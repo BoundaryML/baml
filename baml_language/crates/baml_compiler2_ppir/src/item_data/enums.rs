@@ -25,6 +25,8 @@ pub struct EnumVariantData {
 pub struct EnumSourceMap {
     /// Full source span of the declaration.
     pub span: TextRange,
+    /// Span of the enum's name token.
+    pub name_span: TextRange,
     /// Name span per variant, parallel to [`EnumData::variants`].
     pub variant_name_spans: Vec<TextRange>,
 }
@@ -65,6 +67,11 @@ fn lower<'db>(db: &'db dyn crate::Db, item: EnumLoc<'db>) -> (EnumData, EnumSour
         },
         EnumSourceMap {
             span: data.span,
+            name_span: item_source_map
+                .enum_name_spans
+                .get(&item.id(db))
+                .copied()
+                .unwrap_or_else(|| unreachable!("name span recorded at allocation")),
             variant_name_spans: item_source_map
                 .enum_variant_spans
                 .get(&item.id(db))

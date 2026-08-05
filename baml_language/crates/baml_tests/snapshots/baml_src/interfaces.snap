@@ -39,575 +39,610 @@ function interfaces.$init_test_ns_interfaces_interfaces(registry: testing.TestCo
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "interface_field_via_requires_chain_runtime"
+    load_const "symbolic_interface_view_selects_per_instantiation_link_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 5)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_call_from_override_returns_string"
+    load_const "interface_field_write_through_existential_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 6)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_resolves_to_current_block"
+    load_const "interface_field_write_through_bounded_type_var_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 7)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "as_projection_same_signature_runtime"
+    load_const "generic_implementor_field_resolves_from_receiver_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "as_projection_works_when_unambiguous_runtime"
+    load_const "interface_field_via_requires_chain_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "self_as_projection_call_inside_unrelated_block"
+    load_const "default_call_from_override_returns_string"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 10)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "diamond_as_projection_call_runtime"
+    load_const "default_resolves_to_current_block"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 11)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "interface_typed_var_dispatches_to_concrete"
+    load_const "as_projection_same_signature_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 12)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "heterogeneous_interface_array_dispatches"
+    load_const "as_projection_works_when_unambiguous_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "cast_to_parent_interface_via_requires_runtime"
+    load_const "self_as_projection_call_inside_unrelated_block"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 14)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_method_dispatch_through_interface_var"
+    load_const "diamond_as_projection_call_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 15)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "interface_default_method_calls_self_param_method"
+    load_const "interface_typed_var_dispatches_to_concrete"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 16)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_bound_self_param_method_call"
+    load_const "heterogeneous_interface_array_dispatches"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 17)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "self_param_method_accepts_matching_nested_self"
+    load_const "cast_to_parent_interface_via_requires_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 18)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "bound_self_method_value_accepts_matching_arg"
+    load_const "default_method_dispatch_through_interface_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 19)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "interface_default_method_reference_accepts_explicit_receiver"
+    load_const "interface_default_method_calls_self_param_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 20)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "throwing_interface_dispatch_uses_active_catch"
+    load_const "generic_bound_self_param_method_call"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 21)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "override_dispatched_not_default"
+    load_const "self_param_method_accepts_matching_nested_self"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 22)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "match_narrows_to_concrete_field_access"
+    load_const "bound_self_method_value_accepts_matching_arg"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 23)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "match_destructures_interface_fields"
+    load_const "interface_default_method_reference_accepts_explicit_receiver"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 24)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "match_destructures_interface_fields_directly"
+    load_const "throwing_interface_dispatch_uses_active_catch"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 25)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "match_interface_destructure_respects_field_subpatterns"
+    load_const "override_dispatched_not_default"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 26)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "match_destructures_concrete_implementor_fields"
+    load_const "match_narrows_to_concrete_field_access"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 27)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "match_open_interface_with_wildcard_works"
+    load_const "match_destructures_interface_fields"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 28)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_interface_concrete_type_param_runtime"
+    load_const "match_destructures_interface_fields_directly"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 29)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "same_generic_interface_different_type_params_disambiguated_with_as_projection"
+    load_const "match_interface_destructure_respects_field_subpatterns"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 30)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_bound_runtime"
+    load_const "match_destructures_concrete_implementor_fields"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 31)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_type_of_interface_to_string"
+    load_const "match_open_interface_with_wildcard_works"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 32)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implements_true_for_implementor"
+    load_const "generic_interface_concrete_type_param_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 33)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implements_false_for_non_implementor"
+    load_const "same_generic_interface_different_type_params_disambiguated_with_as_projection"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 34)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implemented_by_inverse_runtime"
+    load_const "generic_bound_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 35)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implements_transitive_via_requires"
+    load_const "reflect_type_of_interface_to_string"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 36)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implementors_lists_lexicographic_order_and_identity"
+    load_const "reflect_implements_true_for_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 37)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implementors_empty_for_concrete_class"
+    load_const "reflect_implements_false_for_non_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 38)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implementors_empty_for_primitive"
+    load_const "reflect_implemented_by_inverse_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 39)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_implements_inside_generic_function"
+    load_const "reflect_implements_transitive_via_requires"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 40)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "reflect_interface_does_not_implement_itself"
+    load_const "reflect_implementors_lists_lexicographic_order_and_identity"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 41)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "class_own_method_callable_from_implements_block"
+    load_const "reflect_implementors_empty_for_concrete_class"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 42)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "class_inherent_method_does_not_override_interface_default_through_existential"
+    load_const "reflect_implementors_empty_for_primitive"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 43)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_bound_extends_named_runtime"
+    load_const "reflect_implements_inside_generic_function"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 44)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_bound_as_projection_selects_generic_interface_instantiation"
+    load_const "reflect_interface_does_not_implement_itself"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 45)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_bound_direct_method_call_dispatches_through_interface"
+    load_const "class_own_method_callable_from_implements_block"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 46)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_interface_method_preserves_method_type_param"
+    load_const "class_inherent_method_does_not_override_interface_default_through_existential"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 47)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_bound_through_extends_chain"
+    load_const "generic_bound_extends_named_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 48)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "self_return_type_carries_concrete_class"
+    load_const "generic_bound_as_projection_selects_generic_interface_instantiation"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 49)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "self_return_on_interface_typed_receiver_collapses_to_interface"
+    load_const "generic_bound_direct_method_call_dispatches_through_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 50)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "multi_self_method_accepts_concrete_receiver"
+    load_const "generic_interface_method_preserves_method_type_param"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 51)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "concrete_receiver_inherited_default_self_param_method"
+    load_const "generic_bound_through_extends_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 52)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "bounded_generic_forwarded_to_bounded_call_is_accepted"
+    load_const "self_return_type_carries_concrete_class"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 53)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "interface_to_interface_conversion_via_unknown_match_narrowing"
+    load_const "self_return_on_interface_typed_receiver_collapses_to_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 54)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "as_upcast_selects_interface_field_link_runtime"
+    load_const "multi_self_method_accepts_concrete_receiver"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 55)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_function_call_result"
+    load_const "concrete_receiver_inherited_default_self_param_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 56)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_array_index_with_field_access"
+    load_const "bounded_generic_forwarded_to_bounded_call_is_accepted"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 57)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_field_access_chain"
+    load_const "interface_to_interface_conversion_via_unknown_match_narrowing"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 58)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "requires_chain_four_levels_deep"
+    load_const "as_upcast_selects_interface_field_link_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 59)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "diamond_call_through_interface_typed_var"
+    load_const "dispatch_through_function_call_result"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 60)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_chained_three_function_calls_returning_interfaces"
+    load_const "dispatch_through_array_index_with_field_access"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 61)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_chained_methods_returning_interface_each_level"
+    load_const "dispatch_through_field_access_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 62)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_nested_array_of_arrays"
+    load_const "requires_chain_four_levels_deep"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 63)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_field_of_array_of_interface"
+    load_const "diamond_call_through_interface_typed_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 64)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_five_level_field_chain"
+    load_const "dispatch_chained_three_function_calls_returning_interfaces"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 65)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_map_value_field_then_method"
+    load_const "dispatch_chained_methods_returning_interface_each_level"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 66)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_through_branch_assigned_interface"
+    load_const "dispatch_through_nested_array_of_arrays"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 67)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "dispatch_for_loop_over_interface_array_collects_results"
+    load_const "dispatch_through_field_of_array_of_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 68)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "diamond_six_level_requires_chain"
+    load_const "dispatch_through_five_level_field_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 69)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "diamond_with_overrides_at_each_level"
+    load_const "dispatch_through_map_value_field_then_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 70)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "double_diamond_two_independent_inheritance_paths"
+    load_const "dispatch_through_branch_assigned_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 71)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_called_twice_in_one_override_body"
+    load_const "dispatch_for_loop_over_interface_array_collects_results"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 72)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_call_with_computed_argument_expression"
+    load_const "diamond_six_level_requires_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 73)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_keyword_shadowed_by_local_variable_resolves_to_local"
+    load_const "diamond_with_overrides_at_each_level"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 74)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "requires_chain_exposes_parent_fields"
+    load_const "double_diamond_two_independent_inheritance_paths"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 75)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "requires_chain_parent_field_in_default_method"
+    load_const "default_called_twice_in_one_override_body"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 76)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "out_of_body_implements_is_visible_to_reflection_registry"
+    load_const "default_call_with_computed_argument_expression"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 77)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "out_of_body_implements_for_primitive_as_projection_runtime"
+    load_const "default_keyword_shadowed_by_local_variable_resolves_to_local"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 78)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_call_from_out_of_body_override_runtime"
+    load_const "requires_chain_exposes_parent_fields"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 79)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "default_call_from_generic_out_of_body_override_runtime"
+    load_const "requires_chain_parent_field_in_default_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 80)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_out_of_body_override_preserves_method_type_args_runtime"
+    load_const "out_of_body_implements_is_visible_to_reflection_registry"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 81)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_requires_parent_args_dispatch_on_class_implementor"
+    load_const "out_of_body_implements_for_primitive_as_projection_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 82)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_requires_parent_field_args_runtime"
+    load_const "default_call_from_out_of_body_override_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 83)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_requires_parent_field_alias_runtime"
+    load_const "default_call_from_generic_out_of_body_override_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 84)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "generic_requires_parent_args_dispatch_on_type_implementor"
+    load_const "generic_out_of_body_override_preserves_method_type_args_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 85)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "requires_closure_preserves_multiple_parent_instantiations_runtime"
+    load_const "generic_requires_parent_args_dispatch_on_class_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 86)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "generic_requires_parent_field_args_runtime"
+    make_closure .<lambda($init_test_ns_interfaces_interfaces, 87)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "generic_requires_parent_field_alias_runtime"
+    make_closure .<lambda($init_test_ns_interfaces_interfaces, 88)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "generic_requires_parent_args_dispatch_on_type_implementor"
+    make_closure .<lambda($init_test_ns_interfaces_interfaces, 89)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "requires_closure_preserves_multiple_parent_instantiations_runtime"
+    make_closure .<lambda($init_test_ns_interfaces_interfaces, 90)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces"
+    load_const "interface_type_args_match_positionally_runtime"
+    make_closure .<lambda($init_test_ns_interfaces_interfaces, 91)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -1220,26 +1255,16 @@ function interfaces.BsmvAcc.BsmvAdder.addOne(self: interfaces.BsmvAcc, other: in
 
 function interfaces.BtviPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.BtviPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.BtviNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.BtvsPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.BtvsPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.BtvsNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.CimdGreeter.greet(self: interfaces.CimdGreeter) -> string {
@@ -1492,19 +1517,12 @@ function interfaces.DkslLogger.log(self: interfaces.DkslLogger, msg: string) -> 
 }
 
 function interfaces.DmdtAnimal.describe(self: interfaces.DmdtAnimal) -> string {
-    load_var self
-    is_type interfaces.DmdtDog
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "animal: "
-    load_var _2
+    load_var self
+    load_type interfaces.DmdtAnimal
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.DmdtDog.DmdtAnimal.speak(self: interfaces.DmdtDog) -> string {
@@ -1609,15 +1627,9 @@ function interfaces.DwoaTip.name(self: interfaces.DwoaTip) -> string {
 function interfaces.F1bgPrintable$for$F1bgWrapper<T>.display(self: interfaces.F1bgWrapper<#0>) -> string {
     load_var self
     load_field .inner
-    store_var_load_var _2
-    is_type interfaces.F1bgPerson
-    pop_jump_if_false L0
-    load_var _2
-    load_field .0
+    load_type interfaces.F1bgNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.F1dPrintable$for$F1dBox<T>.display(self: interfaces.F1dBox<#0>) -> string {
@@ -1644,92 +1656,39 @@ function interfaces.F1saDescribable$for$F1saPair<T>.describe(self: interfaces.F1
 
 function interfaces.F2amPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.F2amTeam
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    is_type interfaces.F2amPerson
-    pop_jump_if_false L3
-    load_var self
-    load_field .0
-    jump L2
-
-  L1:
-    load_var self
-    load_field .0
-
-  L2:
+    load_type interfaces.F2amNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.F2dPrintable$for$T.display(self: #0) -> string {
-    load_var self
-    is_type interfaces.F2dPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "named:"
-    load_var _2
+    load_var self
+    load_type interfaces.F2dNamed
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.F2riPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.F2riPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.F2riNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.F2rsPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.F2rsPerson
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    is_type interfaces.F2rsTeam
-    pop_jump_if_false L3
-    load_var self
-    load_field .0
-    jump L2
-
-  L1:
-    load_var self
-    load_field .0
-
-  L2:
+    load_type interfaces.F2rsNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.F2saLabeled$for$T.label(self: #0) -> string {
     load_var self
-    is_type interfaces.F2saProject
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.F2saNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.Fz03Dog.Fz03Animal.speak(self: interfaces.Fz03Dog) -> string {
@@ -2080,6 +2039,16 @@ function interfaces.IdmrDescribable.describe(self: interfaces.IdmrDescribable) -
     return
 }
 
+function interfaces.ItampBoth.ItampConv<int, string>.tag(self: interfaces.ItampBoth) -> string {
+    load_const "int->string"
+    return
+}
+
+function interfaces.ItampBoth.ItampConv<string, int>.tag(self: interfaces.ItampBoth) -> string {
+    load_const "string->int"
+    return
+}
+
 function interfaces.IticDog.IticAnimal.speak(self: interfaces.IticDog) -> string {
     load_const "Woof!"
     return
@@ -2145,19 +2114,12 @@ function interfaces.MsmaBox.MsmaEquatable.same(self: interfaces.MsmaBox, other: 
 }
 
 function interfaces.OdndAnimal.describe(self: interfaces.OdndAnimal) -> string {
-    load_var self
-    is_type interfaces.OdndCat
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "default:"
-    load_var _2
+    load_var self
+    load_type interfaces.OdndAnimal
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.OdndCat.OdndAnimal.describe(self: interfaces.OdndCat) -> string {
@@ -2193,38 +2155,15 @@ function interfaces.RcflLeaf.RcflA.tag(self: interfaces.RcflLeaf) -> string {
 
 function interfaces.RcpfPerson.introduce(self: interfaces.RcpfPerson) -> string {
     load_var self
-    is_type interfaces.RcpfEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    is_type interfaces.RcpfEmployee
-    pop_jump_if_false L3
-    load_var self
-    load_field .0
-    jump L2
-
-  L1:
-    load_var self
-    load_field .0
-
-  L2:
+    load_type interfaces.RcpfNamed
+    virtual_load_field .name
     load_const " the "
     bin_op +
-    store_var _2
     load_var self
-    is_type interfaces.RcpfEmployee
-    pop_jump_if_false L3
-    load_var self
-    load_field .1
-    store_var _6
-    load_var2 2 3
+    load_type interfaces.RcpfPerson
+    virtual_load_field .occupation
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.RcpmBox.RcpmParent<int>.describe(self: interfaces.RcpmBox) -> string {
@@ -2441,14 +2380,9 @@ function interfaces.W302Loud$for$T.shout(self: #0) -> string {
 
 function interfaces.W302Printable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.W302Person
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.W302Named
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.W304Named.describe(self: interfaces.W304Named) -> string {
@@ -2457,20 +2391,10 @@ function interfaces.W304Named.describe(self: interfaces.W304Named) -> string {
 }
 
 function interfaces.W304P.W304Named.describe(self: interfaces.W304P) -> string {
-    load_var self
-    is_type interfaces.W304P
-    pop_jump_if_false L0
-    load_var self
-    load_field .name
-    store_var _7
-    load_var self
-    is_type interfaces.W304P
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _10
     load_const "default.name=["
-    load_var _7
+    load_var self
+    load_type interfaces.W304Named
+    virtual_load_field .name
     bin_op +
     load_const "] self.name=["
     bin_op +
@@ -2479,14 +2403,13 @@ function interfaces.W304P.W304Named.describe(self: interfaces.W304P) -> string {
     bin_op +
     load_const "] as=["
     bin_op +
-    load_var _10
+    load_var self
+    load_type interfaces.W304Named
+    virtual_load_field .name
     bin_op +
     load_const "]"
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.W307IntBox.W307Box<int>.get(self: interfaces.W307IntBox) -> int {
@@ -2545,19 +2468,12 @@ function interfaces.W3ooDebuggable$for$int.debugW3oo(self: int) -> string {
 }
 
 function interfaces.W3spPerson.W3spNamed.greet(self: interfaces.W3spPerson) -> string {
-    load_var self
-    is_type interfaces.W3spPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "Hi "
-    load_var _2
+    load_var self
+    load_type interfaces.W3spNamed
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.W3umCat.W3umAnimal.speak(self: interfaces.W3umCat) -> string {
@@ -2594,35 +2510,21 @@ function interfaces.ausi_main() -> bool {
     load_const "widget"
     load_const "WIDGET-001"
     init_instance user.interfaces.AusiItem .named_name, .labeled_name
-    store_var i
-    load_var i
-    store_var_load_var _4
-    is_type interfaces.AusiItem
-    pop_jump_if_false L1
-    load_var _4
-    load_field .0
-    store_var _3
-    load_var _3
+    store_var_load_var i
+    load_type interfaces.AusiNamed
+    virtual_load_field .name
     load_const "widget"
     cmp_op ==
     jump_if_false L0
     pop 1
     load_var i
-    store_var_load_var _7
-    is_type interfaces.AusiItem
-    pop_jump_if_false L1
-    load_var _7
-    load_field .1
-    store_var _6
-    load_var _6
+    load_type interfaces.AusiLabeled
+    virtual_load_field .name
     load_const "WIDGET-001"
     cmp_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.bgfb_forward(x: #0) -> bool {
@@ -2770,30 +2672,20 @@ function interfaces.cofs_main() -> bool {
     load_const 0
     load_const "localhost"
     init_instance user.interfaces.CofsServer .host, .config_host
-    store_var s
-    load_var s
-    store_var c
-    load_var s
+    store_var_load_var s
     load_field .host
     load_const 0
     cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_var c
-    is_type interfaces.CofsServer
-    pop_jump_if_false L1
-    load_var c
-    load_field .1
-    store_var _5
-    load_var _5
+    load_var s
+    load_type interfaces.CofsConfig
+    virtual_load_field .host
     load_const "localhost"
     cmp_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.comc_main() -> string {
@@ -2823,28 +2715,9 @@ function interfaces.crid_main() -> bool {
 function interfaces.ctpi_main() -> string {
     load_const "Alice"
     init_instance user.interfaces.CtpiEmployee .name
-    store_var_load_var n
-    is_type interfaces.CtpiEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var n
-    is_type interfaces.CtpiEmployee
-    pop_jump_if_false L3
-    load_var n
-    load_field .0
-    jump L2
-
-  L1:
-    load_var n
-    load_field .0
-
-  L2:
+    load_type interfaces.CtpiNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.dapc_main() -> string {
@@ -3037,14 +2910,14 @@ function interfaces.dflo_main() -> string {
     alloc_instance user.interfaces.DfloDog
     load_type interfaces.DfloAnimal
     alloc_array 5
-    load_type baml.iter.Iterable<Item = interfaces.DfloAnimal, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = interfaces.DfloAnimal>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
 
   L0:
     load_var _9
-    load_type baml.iter.Iterator<Item = interfaces.DfloAnimal, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = interfaces.DfloAnimal>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _10
@@ -3156,15 +3029,9 @@ function interfaces.dtai_main() -> string {
     alloc_array 1
     load_const 0
     load_array_element
-    store_var_load_var _3
-    is_type interfaces.DtaiCat
-    pop_jump_if_false L0
-    load_var _3
-    load_field .0
+    load_type interfaces.DtaiAnimal
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.dtba_main() -> string {
@@ -3652,79 +3519,29 @@ function interfaces.fz20_main() -> string {
     init_instance user.interfaces.Fz20D .a_label, .b_label
     store_var d
     load_var d
-    store_var_load_var _3
-    is_type interfaces.Fz20D
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var _3
-    is_type interfaces.Fz20D
-    pop_jump_if_false L3
-    load_var _3
-    load_field .1
-    store_var a_val
-    jump L2
-
-  L1:
-    load_var _3
-    load_field .0
-    store_var a_val
-
-  L2:
-    load_var d
-    store_var_load_var _7
-    is_type interfaces.Fz20D
-    pop_jump_if_false L3
-    load_var _7
-    load_field .1
-    store_var b_val
-    load_var a_val
+    load_type interfaces.Fz20A
+    virtual_load_field .label
     load_const "|"
     bin_op +
-    load_var b_val
+    load_var d
+    load_type interfaces.Fz20B
+    virtual_load_field .label
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.fz21_get_from_a(a: interfaces.Fz21A) -> string {
     load_var a
-    is_type interfaces.Fz21D
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var a
-    is_type interfaces.Fz21D
-    pop_jump_if_false L3
-    load_var a
-    load_field .1
-    jump L2
-
-  L1:
-    load_var a
-    load_field .0
-
-  L2:
+    load_type interfaces.Fz21A
+    virtual_load_field .label
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.fz21_get_from_b(b: interfaces.Fz21B) -> string {
     load_var b
-    is_type interfaces.Fz21D
-    pop_jump_if_false L0
-    load_var b
-    load_field .1
+    load_type interfaces.Fz21B
+    virtual_load_field .label
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.fz21_main() -> string {
@@ -4130,15 +3947,9 @@ function interfaces.gben_first_name(items: #0[]) -> string {
     load_var items
     load_const 0
     load_array_element
-    store_var_load_var _2
-    is_type interfaces.GbenDog
-    pop_jump_if_false L0
-    load_var _2
-    load_field .0
+    load_type interfaces.GbenNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.gben_main() -> string {
@@ -4157,15 +3968,9 @@ function interfaces.gbr_first_name(items: #0[]) -> string {
     load_var items
     load_const 0
     load_array_element
-    store_var_load_var _2
-    is_type interfaces.GbrDog
-    pop_jump_if_false L0
-    load_var _2
-    load_field .0
+    load_type interfaces.GbrNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.gbr_main() -> string {
@@ -4204,44 +4009,18 @@ function interfaces.gbsp_same(x: #0, y: #0) -> bool {
 }
 
 function interfaces.gbte_greet(p: #0) -> string {
-    load_var p
-    is_type interfaces.GbteEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var p
-    is_type interfaces.GbteEmployee
-    pop_jump_if_false L3
-    load_var p
-    load_field .0
-    store_var _4
-    jump L2
-
-  L1:
-    load_var p
-    load_field .0
-    store_var _4
-
-  L2:
     load_const "Hi, "
-    load_var _4
+    load_var p
+    load_type interfaces.GbteNamed
+    virtual_load_field .name
     bin_op +
     load_const " the "
     bin_op +
-    store_var _2
     load_var p
-    is_type interfaces.GbteEmployee
-    pop_jump_if_false L3
-    load_var p
-    load_field .1
-    store_var _7
-    load_var2 2 4
+    load_type interfaces.GbtePerson
+    virtual_load_field .occupation
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.gbte_main() -> string {
@@ -4276,6 +4055,35 @@ function interfaces.gict_main() -> int {
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
+    return
+}
+
+function interfaces.gif_main() -> bool {
+    load_const 1
+    load_const "one"
+    load_type int
+    init_instance<1> user.interfaces.GifBox .payload, .held
+    call user.interfaces.gif_read
+    load_const "one"
+    cmp_op ==
+    jump_if_false L0
+    pop 1
+    load_const "x"
+    load_const "ex"
+    load_type string
+    init_instance<1> user.interfaces.GifBox .payload, .held
+    call user.interfaces.gif_read
+    load_const "ex"
+    cmp_op ==
+
+  L0:
+    return
+}
+
+function interfaces.gif_read(h: interfaces.GifHolder) -> string {
+    load_var h
+    load_type interfaces.GifHolder
+    virtual_load_field .held
     return
 }
 
@@ -4346,42 +4154,17 @@ function interfaces.grpa_main() -> string {
 function interfaces.grpf_main() -> int {
     load_const 42
     init_instance user.interfaces.GrpfBox .value
-    store_var_load_var child
-    is_type interfaces.GrpfBox
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var child
-    is_type interfaces.GrpfBox
-    pop_jump_if_false L3
-    load_var child
-    load_field .0
-    jump L2
-
-  L1:
-    load_var child
-    load_field .0
-
-  L2:
+    load_type interfaces.GrpfParent<int>
+    virtual_load_field .value
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.grpl_main() -> int {
     load_const 42
     init_instance user.interfaces.GrplBox .stored
-    store_var_load_var child
-    is_type interfaces.GrplBox
-    pop_jump_if_false L0
-    load_var child
-    load_field .0
+    load_type interfaces.GrplParent<int>
+    virtual_load_field .value
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.grpt_main() -> string {
@@ -4452,23 +4235,15 @@ function interfaces.ifcc_main() -> bool {
     store_var s
     load_var s
     store_var_load_var c
-    is_type interfaces.IfccServer
-    pop_jump_if_false L3
-    load_var c
-    load_field .0
-    store_var _6
-    load_var _6
+    load_type interfaces.IfccConfig
+    virtual_load_field .host
     load_const "localhost"
     cmp_op ==
     jump_if_false L0
     pop 1
     load_var c
-    is_type interfaces.IfccServer
-    pop_jump_if_false L3
-    load_var c
-    load_field .1
-    store_var _8
-    load_var _8
+    load_type interfaces.IfccConfig
+    virtual_load_field .port
     load_const 8080
     cmp_int_op ==
 
@@ -4490,9 +4265,6 @@ function interfaces.ifcc_main() -> bool {
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.ifvr_main() -> int {
@@ -4501,28 +4273,105 @@ function interfaces.ifvr_main() -> int {
     load_const "PM"
     load_const 1.0
     init_instance user.interfaces.IfvrEmployee .name, .age, .occupation, .salary
-    store_var_load_var a
-    is_type interfaces.IfvrEmployee
-    pop_jump_if_false L0
-    jump L1
+    load_type interfaces.IfvrAged
+    virtual_load_field .age
+    return
+}
+
+function interfaces.ifw_bump(t: #0) -> void {
+    load_var t
+    load_type interfaces.IfwCounter
+    virtual_load_field .count
+    store_var _2
+    load_var _2
+    load_const 100
+    add_int
+    store_var _2
+    load_var2 1 2
+    load_type interfaces.IfwCounter
+    virtual_store_field .count
+    load_const null
+    return
+}
+
+function interfaces.ifw_main() -> bool {
+    load_const "b"
+    load_const 1
+    init_instance user.interfaces.IfwBox .label, .count
+    store_var b
+    load_var b
+    store_var c
+    load_var c
+    load_const 10
+    load_type interfaces.IfwCounter
+    virtual_store_field .count
+    load_var b
+    load_field .count
+    load_const 10
+    cmp_int_op ==
+    store_var after_assign
+    load_var c
+    load_type interfaces.IfwCounter
+    virtual_load_field .count
+    store_var _5
+    load_var _5
+    load_const 5
+    add_int
+    store_var _5
+    load_var2 2 4
+    load_type interfaces.IfwCounter
+    virtual_store_field .count
+    load_var after_assign
+    jump_if_false L0
+    pop 1
+    load_var b
+    load_field .count
+    load_const 15
+    cmp_int_op ==
 
   L0:
-    load_var a
-    is_type interfaces.IfvrEmployee
-    pop_jump_if_false L3
-    load_var a
-    load_field .1
-    jump L2
-
-  L1:
-    load_var a
-    load_field .1
-
-  L2:
     return
+}
 
-  L3:
-    unreachable
+function interfaces.ifw_typevar_main() -> bool {
+    load_const "b"
+    load_const 1
+    init_instance user.interfaces.IfwBox .label, .count
+    store_var b
+    load_type interfaces.IfwBox
+    load_var b
+    call user.interfaces.ifw_bump
+    pop 1
+    load_var b
+    load_field .count
+    load_const 101
+    cmp_int_op ==
+    return
+}
+
+function interfaces.itamp_main() -> bool {
+    alloc_instance user.interfaces.ItampBoth
+    store_var_load_var p
+    load_type interfaces.ItampConv<int, string>
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_const "int->string"
+    cmp_op ==
+    jump_if_false L0
+    pop 1
+    load_var p
+    load_type interfaces.ItampConv<string, int>
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    load_const "string->int"
+    cmp_op ==
+
+  L0:
+    return
 }
 
 function interfaces.itic_main() -> string {
@@ -4605,33 +4454,12 @@ function interfaces.mdci_main() -> string {
 }
 
 function interfaces.mdid_describe(a: interfaces.MdidAnimal) -> string {
-    load_var a
-    is_type interfaces.MdidCat
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var a
-    is_type interfaces.MdidDog
-    pop_jump_if_false L3
-    load_var a
-    load_field .0
-    store_var _2
-    jump L2
-
-  L1:
-    load_var a
-    load_field .0
-    store_var _2
-
-  L2:
     load_const "animal: "
-    load_var _2
+    load_var a
+    load_type interfaces.MdidAnimal
+    virtual_load_field .name
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.mdid_main() -> string {
@@ -4677,35 +4505,22 @@ function interfaces.midr_describe(s: interfaces.MidrSwitch) -> string {
     is_type interfaces.MidrSwitch
     pop_jump_if_false L0
     load_var s
-    is_type interfaces.MidrLamp
-    pop_jump_if_false L3
-    load_var s
-    load_field .0
-    store_var _3
-    load_var _3
+    load_type interfaces.MidrSwitch
+    virtual_load_field .active
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var s
-    is_type interfaces.MidrLamp
-    pop_jump_if_false L3
     load_const "off"
     jump L2
 
   L1:
-    load_var s
-    is_type interfaces.MidrLamp
-    pop_jump_if_false L3
     load_const "on"
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.midr_main() -> string {
@@ -4846,28 +4661,9 @@ function interfaces.rcep_main() -> string {
     load_const "Alice"
     load_const "PM"
     init_instance user.interfaces.RcepEmployee .name, .occupation
-    store_var_load_var p
-    is_type interfaces.RcepEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var p
-    is_type interfaces.RcepEmployee
-    pop_jump_if_false L3
-    load_var p
-    load_field .0
-    jump L2
-
-  L1:
-    load_var p
-    load_field .0
-
-  L2:
+    load_type interfaces.RcepNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.rcfl_main() -> string {
@@ -5050,37 +4846,21 @@ function interfaces.sfnd_main() -> bool {
     load_const "abc"
     load_const 42
     init_instance user.interfaces.SfndThing .text_id, .numeric_id
-    store_var t
-    load_var t
-    store_var text
-    load_var t
-    store_var numeric
-    load_var text
-    is_type interfaces.SfndThing
-    pop_jump_if_false L1
-    load_var text
-    load_field .0
-    store_var _5
-    load_var _5
+    store_var_load_var t
+    load_type interfaces.SfndHasId
+    virtual_load_field .id
     load_const "abc"
     cmp_op ==
     jump_if_false L0
     pop 1
-    load_var numeric
-    is_type interfaces.SfndThing
-    pop_jump_if_false L1
-    load_var numeric
-    load_field .1
-    store_var _7
-    load_var _7
+    load_var t
+    load_type interfaces.SfndHasNumId
+    virtual_load_field .id
     load_const 42
     cmp_int_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.sgid_main() -> bool {
@@ -5128,37 +4908,50 @@ function interfaces.sgif_main() -> bool {
     load_const 7
     load_const "seven"
     init_instance user.interfaces.SgifPair .int_value, .string_value
-    store_var p
-    load_var p
-    store_var i
-    load_var p
-    store_var s
-    load_var i
-    is_type interfaces.SgifPair
-    pop_jump_if_false L1
-    load_var i
-    load_field .0
-    store_var _5
-    load_var _5
+    store_var_load_var p
+    load_type interfaces.SgifSlot<int>
+    virtual_load_field .value
     load_const 7
     cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_var s
-    is_type interfaces.SgifPair
-    pop_jump_if_false L1
-    load_var s
-    load_field .1
-    store_var _7
-    load_var _7
+    load_var p
+    load_type interfaces.SgifSlot<string>
+    virtual_load_field .value
     load_const "seven"
     cmp_op ==
 
   L0:
     return
+}
 
-  L1:
-    unreachable
+function interfaces.sgif_read(g: interfaces.SgifSlot<#0>) -> #0 {
+    load_var g
+    load_type interfaces.SgifSlot<#0>
+    virtual_load_field .value
+    return
+}
+
+function interfaces.sgif_symbolic_main() -> bool {
+    load_const 7
+    load_const "seven"
+    init_instance user.interfaces.SgifPair .int_value, .string_value
+    store_var p
+    load_type int
+    load_var p
+    call user.interfaces.sgif_read
+    load_const 7
+    cmp_int_op ==
+    jump_if_false L0
+    pop 1
+    load_type string
+    load_var p
+    call user.interfaces.sgif_read
+    load_const "seven"
+    cmp_op ==
+
+  L0:
+    return
 }
 
 function interfaces.spma_combine(x: #0, ys: #0[]) -> int {
@@ -5191,14 +4984,9 @@ function interfaces.srit_main() -> int {
     virtual_call nargs=1 ntypeargs=0
     store_var cloned
     load_var cloned
-    is_type interfaces.SritBox
-    pop_jump_if_false L0
-    load_var cloned
-    load_field .0
+    load_type interfaces.SritCloneable
+    virtual_load_field .value
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.srtc_main() -> int {
@@ -5245,37 +5033,21 @@ function interfaces.tisf_main() -> bool {
     load_const "widget"
     load_const "WIDGET-001"
     init_instance user.interfaces.TisfItem .named_name, .labeled_name
-    store_var i
-    load_var i
-    store_var n
-    load_var i
-    store_var l
-    load_var n
-    is_type interfaces.TisfItem
-    pop_jump_if_false L1
-    load_var n
-    load_field .0
-    store_var _5
-    load_var _5
+    store_var_load_var i
+    load_type interfaces.TisfNamed
+    virtual_load_field .name
     load_const "widget"
     cmp_op ==
     jump_if_false L0
     pop 1
-    load_var l
-    is_type interfaces.TisfItem
-    pop_jump_if_false L1
-    load_var l
-    load_field .1
-    store_var _7
-    load_var _7
+    load_var i
+    load_type interfaces.TisfLabeled
+    virtual_load_field .name
     load_const "WIDGET-001"
     cmp_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.uf01_main() -> string {
@@ -5287,14 +5059,9 @@ function interfaces.uf01_main() -> string {
 
 function interfaces.uf01_readName(x: interfaces.Uf01Dog | interfaces.Uf01Named) -> string {
     load_var x
-    is_type interfaces.Uf01Dog
-    pop_jump_if_false L0
-    load_var x
-    load_field .0
+    load_type interfaces.Uf01Named
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slot<string>) -> int {
@@ -5311,21 +5078,13 @@ function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slo
 
   L1:
     load_var _2
-    store_var_load_var a
-    is_type interfaces.Uf02IntSlot
-    pop_jump_if_false L3
-    load_var a
-    load_field .0
-    store_var _4
-    load_var _4
+    load_type interfaces.Uf02Slot<int>
+    virtual_load_field .value
     load_const 1
     add_int
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.uf02_main() -> int {
@@ -5592,14 +5351,9 @@ function interfaces.ufp2_main() -> int {
 
 function interfaces.ufp3_getHandler(x: interfaces.Ufp3HasHandler | interfaces.Ufp3A) -> (int) -> string throws never {
     load_var x
-    is_type interfaces.Ufp3A
-    pop_jump_if_false L0
-    load_var x
-    load_field .0
+    load_type interfaces.Ufp3HasHandler
+    virtual_load_field .handler
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.ufp3_main() -> string {
@@ -5630,10 +5384,8 @@ function interfaces.ufp4_readName(x: interfaces.Ufp4Dog | interfaces.Ufp4Named |
 
   L0:
     load_var x
-    is_type interfaces.Ufp4Dog
-    pop_jump_if_false L3
-    load_var x
-    load_field .0
+    load_type interfaces.Ufp4Named
+    virtual_load_field .name
     jump L2
 
   L1:
@@ -5641,9 +5393,6 @@ function interfaces.ufp4_readName(x: interfaces.Ufp4Dog | interfaces.Ufp4Named |
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.ufp5_main() -> int {

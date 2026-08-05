@@ -7,9 +7,77 @@
 //! schema (M5b). Orchestrator wiring (auto-building `Context` per attempt) is
 //! a later slice; here we build a `Context` by hand and inspect the result.
 
-use baml_tests::baml_test;
+use std::sync::Arc;
+
+use baml_builtins2::{PromptAst, PromptAstSimple};
+use baml_tests::{baml_test, engine::TestOutput};
 use bex_engine::BexExternalValue;
 use bex_external_types::BexExternalAdt;
+
+fn test_result(output: TestOutput) -> BexExternalValue {
+    output.result.expect("BAML execution should succeed")
+}
+
+fn prompt_ast(output: TestOutput) -> Arc<PromptAst> {
+    match test_result(output) {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
+            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+        },
+        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
+    }
+}
+
+fn string_result(output: TestOutput) -> String {
+    match test_result(output) {
+        BexExternalValue::String(value) => value.to_string(),
+        other => panic!("expected a string result, got {other:?}"),
+    }
+}
+
+fn prompt_text(output: TestOutput) -> String {
+    prompt_ast(output).render_text()
+}
+
+fn prompt_messages(ast: &PromptAst) -> &[Arc<PromptAst>] {
+    match ast {
+        PromptAst::Vec(messages) => messages,
+        other => panic!("expected prompt messages, got {other:?}"),
+    }
+}
+
+fn role_and_metadata(message: &PromptAst) -> (&str, &serde_json::Value) {
+    match message {
+        PromptAst::Message { role, metadata, .. } => (role, metadata),
+        other => panic!("expected a prompt message, got {other:?}"),
+    }
+}
+
+fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::MediaKind>) {
+    fn collect_content(content: &PromptAstSimple, out: &mut Vec<baml_base::MediaKind>) {
+        match content {
+            PromptAstSimple::String(_) => {}
+            PromptAstSimple::Media(media) => out.push(media.kind),
+            PromptAstSimple::Multiple(parts) => {
+                for part in parts {
+                    collect_content(part, out);
+                }
+            }
+        }
+    }
+
+    match ast {
+        PromptAst::Simple(content) => collect_content(content, out),
+        PromptAst::Message { content, .. } => collect_content(content, out),
+        PromptAst::Vec(items) => {
+            for item in items {
+                collect_media_kinds(item, out);
+            }
+        }
+    }
+}
 
 #[tokio::test]
 async fn provider_source_with_raw_jinja_builds_the_same_task() {
@@ -60,6 +128,44 @@ function main() -> baml.llm.Role {
 }
 
 #[tokio::test]
+async fn prompt_role_metadata_is_preserved() {
+    let output = baml_test!(
+        r#"
+function main() -> baml.llm.PromptAst {
+  let system = baml.llm.Role {
+    name: "system",
+    metadata: {
+      "cache_control": { "type": "ephemeral" },
+    },
+  }
+  let user = baml.llm.Role {
+    name: "user",
+    metadata: { "priority": 3 },
+  }
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] }
+  let ctx = baml.llm.Context { client: cc, tags: {} }
+  let render = prompt`${system}Rules${user}Hello`
+  render(ctx)
+}
+"#
+    );
+    let ast = prompt_ast(output);
+    let messages = prompt_messages(&ast);
+    assert_eq!(messages.len(), 2, "expected two prompt messages: {ast:?}");
+    let (role, metadata) = role_and_metadata(&messages[0]);
+    assert_eq!(role, "system");
+    assert_eq!(
+        metadata,
+        &serde_json::json!({
+            "cache_control": { "type": "ephemeral" },
+        })
+    );
+    let (role, metadata) = role_and_metadata(&messages[1]);
+    assert_eq!(role, "user");
+    assert_eq!(metadata, &serde_json::json!({ "priority": 3 }));
+}
+
+#[tokio::test]
 async fn prompt_tag_builds_promptast_with_role_messages() {
     let output = baml_test!(
         r#"
@@ -72,27 +178,10 @@ function main() -> baml.llm.PromptAst {
 }
 "#
     );
-    // `baml.llm.PromptAst` is a handle class wrapping the `PromptAst` rust ADT
-    // in its `_data` field, so the external value is an `Instance`, not a bare
-    // `Adt`. Unwrap the handle to inspect the assembled prompt.
-    let ast = match &output.result {
-        Ok(BexExternalValue::Instance {
-            class_name, fields, ..
-        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
-            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-        },
-        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
-    };
-    // Expect two messages: system "You are helpful." then user "Hi World!".
-    let dbg = format!("{ast:?}");
-    assert!(
-        dbg.contains("\"system\""),
-        "expected a system message: {dbg}"
+    assert_eq!(
+        prompt_text(output),
+        "[system]\nYou are helpful.\n\n[user]\nHi World!"
     );
-    assert!(dbg.contains("You are helpful."), "{dbg}");
-    assert!(dbg.contains("\"user\""), "expected a user message: {dbg}");
-    assert!(dbg.contains("Hi World!"), "{dbg}");
 }
 
 #[tokio::test]
@@ -110,23 +199,9 @@ function main() -> baml.llm.PromptAst {
 }
 "#
     );
-    let ast = match &output.result {
-        Ok(BexExternalValue::Instance {
-            class_name, fields, ..
-        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
-            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-        },
-        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
-    };
-    let dbg = format!("{ast:?}");
-    assert!(
-        dbg.contains("\"system\"") && dbg.contains("You are helpful."),
-        "{dbg}"
-    );
-    assert!(
-        dbg.contains("\"user\"") && dbg.contains("Hi World!"),
-        "{dbg}"
+    assert_eq!(
+        prompt_text(output),
+        "[system]\nYou are helpful.\n\n[user]\nHi World!"
     );
 }
 
@@ -155,10 +230,7 @@ function main() -> string {
 }
 "#
     );
-    let rendered = match &output.result {
-        Ok(BexExternalValue::String(s)) => s.to_string(),
-        other => panic!("expected a string result, got {other:?}"),
-    };
+    let rendered = string_result(output);
     let (from_prompt, from_string) = rendered
         .split_once(" <=> ")
         .expect("main should return the two renderings joined by ` <=> `");
@@ -199,15 +271,79 @@ function main() -> string {
 }
 "#
     );
-    let rendered = match &output.result {
-        Ok(BexExternalValue::String(s)) => s.to_string(),
-        other => panic!("expected a string result, got {other:?}"),
-    };
+    let rendered = string_result(output);
     // Both messages render the override, and the roles still split the content.
     assert_eq!(
         rendered, "[system]\nhead LBL<hi>\n\n[user]\ntail LBL<hi>",
         "override must apply in every message and roles must still split"
     );
+}
+
+#[tokio::test]
+async fn prompt_preserves_media_nested_in_classes_arrays_and_maps() {
+    let output = baml_test!(
+        r#"
+class MediaLeaf {
+  picture image
+  sound audio
+  clip video
+  document pdf
+}
+
+class MediaEnvelope {
+  primary MediaLeaf
+  gallery MediaLeaf[]
+  lookup map<string, MediaLeaf>
+}
+
+function main() -> baml.llm.PromptAst {
+  let leaf = MediaLeaf {
+    picture: image.from_url("https://example.com/picture.png", "image/png"),
+    sound: audio.from_url("https://example.com/sound.wav", "audio/wav"),
+    clip: video.from_url("https://example.com/clip.mp4", "video/mp4"),
+    document: pdf.from_url("https://example.com/document.pdf", "application/pdf"),
+  }
+  let envelope = MediaEnvelope {
+    primary: leaf,
+    gallery: [leaf],
+    lookup: { "copy": leaf },
+  }
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = baml.llm.Context { client: cc, tags: {} }
+  let render = prompt`${role("user")}Inspect ${envelope}`
+  render(ctx)
+}
+"#
+    );
+
+    let ast = prompt_ast(output);
+    let mut media_kinds = Vec::new();
+    collect_media_kinds(&ast, &mut media_kinds);
+    assert_eq!(
+        media_kinds,
+        vec![
+            baml_base::MediaKind::Image,
+            baml_base::MediaKind::Audio,
+            baml_base::MediaKind::Video,
+            baml_base::MediaKind::Pdf,
+            baml_base::MediaKind::Image,
+            baml_base::MediaKind::Audio,
+            baml_base::MediaKind::Video,
+            baml_base::MediaKind::Pdf,
+            baml_base::MediaKind::Image,
+            baml_base::MediaKind::Audio,
+            baml_base::MediaKind::Video,
+            baml_base::MediaKind::Pdf,
+        ],
+        "each nested occurrence must remain a structural media node: {ast:?}"
+    );
+    let rendered = ast.render_text();
+    assert!(rendered.starts_with("[user]\nInspect MediaEnvelope"));
+    assert!(rendered.contains("image::url(https://example.com/picture.png, loaded=false)"));
+    assert!(rendered.contains("audio::url(https://example.com/sound.wav, loaded=false)"));
+    assert!(rendered.contains("video::url(https://example.com/clip.mp4, loaded=false)"));
+    assert!(rendered.contains("pdf::url(https://example.com/document.pdf, loaded=false)"));
+    assert!(!rendered.contains("rust_data"));
 }
 
 #[tokio::test]
@@ -233,23 +369,14 @@ ${ctx.output_format}`
 }
 "#
     );
-    let ast = match &output.result {
-        Ok(BexExternalValue::Instance {
-            class_name, fields, ..
-        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
-            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-        },
-        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
-    };
-    let dbg = format!("{ast:?}");
+    let rendered = prompt_text(output);
     assert!(
-        dbg.contains("Answer using this schema:"),
-        "prompt text should be present: {dbg}"
+        rendered.contains("Answer using this schema:"),
+        "prompt text should be present: {rendered}"
     );
     assert!(
-        dbg.contains("name") && dbg.contains("age"),
-        "rendered output_format should list the Person fields: {dbg}"
+        rendered.contains("name") && rendered.contains("age"),
+        "rendered output_format should list the Person fields: {rendered}"
     );
 }
 
@@ -277,23 +404,14 @@ function main() -> baml.llm.PromptAst {
 }
 "#
     );
-    let ast = match &output.result {
-        Ok(BexExternalValue::Instance {
-            class_name, fields, ..
-        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
-            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-        },
-        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
-    };
-    let dbg = format!("{ast:?}");
+    let rendered = prompt_text(output);
     assert!(
-        dbg.contains("Use this exact schema:"),
-        "the custom `prefix` option should be applied: {dbg}"
+        rendered.contains("Use this exact schema:"),
+        "the custom `prefix` option should be applied: {rendered}"
     );
     assert!(
-        dbg.contains("name") && dbg.contains("age"),
-        "rendered schema should list the Person fields: {dbg}"
+        rendered.contains("name") && rendered.contains("age"),
+        "rendered schema should list the Person fields: {rendered}"
     );
 }
 
@@ -322,19 +440,10 @@ function main() -> baml.llm.PromptAst {
 }
 "#
     );
-    let ast = match &output.result {
-        Ok(BexExternalValue::Instance {
-            class_name, fields, ..
-        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
-            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-        },
-        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
-    };
-    let dbg = format!("{ast:?}");
+    let rendered = prompt_text(output);
     assert!(
-        dbg.contains("name") && dbg.contains("age"),
-        "rendered schema should list the Person fields: {dbg}"
+        rendered.contains("name") && rendered.contains("age"),
+        "rendered schema should list the Person fields: {rendered}"
     );
 }
 
@@ -356,22 +465,13 @@ function main() -> baml.llm.PromptAst {
 }
 "#
     );
-    let ast = match &output.result {
-        Ok(BexExternalValue::Instance {
-            class_name, fields, ..
-        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
-            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-        },
-        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
-    };
-    let dbg = format!("{ast:?}");
+    let rendered = prompt_text(output);
     assert!(
-        dbg.contains("nickname: string or omit,"),
-        "custom null rendering should apply to output_format_with: {dbg}"
+        rendered.contains("nickname: string or omit,"),
+        "custom null rendering should apply to output_format_with: {rendered}"
     );
     assert!(
-        !dbg.contains("string or null"),
-        "default null rendering should be replaced: {dbg}"
+        !rendered.contains("string or null"),
+        "default null rendering should be replaced: {rendered}"
     );
 }

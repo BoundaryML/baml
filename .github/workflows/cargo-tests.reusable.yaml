@@ -72,7 +72,7 @@ env:
 jobs:
 
   cargo-test-linux:
-    name: "cargo test (linux)"
+    name: "cargo test (x86_64-unknown-linux-gnu)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
@@ -166,8 +166,111 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-linux.html
           if-no-files-found: ignore
 
+  cargo-test-linux-musl:
+    name: "cargo test (x86_64-unknown-linux-musl)"
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    timeout-minutes: 35
+    env:
+      CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
+    steps:
+      - uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: |
+          set -euo pipefail
+          rustup show
+          rustup target add x86_64-unknown-linux-musl
+        working-directory: baml_language
+
+      - name: "Setup musl cross toolchain"
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: x86_64-unknown-linux-musl
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # Enabling every feature turns on the optional native-tls backend, which
+      # needs a separate target-specific OpenSSL build. Default features match
+      # the rustls-based musl artifacts we ship.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      - name: "Run tests with nextest"
+        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e)'
+        working-directory: baml_language
+
+      - name: "Run pack end-to-end tests"
+        run: cargo test -p baml_cli --test pack_e2e
+        working-directory: baml_language
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-failures-linux-musl
+          path: |
+            baml_language/**/*.snap.new
+            baml_language/**/target/nextest/
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-test-linux-musl.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-test-linux-musl
+          path: sccache-stats-test-linux-musl.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-linux-musl.html
+        working-directory: baml_language
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-test-linux-musl
+          path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
+          if-no-files-found: ignore
+
   cargo-test-macos:
-    name: "cargo test (macos)"
+    name: "cargo test (aarch64-apple-darwin)"
     # Skip in the merge queue: macos already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
     if: ${{ github.event_name != 'merge_group' }}
@@ -252,7 +355,7 @@ jobs:
           if-no-files-found: ignore
 
   cargo-test-windows:
-    name: "cargo test (windows)"
+    name: "cargo test (x86_64-pc-windows-msvc)"
     # Skip in the merge queue: windows already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
     if: ${{ github.event_name != 'merge_group' }}
@@ -943,7 +1046,7 @@ jobs:
           if-no-files-found: ignore
 
   cargo-test-wasm:
-    name: "cargo test (wasm)"
+    name: "cargo test (wasm32-unknown-unknown)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
     steps:
@@ -1259,13 +1362,11 @@ jobs:
         run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
         working-directory: baml_language
 
-      # This job is the only linux coverage of `baml_tests`, `baml_cli`, and
-      # `baml_lsp2_actions` — `cargo test (linux)` excludes all three to avoid
+      # This job provides glibc coverage of `baml_tests`, `baml_cli`, and
+      # `baml_lsp2_actions`. The x86_64 GNU job excludes all three to avoid
       # running them twice; keep its `--exclude` list in sync with the package
-      # list here. That includes `pack_e2e`, the only linux exercise of `baml
-      # pack`'s ELF embed/extract path (the team develops on macOS, where
-      # libsui takes the Mach-O path, so an ELF writer bug — see
-      # crates/baml_cli/src/pack_elf.rs — once shipped uncaught).
+      # list here. The musl job separately runs `baml_cli`, including
+      # `pack_e2e`, so both Linux libc variants exercise the ELF pack path.
       - name: "Run snapshot tests"
         run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
         working-directory: baml_language
@@ -1324,6 +1425,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - cargo-test-linux
+      - cargo-test-linux-musl
       - cargo-test-macos
       - cargo-test-windows
       - sdk-tests
@@ -1343,6 +1445,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - cargo-test-linux
+      - cargo-test-linux-musl
       - cargo-test-macos
       - cargo-test-windows
       - sdk-tests

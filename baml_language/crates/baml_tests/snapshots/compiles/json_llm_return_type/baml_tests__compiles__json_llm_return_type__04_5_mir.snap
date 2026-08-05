@@ -30,8 +30,9 @@ fn user.ExtractAny(client: baml.llm.Client) -> int | float | string | bool | nul
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.llm.Client // client // param
     let _2: bool
-    let _3: map<string, unknown>
-    let _4: type
+    let _3: ai.ResponseWithMetadata<baml.json.json>
+    let _4: ai.Task<baml.json.json>
+    let _5: type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -44,12 +45,20 @@ fn user.ExtractAny(client: baml.llm.Client) -> int | float | string | bool | nul
     }
 
     bb2: {
-        _3 = {  }: map<string, unknown>;
-        _4 = load_type(baml.json.json);
-        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
+        _4 = call const fn user.ExtractAny$task(copy _1) -> [bb3];
     }
 
     bb3: {
+        _5 = load_type(baml.json.json);
+        _3 = call const fn ai.internal._run_agent_to_response<copy _5>(copy _4) -> [bb4];
+    }
+
+    bb4: {
+        _0 = copy _3.0;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -138,9 +147,9 @@ fn user.ExtractAny$parse(json: string, client: baml.llm.Client) -> int | float |
     }
 }
 
-fn user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> {
+fn user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<baml.json.json, baml.json.json> {
     // Locals:
-    let _0: baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // _0 // return
+    let _0: baml.llm.Stream<baml.json.json, baml.json.json> // _0 // return
     let _1: baml.http.SseStream // sse // param
     let _2: baml.llm.Client // client // param
     let _3: bool
@@ -195,9 +204,9 @@ fn user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst 
     }
 }
 
-fn user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> {
+fn user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml.json.json, baml.json.json> {
     // Locals:
-    let _0: baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // _0 // return
+    let _0: baml.llm.Stream<baml.json.json, baml.json.json> // _0 // return
     let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: map<string, unknown>
@@ -222,6 +231,42 @@ fn user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<int | floa
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.ExtractAny$task(client: baml.llm.Client) -> ai.Task<baml.json.json> {
+    // Locals:
+    let _0: ai.Task<baml.json.json> // _0 // return
+    let _1: baml.llm.Client // client // param
+    let _2: bool
+    let _3: ai.Provider
+    let _4: map<string, unknown>
+    let _5: (ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>)[]
+    let _6: type
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = const item user.TestClient;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _3 = call const fn ai.internal._provider_from_client(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _4 = {  }: map<string, unknown>;
+        _5 = []: ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>[];
+        _6 = load_type(baml.json.json);
+        _0 = call const fn ai.internal._task_named_from_registered_prompt<copy _6>(copy _3, const "ExtractAny", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

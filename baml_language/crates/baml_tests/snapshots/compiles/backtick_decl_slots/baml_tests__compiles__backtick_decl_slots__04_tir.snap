@@ -6,7 +6,10 @@ function user.Fast$new(lenient: bool) -> ? throws never {
   baml.llm.PrimitiveClient { name: "Fast", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.Greet(name: string, client: baml.llm.Client = Fast) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : string
+  ai.internal._run_agent_to_response<string>(Greet$task(name = name, client = client)).value : string
+}
+function user.Greet$task(name: string, client: baml.llm.Client = Fast) -> ai.Task<string> throws never {
+  ai.internal._task_named(ai.internal._provider_from_client(client), "Greet", map { "name": name }, [], baml.llm.prompt`...`) : ai.Task<string>
 }
 function user.Greet$render_prompt(name: string, client: baml.llm.Client = Fast) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst

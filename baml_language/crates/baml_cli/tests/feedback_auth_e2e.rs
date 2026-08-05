@@ -1,9 +1,10 @@
-//! End-to-end tests for `baml feedback` + `baml login` against an
+//! End-to-end tests for `baml feedback` + `baml auth login` against an
 //! in-process mock of `WorkOS` CLI Auth (device flow) and `PostHog` ingestion.
 //!
 //! The mock records every `PostHog` capture body so tests can assert on the
 //! actual events: anonymous continuity (one distinct id across reports),
-//! the `$identify` merge on login, and email attribution afterwards.
+//! the `$identify` merge on login, email attribution afterwards, and the
+//! open-until-synced lifecycle of reports sent while offline.
 
 use std::{
     io::{Read, Write},
@@ -117,12 +118,25 @@ fn run_baml(
     args: &[&str],
     stdin: Option<&str>,
 ) -> (bool, String) {
+    run_baml_posthog(home, base, base, args, stdin)
+}
+
+/// Like [`run_baml`], but with a separately controllable `PostHog` host so
+/// a test can simulate `PostHog` being unreachable while `WorkOS` still
+/// works.
+fn run_baml_posthog(
+    home: &std::path::Path,
+    workos: &str,
+    posthog: &str,
+    args: &[&str],
+    stdin: Option<&str>,
+) -> (bool, String) {
     let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"));
     cmd.args(args)
         .env("BAML_HOME", home)
-        .env("BAML_WORKOS_API_DOMAIN", base)
+        .env("BAML_WORKOS_API_DOMAIN", workos)
         .env("BAML_WORKOS_CLIENT_ID", "client_test")
-        .env("BAML_POSTHOG_HOST", base)
+        .env("BAML_POSTHOG_HOST", posthog)
         // Keep ordinary invocation telemetry quiet so /capture/ sees only
         // feedback + identify events.
         .env("BAML_TELEMETRY_DISABLED", "1")
@@ -159,35 +173,59 @@ fn feedback_events(state: &MockState) -> Vec<Value> {
         .collect()
 }
 
+/// A dead endpoint: a listener that accepts and immediately closes every
+/// connection, so requests fail fast and deterministically. (Bind-then-drop
+/// would free the port for reuse by a concurrent test.)
+fn dead_posthog() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            drop(stream);
+        }
+    });
+    format!("http://{addr}")
+}
+
 #[test]
-fn anonymous_feedback_then_login_backfills() {
+fn anonymous_by_default_then_login_backfills() {
     let state = Arc::new(MockState::default());
     let base = spawn_mock(state.clone());
     let home = tempfile::tempdir().unwrap();
     let creds = home.path().join("creds.json");
 
-    // 1. Anonymous feedback via flag: no session needed, event has no email.
+    // 1. No flags, no prompt: sends anonymously from the get-go, with a
+    //    preview of what goes out and the login hint.
     let (ok, out) = run_baml(
         home.path(),
         &base,
         &[
             "feedback",
-            "--anonymous",
-            "--issue",
-            "parser panics on nested unions",
+            "--title",
+            "Issue (parser): panics on nested unions",
         ],
         None,
     );
     assert!(ok, "{out}");
-    assert!(out.contains("Feedback sent anonymously"), "{out}");
+    assert!(out.contains("reporting to Boundary anonymously:"), "{out}");
+    assert!(!out.contains("How should I report"), "no prompt: {out}");
+    assert!(out.contains("sent anonymously"), "{out}");
+    assert!(out.contains("run `baml auth login`"), "{out}");
     let json = std::fs::read_to_string(&creds).unwrap();
     assert!(json.contains("posthog_distinct_id"), "{json}");
 
-    // 2. Second report reuses the same distinct id (one anonymous person).
+    // 2. Second report reuses the same distinct id (one anonymous person)
+    //    and carries a report_id for later server-side joining.
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--anonymous", "--issue", "map keys mis-typed"],
+        &[
+            "feedback",
+            "--title",
+            "Issue (types): map keys mis-typed",
+            "--description",
+            "Minimum repro: map<int,int>",
+        ],
         None,
     );
     assert!(ok, "{out}");
@@ -197,19 +235,27 @@ fn anonymous_feedback_then_login_backfills() {
     assert_eq!(events[1]["distinct_id"], anon_id.as_str(), "{events:?}");
     assert!(events[0]["properties"]["email"].is_null(), "{events:?}");
     assert_eq!(
-        events[0]["properties"]["issue"], "parser panics on nested unions",
+        events[0]["properties"]["title"], "Issue (parser): panics on nested unions",
+        "{events:?}"
+    );
+    assert_eq!(
+        events[1]["properties"]["description"], "Minimum repro: map<int,int>",
+        "{events:?}"
+    );
+    assert!(
+        events[1]["properties"]["report_id"].is_string(),
         "{events:?}"
     );
 
     // 3. whoami shows the anonymous state.
     let (_, out) = run_baml(home.path(), &base, &["auth", "whoami"], None);
-    assert!(out.contains("Anonymous (feedback id"), "{out}");
+    assert!(out.contains("anonymous (feedback id"), "{out}");
 
-    // 4. Login: device flow (one pending poll), then $identify merges the
-    //    anonymous person into the identified one.
-    let (ok, out) = run_baml(home.path(), &base, &["login", "--no-open"], None);
+    // 4. `baml auth login`: device flow (one pending poll), then $identify
+    //    merges the anonymous person into the identified one.
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
     assert!(ok, "{out}");
-    assert!(out.contains("Logged in as user@example.com"), "{out}");
+    assert!(out.contains("logged in as user@example.com"), "{out}");
     let identify = state
         .captures
         .lock()
@@ -229,16 +275,16 @@ fn anonymous_feedback_then_login_backfills() {
         "{identify}"
     );
 
-    // 5. Feedback while logged in: no prompt, event carries the email and
-    //    still the same distinct id (person continuity).
+    // 5. Feedback while logged in: event carries the email and still the
+    //    same distinct id (person continuity).
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--issue", "third report"],
+        &["feedback", "--title", "Issue (cli): third report"],
         None,
     );
     assert!(ok, "{out}");
-    assert!(out.contains("Feedback sent as user@example.com"), "{out}");
+    assert!(out.contains("sent as user@example.com"), "{out}");
     let events = feedback_events(&state);
     assert_eq!(events.len(), 3, "{events:?}");
     assert_eq!(events[2]["distinct_id"], anon_id.as_str(), "{events:?}");
@@ -257,106 +303,11 @@ fn anonymous_feedback_then_login_backfills() {
     );
     assert!(!json.contains("access_token"), "{json}");
     let (_, out) = run_baml(home.path(), &base, &["auth", "whoami"], None);
-    assert!(out.contains("Anonymous"), "{out}");
-}
+    assert!(out.contains("anonymous"), "{out}");
 
-#[test]
-fn interactive_prompt_anonymous_choice() {
-    let state = Arc::new(MockState::default());
-    let base = spawn_mock(state.clone());
-    let home = tempfile::tempdir().unwrap();
-
-    // No mode flag: the prompt appears; choosing 1 reports anonymously.
-    let (ok, out) = run_baml(
-        home.path(),
-        &base,
-        &["feedback", "--issue", "prompted report"],
-        Some("1\n"),
-    );
-    assert!(ok, "{out}");
-    assert!(out.contains("How should I report it?"), "{out}");
-    assert!(out.contains("Feedback sent anonymously"), "{out}");
-    assert_eq!(feedback_events(&state).len(), 1);
-
-    // The anonymous choice sticks: the next report skips the prompt and
-    // sends anonymously without any stdin.
-    let (ok, out) = run_baml(
-        home.path(),
-        &base,
-        &["feedback", "--issue", "second report"],
-        None,
-    );
-    assert!(ok, "{out}");
-    assert!(!out.contains("How should I report it?"), "{out}");
-    assert!(out.contains("Feedback sent anonymously"), "{out}");
-    assert_eq!(feedback_events(&state).len(), 2);
-}
-
-#[test]
-fn interactive_prompt_decline_sends_nothing() {
-    let state = Arc::new(MockState::default());
-    let base = spawn_mock(state.clone());
-    let home = tempfile::tempdir().unwrap();
-
-    // The prompt is preceded by a preview of exactly what would be sent.
-    // Choosing 3 declines: nothing sent, and the decline is remembered.
-    let (ok, out) = run_baml(
-        home.path(),
-        &base,
-        &["feedback", "--issue", "never mind", "--repro", "class A {}"],
-        Some("3\n"),
-    );
-    assert!(ok, "{out}");
-    assert!(out.contains("Here's what will be sent:"), "{out}");
-    assert!(out.contains("Issue: never mind"), "{out}");
-    assert!(out.contains("Repro: class A {}"), "{out}");
-    assert!(out.contains("Nothing sent"), "{out}");
-    assert_eq!(feedback_events(&state).len(), 0);
-    let creds = std::fs::read_to_string(home.path().join("creds.json")).unwrap();
-    assert!(creds.contains("feedback_declined_at"), "{creds}");
-
-    // Within the day-long cooldown: no prompt, nothing sent, still exit 0.
-    let (ok, out) = run_baml(
-        home.path(),
-        &base,
-        &["feedback", "--issue", "still nothing"],
-        None,
-    );
-    assert!(ok, "{out}");
-    assert!(!out.contains("How should I report it?"), "{out}");
-    assert!(out.contains("declined recently"), "{out}");
-    assert_eq!(feedback_events(&state).len(), 0);
-
-    // Explicit --anonymous overrides the cooldown and clears it.
-    let (ok, out) = run_baml(
-        home.path(),
-        &base,
-        &["feedback", "--anonymous", "--issue", "ok fine"],
-        None,
-    );
-    assert!(ok, "{out}");
-    assert_eq!(feedback_events(&state).len(), 1);
-    let creds = std::fs::read_to_string(home.path().join("creds.json")).unwrap();
-    assert!(!creds.contains("feedback_declined_at"), "{creds}");
-
-    // An expired cooldown prompts again: write stale state directly (a
-    // 1970 decline, no sticky-anonymous flag) and expect the prompt.
-    std::fs::write(
-        home.path().join("creds.json"),
-        r#"{"feedback_declined_at":1}"#,
-    )
-    .unwrap();
-    let (ok, out) = run_baml(
-        home.path(),
-        &base,
-        &["feedback", "--issue", "after cooldown"],
-        Some("3\n"),
-    );
-    assert!(ok, "{out}");
-    assert!(
-        out.contains("How should I report it?"),
-        "prompts again after expiry: {out}"
-    );
+    // 7. `baml login` no longer exists at the top level.
+    let (ok, out) = run_baml(home.path(), &base, &["login"], None);
+    assert!(!ok, "top-level login must be gone: {out}");
 }
 
 #[test]
@@ -368,11 +319,11 @@ fn email_flag_without_login_gives_guidance() {
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--email", "--issue", "x"],
+        &["feedback", "--email", "--title", "x"],
         None,
     );
     assert!(!ok, "must exit non-zero: {out}");
-    assert!(out.contains("Run `baml login`"), "{out}");
+    assert!(out.contains("run `baml auth login`"), "{out}");
     assert_eq!(feedback_events(&state).len(), 0, "nothing may be sent");
 }
 
@@ -385,13 +336,20 @@ fn json_stdin_payload() {
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--anonymous", "-"],
-        Some(r#"{"issue": "from stdin", "repro": "class A {}"}"#),
+        &["feedback", "-"],
+        Some(r#"{"title": "Issue (stdin): piped", "description": "from a pipe"}"#),
     );
     assert!(ok, "{out}");
     let events = feedback_events(&state);
-    assert_eq!(events[0]["properties"]["issue"], "from stdin");
-    assert_eq!(events[0]["properties"]["repro"], "class A {}");
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(
+        events[0]["properties"]["title"], "Issue (stdin): piped",
+        "{events:?}"
+    );
+    assert_eq!(
+        events[0]["properties"]["description"], "from a pipe",
+        "{events:?}"
+    );
 }
 
 #[test]
@@ -400,39 +358,31 @@ fn anonymous_after_login_uses_one_shot_id() {
     let base = spawn_mock(state.clone());
     let home = tempfile::tempdir().unwrap();
 
-    // Establish an identified session with a merged distinct id.
+    // Establish an anonymous id, then log in (merging it).
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--anonymous", "--issue", "first"],
+        &["feedback", "--title", "Issue (x): first"],
         None,
     );
     assert!(ok, "{out}");
-    let anon_id = feedback_events(&state)[0]["distinct_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let (ok, out) = run_baml(home.path(), &base, &["login", "--no-open"], None);
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
     assert!(ok, "{out}");
 
-    // --anonymous after login must NOT use the merged persistent id (which
-    // would attribute the report to the person anyway) and must not carry
-    // the email.
+    // --anonymous while logged in: a fresh, unpersisted id.
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--anonymous", "--issue", "truly anonymous"],
+        &["feedback", "--anonymous", "--title", "Issue (x): hush"],
         None,
     );
     assert!(ok, "{out}");
     let events = feedback_events(&state);
-    let last = events.last().unwrap();
-    assert_ne!(last["distinct_id"], anon_id.as_str(), "{last}");
-    assert!(last["properties"]["email"].is_null(), "{last}");
-
-    // The persistent id is untouched for the identified path.
-    let creds = std::fs::read_to_string(home.path().join("creds.json")).unwrap();
-    assert!(creds.contains(&anon_id), "{creds}");
+    assert_eq!(events.len(), 2, "{events:?}");
+    let stored_id = events[0]["distinct_id"].as_str().unwrap();
+    let one_shot = events[1]["distinct_id"].as_str().unwrap();
+    assert_ne!(stored_id, one_shot, "{events:?}");
+    assert!(events[1]["properties"]["email"].is_null(), "{events:?}");
 }
 
 #[test]
@@ -441,13 +391,254 @@ fn unknown_payload_fields_are_rejected() {
     let base = spawn_mock(state.clone());
     let home = tempfile::tempdir().unwrap();
 
+    for payload in [
+        r#"{"title": "x", "$set": {"email": "spoof@example.com"}}"#,
+        r#"{"title": "x", "issue": "old flag name"}"#,
+    ] {
+        let (ok, out) = run_baml(home.path(), &base, &["feedback", "-"], Some(payload));
+        assert!(!ok, "{out}");
+        assert!(out.contains("unknown feedback field"), "{out}");
+    }
+    assert_eq!(feedback_events(&state).len(), 0, "nothing may be sent");
+}
+
+#[test]
+fn offline_send_saves_open_then_syncs() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let dead = dead_posthog();
+
+    // PostHog unreachable: the send still exits 0 and records the report.
+    let (ok, out) = run_baml_posthog(
+        home.path(),
+        &base,
+        &dead,
+        &["feedback", "--title", "Issue (net): sent offline"],
+        None,
+    );
+    assert!(ok, "an offline send must not fail: {out}");
+    assert!(out.contains("saved locally"), "{out}");
+    let store = std::fs::read_to_string(home.path().join("feedback.json")).unwrap();
+    assert!(store.contains("\"open\""), "{store}");
+    assert_eq!(feedback_events(&state).len(), 0);
+
+    // Any later invocation against a reachable PostHog syncs it.
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "list"], None);
+    assert!(ok, "{out}");
+    assert!(out.contains("anonymous"), "synced status: {out}");
+    let events = feedback_events(&state);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(
+        events[0]["properties"]["title"], "Issue (net): sent offline",
+        "{events:?}"
+    );
+    let store = std::fs::read_to_string(home.path().join("feedback.json")).unwrap();
+    assert!(!store.contains("\"open\""), "{store}");
+}
+
+#[test]
+fn sync_honors_forced_anonymity_after_login() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let dead = dead_posthog();
+
+    // Establish the persistent distinct id online, then log in.
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--anonymous", "-"],
-        Some(r#"{"issue": "x", "$set": {"email": "spoof@example.com"}}"#),
+        &["feedback", "--title", "Issue (x): baseline"],
+        None,
     );
-    assert!(!ok, "must reject unknown fields: {out}");
-    assert!(out.contains("Unknown feedback field"), "{out}");
+    assert!(ok, "{out}");
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
+    assert!(ok, "{out}");
+
+    // An explicitly anonymous report filed while PostHog is unreachable...
+    let (ok, out) = run_baml_posthog(
+        home.path(),
+        &base,
+        &dead,
+        &["feedback", "--anonymous", "--title", "Issue (x): hush"],
+        None,
+    );
+    assert!(ok, "{out}");
+
+    // ...must stay anonymous when a later run syncs it, despite the login:
+    // no email property, and a distinct id different from the merged one.
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "status"], None);
+    assert!(ok, "{out}");
+    let events = feedback_events(&state);
+    assert_eq!(events.len(), 2, "{events:?}");
+    let baseline_id = events[0]["distinct_id"].as_str().unwrap();
+    let synced = &events[1];
+    assert_eq!(synced["properties"]["title"], "Issue (x): hush", "{synced}");
+    assert!(synced["properties"]["email"].is_null(), "{synced}");
+    assert_ne!(synced["distinct_id"].as_str().unwrap(), baseline_id);
+    let store = std::fs::read_to_string(home.path().join("feedback.json")).unwrap();
+    assert!(store.contains("\"anonymous\""), "{store}");
+    assert!(!store.contains("\"open\""), "{store}");
+}
+
+#[test]
+fn attached_files_ship_and_survive_offline_sync() {
+    use base64::Engine as _;
+
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let dead = dead_posthog();
+    let attachment = home.path().join("repro.baml");
+    std::fs::write(&attachment, "class A { x int }").unwrap();
+
+    // Online send with --files: the event carries the encoded attachment.
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &[
+            "feedback",
+            "--title",
+            "Issue (types): with repro file",
+            "--files",
+            attachment.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert!(ok, "{out}");
+    assert!(out.contains("Files: repro.baml (17 bytes)"), "{out}");
+    let events = feedback_events(&state);
+    let files = events[0]["properties"]["files"].as_array().unwrap();
+    assert_eq!(files[0]["name"], "repro.baml");
+    assert_eq!(files[0]["mime"], "text/plain");
+    assert!(!files[0]["content_base64"].as_str().unwrap().is_empty());
+    // Delivered: the local record keeps metadata, not content.
+    let store = std::fs::read_to_string(home.path().join("feedback.json")).unwrap();
+    assert!(store.contains("repro.baml"), "{store}");
+    assert!(!store.contains("content_base64"), "{store}");
+
+    // Offline send with a file: content is retained in the open record...
+    let (ok, out) = run_baml_posthog(
+        home.path(),
+        &base,
+        &dead,
+        &[
+            "feedback",
+            "--title",
+            "Issue (types): offline with file",
+            "--files",
+            attachment.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert!(ok, "{out}");
+    let store = std::fs::read_to_string(home.path().join("feedback.json")).unwrap();
+    assert!(store.contains("content_base64"), "{store}");
+
+    // ...and the deferred delivery ships it intact.
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "status"], None);
+    assert!(ok, "{out}");
+    let events = feedback_events(&state);
+    assert_eq!(events.len(), 2, "{events:?}");
+    let synced_files = events[1]["properties"]["files"].as_array().unwrap();
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(synced_files[0]["content_base64"].as_str().unwrap())
+            .unwrap(),
+        b"class A { x int }"
+    );
+    let store = std::fs::read_to_string(home.path().join("feedback.json")).unwrap();
+    assert!(!store.contains("content_base64"), "{store}");
+    assert!(!store.contains("\"open\""), "{store}");
+}
+
+#[test]
+fn disable_blocks_sends_until_enable() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "disable"], None);
+    assert!(ok, "{out}");
+    assert!(out.contains("feedback disabled"), "{out}");
+
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &["feedback", "--title", "Issue (x): blocked"],
+        None,
+    );
+    assert!(!ok, "disabled send must exit non-zero: {out}");
+    assert!(out.contains("baml feedback enable"), "{out}");
     assert_eq!(feedback_events(&state).len(), 0, "nothing may be sent");
+
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "enable"], None);
+    assert!(ok, "{out}");
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &["feedback", "--title", "Issue (x): unblocked"],
+        None,
+    );
+    assert!(ok, "{out}");
+    assert_eq!(feedback_events(&state).len(), 1);
+}
+
+#[test]
+fn status_list_view_read_the_local_store() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state);
+    let home = tempfile::tempdir().unwrap();
+
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &[
+            "feedback",
+            "--title",
+            "Issue (viewer): first",
+            "--description",
+            "Minimum repro: class A {}",
+        ],
+        None,
+    );
+    assert!(ok, "{out}");
+
+    // status: enabled + the report with its delivery state.
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "status"], None);
+    assert!(ok, "{out}");
+    assert!(out.contains("Status: Enabled"), "{out}");
+    assert!(out.contains("[anonymous]"), "{out}");
+    assert!(out.contains("Issue (viewer): first"), "{out}");
+
+    // list --json: machine-readable records.
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "list", "--json"], None);
+    assert!(ok, "{out}");
+    // run_baml appends stderr (the direct-binary-use warning) after stdout;
+    // parse just the JSON array span.
+    let json_span = &out[out.find('[').unwrap()..=out.rfind(']').unwrap()];
+    let records: Value = serde_json::from_str(json_span).expect("list --json is JSON");
+    let records = records.as_array().unwrap();
+    assert_eq!(records.len(), 1, "{records:?}");
+    let id = records[0]["id"].as_str().unwrap().to_string();
+    assert_eq!(records[0]["status"], "anonymous", "{records:?}");
+
+    // list --status filters.
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &["feedback", "list", "--status", "open"],
+        None,
+    );
+    assert!(ok, "{out}");
+    assert!(out.contains("no matching reports"), "{out}");
+
+    // view renders the full record; unknown ids error.
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "view", &id], None);
+    assert!(ok, "{out}");
+    assert!(out.contains("Issue (viewer): first"), "{out}");
+    assert!(out.contains("Minimum repro: class A {}"), "{out}");
+    let (ok, out) = run_baml(home.path(), &base, &["feedback", "view", "zzzzzzzz"], None);
+    assert!(!ok, "{out}");
+    assert!(out.contains("no report with id"), "{out}");
 }

@@ -647,7 +647,10 @@ function user.TriviaLongValueClientBlock$new(lenient: bool) -> ? throws never {
   baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.TestTarget(client: baml.llm.Client = BasicClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "TestTarget", map {  }) : string
+  ai.internal._run_agent_to_response<string>(TestTarget$task(client = client)).value : string
+}
+function user.TestTarget$task(client: baml.llm.Client = BasicClient) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "TestTarget", map {  }, []) : ai.Task<string>
 }
 function user.TestTarget$render_prompt(client: baml.llm.Client = BasicClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "TestTarget", map {  }) : baml.llm.PromptAst
@@ -962,7 +965,11 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
   }
 }
 function user.LlmBasic(name: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmBasic", map { "name": name }) : string
+  ai.internal._run_agent_to_response<string>(LlmBasic$task(name = name, client = client)).value : string
+  !! 11235..11291: unresolved name: GPT4
+}
+function user.LlmBasic$task(name: string, client: baml.llm.Client = GPT4) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmBasic", map { "name": name }, []) : ai.Task<string>
   !! 11235..11291: unresolved name: GPT4
 }
 function user.LlmBasic$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
@@ -978,7 +985,11 @@ function user.LlmBasic$build_request_stream(name: string, client: baml.llm.Clien
   !! 11235..11291: unresolved name: GPT4
 }
 function user.LlmMultiLine(text: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmMultiLine", map { "text": text }) : string
+  ai.internal._run_agent_to_response<string>(LlmMultiLine$task(text = text, client = client)).value : string
+  !! 11395..11516: unresolved name: GPT4
+}
+function user.LlmMultiLine$task(text: string, client: baml.llm.Client = GPT4) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmMultiLine", map { "text": text }, []) : ai.Task<string>
   !! 11395..11516: unresolved name: GPT4
 }
 function user.LlmMultiLine$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
@@ -994,7 +1005,10 @@ function user.LlmMultiLine$build_request_stream(text: string, client: baml.llm.C
   !! 11395..11516: unresolved name: GPT4
 }
 function user.LlmStringClient(text: string, client: baml.llm.Client = ...) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmStringClient", map { "text": text }) : string
+  ai.internal._run_agent_to_response<string>(LlmStringClient$task(text = text, client = client)).value : string
+}
+function user.LlmStringClient$task(text: string, client: baml.llm.Client = ...) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmStringClient", map { "text": text }, []) : ai.Task<string>
 }
 function user.LlmStringClient$render_prompt(text: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmStringClient", map { "text": text }) : baml.llm.PromptAst
@@ -1006,7 +1020,11 @@ function user.LlmStringClient$build_request_stream(text: string, client: baml.ll
   baml.llm.build_request_stream(client, "LlmStringClient", map { "text": text }) : baml.http.Request
 }
 function user.LlmReversedOrder(text: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmReversedOrder", map { "text": text }) : string
+  ai.internal._run_agent_to_response<string>(LlmReversedOrder$task(text = text, client = client)).value : string
+  !! 11795..11851: unresolved name: GPT4
+}
+function user.LlmReversedOrder$task(text: string, client: baml.llm.Client = GPT4) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmReversedOrder", map { "text": text }, []) : ai.Task<string>
   !! 11795..11851: unresolved name: GPT4
 }
 function user.LlmReversedOrder$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
@@ -1022,7 +1040,11 @@ function user.LlmReversedOrder$build_request_stream(text: string, client: baml.l
   !! 11795..11851: unresolved name: GPT4
 }
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
+  ai.internal._run_agent_to_response<string>(LlmWithLongSignature$task(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client)).value : string
+  !! 12037..12187: unresolved name: GPT4
+}
+function user.LlmWithLongSignature$task(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, []) : ai.Task<string>
   !! 12037..12187: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {

@@ -334,7 +334,7 @@ pub(crate) mod support {
         }
     }
 
-    fn format_lambda_signature(func_def: &baml_compiler2_ast::FunctionDef) -> String {
+    fn format_lambda_signature(func_def: &baml_compiler2_ast::LambdaDef) -> String {
         let params: Vec<String> = func_def
             .params
             .iter()
@@ -357,28 +357,13 @@ pub(crate) mod support {
             .as_ref()
             .map(|te| format!(" throws {}", te))
             .unwrap_or_default();
-        let generics = if func_def.generic_params.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "<{}>",
-                func_def
-                    .generic_params
-                    .iter()
-                    .map(|n| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        format!(
-            "{generics}({}) ->{ret}{throws} {{ ... }}",
-            params.join(", ")
-        )
+        // A lambda never declares generics, so the signature has no `<…>`.
+        format!("({}) ->{ret}{throws} {{ ... }}", params.join(", "))
     }
 
     /// HIR-aware version of `format_lambda_signature` that qualifies type names.
     fn format_lambda_signature_hir(
-        func_def: &baml_compiler2_ast::FunctionDef,
+        func_def: &baml_compiler2_ast::LambdaDef,
         prefix: &str,
         local_type_names: &std::collections::HashSet<&str>,
     ) -> String {
@@ -412,23 +397,8 @@ pub(crate) mod support {
             .as_ref()
             .map(|te| format!(" throws {}", qualify(te)))
             .unwrap_or_default();
-        let generics = if func_def.generic_params.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "<{}>",
-                func_def
-                    .generic_params
-                    .iter()
-                    .map(|n| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        format!(
-            "{generics}({}) ->{ret}{throws} {{ ... }}",
-            params.join(", ")
-        )
+        // A lambda never declares generics, so the signature has no `<…>`.
+        format!("({}) ->{ret}{throws} {{ ... }}", params.join(", "))
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
@@ -560,12 +530,9 @@ pub(crate) mod support {
             Expr::Lambda(func_def) => {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc} : {ty}").ok();
-                // Recursively render the lambda's own ExprBody
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
-                    &func_def.body
-                    && let Some(root) = lambda_body.root_expr
-                {
-                    render_expr_body_untyped(lambda_body, root, indent + 2, output);
+                // The body is an expression in this same arena.
+                if let Some(root) = func_def.body {
+                    render_expr_body_untyped(body, root, indent + 2, output);
                 }
             }
             Expr::Call { callee, args, .. } => {
@@ -608,8 +575,10 @@ pub(crate) mod support {
         }
     }
 
-    /// Render a lambda's ExprBody without type information (since lambda bodies
-    /// have their own ExprBody arena and we don't have a ScopeInference for them).
+    /// Render a lambda's body without type information.
+    ///
+    /// The body shares the enclosing function's arena, but its types live in
+    /// the lambda's own `ScopeInference`, which this renderer does not hold.
     fn render_expr_body_untyped(
         body: &ExprBody,
         expr_id: ExprId,
@@ -647,10 +616,8 @@ pub(crate) mod support {
             Expr::Lambda(func_def) => {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc}").ok();
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lb, _)) = &func_def.body
-                    && let Some(root) = lb.root_expr
-                {
-                    render_expr_body_untyped(lb, root, indent + 2, output);
+                if let Some(root) = func_def.body {
+                    render_expr_body_untyped(body, root, indent + 2, output);
                 }
             }
             _ => {
@@ -1188,7 +1155,8 @@ pub(crate) mod support {
                     let generics_display = if gp.is_empty() {
                         String::new()
                     } else {
-                        let names: Vec<String> = gp.iter().map(|n| n.to_string()).collect();
+                        let names: Vec<String> =
+                            gp.iter().map(|param| param.name.to_string()).collect();
                         format!("<{}>", names.join(", "))
                     };
 
@@ -1971,17 +1939,10 @@ pub(crate) mod support {
                 ),
                 Expr::Lambda(func_def) => {
                     let sig = format_lambda_signature_hir(func_def, prefix, local_type_names);
-                    let body_desc = func_def
-                        .body
-                        .as_ref()
-                        .map(|b| match b {
-                            baml_compiler2_ast::FunctionBodyDef::Expr(lb, _) => lb
-                                .root_expr
-                                .map(|root| expr_desc_hir(root, lb, prefix, local_type_names))
-                                .unwrap_or_else(|| "<empty>".into()),
-                            _ => "<non-expr>".into(),
-                        })
-                        .unwrap_or_else(|| "<no body>".into());
+                    let body_desc = func_def.body.map_or_else(
+                        || "<no body>".into(),
+                        |root| expr_desc_hir(root, body, prefix, local_type_names),
+                    );
                     // Replace "{ ... }" placeholder with actual body
                     sig.replace("{ ... }", &format!("{{ {body_desc} }}"))
                 }
@@ -2145,10 +2106,12 @@ pub(crate) mod support {
             let class = class_data(db, loc);
             writeln!(output, "class {prefix}{} {{", class.name).ok();
             for field in &class.fields {
-                let ty = field
-                    .type_ref
-                    .map(|id| type_ref_to_string(&class.type_refs, id, &prefix, &local_type_names))
-                    .unwrap_or_else(|| "?".into());
+                let ty = type_ref_to_string(
+                    &class.type_refs,
+                    field.type_ref,
+                    &prefix,
+                    &local_type_names,
+                );
                 writeln!(output, "  {}: {}", field.name, ty).ok();
             }
             writeln!(output, "}}").ok();

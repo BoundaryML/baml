@@ -778,6 +778,7 @@ fn merge_package_fragment(
                 interface_args: rule.interface_args.clone(),
                 interface_assoc: rule.interface_assoc.clone(),
                 methods,
+                field_links: rule.field_links.clone(),
             });
         }
         pkg.impl_rules

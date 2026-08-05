@@ -173,6 +173,8 @@ pub struct FunctionInfo {
     pub name: String,
     pub kind: FunctionKind,
     pub origin: FunctionOrigin,
+    pub signature: String,
+    pub source_position: FunctionSourcePosition,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
     /// Parameter schemas for the playground args form; named types inside are
@@ -182,6 +184,14 @@ pub struct FunctionInfo {
     /// the UI relies on the distinction.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<Vec<baml_project::ParamSchema>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FunctionSourcePosition {
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -239,6 +249,8 @@ pub struct ProjectDiagnostic {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
+    /// Generation of the installed engine that backs this project update.
+    pub generation: u64,
     pub functions: Vec<FunctionInfo>,
     /// Statically declared legacy test cases that can seed function previews.
     pub tests: Vec<TestInfo>,
@@ -276,6 +288,8 @@ pub enum PlaygroundNotification {
     ControlFlowGraphResult {
         function_name: String,
         graph: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u32>,
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
@@ -307,6 +321,10 @@ pub struct PlaygroundSourceFile {
 }
 
 pub trait PlaygroundSender: Send + Sync {
+    /// Serialize and enqueue the notification synchronously without waiting
+    /// for a consumer or performing blocking I/O. Project snapshots keep
+    /// revision-fencing guards through this call, so implementations must
+    /// return after a bounded in-process handoff.
     fn send_playground_notification(&self, notification: PlaygroundNotification);
 }
 
@@ -394,7 +412,7 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     ///
     /// Builds the graph and sends it back via the playground notification
     /// callback as a `PlaygroundNotification::ControlFlowGraphResult`.
-    fn request_control_flow_graph(&self, function_name: &str);
+    fn request_control_flow_graph(&self, function_name: &str, request_id: Option<u32>);
 
     /// Get cursor context for playground navigation.
     ///

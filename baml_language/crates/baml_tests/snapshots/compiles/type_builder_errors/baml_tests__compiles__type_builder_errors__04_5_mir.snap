@@ -9,8 +9,9 @@ fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: baml.llm.Client[]
-    let _5: map<string, unknown>
-    let _6: type
+    let _5: ai.ResponseWithMetadata<Resume>
+    let _6: ai.Task<Resume>
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -24,12 +25,20 @@ fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     }
 
     bb2: {
-        _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _6 = load_type(Resume);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _6 = call const fn user.TypeBuilderFn$task(copy _1, copy _2) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(Resume);
+        _5 = call const fn ai.internal._run_agent_to_response<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = copy _5.0;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -218,6 +227,45 @@ fn user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -> baml
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.TypeBuilderFn$task(from_text: string, client: baml.llm.Client) -> ai.Task<Resume> {
+    // Locals:
+    let _0: ai.Task<Resume> // _0 // return
+    let _1: string // from_text // param
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: baml.llm.Client[]
+    let _5: ai.Provider
+    let _6: map<string, unknown>
+    let _7: (ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>)[]
+    let _8: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = []: baml.llm.Client[];
+        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn ai.internal._provider_from_client(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _6 = { const "from_text": copy _1 }: map<string, unknown>;
+        _7 = []: ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>[];
+        _8 = load_type(Resume);
+        _0 = call const fn ai.internal._task_named_from_registered_prompt<copy _8>(copy _5, const "TypeBuilderFn", copy _6, copy _7) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

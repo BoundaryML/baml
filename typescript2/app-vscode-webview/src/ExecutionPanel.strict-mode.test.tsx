@@ -1,15 +1,16 @@
-import { StrictMode, act } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+/** biome-ignore-all lint/style/useFilenamingConvention: preserve the established test filename */
 import {
-  ExecutionPanel,
   type ControlFlowGraph,
+  ExecutionPanel,
   type ProjectUpdate,
-  type RuntimePort,
   type Run,
+  type RuntimePort,
   type WorkerInMessage,
   type WorkerOutMessage,
 } from '@b/pkg-playground';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, StrictMode } from 'react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 beforeAll(() => {
   HTMLElement.prototype.scrollTo ??= vi.fn();
@@ -27,25 +28,26 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
 
     act(() => {
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'listProjects',
           projects: ['project'],
+          type: 'listProjects',
         },
+        type: 'playgroundNotification',
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
-            functions: [
-              { name: 'ReadNote', kind: 'expr', origin: 'userDefined' },
-            ],
             diagnostics: [],
+            functions: [
+              { kind: 'expr', name: 'ReadNote', origin: 'userDefined' },
+            ],
+            generation: 1,
+            isBexCurrent: true,
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -68,9 +70,9 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
     const run = runFixture(startRun!.project, startRun!.functionName);
     act(() => {
       port.emit({
-        type: 'runStarted',
         requestId: startRun!.requestId,
         run,
+        type: 'runStarted',
       });
     });
 
@@ -86,10 +88,10 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
 
     act(() => {
       port.emit({
-        type: 'runSnapshot',
-        requestId: snapshot!.requestId,
         boundaryId: run.boundaryId,
-        snapshot: { ...run, status: 'running', cursor: 1 },
+        requestId: snapshot!.requestId,
+        snapshot: { ...run, cursor: 1, status: 'running' },
+        type: 'runSnapshot',
       });
     });
 
@@ -106,30 +108,30 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
 
     act(() => {
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'listProjects',
           projects: ['project'],
+          type: 'listProjects',
         },
+        type: 'playgroundNotification',
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
-              { name: 'paulo.Hi', kind: 'expr', origin: 'userDefined' },
+              { kind: 'expr', name: 'paulo.Hi', origin: 'userDefined' },
               {
-                name: 'paulo.childFunc1',
                 kind: 'expr',
+                name: 'paulo.childFunc1',
                 origin: 'userDefined',
               },
             ],
-            diagnostics: [],
+            isBexCurrent: true,
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -141,20 +143,20 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
 
     act(() => {
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'controlFlowGraphResult',
           functionName: 'paulo.Hi',
           graph: graphFixture('paulo.Hi', ['childFunc1']),
+          type: 'controlFlowGraphResult',
         },
+        type: 'playgroundNotification',
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'controlFlowGraphResult',
           functionName: 'paulo.childFunc1',
           graph: graphFixture('paulo.childFunc1'),
+          type: 'controlFlowGraphResult',
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -169,11 +171,250 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
       expect(
         port.sent.some(
           (msg) =>
-            msg.type === 'startRun' &&
-            msg.functionName === 'paulo.childFunc1',
+            msg.type === 'startRun' && msg.functionName === 'paulo.childFunc1',
         ),
       ).toBe(true);
     });
+  });
+
+  it('ignores stale CFG responses after a project update', async () => {
+    const port = new FakeRuntimePort();
+    const functions = [
+      { kind: 'expr' as const, name: 'Alpha', origin: 'userDefined' as const },
+      { kind: 'expr' as const, name: 'Zulu', origin: 'userDefined' as const },
+    ];
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
+        type: 'playgroundNotification',
+      });
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions,
+            generation: 1,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+
+    const cfgRequests = () =>
+      port.sent.filter(
+        (
+          message,
+        ): message is Extract<
+          WorkerInMessage,
+          { type: 'requestControlFlowGraph' }
+        > => message.type === 'requestControlFlowGraph',
+      );
+    await waitFor(() => expect(cfgRequests()).toHaveLength(2));
+    const staleRequests = new Map(
+      cfgRequests().map((request) => [request.functionName, request.requestId]),
+    );
+
+    act(() => {
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions,
+            generation: 2,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+
+    await waitFor(() => expect(cfgRequests()).toHaveLength(4));
+    const currentRequests = new Map(
+      cfgRequests()
+        .slice(2)
+        .map((request) => [request.functionName, request.requestId]),
+    );
+
+    act(() => {
+      port.emit({
+        functionName: 'Alpha',
+        graph: graphFixtureWithNodeCount('Alpha', 1),
+        requestId: cfgRequestId(staleRequests, 'Alpha'),
+        type: 'controlFlowGraphResult',
+      });
+      port.emit({
+        functionName: 'Zulu',
+        graph: graphFixtureWithNodeCount('Zulu', 5),
+        requestId: cfgRequestId(staleRequests, 'Zulu'),
+        type: 'controlFlowGraphResult',
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (2)' }),
+    );
+    const alpha = screen.getByRole('button', { name: 'Alpha' });
+    const zulu = screen.getByRole('button', { name: 'Zulu' });
+    expect(
+      alpha.compareDocumentPosition(zulu) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    act(() => {
+      port.emit({
+        functionName: 'Alpha',
+        graph: graphFixtureWithNodeCount('Alpha', 1),
+        requestId: cfgRequestId(currentRequests, 'Alpha'),
+        type: 'controlFlowGraphResult',
+      });
+      port.emit({
+        functionName: 'Zulu',
+        graph: graphFixtureWithNodeCount('Zulu', 5),
+        requestId: cfgRequestId(currentRequests, 'Zulu'),
+        type: 'controlFlowGraphResult',
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        zulu.compareDocumentPosition(alpha) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
+    });
+  });
+});
+
+describe('ExecutionPanel run history', () => {
+  it('opens the selected historical run in the graph tab', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
+        type: 'playgroundNotification',
+      });
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions: [
+              { kind: 'expr', name: 'ReadNote', origin: 'userDefined' },
+            ],
+            generation: 1,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'ReadNote' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
+
+    const startRun = await waitFor(() => {
+      const message = port.sent.find(
+        (
+          candidate,
+        ): candidate is Extract<WorkerInMessage, { type: 'startRun' }> =>
+          candidate.type === 'startRun',
+      );
+      expect(message).toBeDefined();
+      return message!;
+    });
+    const run = runFixture(startRun.project, startRun.functionName);
+    act(() => {
+      port.emit({
+        requestId: startRun.requestId,
+        run,
+        type: 'runStarted',
+      });
+    });
+    const snapshot = await waitFor(() => {
+      const message = port.sent.find(
+        (
+          candidate,
+        ): candidate is Extract<WorkerInMessage, { type: 'snapshot' }> =>
+          candidate.type === 'snapshot',
+      );
+      expect(message).toBeDefined();
+      return message!;
+    });
+    act(() => {
+      port.emit({
+        boundaryId: run.boundaryId,
+        requestId: snapshot.requestId,
+        snapshot: { ...run, cursor: 1, status: 'succeeded' },
+        type: 'runSnapshot',
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', {
+          name: 'View ReadNote run in graph',
+        }),
+      ).toBeInTheDocument();
+    });
+    act(() => {
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions: [
+              { kind: 'expr', name: 'ReadNote', origin: 'userDefined' },
+            ],
+            generation: 2,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+    expect(
+      screen.getByRole('button', { name: 'View ReadNote run in graph' }),
+    ).toBeDisabled();
+
+    act(() => {
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions: [
+              { kind: 'expr', name: 'ReadNote', origin: 'userDefined' },
+            ],
+            generation: 1,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View ReadNote run in graph' }),
+    );
+
+    expect(screen.getByRole('tab', { name: 'Graph' })).toHaveAttribute(
+      'data-state',
+      'active',
+    );
+    expect(screen.getByText('Loading graph...')).toBeInTheDocument();
   });
 });
 
@@ -181,58 +422,56 @@ describe('ExecutionPanel test previews', () => {
   it('hydrates legacy test args without running and releases selection on navigation', async () => {
     const port = new FakeRuntimePort();
     const projectUpdate: ProjectUpdate = {
-      isBexCurrent: true,
+      diagnostics: [],
       functions: [
         {
-          name: 'ClassifySentiment',
-          kind: 'llm',
-          origin: 'userDefined',
           capabilities: {
-            renderPrompt: true,
             buildRequest: true,
             clientName: 'Gpt5',
+            renderPrompt: true,
           },
+          kind: 'llm',
+          name: 'ClassifySentiment',
+          origin: 'userDefined',
           params: [
             {
-              name: 'text',
               hasDefault: false,
+              name: 'text',
               schema: { type: 'string' },
             },
           ],
         },
-        { name: 'OtherFunction', kind: 'expr', origin: 'userDefined' },
+        { kind: 'expr', name: 'OtherFunction', origin: 'userDefined' },
       ],
+      isBexCurrent: true,
       tests: [
         {
-          name: 'HappySentiment',
-          functionName: 'ClassifySentiment',
           argsJson: '{"text":"I absolutely love this feature"}',
+          functionName: 'ClassifySentiment',
+          name: 'HappySentiment',
         },
       ],
-      diagnostics: [],
     };
 
     render(<ExecutionPanel port={port} />);
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: projectUpdate,
         },
+        type: 'playgroundNotification',
       });
     });
 
     fireEvent.click(
-      await screen.findByTitle(
-        'Use HappySentiment args for ClassifySentiment',
-      ),
+      await screen.findByTitle('Use HappySentiment args for ClassifySentiment'),
     );
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
 
@@ -240,32 +479,33 @@ describe('ExecutionPanel test previews', () => {
     expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
       text: 'I absolutely love this feature',
     });
-    expect(
-      screen.getByText('ClassifySentiment()'),
-    ).toBeInTheDocument();
-    expect(port.sent.some((message) => message.type === 'startRun')).toBe(false);
-    expect(port.sent.some((message) => message.type === 'startTestRun')).toBe(false);
+    expect(screen.getByText('ClassifySentiment()')).toBeInTheDocument();
+    expect(port.sent.some((message) => message.type === 'startRun')).toBe(
+      false,
+    );
+    expect(port.sent.some((message) => message.type === 'startTestRun')).toBe(
+      false,
+    );
 
     act(() => {
       port.emit({
-        type: 'cursorContext',
         context: {
           functionName: 'OtherFunction',
           isWorkflow: false,
-          workflowMemberships: [],
           sourceExprId: null,
           testName: null,
+          workflowMemberships: [],
         },
+        type: 'cursorContext',
       });
     });
     expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
 
     act(() => {
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
             ...projectUpdate,
             tests: projectUpdate.tests?.map((test) => ({
@@ -274,6 +514,7 @@ describe('ExecutionPanel test previews', () => {
             })),
           },
         },
+        type: 'playgroundNotification',
       });
     });
     expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
@@ -288,40 +529,44 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'Greet',
                 kind: 'expr',
+                name: 'Greet',
                 origin: 'userDefined',
                 params: [
-                  { name: 'name', hasDefault: false, schema: { type: 'string' } },
                   {
-                    name: 'color',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.Color' },
+                    name: 'name',
+                    schema: { type: 'string' },
+                  },
+                  {
+                    hasDefault: false,
+                    name: 'color',
+                    schema: { name: 'user.Color', type: 'ref' },
                   },
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {
               'user.Color': {
                 kind: 'enum',
                 values: ['Red', 'Green', 'Blue'],
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -341,8 +586,8 @@ describe('ExecutionPanel args form', () => {
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     const parsed = JSON.parse((rawInput as HTMLInputElement).value);
     expect(parsed).toEqual({
-      name: 'Ada',
       color: { $baml: { enum: 'user.Color', value: 'Green' } },
+      name: 'Ada',
     });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
@@ -372,40 +617,40 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'Greet',
                 kind: 'expr',
+                name: 'Greet',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 'color',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.Color' },
+                    name: 'color',
+                    schema: { name: 'user.Color', type: 'ref' },
                   },
                 ],
               },
-              { name: 'Zero', kind: 'expr', origin: 'userDefined', params: [] },
+              { kind: 'expr', name: 'Zero', origin: 'userDefined', params: [] },
             ],
+            isBexCurrent: true,
             types: {
               'user.Color': {
                 kind: 'enum',
                 values: ['Red', 'Green', 'Blue'],
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -439,42 +684,42 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'EchoPerson',
                 kind: 'expr',
+                name: 'EchoPerson',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 'person',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.Person' },
+                    name: 'person',
+                    schema: { name: 'user.Person', type: 'ref' },
                   },
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {
               'user.Person': {
-                kind: 'class',
                 fields: [
                   { name: 'name', schema: { type: 'string' } },
                   { name: 'active', schema: { type: 'bool' } },
                 ],
+                kind: 'class',
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -489,39 +734,39 @@ describe('ExecutionPanel args form', () => {
     // Hot-reload the same function name with a new required class field.
     act(() => {
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'EchoPerson',
                 kind: 'expr',
+                name: 'EchoPerson',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 'person',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.Person' },
+                    name: 'person',
+                    schema: { name: 'user.Person', type: 'ref' },
                   },
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {
               'user.Person': {
-                kind: 'class',
                 fields: [
                   { name: 'name', schema: { type: 'string' } },
                   { name: 'active', schema: { type: 'bool' } },
                   { name: 'age', schema: { type: 'int' } },
                 ],
+                kind: 'class',
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -540,9 +785,9 @@ describe('ExecutionPanel args form', () => {
       expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
         person: {
           $baml: { type: 'user.Person' },
-          name: 'Ada Lovelace',
           active: false,
           age: 0,
+          name: 'Ada Lovelace',
         },
       });
     });
@@ -555,48 +800,48 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'EchoEnvelope',
                 kind: 'expr',
+                name: 'EchoEnvelope',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 'envelope',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.Envelope' },
+                    name: 'envelope',
+                    schema: { name: 'user.Envelope', type: 'ref' },
                   },
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {
-              'user.Flag': {
-                kind: 'class',
-                fields: [{ name: 'active', schema: { type: 'bool' } }],
-              },
               'user.Envelope': {
-                kind: 'class',
                 fields: [
                   {
                     name: 'flag',
-                    schema: { type: 'ref', name: 'user.Flag' },
+                    schema: { name: 'user.Flag', type: 'ref' },
                   },
                 ],
+                kind: 'class',
+              },
+              'user.Flag': {
+                fields: [{ name: 'active', schema: { type: 'bool' } }],
+                kind: 'class',
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -632,25 +877,24 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'Mix',
                 kind: 'expr',
+                name: 'Mix',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 'x',
                     hasDefault: false,
+                    name: 'x',
                     schema: {
                       type: 'union',
                       variants: [{ type: 'int' }, { type: 'float' }],
@@ -659,10 +903,11 @@ describe('ExecutionPanel args form', () => {
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {},
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -696,48 +941,48 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'Walk',
                 kind: 'expr',
+                name: 'Walk',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 't',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.Tree' },
+                    name: 't',
+                    schema: { name: 'user.Tree', type: 'ref' },
                   },
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {
               'user.Tree': {
-                kind: 'class',
                 fields: [
                   { name: 'value', schema: { type: 'int' } },
                   {
                     name: 'children',
                     schema: {
+                      item: { name: 'user.Tree', type: 'ref' },
                       type: 'list',
-                      item: { type: 'ref', name: 'user.Tree' },
                     },
                   },
                 ],
+                kind: 'class',
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -771,10 +1016,8 @@ describe('ExecutionPanel args form', () => {
     expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
       t: {
         $baml: { type: 'user.Tree' },
+        children: [{ $baml: { type: 'user.Tree' }, children: [], value: 7 }],
         value: 0,
-        children: [
-          { $baml: { type: 'user.Tree' }, value: 7, children: [] },
-        ],
       },
     });
   });
@@ -790,45 +1033,42 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'Loop',
                 kind: 'expr',
+                name: 'Loop',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 'a',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.A' },
+                    name: 'a',
+                    schema: { name: 'user.A', type: 'ref' },
                   },
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {
               'user.A': {
                 kind: 'alias',
                 schema: {
                   type: 'union',
-                  variants: [
-                    { type: 'ref', name: 'user.A' },
-                    { type: 'int' },
-                  ],
+                  variants: [{ name: 'user.A', type: 'ref' }, { type: 'int' }],
                 },
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -840,51 +1080,49 @@ describe('ExecutionPanel args form', () => {
     // Union chips render; the self-referential variant is reachable but its
     // widget degrades to the raw-JSON textarea.
     fireEvent.click(await screen.findByRole('button', { name: 'A' }));
-    expect(
-      await screen.findByPlaceholderText('JSON (A)'),
-    ).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('JSON (A)')).toBeInTheDocument();
   });
 
   it('normalizes a bare-enum host seed into the wire marker', async () => {
     const port = new FakeRuntimePort();
 
-    render(<ExecutionPanel port={port} initialArgsJson='{"c":"Red"}' />);
+    render(<ExecutionPanel initialArgsJson='{"c":"Red"}' port={port} />);
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
+            diagnostics: [],
             functions: [
               {
-                name: 'IsRed',
                 kind: 'expr',
+                name: 'IsRed',
                 origin: 'userDefined',
                 params: [
                   {
-                    name: 'c',
                     hasDefault: false,
-                    schema: { type: 'ref', name: 'user.Color' },
+                    name: 'c',
+                    schema: { name: 'user.Color', type: 'ref' },
                   },
                 ],
               },
             ],
+            isBexCurrent: true,
             types: {
               'user.Color': {
                 kind: 'enum',
                 values: ['Red', 'Green', 'Blue'],
               },
             },
-            diagnostics: [],
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -912,22 +1150,22 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
         type: 'playgroundNotification',
-        notification: { type: 'listProjects', projects: ['project'] },
       });
       port.emit({
-        type: 'playgroundNotification',
         notification: {
-          type: 'updateProject',
           project: 'project',
+          type: 'updateProject',
           update: {
-            isBexCurrent: true,
-            functions: [
-              { name: 'Zero', kind: 'expr', origin: 'userDefined', params: [] },
-            ],
             diagnostics: [],
+            functions: [
+              { kind: 'expr', name: 'Zero', origin: 'userDefined', params: [] },
+            ],
+            isBexCurrent: true,
           },
         },
+        type: 'playgroundNotification',
       });
     });
 
@@ -980,33 +1218,33 @@ class FakeRuntimePort implements RuntimePort {
 function runFixture(projectId: string, functionName: string): Run {
   return {
     boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
-    target: { kind: 'function', functionName },
-    visibility: { kind: 'history' },
-    status: 'pending',
-    createdAtMs: 100,
-    startedAtMs: null,
+    calls: [],
+    cancellation: null,
     completedAtMs: null,
+    createdAtMs: 100,
+    cursor: 0,
+    diagnostics: [],
+    error: null,
+    graphRuntimeOverlay: null,
+    payloads: [],
+    request: {
+      argsSummary: '{}',
+      optionsSummary: null,
+      projectGeneration: 1,
+      projectId,
+      target: { functionName, kind: 'function' },
+    },
+    result: null,
+    rootCallNodeId: null,
+    startedAtMs: null,
+    status: 'pending',
+    target: { functionName, kind: 'function' },
+    threads: [],
     timeAnchor: {
       epochCreatedAtMs: 100,
       traceZeroNs: '0',
     },
-    request: {
-      projectId,
-      projectGeneration: 1,
-      target: { kind: 'function', functionName },
-      argsSummary: '{}',
-      optionsSummary: null,
-    },
-    result: null,
-    error: null,
-    cancellation: null,
-    rootCallNodeId: null,
-    graphRuntimeOverlay: null,
-    calls: [],
-    threads: [],
-    payloads: [],
-    diagnostics: [],
-    cursor: 0,
+    visibility: { kind: 'history' },
   };
 }
 
@@ -1015,18 +1253,48 @@ function graphFixture(
   calleeNames: string[] = [],
 ): ControlFlowGraph {
   return {
+    edgesBySrc: {},
     nodes: {
       '1': {
-        id: 1,
-        parentNodeId: null,
-        logFilterKey: functionName,
-        label: functionName,
-        sourceExpr: null,
-        nodeType: 'functionRoot',
         calleeNames,
+        id: 1,
         isContainer: true,
+        label: functionName,
+        logFilterKey: functionName,
+        nodeType: 'functionRoot',
+        parentNodeId: null,
+        sourceExpr: null,
       },
     },
-    edgesBySrc: {},
   };
+}
+
+function graphFixtureWithNodeCount(
+  functionName: string,
+  nodeCount: number,
+): ControlFlowGraph {
+  const graph = graphFixture(functionName);
+  for (let id = 2; id <= nodeCount; id += 1) {
+    graph.nodes[String(id)] = {
+      id,
+      isContainer: false,
+      label: `node ${id}`,
+      logFilterKey: `${functionName}:${id}`,
+      nodeType: 'return',
+      parentNodeId: 1,
+      sourceExpr: null,
+    };
+  }
+  return graph;
+}
+
+function cfgRequestId(
+  requestIds: ReadonlyMap<string, number | undefined>,
+  functionName: string,
+): number {
+  const requestId = requestIds.get(functionName);
+  if (requestId === undefined) {
+    throw new Error(`missing CFG request ID for ${functionName}`);
+  }
+  return requestId;
 }

@@ -6,7 +6,10 @@ function user.OpenAIImageResponses$new(lenient: bool) -> ? throws never {
   baml.llm.PrimitiveClient { name: "OpenAIImageResponses", provider: "openai-responses", options: baml.llm.PrimitiveClientOptions { model: "gpt-4.1", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "type": "image_generation", "size": "1024x1024", "quality": "low" }] } } } : baml.llm.PrimitiveClient
 }
 function user.GenerateImage(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> image throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateImage", map { "prompt": prompt }) : image
+  ai.internal._run_agent_to_response<image>(GenerateImage$task(prompt = prompt, client = client)).value : image
+}
+function user.GenerateImage$task(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> ai.Task<image> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "GenerateImage", map { "prompt": prompt }, []) : ai.Task<image>
 }
 function user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateImage", map { "prompt": prompt }) : baml.llm.PromptAst
@@ -18,7 +21,10 @@ function user.GenerateImage$build_request_stream(prompt: string, client: baml.ll
   baml.llm.build_request_stream(client, "GenerateImage", map { "prompt": prompt }) : baml.http.Request
 }
 function user.GenerateImageSet(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> image[] throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateImageSet", map { "prompt": prompt }) : image[]
+  ai.internal._run_agent_to_response<image[]>(GenerateImageSet$task(prompt = prompt, client = client)).value : image[]
+}
+function user.GenerateImageSet$task(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> ai.Task<image[]> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "GenerateImageSet", map { "prompt": prompt }, []) : ai.Task<image[]>
 }
 function user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateImageSet", map { "prompt": prompt }) : baml.llm.PromptAst
@@ -30,7 +36,10 @@ function user.GenerateImageSet$build_request_stream(prompt: string, client: baml
   baml.llm.build_request_stream(client, "GenerateImageSet", map { "prompt": prompt }) : baml.http.Request
 }
 function user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> (image | string)[] throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateMixedImag...", map { "prompt": prompt }) : (image | string)[]
+  ai.internal._run_agent_to_response<(image | string)[]>(GenerateMixedImageNarrative$task(prompt = prompt, client = client)).value : (image | string)[]
+}
+function user.GenerateMixedImageNarrative$task(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> ai.Task<(image | string)[]> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "GenerateMixedImag...", map { "prompt": prompt }, []) : ai.Task<(image | string)[]>
 }
 function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateMixedImag...", map { "prompt": prompt }) : baml.llm.PromptAst

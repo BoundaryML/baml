@@ -3,7 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.TypeBuilderFn(from_text: string, client: baml.llm.Client = ...) -> user.Resume throws never {
-  baml.llm.call_llm_function<T>(client, "TypeBuilderFn", map { "from_text": from_text }) : user.Resume
+  ai.internal._run_agent_to_response<Resume>(TypeBuilderFn$task(from_text = from_text, client = client)).value : user.Resume
+}
+function user.TypeBuilderFn$task(from_text: string, client: baml.llm.Client = ...) -> ai.Task<user.Resume> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "TypeBuilderFn", map { "from_text": from_text }, []) : ai.Task<user.Resume>
 }
 function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.PromptAst

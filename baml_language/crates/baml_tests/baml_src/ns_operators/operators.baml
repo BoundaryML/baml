@@ -525,3 +525,259 @@ test "driver_panics_match_opcodes" {
     assert.is_true(baml.deep_equals(drv_catch_float_div_zero(), -1.0))
     assert.is_true(baml.deep_equals(drv_catch_bigint_div_zero(), -1n))
 }
+
+// ─── Ordering dispatch through baml.ops.Compare ───────────────────────────────
+// `<` `<=` `>` `>=` on operands the comparison opcodes cannot order lower to a
+// virtual call on baml.ops.Compare. `bool` needs no user code to reach this:
+// the stdlib declares `implement Compare for bool`, and before the interface
+// lowering existed `true < false` aborted with an uncatchable VM internal error.
+
+function ord_bool_lt(a: bool, b: bool) -> bool { a < b }
+function ord_bool_le(a: bool, b: bool) -> bool { a <= b }
+function ord_bool_gt(a: bool, b: bool) -> bool { a > b }
+function ord_bool_ge(a: bool, b: bool) -> bool { a >= b }
+
+test "ordering_on_bool_dispatches_compare" {
+    assert.is_true(ord_bool_lt(false, true))
+    assert.is_true(!ord_bool_lt(true, false))
+    assert.is_true(!ord_bool_lt(true, true))
+    assert.is_true(ord_bool_gt(true, false))
+    assert.is_true(!ord_bool_gt(false, true))
+    // `le`/`ge` come from the Compare defaults, so they are reflexive.
+    assert.is_true(ord_bool_le(false, false))
+    assert.is_true(ord_bool_ge(true, true))
+    assert.is_true(ord_bool_le(false, true))
+    assert.is_true(!ord_bool_ge(false, true))
+}
+
+// A user class implementing only the required `lt`; `le`/`gt`/`ge` resolve to the
+// interface defaults, which are merged into the impl's method table at bake time.
+class Ranked {
+    rank int
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.rank == other.rank }
+    }
+    implements baml.ops.Compare {
+        function lt(self, other: Self) -> bool throws never { self.rank < other.rank }
+    }
+}
+
+function ord_rank_lt(a: Ranked, b: Ranked) -> bool { a < b }
+function ord_rank_le(a: Ranked, b: Ranked) -> bool { a <= b }
+function ord_rank_gt(a: Ranked, b: Ranked) -> bool { a > b }
+function ord_rank_ge(a: Ranked, b: Ranked) -> bool { a >= b }
+
+test "ordering_on_user_class_dispatches_compare" {
+    assert.is_true(ord_rank_lt(Ranked { rank: 1 }, Ranked { rank: 2 }))
+    assert.is_true(!ord_rank_lt(Ranked { rank: 2 }, Ranked { rank: 1 }))
+    assert.is_true(ord_rank_le(Ranked { rank: 1 }, Ranked { rank: 1 }))
+    assert.is_true(ord_rank_gt(Ranked { rank: 2 }, Ranked { rank: 1 }))
+    assert.is_true(ord_rank_ge(Ranked { rank: 1 }, Ranked { rank: 1 }))
+    assert.is_true(!ord_rank_ge(Ranked { rank: 1 }, Ranked { rank: 2 }))
+}
+
+// Each operator dispatches its own method, so an override beats the default it
+// replaces. `gt` here is deliberately inconsistent with `!le`: the default would
+// make `a > a` false, the override makes it true. This fails if `>` is lowered as
+// `!(a <= b)` or as a swapped `b.lt(a)`.
+class OddOrder {
+    n int
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.n == other.n }
+    }
+    implements baml.ops.Compare {
+        function lt(self, other: Self) -> bool throws never { self.n < other.n }
+        function gt(self, other: Self) -> bool throws never { true }
+    }
+}
+
+function ord_odd_gt(a: OddOrder, b: OddOrder) -> bool { a > b }
+function ord_odd_le(a: OddOrder, b: OddOrder) -> bool { a <= b }
+
+test "ordering_override_beats_default" {
+    assert.is_true(ord_odd_gt(OddOrder { n: 1 }, OddOrder { n: 1 }))
+    // The un-overridden `le` still follows the default (`lt || eq`).
+    assert.is_true(ord_odd_le(OddOrder { n: 1 }, OddOrder { n: 1 }))
+}
+
+// A bounded-generic operand keeps MIR off the specialized opcodes, like the
+// arithmetic drv_* block above — though the route differs: arithmetic reaches a
+// baml.ops.__union_* driver function, while ordering dispatches baml.ops.Compare
+// directly. Either way the impl can only come from the runtime instantiation.
+// Monomorphic wrappers pin T (literal args could otherwise infer a literal-typed
+// T, which no interface bound admits).
+function ord_lt<T extends baml.ops.Compare>(a: T, b: T) -> bool { a < b }
+function ord_le<T extends baml.ops.Compare>(a: T, b: T) -> bool { a <= b }
+function ord_gt<T extends baml.ops.Compare>(a: T, b: T) -> bool { a > b }
+function ord_ge<T extends baml.ops.Compare>(a: T, b: T) -> bool { a >= b }
+
+function ord_int_lt(a: int, b: int) -> bool { ord_lt(a, b) }
+function ord_int_le(a: int, b: int) -> bool { ord_le(a, b) }
+function ord_int_gt(a: int, b: int) -> bool { ord_gt(a, b) }
+function ord_int_ge(a: int, b: int) -> bool { ord_ge(a, b) }
+function ord_float_lt(a: float, b: float) -> bool { ord_lt(a, b) }
+function ord_float_ge(a: float, b: float) -> bool { ord_ge(a, b) }
+function ord_string_lt(a: string, b: string) -> bool { ord_lt(a, b) }
+function ord_bigint_lt(a: bigint, b: bigint) -> bool { ord_lt(a, b) }
+function ord_rank_generic_lt(a: Ranked, b: Ranked) -> bool { ord_lt(a, b) }
+
+// Named for the generic (interface) route rather than a driver: unlike the
+// arithmetic block above, ordering reaches no baml.ops driver function.
+test "generic_ordering_matches_opcodes" {
+    assert.is_true(baml.deep_equals(ord_int_lt(1, 2), 1 < 2))
+    assert.is_true(baml.deep_equals(ord_int_lt(2, 1), 2 < 1))
+    assert.is_true(baml.deep_equals(ord_int_le(1, 1), 1 <= 1))
+    assert.is_true(baml.deep_equals(ord_int_gt(2, 1), 2 > 1))
+    assert.is_true(baml.deep_equals(ord_int_ge(1, 2), 1 >= 2))
+    assert.is_true(baml.deep_equals(ord_float_lt(1.5, 2.5), 1.5 < 2.5))
+    assert.is_true(baml.deep_equals(ord_string_lt("a", "b"), "a" < "b"))
+    assert.is_true(baml.deep_equals(ord_bigint_lt(1n, 2n), 1n < 2n))
+    // NaN is unordered in every direction on both paths.
+    assert.is_true(!ord_float_lt(float.nan(), 1.0))
+    assert.is_true(!ord_float_ge(float.nan(), 1.0))
+    assert.is_true(!(float.nan() < 1.0))
+    assert.is_true(!(float.nan() >= 1.0))
+    // The generic path reaches a user class too.
+    assert.is_true(ord_rank_generic_lt(Ranked { rank: 1 }, Ranked { rank: 2 }))
+}
+
+// ─── Ordering: panics propagate and unwind, like the arithmetic drivers ───────
+// The virtual call carries the enclosing catch's unwind edge. `Compare` methods
+// are `throws never`, so the only thing that can escape a user `lt` is a panic —
+// which must still reach an enclosing catch arm, including through an inherited
+// default that nests another dispatch (`le` = `lt || eq`).
+
+class Boom {
+    n int
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.n == other.n }
+    }
+    implements baml.ops.Compare {
+        function lt(self, other: Self) -> bool throws never { (1 / self.n) < other.n }
+    }
+}
+
+function ord_catch_lt() -> bool {
+    (Boom { n: 0 } < Boom { n: 1 }) catch (e) { baml.panics.DivisionByZero => true }
+}
+function ord_catch_le() -> bool {
+    (Boom { n: 0 } <= Boom { n: 1 }) catch (e) { baml.panics.DivisionByZero => true }
+}
+function ord_catch_gt() -> bool {
+    (Boom { n: 0 } > Boom { n: 1 }) catch (e) { baml.panics.DivisionByZero => true }
+}
+function ord_catch_ge() -> bool {
+    (Boom { n: 0 } >= Boom { n: 1 }) catch (e) { baml.panics.DivisionByZero => true }
+}
+
+test "ordering_panics_unwind_to_catch" {
+    assert.is_true(ord_catch_lt())
+    assert.is_true(ord_catch_le())
+    assert.is_true(ord_catch_gt())
+    assert.is_true(ord_catch_ge())
+}
+
+// ─── Ordering into non-local destinations ────────────────────────────────────
+// The call terminator's destination must be a local, so a field / index /
+// captured target is routed through a temp and assigned through on resume.
+
+class FlagBox { flag bool }
+
+function ord_into_field() -> bool {
+    let b = FlagBox { flag: false }
+    b.flag = (Ranked { rank: 1 } < Ranked { rank: 2 })
+    b.flag
+}
+function ord_into_index() -> bool {
+    let xs = [false, false]
+    xs[0] = (Ranked { rank: 1 } < Ranked { rank: 2 })
+    xs[0]
+}
+function ord_into_capture() -> bool {
+    let out = false
+    let set = () -> null throws never { out = (false < true); null }
+    set()
+    out
+}
+
+test "ordering_into_projection_destinations" {
+    assert.is_true(ord_into_field())
+    assert.is_true(ord_into_index())
+    // Each target starts `false` and is written `true`, so a dropped write fails.
+    assert.is_true(ord_into_capture())
+}
+
+// ─── Ordering in condition and short-circuit position ────────────────────────
+// The dispatch splits the block, so the branch terminator lands in the resume
+// block rather than the one the operands were lowered into.
+
+// The class literals are bound first: a bare `Ranked { … }` in condition position
+// would have its brace parsed as the `if` body.
+function ord_as_if_cond() -> int {
+    let lo = Ranked { rank: 1 }
+    let hi = Ranked { rank: 2 }
+    if lo < hi { 10 } else { 20 }
+}
+function ord_as_while_cond() -> int {
+    let n = 0
+    let a = false
+    while a < true { n += 1; a = true }
+    n
+}
+function ord_in_short_circuit() -> bool {
+    (Ranked { rank: 1 } < Ranked { rank: 2 }) && (true > false)
+}
+
+test "ordering_in_condition_position" {
+    assert.is_true(baml.deep_equals(ord_as_if_cond(), 10))
+    assert.is_true(baml.deep_equals(ord_as_while_cond(), 1))
+    assert.is_true(ord_in_short_circuit())
+}
+
+// ─── Ordering with a `Self` receiver and on generic instantiations ───────────
+// `Self` inside an interface default body and a generic class are two of the
+// three receiver shapes the virtual-call terminator exists for.
+
+interface Ordered requires baml.ops.Compare {
+    function precedes(self, other: Self) -> bool throws never { self < other }
+}
+class Tier {
+    level int
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.level == other.level }
+    }
+    implements baml.ops.Compare {
+        function lt(self, other: Self) -> bool throws never { self.level < other.level }
+    }
+    implements Ordered {}
+}
+
+class Wrapped<T> {
+    weight int
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.weight == other.weight }
+    }
+    implements baml.ops.Compare {
+        function lt(self, other: Self) -> bool throws never { self.weight < other.weight }
+    }
+}
+
+function ord_self_in_default(a: Tier, b: Tier) -> bool { a.precedes(b) }
+function ord_generic_int(a: Wrapped<int>, b: Wrapped<int>) -> bool { a < b }
+function ord_generic_string(a: Wrapped<string>, b: Wrapped<string>) -> bool { a < b }
+
+test "ordering_on_self_and_generic_receivers" {
+    assert.is_true(ord_self_in_default(Tier { level: 1 }, Tier { level: 2 }))
+    assert.is_true(!ord_self_in_default(Tier { level: 2 }, Tier { level: 1 }))
+    assert.is_true(ord_generic_int(Wrapped<int> { weight: 1 }, Wrapped<int> { weight: 2 }))
+    assert.is_true(ord_generic_string(Wrapped<string> { weight: 1 }, Wrapped<string> { weight: 2 }))
+}
+
+// The literal form named in the lowering's own comments: `true < false` compiles
+// to a dispatch whose receiver operand is a constant, not a local.
+test "ordering_on_bool_literals" {
+    assert.is_true(!(true < false))
+    assert.is_true(false < true)
+    assert.is_true(true >= true)
+    assert.is_true(false <= false)
+}

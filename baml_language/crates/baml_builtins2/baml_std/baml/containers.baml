@@ -528,7 +528,12 @@ class Array<T> {
   }
 }
 
-/// An unordered collection of key-value pairs.
+/// An insertion-ordered collection of key-value pairs.
+///
+/// Iteration order is the order in which keys were first inserted: `keys()`
+/// and `values()` follow it, replacing an existing key with `set` keeps the
+/// key's original position, and `delete` preserves the order of the
+/// remaining entries.
 class Map<K, V> {
   /// Returns the number of entries in the map.
   function length(self) -> int throws never {
@@ -541,7 +546,7 @@ class Map<K, V> {
     $rust_function
   }
 
-  /// Returns an array of all keys in the map. Order is not guaranteed.
+  /// Returns an array of all keys in the map, in insertion order.
   //baml:mut_vm
   function keys(self) -> K[] throws never {
     $rust_function
@@ -554,6 +559,8 @@ class Map<K, V> {
 
   /// Inserts or replaces the entry for `key`. Returns the previously
   /// associated value, or `null` if `key` was not already present.
+  /// Replacing an existing key keeps its original position in iteration
+  /// order; a new key is appended at the end.
   ///
   /// # Examples
   /// ```
@@ -582,7 +589,7 @@ class Map<K, V> {
   }
 
   /// Removes and returns the entry for `key`. Returns `null` if the key was
-  /// not present.
+  /// not present. Preserves the insertion order of the remaining entries.
   ///
   /// # Examples
   /// ```

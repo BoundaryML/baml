@@ -3,7 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.HelloWorld(name: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "HelloWorld", map { "name": name }) : string
+  ai.internal._run_agent_to_response<string>(HelloWorld$task(name = name, client = client)).value : string
+  !! 44..104: unresolved name: GPT4
+}
+function user.HelloWorld$task(name: string, client: baml.llm.Client = GPT4) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "HelloWorld", map { "name": name }, []) : ai.Task<string>
   !! 44..104: unresolved name: GPT4
 }
 function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {

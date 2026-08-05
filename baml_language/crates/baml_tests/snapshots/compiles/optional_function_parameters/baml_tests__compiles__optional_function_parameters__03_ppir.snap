@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24305
 ---
 === PPIR ===
 class user.SearchService {
@@ -14,7 +13,7 @@ type user.NarrowSearcher$stream = unknown
 type user.Searcher = (query: string, max_results?: int) -> int throws never
 type user.Searcher$stream = unknown
 function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+  ai.internal._run_agent_to_response(AskDocs$task(query = query, max_results = max_results, filter = filter, client = client)).value
 }
 function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
@@ -33,6 +32,9 @@ function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter
 }
 function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+}
+function user.AskDocs$task(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }, [])
 }
 function user.DefaultFilter() -> string  [expr] {
   {  } "none"

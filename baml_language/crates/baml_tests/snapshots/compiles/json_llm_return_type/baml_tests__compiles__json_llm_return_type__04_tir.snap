@@ -6,7 +6,10 @@ function user.TestClient$new(lenient: bool) -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.ExtractAny(client: baml.llm.Client = TestClient) -> baml.json.json throws never {
-  baml.llm.call_llm_function<T>(client, "ExtractAny", map {  }) : baml.json.json
+  ai.internal._run_agent_to_response<baml.json.json>(ExtractAny$task(client = client)).value : baml.json.json
+}
+function user.ExtractAny$task(client: baml.llm.Client = TestClient) -> ai.Task<baml.json.json> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "ExtractAny", map {  }, []) : ai.Task<baml.json.json>
 }
 function user.ExtractAny$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "ExtractAny", map {  }) : baml.llm.PromptAst

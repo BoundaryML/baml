@@ -134,6 +134,85 @@ mod format_options_tests {
 }
 
 #[cfg(test)]
+mod contextual_keyword_identifier_tests {
+    use super::*;
+
+    /// `client` lexes as `KW_CLIENT` but is a legal identifier everywhere the
+    /// checker accepts one. The formatter must not die on it (it used to:
+    /// "Expected token/node of kind WORD, but found `KW_CLIENT`").
+    #[test]
+    fn test_client_as_identifier_formats() {
+        let source = concat!(
+            "class Session {\n",
+            "    client: string,\n",
+            "}\n",
+            "\n",
+            "function use_it(client: Session, f: (client: Session) -> int) -> int {\n",
+            "    let s = Session { client: client.client };\n",
+            "    if (s.client == client.client.to_upper_case()) {\n",
+            "        return f(client);\n",
+            "    }\n",
+            "    0\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options)
+            .expect("formatter should accept `client` as field/param/object-key name");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+        assert!(formatted.contains("client: string"), "field name preserved");
+    }
+}
+
+#[cfg(test)]
+mod header_comment_position_tests {
+    use super::*;
+
+    /// `//#` header comments must survive formatting in class bodies,
+    /// implements blocks, and between match arms — not only at statement
+    /// boundaries inside blocks.
+    #[test]
+    fn test_header_comments_in_member_positions() {
+        let source = concat!(
+            "class Dog {\n",
+            "    //# fields\n",
+            "    name: string,\n",
+            "    //# behavior\n",
+            "    implements Sound {\n",
+            "        //# conformance\n",
+            "        function sound(self) -> string {\n",
+            "            \"woof\"\n",
+            "        }\n",
+            "    }\n",
+            "}\n",
+            "\n",
+            "function classify(n: int) -> string {\n",
+            "    match (n) {\n",
+            "        //# leading header\n",
+            "        0 => \"zero\",\n",
+            "        //# between arms\n",
+            "        _ => \"big\",\n",
+            "    }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options)
+            .expect("formatter should accept header comments in member positions");
+        for needle in [
+            "//# fields",
+            "//# behavior",
+            "//# conformance",
+            "//# leading header",
+            "//# between arms",
+        ] {
+            assert!(formatted.contains(needle), "lost {needle}:\n{formatted}");
+        }
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod lambda_format_tests {
     use super::*;
 

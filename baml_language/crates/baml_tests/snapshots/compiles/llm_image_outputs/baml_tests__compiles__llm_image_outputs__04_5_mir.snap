@@ -40,8 +40,9 @@ fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     let _1: string // prompt // param
     let _2: baml.llm.Client // client // param
     let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
+    let _4: ai.ResponseWithMetadata<image>
+    let _5: ai.Task<image>
+    let _6: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -54,12 +55,20 @@ fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _5 = call const fn user.GenerateImage$task(copy _1, copy _2) -> [bb3];
     }
 
     bb3: {
+        _6 = load_type(image);
+        _4 = call const fn ai.internal._run_agent_to_response<copy _6>(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        _0 = copy _4.0;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -240,14 +249,16 @@ fn user.GenerateImage$stream(prompt: string, client: baml.llm.Client) -> baml.ll
     }
 }
 
-fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
+fn user.GenerateImage$task(prompt: string, client: baml.llm.Client) -> ai.Task<image> {
     // Locals:
-    let _0: image[] // _0 // return
+    let _0: ai.Task<image> // _0 // return
     let _1: string // prompt // param
     let _2: baml.llm.Client // client // param
     let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
+    let _4: ai.Provider
+    let _5: map<string, unknown>
+    let _6: (ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>)[]
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -260,12 +271,56 @@ fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn ai.internal._provider_from_client(copy _2) -> [bb3];
     }
 
     bb3: {
+        _5 = { const "prompt": copy _1 }: map<string, unknown>;
+        _6 = []: ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>[];
+        _7 = load_type(image);
+        _0 = call const fn ai.internal._task_named_from_registered_prompt<copy _7>(copy _4, const "GenerateImage", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
+    // Locals:
+    let _0: image[] // _0 // return
+    let _1: string // prompt // param
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: ai.ResponseWithMetadata<image[]>
+    let _5: ai.Task<image[]>
+    let _6: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const item user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn user.GenerateImageSet$task(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(image[]);
+        _4 = call const fn ai.internal._run_agent_to_response<copy _6>(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        _0 = copy _4.0;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -446,14 +501,16 @@ fn user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client) -> baml
     }
 }
 
-fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (string | image)[] {
+fn user.GenerateImageSet$task(prompt: string, client: baml.llm.Client) -> ai.Task<image[]> {
     // Locals:
-    let _0: (string | image)[] // _0 // return
+    let _0: ai.Task<image[]> // _0 // return
     let _1: string // prompt // param
     let _2: baml.llm.Client // client // param
     let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
+    let _4: ai.Provider
+    let _5: map<string, unknown>
+    let _6: (ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>)[]
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -466,12 +523,56 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type((image | string)[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn ai.internal._provider_from_client(copy _2) -> [bb3];
     }
 
     bb3: {
+        _5 = { const "prompt": copy _1 }: map<string, unknown>;
+        _6 = []: ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>[];
+        _7 = load_type(image[]);
+        _0 = call const fn ai.internal._task_named_from_registered_prompt<copy _7>(copy _4, const "GenerateImageSet", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (string | image)[] {
+    // Locals:
+    let _0: (string | image)[] // _0 // return
+    let _1: string // prompt // param
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: ai.ResponseWithMetadata<(string | image)[]>
+    let _5: ai.Task<(string | image)[]>
+    let _6: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const item user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn user.GenerateMixedImageNarrative$task(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type((image | string)[]);
+        _4 = call const fn ai.internal._run_agent_to_response<copy _6>(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        _0 = copy _4.0;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -648,6 +749,43 @@ fn user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.llm.Clie
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.GenerateMixedImageNarrative$task(prompt: string, client: baml.llm.Client) -> ai.Task<(string | image)[]> {
+    // Locals:
+    let _0: ai.Task<(string | image)[]> // _0 // return
+    let _1: string // prompt // param
+    let _2: baml.llm.Client // client // param
+    let _3: bool
+    let _4: ai.Provider
+    let _5: map<string, unknown>
+    let _6: (ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>)[]
+    let _7: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const item user.OpenAIImageResponses;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn ai.internal._provider_from_client(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _5 = { const "prompt": copy _1 }: map<string, unknown>;
+        _6 = []: ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>[];
+        _7 = load_type((image | string)[]);
+        _0 = call const fn ai.internal._task_named_from_registered_prompt<copy _7>(copy _4, const "GenerateMixedImageNarrative", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

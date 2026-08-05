@@ -157,16 +157,18 @@ impl FromCST for Expression {
             SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
                 Literal::from_cst(elem).map(Expression::Literal)?
             }
-            SyntaxKind::WORD => PathExpr::from_cst(elem).map(Expression::Path)?,
+            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
+                PathExpr::from_cst(elem).map(Expression::Path)?
+            }
             SyntaxKind::PATH_EXPR => {
                 // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
                 // base is a plain path (word / nested PATH_EXPR) it is a
                 // `PathExpr`; otherwise (a parenthesized expr, lambda, etc.) it
                 // is a generic instantiation on a non-path base.
                 let node = StrongAstError::assert_is_node(elem.clone())?;
-                let base_is_path = SyntaxNodeIter::new(&node)
-                    .next()
-                    .is_some_and(|c| matches!(c.kind(), SyntaxKind::WORD | SyntaxKind::PATH_EXPR));
+                let base_is_path = SyntaxNodeIter::new(&node).next().is_some_and(|c| {
+                    is_path_segment_kind(c.kind()) || c.kind() == SyntaxKind::PATH_EXPR
+                });
                 if base_is_path {
                     PathExpr::from_cst(elem).map(Expression::Path)?
                 } else {
@@ -4311,7 +4313,9 @@ pub enum ObjectFieldKey {
 impl FromCST for ObjectFieldKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::WORD => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
+            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
+                Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?))
+            }
             SyntaxKind::STRING_LITERAL => {
                 Ok(ObjectFieldKey::String(t::QuotedString::from_cst(elem)?))
             }

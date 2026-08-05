@@ -1492,6 +1492,7 @@ function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<TS
 function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<TStream, TFinal>) -> TStream | root.stream.StreamNoYield  [builtin]
 function baml.llm.add_events(self: ?, events: string) -> null  [builtin]
 function baml.llm.assemble_prompt_ast(parts: string[], values: unknown[]) -> baml.llm.PromptAst  [builtin]
+function baml.llm.authenticate_request(self: ?, request: root.http.Request) -> root.http.Request  [builtin]
 function baml.llm.build_attempt(self: ?) -> OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_attempt_with_state(planner_state)
 }
@@ -1556,13 +1557,10 @@ function baml.llm.output_format_with(self: ?, prefix: string? = null, or_splitte
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
 function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
-  { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, render_prompt_values(t.values)) } } render
+  { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, t.values) } } render
 }
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
-function baml.llm.render_prompt_values(values: unknown[]) -> unknown[]  [expr] {
-  { let rendered: unknown[] = []; for value in values {  } rendered.push(match (value) { baml.llm.Role => value, _ => string.from(value) }) } rendered
-}
 function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst throws never?) -> baml.llm.PromptAst  [expr] {
   { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }

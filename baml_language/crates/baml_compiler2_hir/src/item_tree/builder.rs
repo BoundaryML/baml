@@ -21,7 +21,7 @@ use crate::{
     item_tree::{
         Attribute, Class, ClassField, Client, DefaultExprRef, Enum, EnumVariant, Function,
         FunctionParam, ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink,
-        InterfaceMethodSig, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy,
+        InterfaceMethodSig, ItemSpans, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy,
         TemplateString, Test, TypeAlias,
     },
 };
@@ -74,7 +74,6 @@ impl ItemTreeBuilder {
             Function {
                 name: f.name.clone(),
                 generic_params: f.generic_params.clone(),
-                generic_param_bounds: f.generic_param_bounds.clone(),
                 params,
                 defaults: f.defaults.clone(),
                 return_type: f.return_type.clone(),
@@ -93,6 +92,7 @@ impl ItemTreeBuilder {
     /// Allocate a class, recording its field name spans in the source map.
     pub fn alloc_class(&mut self, c: &ast::ClassDef) -> LocalItemId<ClassMarker> {
         let id = self.alloc_id(ItemKind::Class, &c.name);
+        self.source_map.class_name_spans.insert(id, c.name_span);
         self.source_map
             .class_field_spans
             .insert(id, c.fields.iter().map(|f| f.name_span).collect());
@@ -126,7 +126,6 @@ impl ItemTreeBuilder {
             Class {
                 name: c.name.clone(),
                 generic_params: c.generic_params.clone(),
-                generic_param_bounds: c.generic_param_bounds.clone(),
                 fields,
                 methods: Vec::new(),
                 implements,
@@ -213,6 +212,7 @@ impl ItemTreeBuilder {
     /// Allocate an enum, recording its variant name spans in the source map.
     pub fn alloc_enum(&mut self, e: &ast::EnumDef) -> LocalItemId<EnumMarker> {
         let id = self.alloc_id(ItemKind::Enum, &e.name);
+        self.source_map.enum_name_spans.insert(id, e.name_span);
         self.source_map
             .enum_variant_spans
             .insert(id, e.variants.iter().map(|v| v.name_span).collect());
@@ -249,6 +249,7 @@ impl ItemTreeBuilder {
         default_method_ids: Vec<LocalItemId<FunctionMarker>>,
     ) -> LocalItemId<InterfaceMarker> {
         let id = self.alloc_id(ItemKind::Interface, &i.name);
+        self.source_map.interface_name_spans.insert(id, i.name_span);
         self.source_map
             .interface_field_spans
             .insert(id, i.fields.iter().map(|f| f.name_span).collect());
@@ -274,7 +275,6 @@ impl ItemTreeBuilder {
             .map(|m| InterfaceMethodSig {
                 name: m.name.clone(),
                 generic_params: m.generic_params.clone(),
-                generic_param_bounds: m.generic_param_bounds.clone(),
                 params: m
                     .params
                     .iter()
@@ -297,7 +297,6 @@ impl ItemTreeBuilder {
             Interface {
                 name: i.name.clone(),
                 generic_params: i.generic_params.clone(),
-                generic_param_bounds: i.generic_param_bounds.clone(),
                 requires: i.requires.clone(),
                 fields,
                 associated_types: i.associated_types.clone(),
@@ -313,12 +312,16 @@ impl ItemTreeBuilder {
 
     pub fn alloc_type_alias(&mut self, ta: &ast::TypeAliasDef) -> LocalItemId<TypeAliasMarker> {
         let id = self.alloc_id(ItemKind::TypeAlias, &ta.name);
+        self.source_map
+            .type_alias_name_spans
+            .insert(id, ta.name_span);
         self.tree.type_aliases.insert(
             id,
             TypeAlias {
                 name: ta.name.clone(),
                 type_expr: ta.type_expr.clone(),
                 span: ta.span,
+                docstring: ta.docstring.clone(),
             },
         );
         id
@@ -326,6 +329,13 @@ impl ItemTreeBuilder {
 
     pub fn alloc_client(&mut self, c: &ast::ClientDef) -> LocalItemId<ClientMarker> {
         let id = self.alloc_id(ItemKind::Client, &c.name);
+        self.source_map.client_spans.insert(
+            id,
+            ItemSpans {
+                span: c.span,
+                name_span: c.name_span,
+            },
+        );
         let provider = c
             .config_items
             .iter()
@@ -357,6 +367,13 @@ impl ItemTreeBuilder {
 
     pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
         let id = self.alloc_id(ItemKind::Test, &t.name);
+        self.source_map.test_spans.insert(
+            id,
+            ItemSpans {
+                span: t.span,
+                name_span: t.name_span,
+            },
+        );
         self.tree.tests.insert(
             id,
             Test {
@@ -373,6 +390,9 @@ impl ItemTreeBuilder {
         ts: &ast::TemplateStringDef,
     ) -> LocalItemId<TemplateStringMarker> {
         let id = self.alloc_id(ItemKind::TemplateString, &ts.name);
+        self.source_map
+            .template_string_name_spans
+            .insert(id, ts.name_span);
         let params = ts
             .params
             .iter()
@@ -401,6 +421,13 @@ impl ItemTreeBuilder {
         rp: &ast::RetryPolicyDef,
     ) -> LocalItemId<RetryPolicyMarker> {
         let id = self.alloc_id(ItemKind::RetryPolicy, &rp.name);
+        self.source_map.retry_policy_spans.insert(
+            id,
+            ItemSpans {
+                span: rp.span,
+                name_span: rp.name_span,
+            },
+        );
         let get_field = |key: &str| -> Option<String> {
             rp.config_items
                 .iter()

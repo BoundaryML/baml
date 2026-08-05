@@ -445,16 +445,19 @@ fn resolve_field_access_at(
                 range: name_span,
             })
         }
-        MemberResolution::InterfaceVirtualField { iface_loc, field } => {
+        MemberResolution::InterfaceVirtualField {
+            iface_loc,
+            field_index,
+            ..
+        } => {
             // A virtual interface-field access: navigate to the field declaration
-            // in the declaring interface.
+            // in the declaring interface. `field_index` indexes the interface's own
+            // field list, which `field_name_spans` is parallel to.
             let target_file = iface_loc.file(db);
-            let iface = item_data::interface_data(db, *iface_loc);
-            let field_idx = iface.fields.iter().position(|f| f.name == *field)?;
             let source_map = item_data::interface_source_map(db, *iface_loc);
             Some(Location {
                 file: target_file,
-                range: source_map.field_name_spans[field_idx],
+                range: *source_map.field_name_spans.get(*field_index as usize)?,
             })
         }
     }

@@ -336,6 +336,7 @@ pub(crate) fn generate_program(
         model,
         None,
         program_bytes,
+        None,
         cli_version,
         required_bridge_version,
         program_identity,
@@ -346,6 +347,7 @@ pub(crate) fn generate_program_with_runtime_identities(
     model: &CodegenModel,
     runtime_identities: &RuntimeCallableIdentities,
     program_bytes: &[u8],
+    embedded_baml_toml: &str,
     cli_version: &str,
     required_bridge_version: &str,
     program_identity: &str,
@@ -354,6 +356,7 @@ pub(crate) fn generate_program_with_runtime_identities(
         model,
         Some(runtime_identities),
         program_bytes,
+        Some(embedded_baml_toml),
         cli_version,
         required_bridge_version,
         program_identity,
@@ -365,6 +368,7 @@ fn generate_program_inner(
     model: &CodegenModel,
     runtime_identities: Option<&RuntimeCallableIdentities>,
     program_bytes: &[u8],
+    embedded_baml_toml: Option<&str>,
     cli_version: &str,
     required_bridge_version: &str,
     program_identity: &str,
@@ -691,8 +695,7 @@ fn generate_program_inner(
             &registry_request,
             &instance_request,
             &deferred_instance_request,
-            cli_version,
-            required_bridge_version,
+            embedded_baml_toml,
         ),
     )?;
     plan.prepare(GenerationInput::new(
@@ -3230,8 +3233,7 @@ fn render_program(
     registry_request: &CSharpNameRequest,
     instance_request: &CSharpNameRequest,
     deferred_instance_request: &CSharpNameRequest,
-    cli_version: &str,
-    required_bridge_version: &str,
+    embedded_baml_toml: Option<&str>,
 ) -> String {
     let namespace = rendered_namespace(render.names, namespace_requests);
     let program_type = allocated(render.names, program_type_request).source();
@@ -3431,9 +3433,10 @@ fn render_program(
         ));
     }
     source.push_str(&format!(
-        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {generated_version},\n            {bridge_version},\n            {registry});\n\n",
-        generated_version = csharp_string(cli_version),
-        bridge_version = csharp_string(required_bridge_version),
+        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {embedded_baml_toml},\n            {registry});\n\n",
+        embedded_baml_toml = embedded_baml_toml
+            .map(csharp_string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     for ty in render.type_specs {
         source.push_str(&render_codec(

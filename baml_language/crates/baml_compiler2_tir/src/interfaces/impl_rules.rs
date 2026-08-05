@@ -190,7 +190,7 @@ pub enum ImplDataError {
 /// into `diags`. `store` is the arena the bound ids index (the declaring item's
 /// `type_refs`); `generic_param_names` are the in-scope type-var names so a
 /// bound naming a sibling param doesn't read as an unresolved type.
-fn lower_generic_param_interface_bounds(
+pub(crate) fn lower_generic_param_interface_bounds(
     db: &dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     bounds: &[baml_compiler2_hir::type_ref::TypeRefId],
@@ -325,14 +325,12 @@ pub fn impl_data<'db>(
             let mut class_bound_diags = Vec::new();
             let generic_params: Vec<(ParamTy, Vec<baml_type::Interface>)> = generic_param_names
                 .iter()
-                .zip(class_data.generic_param_bounds.iter())
-                .map(|(name, bound)| {
-                    let bounds: Vec<baml_compiler2_hir::type_ref::TypeRefId> =
-                        bound.iter().copied().collect();
+                .zip(class_data.generic_params.iter())
+                .map(|(name, declared)| {
                     let ifaces = lower_generic_param_interface_bounds(
                         db,
                         &class_data.type_refs,
-                        &bounds,
+                        &declared.bounds,
                         pkg_items,
                         ns,
                         &generic_param_names,
@@ -915,8 +913,9 @@ fn method_generic_bound_interfaces(
     let empty = crate::lower_type_expr::TypeVarBoundsMap::default();
     spec.generic_bounds()
         .iter()
-        .map(|(name, bound_ids)| {
-            let conjunction = bound_ids
+        .map(|declared| {
+            let conjunction = declared
+                .bounds
                 .iter()
                 .filter_map(|&id| {
                     let mut d = Vec::new();
@@ -936,7 +935,7 @@ fn method_generic_bound_interfaces(
                     .as_interface()
                 })
                 .collect();
-            (name.clone(), conjunction)
+            (declared.name.clone(), conjunction)
         })
         .collect()
 }
@@ -1102,9 +1101,6 @@ pub fn validate_impl_signatures<'db>(
         let self_bound =
             baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
         for iface_field in &iface_data.fields {
-            let Some(iface_field_ref) = iface_field.type_ref else {
-                continue;
-            };
             // The satisfying class field: explicit link, else same name. Absent → E0124 (impl_data).
             let class_field_name = block
                 .field_links
@@ -1132,7 +1128,7 @@ pub fn validate_impl_signatures<'db>(
                 |scope| {
                     crate::lower_type_expr::lower_type_ref(
                         &iface_data.type_refs,
-                        iface_field_ref,
+                        iface_field.type_ref,
                         scope,
                         &mut lower_diags,
                     )

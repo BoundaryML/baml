@@ -54,7 +54,7 @@ homebrew/AUR). npm uses OIDC trusted publishing with channel→dist-tag
   unreasonable download.
 - **Channels:** Maven has no dist-tags; canary = plain version
   (`0.15.0`), nightly = suffixed version
-  (`0.15.0-nightly.YYYYMMDD`). Publish job slots into
+  (`0.15.0-nightly.YYYYMMDD.a`). Publish job slots into
   `release-baml-language.yml` as `build-java-sdk` / `publish-maven`.
 - **CLI:** covered by the wrapper/toolchain tier; nothing to ship via
   Maven. What Java *does* need is a `"java"` `OutputType` variant in

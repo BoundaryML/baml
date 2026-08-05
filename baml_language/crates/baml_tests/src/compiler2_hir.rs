@@ -581,11 +581,11 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Four conflicts: greet, greet$render_prompt, greet$build_request,
-        // greet$build_request_stream
+        // Five conflicts: greet, greet$task, greet$render_prompt,
+        // greet$build_request, greet$build_request_stream
         // Each LLM function expands to AST-level companions, all duplicated across 3 files.
         // ($stream, $parse_stream, and $parse are PPIR-level and don't appear here.)
-        assert_eq!(ns.conflicts().len(), 4);
+        assert_eq!(ns.conflicts().len(), 5);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }
@@ -2072,6 +2072,159 @@ function foo(user: User) -> string {
             !executed.iter().any(|s| s.contains("package_items")),
             "package_items should NOT re-run on comment-only change (early cutoff). Got: {:?}",
             executed
+        );
+    }
+
+    /// Every item kind's name span (and the config kinds' full spans) must
+    /// slice to exactly the identifier written in source, and the docstrings
+    /// added for type aliases and free `implements … for …` blocks must
+    /// survive lowering. Locks the item-tree source-map plumbing end to end.
+    #[test]
+    fn item_source_maps_carry_name_spans_and_docstrings() {
+        use baml_compiler2_ppir::item_data;
+
+        let mut db = make_db();
+        let src = r##"/// Alias docs.
+type MyAlias = string
+
+class MyClass { name string }
+
+enum MyEnum { A }
+
+interface MyIface {
+  function m(self) -> int
+}
+
+/// Impl docs.
+implements MyIface for MyClass {
+  function m(self) -> int { 1 }
+}
+
+template_string MyTemplate(x: string) #"{{ x }}"#
+
+client<llm> MyClient {
+  provider openai
+  options { model "gpt-4o-mini" }
+}
+
+retry_policy MyPolicy {
+  max_retries 2
+}
+
+function target() -> int { 1 }
+
+test my_test {
+  functions [target]
+  args {}
+}
+"##;
+        let file = db.add_file("spans.baml", src);
+        let text = |range: text_size::TextRange| {
+            &src[usize::from(range.start())..usize::from(range.end())]
+        };
+
+        // Select by name: the PPIR expanded index also holds synthetic
+        // `$stream` companions, whose spans are (correctly) defaulted.
+        let alias = *item_data::file_type_aliases(&db, file)
+            .iter()
+            .find(|&&a| item_data::type_alias_data(&db, a).name.as_str() == "MyAlias")
+            .unwrap();
+        assert_eq!(
+            text(item_data::type_alias_source_map(&db, alias).name_span),
+            "MyAlias"
+        );
+        assert_eq!(
+            item_data::type_alias_data(&db, alias).docstring.as_deref(),
+            Some("Alias docs.")
+        );
+
+        let class = *item_data::file_classes(&db, file)
+            .iter()
+            .find(|&&c| item_data::class_data(&db, c).name.as_str() == "MyClass")
+            .unwrap();
+        assert_eq!(
+            text(item_data::class_source_map(&db, class).name_span),
+            "MyClass"
+        );
+
+        let enum_loc = *item_data::file_enums(&db, file)
+            .iter()
+            .find(|&&e| item_data::enum_data(&db, e).name.as_str() == "MyEnum")
+            .unwrap();
+        assert_eq!(
+            text(item_data::enum_source_map(&db, enum_loc).name_span),
+            "MyEnum"
+        );
+
+        let iface = *item_data::file_interfaces(&db, file)
+            .iter()
+            .find(|&&i| item_data::interface_data(&db, i).name.as_str() == "MyIface")
+            .unwrap();
+        assert_eq!(
+            text(item_data::interface_source_map(&db, iface).name_span),
+            "MyIface"
+        );
+
+        let template = *item_data::file_template_strings(&db, file)
+            .iter()
+            .find(|&&t| item_data::template_string_data(&db, t).name.as_str() == "MyTemplate")
+            .unwrap();
+        assert_eq!(
+            text(item_data::template_string_source_map(&db, template).name_span),
+            "MyTemplate"
+        );
+
+        // `client<llm>` and `retry_policy` desugar to top-level lets
+        // (`LetOrigin::Client` / `LetOrigin::RetryPolicy`), so their name
+        // spans come from the let source map, not the client/retry-policy
+        // item queries.
+        let find_let = |name: &str| {
+            *item_data::file_lets(&db, file)
+                .iter()
+                .find(|&&l| item_data::let_data(&db, l).name.as_str() == name)
+                .unwrap()
+        };
+        assert_eq!(
+            text(item_data::let_source_map(&db, find_let("MyClient")).name_span),
+            "MyClient"
+        );
+        assert_eq!(
+            text(item_data::let_source_map(&db, find_let("MyPolicy")).name_span),
+            "MyPolicy"
+        );
+
+        let test_loc = *item_data::file_tests(&db, file)
+            .iter()
+            .find(|&&t| item_data::test_data(&db, t).name.as_str() == "my_test")
+            .unwrap();
+        let test_spans = item_data::test_source_map(&db, test_loc);
+        assert_eq!(text(test_spans.name_span), "my_test");
+        assert!(text(test_spans.span).starts_with("test my_test"));
+
+        // The `implements … for …` block merges onto same-file `MyClass`, so it
+        // is an in-class impl — its docstring is intentionally absent today.
+        // A cross-file (free) impl keeps its docstring.
+        let in_class_impl = *item_data::class_impls(&db, class)
+            .first()
+            .expect("MyClass has an in-class impl");
+        assert_eq!(
+            item_data::impl_block_data(&db, in_class_impl)
+                .docstring
+                .as_deref(),
+            None,
+            "in-class impl docstrings are absent today"
+        );
+
+        let file_b = db.add_file(
+            "spans_b.baml",
+            "/// Free impl docs.\nimplements MyIface for int {\n  function m(self) -> int { 2 }\n}\n",
+        );
+        let free_impl = *item_data::file_free_impls(&db, file_b).first().unwrap();
+        assert_eq!(
+            item_data::impl_block_data(&db, free_impl)
+                .docstring
+                .as_deref(),
+            Some("Free impl docs.")
         );
     }
 }

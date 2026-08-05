@@ -157,6 +157,18 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
             write_rvalue(f, value)?;
             write!(f, ";")
         }
+        StatementKind::VirtualFieldStore {
+            iface,
+            receiver,
+            field_index,
+            field,
+            value,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface} = ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
@@ -448,6 +460,15 @@ fn write_runtime_id_arg(
 fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
+        Rvalue::VirtualFieldAccess {
+            iface,
+            receiver,
+            field_index,
+            field,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface}")
+        }
         Rvalue::BinaryOp { op, left, right } => {
             write_operand(f, left)?;
             write!(f, " {op} ")?;
@@ -696,7 +717,11 @@ mod tests {
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
         let terminator = Terminator::VirtualCall {
-            iface: baml_type::TyTemplate::TypeArgRef(0),
+            iface: baml_type::TyTemplateInterface::new(
+                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
+                Vec::new(),
+                Vec::new(),
+            ),
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
@@ -708,7 +733,7 @@ mod tests {
 
         assert_eq!(
             render_terminator(&terminator),
-            "_0 = virtual_call eq as #0($id = copy _9) -> [bb1];"
+            "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
         );
     }
 

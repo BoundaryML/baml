@@ -256,6 +256,9 @@ impl baml_compiler2_emit::Db for ProjectDatabase {
 }
 
 #[salsa::db]
+impl baml_surface::Db for ProjectDatabase {}
+
+#[salsa::db]
 impl baml_lsp2_actions::Db for ProjectDatabase {}
 
 impl ProjectDatabase {
@@ -677,6 +680,137 @@ impl ProjectDatabase {
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         let mut ctx = CfgExpansionCtx::default();
         self.ast_control_flow_graph_impl(function_name, &mut ctx)
+            .or_else(|| self.ast_test_control_flow_graph_impl(function_name, &mut ctx))
+    }
+
+    /// Build a graph for a statically named top-level `test "..." { ... }`
+    /// declaration. New-style tests are lowered into lambdas passed to the
+    /// per-file `$init_test_*` function, so they do not appear in
+    /// `file_functions`. The test registry exposes their canonical names to
+    /// the playground (`root[.namespace]::name`); recover the matching lambda
+    /// from that synthesized registration and graph its body directly.
+    fn ast_test_control_flow_graph_impl(
+        &self,
+        test_name: &str,
+        ctx: &mut CfgExpansionCtx,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        use baml_compiler2_ast::{Expr, FunctionBodyDef, Item};
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, build_control_flow_graph_from_expr,
+        };
+        use baml_type::Literal;
+
+        if !ctx.expanding.insert(test_name.to_string()) {
+            return None;
+        }
+
+        let mut result = None;
+        'files: for source_file in self.file_map.values().copied() {
+            let ast = baml_compiler2_hir::file_ast(self, source_file);
+            for item in &ast.items {
+                let Item::Function(init_function) = item else {
+                    continue;
+                };
+                if !init_function.name.as_str().starts_with("$init_test") {
+                    continue;
+                }
+                let Some(FunctionBodyDef::Expr(registration_body, registration_source_map)) =
+                    init_function.body.as_ref()
+                else {
+                    continue;
+                };
+                let Some(&init_function_loc) =
+                    baml_compiler2_ppir::item_data::file_functions(self, source_file)
+                        .iter()
+                        .find(|&&loc| {
+                            baml_compiler2_ppir::item_data::function_data(self, loc).name
+                                == init_function.name
+                        })
+                else {
+                    continue;
+                };
+
+                let mut duplicate_counts = HashMap::<String, usize>::new();
+                for (_, expr) in registration_body.exprs.iter() {
+                    let Expr::Call { callee, args, .. } = expr else {
+                        continue;
+                    };
+                    let Expr::Path(callee_segments) = &registration_body.exprs[*callee] else {
+                        continue;
+                    };
+                    if callee_segments.last().map(AsRef::<str>::as_ref) != Some("register_test_at")
+                        || args.len() != 4
+                    {
+                        continue;
+                    }
+
+                    let Expr::Literal(Literal::String(owner)) =
+                        &registration_body.exprs[args[0].expr]
+                    else {
+                        continue;
+                    };
+                    let Expr::Literal(Literal::String(name)) =
+                        &registration_body.exprs[args[1].expr]
+                    else {
+                        // Runtime-computed test names cannot be identified
+                        // statically from the canonical registry name.
+                        continue;
+                    };
+                    let canonical_base = format!("{owner}::{name}");
+                    let duplicate_count = duplicate_counts
+                        .entry(canonical_base.clone())
+                        .and_modify(|count| *count += 1)
+                        .or_insert(1);
+                    let canonical_name = if *duplicate_count == 1 {
+                        canonical_base
+                    } else {
+                        format!("{canonical_base}#{duplicate_count}")
+                    };
+                    if canonical_name != test_name {
+                        continue;
+                    }
+
+                    let Expr::Lambda(test_lambda) = &registration_body.exprs[args[2].expr] else {
+                        continue;
+                    };
+                    // The test body is an expression in the registration body's
+                    // own arena, so it shares that body's source map.
+                    let test_body = registration_body;
+                    let mut graph =
+                        build_control_flow_graph_from_expr(test_name, test_body, test_lambda.body);
+                    self.attach_source_spans_to_graph(
+                        &mut graph,
+                        source_file,
+                        registration_source_map,
+                    );
+
+                    let test_name_span =
+                        Self::source_map_expr_range(registration_source_map, args[1].expr)
+                            .and_then(|range| self.source_span_for_range(source_file, range));
+                    if let Some(root) = graph
+                        .nodes
+                        .values_mut()
+                        .find(|node| node.node_type == NodeType::FunctionRoot)
+                    {
+                        root.source_span = test_name_span
+                            .or_else(|| self.source_span_for_range(source_file, test_lambda.span));
+                    }
+
+                    self.expand_user_function_calls_in_graph(
+                        &mut graph,
+                        init_function_loc,
+                        test_body,
+                        &CfgDispatchBindings::new(),
+                        ctx,
+                    );
+                    result = Some(graph);
+                    break 'files;
+                }
+            }
+        }
+
+        ctx.expanding.remove(test_name);
+        result
     }
 
     fn ast_control_flow_graph_impl(
@@ -1078,7 +1212,7 @@ impl ProjectDatabase {
                         }
                     }
                     Expr::Path(segments) if segments.len() >= 2 => {
-                        segments.first().map(|segment| segment.as_str())
+                        segments.first().map(baml_db::Name::as_str)
                     }
                     _ => None,
                 }?;
@@ -1163,7 +1297,7 @@ impl ProjectDatabase {
         method_name: &baml_db::Name,
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
         let package = baml_compiler2_hir::file_package::file_package(self, iface_loc.file(self));
-        let package_id = baml_compiler2_hir::package::PackageId::new(self, package.package.clone());
+        let package_id = baml_compiler2_hir::package::PackageId::new(self, package.package);
         let aliases = baml_compiler2_tir::inference::package_resolved_aliases(self, package_id);
         let res_ctx =
             baml_compiler2_tir::package_interface::package_resolution_context(self, package_id);
@@ -1326,6 +1460,18 @@ impl ProjectDatabase {
         self.source_span_for_range(source_file, spans[span_idx])
     }
 
+    fn source_map_expr_range(
+        source_map: &baml_compiler2_ast::AstSourceMap,
+        expr_id: baml_compiler2_ast::ExprId,
+    ) -> Option<text_size::TextRange> {
+        let raw = expr_id.into_raw();
+        if raw.into_u32() as usize >= source_map.expr_spans.len() {
+            return None;
+        }
+        let span_idx = la_arena::Idx::<text_size::TextRange>::from_raw(raw);
+        Some(source_map.expr_spans[span_idx])
+    }
+
     fn source_span_for_range(
         &self,
         source_file: SourceFile,
@@ -1379,8 +1525,7 @@ impl ProjectDatabase {
         let offset = text_size::TextSize::from(byte_offset);
 
         // 2. Find CST token at offset
-        let Some(token) = baml_lsp2_actions::utils::find_token_at_offset(self, source_file, offset)
-        else {
+        let Some(token) = baml_lsp2_actions::find_token_at_offset(self, source_file, offset) else {
             return empty;
         };
 
@@ -2778,6 +2923,75 @@ function Early(x: int) -> string {
         assert!(
             graph.nodes.values().all(|n| n.label != "helper body"),
             "callee body headers should not be expanded below a terminal return"
+        );
+    }
+
+    #[test]
+    fn ast_control_flow_graph_builds_new_style_test_bodies() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let src = r#"
+function Workflow(input: int) -> int {
+  //# Choose result
+  input + 1
+}
+
+test "renders workflow" {
+  let result = Workflow(41)
+  assert.equal(result, 42)
+}
+"#;
+        db.add_or_update_file(std::path::Path::new("/tmp/tests.baml"), src);
+
+        let workflow_graph = db
+            .ast_control_flow_graph("Workflow")
+            .expect("workflow should have a graph");
+        assert!(
+            workflow_graph
+                .nodes
+                .values()
+                .any(|node| node.node_type == NodeType::HeaderContextEnter),
+            "fixture workflow must have control flow: {:#?}",
+            workflow_graph.nodes
+        );
+        let graph = db
+            .ast_control_flow_graph("root::renders workflow")
+            .expect("new-style test should have a graph");
+        let root = graph
+            .nodes
+            .values()
+            .find(|node| node.node_type == NodeType::FunctionRoot)
+            .expect("test graph should have a root");
+        let root_span = root
+            .source_span
+            .as_ref()
+            .expect("test graph root should navigate to its declaration");
+        let name_start = src.find("\"renders workflow\"").unwrap();
+        assert_eq!(root_span.start_offset as usize, name_start);
+        assert_eq!(
+            root_span.end_offset as usize,
+            name_start + "\"renders workflow\"".len()
+        );
+        assert!(
+            graph
+                .nodes
+                .values()
+                .any(|node| node.label.contains("Workflow")),
+            "the test body's workflow call should be represented"
+        );
+        let prepared =
+            baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(
+                &graph,
+            );
+        assert!(
+            prepared.nodes.values().any(|node| {
+                node.node_type == NodeType::HeaderContextEnter && node.label == "Choose result"
+            }),
+            "the selected test should render the called workflow's control flow; raw={:#?}; prepared={:#?}",
+            graph.nodes,
+            prepared.nodes
         );
     }
 

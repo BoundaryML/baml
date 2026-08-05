@@ -30,7 +30,7 @@ use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
-    ty::{ParamTy, QualifiedTypeName, Ty, TyAttr},
+    ty::{ParamTy, Ty, TyAttr},
 };
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
@@ -644,51 +644,23 @@ fn impl_diagnostic_spans(
 ///
 /// Returns `None` if the path doesn't name an interface (including: name
 /// doesn't exist, or resolves to a class/enum/etc.).
-#[derive(Debug, Clone)]
-struct ResolvedInterfaceData<'db> {
-    loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    qtn: QualifiedTypeName,
-}
-
+/// The interface an `extends` bound names, or `None` when it does not resolve to
+/// one (diagnosed elsewhere). Only the `loc` is needed: rendering a declarer's
+/// name goes through the compiler's `interface_loc_qtn`, so this does not carry
+/// a second copy of the identity.
 fn resolve_interface_path<'db>(
     db: &'db dyn Db,
     target: &baml_compiler2_ast::TypeExpr,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
-) -> Option<ResolvedInterfaceData<'db>> {
-    let resolved = baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
+) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
         db,
         target,
         pkg_items,
         namespace_path,
-    )?;
-    Some(ResolvedInterfaceData {
-        loc: resolved.loc,
-        qtn: resolved.qtn,
-    })
-}
-
-/// The `TypeRef`-arena twin of [`resolve_interface_path`], for walking a
-/// `requires` target held as firewall data (`interface_data(…).type_refs` plus a
-/// `TypeRefId`) rather than an AST node.
-fn resolve_interface_ref<'db>(
-    db: &'db dyn Db,
-    store: &baml_compiler2_hir::type_ref::TypeRefStore,
-    target: baml_compiler2_hir::type_ref::TypeRefId,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-) -> Option<ResolvedInterfaceData<'db>> {
-    let resolved = baml_compiler2_tir::interfaces::resolve_ref_to_interface_identity(
-        db,
-        store,
-        target,
-        pkg_items,
-        namespace_path,
-    )?;
-    Some(ResolvedInterfaceData {
-        loc: resolved.loc,
-        qtn: resolved.qtn,
-    })
+    )
+    .map(|resolved| resolved.loc)
 }
 
 fn validate_associated_type_bindings_in_items(
@@ -715,8 +687,7 @@ fn validate_associated_type_bindings_in_items(
                 );
             }
             baml_compiler2_ast::Item::Class(class) => {
-                let outer_bounds =
-                    generic_bound_expr_map(&class.generic_params, &class.generic_param_bounds);
+                let outer_bounds = generic_bound_expr_map(&class.generic_params);
                 for method in &class.methods {
                     validate_associated_type_bindings_in_function(
                         db,
@@ -744,8 +715,7 @@ fn validate_associated_type_bindings_in_items(
             }
             baml_compiler2_ast::Item::Interface(iface) => {
                 validate_associated_type_declaration_names(file_id, iface, &mut diagnostics);
-                let iface_bounds =
-                    generic_bound_expr_map(&iface.generic_params, &iface.generic_param_bounds);
+                let iface_bounds = generic_bound_expr_map(&iface.generic_params);
                 for method in &iface.required_methods {
                     validate_associated_type_bindings_in_method_sig(
                         db,
@@ -770,19 +740,7 @@ fn validate_associated_type_bindings_in_items(
                 }
             }
             baml_compiler2_ast::Item::ImplementsFor(imp) => {
-                let impl_generics: Vec<Name> = imp
-                    .generic_params
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect();
-                // Single-bound view (first `&`-bound only) — unchanged behavior;
-                // the full bound set lives on the new HIR `ImplBlock`.
-                let impl_bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
-                    .generic_params
-                    .iter()
-                    .map(|(_, bounds)| bounds.first().cloned())
-                    .collect();
-                let impl_bounds = generic_bound_expr_map(&impl_generics, &impl_bound_exprs);
+                let impl_bounds = generic_bound_expr_map(&imp.generic_params);
                 for method in &imp.methods {
                     validate_associated_type_bindings_in_function(
                         db,
@@ -811,7 +769,7 @@ fn validate_associated_type_declaration_names(
         if iface
             .generic_params
             .iter()
-            .any(|param| param == &assoc.name)
+            .any(|param| param.name == assoc.name)
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -831,26 +789,25 @@ fn validate_associated_type_declaration_names(
     }
 }
 
-type GenericBoundExprMap = std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>;
+/// Each in-scope type variable's declared bound *conjunction* — `T extends A & B`
+/// maps `T` to `[A, B]`, so a `T.member` projection is resolved against all of
+/// them (and reports ambiguity when more than one supplies `member`).
+type GenericBoundExprMap = std::collections::HashMap<Name, Vec<baml_compiler2_ast::TypeExpr>>;
 
-fn generic_bound_expr_map(
-    params: &[Name],
-    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
-) -> GenericBoundExprMap {
+fn generic_bound_expr_map(params: &[baml_compiler2_ast::GenericParam]) -> GenericBoundExprMap {
     params
         .iter()
-        .zip(bounds.iter())
-        .filter_map(|(name, bound)| bound.as_ref().map(|bound| (name.clone(), bound.clone())))
+        .filter(|param| !param.bounds.is_empty())
+        .map(|param| (param.name.clone(), param.bounds.clone()))
         .collect()
 }
 
 fn extend_generic_bound_expr_map(
     outer: &GenericBoundExprMap,
-    params: &[Name],
-    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+    params: &[baml_compiler2_ast::GenericParam],
 ) -> GenericBoundExprMap {
     let mut merged = outer.clone();
-    merged.extend(generic_bound_expr_map(params, bounds));
+    merged.extend(generic_bound_expr_map(params));
     merged
 }
 
@@ -863,11 +820,8 @@ fn validate_associated_type_bindings_in_function(
     namespace_path: &[Name],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let generic_bounds = extend_generic_bound_expr_map(
-        outer_generic_bounds,
-        &function.generic_params,
-        &function.generic_param_bounds,
-    );
+    let generic_bounds =
+        extend_generic_bound_expr_map(outer_generic_bounds, &function.generic_params);
     for param in &function.params {
         if let Some(te) = &param.type_expr {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
@@ -917,11 +871,8 @@ fn validate_associated_type_bindings_in_method_sig(
     namespace_path: &[Name],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let generic_bounds = extend_generic_bound_expr_map(
-        outer_generic_bounds,
-        &method.generic_params,
-        &method.generic_param_bounds,
-    );
+    let generic_bounds =
+        extend_generic_bound_expr_map(outer_generic_bounds, &method.generic_params);
     for param in &method.params {
         if let Some(te) = &param.type_expr {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
@@ -970,7 +921,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
     span: TextRange,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
-    generic_bounds: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    generic_bounds: &GenericBoundExprMap,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_ast::TypeExprKind;
@@ -986,19 +937,38 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
             {
                 let base = &segments[0];
                 let member = &segments[1];
-                if let Some(bound) = generic_bounds.get(base) {
-                    let sources = associated_type_projection_sources_for_interface_bound(
-                        db,
-                        bound,
-                        member,
-                        pkg_items,
-                        namespace_path,
-                    );
+                if let Some(bounds) = generic_bounds.get(base) {
+                    // `T extends A & B` — the member may come from any conjunct,
+                    // so the declarers are collected across the whole conjunction:
+                    // none means unknown, two or more is ambiguous. The compiler
+                    // owns that walk (and its cross-conjunct deduplication, without
+                    // which two bounds reaching the same declarer through `requires`
+                    // would look like an ambiguity); this only renders the result.
+                    let roots = bounds.iter().filter_map(|bound| {
+                        resolve_interface_path(db, bound, pkg_items, namespace_path)
+                    });
+                    let sources: Vec<String> =
+                        baml_compiler2_tir::interfaces::interfaces_declaring_associated_type(
+                            db, roots, member,
+                        )
+                        .into_iter()
+                        .filter_map(|loc| {
+                            baml_compiler2_tir::interfaces::interface_loc_qtn(db, loc)
+                                .map(|qtn| qtn.render_user_facing())
+                        })
+                        .collect();
                     if sources.is_empty() {
+                        let rendered = bounds
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(" & ");
                         diagnostics.push(
                             Diagnostic::error(
                                 DiagnosticId::UnknownType,
-                                format!("unknown associated type `{member}` for bound `{bound}`"),
+                                format!(
+                                    "unknown associated type `{member}` for bound `{rendered}`"
+                                ),
                             )
                             .with_primary_span(Span {
                                 file_id,
@@ -1172,53 +1142,6 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
     }
 }
 
-fn associated_type_projection_sources_for_interface_bound(
-    db: &dyn Db,
-    bound: &baml_compiler2_ast::TypeExpr,
-    member: &Name,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    namespace_path: &[Name],
-) -> Vec<String> {
-    let Some(root) = resolve_interface_path(db, bound, pkg_items, namespace_path) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    let mut visited = HashSet::new();
-    let mut stack = vec![root];
-
-    while let Some(current) = stack.pop() {
-        if !visited.insert(current.qtn.clone()) {
-            continue;
-        }
-        let iface = baml_compiler2_ppir::item_data::interface_data(db, current.loc);
-        if iface
-            .associated_types
-            .iter()
-            .any(|assoc| assoc.name == *member)
-        {
-            out.push(current.qtn.render_user_facing());
-        }
-        let current_file = current.loc.file(db);
-        let current_pkg = baml_compiler2_hir::file_package::file_package(db, current_file);
-        let current_pkg_id =
-            baml_compiler2_hir::package::PackageId::new(db, current_pkg.package.clone());
-        let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
-        for &parent in &iface.requires {
-            if let Some(parent) = resolve_interface_ref(
-                db,
-                &iface.type_refs,
-                parent,
-                current_pkg_items,
-                &current_pkg.namespace_path,
-            ) {
-                stack.push(parent);
-            }
-        }
-    }
-
-    out
-}
-
 fn check_jinja_templates(
     db: &dyn Db,
     file_id: FileId,
@@ -1386,18 +1309,13 @@ fn build_jinja_types(
             .fields
             .iter()
             .map(|field| {
-                let ty = field
-                    .type_ref
-                    .map(|id| {
-                        jinja_type_from_type_ref(
-                            db,
-                            &class_data.type_refs,
-                            id,
-                            pkg_items,
-                            &class_namespace,
-                        )
-                    })
-                    .unwrap_or(sys_jinja_types::Type::Unknown);
+                let ty = jinja_type_from_type_ref(
+                    db,
+                    &class_data.type_refs,
+                    field.type_ref,
+                    pkg_items,
+                    &class_namespace,
+                );
                 (field.name.to_string(), ty)
             })
             .collect::<IndexMap<_, _>>();

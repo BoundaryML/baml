@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36112
 ---
 === PPIR ===
 class user.Resume {
@@ -10,7 +9,7 @@ class user.Resume$stream {
   name: string | null
 }
 function user.TypeBuilderFn(from_text: string, client: baml.llm.Client = ...) -> user.Resume  [llm] {
-  baml.llm.call_llm_function(client, "TypeBuilderFn", map { "from_text": from_text })
+  ai.internal._run_agent_to_response(TypeBuilderFn$task(from_text = from_text, client = client)).value
 }
 function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "TypeBuilderFn", map { "from_text": from_text })
@@ -29,4 +28,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Cl
 }
 function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume>  [expr] {
   baml.llm.stream_llm_function(client, "TypeBuilderFn", map { "from_text": from_text })
+}
+function user.TypeBuilderFn$task(from_text: string, client: baml.llm.Client = ...) -> ai.Task<user.Resume>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "TypeBuilderFn", map { "from_text": from_text }, [])
 }

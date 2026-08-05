@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 44178
 ---
 === PPIR ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int  [expr] {
@@ -494,7 +493,7 @@ function user.StringProviderClient$new(lenient: bool) -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TestTarget(client: baml.llm.Client = BasicClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "TestTarget", map {  })
+  ai.internal._run_agent_to_response(TestTarget$task(client = client)).value
 }
 function user.TestTarget$build_request(client: baml.llm.Client = BasicClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "TestTarget", map {  })
@@ -513,6 +512,9 @@ function user.TestTarget$render_prompt(client: baml.llm.Client = BasicClient) ->
 }
 function user.TestTarget$stream(client: baml.llm.Client = BasicClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "TestTarget", map {  })
+}
+function user.TestTarget$task(client: baml.llm.Client = BasicClient) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "TestTarget", map {  }, [])
 }
 function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new(lenient: bool) -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "ThisIsAnExtremely...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
@@ -588,7 +590,7 @@ function user.FinalExpr(a: int, b: int) -> int  [expr] {
   {  } a Add b
 }
 function user.LlmBasic(name: string, client: baml.llm.Client = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmBasic", map { "name": name })
+  ai.internal._run_agent_to_response(LlmBasic$task(name = name, client = client)).value
 }
 function user.LlmBasic$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmBasic", map { "name": name })
@@ -608,8 +610,11 @@ function user.LlmBasic$render_prompt(name: string, client: baml.llm.Client = GPT
 function user.LlmBasic$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name })
 }
+function user.LlmBasic$task(name: string, client: baml.llm.Client = GPT4) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmBasic", map { "name": name }, [])
+}
 function user.LlmMultiLine(text: string, client: baml.llm.Client = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmMultiLine", map { "text": text })
+  ai.internal._run_agent_to_response(LlmMultiLine$task(text = text, client = client)).value
 }
 function user.LlmMultiLine$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmMultiLine", map { "text": text })
@@ -629,8 +634,11 @@ function user.LlmMultiLine$render_prompt(text: string, client: baml.llm.Client =
 function user.LlmMultiLine$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text })
 }
+function user.LlmMultiLine$task(text: string, client: baml.llm.Client = GPT4) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmMultiLine", map { "text": text }, [])
+}
 function user.LlmReversedOrder(text: string, client: baml.llm.Client = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmReversedOrder", map { "text": text })
+  ai.internal._run_agent_to_response(LlmReversedOrder$task(text = text, client = client)).value
 }
 function user.LlmReversedOrder$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmReversedOrder", map { "text": text })
@@ -650,8 +658,11 @@ function user.LlmReversedOrder$render_prompt(text: string, client: baml.llm.Clie
 function user.LlmReversedOrder$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text })
 }
+function user.LlmReversedOrder$task(text: string, client: baml.llm.Client = GPT4) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmReversedOrder", map { "text": text }, [])
+}
 function user.LlmStringClient(text: string, client: baml.llm.Client = ...) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmStringClient", map { "text": text })
+  ai.internal._run_agent_to_response(LlmStringClient$task(text = text, client = client)).value
 }
 function user.LlmStringClient$build_request(text: string, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmStringClient", map { "text": text })
@@ -671,8 +682,11 @@ function user.LlmStringClient$render_prompt(text: string, client: baml.llm.Clien
 function user.LlmStringClient$stream(text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text })
 }
+function user.LlmStringClient$task(text: string, client: baml.llm.Client = ...) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmStringClient", map { "text": text }, [])
+}
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
+  ai.internal._run_agent_to_response(LlmWithLongSignature$task(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client)).value
 }
 function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
@@ -691,6 +705,9 @@ function user.LlmWithLongSignature$render_prompt(first_context: string, second_c
 }
 function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
+}
+function user.LlmWithLongSignature$task(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, [])
 }
 function user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>>  [expr] {
   {  } map { "a": map { "b": 1 } }

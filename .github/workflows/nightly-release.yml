@@ -1,0 +1,300 @@
+name: Nightly BAML Language Release
+
+# Cuts one nightly per night, at midnight America/Los_Angeles, when canary moved
+# since the last one.
+#
+# `CI - BAML Language` used to dispatch a release for every green push to canary,
+# so "nightly" meant "per merge" -- seven cuts landed on 2026-07-29 alone. CI now
+# dispatches only canary cuts (a baml_language/release.toml version bump), and
+# this workflow is the sole site that cuts the nightly channel. That is what lets
+# "one nightly per night" be true rather than merely intended: with a single cut
+# site there is no second claimant to race.
+#
+# Like every dispatcher of release-baml-language.yml, this one pins the run to
+# the immutable `baml-language-source-<sha>` tag CI created for the commit: the
+# release refuses to publish a production run dispatched at any other ref.
+#
+# Skipping is normal and quiet -- a day with no merges has nothing to release.
+# Everything else is loud: this workflow failing is the signal that the nightly
+# channel has stopped advancing.
+on:
+  schedule:
+    # GitHub cron is UTC-only and does not honor DST, so midnight in Seattle is
+    # 07:00 UTC under PDT and 08:00 UTC under PST. Both entries fire every day
+    # and the local-clock gate below drops whichever one is not local midnight,
+    # so exactly one survives year-round -- including on the DST transition days
+    # themselves, where the surviving entry swaps over. Minute 7 rather than 0
+    # because GitHub delays scheduled runs most at the top of the hour, and a
+    # delay past 01:00 local forfeits the night.
+    - cron: "7 7 * * *"
+    - cron: "7 8 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        # Deliberately does not override the behind/diverged refusal below --
+        # that is the one guard whose whole point is to stop a human overriding
+        # it in a hurry.
+        description: "Cut a nightly even if canary has not moved or a run already exists"
+        type: boolean
+        default: false
+
+permissions:
+  # `actions: write` dispatches the release; the reads below (CI runs, release
+  # runs, commits, tags) need nothing beyond the default scopes.
+  actions: write
+  contents: read
+
+concurrency:
+  group: baml-language-nightly-dispatch
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  dispatch-nightly:
+    name: Dispatch nightly release
+    # A fork inherits the schedule but must never cut releases for the upstream
+    # registries (and its token could not dispatch this anyway).
+    if: ${{ github.repository == 'BoundaryML/baml' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      source_sha: ${{ steps.select.outputs.sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Gate on local midnight in Seattle
+        id: clock
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          local_now="$(TZ=America/Los_Angeles date --iso-8601=seconds)"
+          if [[ "$EVENT_NAME" != "schedule" ]]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run at $local_now; local-midnight gate does not apply."
+            exit 0
+          fi
+          # Deliberately strict. Accepting the 01:00 hour as well would let a
+          # delayed cron still cut that night, but it would also let BOTH cron
+          # entries through every night under PDT (07:00 UTC = 00:00, 08:00 UTC
+          # = 01:00), and a nightly double-cut every night is far worse than the
+          # rare missed night: the next night ships every commit since anyway.
+          local_hour="$(TZ=America/Los_Angeles date +%H)"
+          if [[ "$local_hour" == "00" ]]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "Local time is $local_now; this is tonight's nightly slot."
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "Local time is $local_now, not the midnight hour; the other cron entry owns tonight."
+          fi
+
+      - name: Select the newest green canary commit
+        id: select
+        if: ${{ steps.clock.outputs.proceed == 'true' }}
+        run: |
+          set -euo pipefail
+          # Off the workspace: this job never checks the repo out.
+          green="$RUNNER_TEMP/green-ci-runs.json"
+          commits="$RUNNER_TEMP/canary-commits.txt"
+          # The release attests its source against a successful `CI - BAML
+          # Language` push run on canary, so only such a commit is releasable.
+          gh run list --workflow ci.yaml --branch canary --event push \
+            --status success --limit 100 \
+            --json headSha,databaseId > "$green"
+          # Walk canary newest-first rather than trusting run order: runs are
+          # ordered by creation, which is not commit ancestry.
+          gh api "repos/$GH_REPO/commits?sha=canary&per_page=100" \
+            --jq '.[].sha' > "$commits"
+          sha=""
+          run_id=""
+          while IFS= read -r commit; do
+            id="$(jq -r --arg commit "$commit" \
+              '[.[] | select(.headSha == $commit) | .databaseId] | max // empty' \
+              "$green")"
+            if [[ -n "$id" ]]; then
+              sha="$commit"
+              run_id="$id"
+              break
+            fi
+          done < "$commits"
+          if [[ -z "$sha" ]]; then
+            echo "::error::no canary commit in the last 100 has a successful CI run, so nothing is releasable tonight"
+            exit 1
+          fi
+          {
+            echo "sha=$sha"
+            echo "run_id=$run_id"
+          } >> "$GITHUB_OUTPUT"
+          echo "Newest green canary commit: $sha (CI run $run_id)"
+
+      - name: Decide whether canary moved since the last nightly
+        id: decide
+        if: ${{ steps.select.outputs.sha != '' }}
+        env:
+          CANDIDATE_SHA: ${{ steps.select.outputs.sha }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          set -euo pipefail
+
+          decide() {
+            echo "dispatch=$1" >> "$GITHUB_OUTPUT"
+            echo "$2"
+            echo "$2" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          # One cut per commit. This observes the EFFECT -- a release run exists
+          # at the candidate's source tag -- rather than whether some earlier run
+          # of this workflow happened to conclude green. That distinction is
+          # load-bearing: the clock gate skips *steps*, not the job, so the cron
+          # entry that loses the midnight gate still concludes `success`, and any
+          # guard keyed on this workflow's own conclusion would read that no-op
+          # as "tonight is handled" and stand the real cut down -- every night,
+          # for the whole PST half of the year. Failed and cancelled runs do not
+          # count; that commit still needs a release.
+          #
+          # A run at this tag may be an unrelated canary release rather than a
+          # nightly. Standing down then costs this night its cut, but not the
+          # commits: the next night's candidate is still ahead of the last
+          # nightly, so they ship then.
+          existing="$(gh run list --workflow release-baml-language.yml --limit 200 \
+            --json headBranch,conclusion |
+            jq --arg branch "baml-language-source-$CANDIDATE_SHA" \
+              '[.[]
+                | select(.headBranch == $branch)
+                | select(.conclusion == null or .conclusion == "" or .conclusion == "success")]
+               | length')"
+          if [[ "$existing" != "0" && "$FORCE" != "true" ]]; then
+            decide false "A release run for $CANDIDATE_SHA is already in flight or done; nothing to do."
+            exit 0
+          fi
+
+          # Newest nightly by PUBLICATION time: `created_at` on a GitHub release
+          # is the tagged commit's date, not the publication time, so sorting on
+          # it misorders cuts that share a source commit.
+          prev_tag="$(gh release list --limit 200 \
+            --json tagName,publishedAt,isDraft |
+            jq -r '[.[]
+                    | select(.isDraft | not)
+                    | select(.tagName | test("^baml-language-[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\."))]
+                   | sort_by(.publishedAt) | last | .tagName // empty')"
+          if [[ -z "$prev_tag" ]]; then
+            decide true "No previous nightly release exists; cutting one from $CANDIDATE_SHA."
+            exit 0
+          fi
+          ref_json="$(gh api "repos/$GH_REPO/git/ref/tags/$prev_tag")"
+          prev_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+          if [[ "$(jq -r '.object.type' <<<"$ref_json")" == "tag" ]]; then
+            prev_sha="$(gh api "repos/$GH_REPO/git/tags/$prev_sha" --jq '.object.sha')"
+          fi
+          echo "Last nightly: $prev_tag (source $prev_sha)"
+
+          comparison="$(gh api "repos/$GH_REPO/compare/$prev_sha...$CANDIDATE_SHA")"
+          status="$(jq -r '.status' <<<"$comparison")"
+          ahead_by="$(jq -r '.ahead_by' <<<"$comparison")"
+          case "$status" in
+            ahead)
+              decide true "$ahead_by new commit(s) on canary since $prev_tag; cutting a nightly from $CANDIDATE_SHA."
+              ;;
+            identical)
+              # The one expected quiet outcome: a day with no merges.
+              if [[ "$FORCE" == "true" ]]; then
+                decide true "Forced: cutting a nightly from $CANDIDATE_SHA though canary has not moved."
+              else
+                decide false "canary has not moved since $prev_tag; nothing to release."
+              fi
+              ;;
+            behind | diverged)
+              # The releasable commit is not a descendant of what shipped last
+              # night, so cutting would publish a content rollback under a higher
+              # version -- and the mutable nightly pointers (the npm dist-tag and
+              # the channel manifest) are last-writer-wins, so consumers would
+              # silently move backwards. `force` deliberately does NOT reach this
+              # branch: re-running with it is the obvious reaction to the red
+              # run, and it must not be the one that ships the rollback.
+              #
+              # Canary is squash-merge-only with force-pushes disabled, so the
+              # reachable cause is a nightly tag published before `--target` was
+              # passed to `gh release create`: those name canary's head at
+              # publish time, which can be ahead of the newest green commit. It
+              # clears once one correctly-targeted nightly publishes.
+              echo "::error::$CANDIDATE_SHA is $status relative to $prev_tag ($prev_sha); refusing to cut a nightly"
+              exit 1
+              ;;
+            *)
+              echo "::error::unexpected compare status '$status' for $prev_sha...$CANDIDATE_SHA"
+              exit 1
+              ;;
+          esac
+
+      - name: Dispatch the nightly release
+        if: ${{ steps.decide.outputs.dispatch == 'true' }}
+        env:
+          SOURCE_SHA: ${{ steps.select.outputs.sha }}
+          SOURCE_CI_RUN_ID: ${{ steps.select.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          # CI tags every green canary push with this ref, and the release
+          # refuses to publish unless it was dispatched at exactly it. Verify
+          # rather than create: a missing or mismatched tag means CI did not tag
+          # the commit whose CI run it attested, which is worth surfacing loudly.
+          release_ref="baml-language-source-$SOURCE_SHA"
+          if ! ref_json="$(gh api "repos/$GH_REPO/git/ref/tags/$release_ref" 2>&1)"; then
+            echo "::error::$release_ref does not resolve: $ref_json"
+            exit 1
+          fi
+          ref_type="$(jq -r '.object.type // ""' <<<"$ref_json")"
+          ref_sha="$(jq -r '.object.sha // ""' <<<"$ref_json")"
+          if [[ "$ref_type" != "commit" || "$ref_sha" != "$SOURCE_SHA" ]]; then
+            echo "::error::$release_ref resolves to $ref_type $ref_sha, expected commit $SOURCE_SHA"
+            exit 1
+          fi
+          # The release names the night itself, from the Seattle date at plan
+          # time. That is stable however long this run queues -- it would take a
+          # 24-hour delay to land on a different local date.
+          gh workflow run release-baml-language.yml \
+            --ref "$release_ref" \
+            -f channel=nightly \
+            -f dry_run=false \
+            -f source_sha="$SOURCE_SHA" \
+            -f source_ci_run_id="$SOURCE_CI_RUN_ID"
+          echo "Dispatched a nightly release for $SOURCE_SHA (CI run $SOURCE_CI_RUN_ID)."
+
+  notify-slack:
+    name: Notify Slack on failure
+    needs: [dispatch-nightly]
+    # Only on failure. The sibling notifier in release-baml-language.yml runs
+    # `always()` because it fans in from forty jobs and one of them can go green
+    # with a failed step; here there is a single upstream job, so a failed step
+    # is a failed job. Gating keeps the ~365 nights a year that the clock gate
+    # legitimately skips from each paying for a checkout and a `uv` install.
+    if: ${{ always() && github.repository == 'BoundaryML/baml' && needs.dispatch-nightly.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: boundary-tools-dev
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          sparse-checkout: |
+            .github/actions/setup-mise
+            mise.toml
+            tools/notify-release-failure.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: uv
+      - name: Find failures and notify Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_CHANNEL: "#general"
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+          CHANNEL: "nightly dispatch"
+          VERSION: ${{ needs.dispatch-nightly.outputs.source_sha || 'no candidate commit' }}
+        run: uv run --script tools/notify-release-failure.py

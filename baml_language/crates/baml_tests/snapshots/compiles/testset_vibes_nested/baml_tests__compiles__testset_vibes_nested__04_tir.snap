@@ -11,7 +11,10 @@ class user.Sentiment {
   reasoning: string
 }
 function user.ClassifySentiment(text: string, client: baml.llm.Client = GPT4o) -> user.Sentiment throws never {
-  baml.llm.call_llm_function<T>(client, "ClassifySentiment", map { "text": text }) : user.Sentiment
+  ai.internal._run_agent_to_response<Sentiment>(ClassifySentiment$task(text = text, client = client)).value : user.Sentiment
+}
+function user.ClassifySentiment$task(text: string, client: baml.llm.Client = GPT4o) -> ai.Task<user.Sentiment> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "ClassifySentiment", map { "text": text }, []) : ai.Task<user.Sentiment>
 }
 function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text }) : baml.llm.PromptAst
@@ -23,7 +26,10 @@ function user.ClassifySentiment$build_request_stream(text: string, client: baml.
   baml.llm.build_request_stream(client, "ClassifySentiment", map { "text": text }) : baml.http.Request
 }
 function user.GenerateTests(count: int, topic: string, client: baml.llm.Client = GPT4o) -> string[] throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateTests", map { "count": count, "topic": topic }) : string[]
+  ai.internal._run_agent_to_response<string[]>(GenerateTests$task(count = count, topic = topic, client = client)).value : string[]
+}
+function user.GenerateTests$task(count: int, topic: string, client: baml.llm.Client = GPT4o) -> ai.Task<string[]> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "GenerateTests", map { "count": count, "topic": topic }, []) : ai.Task<string[]>
 }
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.PromptAst
@@ -49,7 +55,10 @@ function user.Foo() -> string | image throws never {
   }
 }
 function user.ClassifySentiment2(text: string, client: baml.llm.Client = GPT4o) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "ClassifySentiment2", map { "text": text }) : string
+  ai.internal._run_agent_to_response<string>(ClassifySentiment2$task(text = text, client = client)).value : string
+}
+function user.ClassifySentiment2$task(text: string, client: baml.llm.Client = GPT4o) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "ClassifySentiment2", map { "text": text }, []) : ai.Task<string>
 }
 function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text }) : baml.llm.PromptAst

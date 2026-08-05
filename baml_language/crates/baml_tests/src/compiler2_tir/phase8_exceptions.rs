@@ -838,6 +838,41 @@ fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
 }
 
 #[test]
+fn defining_a_throwing_lambda_does_not_charge_the_enclosing_functions_throw_set() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function defines(value: int) -> int throws never {
+  let risky = (n: int) -> int {
+    throw "boom"
+  }
+  return value
+}
+
+function calls(value: int) -> int throws never {
+  return defines(value)
+}"#,
+    );
+
+    // `defines` never invokes `risky`, so `boom` is the lambda's effect and not
+    // its definer's. The distinction is carried by walking the body structurally
+    // and stopping at `Expr::Lambda`; a flat scan of the expression arena would
+    // see the `throw` as though `defines` wrote it, give `defines` a
+    // package-level throw set of `string`, and propagate that to every caller.
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("declared throws"),
+        "neither the definer nor its caller may violate `throws never`, got:\n{output}"
+    );
+    // The effect is not lost, just attributed to the right place: the lambda's
+    // own inferred type carries it.
+    assert!(
+        output.contains("(n: int) -> int throws string"),
+        "the throw must land on the lambda's inferred type, got:\n{output}"
+    );
+}
+
+#[test]
 fn alias_hidden_omitted_lambda_reports_local_violation() {
     let mut db = make_db();
     let file = db.add_file(

@@ -2579,21 +2579,6 @@ function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.Primi
     self.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
-function baml.llm.render_prompt_values(values: unknown[]) -> unknown[] throws never {
-  { : unknown[]
-    let rendered: unknown[] = [] : unknown[]
-    for value in values
-      { : int
-        rendered.push(match (value) { Role => value, _ => string.from(value) }) : int
-          match (value : unknown) : baml.llm.Role | string
-            Role =>
-              value : baml.llm.Role
-            _ =>
-              string.from<T>(value) : string
-      }
-    rendered : unknown[]
-  }
-}
 function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context throws never {
   { : baml.llm.Context
     Context { client: ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role ?? "system", allowed_roles: primitive.options.allowed_roles ?? [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) } : baml.llm.Context
@@ -2610,7 +2595,7 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
       (ctx: Context) -> { ... } : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
         {
           let t = body(make_role, ctx)
-          assemble_prompt_ast(t.parts, render_prompt_values(t.values))
+          assemble_prompt_ast(t.parts, t.values)
         }
     render : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
   }

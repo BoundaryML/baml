@@ -239,7 +239,6 @@ namespace baml.llm:
   function prompt_template_for
   function render_output_format
   function render_prompt
-  function render_prompt_values
   function stream_llm_function<TStream, TFinal>
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }

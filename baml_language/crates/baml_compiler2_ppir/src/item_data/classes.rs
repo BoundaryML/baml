@@ -7,8 +7,8 @@ use baml_compiler2_hir::{
 use text_size::TextRange;
 
 use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FieldData, InterfaceFieldLinkData,
-    InterfaceFieldLinkSourceMap,
+    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FieldData, GenericParamData,
+    InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
 };
 
 /// Span-free semantic data for a `class` declaration.
@@ -19,13 +19,12 @@ use crate::item_data::common::{
 #[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct ClassData<'db> {
     pub name: Name,
-    pub generic_params: Vec<Name>,
+    /// Generic type parameters, each with its conjunction of bounds.
+    pub generic_params: Vec<GenericParamData>,
     /// Every type reference in this class's *signature* — bounds, field types,
     /// and `implements` targets. Scoped to the item, so edits to sibling items
     /// cannot renumber these ids.
     pub type_refs: TypeRefStore,
-    /// Parallel to `generic_params`. `Some` means `T extends <bound>`.
-    pub generic_param_bounds: Vec<Option<TypeRefId>>,
     pub fields: Vec<FieldData>,
     pub methods: Vec<FunctionLoc<'db>>,
     pub implements: Vec<ImplementsData>,
@@ -48,6 +47,8 @@ pub struct ImplementsData {
 pub struct ClassSourceMap {
     /// Full source span of the declaration.
     pub span: TextRange,
+    /// Span of the class's name token.
+    pub name_span: TextRange,
     /// Spans for every node in [`ClassData::type_refs`].
     pub type_refs: TypeRefSourceMap,
     /// Name span per field, parallel to [`ClassData::fields`].
@@ -92,18 +93,14 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
 
     let mut type_refs = TypeRefBuilder::new();
 
-    let generic_param_bounds = data
-        .generic_param_bounds
-        .iter()
-        .map(|bound| bound.as_ref().map(|te| type_refs.lower(te)))
-        .collect();
+    let generic_params = lower_generic_params(&data.generic_params, &mut type_refs);
 
     let fields = data
         .fields
         .iter()
         .map(|field| FieldData {
             name: field.name.clone(),
-            type_ref: field.type_expr.as_ref().map(|te| type_refs.lower(te)),
+            type_ref: type_refs.lower(&field.type_expr),
             attributes: field.attributes.clone(),
             docstring: field.docstring.clone(),
         })
@@ -164,9 +161,8 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
     (
         ClassData {
             name: data.name.clone(),
-            generic_params: data.generic_params.clone(),
+            generic_params,
             type_refs: store,
-            generic_param_bounds,
             fields,
             methods: data
                 .methods
@@ -179,6 +175,11 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
         },
         ClassSourceMap {
             span: data.span,
+            name_span: item_source_map
+                .class_name_spans
+                .get(&class.id(db))
+                .copied()
+                .unwrap_or_else(|| unreachable!("name span recorded at allocation")),
             type_refs: spans,
             field_name_spans: item_source_map
                 .class_field_spans

@@ -3,7 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.Fn(client: baml.llm.Client = ...) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "Fn", map {  }) : string
+  ai.internal._run_agent_to_response<string>(Fn$task(client = client)).value : string
+}
+function user.Fn$task(client: baml.llm.Client = ...) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "Fn", map {  }, []) : ai.Task<string>
 }
 function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "Fn", map {  }) : baml.llm.PromptAst

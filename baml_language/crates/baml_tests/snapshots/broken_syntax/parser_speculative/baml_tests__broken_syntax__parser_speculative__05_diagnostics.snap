@@ -4,6 +4,26 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0003
 
+  × unresolved name: `Ambiguous$task`
+   ╭─[ambiguous_function.baml:2:45]
+ 2 │ ╭─▶ function Ambiguous(input: string) -> string {
+ 3 │ │     client GPT4  // This keyword determines it's an LLM function
+ 4 │ │     // Even though it starts like it could be expression function
+ 5 │ ╰─▶ }
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+   ╭─[ambiguous_function.baml:2:45]
+ 2 │ ╭─▶ function Ambiguous(input: string) -> string {
+ 3 │ │     client GPT4  // This keyword determines it's an LLM function
+ 4 │ │     // Even though it starts like it could be expression function
+ 5 │ ╰─▶ }
+   ╰────
+
+  [type] E0003
+
   × unresolved name: `GPT4`
    ╭─[ambiguous_function.baml:2:45]
  2 │ ╭─▶ function Ambiguous(input: string) -> string {
@@ -18,30 +38,8 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[ambiguous_function.baml:5:1]
  5 │ }
    · ┬
-   · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
+   · ╰── expected `declarative model function missing 'prompt' field`, found `'}'`
    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[ambiguous_function.baml:8:1]
-  8 │ ╭─▶ function AnotherLLM(input: string) -> string {
-  9 │ │     clent GPT4  // Typo in "client"
- 10 │ │     prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
- 11 │ ├─▶ }
-    · ╰──── expected `baml.llm.Client`, found `null`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[ambiguous_function.baml:8:46]
-  8 │ ╭─▶ function AnotherLLM(input: string) -> string {
-  9 │ │     clent GPT4  // Typo in "client"
- 10 │ │     prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
- 11 │ ├─▶ }
-    · ╰──── expected `baml.llm.Client`, found `null`
-    ╰────
 
   [parse] E0010
 
@@ -49,7 +47,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[ambiguous_function.baml:9:3]
  9 │   clent GPT4  // Typo in "client"
    ·   ──┬──
-   ·     ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
+   ·     ╰── expected `Only 'client' or 'provider', 'prompt', and 'tools' are allowed in a declarative model function, found 'clent'`, found `identifier`
    ╰────
 
   [parse] E0010
@@ -58,7 +56,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[ambiguous_function.baml:9:9]
  9 │   clent GPT4  // Typo in "client"
    ·         ──┬─
-   ·           ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
+   ·           ╰── expected `Only 'client' or 'provider', 'prompt', and 'tools' are allowed in a declarative model function, found 'GPT4'`, found `identifier`
    ╰────
 
   [parse] E0010
@@ -67,7 +65,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[ambiguous_function.baml:11:1]
  11 │ }
     · ┬
-    · ╰── expected `LLM function missing 'client' field`, found `'}'`
+    · ╰── expected `Declarative model function missing 'client' or 'provider' field`, found `'}'`
     ╰────
 
   [type] E0003

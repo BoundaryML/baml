@@ -3293,13 +3293,7 @@ fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_type::MediaK
     if !args.is_empty() {
         return None;
     }
-    match name.render_dotted(false).as_str() {
-        "baml.media.Image" => Some(baml_type::MediaKind::Image),
-        "baml.media.Audio" => Some(baml_type::MediaKind::Audio),
-        "baml.media.Video" => Some(baml_type::MediaKind::Video),
-        "baml.media.Pdf" => Some(baml_type::MediaKind::Pdf),
-        _ => None,
-    }
+    baml_type::MediaKind::from_wrapper_class_name(&name.render_dotted(false))
 }
 
 fn resolve_runtime_alias<'a>(
@@ -3654,7 +3648,7 @@ fn coerce_arg_to_declared_type_with_aliases(
         // shell before validating/materializing the annotated node.
         (BexExternalValue::Instance { mut fields, .. }, media_ty @ RuntimeTy::Media(..)) => {
             let data = fields
-                .shift_remove("_data")
+                .shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
                 .ok_or_else(|| EngineError::TypeMismatch {
                     message: format!(
                         "host media payload for `{media_ty}` is missing its `_data` handle"

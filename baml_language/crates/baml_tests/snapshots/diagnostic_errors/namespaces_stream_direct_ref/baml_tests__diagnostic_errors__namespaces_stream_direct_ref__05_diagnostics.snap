@@ -23,7 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[models.baml:13:5]
+    ╭─[ns_llm/models.baml:13:5]
  13 │     r.text
     ·     ───┬──
     ·        ╰── expected `string`, found `string | null`
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[models.baml:18:5]
+    ╭─[ns_llm/models.baml:18:5]
  18 │     c.key
     ·     ──┬──
     ·       ╰── expected `string`, found `string | null`

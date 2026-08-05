@@ -3371,6 +3371,13 @@ impl<'a> Parser<'a> {
 
             // Parse fields, methods, implements blocks, and attributes
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between class members,
+                // same as at statement boundaries in a block.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+
                 // Error recovery: if we see a top-level keyword (except class-local members),
                 // assume we missed a closing brace
                 let recover_top_level_item = if p.at(TokenKind::Interface) {
@@ -3467,6 +3474,12 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between interface members.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3695,6 +3708,11 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between implements members.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -3793,6 +3811,11 @@ impl<'a> Parser<'a> {
             }
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Header comments (`//#`) are legal between implements members.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
@@ -8019,6 +8042,22 @@ impl<'a> Parser<'a> {
             // 'test' keyword
             p.expect(TokenKind::Test);
 
+            // Same rule as `parse_testset`: a bare identifier as a
+            // top-level test name can never resolve — report the syntax
+            // fix instead of a downstream "unresolved name".
+            if p.testset_body_depth == 0
+                && p.at(TokenKind::Word)
+                && (p.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace)
+                    || Self::token_is_contextual_kw(p.peek(1), "with"))
+            {
+                let span = p.current().map(|t| t.span).unwrap();
+                let name = p.current().map(|t| t.text.clone()).unwrap_or_default();
+                p.error(
+                    format!("test names must be quoted strings: `test \"{name}\"`"),
+                    span,
+                );
+            }
+
             // Test name — an expression (stops before `{` and `with`)
             p.parse_expr();
 
@@ -8043,6 +8082,25 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TESTSET_DEF, |p| {
             // 'testset' keyword
             p.expect(TokenKind::TestSet);
+
+            // A bare identifier as a top-level testset name can never
+            // resolve (there are no local bindings at top level), and the
+            // downstream "unresolved name" error is misleading. Catch the
+            // syntax mistake here with the actual fix. Inside a testset
+            // body (depth > 0) identifiers stay legal: names may be
+            // computed from loop variables.
+            if p.testset_body_depth == 0
+                && p.at(TokenKind::Word)
+                && (p.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace)
+                    || Self::token_is_contextual_kw(p.peek(1), "with"))
+            {
+                let span = p.current().map(|t| t.span).unwrap();
+                let name = p.current().map(|t| t.text.clone()).unwrap_or_default();
+                p.error(
+                    format!("testset names must be quoted strings: `testset \"{name}\"`"),
+                    span,
+                );
+            }
 
             // Testset name — an expression (stops before `{` and `with`)
             p.parse_expr();

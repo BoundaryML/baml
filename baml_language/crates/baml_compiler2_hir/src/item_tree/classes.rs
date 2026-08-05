@@ -4,14 +4,16 @@ use text_size::TextRange;
 
 use crate::{
     ids::{FunctionMarker, LocalItemId},
-    item_tree::{Attribute, ImplementsBlock},
+    item_tree::{Attribute, GenericParam, ImplementsBlock},
 };
 
 /// A class field stored in the `ItemTree`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassField {
     pub name: Name,
-    pub type_expr: Option<ast::TypeExpr>,
+    /// Always present — see [`ast::FieldDef::type_expr`]. A field written without a
+    /// type recovers as `TypeExprKind::Error`, not as an absent type.
+    pub type_expr: ast::TypeExpr,
     pub attributes: Vec<Attribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
@@ -20,12 +22,9 @@ pub struct ClassField {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Class {
     pub name: Name,
-    /// Generic type parameters (e.g., `["T"]` for `Array<T>`).
-    /// Empty for non-generic classes.
-    pub generic_params: Vec<Name>,
-    /// Generic bounds parallel to `generic_params`. `Some(te)` means
-    /// `T extends <te>`; `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    /// Generic type parameters (e.g., `["T"]` for `Array<T>`), each with its
+    /// bounds. Empty for non-generic classes.
+    pub generic_params: Vec<GenericParam>,
     /// Fields of the class, in declaration order.
     pub fields: Vec<ClassField>,
     /// Methods defined inside this class, referencing their `Function` entries

@@ -6,8 +6,26 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, FunctionLoc, ImplLoc, InterfaceLoc},
     type_ref::{TypeRefId, TypeRefStore},
 };
+use baml_compiler2_ppir::item_data::GenericParamData;
 
 use crate::ty::{ParamTy, Ty, TyAttr};
+
+/// A declared parameter's name paired with every bound it carries, as
+/// `BoundSource`s into `store`. The bounds are a conjunction — all of them are
+/// kept, so `T extends A & B` constrains `T` by both.
+fn bound_sources<'db>(
+    param: &GenericParamData,
+    store: &'db TypeRefStore,
+) -> (Name, Vec<BoundSource<'db>>) {
+    (
+        param.name.clone(),
+        param
+            .bounds
+            .iter()
+            .map(|&id| BoundSource::Ref(store, id))
+            .collect(),
+    )
+}
 
 /// One declared generic bound before it is lowered in the complete generic scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,31 +93,17 @@ impl<'db> GenericEnv<'db> {
 
     fn from_refs(
         parent: Option<Self>,
-        params: &[Name],
+        params: &[GenericParamData],
         store: &'db TypeRefStore,
-        bounds: &[Option<TypeRefId>],
     ) -> Self {
         Self::from_sources(
             parent,
-            params.iter().enumerate().map(|(index, name)| {
-                let bounds = bounds
-                    .get(index)
-                    .copied()
-                    .flatten()
-                    .map(|id| BoundSource::Ref(store, id))
-                    .into_iter()
-                    .collect();
-                (name.clone(), bounds)
-            }),
+            params.iter().map(|param| bound_sources(param, store)),
         )
     }
 
-    pub(crate) fn root_refs(
-        params: &[Name],
-        store: &'db TypeRefStore,
-        bounds: &[Option<TypeRefId>],
-    ) -> Self {
-        Self::from_refs(None, params, store, bounds)
+    pub(crate) fn root_refs(params: &[GenericParamData], store: &'db TypeRefStore) -> Self {
+        Self::from_refs(None, params, store)
     }
 
     #[cfg(test)]
@@ -107,43 +111,33 @@ impl<'db> GenericEnv<'db> {
         Self::from_sources(None, params.iter().cloned().map(|name| (name, Vec::new())))
     }
 
-    pub(crate) fn child_refs(
-        &self,
-        params: &[Name],
-        store: &'db TypeRefStore,
-        bounds: &[Option<TypeRefId>],
-    ) -> Self {
-        Self::from_refs(Some(self.clone()), params, store, bounds)
+    pub(crate) fn child_refs(&self, params: &[GenericParamData], store: &'db TypeRefStore) -> Self {
+        Self::from_refs(Some(self.clone()), params, store)
     }
 
     #[expect(
         deprecated,
         reason = "the one sanctioned Ast producer until the body TypeRef migration"
     )]
-    pub(crate) fn child_unique_ast(
-        &self,
-        params: &[Name],
-        bounds: &[Option<ast::TypeExpr>],
-    ) -> Self {
+    pub(crate) fn child_unique_ast(&self, params: &[ast::GenericParam]) -> Self {
         let mut visible: Vec<_> = self
             .source_params()
             .iter()
             .map(|param| param.name().clone())
             .collect();
-        let own = params.iter().enumerate().filter_map(|(index, name)| {
-            if visible.contains(name) {
+        let own = params.iter().filter_map(|param| {
+            if visible.contains(&param.name) {
                 return None;
             }
-            visible.push(name.clone());
+            visible.push(param.name.clone());
             Some((
-                name.clone(),
-                bounds
-                    .get(index)
+                param.name.clone(),
+                param
+                    .bounds
+                    .iter()
                     .cloned()
-                    .flatten()
                     .map(BoundSource::Ast)
-                    .into_iter()
-                    .collect(),
+                    .collect::<Vec<_>>(),
             ))
         });
         Self::from_sources(Some(self.clone()), own)
@@ -256,11 +250,7 @@ pub(crate) fn class_generic_env<'db>(
     class: ClassLoc<'db>,
 ) -> GenericEnv<'db> {
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
-    GenericEnv::root_refs(
-        &data.generic_params,
-        &data.type_refs,
-        &data.generic_param_bounds,
-    )
+    GenericEnv::root_refs(&data.generic_params, &data.type_refs)
 }
 
 pub(crate) fn interface_generic_env<'db>(
@@ -271,17 +261,11 @@ pub(crate) fn interface_generic_env<'db>(
     let self_name = Name::new("Self");
     let mut params = Vec::with_capacity(1 + data.generic_params.len());
     params.push((self_name, Vec::new()));
-    for (index, name) in data.generic_params.iter().enumerate() {
-        let bounds = data
-            .generic_param_bounds
-            .get(index)
-            .copied()
-            .flatten()
-            .map(|id| BoundSource::Ref(&data.type_refs, id))
-            .into_iter()
-            .collect();
-        params.push((name.clone(), bounds));
-    }
+    params.extend(
+        data.generic_params
+            .iter()
+            .map(|param| bound_sources(param, &data.type_refs)),
+    );
     let env = GenericEnv::from_sources(None, params)
         .with_associated_params(data.associated_types.iter().map(|assoc| assoc.name.clone()));
     let qtn = crate::lower_type_expr::qualify_def(
@@ -318,16 +302,9 @@ pub(crate) fn impl_generic_env<'db>(
         baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => {
             GenericEnv::from_sources(
                 None,
-                generics.iter().map(|param| {
-                    let bounds = param
-                        .bounds
-                        .first()
-                        .copied()
-                        .map(|id| BoundSource::Ref(&data.type_refs, id))
-                        .into_iter()
-                        .collect();
-                    (param.name.clone(), bounds)
-                }),
+                generics
+                    .iter()
+                    .map(|param| bound_sources(param, &data.type_refs)),
             )
         }
     }
@@ -351,16 +328,8 @@ pub(crate) fn function_generic_env<'db>(
         None => None,
     };
     let env = match parent {
-        Some(parent) => parent.child_refs(
-            &data.generic_params,
-            &data.type_refs,
-            &data.generic_param_bounds,
-        ),
-        None => GenericEnv::root_refs(
-            &data.generic_params,
-            &data.type_refs,
-            &data.generic_param_bounds,
-        ),
+        Some(parent) => parent.child_refs(&data.generic_params, &data.type_refs),
+        None => GenericEnv::root_refs(&data.generic_params, &data.type_refs),
     };
     let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     env.with_additional_own_unbounded(&sig.synthetic_effect_params)

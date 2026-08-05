@@ -61,11 +61,17 @@ pub const PACKAGE_AI: &str = "ai";
 /// generated code or committed artifacts).
 pub const BAML_STD_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/baml_std");
 
-/// YAML documentation for BAML keywords, embedded at compile time.
+/// YAML documentation for BAML language-reference topics, embedded at compile time.
 pub const BAML_KEYWORDS_YAML: &str = include_str!("../keyword_docs/baml_keywords.yaml");
 
 /// YAML crosswalk documentation for TypeScript/JS keywords, embedded at compile time.
 pub const TS_KEYWORDS_YAML: &str = include_str!("../keyword_docs/ts_keywords.yaml");
+
+mod language_docs;
+pub use language_docs::{
+    LanguageTopic, TypescriptCrosswalkTopic, has_describe_topic, language_topic, language_topics,
+    typescript_crosswalk_topic, typescript_crosswalk_topics,
+};
 
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {

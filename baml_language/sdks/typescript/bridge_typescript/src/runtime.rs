@@ -53,8 +53,14 @@ impl BamlRuntime {
 
     /// Initialize the process-global runtime from precompiled BAML bytecode.
     #[napi(factory, js_name = "initializeRuntimeFromBytecode")]
-    pub fn initialize_runtime_from_bytecode(bytecode: Buffer) -> napi::Result<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(bytecode.as_ref()) {
+    pub fn initialize_runtime_from_bytecode(
+        bytecode: Buffer,
+        embedded_baml_toml: Option<String>,
+    ) -> napi::Result<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(
+            bytecode.as_ref(),
+            embedded_baml_toml.as_deref(),
+        ) {
             Ok(_bex) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }

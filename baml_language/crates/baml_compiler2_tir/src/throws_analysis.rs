@@ -156,8 +156,21 @@ pub(crate) fn collect_escaping_throws<C: ThrowsAnalysisContext>(
     context: &C,
     body: &ExprBody,
 ) -> BTreeSet<Ty> {
+    collect_escaping_throws_from(context, body, body.root_expr)
+}
+
+/// [`collect_escaping_throws`] rooted at an arbitrary expression of `body`.
+///
+/// A lambda's body is an expression inside the enclosing function's arena, so
+/// its throw surface must be collected from *its* root — walking `body.root_expr`
+/// would compute the enclosing function's surface instead.
+pub(crate) fn collect_escaping_throws_from<C: ThrowsAnalysisContext>(
+    context: &C,
+    body: &ExprBody,
+    root: Option<ExprId>,
+) -> BTreeSet<Ty> {
     let mut out = BTreeSet::new();
-    if let Some(root) = body.root_expr {
+    if let Some(root) = root {
         collect_from_expr(context, root, body, &mut out);
     }
     out

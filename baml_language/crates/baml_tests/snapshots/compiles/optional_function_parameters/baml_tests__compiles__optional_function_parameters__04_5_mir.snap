@@ -265,8 +265,9 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
     let _5: bool
     let _6: bool
     let _7: bool
-    let _8: map<string, unknown>
-    let _9: type
+    let _8: ai.ResponseWithMetadata<string>
+    let _9: ai.Task<string>
+    let _10: type
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -298,12 +299,20 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
     }
 
     bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _9 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _9 = call const fn user.AskDocs$task(copy _1, copy _2, copy _3, copy _4) -> [bb7];
     }
 
     bb7: {
+        _10 = load_type(string);
+        _8 = call const fn ai.internal._run_agent_to_response<copy _10>(copy _9) -> [bb8];
+    }
+
+    bb8: {
+        _0 = copy _8.0;
+        goto -> bb9;
+    }
+
+    bb9: {
         return;
     }
 }
@@ -572,6 +581,66 @@ fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: 
     }
 
     bb7: {
+        return;
+    }
+}
+
+fn user.AskDocs$task(query: string, max_results: int, filter: string, client: baml.llm.Client) -> ai.Task<string> {
+    // Locals:
+    let _0: ai.Task<string> // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: baml.llm.Client // client // param
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: ai.Provider
+    let _9: map<string, unknown>
+    let _10: (ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>)[]
+    let _11: type
+
+    bb0: {
+        _5 = copy _2 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = copy _3 == const <omitted>;
+        branch copy _6 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = call const fn user.DefaultFilter() -> [bb4];
+    }
+
+    bb4: {
+        _7 = copy _4 == const <omitted>;
+        branch copy _7 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _4 = const item user.TestClient;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _8 = call const fn ai.internal._provider_from_client(copy _4) -> [bb7];
+    }
+
+    bb7: {
+        _9 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
+        _10 = []: ai.tools.Tool | baml.AnyFunction<Returns = unknown, Throws = unknown>[];
+        _11 = load_type(string);
+        _0 = call const fn ai.internal._task_named_from_registered_prompt<copy _11>(copy _8, const "AskDocs", copy _9, copy _10) -> [bb8];
+    }
+
+    bb8: {
         return;
     }
 }

@@ -1,0 +1,64 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[generic_intersection_bounds.baml:37:5]
+ 37 │     describe<OnlyNamed>(OnlyNamed { name: "n" })
+    ·     ──────────────────────┬─────────────────────
+    ·                           ╰── expected `Sized`, found `OnlyNamed`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[generic_intersection_bounds.baml:42:5]
+ 42 │     describe<OnlySized>(OnlySized {})
+    ·     ────────────────┬────────────────
+    ·                     ╰── expected `Named`, found `OnlySized`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[generic_intersection_bounds.baml:47:13]
+ 47 │     let f = describe<OnlyNamed>
+    ·             ─────────┬─────────
+    ·                      ╰── expected `Sized`, found `OnlyNamed`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[generic_intersection_bounds.baml:57:13]
+ 57 │     let h = Holder<OnlyNamed> { item: OnlyNamed { name: "n" } }
+    ·             ─────────────────────────┬─────────────────────────
+    ·                                      ╰── expected `Sized`, found `OnlyNamed`
+    ╰────
+
+  [type] E0001
+
+  × type `OnlyNamed` does not satisfy the bound `Sized` required by the blanket `implements` rule
+    ╭─[generic_intersection_bounds.baml:72:24]
+ 72 │     let p: Printable = OnlyNamed { name: "n" }
+    ·                        ───────────────────────
+    ╰────
+
+  [type] E0120
+
+  × method `read` requires `T: Sized`, but interface `Reader`'s `read` declares no such bound — an implementation may not add requirements the interface does not
+    ╭─[generic_intersection_bounds.baml:84:9]
+ 84 │ ╭─▶         function read<T extends Named & Sized>(self, value: T) -> string {
+ 85 │ │               value.name
+ 86 │ ╰─▶         }
+    ╰────
+
+  [type] E0121
+
+  × method `size` on class `T` is declared by multiple interfaces: `Sized`, `OtherSized`; unqualified calls will be ambiguous — use obj.as<Sized>.size() or obj.as<OtherSized>.size()
+    ╭─[generic_intersection_bounds.baml:99:5]
+ 99 │     item.size()
+    ·     ─────────
+    ╰────

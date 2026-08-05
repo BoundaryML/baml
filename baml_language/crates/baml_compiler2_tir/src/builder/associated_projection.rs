@@ -604,10 +604,10 @@ fn associated_type_bound_interface(
         realized.generics.len(),
         iface.generic_params.len(),
     );
-    for (i, name) in iface.generic_params.iter().enumerate() {
+    for (i, declared) in iface.generic_params.iter().enumerate() {
         let arg = realized.generics.get(i).cloned().unwrap_or_else(error_ty);
         let param = generic_env
-            .resolve_param(name)
+            .resolve_param(&declared.name)
             .expect("interface generic parameter is in its environment")
             .clone();
         bindings.insert(param, arg);

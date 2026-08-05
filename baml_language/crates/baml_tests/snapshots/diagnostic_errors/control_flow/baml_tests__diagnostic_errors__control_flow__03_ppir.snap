@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 41988
 ---
 === PPIR ===
 function user.ElseIfChain(x: int) -> string  [expr] {
@@ -13,7 +12,7 @@ function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
   { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"
 }
 function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmFunction", map { "input": input })
+  ai.internal._run_agent_to_response(LlmFunction$task(input = input, client = client)).value
 }
 function user.LlmFunction$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmFunction", map { "input": input })
@@ -32,6 +31,9 @@ function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client =
 }
 function user.LlmFunction$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmFunction", map { "input": input })
+}
+function user.LlmFunction$task(input: string, client: baml.llm.Client = TestClient) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "LlmFunction", map { "input": input }, [])
 }
 function user.MatchExpression(x: int) -> string  [expr] {
   {  } match (x) { 1 => { // [1] One } "one", 2 => { // [1] Two } "two", _ => { // [1] Default } "other" }

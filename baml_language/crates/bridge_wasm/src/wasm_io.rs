@@ -9,7 +9,9 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
-use bex_events::run::{HostCallId, InMemoryRunStore, RequestCommandOutcome, RunRequestState};
+use bex_events::run::{
+    HostCallId, InMemoryRunStore, OutputStream, RequestCommandOutcome, RunRequestState,
+};
 use js_sys::{Function, Promise};
 use sys_ops::io::IoNamespaceIo;
 use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
@@ -44,6 +46,23 @@ impl WasmIo {
 
     fn input_fn(&self) -> &Function {
         self.input_fn.inner()
+    }
+
+    /// Record a `baml.io` stream write and notify the webview.
+    ///
+    /// A write that cannot be attributed to a live run is dropped rather than
+    /// failed. Panicking a program over an unroutable debug print costs more
+    /// than the lost line.
+    fn write_output(&self, call_id: CallId, stream: OutputStream, text: String) {
+        if text.is_empty() {
+            return;
+        }
+        let Some(host_call_id) = crate::wasm_host_call_id(call_id) else {
+            return;
+        };
+        if let Some(patch) = self.run_store.ingest_output(&host_call_id, stream, text) {
+            crate::send_run_patch(&self.notification_callback, &patch);
+        }
     }
 }
 
@@ -130,46 +149,44 @@ impl IoNamespaceIo for WasmIo {
     fn print(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        self.write_output(call_id, OutputStream::Stdout, s);
+        SysOpOutput::ok(())
     }
     fn println(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        mut s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        s.push('\n');
+        self.write_output(call_id, OutputStream::Stdout, s);
+        SysOpOutput::ok(())
     }
     fn eprint(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        self.write_output(call_id, OutputStream::Stderr, s);
+        SysOpOutput::ok(())
     }
     fn eprintln(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _s: String,
+        call_id: CallId,
+        mut s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
+        s.push('\n');
+        self.write_output(call_id, OutputStream::Stderr, s);
+        SysOpOutput::ok(())
     }
 }
 

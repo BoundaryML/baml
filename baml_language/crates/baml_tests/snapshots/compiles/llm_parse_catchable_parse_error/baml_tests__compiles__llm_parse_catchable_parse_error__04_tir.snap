@@ -11,7 +11,10 @@ class user.Invoice {
   amount: float
 }
 function user.ExtractInvoice(text: string, client: baml.llm.Client = GPT4o) -> user.Invoice throws never {
-  baml.llm.call_llm_function<T>(client, "ExtractInvoice", map { "text": text }) : user.Invoice
+  ai.internal._run_agent_to_response<Invoice>(ExtractInvoice$task(text = text, client = client)).value : user.Invoice
+}
+function user.ExtractInvoice$task(text: string, client: baml.llm.Client = GPT4o) -> ai.Task<user.Invoice> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "ExtractInvoice", map { "text": text }, []) : ai.Task<user.Invoice>
 }
 function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "ExtractInvoice", map { "text": text }) : baml.llm.PromptAst

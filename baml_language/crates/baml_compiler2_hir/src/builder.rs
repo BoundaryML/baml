@@ -19,7 +19,7 @@ use crate::{
     diagnostic::{Hir2Diagnostic, MemberSite},
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
-    item_tree::{GenericParam, ImplBlock, ImplSubject, InterfaceFieldLink},
+    item_tree::{ImplBlock, ImplSubject, InterfaceFieldLink},
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
         TemplateStringLoc, TestLoc, TypeAliasLoc,
@@ -348,17 +348,14 @@ impl<'db> SemanticIndexBuilder<'db> {
         debug_assert_eq!(popped, Some(metadata_scope));
     }
 
-    fn walk_parameter_defaults(&mut self, function: &ast::FunctionDef) {
+    /// Takes the parameter list and default arena separately so it serves both
+    /// declared functions and lambdas, which no longer share a type.
+    fn walk_parameter_defaults(&mut self, params: &[ast::Param], defaults: &ast::FunctionDefaults) {
         let metadata_scope = ExprMetadataScope::ParameterDefault(self.current_scope_id());
         self.expr_metadata_scope_stack.push(metadata_scope);
-        for param in &function.params {
+        for param in params {
             if let Some(default) = param.default {
-                self.walk_expr(
-                    default.expr(),
-                    &function.defaults.exprs,
-                    &function.defaults.source_map,
-                    true,
-                );
+                self.walk_expr(default.expr(), &defaults.exprs, &defaults.source_map, true);
             }
         }
         let popped = self.expr_metadata_scope_stack.pop();
@@ -392,7 +389,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Lambda(func_def) => {
                 self.record_expr_scope(expr_id);
-                self.walk_lambda_expr(expr_id, func_def, source_map);
+                self.walk_lambda_expr(expr_id, func_def, body, source_map);
             }
             _ => {
                 self.record_expr_scope(expr_id);
@@ -1113,22 +1110,34 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn walk_lambda_expr(
         &mut self,
         expr_id: ast::ExprId,
-        func_def: &ast::FunctionDef,
+        lambda: &ast::LambdaDef,
+        body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
-        for (idx, param) in func_def.params.iter().enumerate() {
+        for (idx, param) in lambda.params.iter().enumerate() {
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
         }
-        self.emit_duplicate_param_diagnostics(&func_def.params);
+        self.emit_duplicate_param_diagnostics(&lambda.params);
         self.lambda_stack.push(scope_id);
-        self.walk_parameter_defaults(func_def);
-        if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
-            self.walk_expr_body(lambda_body, lambda_source_map);
-            self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
+        self.walk_parameter_defaults(&lambda.params, &lambda.defaults);
+        if let Some(lambda_body) = lambda.body {
+            // The body shares this arena, but it still gets its own metadata
+            // namespace keyed by the lambda's scope. That keeps HIR agreeing
+            // with TIR's `infer_lambda_body` and MIR's `lower_lambda`, both of
+            // which look expression metadata up under the lambda scope. A
+            // mismatch here does not fail loudly: `path_resolution` simply
+            // misses, flow narrowing silently stops inside every lambda, and
+            // reconstructed closure signatures silently degrade to `unknown`.
+            let metadata_scope = ExprMetadataScope::Body(scope_id);
+            self.expr_metadata_scope_stack.push(metadata_scope);
+            self.walk_expr(lambda_body, body, source_map, false);
+            let popped = self.expr_metadata_scope_stack.pop();
+            debug_assert_eq!(popped, Some(metadata_scope));
+            self.analyze_lambda_captures(scope_id, body, source_map);
         }
         self.lambda_stack.pop();
         self.pop_scope();
@@ -1266,7 +1275,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push((param.name.clone(), idx));
         }
         self.emit_duplicate_param_diagnostics(&f.params);
-        self.walk_parameter_defaults(f);
+        self.walk_parameter_defaults(&f.params, &f.defaults);
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {
             self.walk_expr_body(body, source_map);
@@ -1396,6 +1405,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 associated_type_bindings: impl_block.associated_type_bindings.clone(),
                 methods: block_method_ids.clone(),
                 span: impl_block.span,
+                // In-body `implements` blocks don't carry a docstring today —
+                // the AST `ImplementsBlock` has no field for one.
+                docstring: None,
             };
             self.item_tree.alloc_impl(&iface_head, &c.name, block);
             method_ids.extend(block_method_ids);
@@ -1441,14 +1453,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         // Record this out-of-body impl under a stable `ImplId` in the unified `impls` store.
         let iface_head = impl_head_name(&imp.interface_target);
         let for_head = impl_head_name(&imp.for_target);
-        let generics = imp
-            .generic_params
-            .iter()
-            .map(|(name, bounds)| GenericParam {
-                name: name.clone(),
-                bounds: bounds.clone(),
-            })
-            .collect();
+        let generics = imp.generic_params.clone();
         let block = ImplBlock {
             subject: ImplSubject::Free {
                 for_target: imp.for_target.clone(),
@@ -1463,6 +1468,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             associated_type_bindings: imp.associated_type_bindings.clone(),
             methods: method_ids,
             span: imp.span,
+            docstring: imp.docstring.clone(),
         };
         let impl_id = self.item_tree.alloc_impl(&iface_head, &for_head, block);
         if let Some(scope) = impl_scope {
@@ -1706,9 +1712,8 @@ impl<'db> SemanticIndexBuilder<'db> {
                 );
                 self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
-                    if let Some(type_expr) = &field.type_expr {
-                        self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
-                    }
+                    let type_expr = &field.type_expr;
+                    self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                     self.validate_internal_attributes(
                         &field.attributes,
                         is_builtin_file,
@@ -1794,9 +1799,14 @@ impl<'db> SemanticIndexBuilder<'db> {
 
             if let Some(throws) = &function.throws {
                 let mut invalid = Vec::new();
+                let generic_param_names: Vec<Name> = function
+                    .generic_params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect();
                 Self::collect_invalid_builtin_throw_types(
                     throws,
-                    &function.generic_params,
+                    &generic_param_names,
                     &mut invalid,
                 );
                 if !invalid.is_empty() {
@@ -1937,7 +1947,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         let mut occurrences: Vec<(&str, Vec<TextRange>)> = Vec::new();
         for attr in attributes {
             let name = attr.name.as_str();
-            if !matches!(name, "description" | "alias" | "skip") {
+            let Some(spec) = baml_base::schema_attribute_spec(name) else {
+                continue;
+            };
+            if spec.repeatable {
                 continue;
             }
             if let Some(entry) = occurrences.iter_mut().find(|(n, _)| *n == name) {
@@ -1956,9 +1969,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         for attr in attributes {
-            match attr.name.as_str() {
-                "description" | "alias" => {
-                    let attr_name = attr.name.as_str();
+            let Some(spec) = baml_base::schema_attribute_spec(attr.name.as_str()) else {
+                // Unknown attributes pass through (e.g. `@stream.*`).
+                continue;
+            };
+            match spec.arguments {
+                baml_base::SchemaAttributeArguments::String { .. } => {
+                    let attr_name = spec.name;
                     if attr.args.len() != 1 {
                         self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                             diagnostic_id: DiagnosticId::InvalidAttributeArg,
@@ -1978,17 +1995,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         });
                     }
                 }
-                "skip" if !attr.args.is_empty() => {
+                baml_base::SchemaAttributeArguments::None if !attr.args.is_empty() => {
                     self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                         diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
-                        message: "`@skip` does not take any arguments".to_string(),
+                        message: format!("`@{}` does not take any arguments", spec.name),
                         span: attr.span,
                     });
                 }
-                "skip" => {}
-                _ => {
-                    // Unknown attributes passed through silently (e.g. @stream.*)
-                }
+                baml_base::SchemaAttributeArguments::None => {}
             }
         }
     }

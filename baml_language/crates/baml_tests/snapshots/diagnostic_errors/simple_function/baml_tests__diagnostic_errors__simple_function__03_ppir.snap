@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 55199
 ---
 === PPIR ===
 class user.User {
@@ -12,7 +11,7 @@ class user.User$stream {
   age: int | null
 }
 function user.HelloWorld(name: string, client: baml.llm.Client = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "HelloWorld", map { "name": name })
+  ai.internal._run_agent_to_response(HelloWorld$task(name = name, client = client)).value
 }
 function user.HelloWorld$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "HelloWorld", map { "name": name })
@@ -31,4 +30,7 @@ function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = G
 }
 function user.HelloWorld$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "HelloWorld", map { "name": name })
+}
+function user.HelloWorld$task(name: string, client: baml.llm.Client = GPT4) -> ai.Task<string>  [expr] {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "HelloWorld", map { "name": name }, [])
 }

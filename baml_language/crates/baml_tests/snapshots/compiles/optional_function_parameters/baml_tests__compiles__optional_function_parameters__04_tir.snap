@@ -56,7 +56,10 @@ function user.HostEntry(query: string, max_results: int = 10, filter: string | n
   }
 }
 function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : string
+  ai.internal._run_agent_to_response<string>(AskDocs$task(query = query, max_results = max_results, filter = filter, client = client)).value : string
+}
+function user.AskDocs$task(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }, []) : ai.Task<string>
 }
 function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.PromptAst

@@ -276,11 +276,11 @@ fn user.for_let_with_narrow(items: int[]) -> int {
 
     bb0: {
         _2 = const 0_i64;
-        _3 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _1) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -320,11 +320,11 @@ fn user.for_let_ascription(items: int[]) -> int {
 
     bb0: {
         _2 = const 0_i64;
-        _3 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _1) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -365,11 +365,11 @@ fn user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
 
     bb0: {
         _2 = const 0_i64;
-        _3 = virtual_call iter as baml.iter.Iterable<Item = (int) -> int throws never, Error = never>(copy _1) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = (int) -> int throws never>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = (int) -> int throws never, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = (int) -> int throws never>(copy _3) -> [bb2];
     }
 
     bb2: {

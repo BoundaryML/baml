@@ -17,7 +17,7 @@ use std::{
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{
-    self as ast, AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId,
+    self as ast, AstSourceMap, Expr as AstExpr, ExprBody, ExprId, LambdaDef, PatId,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
@@ -83,8 +83,21 @@ pub(crate) fn inference_owner_scope(
 /// scope id to feed `infer_scope_types`.
 #[derive(Clone)]
 pub struct ScopeBody<'db> {
-    /// The inference-owner scope (`Function` / `Let` / `Lambda`).
+    /// The scope owning `scope_id`'s *inference* — a `Function`, `Let`, or
+    /// `Lambda`.
+    ///
+    /// Distinct from the scope owning the arena: since lambda bodies are
+    /// lowered into the enclosing function's `ExprBody`, `expr_body` below is
+    /// that function's whole body while a lambda keeps its own inference
+    /// (`infer_lambda_body` moves its tables into `nested_lambda_inference`).
+    /// Infer with this scope; index into `expr_body` from `root`.
     pub scope: ScopeId<'db>,
+    /// The expression this scope's inference is rooted at: a lambda's body
+    /// expression, or the whole body's root for a function / `let`.
+    ///
+    /// Walking `expr_body` flatly instead would visit the entire enclosing
+    /// function, whose expressions this scope's inference does not cover.
+    pub root: Option<ExprId>,
     pub expr_body: ExprBody,
     pub source_map: AstSourceMap,
 }
@@ -101,10 +114,18 @@ pub struct ScopeBody<'db> {
 pub fn scope_body<'db>(db: &'db dyn crate::Db, scope_id: ScopeId<'db>) -> Option<ScopeBody<'db>> {
     let file = scope_id.file(db);
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let owner = inference_owner_scope(index, scope_id.file_scope_id(db));
-    let (expr_body, source_map) = fetch_scope_body(db, index, owner)?;
+    let inference_owner = inference_owner_scope(index, scope_id.file_scope_id(db));
+    let (expr_body, source_map) = fetch_scope_body(db, index, inference_owner)?;
+    let owner_scope = &index.scopes[inference_owner.index() as usize];
+    let root = if owner_scope.kind == ScopeKind::Lambda {
+        find_lambda_by_span(&expr_body, &source_map, owner_scope.range)
+            .and_then(|(lambda, _)| lambda.body)
+    } else {
+        expr_body.root_expr
+    };
     Some(ScopeBody {
-        scope: index.scope_ids[owner.index() as usize],
+        scope: index.scope_ids[inference_owner.index() as usize],
+        root,
         expr_body,
         source_map,
     })
@@ -120,6 +141,26 @@ pub fn scope_inference_owner<'db>(db: &'db dyn crate::Db, scope_id: ScopeId<'db>
     let index = baml_compiler2_ppir::file_semantic_index(db, scope_id.file(db));
     let owner = inference_owner_scope(index, scope_id.file_scope_id(db));
     index.scope_ids[owner.index() as usize]
+}
+
+/// The scope owning the arena that `scope_id`'s expressions live in.
+///
+/// A lambda has its own scope but no arena of its own, so this walks past it to
+/// the enclosing Function / Let — the body its expressions were lowered into.
+fn body_owner_scope(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    mut scope_id: FileScopeId,
+) -> FileScopeId {
+    loop {
+        let scope = &index.scopes[scope_id.index() as usize];
+        if matches!(scope.kind, ScopeKind::Function | ScopeKind::Let) {
+            return scope_id;
+        }
+        let Some(parent) = scope.parent else {
+            return scope_id;
+        };
+        scope_id = parent;
+    }
 }
 
 /// Fetch the `(ExprBody, AstSourceMap)` for an inference-owner scope.
@@ -163,22 +204,12 @@ fn fetch_scope_body<'db>(
             Some((eb.clone(), sm))
         }
         ScopeKind::Lambda => {
-            // The lambda body is nested inside the enclosing Function/Let body;
-            // descend to it by span.
-            let mut parent = scope.parent;
-            let enclosing = loop {
-                let p = parent?;
-                if matches!(
-                    index.scopes[p.index() as usize].kind,
-                    ScopeKind::Function | ScopeKind::Let
-                ) {
-                    break p;
-                }
-                parent = index.scopes[p.index() as usize].parent;
-            };
-            let (eb, sm) = fetch_scope_body(db, index, enclosing)?;
-            let (_, lambda_body, lambda_sm, _) = find_lambda_by_span(&eb, &sm, scope.range)?;
-            Some((lambda_body.clone(), lambda_sm.clone()))
+            // A lambda's body is lowered into the enclosing Function/Let body's
+            // arena, so that body *is* the lambda's body.
+            let enclosing = body_owner_scope(index, owner);
+            (enclosing != owner)
+                .then(|| fetch_scope_body(db, index, enclosing))
+                .flatten()
         }
         _ => None,
     }
@@ -353,10 +384,12 @@ fn lower_env_interface_bounds(
         let mut diags = Vec::new();
         let bound_ty = lower_bound_source(bound, &scope, &mut diags);
         if let Some(constraint) = bound_ty.as_interface() {
-            // Inner declarations are visited after their parents. Shadowing is
-            // diagnosed separately, and the inner declaration remains the
-            // recovery binding used by the rest of inference.
-            bounds.insert(param.clone(), vec![constraint]);
+            // One predicate per conjunct, so `T extends A & B` visits `T` twice
+            // — accumulate rather than replace. Distinct parameters never
+            // collide here (`ParamTy` keys on index as well as name), so a
+            // shadowing inner declaration gets its own entry; the shadow itself
+            // is diagnosed separately.
+            bounds.entry(param.clone()).or_default().push(constraint);
         }
     });
     if include_concrete && let Some((param, constraint)) = env.self_bound() {
@@ -368,19 +401,22 @@ fn lower_env_interface_bounds(
 /// Report each generic parameter declared more than once in a single declaration
 /// list (`<T, T>`). A name reused across *nested* scopes is not a duplicate but a
 /// shadow, reported as `TypeParamShadowed` at the inner declaration instead.
-fn report_duplicate_generic_params(
+fn report_duplicate_generic_params<'a>(
     builder: &TypeInferenceBuilder<'_>,
-    params: &[Name],
+    params: impl IntoIterator<Item = &'a Name>,
     span: TextRange,
 ) {
-    for (idx, param) in params.iter().enumerate() {
-        if params[..idx].contains(param) {
+    let mut seen: Vec<&Name> = Vec::new();
+    for param in params {
+        if seen.contains(&param) {
             builder.report_at_span(
                 crate::infer_context::TirTypeError::DuplicateGenericParam {
                     name: param.clone(),
                 },
                 span,
             );
+        } else {
+            seen.push(param);
         }
     }
 }
@@ -551,7 +587,12 @@ fn install_generic_param_bounds(
             span,
             param.index() >= env.parent_count(),
         );
-        bounds.insert(param.clone(), constraint.into_vec());
+        // One predicate per conjunct — accumulate so `T extends A & B` enforces
+        // both, rather than only whichever was visited last.
+        bounds
+            .entry(param.clone())
+            .or_default()
+            .extend(constraint.into_vec());
     });
     if let Some((param, constraint)) = env.self_bound() {
         bounds.insert(param.clone(), vec![constraint.clone()]);
@@ -629,11 +670,15 @@ fn validate_type_ref_generic_bounds_at_span(
     builder.validate_type_generic_bounds_at_span(span, &ty);
 }
 
-fn extend_env_with_lambda_generics<'db>(
-    env: &GenericEnv<'db>,
-    func_def: &FunctionDef,
-) -> GenericEnv<'db> {
-    env.child_unique_ast(&func_def.generic_params, &func_def.generic_param_bounds)
+/// The generic environment a lambda body is inferred in.
+///
+/// A lambda declares no generic parameters of its own (the parser rejects
+/// them), so this adds none. The child environment is still created rather than
+/// reusing the parent directly: building a child resets `self_bound` to `None`,
+/// so collapsing this call would silently change what `Self` resolves to inside
+/// a lambda body.
+fn lambda_body_env<'db>(env: &GenericEnv<'db>) -> GenericEnv<'db> {
+    env.child_unique_ast(&[])
 }
 
 fn add_lambda_params_to_builder(
@@ -642,7 +687,7 @@ fn add_lambda_params_to_builder(
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
-    func_def: &FunctionDef,
+    func_def: &LambdaDef,
     contextual_param_tys: Option<&[FunctionParamTy]>,
 ) {
     // The lambda's own generic bounds (its env extends the enclosing scope's) let a
@@ -751,6 +796,18 @@ pub enum MemberResolution<'db> {
     /// case needs its own variant.
     InterfaceVirtualField {
         iface_loc: InterfaceLoc<'db>,
+        /// The realized interface-existential this access resolves *through* — the
+        /// interface that declares `field` (which may be a `requires` parent of the
+        /// receiver's own interface), with its type args and associated bindings
+        /// realized at the receiver. This is the view the runtime resolver keys on:
+        /// a class may implement one interface family at several instantiations with
+        /// different field links, and only the requested view discriminates them.
+        interface: Ty,
+        /// `field`'s position in `interface`'s own declared field list
+        /// (`InterfaceData::fields`) — the index space every implementation of that
+        /// interface is baked against. Deliberately *not* a `requires`-closure
+        /// position: the closure flattening dedups by name and numbers differently.
+        field_index: u32,
         field: Name,
     },
 }
@@ -1227,40 +1284,21 @@ fn seed_template_body_params(
     }
 }
 
-/// Search for a `Lambda` expression whose source span matches `target_span` in
-/// `body`/`source_map`, recursively descending into nested lambda bodies.
+/// The `Lambda` expression in `body` whose source span is `target_span`.
 ///
-/// Returns `Some((func_def, lambda_body, lambda_source_map, lambda_expr_id))` when
-/// found; `None` otherwise.
+/// Every lambda in the function — including ones nested inside another lambda —
+/// is an entry in this one arena, so a single scan finds them all.
 fn find_lambda_by_span<'a>(
     body: &'a ExprBody,
     source_map: &AstSourceMap,
     target_span: TextRange,
-) -> Option<(&'a FunctionDef, &'a ExprBody, &'a AstSourceMap, ExprId)> {
-    for (expr_id, expr) in body.exprs.iter() {
-        if let AstExpr::Lambda(ref func_def) = *expr {
-            let span = source_map.expr_span(expr_id);
-            if span == target_span {
-                // Found the matching lambda
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                    ref lambda_body,
-                    ref lambda_sm,
-                )) = func_def.body
-                {
-                    return Some((func_def, lambda_body, lambda_sm, expr_id));
-                }
-            }
-            // Recurse into nested lambda bodies
-            if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(ref nested_body, ref nested_sm)) =
-                func_def.body
-            {
-                if let Some(found) = find_lambda_by_span(nested_body, nested_sm, target_span) {
-                    return Some(found);
-                }
-            }
+) -> Option<(&'a LambdaDef, ExprId)> {
+    body.exprs.iter().find_map(|(expr_id, expr)| match expr {
+        AstExpr::Lambda(lambda) if source_map.expr_span(expr_id) == target_span => {
+            Some((&**lambda, expr_id))
         }
-    }
-    None
+        _ => None,
+    })
 }
 
 /// Per-scope type inference — the primary Salsa query for type checking.
@@ -1357,9 +1395,13 @@ pub fn infer_scope_types<'db>(
 
                 let env = crate::generic_env::function_generic_env(db, func_loc).clone();
                 report_duplicate_generic_params(&builder, &sig.user_generic_params, func_span);
-                let report_type_shadowing = |owner, type_name: &Name, parent_params: &[Name]| {
+                let report_type_shadowing = |owner,
+                                             type_name: &Name,
+                                             parent_params: &[
+                    baml_compiler2_ppir::item_data::GenericParamData
+                ]| {
                     for param in &sig.user_generic_params {
-                        if !parent_params.contains(param) {
+                        if !parent_params.iter().any(|parent| &parent.name == param) {
                             continue;
                         }
                         builder.report_at_span(
@@ -1556,11 +1598,11 @@ pub fn infer_scope_types<'db>(
                                 ..
                             } = &target.type_refs[target.target].kind
                             {
-                                for (param, &arg) in
+                                for (declared, &arg) in
                                     iface_data.generic_params.iter().zip(generic_args.iter())
                                 {
                                     let param = iface_env
-                                        .resolve_param(param)
+                                        .resolve_param(&declared.name)
                                         .expect("interface generic parameter is in its environment")
                                         .clone();
                                     let mut arg_diags = Vec::new();
@@ -2005,7 +2047,7 @@ pub fn infer_scope_types<'db>(
                                     baml_compiler2_ppir::function_body_source_map(db, ancestor_func)
                             {
                                 let func_sm = &func_sm;
-                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
+                                if let Some((func_def, _lambda_expr_id)) =
                                     find_lambda_by_span(func_body, func_sm, lambda_span)
                                 {
                                     // Look up contextual param types via the lambda's FileScopeId
@@ -2028,8 +2070,7 @@ pub fn infer_scope_types<'db>(
 
                                     let parent_env =
                                         crate::generic_env::function_generic_env(db, ancestor_func);
-                                    let env =
-                                        extend_env_with_lambda_generics(&parent_env, func_def);
+                                    let env = lambda_body_env(&parent_env);
                                     apply_generic_env(
                                         db,
                                         &mut builder,
@@ -2053,9 +2094,10 @@ pub fn infer_scope_types<'db>(
                                         file_scope,
                                         parent_inference,
                                     );
-                                    // Infer the lambda body
-                                    if let Some(root_expr) = lambda_body.root_expr {
-                                        builder.infer_expr(root_expr, lambda_body);
+                                    // Infer the lambda body — it lives in the
+                                    // enclosing function's arena.
+                                    if let Some(body_expr) = func_def.body {
+                                        builder.infer_expr(body_expr, func_body);
                                     }
                                 }
                             }
@@ -2072,7 +2114,7 @@ pub fn infer_scope_types<'db>(
                             if let (LetBody::Expr(let_body), Some(let_sm)) =
                                 (body.as_ref(), source_map_opt)
                             {
-                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
+                                if let Some((func_def, _lambda_expr_id)) =
                                     find_lambda_by_span(let_body, &let_sm, lambda_span)
                                 {
                                     // Look up contextual param types via FileScopeId (same as Function branch).
@@ -2095,8 +2137,7 @@ pub fn infer_scope_types<'db>(
                                         ancestor_scope,
                                     )
                                     .unwrap_or_default();
-                                    let env =
-                                        extend_env_with_lambda_generics(&parent_env, func_def);
+                                    let env = lambda_body_env(&parent_env);
                                     apply_generic_env(
                                         db,
                                         &mut builder,
@@ -2120,8 +2161,10 @@ pub fn infer_scope_types<'db>(
                                         file_scope,
                                         parent_inference,
                                     );
-                                    if let Some(root_expr) = lambda_body.root_expr {
-                                        builder.infer_expr(root_expr, lambda_body);
+                                    // The lambda body lives in the `let`
+                                    // initializer's arena.
+                                    if let Some(body_expr) = func_def.body {
+                                        builder.infer_expr(body_expr, let_body);
                                     }
                                 }
                             }
@@ -2140,7 +2183,11 @@ pub fn infer_scope_types<'db>(
                 let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
                 let class_sm = baml_compiler2_ppir::item_data::class_source_map(db, class_loc);
                 let class_span = class_sm.span;
-                report_duplicate_generic_params(&builder, &class_data.generic_params, class_span);
+                report_duplicate_generic_params(
+                    &builder,
+                    class_data.generic_params.iter().map(|param| &param.name),
+                    class_span,
+                );
                 let env = crate::generic_env::class_generic_env(db, class_loc).clone();
                 apply_generic_env(
                     db,
@@ -2152,10 +2199,10 @@ pub fn infer_scope_types<'db>(
                 );
                 let resolved = resolve_class_fields(db, class_loc);
                 for (field, (_, ty, _)) in class_data.fields.iter().zip(resolved.fields.iter()) {
-                    if let Some(id) = field.type_ref {
-                        builder
-                            .validate_type_generic_bounds_at_span(class_sm.type_refs.span(id), ty);
-                    }
+                    builder.validate_type_generic_bounds_at_span(
+                        class_sm.type_refs.span(field.type_ref),
+                        ty,
+                    );
                 }
             }
             if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Interface(iface_loc)) =
@@ -2166,14 +2213,22 @@ pub fn infer_scope_types<'db>(
                 let (_, iface_generic_params) = iface_env.interface_param_parts();
                 let iface_sm = baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc);
                 let iface_span = iface_sm.span;
-                report_duplicate_generic_params(&builder, &iface_data.generic_params, iface_span);
+                report_duplicate_generic_params(
+                    &builder,
+                    iface_data.generic_params.iter().map(|param| &param.name),
+                    iface_span,
+                );
                 // Associated types share the interface's type-level namespace with its
                 // generic parameters (a bare `Assoc` reference lowers as a type variable),
                 // so a name collision — with a parameter or another associated type —
                 // would silently alias the two. Both are declaration errors.
                 for (idx, assoc) in iface_data.associated_types.iter().enumerate() {
                     let name_span = iface_sm.associated_type_spans[idx].name_span;
-                    if iface_data.generic_params.contains(&assoc.name) {
+                    if iface_data
+                        .generic_params
+                        .iter()
+                        .any(|param| param.name == assoc.name)
+                    {
                         builder.report_at_span(
                             crate::infer_context::TirTypeError::AssociatedTypeConflictsWithGenericParam {
                                 name: assoc.name.clone(),
@@ -2241,18 +2296,16 @@ pub fn infer_scope_types<'db>(
                 // once the implementor binds the associated type it denotes a concrete field
                 // type (`value: Self.Item` with `type Item = int` is an `int` field).
                 for field in &iface_data.fields {
-                    if let Some(type_ref) = field.type_ref
-                        && crate::builder::TypeInferenceBuilder::type_ref_contains_bare_self(
-                            &iface_data.type_refs,
-                            type_ref,
-                        )
-                    {
+                    if crate::builder::TypeInferenceBuilder::type_ref_contains_bare_self(
+                        &iface_data.type_refs,
+                        field.type_ref,
+                    ) {
                         builder.report_at_span(
                             crate::infer_context::TirTypeError::SelfInInterfaceField {
                                 interface: iface_qtn.clone(),
                                 field: field.name.clone(),
                             },
-                            iface_sm.type_refs.span(type_ref),
+                            iface_sm.type_refs.span(field.type_ref),
                         );
                     }
                 }
@@ -2397,20 +2450,18 @@ pub fn infer_scope_types<'db>(
                     }
                 }
                 for field in &iface_data.fields {
-                    if let Some(type_ref) = field.type_ref {
-                        validate_type_ref_generic_bounds_at_span(
-                            db,
-                            &mut builder,
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &iface_env,
-                            &iface_env_bounds,
-                            &iface_data.type_refs,
-                            type_ref,
-                            iface_sm.type_refs.span(type_ref),
-                            Some(self_ty.clone()),
-                        );
-                    }
+                    validate_type_ref_generic_bounds_at_span(
+                        db,
+                        &mut builder,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &iface_env,
+                        &iface_env_bounds,
+                        &iface_data.type_refs,
+                        field.type_ref,
+                        iface_sm.type_refs.span(field.type_ref),
+                        Some(self_ty.clone()),
+                    );
                 }
                 for (sig_idx, sig) in iface_data.required_methods.iter().enumerate() {
                     let sig_span = iface_sm.required_method_spans[sig_idx].span;
@@ -2418,9 +2469,15 @@ pub fn infer_scope_types<'db>(
                     // hygiene checks that the function arm runs for default methods
                     // happen here: no `<T, T>`, and no shadowing of the interface's
                     // type-level parameters (generics and associated types alike).
-                    report_duplicate_generic_params(&builder, &sig.generic_params, sig_span);
-                    for mp in &sig.generic_params {
-                        if iface_params.iter().any(|ip| ip == mp) || iface_assoc_names.contains(mp)
+                    report_duplicate_generic_params(
+                        &builder,
+                        sig.generic_params.iter().map(|param| &param.name),
+                        sig_span,
+                    );
+                    for declared in &sig.generic_params {
+                        let mp = &declared.name;
+                        if iface_params.iter().any(|ip| &ip.name == mp)
+                            || iface_assoc_names.contains(mp)
                         {
                             builder.report_at_span(
                                 crate::infer_context::TirTypeError::TypeParamShadowed {
@@ -2432,11 +2489,7 @@ pub fn infer_scope_types<'db>(
                             );
                         }
                     }
-                    let sig_env = iface_env.child_refs(
-                        &sig.generic_params,
-                        &iface_data.type_refs,
-                        &sig.generic_param_bounds,
-                    );
+                    let sig_env = iface_env.child_refs(&sig.generic_params, &iface_data.type_refs);
                     apply_generic_env(
                         db,
                         &mut builder,
@@ -2901,24 +2954,16 @@ pub fn resolve_class_fields<'db>(
         .fields
         .iter()
         .map(|f| {
-            let ty = f
-                .type_ref
-                .map(|id| {
-                    let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_ref(
-                        &class_data.type_refs,
-                        id,
-                        &field_scope,
-                        &mut diags,
-                    );
-                    for d in diags {
-                        all_diags.push((d, class_spans.type_refs.span(id)));
-                    }
-                    ty
-                })
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
+            let mut diags = Vec::new();
+            let ty = crate::lower_type_expr::lower_type_ref(
+                &class_data.type_refs,
+                f.type_ref,
+                &field_scope,
+                &mut diags,
+            );
+            for d in diags {
+                all_diags.push((d, class_spans.type_refs.span(f.type_ref)));
+            }
             (f.name.clone(), ty, f.attributes.clone())
         })
         .collect();
@@ -3021,64 +3066,17 @@ pub fn render_scope_diagnostics<'db>(
     let file = scope_id.file(db);
     let file_scope = scope_id.file_scope_id(db);
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let scope = &index.scopes[file_scope.index() as usize];
-
-    let source_map = match &scope.kind {
-        ScopeKind::Lambda => {
-            // For lambda scopes, walk ancestors to find the parent Function/Let body,
-            // then use find_lambda_by_span to get the lambda's own source map.
-            let lambda_span = scope.range;
-            let mut found_sm = None;
-            for ancestor_fsi in index.ancestor_scopes(file_scope) {
-                let ancestor_scope = index.scope_ids[ancestor_fsi.index() as usize];
-                let Some(owner) = baml_compiler2_ppir::item_data::scope_owner(db, ancestor_scope)
-                else {
-                    continue;
-                };
-                // The first Function/Let ancestor owns the body the lambda lives in.
-                let body_and_map = match owner {
-                    baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc) => {
-                        match baml_compiler2_ppir::function_body(db, func_loc).as_ref() {
-                            baml_compiler2_hir::body::FunctionBody::Expr(body) => {
-                                baml_compiler2_ppir::function_body_source_map(db, func_loc)
-                                    .map(|sm| (body.clone(), sm))
-                            }
-                            baml_compiler2_hir::body::FunctionBody::Builtin(_)
-                            | baml_compiler2_hir::body::FunctionBody::Missing => None,
-                        }
-                    }
-                    baml_compiler2_ppir::item_data::ScopeOwner::Let(let_loc) => {
-                        match baml_compiler2_hir::body::let_body(db, let_loc).as_ref() {
-                            baml_compiler2_hir::body::LetBody::Expr(body) => {
-                                baml_compiler2_hir::body::let_body_source_map(db, let_loc)
-                                    .map(|sm| (body.clone(), sm))
-                            }
-                            baml_compiler2_hir::body::LetBody::Missing => None,
-                        }
-                    }
-                    _ => continue,
-                };
-                if let Some((body, sm)) = body_and_map
-                    && let Some((_, _, lambda_sm, _)) = find_lambda_by_span(&body, &sm, lambda_span)
-                {
-                    found_sm = Some(lambda_sm.clone());
-                }
-                break;
-            }
-            found_sm
+    // A lambda shares the enclosing Function/Let body's source map, so resolve
+    // through whichever scope owns the arena.
+    let owner_scope = index.scope_ids[body_owner_scope(index, file_scope).index() as usize];
+    let source_map = match baml_compiler2_ppir::item_data::scope_owner(db, owner_scope) {
+        Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) => {
+            baml_compiler2_ppir::function_body_source_map(db, func_loc)
         }
-        _ => {
-            // Function/Let scopes: the owner is recorded, so no scan is needed.
-            match baml_compiler2_ppir::item_data::scope_owner(db, scope_id) {
-                Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) => {
-                    baml_compiler2_ppir::function_body_source_map(db, func_loc)
-                }
-                Some(baml_compiler2_ppir::item_data::ScopeOwner::Let(let_loc)) => {
-                    baml_compiler2_hir::body::let_body_source_map(db, let_loc)
-                }
-                _ => None,
-            }
+        Some(baml_compiler2_ppir::item_data::ScopeOwner::Let(let_loc)) => {
+            baml_compiler2_hir::body::let_body_source_map(db, let_loc)
         }
+        _ => None,
     };
 
     diags

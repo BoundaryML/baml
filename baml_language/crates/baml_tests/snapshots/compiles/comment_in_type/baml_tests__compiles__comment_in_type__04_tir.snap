@@ -6,7 +6,10 @@ function user.TestClient$new(lenient: bool) -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "FunctionWithComments", map { "a": a, "b": b }) : string
+  ai.internal._run_agent_to_response<string>(FunctionWithComments$task(a = a, b = b, client = client)).value : string
+}
+function user.FunctionWithComments$task(a: string, b: int, client: baml.llm.Client = TestClient) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "FunctionWithComments", map { "a": a, "b": b }, []) : ai.Task<string>
 }
 function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.llm.PromptAst
@@ -18,7 +21,10 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int, clien
   baml.llm.build_request_stream(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.http.Request
 }
 function user.CommentAfterArrow(client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "CommentAfterArrow", map {  }) : string
+  ai.internal._run_agent_to_response<string>(CommentAfterArrow$task(client = client)).value : string
+}
+function user.CommentAfterArrow$task(client: baml.llm.Client = TestClient) -> ai.Task<string> throws never {
+  ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), "CommentAfterArrow", map {  }, []) : ai.Task<string>
 }
 function user.CommentAfterArrow$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "CommentAfterArrow", map {  }) : baml.llm.PromptAst

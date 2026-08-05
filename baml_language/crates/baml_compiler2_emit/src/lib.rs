@@ -29,9 +29,9 @@ use baml_compiler2_mir::{
 use baml_compiler2_ppir::{
     function_body,
     item_data::{
-        class_data, enum_data, file_classes, file_enums, file_free_impls, file_functions,
-        file_interfaces, file_lets, file_template_strings, file_tests, function_data,
-        function_llm_meta, function_llm_prompt, impl_block_data, interface_data,
+        GenericParamData, class_data, enum_data, file_classes, file_enums, file_free_impls,
+        file_functions, file_interfaces, file_lets, file_template_strings, file_tests,
+        function_data, function_llm_meta, function_llm_prompt, impl_block_data, interface_data,
         method_interface_target, template_string_data, test_data,
     },
 };
@@ -85,7 +85,7 @@ fn build_interface_def(
         ty,
     };
     use baml_type::RuntimeInterface;
-    use bex_vm_types::types::{InterfaceDef, InterfaceMethodDef};
+    use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
 
     let file = iface_loc.file(db);
     let interface = interface_data(db, iface_loc);
@@ -233,18 +233,18 @@ fn build_interface_def(
         }
     };
 
-    // A generic param carries at most one bound today; lower it (or none).
+    // `T extends A & B` is a conjunction; every conjunct that resolves to an
+    // interface is emitted so the runtime enforces all of them.
     let store = &interface.type_refs;
     let args = generics
         .iter()
-        .enumerate()
-        .map(|(i, param)| {
-            let bound = interface
-                .generic_param_bounds
-                .get(i)
-                .and_then(|o| *o)
-                .and_then(|id| lower_iface(store, id, &interface_frame_params, &decl_bounds));
-            (param.clone(), bound.into_iter().collect())
+        .map(|declared| {
+            let bounds = declared
+                .bounds
+                .iter()
+                .filter_map(|&id| lower_iface(store, id, &interface_frame_params, &decl_bounds))
+                .collect();
+            (declared.name.clone(), bounds)
         })
         .collect();
     let requires = interface
@@ -261,18 +261,15 @@ fn build_interface_def(
                 .map(|ri| (at.name.clone(), ri))
         })
         .collect();
-    // A field always carries a type — an untyped one is a syntax-level error that
-    // cannot reach emit — so every field appears here.
+    // This list is the interface's field *index space*: `RuntimeImplRule::field_links`
+    // is baked parallel to it, so every declared field keeps its slot. A field always
+    // carries a type — an untyped one is a syntax-level error that cannot reach emit.
     let fields = interface
         .fields
         .iter()
-        .filter_map(|f| {
-            f.type_ref.map(|id| {
-                (
-                    f.name.clone(),
-                    lower_rt(store, id, &interface_frame_params, &decl_bounds),
-                )
-            })
+        .map(|f| InterfaceFieldDef {
+            name: f.name.clone(),
+            ty: lower_rt(store, f.type_ref, &interface_frame_params, &decl_bounds),
         })
         .collect();
     let mut methods: Vec<InterfaceMethodDef> = interface
@@ -280,7 +277,8 @@ fn build_interface_def(
         .iter()
         .map(|m| {
             let mut scope = interface_frame_params.clone();
-            ParamTy::extend_frame(&mut scope, &m.generic_params);
+            let own_names: Vec<Name> = m.generic_params.iter().map(|p| p.name.clone()).collect();
+            ParamTy::extend_frame(&mut scope, &own_names);
             build_method(
                 store,
                 &m.name,
@@ -349,6 +347,11 @@ fn build_packages(
     alias_caches: &HashMap<Name, ResolvedAliases>,
     function_indices: &HashMap<String, usize>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
+    // Field-name → slot for every emitted class, keyed by rendered fully-qualified
+    // name. This is the *same* map the class pass built `Class::fields` from, threaded
+    // in rather than recomputed: a second derivation of the layout that drifted would
+    // make every virtual field access read the wrong slot, silently.
+    class_field_indices: &HashMap<String, HashMap<String, usize>>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
@@ -435,10 +438,21 @@ fn build_packages(
     // binding in every slot.
     let mut iface_assoc_decls: indexmap::IndexMap<baml_type::TypeName, IfaceAssocDecls> =
         indexmap::IndexMap::new();
+    // Per field-bearing interface, its declared field names **in declaration order** —
+    // the index space `RuntimeImplRule::field_links` is baked against, and the same
+    // order `build_interface_def` gives `InterfaceDef::fields`. Interfaces with no
+    // fields are absent (their impls get an empty table).
+    let mut iface_field_decls: indexmap::IndexMap<baml_type::TypeName, Vec<Name>> =
+        indexmap::IndexMap::new();
     for file in all_files {
         for &iface_loc in file_interfaces(db, *file) {
             let iface_data = interface_data(db, iface_loc);
             let iface_tn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
+            if !iface_data.fields.is_empty() {
+                iface_field_decls
+                    .entry(iface_tn.clone())
+                    .or_insert_with(|| iface_data.fields.iter().map(|f| f.name.clone()).collect());
+            }
             if !iface_data.associated_types.is_empty() {
                 iface_assoc_decls
                     .entry(iface_tn.clone())
@@ -637,34 +651,35 @@ fn build_packages(
                 &mut diags,
             )
         };
-        // Each generic param's interface bound set (`T extends A & B` → {A, B};
-        // a param has at most one bound today). A bound is an interface, possibly
-        // generic or carrying associated bindings — `split_interface` captures its
-        // args/assoc as templates over the impl's params. A non-interface bound,
-        // rejected upstream, has no interface to record, so skip the whole rule
-        // (`None`); dropping a rule only ever loses a dispatch, never adds a wrong
-        // one.
+        // Each generic param's interface bound set (`T extends A & B` → {A, B}).
+        // A bound is an interface, possibly generic or carrying associated
+        // bindings — `split_interface` captures its args/assoc as templates over
+        // the impl's params. A non-interface bound, rejected upstream, has no
+        // interface to record, so skip the whole rule (`None`); dropping a rule
+        // only ever loses a dispatch, never adds a wrong one. Every conjunct is
+        // emitted: a rule narrowed by two bounds must stay narrowed by both.
         let bound_sets = |store: &TypeRefStore,
-                          param_bounds: &[Option<TypeRefId>],
+                          declared: &[GenericParamData],
                           generics: &[ParamTy],
                           bounds: &TypeVarBoundsMap|
          -> Option<Vec<Vec<InterfaceBound>>> {
-            param_bounds
+            declared
                 .iter()
-                .map(|b| match b {
-                    None => Some(Vec::new()),
-                    Some(id) => {
-                        let bound_ty = lower_constraint_head(store, *id, generics, bounds);
-                        split_interface(&bound_ty, resolved, generics).map(
-                            |(interface, args, assoc)| {
-                                vec![InterfaceBound {
+                .map(|param| {
+                    param
+                        .bounds
+                        .iter()
+                        .map(|&id| {
+                            let bound_ty = lower_constraint_head(store, id, generics, bounds);
+                            split_interface(&bound_ty, resolved, generics).map(
+                                |(interface, args, assoc)| InterfaceBound {
                                     interface,
                                     args,
                                     assoc,
-                                }]
-                            },
-                        )
-                    }
+                                },
+                            )
+                        })
+                        .collect()
                 })
                 .collect()
         };
@@ -707,9 +722,6 @@ fn build_packages(
             };
             let store = &block.type_refs;
             let impl_params = baml_compiler2_tir::impl_generic_params(db, impl_loc);
-            // Legacy flat single-bound form (first `&`-bound per param).
-            let impl_param_bounds: Vec<Option<TypeRefId>> =
-                generics.iter().map(|g| g.bounds.first().copied()).collect();
             let impl_bounds =
                 baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(db, impl_loc);
             // The target is a constraint, not an existential: it carries only
@@ -743,8 +755,7 @@ fn build_packages(
             );
             let for_ty_pattern =
                 baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params);
-            let Some(generic_param_bounds) =
-                bound_sets(store, &impl_param_bounds, &impl_params, impl_bounds)
+            let Some(generic_param_bounds) = bound_sets(store, generics, &impl_params, impl_bounds)
             else {
                 continue;
             };
@@ -794,6 +805,17 @@ fn build_packages(
                     interface_args,
                     interface_assoc,
                     methods,
+                    // An out-of-body impl of a field-bearing interface is E0126, so a
+                    // rule built here never has fields to link — its `for` target need
+                    // not even be a class.
+                    field_links: {
+                        debug_assert!(
+                            !iface_field_decls.contains_key(&iface_tn),
+                            "out-of-body impl of field-bearing interface `{iface_tn}` should be \
+                             rejected by E0126",
+                        );
+                        Box::default()
+                    },
                 });
         }
 
@@ -867,7 +889,7 @@ fn build_packages(
                 )
             };
             let Some(generic_param_bounds) =
-                bound_sets(store, &class.generic_param_bounds, &generics, class_bounds)
+                bound_sets(store, &class.generic_params, &generics, class_bounds)
             else {
                 continue;
             };
@@ -948,6 +970,46 @@ fn build_packages(
                     &interface_assoc,
                 );
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
+                // The field table for this block, positional over the interface's own
+                // declared fields. Each entry is the class slot the interface field
+                // reads: the block's explicit `field as class_field` link, else the
+                // same-named class field (the default that
+                // `concrete_interface_field_sources` applies in TIR).
+                //
+                // A name that resolves to no class slot means the class does not cover
+                // the interface field — already E0124, so this program has diagnostics
+                // and cannot reach a runnable artifact. Drop the whole rule rather than
+                // bake a partial table: losing a dispatch is recoverable, a table whose
+                // positions no longer line up with the interface silently reads the
+                // wrong field. Matches the `resolve_fqn` convention above.
+                let field_links: Option<Box<[u32]>> = match iface_field_decls.get(&iface_tn) {
+                    None => Some(Box::default()),
+                    Some(declared) => {
+                        let class_slots = class_field_indices.get(&class_tn.to_string());
+                        declared
+                            .iter()
+                            .map(|iface_field| {
+                                let class_field = block
+                                    .field_links
+                                    .iter()
+                                    .find(|link| link.interface_field == *iface_field)
+                                    .map_or(iface_field, |link| &link.class_field);
+                                let slot = class_slots
+                                    .and_then(|slots| slots.get(class_field.as_str()))
+                                    .copied();
+                                debug_assert!(
+                                    slot.is_some(),
+                                    "interface `{iface_tn}` field `{iface_field}` links to \
+                                     `{class_tn}.{class_field}`, which has no runtime slot",
+                                );
+                                slot.map(|s| u32::try_from(s).expect("class field count fits u32"))
+                            })
+                            .collect()
+                    }
+                };
+                let Some(field_links) = field_links else {
+                    continue;
+                };
                 program_packages
                     .entry(pkg_info.package.clone())
                     .or_default()
@@ -961,6 +1023,7 @@ fn build_packages(
                         interface_args,
                         interface_assoc,
                         methods,
+                        field_links,
                     });
             }
         }
@@ -1151,7 +1214,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 /// `TypeRefId` into the owning class's `TypeRefStore` (carried alongside).
 type MergedFieldEntry = (
     String,
-    Option<baml_compiler2_hir::type_ref::TypeRefId>,
+    baml_compiler2_hir::type_ref::TypeRefId,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
     Vec<Name>,
     Vec<Name>,
@@ -1175,7 +1238,11 @@ fn collect_class_fields_with_implements(
             name,
             field.type_ref,
             field.attributes.clone(),
-            class.generic_params.clone(),
+            class
+                .generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect(),
             pkg_ns.to_vec(),
         ));
     }
@@ -2249,6 +2316,7 @@ fn build_package_fragment(
                 interface_args: rule.interface_args.clone(),
                 interface_assoc: rule.interface_assoc.clone(),
                 methods,
+                field_links: rule.field_links.clone(),
             });
         }
         frag.impl_rules.push((iface_fq, rule_frags));
@@ -2579,6 +2647,7 @@ fn generate_impl(
         &alias_caches,
         &program.function_indices,
         &tables.interface_object_indices,
+        &tables.classes,
         &mut tables.program_packages,
     );
     tables.program_packages.sort_keys();
@@ -2901,8 +2970,9 @@ fn emit_file_group(
             for (idx, (name, type_ref, attrs, _gen_params, ns)) in merged_fields.iter().enumerate()
             {
                 field_indices.insert(name.clone(), idx);
-                let (field_type, field_template) = match type_ref {
-                    Some(id) => {
+                let (field_type, field_template) = {
+                    let id = type_ref;
+                    {
                         let mut diags = Vec::new();
                         // Pass `class_generic_params` as the binding context so
                         // `T`-references inside `class Container<T> { item: T }`
@@ -2933,17 +3003,6 @@ fn emit_file_group(
                             &class_generic_params,
                         );
                         (resolved_ty, template)
-                    }
-                    None => {
-                        let null_ty = baml_type::RuntimeTy::Null {
-                            attr: baml_type::TyAttr::default(),
-                        };
-                        (
-                            null_ty.clone(),
-                            baml_type::TyTemplate::from(baml_type::RealizedTy::Null {
-                                attr: baml_type::TyAttr::default(),
-                            }),
-                        )
                     }
                 };
                 let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
@@ -3554,13 +3613,20 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
     f.display_return_type.clone_from(&sig.display_return_type);
 }
 
-fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> TypeExpr {
+/// `Name<P0, P1, …>` — the declaring item applied to its own parameters as type
+/// variables. Only the parameter *names* matter; bounds are irrelevant to the
+/// synthesized path.
+fn type_expr_for_name_with_generic_args(
+    name: Name,
+    generic_params: &[GenericParamData],
+) -> TypeExpr {
     baml_compiler2_ast::TypeExprKind::Path {
         segments: vec![name],
         generic_args: generic_params
             .iter()
-            .cloned()
-            .map(baml_compiler2_tir::lower_type_expr::type_expr_for_name)
+            .map(|param| {
+                baml_compiler2_tir::lower_type_expr::type_expr_for_name(param.name.clone())
+            })
             .collect(),
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
@@ -3590,9 +3656,27 @@ fn compute_function_metadata<'db>(
         ty::Ty,
     };
 
-    // A generic param's single optional `extends` bound as `(store, id)` — enclosing
-    // (class/interface/impl) and function bounds live in different arenas.
-    type BoundRef<'a> = Option<(&'a TypeRefStore, TypeRefId)>;
+    /// One in-scope type variable's declared bound conjunction, as `(store, id)`
+    /// refs into whichever arena declared it — enclosing (class/interface/impl)
+    /// and function bounds live in different arenas. Empty when unbounded.
+    type BoundRef<'a> = Vec<(&'a TypeRefStore, TypeRefId)>;
+
+    /// A declaration's parameters split into parallel name and bound-ref lists,
+    /// keeping every `&`-separated conjunct.
+    fn split_declared<'a>(
+        params: &'a [GenericParamData],
+        store: &'a TypeRefStore,
+    ) -> (Vec<Name>, Vec<BoundRef<'a>>) {
+        params
+            .iter()
+            .map(|param| {
+                (
+                    param.name.clone(),
+                    param.bounds.iter().map(|&id| (store, id)).collect(),
+                )
+            })
+            .unzip()
+    }
 
     let file = func_loc.file(db);
     let func = function_data(db, func_loc);
@@ -3632,56 +3716,26 @@ fn compute_function_metadata<'db>(
     // params are in scope inside the method signature. Mirror
     // `MirLowerer::enclosing_generic_params`: enclosing params come first, then
     // function-level params.
-    let func_bounds = || {
-        func.generic_param_bounds
-            .iter()
-            .map(move |o| o.map(|id| (func_store, id)))
-    };
-    let (scoped_generic_param_names, scoped_generic_bound_refs): (Vec<Name>, Vec<BoundRef>) =
-        if let Some(block) = enclosing_free_impl {
-            // The impl block's declared generics as `(names, each's single optional
-            // bound)` — the flat form the removed `implements_for` exposed directly
-            // (mirrors MIR's `free_impl_generics`). Only the first `&`-bound per
-            // param is kept, matching the legacy shape.
-            let (mut names, mut bounds): (Vec<Name>, Vec<BoundRef>) = match &block.subject {
-                ImplSubjectData::Free { generics, .. } => (
-                    generics.iter().map(|g| g.name.clone()).collect(),
-                    generics
-                        .iter()
-                        .map(|g| g.bounds.first().copied().map(|id| (&block.type_refs, id)))
-                        .collect(),
-                ),
+    let (scoped_generic_param_names, scoped_generic_bound_refs): (Vec<Name>, Vec<BoundRef>) = {
+        let (mut names, mut bounds) = if let Some(block) = enclosing_free_impl {
+            match &block.subject {
+                ImplSubjectData::Free { generics, .. } => {
+                    split_declared(generics, &block.type_refs)
+                }
                 ImplSubjectData::InClass { .. } => (Vec::new(), Vec::new()),
-            };
-            names.extend(func.generic_params.iter().cloned());
-            bounds.extend(func_bounds());
-            (names, bounds)
+            }
         } else if let Some(iface) = enclosing_interface {
-            let mut names = iface.generic_params.clone();
-            names.extend(func.generic_params.iter().cloned());
-            let mut bounds: Vec<BoundRef> = iface
-                .generic_param_bounds
-                .iter()
-                .map(|o| o.map(|id| (&iface.type_refs, id)))
-                .collect();
-            bounds.extend(func_bounds());
-            (names, bounds)
+            split_declared(&iface.generic_params, &iface.type_refs)
         } else {
-            let mut names = enclosing_class
-                .map(|c| c.generic_params.clone())
-                .unwrap_or_default();
-            names.extend(func.generic_params.iter().cloned());
-            let mut bounds: Vec<BoundRef> = enclosing_class
-                .map(|c| {
-                    c.generic_param_bounds
-                        .iter()
-                        .map(|o| o.map(|id| (&c.type_refs, id)))
-                        .collect()
-                })
-                .unwrap_or_default();
-            bounds.extend(func_bounds());
-            (names, bounds)
+            enclosing_class
+                .map(|c| split_declared(&c.generic_params, &c.type_refs))
+                .unwrap_or_default()
         };
+        let (own_names, own_bounds) = split_declared(&func.generic_params, func_store);
+        names.extend(own_names);
+        bounds.extend(own_bounds);
+        (names, bounds)
+    };
     let enclosing_generics = baml_compiler2_tir::function_generic_params(db, func_loc);
 
     // Every type variable in scope for this signature, keyed by name, with its
@@ -3721,10 +3775,10 @@ fn compute_function_metadata<'db>(
             let args = iface
                 .generic_params
                 .iter()
-                .map(|name| {
+                .map(|declared| {
                     let param = enclosing_generics
                         .iter()
-                        .find(|param| param.name() == name)
+                        .find(|param| param.name() == &declared.name)
                         .expect("interface generic parameter is in the function environment");
                     Ty::TypeVar(param.clone(), baml_type::TyAttr::default())
                 })
@@ -3901,36 +3955,46 @@ fn compute_function_metadata<'db>(
     // members it writes, so lowering it existentially would mint completeness
     // diagnostics for members the bound legitimately leaves free (and drop the
     // bound from display). Rendered into `display_type_params` below.
-    let generic_param_bounds: HashMap<Name, Ty> = scoped_generic_param_names
+    let generic_param_bounds: HashMap<Name, Vec<Ty>> = scoped_generic_param_names
         .iter()
         .enumerate()
         .filter_map(|(idx, name)| {
-            let (store, id) = scoped_generic_bound_refs.get(idx).copied().flatten()?;
-            let mut diags = Vec::new();
+            let refs = scoped_generic_bound_refs.get(idx)?;
             let generic_params = if enclosing_interface.is_some() {
                 &interface_binding_params
             } else {
                 &enclosing_generics
             };
-            let lowered = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
-                store,
-                id,
-                &ScopeCtx {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params,
-                    bounds: &scope_bounds,
-                    self_ty: None,
-                },
-                &mut diags,
-            );
-            let bound_ty = if enclosing_interface.is_some() {
-                substitute_ty(&lowered, &interface_signature_bindings)
-            } else {
-                lowered
-            };
-            diags.is_empty().then(|| (name.clone(), bound_ty))
+            // Each conjunct lowers independently; one that fails to lower is
+            // dropped (its declaration reported the error) without hiding the
+            // rest of the conjunction.
+            let bound_tys: Vec<Ty> = refs
+                .iter()
+                .filter_map(|&(store, id)| {
+                    let mut diags = Vec::new();
+                    let lowered =
+                        baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
+                            store,
+                            id,
+                            &ScopeCtx {
+                                db,
+                                package_items: pkg_items,
+                                ns_context: &pkg_info.namespace_path,
+                                generic_params,
+                                bounds: &scope_bounds,
+                                self_ty: None,
+                            },
+                            &mut diags,
+                        );
+                    let bound_ty = if enclosing_interface.is_some() {
+                        substitute_ty(&lowered, &interface_signature_bindings)
+                    } else {
+                        lowered
+                    };
+                    diags.is_empty().then_some(bound_ty)
+                })
+                .collect();
+            (!bound_tys.is_empty()).then(|| (name.clone(), bound_tys))
         })
         .collect();
 
@@ -3944,12 +4008,16 @@ fn compute_function_metadata<'db>(
 
     let display_type_params: Vec<String> = scoped_generic_param_names
         .iter()
-        .map(|name| {
-            if let Some(bound) = generic_param_bounds.get(name) {
-                format!("{} extends {}", name.as_str(), bound.render_user_facing())
-            } else {
-                name.to_string()
+        .map(|name| match generic_param_bounds.get(name) {
+            Some(bounds) => {
+                let rendered = bounds
+                    .iter()
+                    .map(Ty::render_user_facing)
+                    .collect::<Vec<_>>()
+                    .join(" & ");
+                format!("{} extends {rendered}", name.as_str())
             }
+            None => name.to_string(),
         })
         .collect();
 
