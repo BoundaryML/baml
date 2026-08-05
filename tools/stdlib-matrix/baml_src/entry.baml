@@ -1,6 +1,6 @@
 // Entry points. The `run` wrapper regenerates the two data files (they are
-// gitignored intermediates), invokes build_matrix with absolute paths, and
-// writes `markdown` to `output_file`.
+// gitignored intermediates), invokes one of these with absolute paths, and
+// writes the canonical JSON plus its markdown view.
 //
 // BUG(baml compiler): this file is named entry.baml instead of pipeline.baml
 // because compilation is sensitive to file order: with identical content
@@ -12,6 +12,31 @@
 // Deterministic 3/3 either way. Repro: rename this file to pipeline.baml,
 // delete .baml/, run `baml check`. The throws-inference rework should retire
 // this; until then, keep this file first in sort order.
+
+class MatrixResult {
+    markdown: string,
+    output_file: string,
+    json_file: string,
+    report: SymbolMatrix,
+}
+
+/// `build_matrix_aligned`'s result: the same artifacts plus what the model
+/// contributed and what was rejected.
+class AlignedMatrixResult {
+    markdown: string,
+    output_file: string,
+    json_file: string,
+    report: SymbolMatrix,
+    applied: int,
+    rejected: string[],
+}
+
+class CheckResult {
+    output_file: string,
+    json_file: string,
+    comparison: BaselineComparison,
+    report: SymbolMatrix,
+}
 
 function build_matrix(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
@@ -25,24 +50,21 @@ function build_matrix(
             message: "baml_surface_sha256 is required — it is the ratchet key; the run wrapper computes it",
         };
     }
-    let export_doc = load_baml_surface(baml_surface_file);
-    let ts_doc = load_ts_surface(ts_surface_file);
-    let report = build_matrix_report(export_doc, ts_doc, baml_surface_sha256);
+    let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), baml_surface_sha256);
     MatrixResult {
-        markdown: render_matrix_markdown(report),
+        markdown: render_matrix_markdown(matrix),
         output_file: output_file,
         json_file: json_file,
-        report: report,
+        report: matrix,
     }
 }
 
-/// Ratchet mode: build the matrix and compare it against `baseline_file` —
-/// any previously generated canonical report — without writing anything. The
-/// wrapper turns `comparison` into an exit code.
+/// Ratchet mode: build the matrix and compare it against `baseline_file` — any
+/// previously generated report — without writing anything. The wrapper turns
+/// `comparison` into an exit code.
 ///
-/// The baseline is supplied, never discovered: reports are CI artifacts rather
+/// The baseline is supplied, never discovered: reports are artifacts rather
 /// than checked-in files, so there is no well-known path to compare against.
-/// CI passes the previous run's artifact; a human can pass any two reports.
 function check_matrix(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
     ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
@@ -63,13 +85,12 @@ function check_matrix(
         json_file = json_file,
         baml_surface_sha256 = baml_surface_sha256,
     );
-    let baseline: MatrixReport? = if (baml.fs.exists(baseline_file)) {
+    let baseline: ReportHeader? = if (baml.fs.exists(baseline_file)) {
         load_report(baseline_file)
     } else {
         null
     };
     CheckResult {
-        markdown: result.markdown,
         output_file: output_file,
         json_file: json_file,
         comparison: compare_to_baseline(baseline, result.report),
@@ -77,8 +98,8 @@ function check_matrix(
     }
 }
 
-/// The full pass: structure-only matching, then LLM alignment over the
-/// residue. Reads ANTHROPIC_API_KEY from the environment.
+/// The full pass: name matching, then model alignment over what is left.
+/// Reads ANTHROPIC_API_KEY from the environment.
 function build_matrix_aligned(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
     ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
@@ -93,13 +114,13 @@ function build_matrix_aligned(
         json_file = json_file,
         baml_surface_sha256 = baml_surface_sha256,
     );
-    //# enrich the structure-only report with model-judged equivalences
-    let outcome = align_report(base.report);
+    //# enrich the name-matched report with model-judged correspondences
+    let outcome = align_matrix(base.report);
     AlignedMatrixResult {
-        markdown: render_matrix_markdown(outcome.report),
+        markdown: render_matrix_markdown(outcome.matrix),
         output_file: output_file,
         json_file: json_file,
-        report: outcome.report,
+        report: outcome.matrix,
         applied: outcome.applied,
         rejected: outcome.rejected,
     }

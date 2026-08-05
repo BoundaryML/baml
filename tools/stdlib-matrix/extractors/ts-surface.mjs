@@ -96,16 +96,22 @@ function containerFor(name, kind, source) {
   return c;
 }
 
-function jsdocSummary(node, sourceFile) {
+// The jsdoc description: every line up to the first `@tag`, stripped of
+// comment markers. Tags themselves (`@param`, `@deprecated`, …) are dropped —
+// they describe the signature, which the matrix already has structurally.
+function jsdocDescription(node, sourceFile) {
   const ranges = ts.getLeadingCommentRanges(sourceFile.text, node.pos) ?? [];
   for (const range of ranges.reverse()) {
     const text = sourceFile.text.slice(range.pos, range.end);
     if (!text.startsWith("/**")) continue;
-    const line = text
-      .split("\n")
-      .map((l) => l.replace(/^\s*\/?\*+\/?\s?/, "").trim())
-      .find((l) => l.length > 0 && !l.startsWith("@"));
-    if (line) return line;
+    const lines = [];
+    for (const raw of text.split("\n")) {
+      const line = raw.replace(/^\s*\/?\*+\/?\s?/, "").trimEnd();
+      if (line.trimStart().startsWith("@")) break;
+      lines.push(line);
+    }
+    const description = lines.join("\n").trim();
+    if (description) return description;
   }
   return null;
 }
@@ -152,7 +158,7 @@ function addMember(container, member, sourceFile, { since, isStatic }) {
     container.members.set(key, entry);
   }
   if (!entry.signatures.includes(sig)) entry.signatures.push(sig);
-  entry.doc ??= jsdocSummary(member, sourceFile);
+  entry.doc ??= jsdocDescription(member, sourceFile);
 }
 
 function sinceOf(fileName) {

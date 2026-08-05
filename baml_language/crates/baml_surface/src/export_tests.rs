@@ -107,6 +107,37 @@ fn baml_package_export_cross_links() {
         "(Self as baml.Comparable).CompareError"
     );
 
+    // An interface exports the parameters it declares, and only those. The
+    // in-scope view leads with the implicit `Self`, which belongs to every
+    // interface and so describes none of them; exporting it would read as
+    // `interface Add<Self, Rhs>`.
+    let add = find("T:baml.ops.Add");
+    let add_generics: Vec<&str> = add["generics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| g["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(add_generics, ["Rhs"], "Add declares Rhs alone");
+    assert_eq!(
+        add["generics"][0]["bounds"][0], "baml.Concrete",
+        "the parameter's bound comes with it"
+    );
+    assert!(
+        comparable["generics"].as_array().is_none_or(Vec::is_empty),
+        "an interface with no declared parameters exports none"
+    );
+    // Associated types are exported as members of the interface that owns them.
+    let sortable = find("T:baml.Sortable");
+    assert!(
+        sortable["assoc_types"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["name"] == "SortError"),
+        "Sortable carries SortError"
+    );
+
     // Synthetic companions are present and flagged, never dropped.
     assert!(
         items

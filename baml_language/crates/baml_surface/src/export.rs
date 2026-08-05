@@ -276,6 +276,12 @@ pub enum ItemDetail {
         impls: Vec<String>,
     },
     Interface {
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        generics: Vec<GenericExport>,
+        /// Fields an implementor must provide, resolved in the interface's own
+        /// scope (symbolic `Self`). Empty for the common method-only interface.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        fields: Vec<FieldExport>,
         assoc_types: Vec<AssocTypeExport>,
         required_methods: Vec<RequiredMethodExport>,
         default_methods: Vec<FunctionExport>,
@@ -609,6 +615,16 @@ fn export_item<'db>(
                 .collect();
             defaults.sort_by(|a, b| a.name.cmp(&b.name));
             ItemDetail::Interface {
+                generics: iface
+                    .generic_params(db)
+                    .iter()
+                    .map(|(param, bounds)| generic_export(param, bounds))
+                    .collect(),
+                fields: iface
+                    .fields(db)
+                    .into_iter()
+                    .map(|f| field_export(db, symbol, f))
+                    .collect(),
                 assoc_types: iface
                     .assoc_types(db)
                     .into_iter()

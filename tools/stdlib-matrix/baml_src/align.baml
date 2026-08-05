@@ -1,21 +1,19 @@
-// LLM alignment: the second pass over what deterministic name matching leaves
-// behind.
+// The model pass: correspondences the name heuristic cannot reach.
 //
-// The structure-only pass matches `to_upper_case` ↔ `toUpperCase` by
-// normalizing case and underscores. What it cannot see is that BAML's
-// `String.substring` and TypeScript's `String.slice` are the same operation
-// under different names, or that `Instant.now` answers `Date.now`. That
-// residue — every BAML-only and TS-only member — is what goes to the model.
+// The deterministic prepass only pairs symbols whose *names* agree after
+// normalization AND whose owners correspond. That is deliberately strict — it
+// would rather miss a pair than invent one — so most of the surface arrives
+// here unmatched: `baml.time.Instant.now` against `Date.now`, `int.parse`
+// against `Number.parseInt`, `string.iter` against `[Symbol.iterator]`.
 //
-// The shape here keeps the model at arm's length: `align_candidates` decides
-// what to ask and `apply_verdicts` decides what to believe, both pure
-// functions over the report, both unit-tested without a key. Only
-// `align_container` needs credentials. A wrong or unavailable model degrades
-// the matrix to the structure-only pass rather than corrupting it.
+// The model is a proposer, never an authority. `align_batch` asks, and
+// `apply_alignments` decides what to believe: a pair naming a symbol that was
+// not offered is dropped and counted, so a prompt that starts hallucinating
+// shows up as a number rather than as quietly worse data. A failed call costs
+// that batch's enrichment, not the run.
 
 // No `temperature`: claude-sonnet-5 rejects it ("`temperature` is deprecated
-// for this model"). Run-to-run stability therefore comes from caching verdicts
-// rather than from pinning sampling.
+// for this model"). Reproducibility has to come from caching verdicts.
 client<llm> Aligner {
     provider: anthropic,
     options: {
@@ -24,325 +22,281 @@ client<llm> Aligner {
     },
 }
 
-/// One container pair's residue, rendered for the model.
-class AlignmentTask {
-    container_key: string,
-    baml_members: string[],
-    ts_members: string[],
-}
-
-/// A claimed equivalence between one BAML member and one TS member. The
-/// member strings echo back the lines the model was given, so `apply_verdicts`
-/// can reject anything it did not actually offer.
-class AlignmentPair {
-    baml_member: string @description("the BAML member's display name, exactly as given"),
-    ts_member: string @description("the TypeScript member's display name, exactly as given"),
+/// One proposed equivalence. The displays echo back lines the model was given,
+/// so `apply_alignments` can reject anything it did not actually offer.
+class ProposedPair {
+    baml_display: string @description("the BAML name from inside [ ], nothing else"),
+    ts_display: string @description("the TypeScript name from inside [ ], nothing else"),
     confidence: "high" | "medium" | "low",
     reason: string @description("under 15 words"),
 }
 
-class AlignmentVerdict {
-    container_key: string,
-    pairs: AlignmentPair[],
+/// A batch's answer.
+class BatchVerdict {
+    pairs: ProposedPair[],
 }
 
-/// Renders a pooled member for the prompt: display name plus signature, which
-/// is what makes `slice` recognizable as `substring`.
-function member_line(member: PooledMember) -> string {
-    let signature = member.signature ?? "";
-    if (signature.length() == 0) {
-        `- ${member.display}`
+/// One group's unmatched BAML symbols, with the TypeScript menu to match against.
+class AlignBatch {
+    group: string,
+    baml_lines: string[],
+    ts_menu: string[],
+}
+
+/// Renders a BAML symbol for the prompt: what it is, its signature, and the
+/// first line of its documentation — enough to judge behaviour, short enough
+/// that a whole group fits in one call.
+function baml_line(symbol: BamlSymbol) -> string {
+    let signature = symbol.signature?.display ?? "";
+    `- [${symbol.display}] ${signature}${first_line(symbol.doc)}`
+}
+
+function ts_line(symbol: TsSymbol) -> string {
+    `- [${symbol.display}] ${symbol.signature.lines().at(0) ?? ""}${first_line(symbol.doc)}`
+}
+
+function first_line(doc: string?) -> string {
+    let text = doc ?? "";
+    if (text.length() == 0) {
+        ""
     } else {
-        `- ${member.display} — ${signature}`
+        `  // ${text.lines().at(0) ?? ""}`
     }
 }
 
-/// The containers worth asking about, and what to ask. A container with
-/// residue on only one side has nothing to align: an unmatched member needs a
-/// candidate on the other side to be matched *to*.
-function align_candidates(report: MatrixReport) -> AlignmentTask[] {
-    let tasks: AlignmentTask[] = [];
-    for (let container in report.containers) {
-        let baml_members: string[] = [];
-        let ts_members: string[] = [];
-        for (let row in container.rows) {
-            if (row.status == "baml_only") {
-                if let member: PooledMember = row.baml {
-                    baml_members.push(member_line(member));
-                }
-            } else if (row.status == "ts_only") {
-                if let member: PooledMember = row.ts {
-                    ts_members.push(member_line(member));
-                }
+/// Which symbols still need an answer, batched by the group they live in.
+///
+/// Batching by group is what makes this affordable: one call per group rather
+/// than one per symbol, and a group shares enough context that the model can
+/// reason about the set. Already-matched symbols are left out — the prepass has
+/// spoken for them.
+function align_batches(matrix: SymbolMatrix) -> AlignBatch[] {
+    let matched: map<string, bool> = {};
+    for (let link in matrix.correspondences) {
+        let _ = matched.set(link.baml.to_string(), true);
+    }
+
+    // The TypeScript menu is the whole unmatched surface, listed once per call.
+    // It is the thing being searched, so trimming it would hide the answer.
+    let menu: string[] = [];
+    let claimed: map<string, bool> = {};
+    for (let link in matrix.correspondences) {
+        let _ = claimed.set(link.ts.to_string(), true);
+    }
+    let ts_index = 0;
+    for (let symbol in matrix.ts) {
+        if (!claimed.has(ts_index.to_string())) {
+            menu.push(ts_line(symbol));
+        }
+        ts_index += 1;
+    }
+
+    let groups: map<string, string[]> = {};
+    let order: string[] = [];
+    let index = 0;
+    for (let symbol in matrix.baml) {
+        if (!matched.has(index.to_string())) {
+            let group = baml_group_of(symbol);
+            if (!groups.has(group)) {
+                let empty: string[] = [];
+                let _ = groups.set(group, empty);
+                order.push(group);
+            }
+            if let bucket: string[] = groups.get(group) {
+                bucket.push(baml_line(symbol));
             }
         }
-        if (baml_members.length() > 0 && ts_members.length() > 0) {
-            tasks.push(AlignmentTask {
-                container_key: container.key,
-                baml_members: baml_members,
-                ts_members: ts_members,
-            });
+        index += 1;
+    }
+
+    let batches: AlignBatch[] = [];
+    for (let group in order) {
+        let lines: string[] = groups.get(group) ?? [];
+        if (lines.length() > 0) {
+            batches.push(AlignBatch { group: group, baml_lines: lines, ts_menu: menu });
         }
     }
-    tasks
+    batches
 }
 
-function align_container(task: AlignmentTask) -> AlignmentPair[] {
+function align_batch(batch: AlignBatch) -> BatchVerdict {
     client: Aligner
     prompt: `
-You are comparing two standard libraries: BAML and TypeScript. A deterministic
-name matcher has already paired members whose names agree after case and
-underscore normalization. What remains below is the residue on each side of
-the "${task.container_key}" container.
+You are comparing two standard libraries: BAML and TypeScript.
 
-Identify pairs that are the SAME OPERATION under different names.
+A deterministic pass has already paired everything whose names and owners
+agree, so what follows is the residue. Your job is to find pairs that are the
+SAME OPERATION under different names.
 
-Match on behavior, not on name similarity. "substring" and "slice" are the
+Match on behaviour, not on name similarity. "substring" and "slice" are the
 same operation; "push" and "pop" are not, despite both being array mutations.
-Use each member in at most one pair. Leave a member unpaired when nothing on
-the other side does its job — an unmatched member is a real finding about the
-two libraries, not a failure. Return an empty list if nothing aligns.
+Expect structural differences: BAML puts static methods on primitives where
+TypeScript uses free functions, and reaches operators through interface impls
+where TypeScript uses built-in syntax. Those still count as the same operation.
 
-Copy member names back exactly as given.
+Use each symbol in at most one pair. Leave a symbol unpaired when nothing on
+the other side does its job — an unmatched symbol is a real finding about the
+two libraries, not a failure. Return an empty list rather than reaching.
 
-BAML members:
-${task.baml_members.join("\n")}
+Every symbol below is written as [name] followed by its signature and, where
+there is one, a summary. Report the name from inside the brackets — just the
+name, without the brackets, the signature, or the summary.
 
-TypeScript members:
-${task.ts_members.join("\n")}
+BAML symbols in "${batch.group}" that are still unmatched:
+${batch.baml_lines.join("\n")}
+
+Unmatched TypeScript symbols to choose from:
+${batch.ts_menu.join("\n")}
 
 ${ctx.output_format}
 `
 }
 
-/// Smoke entry: align a single container from a generated report, so the LLM
-/// seam can be exercised without running the whole matrix.
-function align_one(
-    container: string = "string",
-    json_file: string = "tools/stdlib-matrix/report/matrix.json",
-) -> AlignmentPair[] {
-    let report = load_report(json_file);
-    let matching = align_candidates(report)
-        .filter(
-            (task) -> {
-                task.container_key == container
-            },
-        );
-    if let task: AlignmentTask = matching.at(0) {
-        align_container(task)
-    } else {
-        throw baml.errors.InvalidArgument {
-            message: `no alignable container ${container}; it needs residue on both sides`,
-        };
+/// One batch, as a verdict. A failed call yields an empty verdict rather than
+/// aborting: alignment is enrichment, and one unlucky batch should not cost the
+/// whole run.
+function align_one_batch(batch: AlignBatch) -> BatchVerdict {
+    //# ask the model which leftover symbols are the same operation
+    let empty = BatchVerdict { pairs: [] };
+    align_batch(batch) catch (_) {
+        _ => empty,
     }
 }
 
-/// Merges model verdicts into a report, returning a new report.
-///
-/// Every claim is checked against the rows actually sent: a pair naming a
-/// member that was not offered, or naming one already consumed by an earlier
-/// pair, is dropped. The model is a proposer, not an authority — it can only
-/// join two members this run already classified as unmatched, never invent a
-/// member or overwrite a deterministic match.
-///
-/// Dropped claims are counted rather than silently ignored, so a prompt that
-/// starts hallucinating shows up as a number instead of as quietly worse data.
-class MergeOutcome {
-    report: MatrixReport,
+class AlignOutcome {
+    matrix: SymbolMatrix,
     applied: int,
     rejected: string[],
 }
 
-function apply_verdicts(report: MatrixReport, verdicts: AlignmentVerdict[]) -> MergeOutcome {
-    let by_container: map<string, AlignmentVerdict> = {};
-    for (let verdict in verdicts) {
-        let _ = by_container.set(verdict.container_key, verdict);
+/// Folds verdicts into the matrix, keeping only claims that name symbols the
+/// model was actually offered.
+function apply_alignments(matrix: SymbolMatrix, verdicts: BatchVerdict[]) -> AlignOutcome {
+    // Displays collide, so a display maps to every index that bears it; a claim
+    // is only accepted when it resolves to exactly one unmatched symbol.
+    let baml_by_display: map<string, int[]> = {};
+    let matched: map<string, bool> = {};
+    for (let link in matrix.correspondences) {
+        let _ = matched.set(link.baml.to_string(), true);
+    }
+    let index = 0;
+    for (let symbol in matrix.baml) {
+        if (!matched.has(index.to_string())) {
+            let bucket: int[] = baml_by_display.get(symbol.display) ?? [];
+            bucket.push(index);
+            let _ = baml_by_display.set(symbol.display, bucket);
+        }
+        index += 1;
+    }
+    let ts_by_display: map<string, int[]> = {};
+    let ts_index = 0;
+    for (let symbol in matrix.ts) {
+        let bucket: int[] = ts_by_display.get(symbol.display) ?? [];
+        bucket.push(ts_index);
+        let _ = ts_by_display.set(symbol.display, bucket);
+        ts_index += 1;
     }
 
     let rejected: string[] = [];
     let applied = 0;
-    let containers: ContainerReport[] = [];
-    for (let container in report.containers) {
-        let verdict = by_container.get(container.key);
-        if let found: AlignmentVerdict = verdict {
-            containers.push(
-                merge_container(container, found, rejected),
-            );
-        } else {
-            containers.push(container);
-        }
-    }
-    for (let container in containers) {
-        applied += container.aligned;
-    }
-
-    let matched = 0;
-    let aligned = 0;
-    let baml_only = 0;
-    let ts_only = 0;
-    let synthetic_hidden = 0;
-    for (let container in containers) {
-        matched += container.matched;
-        aligned += container.aligned;
-        baml_only += container.baml_only;
-        ts_only += container.ts_only;
-        synthetic_hidden += container.synthetic_hidden;
-    }
-
-    MergeOutcome {
-        report: MatrixReport {
-            format_version: report.format_version,
-            provenance: report.provenance,
-            uncompared_baml: report.uncompared_baml,
-            uncompared_ts: report.uncompared_ts,
-            containers: containers,
-            totals: MatrixTotals {
-                containers: containers.length(),
-                matched: matched,
-                aligned: aligned,
-                baml_only: baml_only,
-                ts_only: ts_only,
-                synthetic_hidden: synthetic_hidden,
-            },
-        },
-        applied: applied,
-        rejected: rejected,
-    }
-}
-
-/// Folds one container's accepted pairs into merged rows. Unmatched rows keep
-/// their identity; a joined pair becomes a single "aligned" row carrying both
-/// members and the model's reasoning.
-function merge_container(
-    container: ContainerReport,
-    verdict: AlignmentVerdict,
-    rejected: string[],
-) -> ContainerReport {
-    let baml_rows: map<string, MemberRow> = {};
-    let ts_rows: map<string, MemberRow> = {};
-    for (let row in container.rows) {
-        if (row.status == "baml_only") {
-            if let member: PooledMember = row.baml {
-                let _ = baml_rows.set(member.display, row);
-            }
-        } else if (row.status == "ts_only") {
-            if let member: PooledMember = row.ts {
-                let _ = ts_rows.set(member.display, row);
+    // A claim may arrive as the whole prompt line rather than just the name.
+    // Trimming at the first space recovers the display without loosening what
+    // counts as a match: the result still has to name exactly one symbol.
+    // A pre-typed empty, because `?? []` in a branch yields `int[] | _[]`
+    // rather than unifying with the map's value type.
+    let none: int[] = [];
+    let resolve = (claimed: string, table: map<string, int[]>) -> {
+        let hits: int[] = table.get(claimed) ?? none;
+        if (hits.length() == 0) {
+            if let cut: int = claimed.index_of(" ") {
+                hits = table.get(claimed.substring(0, cut)) ?? none;
             }
         }
-    }
-
+        hits
+    };
     let consumed: map<string, bool> = {};
-    let merged: MemberRow[] = [];
-    for (let pair in verdict.pairs) {
-        let baml_row = baml_rows.get(pair.baml_member);
-        let ts_row = ts_rows.get(pair.ts_member);
-        if let b: MemberRow = baml_row {
-            if let t: MemberRow = ts_row {
-                if (consumed.has(pair.baml_member) || consumed.has(pair.ts_member)) {
-                    rejected.push(
-                        `${container.key}: ${pair.baml_member} ↔ ${pair.ts_member} (member already paired)`,
-                    );
-                } else {
-                    let _ = consumed.set(pair.baml_member, true);
-                    let _ = consumed.set(pair.ts_member, true);
-                    merged.push(MemberRow {
-                        key: b.key,
-                        status: "aligned",
-                        baml: b.baml,
-                        ts: t.ts,
-                        baml_alternates: b.baml_alternates,
-                        ts_alternates: t.ts_alternates,
-                        alignment: AlignmentInfo {
+    for (let verdict in verdicts) {
+        for (let pair in verdict.pairs) {
+            let baml_hits = resolve(pair.baml_display, baml_by_display);
+            let ts_hits = resolve(pair.ts_display, ts_by_display);
+            if (baml_hits.length() != 1) {
+                rejected.push(`${pair.baml_display} is not a single unmatched BAML symbol`);
+            } else if (ts_hits.length() != 1) {
+                rejected.push(`${pair.ts_display} is not a single TypeScript symbol`);
+            } else if (consumed.has(pair.baml_display)) {
+                rejected.push(`${pair.baml_display} was already paired`);
+            } else {
+                let _ = consumed.set(pair.baml_display, true);
+                matrix
+                    .correspondences
+                    .push(
+                        Correspondence {
+                            baml: baml_hits.at(0) ?? 0,
+                            ts: ts_hits.at(0) ?? 0,
+                            basis: "model",
                             confidence: pair.confidence,
                             reason: pair.reason,
                         },
-                    });
-                }
-            } else {
-                rejected.push(
-                    `${container.key}: ${pair.ts_member} is not an unmatched TypeScript member`,
-                );
+                    );
+                applied += 1;
             }
-        } else {
-            rejected.push(
-                `${container.key}: ${pair.baml_member} is not an unmatched BAML member`,
-            );
         }
     }
 
-    let rows: MemberRow[] = [];
-    for (let row in container.rows) {
-        let display = "";
-        if (row.status == "baml_only") {
-            display = row.baml?.display ?? "";
-        } else if (row.status == "ts_only") {
-            display = row.ts?.display ?? "";
-        }
-        if (!consumed.has(display) || display.length() == 0) {
-            rows.push(row);
-        }
-    }
-    for (let row in merged) {
-        rows.push(row);
-    }
-    rows.sort_by_key(
-        (r) -> {
-            `${status_rank(r.status)}:${r.key}`
-        },
-    );
+    matrix.counts = recount(matrix);
+    AlignOutcome { matrix: matrix, applied: applied, rejected: rejected }
+}
 
+/// Recomputes the tallies after enrichment, from the relation rather than by
+/// adjusting the old numbers.
+function recount(matrix: SymbolMatrix) -> MatrixCounts {
+    let baml_linked: map<string, bool> = {};
+    let ts_linked: map<string, bool> = {};
+    for (let link in matrix.correspondences) {
+        let _ = baml_linked.set(link.baml.to_string(), true);
+        let _ = ts_linked.set(link.ts.to_string(), true);
+    }
     let matched = 0;
-    let aligned = 0;
-    let baml_only = 0;
-    let ts_only = 0;
-    for (let row in rows) {
-        match (row.status) {
-            "matched" => { matched += 1; },
-            "aligned" => { aligned += 1; },
-            "baml_only" => { baml_only += 1; },
-            _ => { ts_only += 1; },
+    let unmatched = 0;
+    let index = 0;
+    for (let symbol in matrix.baml) {
+        if (baml_linked.has(index.to_string())) {
+            matched += 1;
+        } else {
+            unmatched += 1;
         }
+        index += 1;
     }
-
-    ContainerReport {
-        key: container.key,
-        note: container.note,
-        baml_origins: container.baml_origins,
-        ts_origins: container.ts_origins,
-        matched: matched,
-        aligned: aligned,
-        baml_only: baml_only,
-        ts_only: ts_only,
-        synthetic_hidden: container.synthetic_hidden,
-        rows: rows,
+    let ts_unmatched = 0;
+    let scan = 0;
+    while (scan < matrix.ts.length()) {
+        if (!ts_linked.has(scan.to_string())) {
+            ts_unmatched += 1;
+        }
+        scan += 1;
+    }
+    MatrixCounts {
+        baml_symbols: matrix.baml.length(),
+        ts_symbols: matrix.ts.length(),
+        correspondences: matrix.correspondences.length(),
+        baml_matched: matched,
+        baml_unmatched: unmatched,
+        ts_unmatched: ts_unmatched,
     }
 }
 
-/// One container's alignment, as a verdict. A failed call yields an empty
-/// verdict rather than aborting the run: alignment is an enrichment pass, and
-/// one unlucky container should not cost the whole matrix.
-function align_task(task: AlignmentTask) -> AlignmentVerdict {
-    //# ask the model which leftover members are the same operation
-    let empty: AlignmentPair[] = [];
-    let pairs = align_container(task) catch (_) {
-        _ => empty,
-    };
-    AlignmentVerdict { container_key: task.container_key, pairs: pairs }
-}
-
-/// Runs every alignable container concurrently and merges the results.
-function align_report(report: MatrixReport) -> MergeOutcome {
-    //# one green thread per container pair; ~20 calls in the time of the slowest
+/// Runs every batch concurrently and folds the results in.
+function align_matrix(matrix: SymbolMatrix) -> AlignOutcome {
+    //# one green thread per group; the run costs the slowest batch, not the sum
     let verdicts = await baml.future.all(
-        align_candidates(report)
+        align_batches(matrix)
             .map(
-                (task) -> {
+                (batch) -> {
                     spawn {
-                        align_task(task)
+                        align_one_batch(batch)
                     }
                 },
             ),
     );
-    apply_verdicts(report, verdicts)
+    apply_alignments(matrix, verdicts)
 }

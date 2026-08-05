@@ -608,6 +608,23 @@ impl<'db> Interface<'db> {
             .map(|&loc| loc.into())
             .collect()
     }
+
+    /// The parameters the interface *declares*, with their resolved bounds, in
+    /// declaration order.
+    ///
+    /// Not the in-scope view: an interface's scope also carries the implicit
+    /// `Self`, which is a parameter of every interface and so says nothing
+    /// about this one. `interface Add<Rhs>` declares `Rhs`.
+    pub fn generic_params(self, db: &'db dyn Db) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
+        let bounds = facts::interface_generic_bounds(db, self.0);
+        facts::interface_generic_params(db, self.0)
+            .into_iter()
+            .map(|param| {
+                let ifaces = bounds.get(&param).cloned().unwrap_or_default();
+                (param, ifaces)
+            })
+            .collect()
+    }
 }
 
 impl<'db> TypeAlias<'db> {

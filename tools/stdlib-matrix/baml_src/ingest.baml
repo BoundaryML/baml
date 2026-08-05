@@ -44,17 +44,36 @@ function load_baml_surface(path: string) -> PackageExportDoc {
     doc
 }
 
-/// Reads a previously generated canonical report, for use as a comparison
+/// What a baseline report is read for: the ratchet compares inputs and totals,
+/// never individual symbols, so only this much is decoded.
+///
+/// Reading less is also the only thing that works. A full `SymbolMatrix` decode
+/// fails on `PathStep`, the `string | ImplStep` union: `ImplStep` serializes
+/// through a `baml.ToJson` override that spells its field `interface`, but
+/// union decoding does not dispatch to the matching `baml.FromJson`, so it
+/// looks for the raw field name and reports "no union member matched".
+/// BUG(baml): `baml.json.to` should honor a union member's FromJson override.
+class ReportHeader {
+    format_version: int,
+    provenance: MatrixProvenance,
+    counts: MatrixCounts,
+}
+
+/// Reads a previously generated report's header, for use as a comparison
 /// baseline. A file that cannot be decoded is an error, never a silent "no
 /// baseline": treating an unreadable report as absent would let `--check` pass
 /// against a corrupt or stale-format artifact.
-function load_report(path: string) -> MatrixReport {
-    let report = baml.json.to<MatrixReport>(baml.json.parse(baml.fs.read(path))) catch (_) {
-        baml.json.JsonParseError => throw baml.errors.InvalidArgument {
+function load_report(path: string) -> ReportHeader {
+    let report = baml.json.to<ReportHeader>(baml.json.parse(baml.fs.read(path))) catch (_) {
+        baml.json.JsonParseError => {
+            throw baml.errors.InvalidArgument {
             message: `${path} is not valid JSON; regenerate it with tools/stdlib-matrix/run`,
+        }
         },
-        baml.json.JsonDecodeError => throw baml.errors.InvalidArgument {
+        baml.json.JsonDecodeError => {
+            throw baml.errors.InvalidArgument {
             message: `${path} does not match the current report model, probably written by an older tool; regenerate it with tools/stdlib-matrix/run`,
+        }
         },
     };
     if (report.format_version != 1) {

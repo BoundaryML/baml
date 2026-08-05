@@ -1,5 +1,11 @@
-// Markdown rendering of the MatrixReport. The report file is the reviewable
-// artifact; keep the output deterministic (no timestamps, no environment).
+// Markdown view of the matrix — a readable companion to the canonical JSON.
+//
+// The JSON serves both languages' hierarchies from one relation; markdown has
+// no view toggle, so this renders the BAML-rooted view and lists the
+// TypeScript symbols nothing claimed at the end. A reader who wants the
+// TypeScript-rooted view has the web page.
+//
+// Keep the output deterministic: no timestamps, no environment.
 
 function escape_cell(value: string) -> string {
     value
@@ -9,120 +15,6 @@ function escape_cell(value: string) -> string {
         .replace_all("\n", "<br>")
 }
 
-function optional_cell(value: string?) -> string {
-    escape_cell(value ?? "")
-}
-
-function member_cell(member: PooledMember?, alternates: string[]) -> string {
-    let out = "";
-    if let m: PooledMember = member {
-        let static_marker = "";
-        if (m.static) {
-            static_marker = "static ";
-        }
-        let via_marker = "";
-        if let via: string = m.via {
-            via_marker = ` (via ${via})`;
-        }
-        out = escape_cell(`${static_marker}${m.display}${via_marker}`);
-        if (alternates.length() > 0) {
-            out = `${out}<br>also: ${escape_cell(alternates.join(", "))}`;
-        }
-    }
-    out
-}
-
-function throws_cell(member: PooledMember?) -> string {
-    escape_cell(member?.errors ?? "")
-}
-
-function signature_cell(member: PooledMember?) -> string {
-    let out = "";
-    if let m: PooledMember = member {
-        out = optional_cell(m.signature);
-    }
-    out
-}
-
-function render_status_label(status: string) -> string {
-    match (status) {
-        "baml_only" => "BAML only",
-        "ts_only" => "TS only",
-        "aligned" => "aligned",
-        _ => status,
-    }
-}
-
-/// Aligned rows carry the model's confidence and reasoning; deterministic
-/// rows carry nothing, which is itself the signal that no judgment was needed.
-function alignment_cell(member_row: MemberRow) -> string {
-    if let info: AlignmentInfo = member_row.alignment {
-        escape_cell(`${info.confidence}: ${info.reason}`)
-    } else {
-        ""
-    }
-}
-
-function render_member_row(member_row: MemberRow) -> string {
-    [
-        `| ${render_status_label(member_row.status)} `,
-        `| ${member_cell(member_row.baml, member_row.baml_alternates)} `,
-        `| ${member_cell(member_row.ts, member_row.ts_alternates)} `,
-        `| ${signature_cell(member_row.baml)} `,
-        `| ${signature_cell(member_row.ts)} `,
-        `| ${throws_cell(member_row.baml)} `,
-        `| ${alignment_cell(member_row)} |`,
-    ]
-    .join("")
-}
-
-function render_container_section(report: ContainerReport) -> string {
-    let out: string[] = [];
-    out.push(`### ${report.key}`);
-    out.push("");
-    out.push(`BAML: ${render_origin_list(report.baml_origins)} · TS: ${render_origin_list(report.ts_origins)}`);
-    if let note: string = report.note {
-        out.push("");
-        out.push(`> ${note}`);
-    }
-    out.push("");
-    out.push(`matched ${report.matched} · aligned ${report.aligned} · BAML only ${report.baml_only} · TS only ${report.ts_only}`);
-    out.push("");
-    out.push("| status | BAML member | TS member | BAML signature | TS signature | BAML throws | alignment |");
-    out.push("| --- | --- | --- | --- | --- | --- | --- |");
-    for (let member_row in report.rows) {
-        out.push(render_member_row(member_row));
-    }
-    if (report.synthetic_hidden > 0) {
-        out.push("");
-        out.push(`(${report.synthetic_hidden} compiler-synthesized BAML member(s) hidden)`);
-    }
-    out.join("\n")
-}
-
-function render_origin_list(origins: string[]) -> string {
-    if (origins.length() == 0) {
-        "—"
-    } else {
-        origins.map(
-            (origin) -> {
-                `\`${origin}\``
-            },
-        )
-        .join(", ")
-    }
-}
-
-function render_uncompared_section(title: string, entries: UncomparedEntry[]) -> string {
-    let out: string[] = [];
-    out.push(`### ${title}`);
-    out.push("");
-    for (let entry in entries) {
-        out.push(`- \`${entry.name}\` — ${entry.reason}`);
-    }
-    out.join("\n")
-}
-
 /// Stands in for a version the extractor could not determine. Shared with the
 /// ratchet so an absent version reads the same when reported as when rendered.
 function provenance_absent() -> string {
@@ -130,14 +22,10 @@ function provenance_absent() -> string {
 }
 
 /// Shows the reader which inputs this view was built from. Purely
-/// presentational: `run --check` reads provenance from the canonical JSON
-/// report, so this block is free to change shape without breaking the ratchet.
+/// presentational: `run --check` reads provenance from the canonical JSON, so
+/// this block is free to change shape without breaking the ratchet.
 function render_inputs_section(provenance: MatrixProvenance) -> string {
     [
-        "## Inputs",
-        "",
-        "Generated from these inputs; `run --check` compares them against a baseline report.",
-        "",
         `- BAML stdlib surface: \`${provenance.baml_surface_sha256}\` (sha256 of the export)`,
         `- BAML export format: v${provenance.export_format_version}`,
         `- TypeScript: ${provenance.typescript_version}`,
@@ -146,37 +34,149 @@ function render_inputs_section(provenance: MatrixProvenance) -> string {
     .join("\n")
 }
 
-function render_matrix_markdown(report: MatrixReport) -> string {
+/// The group a BAML symbol belongs to: its owner path, or the impl it arrives
+/// through. Mirrors `groupOf` in the web view.
+function baml_group_of(symbol: BamlSymbol) -> string {
+    let names: string[] = [];
+    let impl_group = "";
+    for (let step in symbol.symbol) {
+        match (step) {
+            let plain: string => {
+                names.push(plain);
+            },
+            let node: ImplStep => {
+                impl_group = `${node.base} as ${node.iface.join(".")}`;
+            },
+        }
+    }
+    if (impl_group.length() > 0) {
+        impl_group
+    } else if (names.length() > 1) {
+        names.slice(0, names.length() - 1).join(".")
+    } else {
+        names.at(0) ?? "(root)"
+    }
+}
+
+function render_symbol_row(
+    symbol: BamlSymbol,
+    links: Correspondence[],
+    matrix: SymbolMatrix,
+) -> string {
+    let counterparts: string[] = [];
+    for (let link in links) {
+        if let ts: TsSymbol = matrix.ts.at(link.ts) {
+            let note = if (link.basis == "model") {
+                ` (${link.confidence ?? "?"})`
+            } else {
+                ""
+            };
+            counterparts.push(`${ts.display}${note}`);
+        }
+    }
+    let state = if (counterparts.length() > 0) {
+        "both"
+    } else {
+        "BAML only"
+    };
+    [
+        `| ${escape_cell(symbol.display)} `,
+        `| ${escape_cell(symbol.signature?.display ?? "")} `,
+        `| ${state} `,
+        `| ${escape_cell(counterparts.join(", "))} |`,
+    ]
+    .join("")
+}
+
+function render_matrix_markdown(matrix: SymbolMatrix) -> string {
+    let counts = matrix.counts;
+    let ts_matched = counts.ts_symbols - counts.ts_unmatched;
+
+    // Correspondences indexed from each side, mirroring the web view's Links.
+    let by_baml: map<string, Correspondence[]> = {};
+    let ts_claimed: map<string, bool> = {};
+    for (let link in matrix.correspondences) {
+        let key = link.baml.to_string();
+        let bucket: Correspondence[] = by_baml.get(key) ?? [];
+        bucket.push(link);
+        let _ = by_baml.set(key, bucket);
+        let _ = ts_claimed.set(link.ts.to_string(), true);
+    }
+
+    // Bucket BAML symbols by group, carrying each one's index so its
+    // correspondences stay reachable.
+    let groups: map<string, int[]> = {};
+    let order: string[] = [];
+    let index = 0;
+    for (let symbol in matrix.baml) {
+        let group = baml_group_of(symbol);
+        if (!groups.has(group)) {
+            let empty: int[] = [];
+            let _ = groups.set(group, empty);
+            order.push(group);
+        }
+        if let bucket: int[] = groups.get(group) {
+            bucket.push(index);
+        }
+        index += 1;
+    }
+    order.sort_by_key((name) -> {
+        name
+    });
+
     let out: string[] = [];
-    out.push("# BAML ↔ TypeScript stdlib surface matrix");
+    out.push("# BAML ↔ TypeScript stdlib matrix");
     out.push("");
-    out.push("Generated by `tools/stdlib-matrix/run` (structure-only pass: deterministic name matching, no LLM alignment yet). Do not edit by hand.");
+    out.push("Generated by `tools/stdlib-matrix/run`. Do not edit by hand.");
     out.push("");
-    out.push(render_inputs_section(report.provenance));
+    out.push("## Inputs");
+    out.push("");
+    out.push(render_inputs_section(matrix.provenance));
     out.push("");
     out.push("## Summary");
     out.push("");
-    out.push("| container | matched | aligned | BAML only | TS only | note |");
-    out.push("| --- | --- | --- | --- | --- | --- |");
-    for (let container in report.containers) {
-        out.push(`| ${container.key} | ${container.matched} | ${container.aligned} | ${container.baml_only} | ${container.ts_only} | ${optional_cell(container.note)} |`);
-    }
+    out.push(
+        `${counts.baml_matched} of ${counts.baml_symbols} BAML symbols have a TypeScript counterpart · ${counts.baml_unmatched} do not.`,
+    );
     out.push("");
-    out.push(`Totals: ${report.totals.matched} matched · ${report.totals.aligned} aligned · ${report.totals.baml_only} BAML only · ${report.totals.ts_only} TS only across ${report.totals.containers} containers (${report.totals.synthetic_hidden} compiler-synthesized BAML members hidden).`);
+    out.push(
+        `${ts_matched} of ${counts.ts_symbols} TypeScript symbols have a BAML counterpart · ${counts.ts_unmatched} do not.`,
+    );
     out.push("");
-    out.push("*matched* is deterministic name agreement; *aligned* is a model's judgment that two differently-named members are the same operation, and carries its confidence and reasoning.");
+    out.push(
+        "A correspondence is either deterministic name agreement or a model's judgment, which carries its confidence in parentheses.",
+    );
     out.push("");
-    out.push("## Uncompared surfaces");
+    out.push("## BAML surface");
     out.push("");
-    out.push(render_uncompared_section("BAML", report.uncompared_baml));
-    out.push("");
-    out.push(render_uncompared_section("TypeScript", report.uncompared_ts));
-    out.push("");
-    out.push("## Containers");
-    out.push("");
-    for (let container in report.containers) {
-        out.push(render_container_section(container));
+    for (let group in order) {
+        out.push(`### ${group}`);
+        out.push("");
+        out.push("| symbol | signature | state | TypeScript |");
+        out.push("| --- | --- | --- | --- |");
+        let members: int[] = groups.get(group) ?? [];
+        for (let member in members) {
+            if let symbol: BamlSymbol = matrix.baml.at(member) {
+                let links: Correspondence[] = by_baml.get(member.to_string()) ?? [];
+                out.push(render_symbol_row(symbol, links, matrix));
+            }
+        }
         out.push("");
     }
+
+    out.push("## TypeScript symbols with no BAML counterpart");
+    out.push("");
+    out.push("| symbol | signature | since |");
+    out.push("| --- | --- | --- |");
+    let ts_index = 0;
+    for (let symbol in matrix.ts) {
+        if (!ts_claimed.has(ts_index.to_string())) {
+            out.push(
+                `| ${escape_cell(symbol.display)} | ${escape_cell(symbol.signature)} | ${symbol.since} |`,
+            );
+        }
+        ts_index += 1;
+    }
+    out.push("");
     out.join("\n")
 }

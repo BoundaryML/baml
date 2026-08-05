@@ -150,3 +150,21 @@ pub(crate) fn impl_data<'db>(db: &'db dyn Db, imp: ImplLoc<'db>) -> Option<&'db 
 pub(crate) fn class_generic_params<'db>(db: &'db dyn Db, class: ClassLoc<'db>) -> Vec<ParamTy> {
     baml_compiler2_tir::class_generic_params(db, class)
 }
+
+/// An interface's *declared* generic parameters, in order — the in-scope view
+/// would lead with the implicit `Self`, which every interface has and which is
+/// therefore not part of what this one declares.
+pub(crate) fn interface_generic_params<'db>(
+    db: &'db dyn Db,
+    iface: InterfaceLoc<'db>,
+) -> Vec<ParamTy> {
+    baml_compiler2_tir::interface_declared_generic_params(db, iface)
+}
+
+/// An interface's generic bounds, keyed by parameter.
+pub(crate) fn interface_generic_bounds<'db>(
+    db: &'db dyn Db,
+    iface: InterfaceLoc<'db>,
+) -> &'db TypeVarBoundsMap {
+    baml_compiler2_tir::lower_type_expr::interface_generic_param_bounds(db, iface)
+}
