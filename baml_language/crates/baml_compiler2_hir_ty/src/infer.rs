@@ -2603,7 +2603,7 @@ impl<'db> InferenceContext<'db> {
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
             instantiation.extend(own);
-            return function_value_ty(signature, &instantiation);
+            return bind_receiver(function_value_ty(signature, &instantiation));
         }
         if let Some(interface_member) =
             crate::method_resolution::lookup_interface_member(self.db, &self.facts, &resolved, member)
@@ -2619,7 +2619,10 @@ impl<'db> InferenceContext<'db> {
                     .collect();
                 let mut instantiation = pending.prefix;
                 instantiation.extend(own);
-                return function_value_ty(signature, &instantiation);
+                return bind_receiver(function_value_ty(signature, &instantiation));
+            }
+            if interface_member.is_method {
+                return bind_receiver(interface_member.ty);
             }
             return interface_member.ty;
         }
@@ -3219,6 +3222,35 @@ impl<'db> InferenceContext<'db> {
             }
         }
     }
+}
+
+/// An instance-accessed METHOD as a value is receiver-BOUND: the access
+/// consumes the `self` slot (`greeter.handle` is `(req) -> Response` -
+/// the runtime hands out a bound closure). Static/UFCS spellings
+/// (`Type.method`) keep the full signature; there the receiver arrives
+/// as the written first argument. Non-methods pass through untouched.
+fn bind_receiver(fn_ty: Ty) -> Ty {
+    let TyKind::Function {
+        params,
+        ret,
+        throws,
+        attr,
+    } = fn_ty.kind()
+    else {
+        return fn_ty;
+    };
+    let binds = params
+        .first()
+        .is_some_and(|param| param.name.as_ref().is_some_and(|name| name.as_str() == "self"));
+    if !binds {
+        return fn_ty;
+    }
+    Ty::intern(TyKind::Function {
+        params: params[1..].to_vec().into_boxed_slice(),
+        ret: ret.clone(),
+        throws: throws.clone(),
+        attr: attr.clone(),
+    })
 }
 
 /// A resolved function as a first-class value: its signature instantiated
