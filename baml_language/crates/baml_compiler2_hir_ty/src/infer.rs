@@ -3351,32 +3351,17 @@ impl<'db> InferenceContext<'db> {
     /// misses as before (the "type annotations needed" family, S17's
     /// diagnostic).
     fn structurally_resolve(&mut self, ty: &Ty) -> Ty {
-        let mut resolved = self.table.resolve_completely(ty);
-        // EVERY var the type still carries is forced, not just the
-        // head: rustc's resolve_vars_with_obligations resolves the
-        // whole type before method probing, and impl matching on
-        // `ArrayIterator<?T>` needs `?T` committed (the registry is
-        // fail-safe against infer vars). Fixpoint, since one class's
-        // solution can ground another's bounds; classes with no ground
-        // evidence stay vars and the caller's lookup misses as before.
-        while resolved.has_infer() {
-            let mut vars = Vec::new();
-            collect_infer_vars(&resolved, &mut vars);
-            vars.sort_by_key(|var| var.index());
-            vars.dedup();
-            let mut progressed = false;
-            for var in vars {
-                let bounds = self.table.var_bounds(var);
-                if self.try_solve_bounded_var(var, &bounds) {
-                    progressed = true;
-                }
-            }
-            if !progressed {
-                break;
-            }
-            resolved = self.table.resolve_completely(&resolved);
+        let resolved = self.table.resolve_completely(ty);
+        let TyKind::Infer { var: Some(var), .. } = resolved.kind() else {
+            return resolved;
+        };
+        let var = *var;
+        let bounds = self.table.var_bounds(var);
+        if self.try_solve_bounded_var(var, &bounds) {
+            self.table.resolve_completely(&resolved)
+        } else {
+            resolved
         }
-        resolved
     }
 
     /// Re-examines the deferred `Sub` residue now that resolution has run;
@@ -3392,18 +3377,6 @@ impl<'db> InferenceContext<'db> {
             }
         }
     }
-}
-
-/// Every unsolved inference var occurring in `ty`, for structural
-/// resolution's whole-type forcing.
-fn collect_infer_vars(ty: &Ty, out: &mut Vec<baml_type::interned::InferVar>) {
-    if !ty.has_infer() {
-        return;
-    }
-    if let TyKind::Infer { var: Some(var), .. } = ty.kind() {
-        out.push(*var);
-    }
-    baml_type::interned::for_each_child(ty.kind(), |child| collect_infer_vars(child, out));
 }
 
 /// An instance-accessed METHOD as a value is receiver-BOUND: the access
