@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+741..744 'get': throws never
+771..791 '{\n   ...n    }': int
+781..785 'self': int
+843..846 'get': throws never
+873..890 '{\n   ...n    }': 0
+883..884 '0': 0
+903..909 'ug_get': throws never
+944..959 '{\n   ...t()\n}': T
+950..955 'b.get': hir_ty=[(self: user.UgBox<T>) -> T throws never] tir=[() -> T throws never]
+950..957 'b.get()': T
+970..976 'ug_use': throws never
+1014..1060 '{\n   ...  n\n}': hir_ty=[int] tir=[unknown]
+1020..1025 'let n': hir_ty=[int] tir=[unknown]
+1028..1034 'ug_get': hir_ty=[(b: user.UgBox<int>) -> int throws never] tir=[(b: user.UgBox<T>) -> T throws never]
+1028..1037 'ug_get(v)': hir_ty=[int] tir=[unknown]
+1035..1036 'v': int | string
+1057..1058 'n': hir_ty=[int] tir=[unknown]
