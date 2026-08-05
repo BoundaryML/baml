@@ -4,10 +4,10 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51948
+agreements: 51952
 one-sided (coverage): 88
-conflicts: 8493 across 1515 distinct pairs
-hir_ty error-channel entries: 38
+conflicts: 8489 across 1514 distinct pairs
+hir_ty error-channel entries: 36
 tir diagnostics: 0
 panics: 0
 
@@ -42,8 +42,6 @@ ns_iter_impl_generics_only/ns_core/core.baml:9057..9065 `{ self }`: expected use
 ns_iter_impl_generics_only/ns_core/core.baml:9615..9623 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<T, E>, got user.iter_impl_generics_only.core.Chain<T, E>
 ns_json_alias/json_alias.baml:2103..2112 `[1, 2, 3]`: expected baml.json.json, got int[]
 ns_json_alias/json_alias.baml:2665..2681 `{"key": "value"}`: expected baml.json.json, got map<string, string>
-ns_patterns_new_runtime/patterns_new_runtime.baml:13750..13891 `match (box...th()\n    }`: non-exhaustive
-ns_patterns_new_runtime/patterns_new_runtime.baml:14453..14516 `match (box...=> 7\n    }`: non-exhaustive
 ns_provider_stdlib/provider_stdlib.baml:815..864 `{\n    "ke...    },\n  }`: expected baml.json.json, got map<string, map<string, int>>
 ns_streaming_parsing/streaming_parsing.baml:1852..1966 `function E...put }}"#\n}`: expected map<string, unknown>, got map<string, string>
 ns_streaming_parsing/streaming_parsing.baml:1894..1966 `{\n    cli...put }}"#\n}`: expected map<string, unknown>, got map<string, string>
@@ -85,15 +83,15 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [83x] hir_ty=[int] tir=[int | 0]
     at ns_array_rest_binding/array_rest_binding.baml:4058..4172 `{\n    mat...0\n    }\n}`
     at ns_array_rest_binding/array_rest_binding.baml:4064..4170 `match (v) ...=> 0\n    }`
-[67x] hir_ty=[!error] tir=[int]
-    at ns_arrays/sort_comparable.baml:3712..3724 `other.points`
-    at ns_arrays/sort_comparable.baml:8513..8523 `other.rank`
 [67x] hir_ty=[() -> void throws baml.errors.ParseError / null] tir=[() -> void throws unknown / null]
     at ns_bigints/bigints.baml:6953..7024 `{\n    ass...12345n))\n}`
     at ns_bigints/bigints.baml:7052..7153 `{\n    ass...99999n))\n}`
 [66x] hir_ty=[bool] tir=[true]
     at ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`
     at ns_bigints/bigints.baml:5066..5073 `1n < 2n`
+[65x] hir_ty=[!error] tir=[int]
+    at ns_arrays/sort_comparable.baml:3712..3724 `other.points`
+    at ns_arrays/sort_comparable.baml:8513..8523 `other.rank`
 [45x] hir_ty=[1] tir=[int]
     at ns_cancel_cascade/cancel_cascade.baml:3497..3498 `1`
     at ns_closures/closures.baml:2670..2671 `1`
@@ -1177,9 +1175,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[!error] tir=[(x: T) -> T throws never]
     at ns_instantiation_expr/instantiation_expr.baml:3323..3328 `let f`
     at ns_instantiation_expr/instantiation_expr.baml:3348..3349 `f`
-[2x] hir_ty=[!error] tir=[7]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:14447..14518 `{\n    mat...7\n    }\n}`
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:14453..14516 `match (box...=> 7\n    }`
 [2x] hir_ty=[!error] tir=[T]
     at ns_instantiation_expr/instantiation_expr.baml:3317..3354 `{\n    let...    f(x)\n}`
     at ns_instantiation_expr/instantiation_expr.baml:3348..3352 `f(x)`

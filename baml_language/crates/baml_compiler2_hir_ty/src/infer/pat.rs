@@ -590,10 +590,32 @@ impl InferenceContext<'_> {
             );
             match scrut.kind() {
                 TyKind::Union(members, _) => {
+                    // Same class AND agreeing instantiation: against
+                    // `Box<int> | Box<string>`, `Box<int> { .. }` claims
+                    // exactly the `Box<int>` member, so
+                    // per-instantiation arms compose to full coverage -
+                    // the member attribution bare type patterns already
+                    // get. Without written/adopted args the name alone
+                    // decides (a multi-instantiation scrutinee then
+                    // stays unclaimed, as before).
                     let claimed: Vec<&Ty> = members
                         .iter()
-                        .filter(|member| {
-                            matches!(member.kind(), TyKind::Class(member_qtn, _, _) if *member_qtn == qtn)
+                        .filter(|member| match member.kind() {
+                            TyKind::Class(member_qtn, member_args, _) => {
+                                *member_qtn == qtn
+                                    && (args.is_empty()
+                                        || (member_args.len() == args.len()
+                                            && member_args.iter().zip(args.iter()).all(
+                                                |(member_arg, arg)| {
+                                                    baml_type::normalize::equivalent_interned(
+                                                        member_arg,
+                                                        arg,
+                                                        &self.facts,
+                                                    )
+                                                },
+                                            )))
+                            }
+                            _ => false,
                         })
                         .collect();
                     match claimed.as_slice() {
