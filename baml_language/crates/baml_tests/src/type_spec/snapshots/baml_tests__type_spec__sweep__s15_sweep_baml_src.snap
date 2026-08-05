@@ -7,7 +7,7 @@ nodes compared: 60529
 agreements: 51953
 one-sided (coverage): 88
 conflicts: 8488 across 1513 distinct pairs
-hir_ty error-channel entries: 29
+hir_ty error-channel entries: 10
 tir diagnostics: 0
 panics: 0
 
@@ -17,26 +17,7 @@ ns_bigints/bigints.baml:4894..4905 `{ 3n * 4n }`: expected 12n, got bigint
 ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 ns_defer/defer.baml:3849..3957 `{\n  defer...("body")\n}`: expected void, got int
 ns_exceptions/exceptions.baml:35238..35402 `{\n    {\n...l\n    }\n}`: expected void, got "one" | null
-ns_inferred_generic_type_args/inferred_generic_type_args.baml:3230..3268 `SingleCurs...lf.head() }`: expected user.inferred_generic_type_args.Cursor<T>, got user.inferred_generic_type_args.SingleCursor<T>
-ns_inferred_generic_type_args/inferred_generic_type_args.baml:8137..8166 `Boxed<T> {...lf.arr[0] }`: expected user.inferred_generic_type_args.Wrap<T>, got user.inferred_generic_type_args.Boxed<T>
 ns_interfaces/interfaces.baml:56918..56919 `1`: expected user.interfaces.GrptChild<int>, got 1
-ns_iter_impl_generics_only/ns_core/core.baml:511..562 `{\n    Map...: fn }\n  }`: expected user.iter_impl_generics_only.core.Iterator<R, E | E2>, got user.iter_impl_generics_only.core.Map<T, R, E, E2>
-ns_iter_impl_generics_only/ns_core/core.baml:662..725 `{\n    Fil...cate }\n  }`: expected user.iter_impl_generics_only.core.Iterator<T, E | E2>, got user.iter_impl_generics_only.core.Filter<T, E, E2>
-ns_iter_impl_generics_only/ns_core/core.baml:823..880 `{\n    Fil...: fn }\n  }`: expected user.iter_impl_generics_only.core.Iterator<R, E | E2>, got user.iter_impl_generics_only.core.FilterMap<T, R, E, E2>
-ns_iter_impl_generics_only/ns_core/core.baml:998..1073 `{\n    Fla...e {} }\n  }`: expected user.iter_impl_generics_only.core.Iterator<R, E | E2 | E3>, got user.iter_impl_generics_only.core.FlatMap<T, R, E, E2, E3>
-ns_iter_impl_generics_only/ns_core/core.baml:1139..1195 `{\n    Ste...true }\n  }`: expected user.iter_impl_generics_only.core.Iterator<T, E>, got user.iter_impl_generics_only.core.StepBy<T, E>
-ns_iter_impl_generics_only/ns_core/core.baml:1274..1343 `{\n    Cha...alse }\n  }`: expected user.iter_impl_generics_only.core.Iterator<T, E>, got user.iter_impl_generics_only.core.Chain<T, E>
-ns_iter_impl_generics_only/ns_core/core.baml:3090..3143 `{\n  Flatt...one {} }\n}`: expected user.iter_impl_generics_only.core.Iterator<R, E | E3>, got user.iter_impl_generics_only.core.Flatten<R, E, E3>
-ns_iter_impl_generics_only/ns_core/core.baml:3416..3424 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<T, never>, got user.iter_impl_generics_only.core.ArrayIterator<T>
-ns_iter_impl_generics_only/ns_core/core.baml:4450..4458 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<T, never>, got user.iter_impl_generics_only.core.Repeat<T>
-ns_iter_impl_generics_only/ns_core/core.baml:5230..5238 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<R, E | E2>, got user.iter_impl_generics_only.core.Map<T, R, E, E2>
-ns_iter_impl_generics_only/ns_core/core.baml:5623..5631 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<T, E | E2>, got user.iter_impl_generics_only.core.Filter<T, E, E2>
-ns_iter_impl_generics_only/ns_core/core.baml:6154..6162 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<R, E | E2>, got user.iter_impl_generics_only.core.FilterMap<T, R, E, E2>
-ns_iter_impl_generics_only/ns_core/core.baml:6783..6791 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<R, E | E2 | E3>, got user.iter_impl_generics_only.core.FlatMap<T, R, E, E2, E3>
-ns_iter_impl_generics_only/ns_core/core.baml:7623..7631 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<R, E | E3>, got user.iter_impl_generics_only.core.Flatten<R, E, E3>
-ns_iter_impl_generics_only/ns_core/core.baml:8629..8637 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<T, E>, got user.iter_impl_generics_only.core.Peekable<T, E>
-ns_iter_impl_generics_only/ns_core/core.baml:9057..9065 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<T, E>, got user.iter_impl_generics_only.core.StepBy<T, E>
-ns_iter_impl_generics_only/ns_core/core.baml:9615..9623 `{ self }`: expected user.iter_impl_generics_only.core.Iterator<T, E>, got user.iter_impl_generics_only.core.Chain<T, E>
 ns_json_alias/json_alias.baml:2103..2112 `[1, 2, 3]`: expected baml.json.json, got int[]
 ns_json_alias/json_alias.baml:2665..2681 `{"key": "value"}`: expected baml.json.json, got map<string, string>
 ns_provider_stdlib/provider_stdlib.baml:815..864 `{\n    "ke...    },\n  }`: expected baml.json.json, got map<string, map<string, int>>

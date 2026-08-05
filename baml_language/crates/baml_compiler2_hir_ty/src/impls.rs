@@ -541,7 +541,14 @@ pub fn resolve_impl<'db>(
     concrete: &Ty,
     interface: &InterfaceTarget,
 ) -> Option<ResolvedImpl<'db>> {
-    if !is_realized(concrete) || !interface.args.iter().all(is_realized) {
+    // RIGID vars (skolems) are legal in goals: rustc proves
+    // `Arr<T>: Iter<T>` inside a generic body by matching impls with
+    // the placeholder as an opaque constant, and `match_pattern` binds
+    // only impl-frame params - a rigid var unifies with itself or an
+    // impl var, never with ground structure. Only unresolved inference
+    // vars and error sentinels stay out.
+    let admissible = |ty: &Ty| !ty.has_infer() && !ty.has_error();
+    if !admissible(concrete) || !interface.args.iter().all(admissible) {
         return None;
     }
     resolve_within_depth(
