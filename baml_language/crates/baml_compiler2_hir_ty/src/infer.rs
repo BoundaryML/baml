@@ -1280,6 +1280,70 @@ impl<'db> InferenceContext<'db> {
                 }
                 ok
             }
+            // A var-carrying union TARGET: TypeScript's
+            // `inferToMultipleTypes`, the union-position inference rule
+            // (`int | null <: ?R | null` must conclude `?R := int`;
+            // BAML's `R?` is a bare union, so no constructor exists for
+            // plain unification to match on). Constituents IDENTICAL on
+            // both sides match and drop; then:
+            // - exactly ONE naked variable left in the target takes the
+            //   whole remaining source as a lower bound (the ordinary
+            //   var arm);
+            // - no naked variable, a single-member remainder, and a
+            //   UNIQUE structurally-matching target constituent recurse
+            //   (`int[] <: ?R[] | null` solves through the list pair);
+            // - anything else - several naked variables, no unique home
+            //   - defers. Forced answers only, the unique-candidate
+            //   discipline; TS likewise refuses to partition a source
+            //   across several naked variables.
+            (_, TyKind::Union(members, _)) if expected.has_infer() => {
+                let members: Vec<Ty> = members.to_vec();
+                let actual_members: Vec<Ty> = match actual.kind() {
+                    TyKind::Union(actual_members, _) => actual_members.to_vec(),
+                    _ => vec![actual.clone()],
+                };
+                let (naked, targets): (Vec<Ty>, Vec<Ty>) = members
+                    .into_iter()
+                    .partition(|member| {
+                        matches!(member.kind(), TyKind::Infer { var: Some(_), .. })
+                    });
+                let remainder: Vec<Ty> = actual_members
+                    .into_iter()
+                    .filter(|member| !targets.contains(member))
+                    .collect();
+                if remainder.is_empty() {
+                    // Every source constituent found an identical target
+                    // member: the pair holds with no inference.
+                    return true;
+                }
+                if let [naked_var] = naked.as_slice() {
+                    let naked_var = naked_var.clone();
+                    // `join`, not `union_of`: the remainder flows on as a
+                    // LOWER BOUND, and the canonical algebra would erase
+                    // literal freshness - `fmu_pick(7, 0)` must leave
+                    // `?R`'s lowers fresh so they widen and agree.
+                    let source = self.join(&remainder);
+                    return self.sub(&source, &naked_var);
+                }
+                if naked.is_empty()
+                    && let [source] = remainder.as_slice()
+                {
+                    let matching: Vec<Ty> = targets
+                        .iter()
+                        .filter(|target| {
+                            target.has_infer() && same_head_constructor(source, target)
+                        })
+                        .cloned()
+                        .collect();
+                    if let [target] = matching.as_slice() {
+                        let source = source.clone();
+                        let target = target.clone();
+                        return self.sub(&source, &target);
+                    }
+                }
+                self.deferred_subs.push((actual, expected));
+                true
+            }
             // Invariant constructors: Sub decays to Eq of the pieces.
             (TyKind::Class(a_name, a_args, _), TyKind::Class(b_name, b_args, _))
                 if a_name == b_name && a_args.len() == b_args.len() =>
@@ -3464,6 +3528,32 @@ impl<'db> InferenceContext<'db> {
                 let _ = is_subtype_interned(&actual, &expected, &self.facts);
             }
         }
+    }
+}
+
+/// Whether `source` and `target` share a head CONSTRUCTOR - the gate
+/// for recursing into a union target's single structured constituent
+/// (only pairs plain unification could relate member-wise).
+fn same_head_constructor(source: &Ty, target: &Ty) -> bool {
+    match (source.kind(), target.kind()) {
+        (TyKind::List(..), TyKind::List(..))
+        | (TyKind::Map { .. }, TyKind::Map { .. })
+        | (TyKind::Future(..), TyKind::Future(..)) => true,
+        (TyKind::Class(a, a_args, _), TyKind::Class(b, b_args, _)) => {
+            a == b && a_args.len() == b_args.len()
+        }
+        (TyKind::Interface(a, a_args, _, _), TyKind::Interface(b, b_args, _, _)) => {
+            a == b && a_args.len() == b_args.len()
+        }
+        (
+            TyKind::Function {
+                params: a_params, ..
+            },
+            TyKind::Function {
+                params: b_params, ..
+            },
+        ) => a_params.len() == b_params.len(),
+        _ => false,
     }
 }
 
