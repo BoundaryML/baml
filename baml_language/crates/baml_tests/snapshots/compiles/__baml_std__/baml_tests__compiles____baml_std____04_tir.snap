@@ -3002,8 +3002,6 @@ function baml.sap.parse_type(t: type, text: string) -> unknown throws baml.error
   }
 }
 
---- <builtin>/baml/ns_schema/schema.baml ---
-
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.SpawnParams {
   body: () -> T throws E

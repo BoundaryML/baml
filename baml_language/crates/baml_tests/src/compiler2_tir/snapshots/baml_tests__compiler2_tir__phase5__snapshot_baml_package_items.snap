@@ -191,6 +191,7 @@ namespace baml.json:
   function parse
   function path<T>
   function path_or<T>
+  function schema
   function serialize<T>
   function stringify
   function stringify_pretty
@@ -293,8 +294,6 @@ namespace baml.random:
 namespace baml.sap:
   function parse<T>
   function parse_type
-namespace baml.schema:
-  function json_schema
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
   class SpawnParams<T, E> { methods: [] }

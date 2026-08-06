@@ -4164,6 +4164,9 @@ function baml.json.path_or(j: baml.json.json, selector: string, default: #0) -> 
     return
 }
 
+function baml.json.schema(t: type) -> baml.json.json {
+}
+
 function baml.json.serialize(v: #0) -> string {
     load_type #0
     load_var v
@@ -6318,9 +6321,6 @@ function baml.sap.parse_type(t: type, text: string) -> unknown {
     load_type unknown
     sys_op baml.llm.__sap_parse_final
     return
-}
-
-function baml.schema.json_schema(t: type) -> baml.json.json {
 }
 
 function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
