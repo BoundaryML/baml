@@ -872,7 +872,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                             )
                         })
                         .unwrap_or_else(|| raw_owner.clone());
-                    debug_assert_eq!(
+                    assert_eq!(
                         owner, raw_owner,
                         "structural impl symbol must preserve the source-era B-693 spelling"
                     );
@@ -10931,7 +10931,12 @@ impl<'db> LoweringContext<'db> {
                     .iter()
                     .chain(default_methods)
                     .find(|m| m.name == *method)
-                    .map(|m| m.generic_params.len());
+                    .map(|m| {
+                        m.generic_params
+                            .iter()
+                            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+                            .count()
+                    });
             }
             return None;
         };

@@ -11919,6 +11919,20 @@ fn union_fuzz_f16_unqualified_ambiguous_union_field_is_e0131() {
     );
 }
 
+#[test]
+fn conjunction_ambiguous_source_fields_keep_field_diagnostic() {
+    assert_compile_error_contains(
+        r#"
+        interface Left { value: string }
+        interface Right { value: int }
+        function read<T extends Left & Right>(value: T) -> string {
+            return value.value
+        }
+        "#,
+        "field `value`",
+    );
+}
+
 /// F17 [bad-diagnostic]: a failed `.as<Cargo<int>>` projection drops the `<int>`
 /// type argument from the message (`does not implement interface Cargo`), which
 /// is misleading because the type DOES implement `Cargo`, just at `<string>`.

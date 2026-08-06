@@ -430,24 +430,40 @@ impl<'db> TypeInferenceBuilder<'db> {
                 access,
             ),
             _ => {
+                let is_field = declarers.iter().any(|declarer| match declarer {
+                    MemberDeclarer::Source(view) => {
+                        self.interface_member_kind(view.loc, access.member)
+                            == Some(UnionMemberKind::Field)
+                    }
+                    MemberDeclarer::Mounted(_) => false,
+                });
                 let receiver = match &recv {
                     SelfReceiver::RigidVar(name) => name.to_string(),
                     SelfReceiver::ExactTy(ty)
                     | SelfReceiver::Existential(ty)
                     | SelfReceiver::Union(ty) => ty.render_user_facing(),
                 };
-                let sources = declarers
+                let sources: Vec<String> = declarers
                     .iter()
                     .map(|v| self.qualified_interface_display(v.realized()))
                     .collect();
-                self.context.report_at_member_simple(
+                let error = if is_field {
+                    TirTypeError::AmbiguousInterfaceField {
+                        class_name: Name::new(&receiver),
+                        field_name: access.member.clone(),
+                        sources: sources
+                            .into_iter()
+                            .map(|source| Name::new(&source))
+                            .collect(),
+                    }
+                } else {
                     TirTypeError::AmbiguousInterfaceMethod {
                         class_name: Name::new(&receiver),
                         method_name: access.member.clone(),
                         sources,
-                    },
-                    access.at,
-                );
+                    }
+                };
+                self.context.report_at_member_simple(error, access.at);
                 Some(Ty::Unknown {
                     attr: TyAttr::default(),
                 })

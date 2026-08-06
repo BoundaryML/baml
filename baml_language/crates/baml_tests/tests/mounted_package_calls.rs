@@ -525,6 +525,7 @@ function native_value() -> int throws never {
         "main.baml",
         r#"
 function main() -> int throws never {
+    let reference = app.native_value
     app.native_value()
 }
 "#,
@@ -534,10 +535,12 @@ function main() -> int throws never {
         .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
         .map(|d| format!("[{}] {}", d.code(), d.message))
         .collect();
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.contains("E0158") && e.contains("mounted")),
-        "expected the reserved E0158 diagnostic, got:\n{errors:#?}"
+    let reserved = errors
+        .iter()
+        .filter(|error| error.contains("E0158") && error.contains("mounted"))
+        .count();
+    assert_eq!(
+        reserved, 2,
+        "both the bare reference and call must report reserved E0158, got:\n{errors:#?}"
     );
 }

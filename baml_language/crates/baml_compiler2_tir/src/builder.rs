@@ -6430,7 +6430,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Report the reserved BEP-066 slice 6a diagnostic when a mounted callee
     /// has no loc-free link contract (currently compiler/VM builtin bodies).
     fn report_reserved_mounted_call(&mut self, callee: ExprId, at: ExprId) {
-        if let Some(path) = self.foreign_callable_exprs.get(&callee).cloned() {
+        if let Some(path) = self.foreign_callable_exprs.remove(&callee) {
             self.context
                 .report_simple(TirTypeError::MountedPackageCallUnsupported { path }, at);
         }
@@ -10175,12 +10175,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             if self.locals.contains_key(&segments[0]) {
                 // Root is a local variable — chain resolve_member for segments[1..].
                 // The last segment resolves as a bound method reference.
-                self.infer_local_rooted_path(segments, expr_id, true)
+                let ty = self.infer_local_rooted_path(segments, expr_id, true);
+                self.report_reserved_mounted_call(expr_id, expr_id);
+                ty
             } else {
                 // Root is not a known local. Try full package/namespace resolution:
                 // 1. Package path (e.g. baml.llm.ClientType.Primitive, baml.env.get)
                 let pkg_ty = self.infer_multi_segment_path(segments, expr_id);
                 if !matches!(pkg_ty, Ty::Unknown { .. }) {
+                    self.report_reserved_mounted_call(expr_id, expr_id);
                     return pkg_ty;
                 }
                 // 2. Primitive static access (e.g. image.from_url)
@@ -10212,7 +10215,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 //    root_is_value = false → last segment is an unbound method reference.
                 let root_ty = self.infer_single_name(&segments[0]);
                 if !matches!(root_ty, Ty::Unknown { .. }) {
-                    return self.infer_local_rooted_path(segments, expr_id, false);
+                    let ty = self.infer_local_rooted_path(segments, expr_id, false);
+                    self.report_reserved_mounted_call(expr_id, expr_id);
+                    return ty;
                 }
                 // 4. Truly unresolved — report error if not a known namespace/package name.
                 let is_dep_package = self
