@@ -11,6 +11,8 @@ skip_extract=0
 check_only=0
 baseline_file=""
 previous_file=""
+review_all=0
+concurrency=""
 use_llm=0
 
 absolute_path() {
@@ -24,6 +26,7 @@ usage() {
     cat <<'EOF'
 Usage: tools/stdlib-matrix/run [--output PATH] [--json-output PATH]
                                [--skip-extract] [--llm] [--previous PATH]
+                               [--review-all] [--concurrency N]
                                [--check --baseline PATH]
 
 Compare the BAML stdlib surface against the TypeScript stdlib and write two
@@ -46,6 +49,15 @@ keeps its previous answer when it and every type it names are unchanged, so a
 run costs only what actually moved. Distinct from --baseline, which compares
 inputs and decides an exit code without changing the report; in practice both
 take the same file.
+
+--review-all keeps the previous report but carries nothing from it: every
+symbol goes to the passes again with its previous conclusion shown, so a model
+can bless it or change its mind. Use it after changing a prompt, when the
+question being asked has moved rather than the surface being asked about.
+
+--concurrency N caps how many calls are in flight (default 8). Raise it if your
+account's rate limits allow; the passes are wide, so this is what bounds a cold
+run's wall clock.
 
 The report is not checked into the repository: it is a generated artifact.
 CI publishes matrix.json per run; locally it lands in report/ (gitignored).
@@ -87,6 +99,14 @@ while (($# > 0)); do
             previous_file="$(absolute_path "$2")"
             shift 2
             ;;
+        --review-all)
+            review_all=1
+            shift
+            ;;
+        --concurrency)
+            concurrency="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -111,6 +131,30 @@ fi
 if [[ -n "${previous_file}" && ! -f "${previous_file}" ]]; then
     echo "stdlib-matrix: no previous report at ${previous_file}" >&2
     exit 2
+fi
+if ((review_all == 1)); then
+    if [[ -z "${previous_file}" ]]; then
+        echo "stdlib-matrix: --review-all needs --previous PATH — there is nothing to review without it" >&2
+        exit 2
+    fi
+    # Without the passes, "review everything again" means "carry nothing and
+    # ask no one", which would replace a report full of judgements with one
+    # holding only name matches.
+    if ((use_llm == 0)); then
+        echo "stdlib-matrix: --review-all needs --llm — reviewing means asking, and without it this" \
+             "would discard the previous report's judgements rather than re-examine them" >&2
+        exit 2
+    fi
+fi
+if [[ -n "${concurrency}" ]]; then
+    if [[ ! "${concurrency}" =~ ^[1-9][0-9]*$ ]]; then
+        echo "stdlib-matrix: --concurrency takes a positive integer, got ${concurrency}" >&2
+        exit 2
+    fi
+    if ((use_llm == 0)); then
+        echo "stdlib-matrix: --concurrency only applies with --llm" >&2
+        exit 2
+    fi
 fi
 
 baml_bin="${BAML_BIN:-${tool_repo}/baml_language/target/debug/baml-cli}"
@@ -169,6 +213,9 @@ target_args=()
 if [[ -n "${previous_file}" ]]; then
     target_args+=(--previous_file "${previous_file}")
 fi
+if ((review_all == 1)); then
+    target_args+=(--review_all true)
+fi
 if ((check_only == 1)); then
     target="check_matrix"
     target_args+=(--baseline_file "${baseline_file}")
@@ -178,6 +225,9 @@ elif ((use_llm == 1)); then
         exit 2
     fi
     target="build_matrix_aligned"
+    if [[ -n "${concurrency}" ]]; then
+        target_args+=(--concurrency "${concurrency}")
+    fi
 fi
 
 cd "${tool_repo}"

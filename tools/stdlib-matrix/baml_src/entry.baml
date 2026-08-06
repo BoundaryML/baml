@@ -47,9 +47,14 @@ class CheckResult {
     report: SymbolMatrix,
 }
 
-/// Builds the report. `previous_file`, when given, is an earlier report whose
-/// judgements are carried forward for every symbol that has not changed —
-/// itself or anything it names.
+/// Builds the report.
+///
+/// `previous` is an earlier revision whose judgements are carried forward for
+/// every symbol that has not changed — itself or anything it names.
+/// `review_all` keeps the revision but carries nothing from it: every symbol is
+/// put to the passes again, with its previous conclusion shown so a model can
+/// bless it. That is the difference between trusting a judgement because
+/// nothing moved and asking for it to be made again.
 function build_matrix(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
     ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
@@ -57,6 +62,8 @@ function build_matrix(
     json_file: string = "tools/stdlib-matrix/report/matrix.json",
     baml_surface_sha256: string = "",
     previous_file: string = "",
+    review_all: bool = false,
+    previous: Revision? = null,
 ) -> MatrixResult {
     if (baml_surface_sha256.length() == 0) {
         throw baml.errors.InvalidArgument {
@@ -66,11 +73,20 @@ function build_matrix(
     let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), baml_surface_sha256);
     let carried = 0;
     let queued = matrix.baml.length();
-    if (previous_file.length() > 0) {
-        let outcome = apply_revision(matrix, load_revision(previous_file));
-        matrix = outcome.matrix;
-        carried = outcome.carried;
-        queued = outcome.queued;
+    // Loaded once when a caller already has it: the previous report is a
+    // megabyte and a half, and the passes need the same one.
+    let revision: Revision? = if (previous == null && previous_file.length() > 0) {
+        load_revision(previous_file)
+    } else {
+        previous
+    };
+    if (!review_all) {
+        if let before: Revision = revision {
+            let outcome = apply_revision(matrix, before);
+            matrix = outcome.matrix;
+            carried = outcome.carried;
+            queued = outcome.queued;
+        }
     }
     MatrixResult {
         markdown: render_matrix_markdown(matrix),
@@ -96,6 +112,7 @@ function check_matrix(
     baml_surface_sha256: string = "",
     baseline_file: string = "",
     previous_file: string = "",
+    review_all: bool = false,
 ) -> CheckResult {
     if (baseline_file.length() == 0) {
         throw baml.errors.InvalidArgument {
@@ -109,6 +126,7 @@ function check_matrix(
         json_file = json_file,
         baml_surface_sha256 = baml_surface_sha256,
         previous_file = previous_file,
+        review_all = review_all,
     );
     let baseline: ReportHeader? = if (baml.fs.exists(baseline_file)) {
         load_report(baseline_file)
@@ -132,25 +150,28 @@ function build_matrix_aligned(
     json_file: string = "tools/stdlib-matrix/report/matrix.json",
     baml_surface_sha256: string = "",
     previous_file: string = "",
+    review_all: bool = false,
+    concurrency: int = 0,
 ) -> AlignedMatrixResult {
+    // The passes see the previous revision too: a symbol that changed still
+    // arrives with what was concluded about it last time, which is what makes
+    // `bless` an answer the model can give. Read once, used twice.
+    let revision: Revision? = if (previous_file.length() > 0) {
+        load_revision(previous_file)
+    } else {
+        null
+    };
     let base = build_matrix(
         baml_surface_file = baml_surface_file,
         ts_surface_file = ts_surface_file,
         output_file = output_file,
         json_file = json_file,
         baml_surface_sha256 = baml_surface_sha256,
-        previous_file = previous_file,
+        review_all = review_all,
+        previous = revision,
     );
-    // The passes see the previous revision too: a symbol that changed still
-    // arrives with what was concluded about it last time, which is what makes
-    // `bless` an answer the model can give.
-    let revision: Revision? = if (previous_file.length() > 0) {
-        load_revision(previous_file)
-    } else {
-        null
-    };
     //# propose, sweep, then verify everything either produced
-    let outcome = align_matrix(base.report, revision);
+    let outcome = align_matrix(base.report, revision, concurrency);
     AlignedMatrixResult {
         markdown: render_matrix_markdown(outcome.matrix),
         output_file: output_file,

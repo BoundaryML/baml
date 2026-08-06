@@ -909,15 +909,27 @@ function sort_judgements(matrix: SymbolMatrix) -> null {
     null
 }
 
-/// How many calls may be in flight at once.
+/// How many calls may be in flight at once, by default.
 ///
 /// A cold run is a few hundred calls that would otherwise all start at the same
 /// instant, which is the shape of traffic a provider rate-limits hardest. The
 /// cap is deliberately modest: the passes are wide rather than deep, so the run
 /// is bounded by the slowest call in each batch either way, and a 429 costs a
-/// retry with backoff that would have taken longer than waiting.
+/// retry with backoff that would have taken longer than waiting. `--concurrency`
+/// raises it for an account whose limits allow.
 function call_limit() -> int {
     8
+}
+
+/// The cap in force: what the caller asked for, or the default when they did
+/// not ask. Zero and negatives mean "unset" rather than "no calls", which is
+/// what an unpassed flag looks like by the time it reaches here.
+function effective_limit(requested: int) -> int {
+    if (requested > 0) {
+        requested
+    } else {
+        call_limit()
+    }
 }
 
 /// Progress, on stderr.
@@ -936,12 +948,12 @@ function report_progress(message: string) -> void {
 /// FIFO, so this reads exactly like the unthrottled version. Each result is
 /// awaited in order rather than through `future.all`, which is what makes
 /// progress reportable at all — `all` yields once, at the end.
-function run_propose_pass(pass: string, requests: ProposeRequest[]) -> PassResult[] {
-    let group = baml.spawn.TaskGroup.new(call_limit(), name = pass);
+function run_propose_pass(pass: string, requests: ProposeRequest[], limit: int) -> PassResult[] {
+    let group = baml.spawn.TaskGroup.new(limit, name = pass);
     let pending = requests.map((request) -> {
         spawn with baml.spawn.options(group = group) { propose_once(request) }
     });
-    report_progress(`${pass}: ${requests.length()} calls, ${call_limit()} at a time`);
+    report_progress(`${pass}: ${requests.length()} calls, ${limit} at a time`);
     let results: PassResult[] = [];
     for (let future in pending) {
         results.push(await future);
@@ -952,12 +964,12 @@ function run_propose_pass(pass: string, requests: ProposeRequest[]) -> PassResul
     results
 }
 
-function run_sweep_pass(requests: SweepRequest[]) -> PassResult[] {
-    let group = baml.spawn.TaskGroup.new(call_limit(), name = "sweep");
+function run_sweep_pass(requests: SweepRequest[], limit: int) -> PassResult[] {
+    let group = baml.spawn.TaskGroup.new(limit, name = "sweep");
     let pending = requests.map((request) -> {
         spawn with baml.spawn.options(group = group) { sweep_once(request) }
     });
-    report_progress(`sweep: ${requests.length()} calls, ${call_limit()} at a time`);
+    report_progress(`sweep: ${requests.length()} calls, ${limit} at a time`);
     let results: PassResult[] = [];
     for (let future in pending) {
         results.push(await future);
@@ -968,12 +980,12 @@ function run_sweep_pass(requests: SweepRequest[]) -> PassResult[] {
     results
 }
 
-function run_verify_pass(requests: VerifyRequest[]) -> VerifyResult[] {
-    let group = baml.spawn.TaskGroup.new(call_limit(), name = "verify");
+function run_verify_pass(requests: VerifyRequest[], limit: int) -> VerifyResult[] {
+    let group = baml.spawn.TaskGroup.new(limit, name = "verify");
     let pending = requests.map((request) -> {
         spawn with baml.spawn.options(group = group) { verify_once(request) }
     });
-    report_progress(`verify: ${requests.length()} calls, ${call_limit()} at a time`);
+    report_progress(`verify: ${requests.length()} calls, ${limit} at a time`);
     let results: VerifyResult[] = [];
     for (let future in pending) {
         results.push(await future);
@@ -985,7 +997,8 @@ function run_verify_pass(requests: VerifyRequest[]) -> VerifyResult[] {
 }
 
 /// Runs all three passes over a matrix, in order.
-function align_matrix(matrix: SymbolMatrix, revision: Revision?) -> AlignOutcome {
+function align_matrix(matrix: SymbolMatrix, revision: Revision?, concurrency: int) -> AlignOutcome {
+    let limit = effective_limit(concurrency);
     // Built once: every owner's pool is drawn from the same normalized view of
     // the TypeScript surface.
     report_progress("building pools");
@@ -994,14 +1007,14 @@ function align_matrix(matrix: SymbolMatrix, revision: Revision?) -> AlignOutcome
     let empty_pools = record_empty_pools(matrix, pools);
     report_progress(`${empty_pools} symbols answered without a call (no candidates)`);
 
-    let proposed = apply_proposals(matrix, run_propose_pass("propose", requests), revision);
+    let proposed = apply_proposals(matrix, run_propose_pass("propose", requests, limit), revision);
     report_progress(`propose: ${proposed.proposed} judged, ${proposed.rejected.length()} claims refused`);
 
-    let sweeps = run_sweep_pass(sweep_requests(proposed.matrix));
+    let sweeps = run_sweep_pass(sweep_requests(proposed.matrix), limit);
     let swept = apply_sweep(proposed.matrix, sweeps);
     report_progress(`sweep: ${swept.swept} judged, ${swept.rejected.length()} claims refused`);
 
-    let rulings = run_verify_pass(verify_requests(swept.matrix));
+    let rulings = run_verify_pass(verify_requests(swept.matrix), limit);
     let verified = apply_rulings(swept.matrix, rulings);
     report_progress(`verify: ${verified.upheld} upheld, ${verified.refuted} refuted`);
     if (verified.matrix.failures.length() > 0) {

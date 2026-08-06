@@ -900,3 +900,54 @@ test "the sweep can overturn an absence but not a pairing" {
         baml.sys.panic("the sweep did not land");
     }
 }
+
+test "reviewing everything carries nothing but keeps the previous conclusions" {
+    // A revision that concluded something about a symbol the fresh run has not
+    // judged — which is what every model judgement looks like on the next run.
+    let source = fixture_matrix("sha-a", "5.8.3-test");
+    let absent: string[] = [];
+    source
+        .judgements
+        .push(
+            Judgement {
+                baml: "M:baml.Foo.from_parts",
+                ts: null,
+                verdict: "none",
+                basis: "model",
+                confidence: "high",
+                reason: "TypeScript builds these inline",
+                divergence: null,
+                rejected: absent,
+                verified: true,
+            },
+        );
+    let before = fixture_revision(source);
+
+    // Carrying: nothing has changed, so the conclusion is kept without asking.
+    let carried = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+    assert.is_true(carried.carried > 0);
+    let kept = carried.matrix.judgements.filter((judgement) -> {
+        judgement.baml == "M:baml.Foo.from_parts"
+    });
+    assert.equal(kept.length(), 1);
+
+    // Reviewing: the same revision is still in hand, and its conclusions are
+    // put in front of the model so it can bless them — but nothing is taken on
+    // trust, and the symbol is asked about again.
+    let matrix = fixture_matrix("sha-a", "5.8.3-test");
+    let requests = propose_requests(matrix, build_pools(matrix, pending_symbols(matrix)), before);
+    let shown = requests
+        .map((request) -> {
+            request.prior_lines.join("\n")
+        })
+        .join("\n");
+    assert.is_true(shown.includes("M:baml.Foo.from_parts"));
+    assert.is_true(shown.includes("was none with nothing"));
+    assert.is_true(shown.includes("TypeScript builds these inline"));
+}
+
+test "the concurrency cap falls back when nothing was asked for" {
+    assert.equal(effective_limit(0), call_limit());
+    assert.equal(effective_limit(-1), call_limit());
+    assert.equal(effective_limit(24), 24);
+}
