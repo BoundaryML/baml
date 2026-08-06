@@ -38,10 +38,15 @@ function last_segment(path: string) -> string {
 /// The stdlib backs each primitive with a companion class (`class baml.String`
 /// carries `string`'s methods, `class Array<T>` carries `T[]`'s) — an
 /// implementation detail of where methods live, not a type users write. The
-/// matrix compares languages as written, so `baml.Uint8Array` normalizes to
-/// `uint8array` wherever it appears, including a `self` parameter's type. The
-/// table mirrors `PrimitiveType::builtin_class_path` and `head.rs`'s container
-/// normalization.
+/// matrix compares languages as written, so a display of `baml.Uint8Array`
+/// becomes `uint8array`, including a `self` parameter's type.
+///
+/// A whole display, never a name inside a composite: `baml.String[]` would pass
+/// through untouched. That costs nothing today because the export's canonical
+/// renderer already normalizes companions before they reach here — no composite
+/// companion spelling appears anywhere in it — so this only has to handle the
+/// bare case the export does produce. The table mirrors
+/// `PrimitiveType::builtin_class_path` and `head.rs`'s container normalization.
 function normalize_ty_display(display: string) -> string {
     match (display) {
         "baml.Int" => "int",

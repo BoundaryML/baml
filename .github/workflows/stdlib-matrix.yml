@@ -58,9 +58,13 @@ jobs:
     outputs:
       changed: ${{ steps.ratchet.outputs.changed }}
     steps:
-      - name: "Checkout"
+      # A `workflow_run` job checks out the default branch unless told
+      # otherwise, which would publish a matrix of whatever canary happens to
+      # hold rather than of the surface that was just released.
+      - name: "Checkout the released commit"
         uses: useblacksmith/checkout@v1
         with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
       - name: "Install mise"

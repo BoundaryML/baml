@@ -88,6 +88,21 @@ function activate(event: MouseEvent, ref: Ref, address: string | null) {
   dispatchGoto(event.currentTarget as Element, ref, address);
 }
 
+/**
+ * Enter on a focused reference follows it.
+ *
+ * A keyboard has no modifier to hold, and pressing Enter on an anchor
+ * dispatches a plain click — which `activate` suppresses on its way to leaving
+ * the row's behaviour alone. Without this, a reference is reachable by Tab and
+ * does nothing when activated.
+ */
+function activateByKey(event: KeyboardEvent, ref: Ref, address: string | null) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  dispatchGoto(event.currentTarget as Element, ref, address);
+}
+
 /** One name inside a type: a link when this report declares it, plain text
  *  when it does not. A name from outside — another package, a bound, `never` —
  *  has nowhere to go, and an affordance that leads nowhere is worse than none. */
@@ -99,6 +114,7 @@ function reference(name: string, refs: Refs): TemplateResult | string {
     class="type-ref"
     href=${address === null ? nothing : `#${ref.side}/${encodeURIComponent(address)}`}
     @click=${(event: MouseEvent) => activate(event, ref, address)}
+    @keydown=${(event: KeyboardEvent) => activateByKey(event, ref, address)}
     >${name}</a
   >`;
 }
@@ -167,7 +183,7 @@ function typeName(name: string): TemplateResult {
   const open = name.indexOf('<');
   if (open > 0 && name.endsWith('>')) {
     const base = name.slice(0, open);
-    const args = name.slice(open + 1, -1).split(',');
+    const args = splitArguments(name.slice(open + 1, -1));
     return html`<span class="${NAME} font-medium">${base}</span
       ><span class=${PUNCT}>&lt;</span
       >${args.map(
@@ -178,6 +194,32 @@ function typeName(name: string): TemplateResult {
       )}<span class=${PUNCT}>&gt;</span>`;
   }
   return html`<span class="${NAME} font-medium">${name}</span>`;
+}
+
+/**
+ * A generic argument list, split at the top level only.
+ *
+ * Splitting on every comma tears a nested display apart: `map<K, map<A, B>>`
+ * would render as the arguments `map<A` and `B>>`, which is wrong on screen
+ * rather than merely uncoloured. No display in the stdlib nests today; the
+ * cost of being right anyway is a depth counter.
+ */
+function splitArguments(text: string): string[] {
+  const args: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const char of text) {
+    if (char === '<') depth += 1;
+    else if (char === '>') depth -= 1;
+    if (char === ',' && depth === 0) {
+      args.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  args.push(current);
+  return args;
 }
 
 /** True when the display already spells the parameters the declaration lists. */

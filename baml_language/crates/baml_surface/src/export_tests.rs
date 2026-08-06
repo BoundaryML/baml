@@ -54,6 +54,10 @@ fn every_exported_id_is_unique() {
             "variants",
             "assoc_types",
             "required_methods",
+            // An interface's defaults are a member list like any other, and
+            // every entry carries an id. Omitting the key left a whole class of
+            // member outside the invariant this test exists to state.
+            "default_methods",
         ] {
             for member in item
                 .get(key)

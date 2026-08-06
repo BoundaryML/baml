@@ -47,6 +47,26 @@ function legendFor(side: Side): ReadonlyArray<readonly [string, string]> {
     : [...shared, [solid, `no ${other} counterpart`]];
 }
 
+/**
+ * Which report to load, given whatever `?src=` said.
+ *
+ * A relative path only, resolved against this page. The parameter exists so one
+ * build can render any run's artifact — a report beside the page, a second one
+ * for comparison — not so a link can point the page at another origin. A public
+ * URL that renders attacker-hosted JSON as this site's content is a different
+ * feature, and not one worth having.
+ */
+export function reportSource(requested: string | null): string {
+  const fallback = './matrix.json';
+  if (requested === null || requested.length === 0) return fallback;
+  // Anything the URL parser accepts as absolute — including a scheme-relative
+  // `//host/x` — names an origin, and so is refused.
+  const resolved = new URL(requested, location.href);
+  return resolved.origin === location.origin
+    ? resolved.pathname + resolved.search
+    : fallback;
+}
+
 export class MatrixAppElement extends LitElement {
   static properties = {
     error: { state: true },
@@ -90,7 +110,7 @@ export class MatrixAppElement extends LitElement {
       addEventListener(event, this.#onModifier);
     }
     addEventListener('blur', this.#clearModifier);
-    void this.#load(params.get('src') ?? './matrix.json');
+    void this.#load(reportSource(params.get('src')));
   }
 
   disconnectedCallback() {
@@ -100,6 +120,7 @@ export class MatrixAppElement extends LitElement {
       removeEventListener(event, this.#onModifier);
     }
     removeEventListener('blur', this.#clearModifier);
+    this.removeEventListener(GOTO_EVENT, this.#onGoto as EventListener);
     this.#clearModifier();
   }
 

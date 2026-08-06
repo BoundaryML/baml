@@ -30,7 +30,7 @@ const FORMAT_VERSION = 1;
 
 const ECMA_CONTAINERS = new Set([
   "String", "Number", "BigInt", "Boolean", "Array", "ReadonlyArray", "Map",
-  "Set", "JSON", "Math", "Date", "Promise", "PromiseConstructor", "RegExp",
+  "Set", "JSON", "Math", "Date", "Promise", "RegExp",
   "Error", "Object", "Uint8Array", "ArrayBuffer", "Iterator", "Symbol",
 ]);
 
@@ -73,6 +73,12 @@ const NODE_MODULE_INTERFACES = new Map([
 
 const args = process.argv.slice(2);
 const rootFlag = args.indexOf("--repo-root");
+if (rootFlag >= 0 && args[rootFlag + 1] === undefined) {
+  // Otherwise `path.resolve(undefined)` throws, and the operator gets a stack
+  // trace naming a function they did not call.
+  console.error("ts-surface: --repo-root needs a path");
+  process.exit(2);
+}
 const repoRoot = path.resolve(rootFlag >= 0 ? args[rootFlag + 1] : ".");
 
 const require = createRequire(url.pathToFileURL(path.join(repoRoot, "package.json")));
@@ -238,8 +244,29 @@ function walkNodeModuleFile(filePath) {
   }
 }
 
+// The standard a member was introduced by, as a sort key.
+//
+// `since` is recorded when a member is first seen and never revised, so the
+// visit order decides it. Lexicographic order gets this wrong: "lib.dom" and
+// "lib.es2015.*" both sort before "lib.es5.d.ts" — "2" precedes "5" — and the
+// libs re-declare members across files through declaration merging, so
+// `Object.keys` came out as es2015 when ES5 introduced it. Oldest standard
+// first makes the first sighting the earliest one.
+function standardRank(file) {
+  if (file.startsWith("lib.es5.")) return 5;
+  const year = /^lib\.es(\d{4})\./.exec(file);
+  if (year) return Number(year[1]);
+  if (file.startsWith("lib.esnext")) return 9998;
+  // DOM and the rest describe no ECMAScript edition; they go last so an ES
+  // member is never attributed to them.
+  return 9999;
+}
+
 // ECMAScript core + DOM.
-for (const file of fs.readdirSync(tsLibDir).sort()) {
+const libFiles = fs
+  .readdirSync(tsLibDir)
+  .sort((a, b) => standardRank(a) - standardRank(b) || (a < b ? -1 : a > b ? 1 : 0));
+for (const file of libFiles) {
   if (!file.startsWith("lib.") || !file.endsWith(".d.ts")) continue;
   const isDom = file.startsWith("lib.dom");
   walkLibFile(
@@ -249,12 +276,21 @@ for (const file of fs.readdirSync(tsLibDir).sort()) {
   );
 }
 
-// Node.
+// Node. A file that is not where it was expected is recorded rather than
+// skipped: without that, a reorganized @types/node makes a module's symbols
+// vanish while the version string still claims they were compared, and a
+// consumer cannot tell "matched nothing" from "never read".
+const missingNodeFiles = [];
 if (nodeTypesDir) {
   for (const rel of ["fs/promises.d.ts", "child_process.d.ts", "process.d.ts", "net.d.ts", "path.d.ts"]) {
     const p = path.join(nodeTypesDir, rel);
     if (fs.existsSync(p)) walkNodeModuleFile(p);
+    else missingNodeFiles.push(rel);
   }
+}
+if (nodeTypesDir && missingNodeFiles.length === 5) {
+  console.error(`ts-surface: none of the expected @types/node files exist under ${nodeTypesDir}`);
+  process.exit(2);
 }
 
 // ── emit ─────────────────────────────────────────────────────────────────────
@@ -268,6 +304,10 @@ const doc = {
     dom: [...DOM_CONTAINERS].sort(),
     dom_functions: [...DOM_FUNCTIONS].sort(),
     node_modules: [...NODE_MODULES].filter((m) => !m.startsWith("node:")).sort(),
+    // Expected but absent. Empty is the normal case; a non-empty list says a
+    // module's symbols are missing from this document rather than genuinely
+    // having no counterpart.
+    node_files_missing: missingNodeFiles.sort(),
   },
   containers: [...containers.values()]
     .map((c) => ({
@@ -277,9 +317,15 @@ const doc = {
       sources: [...c.sources].sort(),
       members: [...c.members.values()]
         .map((m) => ({ ...m, signatures: [...m.signatures].sort() }))
-        .sort((a, b) => a.name.localeCompare(b.name) || Number(a.static) - Number(b.static)),
+        // Code-unit order, not `localeCompare`: that depends on the runtime's
+        // ICU data, and this file claims to be deterministic.
+        .sort(
+          (a, b) =>
+            (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) ||
+            Number(a.static) - Number(b.static),
+        ),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name)),
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
 };
 
 process.stdout.write(JSON.stringify(doc, null, 2) + "\n");

@@ -36,12 +36,18 @@ class TsSymbol {
 function ts_origin_of(container: TsContainer, member: TsMember) -> string {
     if (container.kind == "functions" || container.kind == "module") {
         "free"
+    } else if (!ts_is_callable(member)) {
+        // Callability is asked first, because the constructor side holds
+        // constants as well as statics: `Number.MAX_SAFE_INTEGER` and
+        // `Array.prototype` come from the `*Constructor` interface and are not
+        // methods. Testing `static` first labelled 95 of them `static_method`,
+        // which sends a constant to be compared against BAML's methods rather
+        // than its fields.
+        "property"
     } else if (member.static) {
         "static_method"
-    } else if (ts_is_callable(member)) {
-        "method"
     } else {
-        "property"
+        "method"
     }
 }
 
@@ -79,13 +85,16 @@ function ts_signature_of(member: TsMember) -> string {
 /// reached on the constructor, the instance side through `prototype`. Free
 /// functions have no receiver and keep their container as written, and a
 /// namespace object has no prototype for anything to hang off.
+///
+/// Keyed on `static`, not on `origin`: the constructor side holds constants as
+/// well as methods, and both are reached on the constructor. Deciding from
+/// `origin` put a static constant behind `prototype`, which is how the two
+/// sides of `Uint8Array.BYTES_PER_ELEMENT` came to share one address.
 function ts_id_of(container: TsContainer, member: TsMember, origin: string) -> string {
-    if ((container.singleton ?? false)) {
+    if ((container.singleton ?? false) || origin == "free" || member.static) {
         `${container.name}.${member.name}`
-    } else if (origin == "method" || origin == "property") {
-        `${container.name}.prototype.${member.name}`
     } else {
-        `${container.name}.${member.name}`
+        `${container.name}.prototype.${member.name}`
     }
 }
 

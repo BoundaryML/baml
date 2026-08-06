@@ -38,10 +38,13 @@ nothing from it, putting every symbol back to the passes with its previous
 conclusion shown; use it when a prompt changed, meaning the question moved
 rather than the surface.
 
-`--check --baseline <report>` writes nothing and only compares *inputs* — the
+`--check --baseline <report>` writes no report and only compares *inputs* — the
 stdlib surface's content hash and the TypeScript release — exiting 1 when they
 have moved. That is the cheap gate: it answers "is a rebuild worth paying for"
-without paying for one.
+without paying for one. It does refresh `data/` on the way, since it has to read
+the current surface to compare it; pass `--skip-extract` to reuse what is there,
+and note that it never calls a model, so `--llm` alongside it is refused rather
+than ignored.
 
 ## Publishing
 

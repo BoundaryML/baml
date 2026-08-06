@@ -168,6 +168,28 @@ test "BAML symbols carry paths, origins, and split args from kwargs" {
     assert.equal(impl_methods.length(), 2);
 }
 
+test "a static that is not callable is a property, not a static method" {
+    let container = TsContainer { name: "Number", kind: "interface", members: [] };
+    let constant = TsMember {
+        name: "MAX_SAFE_INTEGER",
+        static: true,
+        signatures: ["readonly MAX_SAFE_INTEGER: number"],
+        doc: null,
+        since: "es2015",
+    };
+    // On the constructor side, but a constant. Comparing it against BAML's
+    // methods rather than its fields is the wrong question to ask.
+    assert.equal(ts_origin_of(container, constant), "property");
+    let factory = TsMember {
+        name: "isInteger",
+        static: true,
+        signatures: ["isInteger(number: unknown): boolean"],
+        doc: null,
+        since: "es2015",
+    };
+    assert.equal(ts_origin_of(container, factory), "static_method");
+}
+
 test "TypeScript symbols separate callables from properties" {
     let symbols = extract_ts_symbols(baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()));
     assert.equal(symbols.length(), 3);
@@ -243,7 +265,7 @@ test "an unchanged run matches its baseline" {
     let comparison = compare_to_baseline(fixture_header("sha-a", "5.8.3-test"), matrix);
     assert.is_true(comparison.up_to_date);
     assert.is_true(comparison.baseline_present);
-    assert.is_true(!comparison.body_differs);
+    assert.is_true(!comparison.counts_differ);
     assert.equal(comparison.regressions.length(), 0);
 }
 
@@ -281,7 +303,7 @@ test "the report's header round-trips through JSON" {
     // A round-tripped header must compare equal to its source, or the ratchet
     // would report drift on every run.
     assert.is_true(compare_to_baseline(decoded, matrix).up_to_date);
-    assert.is_true(!compare_to_baseline(decoded, matrix).body_differs);
+    assert.is_true(!compare_to_baseline(decoded, matrix).counts_differ);
 }
 
 test "the markdown view renders both sides" {
@@ -450,7 +472,18 @@ test "the static and instance sides of a container are addressed apart" {
         since: "es5",
     };
     assert.equal(ts_id_of(instance, member, "property"), "Uint8Array.prototype.BYTES_PER_ELEMENT");
-    assert.equal(ts_id_of(instance, member, "static_method"), "Uint8Array.BYTES_PER_ELEMENT");
+    // The same name on the constructor side. `static` decides, not `origin`:
+    // the constructor holds constants as well as methods and both are reached
+    // on it, so deciding from `origin` put a constant behind `prototype` and
+    // gave the two sides one address.
+    let constructor_side = TsMember {
+        name: "BYTES_PER_ELEMENT",
+        static: true,
+        signatures: ["readonly BYTES_PER_ELEMENT: number"],
+        doc: null,
+        since: "es5",
+    };
+    assert.equal(ts_id_of(instance, constructor_side, "property"), "Uint8Array.BYTES_PER_ELEMENT");
     // A free function has no receiver to be reached through.
     let globals = TsContainer { name: "(globals)", kind: "functions", members: [] };
     assert.equal(ts_id_of(globals, member, "free"), "(globals).BYTES_PER_ELEMENT");

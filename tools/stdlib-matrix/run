@@ -62,10 +62,12 @@ run's wall clock.
 The report is not checked into the repository: it is a generated artifact.
 CI publishes matrix.json per run; locally it lands in report/ (gitignored).
 
---check writes nothing and instead compares this run against a baseline report
-given by --baseline, exiting 1 when the baseline's recorded inputs no longer
-match the current ones — a changed BAML stdlib surface, TypeScript release, or
-export format. Exit codes: 0 up to date, 1 out of date, 2 tool error.
+--check writes no report and instead compares this run against a baseline
+report given by --baseline, exiting 1 when the baseline's recorded inputs no
+longer match the current ones — a changed BAML stdlib surface, TypeScript
+release, or export format. It still refreshes data/ unless --skip-extract is
+passed, since it has to read the current surface to compare it. Exit codes:
+0 up to date, 1 out of date, 2 tool error.
 EOF
 }
 
@@ -118,6 +120,18 @@ while (($# > 0)); do
             ;;
     esac
 done
+
+# --check compares inputs and calls no model, so a model flag alongside it is a
+# request the run cannot honour. Rejecting beats quietly dropping it: the whole
+# point of --check is to decide whether a --llm run is worth paying for.
+if ((check_only == 1)) && ((use_llm == 1)); then
+    echo "stdlib-matrix: --check never calls a model; drop --llm" >&2
+    exit 2
+fi
+if ((check_only == 1)) && [[ -n "${concurrency}" ]]; then
+    echo "stdlib-matrix: --check never calls a model; --concurrency does not apply" >&2
+    exit 2
+fi
 
 if ((check_only == 1)) && [[ -z "${baseline_file}" ]]; then
     echo "stdlib-matrix: --check needs --baseline PATH (a previously generated matrix.json)" >&2
@@ -246,9 +260,15 @@ fi
 # minutes of model time, and every step after this point — extracting fields,
 # formatting a summary — is one that could fail and take the run with it. This
 # file is what makes that recoverable rather than expensive.
-raw_result="${script_dir}/report/last-run.json"
-mkdir -p "$(dirname "${raw_result}")"
-cp "${temporary_dir}/result.json" "${raw_result}"
+#
+# Not under --check, which promises to write nothing: a comparison has no result
+# worth salvaging, and leaving one behind would be a lie about what ran.
+raw_result=""
+if ((check_only == 0)); then
+    raw_result="${script_dir}/report/last-run.json"
+    mkdir -p "$(dirname "${raw_result}")"
+    cp "${temporary_dir}/result.json" "${raw_result}"
+fi
 
 if ((check_only == 1)); then
     if [[ "$(jq -er '.comparison.baseline_present' "${temporary_dir}/result.json")" != "true" ]]; then
@@ -257,8 +277,8 @@ if ((check_only == 1)); then
     fi
     if [[ "$(jq -er '.comparison.up_to_date' "${temporary_dir}/result.json")" == "true" ]]; then
         echo "This run matches the baseline report (inputs unchanged)"
-        if [[ "$(jq -er '.comparison.body_differs' "${temporary_dir}/result.json")" == "true" ]]; then
-            echo "Note: the comparison differs from the baseline even though the inputs match," \
+        if [[ "$(jq -er '.comparison.counts_differ' "${temporary_dir}/result.json")" == "true" ]]; then
+            echo "Note: the tallies differ from the baseline even though the inputs match," \
                  "which means the tool changed between the two reports."
         fi
         exit 0
@@ -268,8 +288,8 @@ if ((check_only == 1)); then
     jq -r '.comparison.regressions[] | "  regression: \(.)"' "${temporary_dir}/result.json" >&2
     jq -r '.comparison.improvements[] | "  improvement: \(.)"' "${temporary_dir}/result.json" >&2
     jq -r '.comparison.neutral[] | "  changed:     \(.)"' "${temporary_dir}/result.json" >&2
-    if [[ "$(jq -er '.comparison.body_differs' "${temporary_dir}/result.json")" == "false" ]]; then
-        echo "  the comparison itself is unchanged — only the inputs' fingerprint moved," \
+    if [[ "$(jq -er '.comparison.counts_differ' "${temporary_dir}/result.json")" == "false" ]]; then
+        echo "  the tallies are unchanged — only the inputs' fingerprint moved," \
              "so the comparison is unaffected and needs no review" >&2
     fi
     echo "Review the differences, then adopt this run's report as the new baseline." >&2

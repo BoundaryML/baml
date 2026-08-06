@@ -203,13 +203,18 @@ class MatrixProvenance {
 ///
 /// `up_to_date` is keyed on provenance, not on the report's contents: the
 /// contents drift once model judgments land, while the inputs are what
-/// determine whether an older report still describes reality. `body_differs`
-/// is advisory — with identical inputs it means the tool itself changed
-/// between the two reports, not something CI should fail on.
+/// determine whether an older report still describes reality.
+///
+/// `counts_differ` is advisory, and named for exactly what it compares. The
+/// baseline is read as a `ReportHeader`, which carries the tallies and nothing
+/// else, so two reports with identical counts but different judgements,
+/// reasons, or divergences compare equal here. With identical inputs a
+/// difference means the tool itself changed between the two reports — not
+/// something CI should fail on.
 class BaselineComparison {
     up_to_date: bool,
     baseline_present: bool,
-    body_differs: bool,
+    counts_differ: bool,
     input_changes: string[],
     regressions: string[],
     improvements: string[],

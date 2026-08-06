@@ -60,7 +60,7 @@ function count_changes(before: MatrixCounts, now: MatrixCounts) -> BaselineCompa
     let comparison = BaselineComparison {
         up_to_date: false,
         baseline_present: true,
-        body_differs: false,
+        counts_differ: false,
         input_changes: [],
         regressions: [],
         improvements: [],
@@ -96,13 +96,13 @@ function compare_to_baseline(baseline: ReportHeader?, matrix: SymbolMatrix) -> B
         let comparison = count_changes(before.counts, matrix.counts);
         comparison.input_changes = provenance_changes(before.provenance, matrix.provenance);
         comparison.up_to_date = comparison.input_changes.length() == 0;
-        comparison.body_differs = !baml.deep_equals(before.counts, matrix.counts);
+        comparison.counts_differ = !baml.deep_equals(before.counts, matrix.counts);
         comparison
     } else {
         BaselineComparison {
             up_to_date: false,
             baseline_present: false,
-            body_differs: false,
+            counts_differ: false,
             input_changes: [],
             regressions: [],
             improvements: [],
