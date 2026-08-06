@@ -437,7 +437,7 @@ fn assoc_realization_env<'db>(
     Some((interface, data))
 }
 
-/// Every impl a realized `concrete` type matches, across every package
+/// Every impl an admissible `concrete` type matches, across every package
 /// in the compilation (enumeration has no interface side to derive
 /// search roots from, and coherence guarantees the set is
 /// overlap-free; per-package visibility gating is I7/S17's). The
@@ -453,7 +453,12 @@ pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
 ) -> Vec<ResolvedImpl<'db>> {
-    if !is_realized(concrete) {
+    // The same admission as `resolve_impl`: RIGID vars (skolems) are
+    // legal in goals - `self: RbeBox<T>` inside the impl's own body
+    // matches the impl with the placeholder as an opaque constant.
+    // Bounds the match places on rigid bindings are the CALLER's to
+    // discharge against its param env (`lookup_impl_member` does).
+    if concrete.has_infer() || concrete.has_error() {
         return Vec::new();
     }
     let eq = AliasOnlyFacts::new(db);
@@ -482,21 +487,24 @@ pub fn impls_for_type<'db>(
             if !bounds_hold(db, facts, &bindings, BLANKET_IMPL_BOUND_DEPTH, &mut Vec::new()) {
                 continue;
             }
-            let resolved = ResolvedImpl {
-                block,
-                facts,
-                bindings,
-            };
-            let implemented = resolved.implemented();
-            if implemented.args.iter().any(Ty::has_typevar)
-                || implemented
-                    .pins
-                    .iter()
-                    .any(|(_, ty)| ty.has_typevar())
+            // The skip the doc comment describes: an implemented
+            // interface still mentioning UNBOUND impl params is
+            // undetermined by the receiver. Checked on the PATTERN side
+            // (pre-substitution), so receiver-supplied rigid vars -
+            // which are the body's own frame, legal in its inference -
+            // never trip it even when their `ParamTy` identity shadows
+            // an impl param's.
+            let undetermined = |ty: &Ty| !pattern_fully_bound(ty, &params, &bindings);
+            if facts.interface.args.iter().any(|arg| undetermined(arg))
+                || facts.interface.pins.iter().any(|(_, ty)| undetermined(ty))
             {
                 continue;
             }
-            out.push(resolved);
+            out.push(ResolvedImpl {
+                block,
+                facts,
+                bindings,
+            });
         }
     }
     out

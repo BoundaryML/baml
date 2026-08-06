@@ -228,6 +228,9 @@ fn lookup_impl_member<'db>(
 ) -> Option<InterfaceMember<'db>> {
     let mut providers: Vec<(InterfaceTarget, InterfaceMember<'db>)> = Vec::new();
     for resolved in crate::impls::impls_for_type(db, receiver) {
+        if !env_discharges_rigid_bounds(db, facts, &resolved) {
+            continue;
+        }
         let implemented = resolved.implemented();
         if let Some(member) = member_on_interface(db, facts, &implemented, receiver, name, false)
             && !providers.iter().any(|(seen, _)| *seen == implemented)
@@ -248,6 +251,75 @@ fn lookup_impl_member<'db>(
         1 => providers.pop().map(|(_, member)| member),
         _ => None,
     }
+}
+
+/// Discharges the bounds `bounds_hold` skipped as vacuous - impl params
+/// bound to RIGID vars - against the caller's param env: rustc's
+/// caller-bound (`ParamCandidate`) tier, checked here because the env
+/// exists at this layer and not inside the db-only impl search.
+fn env_discharges_rigid_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    resolved: &crate::impls::ResolvedImpl<'db>,
+) -> bool {
+    for (param, bounds) in &resolved.facts.generic_params {
+        let Some(actual) = resolved.bindings.get(param) else {
+            continue;
+        };
+        if !actual.has_typevar() {
+            continue;
+        }
+        for bound in bounds {
+            let goal = InterfaceTarget {
+                name: bound.name.clone(),
+                args: bound
+                    .args
+                    .iter()
+                    .map(|arg| crate::impls::substitute_bindings(arg, &resolved.bindings))
+                    .collect(),
+                // Pins are outputs, not part of the relation.
+                pins: Vec::new(),
+            };
+            if !env_proves(db, facts, actual, &goal) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Whether the param env proves rigid `actual` implements `goal`: the
+/// declared env clause for the var, or anything in its elaborated
+/// `requires` closure, whose head matches the goal. Structured
+/// rigid-carrying actuals fall back to the impl search (which admits
+/// placeholders).
+fn env_proves<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    actual: &Ty,
+    goal: &InterfaceTarget,
+) -> bool {
+    let TyKind::TypeVar(param, _) = actual.kind() else {
+        return crate::impls::resolve_impl(db, actual, goal).is_some();
+    };
+    let eq = crate::impls::AliasOnlyFacts::new(db);
+    for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
+        let root = InterfaceTarget::from_constraint(&bound);
+        let mut heads = vec![root.clone()];
+        heads.extend(crate::impls::direct_requires_closure(db, &root, actual, 8));
+        if heads.iter().any(|head| {
+            head.name == goal.name
+                && head.args.len() == goal.args.len()
+                && head
+                    .args
+                    .iter()
+                    .zip(&goal.args)
+                    .all(|(a, b)| baml_type::normalize::equivalent_interned(a, b, &eq))
+        }) {
+            return true;
+        }
+    }
+    false
 }
 
 /// A member declared DIRECTLY on `target`, instantiated for `receiver`.
