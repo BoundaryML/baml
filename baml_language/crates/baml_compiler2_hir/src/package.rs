@@ -380,7 +380,7 @@ const RESERVED_PACKAGE_NAMES: &[&str] = &[
     "baml", "boundary", "testing", "assert", "log", "reflect", "user", "root", "env",
 ];
 
-/// Whether `name` is reserved against mounting — see [`RESERVED_PACKAGE_NAMES`].
+/// Whether `name` is reserved against mounting — see `RESERVED_PACKAGE_NAMES`.
 pub fn is_reserved_package_name(name: &str) -> bool {
     RESERVED_PACKAGE_NAMES.contains(&name)
 }
