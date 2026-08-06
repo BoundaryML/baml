@@ -3975,23 +3975,62 @@ impl<'db> InferenceContext<'db> {
                 None => return false,
             }
         } else {
-            // Ruling 1: widen fresh literals, then all lowers must
-            // AGREE (equality, not adjacency-dedup); disagreement
-            // is a mismatch (Error until the S17 diagnostic), and
-            // the choice is checked against every upper.
+            // The MAXIMUM lower is the join when one exists - the
+            // mirror of the uppers' minimum-meet rule, TS's
+            // best-common-supertype. Raw candidates first, so an
+            // exact literal demand keeps the literal (`pair(three(),
+            // 3)` is `3`); ruling 1's fresh widening is the RETRY
+            // when raw candidates have no maximum (`pair(1, 2)`
+            // widens to `int`), never a way to lose one. Still no
+            // maximum - genuinely incompatible arguments - is a
+            // mismatch (Error until the S17 diagnostic), and the
+            // choice is checked against every upper.
             let widened: Vec<Ty> = lowers.iter().map(|ty| self.widen_fresh(ty)).collect();
-            let first = widened.first().expect("non-empty lowers").clone();
-            if widened.iter().all(|lower| *lower == first) {
-                if uppers
+            let widening: Vec<bool> = lowers
+                .iter()
+                .zip(&widened)
+                .map(|(lower, wide)| lower != wide)
+                .collect();
+            let facts = &self.facts;
+            let maximum_of = |candidates: &[Ty]| -> Option<Ty> {
+                let subsumes_all = |candidate: &&Ty| {
+                    candidates
+                        .iter()
+                        .all(|lower| is_subtype_interned(lower, candidate, facts))
+                };
+                // Prefer a non-widening witness: the solution's
+                // freshness decides binding-site widening later, and a
+                // rigid `3` holding a fresh `3` must keep the demand
+                // rigid.
+                candidates
                     .iter()
-                    .all(|upper| is_subtype_interned(&first, upper, &self.facts))
-                {
-                    first
-                } else {
-                    Ty::error()
-                }
+                    .enumerate()
+                    .filter(|(index, _)| !widening[*index])
+                    .map(|(_, candidate)| candidate)
+                    .find(subsumes_all)
+                    .or_else(|| candidates.iter().find(subsumes_all))
+                    .cloned()
+            };
+            // An ALL-widening candidate set widens unconditionally
+            // (ruling 1's generation-site rule: `push(1)` infers
+            // `int[]`, and a fresh `100 | 999` join widens the same
+            // way); a non-widening candidate anchors the raw literals
+            // instead (`pair(three(), 3)` keeps `3`) - TS's split
+            // exactly.
+            let maximum = if widening.iter().all(|&flag| flag) {
+                maximum_of(&widened)
             } else {
-                Ty::error()
+                maximum_of(&lowers).or_else(|| maximum_of(&widened))
+            };
+            match maximum {
+                Some(maximum)
+                    if uppers
+                        .iter()
+                        .all(|upper| is_subtype_interned(&maximum, upper, &self.facts)) =>
+                {
+                    maximum
+                }
+                _ => Ty::error(),
             }
         };
         self.table.solve(var, solution);

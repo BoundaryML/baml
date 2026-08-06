@@ -6,7 +6,7 @@ files: 116
 nodes compared: 60705
 agreements: 52446
 one-sided (coverage): 264
-conflicts: 7995 across 1418 distinct pairs
+conflicts: 7995 across 1431 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -86,9 +86,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [30x] hir_ty=[() -> void throws baml.json.JsonSerializationError / null] tir=[() -> void throws unknown / null]
     at ns_bigints/bigints.baml:21864..21907 `{\n    ass...), "42")\n}`
     at ns_bigints/bigints.baml:21942..22021 `{\n    ass...999999")\n}`
-[29x] hir_ty=[(a: !error, b: !error) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
-    at ns_arrays/arrays.baml:12197..12213 `baml.deep_equals`
-    at ns_bigints/bigints.baml:4803..4819 `baml.deep_equals`
 [29x] hir_ty=[(a: string[], b: string[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:2817..2833 `baml.deep_equals`
     at ns_arrays/arrays.baml:6068..6084 `baml.deep_equals`
@@ -638,6 +635,12 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[() -> void throws string / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:7024..7258 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:11572..11778 `{\n    let...pected))\n}`
+[4x] hir_ty=[(a: baml.future.FutureState, b: baml.future.FutureState) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_cancel_cascade/cancel_cascade.baml:4747..4763 `baml.deep_equals`
+    at ns_future_methods/future_methods.baml:1877..1893 `baml.deep_equals`
+[4x] hir_ty=[(a: baml.json.json, b: baml.json.json) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_json_auto_derive/json_auto_derive.baml:1530..1546 `baml.deep_equals`
+    at ns_json_auto_derive/json_auto_derive.baml:1982..1998 `baml.deep_equals`
 [4x] hir_ty=[(a: user.deep_copy.Node, b: user.deep_copy.Node) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_deep_copy/deep_copy.baml:6403..6419 `baml.deep_equals`
     at ns_deep_copy/deep_copy.baml:6799..6815 `baml.deep_equals`
@@ -821,9 +824,15 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[(a: float[], b: float[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:3183..3199 `baml.deep_equals`
     at ns_arrays/reductions.baml:2030..2046 `baml.deep_equals`
+[3x] hir_ty=[(a: int | null, b: int | null) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_strings/strings.baml:10122..10138 `baml.deep_equals`
+    at ns_strings/strings.baml:10226..10242 `baml.deep_equals`
 [3x] hir_ty=[(a: user.classes.PointXYZW, b: user.classes.PointXYZW) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_classes/classes.baml:4863..4879 `baml.deep_equals`
     at ns_classes/classes.baml:5153..5169 `baml.deep_equals`
+[3x] hir_ty=[(a: user.enums.EnumsShape, b: user.enums.EnumsShape) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_enums/enums.baml:932..948 `baml.deep_equals`
+    at ns_enums/enums.baml:1047..1063 `baml.deep_equals`
 [3x] hir_ty=[(a: user.operators.Vec2, b: user.operators.Vec2) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_operators/operators.baml:7069..7085 `baml.deep_equals`
     at ns_operators/operators.baml:7245..7261 `baml.deep_equals`
@@ -1277,6 +1286,12 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(a: float, b: float) -> float throws never] tir=[(a: T, b: T) -> T throws never]
     at ns_operators/operators.baml:14194..14201 `drv_add`
     at ns_operators/operators.baml:14264..14271 `drv_div`
+[2x] hir_ty=[(a: int | float, b: int | float) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_operators/operators.baml:16403..16419 `baml.deep_equals`
+    at ns_operators/operators.baml:16467..16483 `baml.deep_equals`
+[2x] hir_ty=[(a: int | string, b: int | string) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_spawn_throws/spawn_throws.baml:1294..1310 `baml.deep_equals`
+    at ns_typed_outputs/typed_outputs.baml:1975..1991 `baml.deep_equals`
 [2x] hir_ty=[(a: int, b: int) -> int throws never] tir=[(a: int, b: int) -> int throws E]
     at ns_arrays/arrays.baml:4587..4620 `(a: int, b...t { b - a }`
     at ns_arrays/arrays.baml:4795..4828 `(a: int, b...t { a - b }`
@@ -1289,6 +1304,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(a: int[][], b: int[][]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:35577..35593 `baml.deep_equals`
     at ns_arrays/arrays.baml:36110..36126 `baml.deep_equals`
+[2x] hir_ty=[(a: string | null, b: string | null) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_http_server/http_server.baml:2519..2535 `baml.deep_equals`
+    at ns_streaming_sse_primitives/streaming_sse_primitives.baml:9801..9817 `baml.deep_equals`
 [2x] hir_ty=[(a: type, b: type) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_type_reflection/type_reflection.baml:2298..2314 `baml.deep_equals`
     at ns_type_reflection/type_reflection.baml:2601..2617 `baml.deep_equals`
@@ -1301,9 +1319,15 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(a: user.deep_copy.Point, b: user.deep_copy.Point) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_deep_copy/deep_copy.baml:5876..5892 `baml.deep_equals`
     at ns_deep_copy/deep_copy.baml:6051..6067 `baml.deep_equals`
+[2x] hir_ty=[(a: user.operators.Feet | user.operators.Meters, b: user.operators.Feet | user.operators.Meters) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_operators/operators.baml:7947..7963 `baml.deep_equals`
+    at ns_operators/operators.baml:8038..8054 `baml.deep_equals`
 [2x] hir_ty=[(a: user.operators.Poly, b: user.operators.Poly) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_operators/operators.baml:11366..11382 `baml.deep_equals`
     at ns_operators/operators.baml:11454..11470 `baml.deep_equals`
+[2x] hir_ty=[(a: user.typed_outputs.Failure | user.typed_outputs.Success, b: user.typed_outputs.Failure | user.typed_outputs.Success) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_typed_outputs/typed_outputs.baml:3180..3196 `baml.deep_equals`
+    at ns_typed_outputs/typed_outputs.baml:3425..3441 `baml.deep_equals`
 [2x] hir_ty=[(baml.iter.Iterator<Error = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Error | !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item> as baml.iter.Iterator).Item[]] tir=[int[]]
     at ns_iter/iter.baml:10108..10322 `{\n  let a...ollect()\n}`
     at ns_iter/iter.baml:10300..10320 `a.chain(b).collect()`
@@ -2119,6 +2143,10 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_provider_stdlib/provider_stdlib.baml:793..956 `{\n  let v... 7,\n  )\n}`
 [1x] hir_ty=[(a: (int | string)[], b: (int | string)[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_typed_outputs/typed_outputs.baml:4162..4178 `baml.deep_equals`
+[1x] hir_ty=[(a: 12n, b: 12n) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_bigints/bigints.baml:4973..4989 `baml.deep_equals`
+[1x] hir_ty=[(a: 3n, b: 3n) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_bigints/bigints.baml:4803..4819 `baml.deep_equals`
 [1x] hir_ty=[(a: Self[]) -> string throws never] tir=[(a: T) -> string throws never]
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:15443..15452 `echo_type`
 [1x] hir_ty=[(a: T[], b: T[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
@@ -2135,6 +2163,8 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_comparable_sort/comparable_sort.baml:8958..8961 `cmp`
 [1x] hir_ty=[(a: int, b: string) -> string throws never] tir=[(a: A, b: B) -> B throws never / (a: int, b: string) -> string throws never]
     at ns_instantiation_expr/instantiation_expr.baml:2043..2060 `pair<int, string>`
+[1x] hir_ty=[(a: int[] | string[], b: int[] | string[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_typed_outputs/typed_outputs.baml:3843..3859 `baml.deep_equals`
 [1x] hir_ty=[(a: int[]) -> string throws never] tir=[(a: T[]) -> string throws never]
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:12400..12413 `free_fn_tname`
 [1x] hir_ty=[(a: int[]) -> user.inferred_generic_type_args.ArrIter<int> throws never] tir=[(a: T[]) -> user.inferred_generic_type_args.ArrIter<T> throws never]
@@ -2143,6 +2173,10 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_typed_outputs/typed_outputs.baml:6617..6633 `baml.deep_equals`
 [1x] hir_ty=[(a: null, b: null) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_json_alias/json_alias.baml:1169..1185 `baml.deep_equals`
+[1x] hir_ty=[(a: string | (int | bool)[], b: string | (int | bool)[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_typed_outputs/typed_outputs.baml:7189..7205 `baml.deep_equals`
+[1x] hir_ty=[(a: string | int[], b: string | int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_arrays/arrays.baml:12197..12213 `baml.deep_equals`
 [1x] hir_ty=[(a: string, b: string) -> string throws never] tir=[(a: T, b: T) -> T throws never]
     at ns_operators/operators.baml:14543..14550 `drv_add`
 [1x] hir_ty=[(a: user.comparable_sort.Num, b: user.comparable_sort.Num) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
