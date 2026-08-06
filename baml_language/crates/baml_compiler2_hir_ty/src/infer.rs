@@ -2643,15 +2643,18 @@ impl<'db> InferenceContext<'db> {
         else {
             return None;
         };
-        let has_default = baml_compiler2_ppir::item_data::interface_data(self.db, interface)
-            .methods
-            .iter()
-            .any(|&method| {
+        // The interface side must give the member MEANING: a declared
+        // field (contract state, read through the interface view) or a
+        // default-bodied method (delegation). Bodyless required methods
+        // have nothing to delegate to.
+        let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+        let provided = data.fields.iter().any(|field| field.name == *member)
+            || data.methods.iter().any(|&method| {
                 baml_compiler2_ppir::item_data::function_has_body(self.db, method)
                     && baml_compiler2_ppir::item_data::function_data(self.db, method).name
                         == *member
             });
-        if !has_default {
+        if !provided {
             return None;
         }
         crate::method_resolution::member_on_interface(
