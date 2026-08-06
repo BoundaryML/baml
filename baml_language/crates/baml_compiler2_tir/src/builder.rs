@@ -28,7 +28,7 @@ use baml_compiler2_hir::{
 };
 // The trait must be in scope so the builder (which implements it) can call the
 // defaulted type-algebra methods on itself — `self.is_subtype(a, b)`.
-use baml_type::normalize::TypeContext;
+use baml_type::{normalize::TypeContext, type_kind::is_type_kind_class};
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
@@ -6113,6 +6113,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             ty => ty,
         };
+        if let Ty::Class(class_name, _, _) = &ty
+            && is_type_kind_class(class_name)
+        {
+            self.context.report_simple(
+                TirTypeError::CannotConstructReflectionKind {
+                    class_name: class_name.clone(),
+                },
+                expr_id,
+            );
+        }
         self.validate_type_generic_bounds(expr_id, &ty);
         // Class spread is nominal and invariant: the source must be the same
         // resolved class with compatible generic arguments. Besides preventing
@@ -6260,6 +6270,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             obj_type_args,
         ) {
             return inferred;
+        }
+        if let Ty::Class(class_name, _, _) = expected
+            && is_type_kind_class(class_name)
+        {
+            self.context.report_simple(
+                TirTypeError::CannotConstructReflectionKind {
+                    class_name: class_name.clone(),
+                },
+                expr_id,
+            );
         }
         self.validate_type_generic_bounds(expr_id, expected);
         if let Ty::Class(class_name, type_args, _) = expected {

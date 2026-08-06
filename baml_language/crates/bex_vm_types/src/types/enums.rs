@@ -1,4 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use indexmap::IndexMap;
 
 use crate::HeapPtr;
 
@@ -8,6 +9,8 @@ pub struct EnumVariant {
     pub name: String,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
     pub skip: bool,
 }
 
@@ -26,6 +29,10 @@ pub struct Enum {
 
     /// Enum-level serialization alias.
     pub alias: Option<String>,
+
+    /// Enum-level source documentation and custom annotations.
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
 
     /// Enum-level type attribute.
     pub ty_attr: baml_type::TyAttr,

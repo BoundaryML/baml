@@ -4070,17 +4070,23 @@ mod union_container_selection_tests {
                     name: "HAPPY".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: indexmap::IndexMap::new(),
                     skip: false,
                 },
                 EnumVariant {
                     name: "SAD".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: indexmap::IndexMap::new(),
                     skip: false,
                 },
             ],
             description: None,
             alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
             ty_attr: TyAttr::default(),
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());

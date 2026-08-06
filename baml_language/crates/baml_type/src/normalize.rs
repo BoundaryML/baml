@@ -769,6 +769,9 @@ impl NormalTy {
             NormalTy::Type => Category::Type,
             NormalTy::Resource => Category::Resource,
             NormalTy::PromptAst => Category::PromptAst,
+            NormalTy::Class(name, _) if crate::type_kind::is_type_kind_class(name) => {
+                Category::Type
+            }
             NormalTy::Class(..) => Category::Class,
             NormalTy::List(_) => Category::List,
             NormalTy::Map { .. } => Category::Map,
@@ -2028,6 +2031,14 @@ impl NormalTy {
                 a1.iter()
                     .zip(a2.iter())
                     .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions))
+            }
+            // BEP-066: the nine reflection-kind classes form one sealed family
+            // beneath the `type` carrier. Because membership is hard-coded to
+            // builtin qualified names, user classes cannot acquire this edge.
+            (NormalTy::Class(name, _), NormalTy::Type)
+                if crate::type_kind::is_type_kind_class(name) =>
+            {
+                true
             }
             (NormalTy::List(a), NormalTy::List(b)) => a.invariant_compatible(b, ctx, assumptions),
             (NormalTy::Map { key: k1, value: v1 }, NormalTy::Map { key: k2, value: v2 }) => {

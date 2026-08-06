@@ -7875,7 +7875,7 @@ impl<'db> LoweringContext<'db> {
                 // type slot, same field-chain lowering.
                 else if let Some(members) = self
                     .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
-                    .and_then(Self::tir_union_members)
+                    .and_then(|ty| self.tir_union_members(ty))
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local = self.lower_path_receiver_to_local(
@@ -10336,7 +10336,7 @@ impl<'db> LoweringContext<'db> {
     ) -> bool {
         let Some(members) = self
             .tir_expr_type(self.expr_metadata_key(base))
-            .and_then(Self::tir_union_members)
+            .and_then(|ty| self.tir_union_members(ty))
         else {
             return false;
         };
@@ -10375,7 +10375,7 @@ impl<'db> LoweringContext<'db> {
     ) -> bool {
         let Some(members) = self
             .tir_expr_type(self.expr_metadata_key(base))
-            .and_then(Self::tir_union_members)
+            .and_then(|ty| self.tir_union_members(ty))
         else {
             return false;
         };
@@ -12605,9 +12605,14 @@ impl LoweringContext<'_> {
     /// layers — `(Dog | Named)?` after a null check still dispatches the
     /// field/method on the underlying union. Returns `None` when `ty` isn't a
     /// (optionally-wrapped) union.
-    fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
+    fn tir_union_members(&self, ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
         match ty {
             Tir2Ty::Union(members, _) => Some(members.clone()),
+            Tir2Ty::TypeAlias(qtn, _) if !self.resolved_aliases.recursive.contains(qtn) => self
+                .resolved_aliases
+                .aliases
+                .get(qtn)
+                .and_then(|target| self.tir_union_members(target)),
             _ => None,
         }
     }
@@ -12813,6 +12818,11 @@ impl LoweringContext<'_> {
             RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
             RuntimeTy::Future(..) => Some(baml_type::typetag::FUTURE),
             RuntimeTy::Type { .. } => Some(baml_type::typetag::TYPE),
+            // Reflection-kind classes describe the reconstructed type of an
+            // `Object::Type`; the physical value deliberately keeps the shared
+            // TYPE tag. They therefore require the structural matcher and may
+            // never enter class-tag switch dispatch.
+            RuntimeTy::Class(tn, _, _) if baml_type::type_kind::is_type_kind_class(tn) => None,
             RuntimeTy::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }

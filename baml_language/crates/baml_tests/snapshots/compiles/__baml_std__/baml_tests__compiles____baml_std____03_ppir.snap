@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 2875
 ---
 === PPIR ===
 
@@ -1926,6 +1925,109 @@ function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 
+--- <builtin>/baml/ns_reflect/ns_array/array.baml ---
+class baml.reflect.array.Type {
+}
+class baml.reflect.array.Type$stream {
+}
+function baml.reflect.array.as_type(self: ?) -> type  [builtin]
+function baml.reflect.array.element_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_class/class.baml ---
+class baml.reflect.class.Field {
+  name: string
+  type: type?
+  meta: baml.reflect.Meta
+}
+class baml.reflect.class.Field$stream {
+  name: string | null
+  type: unknown | null
+  meta: baml.reflect.Meta$stream | null
+}
+class baml.reflect.class.Type {
+}
+class baml.reflect.class.Type$stream {
+}
+function baml.reflect.class.as_type(self: ?) -> type  [builtin]
+function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
+function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
+class baml.reflect.enum.Type {
+}
+class baml.reflect.enum.Type$stream {
+}
+class baml.reflect.enum.Value {
+  name: string
+  meta: baml.reflect.Meta
+}
+class baml.reflect.enum.Value$stream {
+  name: string | null
+  meta: baml.reflect.Meta$stream | null
+}
+function baml.reflect.enum.as_type(self: ?) -> type  [builtin]
+function baml.reflect.enum.meta(self: ?) -> baml.reflect.Meta  [builtin]
+function baml.reflect.enum.values(self: ?) -> baml.reflect.enum.Value[]  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_function/function.baml ---
+class baml.reflect.function.Parameter {
+  name: string?
+  type: type
+  optional: bool
+}
+class baml.reflect.function.Parameter$stream {
+  name: string | null
+  type: unknown
+  optional: bool | null
+}
+class baml.reflect.function.Type {
+}
+class baml.reflect.function.Type$stream {
+}
+function baml.reflect.function.as_type(self: ?) -> type  [builtin]
+function baml.reflect.function.params(self: ?) -> baml.reflect.function.Parameter[]  [builtin]
+function baml.reflect.function.return_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_interface/interface.baml ---
+class baml.reflect.interface.Type {
+}
+class baml.reflect.interface.Type$stream {
+}
+function baml.reflect.interface.as_type(self: ?) -> type  [builtin]
+function baml.reflect.interface.implemented_by(self: ?, other: type) -> bool  [builtin]
+function baml.reflect.interface.implementors(self: ?) -> type[]  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_literal/literal.baml ---
+class baml.reflect.literal.Type {
+}
+class baml.reflect.literal.Type$stream {
+}
+function baml.reflect.literal.as_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_map/map.baml ---
+class baml.reflect.map.Type {
+}
+class baml.reflect.map.Type$stream {
+}
+function baml.reflect.map.as_type(self: ?) -> type  [builtin]
+function baml.reflect.map.key_type(self: ?) -> type  [builtin]
+function baml.reflect.map.value_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_primitive/primitive.baml ---
+class baml.reflect.primitive.Type {
+}
+class baml.reflect.primitive.Type$stream {
+}
+function baml.reflect.primitive.as_type(self: ?) -> type  [builtin]
+
+--- <builtin>/baml/ns_reflect/ns_union/union.baml ---
+class baml.reflect.union.Type {
+}
+class baml.reflect.union.Type$stream {
+}
+function baml.reflect.union.as_type(self: ?) -> type  [builtin]
+function baml.reflect.union.member_types(self: ?) -> type[]  [builtin]
+
 --- <builtin>/baml/ns_reflect/reflect.baml ---
 class baml.reflect.Arg {
   name: string
@@ -1945,6 +2047,18 @@ class baml.reflect.InvalidArgumentError$stream {
   expected: unknown
   got: unknown
 }
+class baml.reflect.Meta {
+  alias: string?
+  description: string?
+  docstring: string?
+  other: map<string, string>
+}
+class baml.reflect.Meta$stream {
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
 class baml.reflect.Signature {
   name: string?
   args: baml.reflect.Arg[]
@@ -1961,6 +2075,8 @@ class baml.reflect.Signature$stream {
   errors: unknown
   docstring: string | null
 }
+type baml.reflect.TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
+type baml.reflect.TypeKind$stream = baml.reflect.class.Type$stream | baml.reflect.enum.Type$stream | baml.reflect.union.Type$stream | baml.reflect.literal.Type$stream | baml.reflect.array.Type$stream | baml.reflect.map.Type$stream | baml.reflect.interface.Type$stream | baml.reflect.primitive.Type$stream | baml.reflect.function.Type$stream
 function baml.reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
 function baml.reflect.signature(f: baml.AnyFunction) -> baml.reflect.Signature  [builtin]
 
@@ -2532,9 +2648,19 @@ class baml.TypeValue {
 class baml.TypeValue$stream {
 }
 function baml._to_string_impl(self: ?) -> string  [builtin]
+function baml.as_array(self: ?) -> baml.reflect.array.Type?  [builtin]
+function baml.as_class(self: ?) -> baml.reflect.class.Type?  [builtin]
+function baml.as_enum(self: ?) -> baml.reflect.enum.Type?  [builtin]
+function baml.as_function(self: ?) -> baml.reflect.function.Type?  [builtin]
+function baml.as_interface(self: ?) -> baml.reflect.interface.Type?  [builtin]
+function baml.as_literal(self: ?) -> baml.reflect.literal.Type?  [builtin]
+function baml.as_map(self: ?) -> baml.reflect.map.Type?  [builtin]
+function baml.as_primitive(self: ?) -> baml.reflect.primitive.Type?  [builtin]
+function baml.as_union(self: ?) -> baml.reflect.union.Type?  [builtin]
 function baml.implemented_by(self: ?, other: type) -> bool  [builtin]
 function baml.implementors(self: ?) -> type[]  [builtin]
 function baml.implements(self: ?, other: type) -> bool  [builtin]
+function baml.kind(self: ?) -> baml.reflect.TypeKind  [builtin]
 function baml.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl()
 }

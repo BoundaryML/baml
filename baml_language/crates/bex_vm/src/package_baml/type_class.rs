@@ -22,6 +22,46 @@ impl BamlNamespaceType for PackageBamlImpl {
 }
 
 impl BamlClassTypeValue for PackageBamlImpl {
+    fn kind(_vm: &BexVm, self_value: &Value) -> Value {
+        *self_value
+    }
+
+    fn as_class(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Class)
+    }
+
+    fn as_enum(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Enum)
+    }
+
+    fn as_union(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Union)
+    }
+
+    fn as_literal(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Literal)
+    }
+
+    fn as_array(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Array)
+    }
+
+    fn as_map(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Map)
+    }
+
+    fn as_interface(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Interface)
+    }
+
+    fn as_primitive(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Primitive)
+    }
+
+    fn as_function(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Function)
+    }
+
     /// Returns the `RealizedTy`'s display name.  Includes namespaces and (for
     /// non-`user` packages) the package prefix, so two distinct types never
     /// collide on this string — package names are unique within a workspace,
@@ -118,11 +158,16 @@ impl BamlClassTypeValue for PackageBamlImpl {
 
 /// The concrete `RealizedTy` wrapped by a `type` value (class, enum, interface,
 /// primitive, container, …), or `None` if `value` isn't a `type`.
-fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RealizedTy> {
+pub(super) fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RealizedTy> {
     match vm.get_object(value.as_object_ptr()?) {
         Object::Type(type_value) => Some(type_value.ty.clone()),
         _ => None,
     }
+}
+
+fn as_kind(vm: &BexVm, value: Value, expected: baml_type::type_kind::TypeKind) -> Option<Value> {
+    let ty = type_value_ty(vm, value)?;
+    (baml_type::type_kind::classify_type(&ty) == expected).then_some(value)
 }
 
 /// A realized interface instantiation as reflected off a value: the type's

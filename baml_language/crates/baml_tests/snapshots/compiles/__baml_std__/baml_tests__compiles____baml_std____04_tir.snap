@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 2915
 ---
 === TIR2 ===
 
@@ -2989,11 +2988,100 @@ class baml.random.ChaCha20$stream {
   _state: $rust_type
 }
 
+--- <builtin>/baml/ns_reflect/ns_array/array.baml ---
+class baml.reflect.array.Type {
+}
+class baml.reflect.array.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_class/class.baml ---
+class baml.reflect.class.Field {
+  name: string
+  type: type | null
+  meta: baml.reflect.Meta
+}
+class baml.reflect.class.Type {
+}
+class baml.reflect.class.Field$stream {
+  name: string | null
+  type: unknown | null
+  meta: baml.reflect.Meta$stream | null
+}
+class baml.reflect.class.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
+class baml.reflect.enum.Value {
+  name: string
+  meta: baml.reflect.Meta
+}
+class baml.reflect.enum.Type {
+}
+class baml.reflect.enum.Value$stream {
+  name: string | null
+  meta: baml.reflect.Meta$stream | null
+}
+class baml.reflect.enum.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_function/function.baml ---
+class baml.reflect.function.Parameter {
+  name: string | null
+  type: type
+  optional: bool
+}
+class baml.reflect.function.Type {
+}
+class baml.reflect.function.Parameter$stream {
+  name: string | null
+  type: unknown
+  optional: bool | null
+}
+class baml.reflect.function.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_interface/interface.baml ---
+class baml.reflect.interface.Type {
+}
+class baml.reflect.interface.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_literal/literal.baml ---
+class baml.reflect.literal.Type {
+}
+class baml.reflect.literal.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_map/map.baml ---
+class baml.reflect.map.Type {
+}
+class baml.reflect.map.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_primitive/primitive.baml ---
+class baml.reflect.primitive.Type {
+}
+class baml.reflect.primitive.Type$stream {
+}
+
+--- <builtin>/baml/ns_reflect/ns_union/union.baml ---
+class baml.reflect.union.Type {
+}
+class baml.reflect.union.Type$stream {
+}
+
 --- <builtin>/baml/ns_reflect/reflect.baml ---
 class baml.reflect.Arg {
   name: string
   type: type
 }
+class baml.reflect.Meta {
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+type baml.reflect.TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
 class baml.reflect.Signature {
   name: string | null
   args: baml.reflect.Arg[]
@@ -3011,6 +3099,13 @@ class baml.reflect.Arg$stream {
   name: string | null
   type: unknown
 }
+class baml.reflect.Meta$stream {
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+type baml.reflect.TypeKind$stream = baml.reflect.class.Type$stream | baml.reflect.enum.Type$stream | baml.reflect.union.Type$stream | baml.reflect.literal.Type$stream | baml.reflect.array.Type$stream | baml.reflect.map.Type$stream | baml.reflect.interface.Type$stream | baml.reflect.primitive.Type$stream | baml.reflect.function.Type$stream
 class baml.reflect.Signature$stream {
   name: string | null
   args: baml.reflect.Arg$stream[]

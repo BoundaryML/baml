@@ -131,6 +131,10 @@ pub enum TirTypeError {
         field_name: Name,
         suggestions: Vec<Name>,
     },
+    /// Runtime reflection-kind classes are sealed VM views, not user data.
+    CannotConstructReflectionKind {
+        class_name: crate::ty::QualifiedTypeName,
+    },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -891,6 +895,11 @@ impl fmt::Display for TirTypeError {
                     )
                 }
             }
+            TirTypeError::CannotConstructReflectionKind { class_name } => write!(
+                f,
+                "reflection kind `{}` cannot be constructed; obtain it from a type value",
+                class_name.render_user_facing()
+            ),
             TirTypeError::DeadCode {
                 unreachable_count, ..
             } => {

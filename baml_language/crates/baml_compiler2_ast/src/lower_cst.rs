@@ -1116,7 +1116,7 @@ fn lower_class(
                     let all_outer_attrs = std::mem::take(expr.attrs_mut());
                     let (hoist, keep): (Vec<_>, Vec<_>) =
                         all_outer_attrs.into_iter().partition(|a| {
-                            crate::disambiguate::is_field_attr(a.name.as_str())
+                            crate::disambiguate::should_hoist_field_attr(a.name.as_str())
                                 && direct_attr_spans.contains(&a.span)
                         });
                     *expr.attrs_mut() = keep;
