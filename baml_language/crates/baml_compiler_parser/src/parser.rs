@@ -8310,6 +8310,69 @@ mod tests {
         );
     }
 
+    fn assert_removed_feature_recovery(source: &str, expected_message: &str) {
+        let (root, errors) = parse_source(source);
+
+        assert_eq!(
+            errors.len(),
+            1,
+            "recovery should emit one targeted diagnostic without a parse-error cascade: {errors:#?}"
+        );
+        assert!(
+            matches!(
+                &errors[0],
+                ParseError::RemovedFeature { message, .. }
+                    if message.contains(expected_message)
+            ),
+            "expected a removed-feature diagnostic containing {expected_message:?}, got: {errors:#?}"
+        );
+        assert_eq!(
+            root.text().to_string(),
+            source,
+            "parsing must remain lossless"
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::ERROR)
+                .count(),
+            1,
+            "the removed construct should be consumed into one ERROR node"
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::FUNCTION_DEF)
+                .count(),
+            1,
+            "recovery must stop before the following declaration"
+        );
+    }
+
+    #[test]
+    fn removed_type_builder_forms_recover_without_cascading() {
+        for source in [
+            "type_builder { class Legacy { value string } }\nfunction After() -> int { 1 }\n",
+            "type_builder: { class Legacy { value string } }\nfunction After() -> int { 1 }\n",
+        ] {
+            assert_removed_feature_recovery(source, "`type_builder` blocks were removed");
+        }
+    }
+
+    #[test]
+    fn removed_dynamic_definitions_recover_without_cascading() {
+        for (source, expected_message) in [
+            (
+                "dynamic class Legacy { value string }\nfunction After() -> int { 1 }\n",
+                "`dynamic class` definitions were removed",
+            ),
+            (
+                "dynamic enum Legacy { One Two }\nfunction After() -> int { 1 }\n",
+                "`dynamic enum` definitions were removed",
+            ),
+        ] {
+            assert_removed_feature_recovery(source, expected_message);
+        }
+    }
+
     /// A run of hashes at EOF (an incomplete raw string like `##`) must
     /// parse to errors, never panic: `find_token_after_hashes` returns
     /// `None` at EOF instead of the one-past-the-end index its callers
