@@ -170,7 +170,31 @@ pub fn impl_facts<'db>(
             }
         };
 
-    let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(params.clone());
+    // The impl's own bounds ride along: `type Output = T.Item` must
+    // find `Item`'s declaring interface through `T`'s declared bound.
+    let bounds_map: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> = params
+        .iter()
+        .cloned()
+        .zip(param_bounds.iter())
+        .map(|(param, bounds)| {
+            (
+                param,
+                bounds
+                    .iter()
+                    .map(|target| {
+                        baml_type::interned::InterfaceRef::new(
+                            target.name.clone(),
+                            target.args.clone().into_boxed_slice(),
+                            target.pins.clone(),
+                        )
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    let ctx = crate::lower::lower_ctx_for_file(db, file)
+        .with_frame(params.clone())
+        .with_bounds(bounds_map);
     let interface = interface_target_of(&ctx.lower_type_ref(&data.type_refs, data.interface_target))?;
     let associated_types = data
         .associated_type_bindings
@@ -759,7 +783,17 @@ fn match_impl_head(
             }
         };
         match supplied {
-            Some(supplied) if equivalent_interned(&supplied, requested, eq) => {}
+            Some(supplied) => {
+                // Normalize-then-compare (the confirmation road's
+                // discipline): the impl's binding may be a projection
+                // over the now-bound params (`type Output = T.Item`)
+                // that only meets `Output = string` by VALUE.
+                let supplied = reduce_ground_projections(db, &supplied, 8);
+                let requested = reduce_ground_projections(db, requested, 8);
+                if !equivalent_interned(&supplied, &requested, eq) {
+                    return None;
+                }
+            }
             _ => return None,
         }
     }
@@ -772,6 +806,57 @@ fn match_impl_head(
 /// widenings real stdlib impls rely on: a literal target matches its
 /// base-primitive pattern, and an enum-variant target matches its enum's
 /// pattern.
+/// Fuel-bounded projection reduction over GROUND types for the registry
+/// matcher - rustc's associated-type normalization during winnowing,
+/// recursion-limited: a requested pin `Output = string` must meet an
+/// impl's `type Output = T.Item` by VALUE once the match binds `T`, and
+/// the alias-only equivalence cannot project. Var-carrying input returns
+/// unchanged (the oracle's plain conversion erases inference vars).
+pub(crate) fn reduce_ground_projections(
+    db: &dyn baml_compiler2_ppir::Db,
+    ty: &Ty,
+    fuel: u32,
+) -> Ty {
+    if fuel == 0 || !ty.has_projection() || ty.has_infer() {
+        return ty.clone();
+    }
+    let rebuilt = Ty::intern(
+        ty.kind()
+            .map_children(|child| reduce_ground_projections(db, child, fuel)),
+    );
+    if let TyKind::AssociatedTypeProjection {
+        base,
+        interface,
+        member,
+        ..
+    } = rebuilt.kind()
+    {
+        let facts = crate::facts::Facts::new(db);
+        let plain_base = base.to_plain();
+        let plain_interface = baml_type::Interface::new(
+            interface.name.clone(),
+            interface.generics.iter().map(Ty::to_plain).collect(),
+            interface
+                .associated_types
+                .iter()
+                .map(|(name, pin)| (name.clone(), pin.to_plain()))
+                .collect(),
+        );
+        if let baml_type::normalize::ProjectionStep::Reduced(step) =
+            baml_type::normalize::TypeContext::project(
+                &facts,
+                &plain_base,
+                &plain_interface,
+                member,
+                fuel,
+            )
+        {
+            return reduce_ground_projections(db, &Ty::from_plain(&step), fuel - 1);
+        }
+    }
+    rebuilt
+}
+
 fn match_pattern(
     pattern: &Ty,
     target: &Ty,

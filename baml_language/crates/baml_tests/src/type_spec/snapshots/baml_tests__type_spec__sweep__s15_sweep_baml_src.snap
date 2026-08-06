@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52263
+agreements: 52319
 one-sided (coverage): 264
-conflicts: 8178 across 1449 distinct pairs
+conflicts: 8122 across 1437 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -17,7 +17,7 @@ ns_bigints/bigints.baml:4894..4905 `{ 3n * 4n }`: expected 12n, got bigint
 ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 
 == conflicts by (hir_ty, tir) pair ==
-[2022x] hir_ty=[() -> void throws never / null] tir=[() -> void throws unknown / null]
+[2040x] hir_ty=[() -> void throws never / null] tir=[() -> void throws unknown / null]
     at ns_array_length_snapshot/array_length_snapshot.baml:385..431 `{\n    ass...ug(), 0)\n}`
     at ns_array_rest_binding/array_rest_binding.baml:820..926 `{\n    // ... 51234))\n}`
 [696x] hir_ty=[(a: int, b: int) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
@@ -38,9 +38,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [99x] hir_ty=[(a: bigint, b: bigint) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_bigints/bigints.baml:2659..2675 `baml.deep_equals`
     at ns_bigints/bigints.baml:2879..2895 `baml.deep_equals`
-[89x] hir_ty=[!error] tir=[string]
-    at ns_interfaces/interfaces.baml:8894..8911 `x.as<DrtcA>.tag()`
-    at ns_interfaces/interfaces.baml:9666..9695 `h.as<ApssS...r>.encode()`
 [89x] hir_ty=[() -> void throws baml.errors.InvalidArgument / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:17100..17328 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:17358..17580 `{\n    let...pected))\n}`
@@ -56,10 +53,13 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [66x] hir_ty=[bool] tir=[true]
     at ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`
     at ns_bigints/bigints.baml:5066..5073 `1n < 2n`
+[58x] hir_ty=[!error] tir=[string]
+    at ns_interfaces/interfaces.baml:16612..16623 `describe(t)`
+    at ns_interfaces/interfaces.baml:19527..19593 `match (a) ...name\n    }`
 [57x] hir_ty=[baml.iter.Iterator<Error = never, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = never>]
     at ns_iter/iter.baml:222..275 `let it: ba...or = never>`
     at ns_iter/iter.baml:230..275 `baml.iter....or = never>`
-[50x] hir_ty=[!error] tir=[int]
+[48x] hir_ty=[!error] tir=[int]
     at ns_arrays/sort_comparable.baml:3712..3724 `other.points`
     at ns_arrays/sort_comparable.baml:8513..8523 `other.rank`
 [45x] hir_ty=[1] tir=[int]
@@ -152,9 +152,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [19x] hir_ty=[string] tir=["missing" | string]
     at ns_csv/csv.baml:8514..8630 `match (com...zip,\n    }`
     at ns_csv/csv.baml:8652..8746 `match (esc...w.b,\n    }`
-[18x] hir_ty=[() -> void throws !error / null] tir=[() -> void throws unknown / null]
-    at ns_arrays/arrays.baml:1912..2082 `{\n    let...pected))\n}`
-    at ns_arrays/arrays.baml:2115..2308 `{\n    let...pected))\n}`
 [18x] hir_ty=[int] tir=[int | 1]
     at ns_exceptions/exceptions.baml:3513..3571 `{\n    s2_...1\n    }\n}`
     at ns_exceptions/exceptions.baml:3519..3569 `s2_fails_5...=> 1\n    }`
@@ -197,9 +194,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [14x] hir_ty=[user.control_flow.Err | user.control_flow.Ok] tir=[user.control_flow.Ok | user.control_flow.Err]
     at ns_control_flow/control_flow.baml:2887..2888 `r`
     at ns_control_flow/control_flow.baml:3023..3024 `r`
-[13x] hir_ty=[!error] tir=[() -> string throws never]
-    at ns_interfaces/interfaces.baml:8894..8909 `x.as<DrtcA>.tag`
-    at ns_interfaces/interfaces.baml:9666..9693 `h.as<ApssS...zer>.encode`
 [13x] hir_ty=[() -> string throws never] tir=[() -> string throws __effect_param_0]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1324..1352 `tt_parts_b..._order_main`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1852..1884 `tt_capture..._local_main`
@@ -275,7 +269,7 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [10x] hir_ty=[(self: baml.time.Instant) -> string throws never] tir=[() -> string throws never]
     at ns_csv/csv.baml:16070..16084 `r.at.to_string`
     at ns_time/datetime.baml:5683..5707 `z.to_instant().to_string`
-[10x] hir_ty=[(self: int[]) -> int[] throws !error] tir=[() -> int[] throws (int as baml.Comparable).CompareError]
+[10x] hir_ty=[(self: int[]) -> int[] throws never] tir=[() -> int[] throws (int as baml.Comparable).CompareError]
     at ns_arrays/arrays.baml:1955..1962 `xs.sort`
     at ns_arrays/arrays.baml:2158..2165 `xs.sort`
 [10x] hir_ty=[(x: int) -> int throws never] tir=[(x: int) -> int throws E]
@@ -470,7 +464,7 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [6x] hir_ty=[(self: baml.time.PlainDateTime) -> int throws baml.errors.InvalidArgument] tir=[() -> int throws baml.errors.InvalidArgument]
     at ns_time/datetime.baml:4349..4356 `dt.year`
     at ns_time/datetime.baml:4384..4392 `dt.month`
-[6x] hir_ty=[(self: float[]) -> float[] throws !error] tir=[() -> float[] throws (float as baml.Comparable).CompareError]
+[6x] hir_ty=[(self: float[]) -> float[] throws never] tir=[() -> float[] throws (float as baml.Comparable).CompareError]
     at ns_arrays/arrays.baml:3083..3090 `xs.sort`
     at ns_arrays/arrays.baml:4131..4138 `xs.sort`
 [6x] hir_ty=[(source: string | uint8array, options?: baml.csv.ReaderOptions | null) -> user.csv.NullProbe[] throws baml.csv.CsvError] tir=[(source: string | uint8array, options?: baml.csv.ReaderOptions | null) -> T[] throws baml.csv.CsvError]
@@ -815,9 +809,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[throws 42 | "boom"] tir=[throws int | string]
     at ns_exceptions/exceptions.baml:3920..3930 `s2_fails_7`
     at ns_exceptions/exceptions.baml:4550..4560 `s2_fails_9`
-[3x] hir_ty=[!error] tir=[() -> int throws never]
-    at ns_interfaces/interfaces.baml:23389..23421 `m.as<SgidC...t>>.convert`
-    at ns_interfaces/interfaces.baml:31211..31243 `m.as<GbapC...t>>.convert`
+[3x] hir_ty=[!error] tir=[() -> string throws never]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:6458..6466 `self.key`
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:7672..7692 `holder.get().summary`
 [3x] hir_ty=[!error] tir=[(self: Self) -> string throws never]
     at ns_interfaces/interfaces.baml:16561..16573 `let describe`
     at ns_interfaces/interfaces.baml:16576..16600 `IdmrDescribable.describe`
@@ -920,19 +914,19 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[(self: bigint, other: bigint) -> int throws never] tir=[(other: bigint) -> int throws never]
     at ns_arrays/sort_comparable.baml:1826..1837 `two.compare`
     at ns_arrays/sort_comparable.baml:1867..1878 `one.compare`
-[3x] hir_ty=[(self: bigint[]) -> bigint[] throws !error] tir=[() -> bigint[] throws (bigint as baml.Comparable).CompareError]
+[3x] hir_ty=[(self: bigint[]) -> bigint[] throws never] tir=[() -> bigint[] throws (bigint as baml.Comparable).CompareError]
     at ns_arrays/arrays.baml:2911..2918 `xs.sort`
     at ns_arrays/sort_comparable.baml:6378..6385 `xs.sort`
 [3x] hir_ty=[(self: int[], key: (int) -> int throws string) -> int[] throws string] tir=[(self: int[], key: (int) -> U throws E) -> int[] throws E | (U as baml.Comparable).CompareError]
     at ns_arrays/arrays.baml:7067..7081 `xs.sort_by_key`
     at ns_arrays/arrays.baml:7354..7368 `xs.sort_by_key`
-[3x] hir_ty=[(self: string[]) -> string[] throws !error] tir=[() -> string[] throws (string as baml.Comparable).CompareError]
+[3x] hir_ty=[(self: string[]) -> string[] throws never] tir=[() -> string[] throws (string as baml.Comparable).CompareError]
     at ns_arrays/arrays.baml:2750..2757 `xs.sort`
     at ns_arrays/sort_comparable.baml:6303..6310 `xs.sort`
 [3x] hir_ty=[(self: user.arrays.ComparableScore, other: !error) -> int throws never] tir=[(other: user.arrays.ComparableScore) -> int throws never]
     at ns_arrays/sort_comparable.baml:3821..3858 `Comparable...9 }.compare`
     at ns_arrays/sort_comparable.baml:3915..3952 `Comparable...1 }.compare`
-[3x] hir_ty=[(self: user.arrays.SortableItem[]) -> user.arrays.SortableItem[] throws !error] tir=[() -> user.arrays.SortableItem[] throws (user.arrays.SortableItem as baml.Comparable).CompareError]
+[3x] hir_ty=[(self: user.arrays.SortableItem[]) -> user.arrays.SortableItem[] throws never] tir=[() -> user.arrays.SortableItem[] throws (user.arrays.SortableItem as baml.Comparable).CompareError]
     at ns_arrays/sort_comparable.baml:8866..8873 `xs.sort`
     at ns_arrays/sort_comparable.baml:9097..9104 `xs.sort`
 [3x] hir_ty=[(self: user.generic_match_subtype.Shape) -> int throws never] tir=[() -> int throws never]
@@ -1088,9 +1082,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[!error] tir=[user.interfaces.SrtcBox]
     at ns_interfaces/interfaces.baml:33662..33667 `let c`
     at ns_interfaces/interfaces.baml:33670..33679 `b.clone()`
-[2x] hir_ty=[!error] tir=[user.interfaces_associated_types.UpcHasKey<Key = string>]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:6330..6368 `self.value... = string>>`
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:6570..6603 `value.as<U... = string>>`
 [2x] hir_ty=[!error] tir=[user.prompt_tag_runtime.Point]
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:3757..3760 `{p}`
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:3758..3759 `p`
@@ -1568,6 +1559,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(self: user.interfaces.HiadAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:12585..12601 `animals[0].speak`
     at ns_interfaces/interfaces.baml:12606..12622 `animals[1].speak`
+[2x] hir_ty=[(self: user.interfaces.OobpDebuggable) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:52930..52968 `myInteger....>.debugOobp`
+    at ns_interfaces/interfaces.baml:52979..53001 `asDebuggable.debugOobp`
 [2x] hir_ty=[(self: user.interfaces.Uf08Dog) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces_3.baml:15833..15840 `d.fetch`
     at ns_interfaces/interfaces_3.baml:15851..15858 `d.speak`
@@ -1989,66 +1983,24 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_comparable_sort/comparable_sort.baml:15586..15593 `xs.sort`
 [1x] hir_ty=[!error] tir=[() -> U[] throws (U as baml.Comparable).CompareError]
     at ns_arrays/sort_comparable.baml:11803..11810 `xs.sort`
-[1x] hir_ty=[!error] tir=[() -> float throws never]
-    at ns_interfaces/interfaces.baml:23511..23545 `m.as<SgidC...t>>.convert`
 [1x] hir_ty=[!error] tir=[() -> int throws (U as user.comparable_sort.HasErr).E]
     at ns_comparable_sort/comparable_sort.baml:4622..4626 `us.g`
+[1x] hir_ty=[!error] tir=[() -> int throws never]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:11404..11421 `outer.inner().get`
 [1x] hir_ty=[!error] tir=[(other: (H as user.interfaces_associated_types.ApdHolder).Item) -> bool throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:8940..8955 `item.same_label`
-[1x] hir_ty=[!error] tir=[float]
-    at ns_interfaces/interfaces.baml:23511..23547 `m.as<SgidC...>.convert()`
 [1x] hir_ty=[!error] tir=[int | null]
     at ns_arrays/sort_comparable.baml:4507..4518 `other.value`
-[1x] hir_ty=[!error] tir=[user.comparable_sort.Kaboom]
-    at ns_comparable_sort/comparable_sort.baml:4171..4172 `e`
 [1x] hir_ty=[!error] tir=[user.from_json_interface.Box]
     at ns_from_json_interface/from_json_interface.baml:7603..7611 `Box<int>`
 [1x] hir_ty=[!error] tir=[user.from_json_interface.Box<int>]
     at ns_from_json_interface/from_json_interface.baml:7603..7624 `Box<int>.from_json(j)`
 [1x] hir_ty=[!error] tir=[user.from_json_interface.Temp]
     at ns_from_json_interface/from_json_interface.baml:6839..6856 `Temp.from_json(j)`
-[1x] hir_ty=[!error] tir=[user.interfaces.ApssSerializer]
-    at ns_interfaces/interfaces.baml:9666..9686 `h.as<ApssSerializer>`
-[1x] hir_ty=[!error] tir=[user.interfaces.ApwuAnimal]
-    at ns_interfaces/interfaces.baml:10086..10102 `d.as<ApwuAnimal>`
-[1x] hir_ty=[!error] tir=[user.interfaces.AusiLabeled]
-    at ns_interfaces/interfaces.baml:37449..37466 `i.as<AusiLabeled>`
-[1x] hir_ty=[!error] tir=[user.interfaces.AusiNamed]
-    at ns_interfaces/interfaces.baml:37405..37420 `i.as<AusiNamed>`
-[1x] hir_ty=[!error] tir=[user.interfaces.DapcLeft]
-    at ns_interfaces/interfaces.baml:11451..11465 `d.as<DapcLeft>`
-[1x] hir_ty=[!error] tir=[user.interfaces.DapcRight]
-    at ns_interfaces/interfaces.baml:11480..11495 `d.as<DapcRight>`
-[1x] hir_ty=[!error] tir=[user.interfaces.DrtcA]
-    at ns_interfaces/interfaces.baml:8894..8905 `x.as<DrtcA>`
-[1x] hir_ty=[!error] tir=[user.interfaces.Fz20A]
-    at ns_interfaces/interfaces_2.baml:19530..19541 `d.as<Fz20A>`
-[1x] hir_ty=[!error] tir=[user.interfaces.Fz20B]
-    at ns_interfaces/interfaces_2.baml:19564..19575 `d.as<Fz20B>`
-[1x] hir_ty=[!error] tir=[user.interfaces.GbapConverter<int>]
-    at ns_interfaces/interfaces.baml:31211..31235 `m.as<GbapConverter<int>>`
 [1x] hir_ty=[!error] tir=[user.interfaces.MdidAnimal]
     at ns_interfaces/interfaces.baml:19547..19566 `MdidAnimal { name }`
-[1x] hir_ty=[!error] tir=[user.interfaces.OobpDebuggable]
-    at ns_interfaces/interfaces.baml:52930..52958 `myInteger....Debuggable>`
-[1x] hir_ty=[!error] tir=[user.interfaces.RcpmParent<int>]
-    at ns_interfaces/interfaces.baml:57775..57799 `both.as<RcpmParent<int>>`
-[1x] hir_ty=[!error] tir=[user.interfaces.RcpmParent<string>]
-    at ns_interfaces/interfaces.baml:57831..57858 `both.as<Rc...nt<string>>`
-[1x] hir_ty=[!error] tir=[user.interfaces.SapcGreeter]
-    at ns_interfaces/interfaces.baml:10661..10681 `self.as<SapcGreeter>`
-[1x] hir_ty=[!error] tir=[user.interfaces.SgidConverter<float>]
-    at ns_interfaces/interfaces.baml:23511..23537 `m.as<SgidC...ter<float>>`
-[1x] hir_ty=[!error] tir=[user.interfaces.SgidConverter<int>]
-    at ns_interfaces/interfaces.baml:23389..23413 `m.as<SgidConverter<int>>`
 [1x] hir_ty=[!error] tir=[user.interfaces.SpmaAcc]
     at ns_interfaces/interfaces.baml:15336..15345 `others[0]`
-[1x] hir_ty=[!error] tir=[user.interfaces.W304Named]
-    at ns_interfaces/interfaces_3.baml:1988..2006 `self.as<W304Named>`
-[1x] hir_ty=[!error] tir=[user.interfaces.W3spNamed]
-    at ns_interfaces/interfaces_3.baml:5876..5894 `self.as<W3spNamed>`
-[1x] hir_ty=[!error] tir=[user.interfaces_associated_types.BspRenderable<Output = string>]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:4317..4359 `wrapped.as... = string>>`
 [1x] hir_ty=[!error] tir=[user.interfaces_associated_types.RdfSource<Item = int>]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:13165..13196 `RdfSource<...> { value }`
 [1x] hir_ty=[!error] tir=[user.json_auto_derive.Box6]
@@ -2597,9 +2549,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_arrays/arrays.baml:12519..12531 `items.filter`
 [1x] hir_ty=[(self: string[], reducer: (string, string) -> string throws never, initial: string) -> string throws never] tir=[(self: string[], reducer: (A, string) -> A throws E, initial: A) -> A throws E]
     at ns_arrays/arrays.baml:28383..28405 `["a", "b", "c"].reduce`
-[1x] hir_ty=[(self: user.arrays.ComparableFlaky[]) -> user.arrays.ComparableFlaky[] throws !error] tir=[() -> user.arrays.ComparableFlaky[] throws (user.arrays.ComparableFlaky as baml.Comparable).CompareError]
+[1x] hir_ty=[(self: user.arrays.ComparableFlaky[]) -> user.arrays.ComparableFlaky[] throws user.arrays.ComparableCompareError] tir=[() -> user.arrays.ComparableFlaky[] throws (user.arrays.ComparableFlaky as baml.Comparable).CompareError]
     at ns_arrays/sort_comparable.baml:9976..9983 `xs.sort`
-[1x] hir_ty=[(self: user.arrays.OutOfBodyScore[]) -> user.arrays.OutOfBodyScore[] throws !error] tir=[() -> user.arrays.OutOfBodyScore[] throws (user.arrays.OutOfBodyScore as baml.Comparable).CompareError]
+[1x] hir_ty=[(self: user.arrays.OutOfBodyScore[]) -> user.arrays.OutOfBodyScore[] throws never] tir=[() -> user.arrays.OutOfBodyScore[] throws (user.arrays.OutOfBodyScore as baml.Comparable).CompareError]
     at ns_arrays/sort_comparable.baml:12962..12969 `xs.sort`
 [1x] hir_ty=[(self: user.arrays.OutOfBodyScore[], f: (user.arrays.OutOfBodyScore) -> int throws never) -> int[] throws never] tir=[(self: user.arrays.OutOfBodyScore[], f: (user.arrays.OutOfBodyScore) -> U throws E) -> U[] throws E]
     at ns_arrays/sort_comparable.baml:12987..12993 `xs.map`
@@ -2619,21 +2571,21 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_classes/classes.baml:7362..7367 `a.add`
 [1x] hir_ty=[(self: user.closures.ClsEmployee[], f: (user.closures.ClsEmployee) -> string throws never) -> string[] throws never] tir=[(self: user.closures.ClsEmployee[], f: (user.closures.ClsEmployee) -> U throws E) -> U[] throws E]
     at ns_closures/closures.baml:1535..1548 `employees.map`
-[1x] hir_ty=[(self: user.comparable_sort.OobScore[]) -> user.comparable_sort.OobScore[] throws !error] tir=[() -> user.comparable_sort.OobScore[] throws (user.comparable_sort.OobScore as baml.Comparable).CompareError]
+[1x] hir_ty=[(self: user.comparable_sort.OobScore[]) -> user.comparable_sort.OobScore[] throws never] tir=[() -> user.comparable_sort.OobScore[] throws (user.comparable_sort.OobScore as baml.Comparable).CompareError]
     at ns_comparable_sort/comparable_sort.baml:17699..17706 `xs.sort`
 [1x] hir_ty=[(self: user.comparable_sort.Person[]) -> string throws never] tir=[() -> string throws never]
     at ns_comparable_sort/comparable_sort.baml:5718..5731 `xs.first_name`
-[1x] hir_ty=[(self: user.comparable_sort.Ranked[]) -> user.comparable_sort.Ranked[] throws !error] tir=[() -> user.comparable_sort.Ranked[] throws (user.comparable_sort.Ranked as baml.Comparable).CompareError]
+[1x] hir_ty=[(self: user.comparable_sort.Ranked[]) -> user.comparable_sort.Ranked[] throws never] tir=[() -> user.comparable_sort.Ranked[] throws (user.comparable_sort.Ranked as baml.Comparable).CompareError]
     at ns_comparable_sort/comparable_sort.baml:18572..18579 `xs.sort`
 [1x] hir_ty=[(self: user.comparable_sort.Ranked[], f: (user.comparable_sort.Ranked) -> string throws never) -> string[] throws never] tir=[(self: user.comparable_sort.Ranked[], f: (user.comparable_sort.Ranked) -> U throws E) -> U[] throws E]
     at ns_comparable_sort/comparable_sort.baml:18637..18643 `xs.map`
-[1x] hir_ty=[(self: user.comparable_sort.Resume[]) -> user.comparable_sort.Resume[] throws !error] tir=[() -> user.comparable_sort.Resume[] throws (user.comparable_sort.Resume as baml.Comparable).CompareError]
+[1x] hir_ty=[(self: user.comparable_sort.Resume[]) -> user.comparable_sort.Resume[] throws never] tir=[() -> user.comparable_sort.Resume[] throws (user.comparable_sort.Resume as baml.Comparable).CompareError]
     at ns_comparable_sort/comparable_sort.baml:12134..12141 `xs.sort`
-[1x] hir_ty=[(self: user.comparable_sort.Risky[]) -> int throws !error] tir=[() -> int throws (user.comparable_sort.Risky as user.comparable_sort.HasErr).E]
+[1x] hir_ty=[(self: user.comparable_sort.Risky[]) -> int throws user.comparable_sort.Kaboom] tir=[() -> int throws (user.comparable_sort.Risky as user.comparable_sort.HasErr).E]
     at ns_comparable_sort/comparable_sort.baml:4131..4135 `xs.g`
-[1x] hir_ty=[(self: user.comparable_sort.Safe[]) -> int throws !error] tir=[() -> int throws (user.comparable_sort.Safe as user.comparable_sort.HasErr).E]
+[1x] hir_ty=[(self: user.comparable_sort.Safe[]) -> int throws never] tir=[() -> int throws (user.comparable_sort.Safe as user.comparable_sort.HasErr).E]
     at ns_comparable_sort/comparable_sort.baml:3900..3904 `xs.g`
-[1x] hir_ty=[(self: user.comparable_sort.ScorePts[]) -> user.comparable_sort.ScorePts[] throws !error] tir=[() -> user.comparable_sort.ScorePts[] throws (user.comparable_sort.ScorePts as baml.Comparable).CompareError]
+[1x] hir_ty=[(self: user.comparable_sort.ScorePts[]) -> user.comparable_sort.ScorePts[] throws never] tir=[() -> user.comparable_sort.ScorePts[] throws (user.comparable_sort.ScorePts as baml.Comparable).CompareError]
     at ns_comparable_sort/comparable_sort.baml:9889..9896 `xs.sort`
 [1x] hir_ty=[(self: user.generic_union_returns.ParsedChild[], index: int) -> user.generic_union_returns.ParsedChild | null throws never] tir=[((self: user.generic_union_returns.ParsedChild[], index: int) -> user.generic_union_returns.ParsedChild | null throws never) | null]
     at ns_generic_union_returns/generic_union_returns.baml:1971..1983 `children?.at`
@@ -2667,10 +2619,18 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:8623..8630 `w.first`
 [1x] hir_ty=[(self: user.instantiation_expr.GenBox, x: int) -> int throws never] tir=[(x: T) -> T throws never]
     at ns_instantiation_expr/instantiation_expr.baml:4989..4995 `p.pick`
+[1x] hir_ty=[(self: user.interfaces.ApssSerializer) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:9666..9693 `h.as<ApssS...zer>.encode`
+[1x] hir_ty=[(self: user.interfaces.ApwuAnimal) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:10086..10108 `d.as<ApwuAnimal>.speak`
 [1x] hir_ty=[(self: user.interfaces.CimdGreeter) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:29936..29949 `greeter.greet`
 [1x] hir_ty=[(self: user.interfaces.CridNum, other: user.interfaces.CridNum) -> bool throws never] tir=[(other: user.interfaces.CridNum) -> bool throws never]
     at ns_interfaces/interfaces.baml:35284..35304 `CridNum { v: 1 }.neq`
+[1x] hir_ty=[(self: user.interfaces.DapcLeft) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:11451..11469 `d.as<DapcLeft>.foo`
+[1x] hir_ty=[(self: user.interfaces.DapcRight) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:11480..11499 `d.as<DapcRight>.foo`
 [1x] hir_ty=[(self: user.interfaces.DcgoBox<T>, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:54058..54069 `default.log`
 [1x] hir_ty=[(self: user.interfaces.DcgoLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
@@ -2693,6 +2653,8 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces/interfaces.baml:50389..50394 `l.log`
 [1x] hir_ty=[(self: user.interfaces.DmdtAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:13740..13750 `a.describe`
+[1x] hir_ty=[(self: user.interfaces.DrtcA) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:8894..8909 `x.as<DrtcA>.tag`
 [1x] hir_ty=[(self: user.interfaces.DrtcX) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:8775..8786 `default.tag`
 [1x] hir_ty=[(self: user.interfaces.DslrA) -> string throws never] tir=[() -> string throws never]
@@ -2765,6 +2727,8 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces/interfaces_2.baml:30982..30988 `w.wrap`
 [1x] hir_ty=[(self: user.interfaces.Fz45Animal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces_2.baml:31455..31462 `a.speak`
+[1x] hir_ty=[(self: user.interfaces.GbapConverter<int>) -> int throws never] tir=[() -> int throws never]
+    at ns_interfaces/interfaces.baml:31211..31243 `m.as<GbapC...t>>.convert`
 [1x] hir_ty=[(self: user.interfaces.GictIntStack) -> int throws never] tir=[() -> int throws never]
     at ns_interfaces/interfaces.baml:22814..22820 `s.size`
 [1x] hir_ty=[(self: user.interfaces.GimpEcho<int>, value: string) -> string throws never] tir=[(value: U) -> U throws never]
@@ -2791,16 +2755,24 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces/interfaces.baml:34768..34774 `a.same`
 [1x] hir_ty=[(self: user.interfaces.OdndAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:17754..17764 `a.describe`
-[1x] hir_ty=[(self: user.interfaces.OobpDebuggable) -> string throws never] tir=[() -> string throws never]
-    at ns_interfaces/interfaces.baml:52979..53001 `asDebuggable.debugOobp`
 [1x] hir_ty=[(self: user.interfaces.PtuPipe<user.interfaces.PtuErrA | user.interfaces.PtuErrB>) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces_3.baml:17675..17680 `p.run`
 [1x] hir_ty=[(self: user.interfaces.RcflA) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:39703..39708 `l.tag`
 [1x] hir_ty=[(self: user.interfaces.RcpfPerson) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:51654..51665 `p.introduce`
+[1x] hir_ty=[(self: user.interfaces.RcpmParent<int>) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:57775..57808 `both.as<Rc...>>.describe`
+[1x] hir_ty=[(self: user.interfaces.RcpmParent<string>) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:57831..57867 `both.as<Rc...>>.describe`
+[1x] hir_ty=[(self: user.interfaces.SapcGreeter) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:10661..10687 `self.as<Sa...eter>.greet`
 [1x] hir_ty=[(self: user.interfaces.SapcPolite) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:10815..10820 `p.bye`
+[1x] hir_ty=[(self: user.interfaces.SgidConverter<float>) -> float throws never] tir=[() -> float throws never]
+    at ns_interfaces/interfaces.baml:23511..23545 `m.as<SgidC...t>>.convert`
+[1x] hir_ty=[(self: user.interfaces.SgidConverter<int>) -> int throws never] tir=[() -> int throws never]
+    at ns_interfaces/interfaces.baml:23389..23421 `m.as<SgidC...t>>.convert`
 [1x] hir_ty=[(self: user.interfaces.SritCloneable) -> user.interfaces.SritCloneable throws never] tir=[() -> user.interfaces.SritCloneable throws never]
     at ns_interfaces/interfaces.baml:34206..34213 `c.clone`
 [1x] hir_ty=[(self: user.interfaces.SrtcBox) -> !error throws never] tir=[() -> user.interfaces.SrtcBox throws never]
@@ -2831,8 +2803,10 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces/interfaces_3.baml:6027..6034 `n.greet`
 [1x] hir_ty=[(self: user.interfaces_associated_types.AlwaysFails) -> int throws user.interfaces_associated_types.Boom] tir=[() -> int throws user.interfaces_associated_types.Boom]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:1043..1072 `AlwaysFail...ue_plus_one`
-[1x] hir_ty=[(self: user.interfaces_associated_types.BcpWrapped<user.interfaces_associated_types.BcpTextSource>) -> !error throws never] tir=[() -> string throws never]
+[1x] hir_ty=[(self: user.interfaces_associated_types.BcpWrapped<user.interfaces_associated_types.BcpTextSource>) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:5361..5375 `wrapped.output`
+[1x] hir_ty=[(self: user.interfaces_associated_types.BspRenderable<Output = string>) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:4317..4366 `wrapped.as...ng>>.render`
 [1x] hir_ty=[(self: user.interfaces_associated_types.CaeTask<int>, driver: user.interfaces_associated_types.CaeIntDriver) -> int throws user.interfaces_associated_types.CaeKaboom] tir=[(driver: D) -> Output throws Error]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:2302..2334 `CaeTask<in... 42 }.drive`
 [1x] hir_ty=[(self: user.interfaces_associated_types.IngIterator<Item = int | null>) -> int | null throws never] tir=[() -> int | null throws never]

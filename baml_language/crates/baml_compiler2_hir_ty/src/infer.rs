@@ -708,6 +708,39 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
+            Expr::Upcast { base, .. } => {
+                // Rust's qualified trait path (`<X as Parent<i32>>`,
+                // r-a's trait-object coercion): the value viewed through
+                // a WRITTEN interface. The base proves the view - ground
+                // pairs through the implements oracle, var-carrying
+                // targets as an Implements obligation anchored HERE -
+                // and the result IS the target, so members flow through
+                // the existential road with exactly the requested
+                // args/pins (what disambiguates same-name members across
+                // instantiations). Interface views only (TIR's rule);
+                // the non-interface diagnostic is S17's.
+                let base_ty = self.infer_expr(body, *base, &Expectation::None);
+                let target = self
+                    .type_refs
+                    .upcast_targets
+                    .get(&expr)
+                    .copied()
+                    .map(|target_ref| self.lower_body_annotation(target_ref))
+                    .unwrap_or_else(Ty::error);
+                if target.has_error() || !matches!(target.kind(), TyKind::Interface(..)) {
+                    Ty::error()
+                } else {
+                    let saved_anchor = self.obligation_anchor.replace(expr);
+                    let fits = self.sub(&base_ty, &target);
+                    self.obligation_anchor = saved_anchor;
+                    if !fits {
+                        self.result
+                            .type_mismatches
+                            .insert(expr, (target.clone(), base_ty));
+                    }
+                    target
+                }
+            }
             Expr::GenericApply { base, .. } => {
                 // Value-position turbofish (rustc's `let f =
                 // identity::<i32>`; r-a's `substs_from_path`): the SAME
