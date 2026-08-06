@@ -87,8 +87,8 @@
           ".baml"
         ],
         "icon": {
-          "dark": "./baml-logo.png",
-          "light": "./baml-logo.png"
+          "dark": "./baml-lamb-dark.svg",
+          "light": "./baml-lamb-light.svg"
         },
         "id": "baml"
       }
