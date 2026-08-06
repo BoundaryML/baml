@@ -178,6 +178,16 @@ pub fn lookup_interface_member<'db>(
                 .collect(),
             false,
         ),
+        // A rigid, irreducible projection: rustc's alias-bound
+        // (`item_bounds`) candidates - the associated type's DECLARED
+        // bound (`type Item extends Labeled`) is what its members
+        // resolve through, realized for the projection's subject.
+        TyKind::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => (assoc_bound_roots(db, facts, base, interface, member), false),
         // Concrete receivers resolve through the impls they match - the
         // trait-impl candidate tier (I6).
         _ => return lookup_impl_member(db, facts, receiver, name),
@@ -250,6 +260,48 @@ fn lookup_impl_member<'db>(
     match providers.len() {
         1 => providers.pop().map(|(_, member)| member),
         _ => None,
+    }
+}
+
+/// The alias-bound roots of a projection receiver: the associated
+/// type's declared bound, lowered in the interface frame and realized
+/// with `Self` = the projection's base - the assoc's own slot realizes
+/// to the projection itself, so a `Self.Item`-mentioning bound lands
+/// back on the receiver.
+fn assoc_bound_roots<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    base: &Ty,
+    interface_ref: &baml_type::interned::InterfaceRef,
+    member: &Name,
+) -> Vec<InterfaceTarget> {
+    let Some(Definition::Interface(interface)) = facts.definition_of(&interface_ref.name) else {
+        return Vec::new();
+    };
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let Some(assoc) = data.associated_types.iter().find(|assoc| assoc.name == *member) else {
+        return Vec::new();
+    };
+    let Some(bound) = assoc.bound else {
+        return Vec::new();
+    };
+    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
+        .with_frame(interface_frame(interface, db))
+        .with_bounds(crate::lower::interface_scope_bounds(db, interface));
+    let bound_ty = ctx.lower_type_ref(&data.type_refs, bound);
+    let target = InterfaceTarget {
+        name: interface_ref.name.clone(),
+        args: interface_ref.generics.to_vec(),
+        pins: interface_ref.associated_types.to_vec(),
+    };
+    let instantiation = interface_instantiation(base, &target, data);
+    match crate::lower::substitute_params(&bound_ty, &instantiation).kind() {
+        TyKind::Interface(name, args, pins, _) => vec![InterfaceTarget {
+            name: name.clone(),
+            args: args.to_vec(),
+            pins: pins.to_vec(),
+        }],
+        _ => Vec::new(),
     }
 }
 
