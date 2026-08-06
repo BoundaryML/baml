@@ -106,9 +106,10 @@ pub enum ExportedType {
         resolved: Ty,
     },
     /// An interface declaration's full loc-free surface (BEP-066 slice 6a).
-    /// Derived but not yet consumed: today's resolution paths deliberately
-    /// treat these rows as absent (see `resolve_type_in_own_then_deps`) until
-    /// the dualized resolution context lands in a follow-up PR.
+    /// Resolution consumes these rows for mounted (source-less) dependencies,
+    /// where the exported blob is the sole representation. They remain
+    /// invisible for source-backed dependencies, whose interfaces resolve
+    /// through source items instead.
     ///
     /// Every type below is lowered at the interface's *own declaration scope*:
     /// the declared generic parameters are rigid `TypeVar`s and `Self` is the
