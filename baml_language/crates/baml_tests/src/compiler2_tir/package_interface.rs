@@ -1367,8 +1367,9 @@ function n() -> int throws never {
     }
 
     #[test]
-    fn function_reference_types_but_call_is_reserved() {
-        // A dep-function REFERENCE types correctly (the exported signature)…
+    fn function_reference_and_call_type_from_mounted_signature() {
+        // References and direct calls share the exported signature and both
+        // receive a loc-free External resolution.
         let db = consumer_db(
             lib_blob(),
             &[(
@@ -1379,27 +1380,12 @@ function use_f(f: (a: int, b: int) -> int) -> int throws never {
 }
 
 function r() -> int throws never {
-    use_f(app.add)
+    use_f(app.add) + app.add(1, 2)
 }
 "#,
             )],
         );
         assert_clean(&db);
-
-        // …but a CALL is rejected with the reserved not-yet diagnostic
-        // (calls into mounted packages land in the next PR).
-        let db = consumer_db(
-            lib_blob(),
-            &[(
-                "main.baml",
-                r#"
-function c() -> int throws never {
-    app.add(1, 2)
-}
-"#,
-            )],
-        );
-        assert_error_containing(&db, "mounted");
     }
 
     #[test]
@@ -1430,30 +1416,30 @@ implement app.Taggable for Mine {
     }
 
     #[test]
-    fn stream_companion_of_mounted_class_stays_unresolvable() {
-        // The blob exports no `$stream` rows, and `resolve_type_in`'s
-        // `$stream`-companion fallback deliberately consults raw source items
-        // only — so a companion reference to a mounted class cannot resolve
-        // (a compiler-synthesized one degrades to the ordinary E0002).
-        // A USER-written `$`-suffixed spelling never reaches type lowering at
-        // all (the parser drops the annotation without diagnostics —
-        // pre-existing behavior, identical for source-backed classes), so
-        // this pins the observable pieces: the `$stream` line neither
-        // resolves-to-something-bogus nor wedges the checker, and sibling
-        // resolution still runs (the E0002 on the next line).
+    fn stream_companion_of_mounted_class_resolves_in_consumer_expansion() {
+        // Canonical PPIR `$stream` companions are exported as ordinary type
+        // rows. A consumer-side declarative LLM expansion can therefore name
+        // the mounted return type's companion with no dependency source.
         let db = consumer_db(
             lib_blob(),
             &[(
                 "main.baml",
-                r#"
-function s() -> int throws never {
-    let w: app.Widget$stream? = null
-    let v: app.Nope? = null
-    0
+                r##"
+client<llm> Dummy {
+    provider openai
+    options {
+        model "gpt-4o"
+        api_key "test"
+    }
 }
-"#,
+
+function Ask() -> app.Widget {
+    client Dummy
+    prompt #"Return a widget"#
+}
+"##,
             )],
         );
-        assert_error_containing(&db, "app.Nope");
+        assert_clean(&db);
     }
 }

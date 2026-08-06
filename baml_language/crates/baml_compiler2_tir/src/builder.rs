@@ -13,7 +13,10 @@
 //! NOT recurse into it — lambda bodies are separate scopes with their own
 //! `infer_scope_types` Salsa query.
 
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{
@@ -116,11 +119,14 @@ enum ClassMethodLookup<'db> {
         func_loc: FunctionLoc<'db>,
     },
     /// A method of a MOUNTED (source-less) dependency's class, typed from its
-    /// exported signature (BEP-066 slice 6a). Carries no locs — a reference
-    /// types fine, but a call cannot record a `MemberResolution` for MIR and
-    /// is reported reserved (see `foreign_callable_exprs`).
+    /// exported signature (BEP-066 slice 6a). Carries no locs; `callee` is the
+    /// loc-free [`MemberResolution::External`] payload the caller records so
+    /// MIR can lower a call symbolically. `None` marks the residue MIR cannot
+    /// lower yet (a blob-exported builtin-kind body) — the reference still
+    /// types, but a call is reported reserved (see `foreign_callable_exprs`).
     ForeignFound {
         ty: Ty,
+        callee: Option<Arc<crate::inference::ExternalCallable>>,
     },
     DuplicateInherent,
     DeferToInterfaces,
@@ -2208,14 +2214,26 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// are exempt, and a `GenericApply` (`foo<int>`) records no `Free` resolution
     /// on its own node, so it is already realized.
     fn references_unspecialized_generic_function(&self, expr: ExprId) -> bool {
-        if let Some(crate::inference::MemberResolution::Free { func_loc }) =
-            self.resolutions.get(&expr)
-        {
-            !baml_compiler2_ppir::item_data::elaborated_function_data(self.context.db(), *func_loc)
+        match self.resolutions.get(&expr) {
+            Some(crate::inference::MemberResolution::Free { func_loc }) => {
+                !baml_compiler2_ppir::item_data::elaborated_function_data(
+                    self.context.db(),
+                    *func_loc,
+                )
                 .user_generic_params
                 .is_empty()
-        } else {
-            false
+            }
+            // A mounted free function (BEP-066 slice 6a): the exported facts
+            // carry the user-declared params.
+            Some(crate::inference::MemberResolution::External(external))
+                if matches!(
+                    external.target,
+                    crate::inference::ExternalCallTarget::Free { .. }
+                ) =>
+            {
+                external.user_generic_params().next().is_some()
+            }
+            _ => false,
         }
     }
 
@@ -2262,6 +2280,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             | crate::inference::MemberResolution::BoundMethod { .. }
                             | crate::inference::MemberResolution::InterfaceVirtualMethod { .. }
                             | crate::inference::MemberResolution::InterfaceConcreteMethod { .. }
+                            | crate::inference::MemberResolution::External(_)
                     )
                 })
         });
@@ -2297,6 +2316,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .get(&callee_id)
                     .cloned()?;
                 return Some((declared_params, declared_bounds, callee_name));
+            }
+            // A mounted-package callee (BEP-066 slice 6a): the declared list is
+            // the resolution's owned copy of the exported facts — the owner
+            // params this call form supplies (unbounded at call position, like
+            // the loc path's prepended class params), then the user-declared
+            // function params with their bounds. Synthetic effect params are
+            // never call-site suppliable, exactly as on the loc path.
+            crate::inference::MemberResolution::External(external) => {
+                let mut declared_params: Vec<crate::ty::ParamTy> =
+                    external.owner_generic_params.clone();
+                let mut declared_bounds: Vec<Vec<Ty>> = vec![Vec::new(); declared_params.len()];
+                for (param, bounds) in external.user_generic_params() {
+                    declared_params.push(param.clone());
+                    declared_bounds.push(bounds.iter().map(baml_type::Interface::to_ty).collect());
+                }
+                return Some((declared_params, declared_bounds, external.display_name()));
             }
             _ => return None,
         };
@@ -2860,6 +2895,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .get(&callee_id)
                     .map(|(_, params, _)| crate::ty::RuntimeGenericLayout::new(params))
                     .unwrap_or_else(|| crate::ty::RuntimeGenericLayout::new(callee_generic_params)),
+                // A mounted-package callee's frame layout comes from the
+                // exported facts the resolution carries: the owner params it
+                // supplies at this call form, then the callee's own (user +
+                // synthetic effect) params — mirroring the loc path's
+                // `function_generic_env` ordering (BEP-066 slice 6a).
+                MemberResolution::External(external) => {
+                    let mut params: Vec<crate::ty::ParamTy> = external.owner_generic_params.clone();
+                    params.extend(external.generic_params.iter().cloned());
+                    crate::ty::RuntimeGenericLayout::new(&params)
+                }
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
                 | MemberResolution::InterfaceVirtualField { .. } => {
@@ -6382,10 +6427,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    /// Report the reserved BEP-066 slice 6a diagnostic when a call's callee
-    /// resolved into a MOUNTED package (see `foreign_callable_exprs`): the
-    /// reference typed fine, but the call needs a `MemberResolution` for MIR,
-    /// which a source-less blob cannot provide until the call-lowering PR.
+    /// Report the reserved BEP-066 slice 6a diagnostic when a mounted callee
+    /// has no loc-free link contract (currently compiler/VM builtin bodies).
     fn report_reserved_mounted_call(&mut self, callee: ExprId, at: ExprId) {
         if let Some(path) = self.foreign_callable_exprs.get(&callee).cloned() {
             self.context
@@ -10556,13 +10599,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         });
                     }
-                    ClassMethodLookup::ForeignFound { ty } => {
-                        // A mounted class's method: no locs to record — the
-                        // reference types, a call is reported reserved.
-                        self.foreign_callable_exprs.insert(
-                            expr_id,
-                            Name::new(path.iter().map(Name::as_str).collect::<Vec<_>>().join(".")),
-                        );
+                    ClassMethodLookup::ForeignFound { ty, callee } => {
+                        // A mounted class's method reached through a
+                        // source-package path (unreachable in practice — a
+                        // class found in raw items is never mounted): mirror
+                        // the mounted UFCS arm's recording.
+                        match callee {
+                            Some(callee)
+                                if matches!(
+                                    callee.target,
+                                    crate::inference::ExternalCallTarget::Method { .. }
+                                ) =>
+                            {
+                                self.resolutions.insert(
+                                    expr_id,
+                                    crate::inference::MemberResolution::External(callee),
+                                );
+                            }
+                            Some(_) | None => {
+                                self.foreign_callable_exprs.insert(
+                                    expr_id,
+                                    Name::new(
+                                        path.iter().map(Name::as_str).collect::<Vec<_>>().join("."),
+                                    ),
+                                );
+                            }
+                        }
                         return Some(ty);
                     }
                     ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => {}
@@ -10576,12 +10638,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// The MOUNTED-package arm of [`Self::resolve_package_item`] (BEP-066
     /// slice 6a): answer a `pkg.…` value/type path from the mounted interface
     /// blob. Mirrors the raw-items arm — functions type from their exported
-    /// signature (but record NO `MemberResolution`, so a CALL of the result is
-    /// reported reserved via `foreign_callable_exprs`); classes/enums/
+    /// signature and record a loc-free [`MemberResolution::External`] (so MIR
+    /// lowers the call to the library's exported symbol); classes/enums/
     /// interfaces produce the same bare value-position types as
     /// `resolve_package_item`'s type arm; enum variants verify against the
     /// exported variant list. UFCS method paths (`app.Widget.describe`) type
-    /// through the exported class methods, also call-reserved.
+    /// through the exported class methods; interface-scoped UFCS calls route
+    /// through the interface slot. Blob-exported builtin-kind bodies remain
+    /// call-reserved via `foreign_callable_exprs` (E0158).
     fn resolve_mounted_package_item(
         &mut self,
         iface: &'db crate::package_interface::PackageInterface,
@@ -10599,9 +10663,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         let item = path.last().expect("non-empty path");
         let ns = &path[..path.len() - 1];
 
-        // Free function: the exported signature is the reference type.
+        // Free function: the exported signature is the reference type, and the
+        // call target is the exported `pkg.ns….name` symbol.
         if let Some(f) = iface.lookup_function(ns, item) {
-            self.foreign_callable_exprs.insert(expr_id, dotted(path));
+            if f.builtin_kind.is_some() {
+                // A blob-exported builtin body (`$rust_function` and kin) has
+                // no symbolic call contract for a consumer image — reserved.
+                self.foreign_callable_exprs.insert(expr_id, dotted(path));
+            } else {
+                self.resolutions.insert(
+                    expr_id,
+                    crate::inference::MemberResolution::External(Arc::new(
+                        crate::inference::ExternalCallable {
+                            target: crate::inference::ExternalCallTarget::Free {
+                                package: pkg_name.clone(),
+                                namespace: ns.to_vec(),
+                                name: item.clone(),
+                            },
+                            takes_self: false,
+                            owner_generic_params: Vec::new(),
+                            generic_params: f.generic_params.clone(),
+                            generic_param_bounds: f.generic_param_bounds.clone(),
+                        },
+                    )),
+                );
+            }
             return Some(Ty::Function {
                 params: f.params.clone(),
                 ret: Box::new(f.return_type.clone()),
@@ -10655,15 +10741,39 @@ impl<'db> TypeInferenceBuilder<'db> {
         for split in 1..path.len() {
             let ns = &path[..split - 1];
             let type_name = &path[split - 1];
-            if let Some(ExportedType::Class { qtn, .. }) = iface.lookup_type(ns, type_name) {
+            if let Some(ExportedType::Class {
+                qtn,
+                generic_params,
+                ..
+            }) = iface.lookup_type(ns, type_name)
+            {
                 if split + 1 != path.len() {
                     continue;
                 }
                 let method_name = &path[split];
-                if let ClassMethodLookup::ForeignFound { ty } =
+                if let ClassMethodLookup::ForeignFound { ty, callee } =
                     self.lookup_class_method(qtn, &[], method_name)
                 {
-                    self.foreign_callable_exprs.insert(expr_id, dotted(path));
+                    match callee {
+                        // A plain method in static (UFCS) form: the class's
+                        // own generic params are supplied at the call site, so
+                        // they prepend the declared list (the loc path's
+                        // `treat_as_static_method` shape).
+                        Some(callee) => {
+                            let mut callee = (*callee).clone();
+                            callee.owner_generic_params.clone_from(generic_params);
+                            self.resolutions.insert(
+                                expr_id,
+                                crate::inference::MemberResolution::External(Arc::new(callee)),
+                            );
+                        }
+                        // A blob-exported builtin-kind method has no consumer
+                        // link contract (the implementation lives in the
+                        // compiler/VM, not as an ordinary B-693 unit symbol).
+                        None => {
+                            self.foreign_callable_exprs.insert(expr_id, dotted(path));
+                        }
+                    }
                     return Some(ty);
                 }
             }
@@ -11002,13 +11112,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                         class_loc,
                         func_loc,
                     } => Some((ty, class_loc, func_loc)),
-                    ClassMethodLookup::ForeignFound { ty } => {
+                    ClassMethodLookup::ForeignFound { ty, callee } => {
                         // A mounted class's method: the reference types from
                         // the exported signature (self stripped for a bound
-                        // access), but no `MemberResolution` exists — a call
-                        // of the result is reported reserved.
-                        self.foreign_callable_exprs
-                            .insert(at, Name::new(format!("{class_name}.{member}")));
+                        // access) and records the loc-free `External`
+                        // resolution — a plain method lowers to the exported
+                        // `pkg.Class.name` symbol, an `implements`-block one
+                        // routes through its interface slot. The receiver's
+                        // class args seed the frame at runtime (bound form),
+                        // so `owner_generic_params` stays empty. Builtin-kind
+                        // residue stays call-reserved.
+                        match callee {
+                            Some(callee) => {
+                                self.resolutions.insert(
+                                    at,
+                                    crate::inference::MemberResolution::External(callee),
+                                );
+                            }
+                            None => {
+                                self.foreign_callable_exprs
+                                    .insert(at, Name::new(format!("{class_name}.{member}")));
+                            }
+                        }
                         if bound
                             && let Ty::Function {
                                 params,
@@ -12727,8 +12852,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> ClassMethodLookup<'db> {
         // A MOUNTED (source-less) dependency's class: type the method from its
         // exported signature (BEP-066 slice 6a) — declaration-scoped, with the
-        // class generics substituted at this receiver's type args. No locs.
+        // class generics substituted at this receiver's type args. No locs;
+        // the `ForeignFound` carries the loc-free `External` callee facts so
+        // the caller can record a MIR-lowerable resolution.
         if let Some(crate::package_interface::ExportedType::Class {
+            qtn,
             generic_params,
             methods,
             ..
@@ -12745,6 +12873,39 @@ impl<'db> TypeInferenceBuilder<'db> {
                     crate::generics::substitute_ty(ty, &bindings)
                 }
             };
+            // The symbol a call lowers to: an `implements`-block method routes
+            // through its interface slot (the VM resolves the receiver's
+            // registered impl — the `InterfaceConcreteMethod` routing); a
+            // plain method is the direct `pkg.ns….Class.name` symbol the
+            // library's own emit exported. A blob-exported builtin-kind body
+            // has no lowerable symbol contract here — reserved (`None`).
+            let callee = if method.builtin_kind.is_some() {
+                None
+            } else {
+                let target = match &method.interface_target {
+                    Some(iface_qtn) => crate::inference::ExternalCallTarget::Interface {
+                        iface: iface_qtn.clone(),
+                        method: method.name.clone(),
+                    },
+                    None => crate::inference::ExternalCallTarget::Method {
+                        package: qtn.package().clone(),
+                        namespace: qtn.namespace().clone(),
+                        class: qtn.name().clone(),
+                        name: method.name.clone(),
+                    },
+                };
+                Some(Arc::new(crate::inference::ExternalCallable {
+                    target,
+                    takes_self: method
+                        .params
+                        .first()
+                        .and_then(|p| p.name.as_ref())
+                        .is_some_and(|n| n.as_str() == "self"),
+                    owner_generic_params: Vec::new(),
+                    generic_params: method.generic_params.clone(),
+                    generic_param_bounds: method.generic_param_bounds.clone(),
+                }))
+            };
             return ClassMethodLookup::ForeignFound {
                 ty: Ty::Function {
                     params: method
@@ -12760,6 +12921,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     throws: Box::new(substitute(&method.callable_throws)),
                     attr: TyAttr::default(),
                 },
+                callee,
             };
         }
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {

@@ -30,6 +30,23 @@ struct InterfaceView<'db> {
     realized: baml_type::Interface,
 }
 
+/// A member declarer may have a source loc or be represented solely by a
+/// mounted interface row. Keeping both in one candidate set is essential for
+/// conjunction ambiguity: source and mounted bounds are sibling constraints.
+enum MemberDeclarer<'db> {
+    Source(InterfaceView<'db>),
+    Mounted(baml_type::Interface),
+}
+
+impl MemberDeclarer<'_> {
+    fn realized(&self) -> &baml_type::Interface {
+        match self {
+            Self::Source(view) => &view.realized,
+            Self::Mounted(realized) => realized,
+        }
+    }
+}
+
 impl<'db> InterfaceView<'db> {
     /// The namespace the interface is declared in — the scope its member type expressions
     /// resolve unqualified names against.
@@ -340,6 +357,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         recv: SelfReceiver<'_>,
         access: MemberAccess<'_>,
     ) -> Option<Ty> {
+        // A MOUNTED (source-less) interface has no loc: its declaration
+        // surface is the exported row, resolved by pure substitution
+        // (BEP-066 slice 6a).
+        if crate::package_interface::mounted_type_row(self.context.db(), bound.name).is_some() {
+            return self.resolve_member_on_mounted_interface(bound, recv, access);
+        }
         let declarers = self.member_declarers_for_bound(bound, access.member);
         self.arbitrate_member_declarers(&declarers, recv, access)
     }
@@ -362,7 +385,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         recv: SelfReceiver<'_>,
         access: MemberAccess<'_>,
     ) -> Option<Ty> {
-        let mut declarers: Vec<InterfaceView<'db>> = Vec::new();
+        let mut declarers: Vec<MemberDeclarer<'db>> = Vec::new();
         for iface in bounds {
             for view in self.member_declarers_for_bound(
                 InterfaceBound {
@@ -372,12 +395,132 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
                 access.member,
             ) {
-                if !declarers.iter().any(|v| v.realized == view.realized) {
-                    declarers.push(view);
+                if !declarers.iter().any(|v| v.realized() == &view.realized) {
+                    declarers.push(MemberDeclarer::Source(view));
+                }
+            }
+            for declarer in self.mounted_method_declarers_for_bound(
+                InterfaceBound {
+                    name: &iface.name,
+                    type_args: &iface.generics,
+                    associated_bindings: &iface.associated_types,
+                },
+                access.member,
+            ) {
+                if !declarers
+                    .iter()
+                    .any(|v| v.realized() == declarer.realized())
+                {
+                    declarers.push(declarer);
                 }
             }
         }
-        self.arbitrate_member_declarers(&declarers, recv, access)
+        match declarers.as_slice() {
+            [] => None,
+            [MemberDeclarer::Source(view)] => {
+                self.resolve_member_on_one_interface(view, recv, &access)
+            }
+            [MemberDeclarer::Mounted(realized)] => self.resolve_member_on_mounted_interface(
+                InterfaceBound {
+                    name: &realized.name,
+                    type_args: &realized.generics,
+                    associated_bindings: &realized.associated_types,
+                },
+                recv,
+                access,
+            ),
+            _ => {
+                let receiver = match &recv {
+                    SelfReceiver::RigidVar(name) => name.to_string(),
+                    SelfReceiver::ExactTy(ty)
+                    | SelfReceiver::Existential(ty)
+                    | SelfReceiver::Union(ty) => ty.render_user_facing(),
+                };
+                let sources = declarers
+                    .iter()
+                    .map(|v| self.qualified_interface_display(v.realized()))
+                    .collect();
+                self.context.report_at_member_simple(
+                    TirTypeError::AmbiguousInterfaceMethod {
+                        class_name: Name::new(&receiver),
+                        method_name: access.member.clone(),
+                        sources,
+                    },
+                    access.at,
+                );
+                Some(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
+            }
+        }
+    }
+
+    /// Loc-free declarers for one mounted bound, with root-wins tiering and a
+    /// mixed source/mounted `requires` closure. Mounted fields remain outside
+    /// the current slice; this helper intentionally enumerates methods only.
+    fn mounted_method_declarers_for_bound(
+        &self,
+        bound: InterfaceBound<'_>,
+        member: &Name,
+    ) -> Vec<MemberDeclarer<'db>> {
+        use crate::package_interface::ExportedType;
+
+        let db = self.context.db();
+        let Some(ExportedType::Interface {
+            qtn,
+            generic_params,
+            required_methods,
+            default_methods,
+            requires,
+            ..
+        }) = crate::package_interface::mounted_type_row(db, bound.name)
+        else {
+            return Vec::new();
+        };
+        let root = baml_type::Interface::new(
+            qtn.clone(),
+            bound.type_args.to_vec(),
+            bound.associated_bindings.to_vec(),
+        );
+        if required_methods
+            .iter()
+            .chain(default_methods)
+            .any(|method| method.name == *member)
+        {
+            return vec![MemberDeclarer::Mounted(root)];
+        }
+
+        let bindings = crate::generics::bind_type_vars(generic_params, bound.type_args);
+        let mut out = Vec::new();
+        for required in requires {
+            let realized = required.map_tys(|ty| crate::generics::substitute_ty(ty, &bindings));
+            let pkg =
+                baml_compiler2_hir::package::PackageId::new(db, realized.name.package().clone());
+            match baml_compiler2_ppir::package_items(db, pkg)
+                .lookup_type(realized.name.namespace(), realized.name.name())
+            {
+                Some(Definition::Interface(loc))
+                    if self.interface_member_kind(loc, member) == Some(UnionMemberKind::Method) =>
+                {
+                    out.push(MemberDeclarer::Source(InterfaceView { loc, realized }));
+                }
+                _ => {
+                    if let Some(ExportedType::Interface {
+                        required_methods,
+                        default_methods,
+                        ..
+                    }) = crate::package_interface::mounted_type_row(db, &realized.name)
+                        && required_methods
+                            .iter()
+                            .chain(default_methods)
+                            .any(|method| method.name == *member)
+                    {
+                        out.push(MemberDeclarer::Mounted(realized));
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Every interface in `bound`'s `requires` closure that declares `member`.
@@ -532,18 +675,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             let Some(data) = resolved_impl.data(db) else {
                 continue;
             };
-            // A mounted blob impl (or an impl of a mounted interface) has no
-            // locs to record for MIR's concrete dispatch — method calls
-            // through those land with the mounted-call lowering PR, so the
-            // candidate is skipped (the member reports unresolved).
-            let (Some(impl_loc), Some(iface_loc)) =
-                (resolved_impl.impl_loc(), data.interface_loc())
-            else {
-                continue;
-            };
             let realized = resolved_impl.implemented_interface(db);
             if !method_candidates.iter().any(|(r, ..)| *r == realized) {
-                method_candidates.push((realized, impl_loc, iface_loc, data, resolved_method));
+                method_candidates.push((
+                    realized,
+                    resolved_impl.impl_loc(),
+                    data.interface_loc(),
+                    data,
+                    resolved_method,
+                ));
             }
         }
         let field_sources = self.concrete_interface_field_sources(&impls, member);
@@ -605,6 +745,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         let (realized, impl_loc, iface_loc, data, resolved_method) =
             method_candidates.into_iter().next()?;
 
+        // The fully source-backed case preserves its concrete-resolution locs.
+        // Any mounted side is loc-free and routes through the interface slot;
+        // obtain the same symbolic declaration surface from the package export
+        // and let `build_foreign_interface_method_ty` realize it at `base_ty`.
+        let Some(func_loc) = resolved_method.method_loc() else {
+            return self.resolve_member_from_external_impl(base_ty, member, at, bound, &realized);
+        };
+        let (Some(impl_loc), Some(iface_loc)) = (impl_loc, iface_loc) else {
+            return self.resolve_member_from_external_impl(base_ty, member, at, bound, &realized);
+        };
+
         // The realized interface declares the member; build its `Ty::Function` with `Self`
         // pinned to the concrete receiver (the impl conforms, so the signature is the
         // interface's). The view lowers the interface's declared types in its own package.
@@ -621,10 +772,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // seed with the impl's frame (the override body is keyed by the impl's own params).
         self.resolutions.insert(
             at,
-            crate::inference::MemberResolution::InterfaceConcreteMethod {
-                impl_loc,
-                func_loc: resolved_method.method,
-            },
+            crate::inference::MemberResolution::InterfaceConcreteMethod { impl_loc, func_loc },
         );
         if !resolved_method.from_interface_default {
             let frame = data
@@ -636,6 +784,59 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.owner_type_arg_binding_seed.insert(at, frame);
         }
         Some(ty)
+    }
+
+    /// Resolve a concrete member supplied by a loc-free impl through the
+    /// implemented interface's exported declaration row. The row may itself
+    /// be mounted or source-backed in this database; cloning it before the
+    /// builder mutation keeps the Salsa borrow boundary explicit.
+    fn resolve_member_from_external_impl(
+        &mut self,
+        base_ty: &Ty,
+        member: &Name,
+        at: ExprId,
+        bound: bool,
+        realized: &baml_type::Interface,
+    ) -> Option<Ty> {
+        use crate::package_interface::ExportedType;
+
+        let db = self.context.db();
+        let exported = crate::package_interface::mounted_type_row(db, &realized.name)
+            .cloned()
+            .or_else(|| {
+                let pkg = baml_compiler2_hir::package::PackageId::new(
+                    db,
+                    realized.name.package().clone(),
+                );
+                crate::package_interface::package_interface(db, pkg)
+                    .lookup_type(realized.name.namespace(), realized.name.name())
+                    .cloned()
+            })?;
+        let ExportedType::Interface {
+            qtn,
+            self_param,
+            generic_params,
+            required_methods,
+            default_methods,
+            ..
+        } = exported
+        else {
+            return None;
+        };
+        let method = required_methods
+            .iter()
+            .chain(&default_methods)
+            .find(|method| method.name == *member)?;
+        self.build_foreign_interface_method_ty(
+            &qtn,
+            &self_param,
+            &generic_params,
+            realized,
+            method,
+            SelfReceiver::ExactTy(base_ty),
+            &MemberAccess { member, at, bound },
+        )
+        .into()
     }
 
     /// All impl blocks the concrete `base_ty` satisfies — `impls_for_type` with the builder's
@@ -1501,4 +1702,372 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         fn_ty
     }
+
+    /// Resolve `access.member` on a receiver whose bound names a MOUNTED
+    /// (source-less) interface — the loc-free foreign twin of
+    /// [`Self::resolve_interface_member`] (BEP-066 slice 6a). The exported row
+    /// carries pre-lowered symbolic-`Self` signatures and the pre-flattened
+    /// `requires` closure, so root-wins tiering runs over rows and realization
+    /// at this receiver is pure substitution. A `requires` parent that is
+    /// source-backed in THIS database (a mounted interface requiring a stdlib
+    /// one) delegates to the ordinary loc view.
+    ///
+    /// Mounted interface FIELDS deliberately stay unresolved here (fail-closed
+    /// residue: the virtual-field view's loc-free lowering lands in a
+    /// follow-up), and unbound (`I.method`) value accesses never reach this
+    /// path (they stay call-reserved upstream).
+    fn resolve_member_on_mounted_interface(
+        &mut self,
+        bound: InterfaceBound<'_>,
+        recv: SelfReceiver<'_>,
+        access: MemberAccess<'_>,
+    ) -> Option<Ty> {
+        use crate::package_interface::ExportedType;
+        let db = self.context.db();
+        let ExportedType::Interface {
+            qtn,
+            self_param,
+            generic_params,
+            fields,
+            required_methods,
+            default_methods,
+            requires,
+            ..
+        } = crate::package_interface::mounted_type_row(db, bound.name)?
+        else {
+            return None;
+        };
+
+        // Root-wins tier: the mounted root's own declaration surface shadows
+        // everything it transitively requires.
+        if let Some(method) = required_methods
+            .iter()
+            .chain(default_methods)
+            .find(|m| m.name == *access.member)
+        {
+            let realized = baml_type::Interface::new(
+                qtn.clone(),
+                bound.type_args.to_vec(),
+                bound.associated_bindings.to_vec(),
+            );
+            return Some(self.build_foreign_interface_method_ty(
+                qtn,
+                self_param,
+                generic_params,
+                &realized,
+                method,
+                recv,
+                &access,
+            ));
+        }
+        if fields.iter().any(|(name, _, _)| name == access.member) {
+            // Field residue: unresolved (never a fabricated view).
+            return None;
+        }
+
+        // Transitive tier: the pre-flattened `requires` closure realized at
+        // the bound's args, deduped by realized identity; declarers split by
+        // which declaration surface they have HERE.
+        let bindings = crate::generics::bind_type_vars(generic_params, bound.type_args);
+        let mut source_declarers: Vec<InterfaceView<'db>> = Vec::new();
+        let mut foreign_declarers: Vec<baml_type::Interface> = Vec::new();
+        for required in requires {
+            let realized = required.map_tys(|ty| crate::generics::substitute_ty(ty, &bindings));
+            let req_pkg =
+                baml_compiler2_hir::package::PackageId::new(db, realized.name.package().clone());
+            match baml_compiler2_ppir::package_items(db, req_pkg)
+                .lookup_type(realized.name.namespace(), realized.name.name())
+            {
+                Some(Definition::Interface(loc)) => {
+                    if self.interface_member_kind(loc, access.member).is_some()
+                        && !source_declarers.iter().any(|v| v.realized == realized)
+                    {
+                        source_declarers.push(InterfaceView { loc, realized });
+                    }
+                }
+                _ => {
+                    if let Some(ExportedType::Interface {
+                        required_methods,
+                        default_methods,
+                        ..
+                    }) = crate::package_interface::mounted_type_row(db, &realized.name)
+                        && required_methods
+                            .iter()
+                            .chain(default_methods)
+                            .any(|m| m.name == *access.member)
+                        && !foreign_declarers.contains(&realized)
+                    {
+                        foreign_declarers.push(realized);
+                    }
+                }
+            }
+        }
+        match (source_declarers.as_slice(), foreign_declarers.as_slice()) {
+            ([], []) => None,
+            ([one], []) => {
+                let view = one.clone();
+                self.resolve_member_on_one_interface(&view, recv, &access)
+            }
+            ([], [_one]) => {
+                let realized = foreign_declarers.into_iter().next().expect("one declarer");
+                let ExportedType::Interface {
+                    qtn,
+                    self_param,
+                    generic_params,
+                    required_methods,
+                    default_methods,
+                    ..
+                } = crate::package_interface::mounted_type_row(db, &realized.name)?
+                else {
+                    return None;
+                };
+                let method = required_methods
+                    .iter()
+                    .chain(default_methods)
+                    .find(|m| m.name == *access.member)?;
+                Some(self.build_foreign_interface_method_ty(
+                    qtn,
+                    self_param,
+                    generic_params,
+                    &realized,
+                    method,
+                    recv,
+                    &access,
+                ))
+            }
+            // ≥2 incomparable declarers (any mix of surfaces): ambiguous,
+            // exactly as `arbitrate_member_declarers` reports it.
+            _ => {
+                let receiver = match &recv {
+                    SelfReceiver::RigidVar(name) => name.to_string(),
+                    SelfReceiver::ExactTy(ty)
+                    | SelfReceiver::Existential(ty)
+                    | SelfReceiver::Union(ty) => ty.render_user_facing(),
+                };
+                let sources: Vec<String> = source_declarers
+                    .iter()
+                    .map(|v| self.qualified_interface_display(&v.realized))
+                    .chain(
+                        foreign_declarers
+                            .iter()
+                            .map(|r| self.qualified_interface_display(r)),
+                    )
+                    .collect();
+                self.context.report_at_member_simple(
+                    TirTypeError::AmbiguousInterfaceMethod {
+                        class_name: Name::new(&receiver),
+                        method_name: access.member.clone(),
+                        sources,
+                    },
+                    access.at,
+                );
+                Some(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
+            }
+        }
+    }
+
+    /// Build the `Ty::Function` for a MOUNTED interface's method resolved on a
+    /// receiver — the substitution twin of [`Self::build_interface_method_ty`]
+    /// (BEP-066 slice 6a). The exported signature keeps `Self` symbolic (and
+    /// associated types as `Self.<name>` projections on it), so realization is
+    /// one substitution: interface params to the realized args, `Self` to the
+    /// receiver; residual projections reduce under `normalize` through the
+    /// receiver's pins/impls. Records the loc-free `External` resolution
+    /// (interface-slot routing — the VM resolves the receiver's registered
+    /// impl) plus the same call-site seeds the source path records.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the exported row's decomposed fields plus the receiver/access pair"
+    )]
+    fn build_foreign_interface_method_ty(
+        &mut self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        self_param: &crate::ty::ParamTy,
+        iface_generic_params: &[crate::ty::ParamTy],
+        realized: &baml_type::Interface,
+        method: &crate::package_interface::ExportedFunction,
+        recv: SelfReceiver<'_>,
+        access: &MemberAccess<'_>,
+    ) -> Ty {
+        // `Self` for this receiver. The foreign path serves bound accesses and
+        // rigid receivers; an exact/union/existential receiver pins `Self` to
+        // its own type (the existential's pins travel on the type itself).
+        let (self_ty, rigid_pin) = match recv {
+            SelfReceiver::RigidVar(param) => (
+                Ty::TypeVar(param.clone(), TyAttr::default()),
+                Some(param.clone()),
+            ),
+            SelfReceiver::ExactTy(ty) | SelfReceiver::Union(ty) | SelfReceiver::Existential(ty) => {
+                (ty.clone(), None)
+            }
+        };
+
+        // Object safety on a bare existential/union receiver, on the exported
+        // symbolic-`Self` surface: a non-receiver parameter mentioning bare
+        // `Self` (projections exempt) is uncallable; `Self` nested in an
+        // invariant constructor in return/throws likewise (a bare top-level
+        // `-> Self` collapses covariantly). Mirrors the source arm.
+        if matches!(recv, SelfReceiver::Existential(_) | SelfReceiver::Union(_)) && access.bound {
+            let param_self = method
+                .params
+                .iter()
+                .filter(|p| p.name.as_ref().map(Name::as_str) != Some("self"))
+                .any(|p| mentions_bare_self(&p.ty, self_param));
+            let position = if param_self {
+                Some(SelfCallPosition::Parameter)
+            } else if self_nested_in_invariant_position(&method.return_type, self_param)
+                || self_nested_in_invariant_position(&method.callable_throws, self_param)
+            {
+                Some(SelfCallPosition::NestedInReturn)
+            } else {
+                None
+            };
+            if let Some(position) = position {
+                self.context.report_simple(
+                    TirTypeError::InvalidSelfCallThroughInterface {
+                        interface_name: iface_qtn.name().clone(),
+                        method_name: access.member.clone(),
+                        position,
+                    },
+                    access.at,
+                );
+            }
+        }
+
+        let mut bindings =
+            crate::generics::bind_type_vars(iface_generic_params, &realized.generics);
+        bindings.insert(self_param.clone(), self_ty);
+        for gp in &method.generic_params {
+            bindings
+                .entry(gp.clone())
+                .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+        }
+        let substitute = |ty: &Ty| crate::generics::substitute_ty(ty, &bindings);
+
+        let takes_self = method
+            .params
+            .first()
+            .and_then(|p| p.name.as_ref())
+            .is_some_and(|n| n.as_str() == "self");
+        let mut params: Vec<crate::ty::FunctionParamTy> = method
+            .params
+            .iter()
+            .map(|p| crate::ty::FunctionParamTy {
+                name: p.name.clone(),
+                ty: substitute(&p.ty),
+                mode: p.mode,
+            })
+            .collect();
+        if access.bound {
+            params = crate::generics::skip_self_param(&params).to_vec();
+        }
+        let fn_ty = Ty::Function {
+            params,
+            ret: Box::new(substitute(&method.return_type)),
+            throws: Box::new(substitute(&method.callable_throws)),
+            attr: TyAttr::default(),
+        };
+
+        // The call-site facts, realized at this receiver: the loc-free
+        // `External` resolution (the interface's method slot — virtual
+        // dispatch), the interface args seed for bound checks that reference
+        // owner params, and the rigid `Self` pin.
+        let realized_bounds: Vec<Vec<baml_type::Interface>> = method
+            .generic_param_bounds
+            .iter()
+            .map(|conjunction| {
+                conjunction
+                    .iter()
+                    .map(|bound| bound.map_tys(&substitute))
+                    .collect()
+            })
+            .collect();
+        self.resolutions.insert(
+            access.at,
+            crate::inference::MemberResolution::External(std::sync::Arc::new(
+                crate::inference::ExternalCallable {
+                    target: crate::inference::ExternalCallTarget::Interface {
+                        iface: iface_qtn.clone(),
+                        method: method.name.clone(),
+                    },
+                    takes_self,
+                    owner_generic_params: Vec::new(),
+                    generic_params: method.generic_params.clone(),
+                    generic_param_bounds: realized_bounds,
+                },
+            )),
+        );
+        let owner_bindings: Vec<(crate::ty::ParamTy, Ty)> = iface_generic_params
+            .iter()
+            .cloned()
+            .zip(realized.generics.iter().cloned())
+            .collect();
+        if !owner_bindings.is_empty() {
+            self.owner_type_arg_binding_seed
+                .insert(access.at, owner_bindings);
+        }
+        if let Some(pin) = rigid_pin {
+            self.self_pinned_rigid_var.insert(access.at, pin);
+        }
+        fn_ty
+    }
+}
+
+/// Whether `ty` mentions the symbolic `Self` parameter OUTSIDE an
+/// associated-type projection base (`Self` is bare; `Self.Item` is exempt —
+/// the receiver's pins make it one concrete type). The exported-row twin of
+/// `type_ref_contains_bare_self`, walking the already-lowered `Ty`.
+fn mentions_bare_self(ty: &Ty, self_param: &crate::ty::ParamTy) -> bool {
+    match ty {
+        Ty::TypeVar(param, _) => param == self_param,
+        // The projection base is exempt; its qualifying interface's own types
+        // are still walked (a `(Self as I<Self>)`-shaped qualifier is bare use).
+        Ty::AssociatedTypeProjection { interface, .. } => {
+            interface.tys().any(|t| mentions_bare_self(t, self_param))
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => mentions_bare_self(inner, self_param),
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => {
+            mentions_bare_self(k, self_param) || mentions_bare_self(v, self_param)
+        }
+        Ty::Union(tys, _) => tys.iter().any(|t| mentions_bare_self(t, self_param)),
+        Ty::Future(value, error, _) => {
+            mentions_bare_self(value, self_param) || mentions_bare_self(error, self_param)
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| mentions_bare_self(&param.ty, self_param))
+                || mentions_bare_self(ret, self_param)
+                || mentions_bare_self(throws, self_param)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| mentions_bare_self(t, self_param)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(|t| mentions_bare_self(t, self_param))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| mentions_bare_self(ty, self_param))
+        }
+        _ => false,
+    }
+}
+
+/// Whether bare `Self` appears NESTED inside `ty` — anywhere except as the
+/// whole type — the invariant-constructor half of the object-safety rule for
+/// return/throws positions (`-> Self` collapses covariantly; `-> Self[]` /
+/// `-> Box<Self>` do not).
+fn self_nested_in_invariant_position(ty: &Ty, self_param: &crate::ty::ParamTy) -> bool {
+    if matches!(ty, Ty::TypeVar(param, _) if param == self_param) {
+        return false;
+    }
+    mentions_bare_self(ty, self_param)
 }

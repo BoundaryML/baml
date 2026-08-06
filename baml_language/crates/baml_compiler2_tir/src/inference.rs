@@ -825,6 +825,97 @@ pub enum MemberResolution<'db> {
         field_index: u32,
         field: Name,
     },
+    /// A callee that resolved into a MOUNTED (source-less) dependency package
+    /// (BEP-066 slice 6a). Loc-free by construction: the identity is carried as
+    /// plain names — exactly the material MIR's `ItemRef` is built from — and the
+    /// call-site facts TIR/MIR consult (receiver convention, generic params and
+    /// bounds) are copied OUT of the exported signature at resolution time. All
+    /// data is owned (never a borrow into another query's storage — the
+    /// incremental-invalidation rule `PackageResolutionContext` documents);
+    /// `Arc`-wrapped because resolutions are cloned freely during MIR lowering.
+    External(Arc<ExternalCallable>),
+}
+
+/// The loc-free facts of a mounted-package callee — see
+/// [`MemberResolution::External`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalCallable {
+    /// Which linked symbol the call (or value reference) lowers to.
+    pub target: ExternalCallTarget,
+    /// Whether the callee's first declared parameter is the `self` receiver
+    /// (drives MIR's receiver-prepending on method-shaped call sites).
+    pub takes_self: bool,
+    /// The receiver-owner's generic params when they are supplied at the CALL
+    /// site (the static/UFCS form on a generic mounted class); empty for
+    /// bound-receiver accesses (the receiver's own class args seed the frame),
+    /// free functions, and interface targets. Mirrors the source path's
+    /// `treat_as_static_method` distinction in `callee_declared_generics`.
+    pub owner_generic_params: Vec<crate::ty::ParamTy>,
+    /// The callee's exported generic params: user-declared params first, then
+    /// any synthetic effect params preserved by the export kind. Impl-method
+    /// rows currently carry the declared prefix only. Only user-declared
+    /// params are call-site suppliable ([`Self::user_generic_params`]), and
+    /// `RuntimeGenericLayout` erases effects from every runtime frame.
+    pub generic_params: Vec<crate::ty::ParamTy>,
+    /// Per-param interface-bound conjunctions, parallel to
+    /// [`generic_params`](Self::generic_params) (when synthetic effect params
+    /// are present they are unbounded, so their entries are empty).
+    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
+}
+
+impl ExternalCallable {
+    /// The user-declared (call-site suppliable) prefix of
+    /// [`generic_params`](Self::generic_params) with its bounds — synthetic
+    /// effect params are always inferred, never written.
+    pub fn user_generic_params(
+        &self,
+    ) -> impl Iterator<Item = (&crate::ty::ParamTy, &Vec<baml_type::Interface>)> {
+        self.generic_params
+            .iter()
+            .zip(self.generic_param_bounds.iter())
+            .filter(|(param, _)| !baml_type::is_synthetic_effect_param(param.name()))
+    }
+
+    /// The callee's short name, for diagnostics.
+    pub fn display_name(&self) -> Name {
+        match &self.target {
+            ExternalCallTarget::Free { name, .. } | ExternalCallTarget::Method { name, .. } => {
+                name.clone()
+            }
+            ExternalCallTarget::Interface { method, .. } => method.clone(),
+        }
+    }
+}
+
+/// The linked-symbol identity of a mounted-package callee. Names only — the
+/// same fields MIR's `ItemRef::Free`/`ItemRef::Method` carry, so lowering is a
+/// pure repackaging (and matches the symbol the library's own emit exported).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalCallTarget {
+    /// A free function: `pkg.ns….name`.
+    Free {
+        package: Name,
+        namespace: Vec<Name>,
+        name: Name,
+    },
+    /// A plain (non-`implements`) class method: `pkg.ns….Class.name` — the
+    /// exact symbol the library's `def_to_item_ref` exported for it.
+    Method {
+        package: Name,
+        namespace: Vec<Name>,
+        class: Name,
+        name: Name,
+    },
+    /// A method reached through an interface (an `implements`-block method on
+    /// a concrete mounted receiver, or any interface-dispatched member whose
+    /// declaring interface is mounted): the emitted callee is the interface's
+    /// method slot (`ifacepkg.ns….Iface.method`) and the VM resolves the
+    /// receiver's registered impl — the same routing MIR uses for
+    /// [`MemberResolution::InterfaceConcreteMethod`].
+    Interface {
+        iface: crate::ty::QualifiedTypeName,
+        method: Name,
+    },
 }
 
 // ── Per-Scope Inference Result ─────────────────────────────────────────────

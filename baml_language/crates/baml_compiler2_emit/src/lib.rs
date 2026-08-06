@@ -2650,6 +2650,31 @@ fn generate_impl(
         &tables.classes,
         &mut tables.program_packages,
     );
+    // A MOUNTED (source-less) package contributes no files to this database,
+    // so `build_packages` cannot rebuild its impl rules or recursive aliases
+    // (`from_stdlib_program` clears both for recomputation). Restore them from
+    // the spliced base image, which carries the library's own compiled rules —
+    // without this, interface dispatch through a mounted impl would find no
+    // registered rule at runtime (BEP-066 slice 6a).
+    if let Some(base) = base {
+        for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
+            let Some(base_pkg) = base.packages.get(&pkg_name) else {
+                continue;
+            };
+            match tables.program_packages.get_mut(&pkg_name) {
+                Some(pkg) => {
+                    pkg.impl_rules.clone_from(&base_pkg.impl_rules);
+                    pkg.recursive_type_aliases
+                        .clone_from(&base_pkg.recursive_type_aliases);
+                }
+                None => {
+                    tables
+                        .program_packages
+                        .insert(pkg_name.clone(), base_pkg.clone());
+                }
+            }
+        }
+    }
     tables.program_packages.sort_keys();
     program.packages = tables.program_packages;
 

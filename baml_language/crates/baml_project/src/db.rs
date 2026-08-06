@@ -1290,7 +1290,10 @@ impl ProjectDatabase {
             Some(
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. },
+                | MemberResolution::InterfaceVirtualField { .. }
+                // A mounted (source-less) callee has no `FunctionLoc` in this
+                // database (BEP-066 slice 6a).
+                | MemberResolution::External(_),
             )
             | None => None,
         }
@@ -1394,7 +1397,7 @@ impl ProjectDatabase {
         if methods.next().is_some() {
             return None;
         }
-        Some(method.method)
+        method.method_loc()
     }
 
     fn is_single_llm_graph(
