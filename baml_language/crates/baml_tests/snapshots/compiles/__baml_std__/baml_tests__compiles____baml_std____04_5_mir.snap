@@ -18,6 +18,8 @@ fn baml.Bigint.pow = builtin(vm)
 
 fn baml.Bigint.ilog = builtin(vm)
 
+fn baml.Bigint.to_int = builtin(vm)
+
 fn baml.Bigint.parse = builtin(vm)
 
 fn baml.Bigint.random = builtin(vm)
@@ -9238,8 +9240,6 @@ fn baml.sys.collect_garbage = builtin(io)
 fn baml.sys.panic = builtin(vm)
 
 fn baml.sys.exit = builtin(vm)
-
-fn baml.sys.now_ms = builtin(vm)
 
 fn baml.sys.argv = builtin(vm)
 

@@ -19,6 +19,7 @@ function baml.min(self: ?, other: bigint) -> bigint  [builtin]
 function baml.parse(text: string) -> bigint  [builtin]
 function baml.pow(self: ?, exp: bigint) -> bigint  [builtin]
 function baml.random(lower: bigint, upper: bigint) -> bigint  [builtin]
+function baml.to_int(self: ?) -> int  [builtin]
 
 --- <builtin>/baml/bool.baml ---
 class baml.Bool {
@@ -2018,7 +2019,6 @@ function baml.sys.argv() -> string[]  [builtin]
 function baml.sys.collect_garbage() -> null  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.exit(code: int) -> never  [builtin]
-function baml.sys.now_ms() -> int  [builtin]
 function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }

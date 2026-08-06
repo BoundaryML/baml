@@ -391,6 +391,9 @@ function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
 function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
 }
 
+function baml.Bigint.to_int(self: baml.Bigint) -> int {
+}
+
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
     load_var2 1 2
     cmp_op <
@@ -6413,9 +6416,6 @@ function baml.sys.exec(program: string, args: string[] | null, options: baml.sys
 }
 
 function baml.sys.exit(code: int) -> never {
-}
-
-function baml.sys.now_ms() -> int {
 }
 
 function baml.sys.panic(message: string) -> never {

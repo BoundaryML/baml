@@ -1163,7 +1163,7 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     let _7: type
     let _8: null | testing.TestRegistry
     let _9: testing.TestRegistry // existing
-    let _10: int // start
+    let _10: baml.time.Instant // start
     let _11: testing.TestCollector // sub_collector
     let _12: string
     let _13: testing.TestRegistration[]
@@ -1172,18 +1172,24 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     let _16: (testing.TestCollector) -> void throws unknown
     let _17: testing.TestCollector
     let _18: int // elapsed
-    let _19: int
-    let _20: int
-    let _21: testing.TestRegistry // sub_registry
-    let _22: testing.TestCollector
-    let _23: map<string, testing.TestRegistry>
-    let _24: int
-    let _25: null | testing.TestRegistry
-    let _26: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> null | testing.TestRegistry throws never
-    let _27: string
-    let _28: testing.TestRegistry
-    let _29: type
-    let _30: type
+    let _19: unknown // _
+    let _20: bigint
+    let _21: baml.time.Duration
+    let _22: bool
+    let _23: string
+    let _24: string // message
+    let _25: string
+    let _26: string
+    let _27: testing.TestRegistry // sub_registry
+    let _28: testing.TestCollector
+    let _29: map<string, testing.TestRegistry>
+    let _30: int
+    let _31: null | testing.TestRegistry
+    let _32: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> null | testing.TestRegistry throws never
+    let _33: string
+    let _34: testing.TestRegistry
+    let _35: type
+    let _36: type
 
     bb0: {
         _4 = copy _1.1;
@@ -1199,7 +1205,7 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     }
 
     bb2: {
-        _10 = call const fn baml.sys.now_ms() -> [bb3];
+        _10 = sys_op const fn baml.time.Instant.now() -> bb3;
     }
 
     bb3: {
@@ -1213,36 +1219,59 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     }
 
     bb4: {
-        _19 = call const fn baml.sys.now_ms() -> [bb5];
+        _21 = call const fn baml.time.Instant.elapsed(copy _10) -> [bb5, unwind: bb8];
     }
 
     bb5: {
-        _20 = copy _10;
-        _18 = copy _19 - copy _20;
-        _22 = copy _11;
-        _23 = {  }: map<string, testing.TestRegistry>;
-        _24 = copy _18;
-        _21 = testing.TestRegistry { copy _22, copy _23, copy _24 };
-        _26 = copy _1.1;
-        _27 = copy _2.0;
-        _28 = copy _21;
-        _29 = load_type(string);
-        _30 = load_type(testing.TestRegistry);
-        _25 = call const fn baml.Map.set<copy _29, copy _30>(copy _26, copy _27, copy _28) -> [bb6];
+        _20 = call const fn baml.time.Duration.to_milliseconds(copy _21) -> [bb6, unwind: bb8];
     }
 
     bb6: {
-        _0 = copy _21;
-        goto -> bb8;
+        _18 = call const fn baml.Bigint.to_int(copy _20) -> [bb11, unwind: bb8];
     }
 
     bb7: {
         _9 = copy _8;
         _0 = copy _9;
-        goto -> bb8;
+        goto -> bb13;
     }
 
     bb8: {
+        _22 = is_type(copy _19, baml.errors.InvalidArgument);
+        branch copy _22 -> [bb10, bb9];
+    }
+
+    bb9: {
+        rethrow copy _19;
+    }
+
+    bb10: {
+        _23 = copy _19.0;
+        _24 = copy _23;
+        _26 = copy _24;
+        _25 = const "testing: expansion duration: " + copy _26;
+        _18 = call const fn baml.sys.panic(copy _25) -> [bb11];
+    }
+
+    bb11: {
+        _28 = copy _11;
+        _29 = {  }: map<string, testing.TestRegistry>;
+        _30 = copy _18;
+        _27 = testing.TestRegistry { copy _28, copy _29, copy _30 };
+        _32 = copy _1.1;
+        _33 = copy _2.0;
+        _34 = copy _27;
+        _35 = load_type(string);
+        _36 = load_type(testing.TestRegistry);
+        _31 = call const fn baml.Map.set<copy _35, copy _36>(copy _32, copy _33, copy _34) -> [bb12];
+    }
+
+    bb12: {
+        _0 = copy _27;
+        goto -> bb13;
+    }
+
+    bb13: {
         return;
     }
 }
@@ -2126,7 +2155,7 @@ fn testing.run_test(body: () -> void throws unknown, runner: null | ((() -> test
 fn .<lambda(run_test, 0)>() -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
-    let _1: int // start
+    let _1: baml.time.Instant // start
     let _2: testing.RunReport // result
     let _3: unknown // e
     let _4: unknown
@@ -2156,17 +2185,24 @@ fn .<lambda(run_test, 0)>() -> testing.TestReport {
     let _28: string
     let _29: string
     let _30: string
-    let _31: "error" | "fail" | "pass"
-    let _32: testing.RunReport[]
-    let _33: testing.RunReport
-    let _34: "error" | "fail" | "pass"
-    let _35: int
-    let _36: int
-    let _37: int
-    let _38: string | null
+    let _31: int // duration
+    let _32: unknown // _
+    let _33: bigint
+    let _34: baml.time.Duration
+    let _35: bool
+    let _36: string
+    let _37: string // message
+    let _38: string
+    let _39: string
+    let _40: "error" | "fail" | "pass"
+    let _41: testing.RunReport[]
+    let _42: testing.RunReport
+    let _43: "error" | "fail" | "pass"
+    let _44: int
+    let _45: string | null
 
     bb0: {
-        _1 = call const fn baml.sys.now_ms() -> [bb1];
+        _1 = sys_op const fn baml.time.Instant.now() -> bb1;
     }
 
     bb1: {
@@ -2306,22 +2342,46 @@ fn .<lambda(run_test, 0)>() -> testing.TestReport {
     }
 
     bb28: {
-        _31 = copy _2.0;
-        _34 = copy _2.0;
-        _36 = call const fn baml.sys.now_ms() -> [bb29];
+        _34 = call const fn baml.time.Instant.elapsed(copy _1) -> [bb29, unwind: bb31];
     }
 
     bb29: {
-        _37 = copy _1;
-        _35 = copy _36 - copy _37;
-        _38 = copy _2.2;
-        _33 = testing.RunReport { copy _34, copy _35, copy _38 };
-        _32 = [copy _33]: testing.RunReport[];
-        _0 = testing.TestReport { copy _31, copy _32 };
-        goto -> bb30;
+        _33 = call const fn baml.time.Duration.to_milliseconds(copy _34) -> [bb30, unwind: bb31];
     }
 
     bb30: {
+        _31 = call const fn baml.Bigint.to_int(copy _33) -> [bb34, unwind: bb31];
+    }
+
+    bb31: {
+        _35 = is_type(copy _32, baml.errors.InvalidArgument);
+        branch copy _35 -> [bb33, bb32];
+    }
+
+    bb32: {
+        rethrow copy _32;
+    }
+
+    bb33: {
+        _36 = copy _32.0;
+        _37 = copy _36;
+        _39 = copy _37;
+        _38 = const "testing: test duration: " + copy _39;
+        _31 = call const fn baml.sys.panic(copy _38) -> [bb34];
+    }
+
+    bb34: {
+        _40 = copy _2.0;
+        _43 = copy _2.0;
+        _44 = copy _31;
+        _45 = copy _2.2;
+        _42 = testing.RunReport { copy _43, copy _44, copy _45 };
+        _41 = [copy _42]: testing.RunReport[];
+        _0 = testing.TestReport { copy _40, copy _41 };
+        goto -> bb35;
+    }
+
+    bb35: {
         return;
     }
 }

@@ -1,7 +1,7 @@
 // Tests for baml.glob namespace.
 //
 // HERMETICITY: every scan test creates a unique temp directory under /tmp
-// (using baml.sys.now_ms() and int.random as discriminators), writes fixture files with
+// (using baml.time.Instant.now() and int.random as discriminators), writes fixture files with
 // baml.fs.write / baml.fs.mkdir, runs the assertions, then removes the
 // directory tree with baml.sys.shell("rm -rf …"). All filesystem work is
 // done inside top-level functions (not in test-block locals) to avoid the
@@ -10,8 +10,9 @@
 // instead of the string path. Locals inside a top-level `function` do not
 // have this problem.
 //
-// baml.json.stringify converts an int to its decimal JSON representation
-// (e.g. 1234567890 → "1234567890"); used to build unique temp dir paths.
+// string.from renders the epoch-milliseconds bigint in decimal (e.g. 1234567890n
+// → "1234567890"); used to build unique temp dir paths. baml.json.stringify
+// cannot take its place here — the `json` type admits `int` but not `bigint`.
 //
 // Scan failures (broken symlink with throw_error_on_broken_symlink=true,
 // unreadable directories) surface as BAML-catchable `baml.errors.Io` throws,
@@ -25,7 +26,7 @@
 // ============================================================================
 
 function glob_tmp(name: string) -> string {
-    "/tmp/baml_glob_" + name + "_" + baml.json.stringify(baml.sys.now_ms()) + "_" + baml.json.stringify(int.random(0, 1000000000))
+    `/tmp/baml_glob_${name}_${baml.time.Instant.now().to_timestamp_milliseconds()}_${int.random(0, 1000000000)}`
 }
 
 test "glob_matches_basic" {

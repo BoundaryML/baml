@@ -1,9 +1,8 @@
 //! WASM `baml.time` namespace implementation.
 //!
 //! `Instant.now()` reads the wall clock directly via `web_time`, which maps to
-//! the browser's `Date.now()` / `performance.now()` on wasm targets — the same
-//! clock source `baml.sys.now_ms` uses in the VM. No JS callback is needed, so
-//! `WasmTime` is a unit struct.
+//! the browser's `Date.now()` / `performance.now()` on wasm targets. No JS
+//! callback is needed, so `WasmTime` is a unit struct.
 //!
 //! Timezone-database operations (`system_timezone`, `_tz_offset_at`,
 //! `_tz_to_instant`) delegate to the host JavaScript [`Temporal`] API, per

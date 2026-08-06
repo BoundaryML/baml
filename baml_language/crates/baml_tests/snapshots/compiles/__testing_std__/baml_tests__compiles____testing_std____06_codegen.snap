@@ -557,10 +557,10 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     load_var _8
     narrow_bind testing.TestRegistry, slot=3
     pop_jump_if_false L0
-    jump L1
+    jump L4
 
   L0:
-    call baml.sys.now_ms
+    sys_op baml.time.Instant.now
     store_var start
     load_var ts
     load_field .name
@@ -574,14 +574,35 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     load_field .collector
     call_indirect
     pop 1
-    call baml.sys.now_ms
-    store_var _19
+    load_var start
+    call baml.time.Instant.elapsed
+    call baml.time.Duration.to_milliseconds
+    call baml.Bigint.to_int
+    store_var elapsed
+    jump L3
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _
+    rethrow
+
+  L2:
+    load_const "testing: expansion duration: "
+    load_var _
+    load_field .0
+    bin_op +
+    call baml.sys.panic
+    store_var elapsed
+
+  L3:
     load_var sub_collector
     load_type string
     load_type testing.TestRegistry
     alloc_map 0
-    load_var2 6 4
-    sub_int
+    load_var elapsed
     init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
     store_var sub_registry
     load_type string
@@ -594,12 +615,12 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     call baml.Map.set
     pop 1
     load_var sub_registry
-    jump L2
+    jump L5
 
-  L1:
+  L4:
     load_var _8
 
-  L2:
+  L5:
     return
 }
 
