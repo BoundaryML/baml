@@ -330,9 +330,6 @@ mod tests {
         // unaffected.
         let n = name("baml", &["type"], "of_value");
         let lp = route(&n, &func_sym());
-        assert_eq!(
-            lp.segments,
-            vec!["baml".to_string(), "type_".to_string()]
-        );
+        assert_eq!(lp.segments, vec!["baml".to_string(), "type_".to_string()]);
     }
 }
