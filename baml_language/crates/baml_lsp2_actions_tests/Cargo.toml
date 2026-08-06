@@ -27,4 +27,5 @@ walkdir = { workspace = true }
 wasm_support = false
 
 [dev-dependencies]
+insta = { workspace = true }
 salsa = { workspace = true }

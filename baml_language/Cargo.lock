@@ -1043,6 +1043,7 @@ dependencies = [
  "baml_lsp2_actions",
  "baml_project",
  "indexmap",
+ "insta",
  "prettyplease",
  "proc-macro2",
  "quote",

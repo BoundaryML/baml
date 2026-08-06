@@ -55,6 +55,10 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
         document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
+        rename_provider: Some(lsp_types::OneOf::Right(lsp_types::RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        })),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
             SemanticTokensOptions {
@@ -652,6 +656,59 @@ impl BexLspRequest for BexMulitProject {
         } else {
             Ok(Some(references))
         }
+    }
+
+    fn on_request_text_document_prepare_rename(
+        &self,
+        params: lsp_request_params!("textDocument/prepareRename"),
+    ) -> Result<lsp_request_result!("textDocument/prepareRename"), LspError> {
+        self.compute_on_position(&params, |db, source_file, offset, encoding| {
+            let target = baml_lsp2_actions::prepare_rename(db, source_file, offset).ok()?;
+            let codec = PositionCodec::new(source_file.text(db), encoding);
+            Some(lsp_types::PrepareRenameResponse::RangeWithPlaceholder {
+                range: codec.byte_range_to_lsp(target.definition.range),
+                placeholder: target.name,
+            })
+        })
+    }
+
+    fn on_request_text_document_rename(
+        &self,
+        params: lsp_request_params!("textDocument/rename"),
+    ) -> Result<lsp_request_result!("textDocument/rename"), LspError> {
+        let new_name = params.new_name;
+        let edits = self.compute_on_position(
+            &params.text_document_position,
+            |db, source_file, offset, encoding| {
+                let locations = baml_lsp2_actions::rename(db, source_file, offset, &new_name)
+                    .map_err(|error| LspError::RequestFailed(error.to_string()))?;
+                let mut changes: std::collections::HashMap<_, Vec<_>> =
+                    std::collections::HashMap::new();
+                let mut codecs = std::collections::HashMap::new();
+                for location in locations {
+                    let file_id = location.file.file_id(db);
+                    let Some(path) = db.file_id_to_path(file_id) else {
+                        continue;
+                    };
+                    let Ok(uri) = wasm_helpers::from_file_path(path) else {
+                        continue;
+                    };
+                    let codec = codecs
+                        .entry(file_id)
+                        .or_insert_with(|| PositionCodec::new(location.file.text(db), encoding));
+                    changes.entry(uri).or_default().push(lsp_types::TextEdit {
+                        range: codec.byte_range_to_lsp(location.range),
+                        new_text: new_name.clone(),
+                    });
+                }
+                Ok::<_, LspError>(changes)
+            },
+        )??;
+        Ok(Some(lsp_types::WorkspaceEdit {
+            changes: Some(edits),
+            document_changes: None,
+            change_annotations: None,
+        }))
     }
 
     fn on_request_text_document_diagnostic(
