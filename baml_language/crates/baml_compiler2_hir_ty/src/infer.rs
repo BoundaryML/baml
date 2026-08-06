@@ -794,16 +794,13 @@ impl<'db> InferenceContext<'db> {
                         }
                         _ => (Ty::error(), FxHashMap::default()),
                     };
-                    let template_scope = self.current_scope.and_then(|scope| {
-                        self.index.lambda_scope(ExprMetadataKey::new(
-                            ExprMetadataScope::Body(scope),
-                            expr,
-                        ))
-                    });
-                    let saved_scope = self.current_scope;
-                    if template_scope.is_some() {
-                        self.current_scope = template_scope;
-                    }
+                    // NO scope switch: the builder marks the template's
+                    // Lambda scope `is_template_body` - a capture boundary
+                    // for MIR, but its expressions register in the
+                    // ENCLOSING metadata namespace (TIR's
+                    // `inference_owner_scope` climbs past it the same way).
+                    // Entering it here would key every lookup into a
+                    // namespace nothing was registered under.
                     self.template_params.push(frame);
                     self.throws_channels.push(Vec::new());
                     let saved_diverges =
@@ -815,7 +812,6 @@ impl<'db> InferenceContext<'db> {
                     // contract diagnostic is S17's, so the channel drops.
                     self.throws_channels.pop();
                     self.template_params.pop();
-                    self.current_scope = saved_scope;
                     result
                 }
             },
