@@ -35,8 +35,11 @@
 /// `basis` is why it is believed:
 ///   - `name`           — deterministic agreement of name and owner
 ///   - `model`          — a model judged it, and said why
-///   - `carried`        — held over from a previous revision, nothing having changed
 ///   - `no-candidates`  — no plausible counterpart existed to ask about
+///
+/// There is no `carried` basis. A judgement held over from a previous revision
+/// is the same judgement on the same evidence — see revision.baml — and marking
+/// it would describe the run that copied it rather than the two libraries.
 class Judgement {
     baml: string,
     ts: string?,

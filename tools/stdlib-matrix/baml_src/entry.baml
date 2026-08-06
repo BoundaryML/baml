@@ -18,6 +18,10 @@ class MatrixResult {
     output_file: string,
     json_file: string,
     report: SymbolMatrix,
+    /// Judgements taken from a previous revision rather than made again.
+    carried: int,
+    /// BAML symbols left for the passes to judge.
+    queued: int,
 }
 
 /// `build_matrix_aligned`'s result: the same artifacts plus what the model
@@ -38,12 +42,16 @@ class CheckResult {
     report: SymbolMatrix,
 }
 
+/// Builds the report. `previous_file`, when given, is an earlier report whose
+/// judgements are carried forward for every symbol that has not changed —
+/// itself or anything it names.
 function build_matrix(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
     ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
     output_file: string = "tools/stdlib-matrix/report/matrix.md",
     json_file: string = "tools/stdlib-matrix/report/matrix.json",
     baml_surface_sha256: string = "",
+    previous_file: string = "",
 ) -> MatrixResult {
     if (baml_surface_sha256.length() == 0) {
         throw baml.errors.InvalidArgument {
@@ -51,11 +59,21 @@ function build_matrix(
         };
     }
     let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), baml_surface_sha256);
+    let carried = 0;
+    let queued = matrix.baml.length();
+    if (previous_file.length() > 0) {
+        let outcome = apply_revision(matrix, load_revision(previous_file));
+        matrix = outcome.matrix;
+        carried = outcome.carried;
+        queued = outcome.queued;
+    }
     MatrixResult {
         markdown: render_matrix_markdown(matrix),
         output_file: output_file,
         json_file: json_file,
         report: matrix,
+        carried: carried,
+        queued: queued,
     }
 }
 
@@ -72,6 +90,7 @@ function check_matrix(
     json_file: string = "tools/stdlib-matrix/report/matrix.json",
     baml_surface_sha256: string = "",
     baseline_file: string = "",
+    previous_file: string = "",
 ) -> CheckResult {
     if (baseline_file.length() == 0) {
         throw baml.errors.InvalidArgument {
@@ -84,6 +103,7 @@ function check_matrix(
         output_file = output_file,
         json_file = json_file,
         baml_surface_sha256 = baml_surface_sha256,
+        previous_file = previous_file,
     );
     let baseline: ReportHeader? = if (baml.fs.exists(baseline_file)) {
         load_report(baseline_file)
@@ -106,6 +126,7 @@ function build_matrix_aligned(
     output_file: string = "tools/stdlib-matrix/report/matrix.md",
     json_file: string = "tools/stdlib-matrix/report/matrix.json",
     baml_surface_sha256: string = "",
+    previous_file: string = "",
 ) -> AlignedMatrixResult {
     let base = build_matrix(
         baml_surface_file = baml_surface_file,
@@ -113,8 +134,9 @@ function build_matrix_aligned(
         output_file = output_file,
         json_file = json_file,
         baml_surface_sha256 = baml_surface_sha256,
+        previous_file = previous_file,
     );
-    //# enrich the name-matched report with model-judged correspondences
+    //# enrich the carried report with model-judged correspondences
     let outcome = align_matrix(base.report);
     AlignedMatrixResult {
         markdown: render_matrix_markdown(outcome.matrix),

@@ -10,6 +10,7 @@ json_file="${script_dir}/report/matrix.json"
 skip_extract=0
 check_only=0
 baseline_file=""
+previous_file=""
 use_llm=0
 
 absolute_path() {
@@ -22,7 +23,7 @@ absolute_path() {
 usage() {
     cat <<'EOF'
 Usage: tools/stdlib-matrix/run [--output PATH] [--json-output PATH]
-                               [--skip-extract] [--llm]
+                               [--skip-extract] [--llm] [--previous PATH]
                                [--check --baseline PATH]
 
 Compare the BAML stdlib surface against the TypeScript stdlib and write two
@@ -39,6 +40,12 @@ asking a model which symbols are the same operation under different names.
 Requires ANTHROPIC_API_KEY in the environment.
 Model-found correspondences are recorded with basis "model" and carry the
 model's confidence, so they stay distinguishable from name agreement.
+
+--previous PATH carries judgements forward from an earlier report. A symbol
+keeps its previous answer when it and every type it names are unchanged, so a
+run costs only what actually moved. Distinct from --baseline, which compares
+inputs and decides an exit code without changing the report; in practice both
+take the same file.
 
 The report is not checked into the repository: it is a generated artifact.
 CI publishes matrix.json per run; locally it lands in report/ (gitignored).
@@ -76,6 +83,10 @@ while (($# > 0)); do
             baseline_file="$(absolute_path "$2")"
             shift 2
             ;;
+        --previous)
+            previous_file="$(absolute_path "$2")"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -95,6 +106,10 @@ if ((check_only == 1)) && [[ -z "${baseline_file}" ]]; then
 fi
 if ((check_only == 0)) && [[ -n "${baseline_file}" ]]; then
     echo "stdlib-matrix: --baseline only applies with --check" >&2
+    exit 2
+fi
+if [[ -n "${previous_file}" && ! -f "${previous_file}" ]]; then
+    echo "stdlib-matrix: no previous report at ${previous_file}" >&2
     exit 2
 fi
 
@@ -151,9 +166,12 @@ fi
 # `--baseline_file` exists only on check_matrix, so it is passed only there.
 target="build_matrix"
 target_args=()
+if [[ -n "${previous_file}" ]]; then
+    target_args+=(--previous_file "${previous_file}")
+fi
 if ((check_only == 1)); then
     target="check_matrix"
-    target_args=(--baseline_file "${baseline_file}")
+    target_args+=(--baseline_file "${baseline_file}")
 elif ((use_llm == 1)); then
     if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
         echo "stdlib-matrix: --llm requires ANTHROPIC_API_KEY in the environment" >&2

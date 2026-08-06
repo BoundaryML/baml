@@ -455,3 +455,138 @@ test "the static and instance sides of a container are addressed apart" {
     let globals = TsContainer { name: "(globals)", kind: "functions", members: [] };
     assert.equal(ts_id_of(globals, member, "free"), "(globals).BYTES_PER_ELEMENT");
 }
+
+// ── carrying a revision forward ─────────────────────────────────────────────
+
+/// A previous revision of the fixture, as `load_revision` would read one back.
+/// Going through the real JSON round trip is the point: it is what proves the
+/// live and decoded halves of the comparison agree.
+function fixture_revision(matrix: SymbolMatrix) -> Revision {
+    let report = baml.json.to<PriorReport>(baml.json.parse(baml.json.serialize(matrix)));
+    let texts: map<string, string> = {};
+    for (let symbol in report.baml) {
+        let _ = texts.set(symbol.id, prior_symbol_text(symbol));
+    }
+    for (let symbol in report.ts) {
+        let _ = texts.set(symbol.id, ts_symbol_text(symbol));
+    }
+    let judgements: map<string, Judgement[]> = {};
+    for (let judgement in report.judgements) {
+        let bucket: Judgement[] = judgements.get(judgement.baml) ?? [];
+        bucket.push(judgement);
+        let _ = judgements.set(judgement.baml, bucket);
+    }
+    Revision { provenance: report.provenance, texts: texts, judgements: judgements }
+}
+
+test "a report round-trips into the revision it describes" {
+    let matrix = fixture_matrix("sha-r", "5.8.3-test");
+    let decoded = fixture_revision(matrix);
+    let live = revision_of(matrix);
+    // Both halves of the comparison must read the same symbol the same way, or
+    // a surface would never go stale.
+    for (let symbol in matrix.baml) {
+        assert.equal(decoded.texts.get(symbol.id) ?? "", live.texts.get(symbol.id) ?? "");
+    }
+    assert.is_true(matrix.baml.length() > 0);
+}
+
+test "an unchanged symbol keeps its judgement without being asked again" {
+    let matrix = fixture_matrix("sha-a", "5.8.3-test");
+    let before = fixture_revision(matrix);
+    let outcome = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+    assert.equal(outcome.carried, matrix.judgements.length());
+    assert.equal(outcome.matrix.judgements.length(), matrix.judgements.length());
+}
+
+test "a reworded doc comment invalidates the symbol that carries it" {
+    let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
+    let matrix = fixture_matrix("sha-a", "5.8.3-test");
+    let judged_id = (matrix.judgements.at(0)?.baml) ?? "";
+    for (let symbol in matrix.baml) {
+        if (symbol.id == judged_id) {
+            symbol.doc = "reworded";
+        }
+    }
+    let outcome = apply_revision(matrix, before);
+    assert.equal(outcome.carried, 0);
+}
+
+test "a changed reference invalidates the symbols that name it" {
+    let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
+    let matrix = fixture_matrix("sha-a", "5.8.3-test");
+    // `Foo.index_of` names `baml.Foo`; changing the type it names must unsettle
+    // the method, whose own text has not moved at all.
+    let judged_id = (matrix.judgements.at(0)?.baml) ?? "";
+    let named: string[] = [];
+    for (let symbol in matrix.baml) {
+        if (symbol.id == judged_id) {
+            named = symbol.references;
+        }
+    }
+    assert.is_true(named.length() > 0);
+    for (let symbol in matrix.baml) {
+        if (named.includes(symbol.id)) {
+            symbol.doc = "the referenced type changed";
+        }
+    }
+    let outcome = apply_revision(matrix, before);
+    assert.equal(outcome.carried, 0);
+}
+
+test "a changed counterpart invalidates the pairing" {
+    let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
+    let matrix = fixture_matrix("sha-a", "5.8.3-test");
+    let paired = (matrix.judgements.at(0)?.ts) ?? "";
+    for (let symbol in matrix.ts) {
+        if (symbol.id == paired) {
+            symbol.signature = "indexOf(x: number, from: number): number";
+        }
+    }
+    let outcome = apply_revision(matrix, before);
+    assert.equal(outcome.carried, 0);
+}
+
+test "a judged absence survives only while the surface it was judged against does" {
+    let source = fixture_matrix("sha-a", "5.8.3-test");
+    let absent: string[] = [];
+    if let symbol: BamlSymbol = source.baml.at(0) {
+        source
+            .judgements
+            .push(
+                Judgement {
+                    baml: symbol.id,
+                    ts: null,
+                    verdict: "none",
+                    basis: "model",
+                    confidence: "high",
+                    reason: "TypeScript has no equivalent",
+                    divergence: null,
+                    rejected: absent,
+                    verified: true,
+                },
+            );
+    }
+    let before = fixture_revision(source);
+
+    // The same TypeScript release: the absence still holds.
+    let same = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+    assert.is_true(same.carried > 0);
+
+    // A new TypeScript release could have added the very thing the absence
+    // denies, so the claim is no longer one this revision can make.
+    let bumped = apply_revision(fixture_matrix("sha-a", "5.9.0-test"), before);
+    assert.is_true(bumped.carried < same.carried);
+}
+
+test "a symbol the previous revision never saw is queued, not carried" {
+    let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
+    let matrix = fixture_matrix("sha-a", "5.8.3-test");
+    let queued_before = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before).queued;
+    // A judgement about a symbol that no longer exists simply finds no home.
+    let empty_revision = Revision { provenance: before.provenance, texts: {}, judgements: before.judgements };
+    let outcome = apply_revision(matrix, empty_revision);
+    assert.equal(outcome.carried, 0);
+    assert.equal(outcome.queued, matrix.baml.length());
+    assert.is_true(queued_before < matrix.baml.length());
+}
