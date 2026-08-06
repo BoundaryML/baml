@@ -46,11 +46,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           "head": "T:baml.Null"
         },
         "throws": {
-          "effective": {
-            "display": "never"
-          },
-          "panics": [],
-          "errors": []
+          "display": "never"
         }
       }
     },
@@ -87,11 +83,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           "head": "T:baml.Null"
         },
         "throws": {
-          "effective": {
-            "display": "never"
-          },
-          "panics": [],
-          "errors": []
+          "display": "never"
         }
       }
     },
@@ -126,11 +118,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           "head": "T:baml.Null"
         },
         "throws": {
-          "effective": {
-            "display": "never"
-          },
-          "panics": [],
-          "errors": []
+          "display": "never"
         }
       }
     },
@@ -159,11 +147,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           "head": "T:baml.String"
         },
         "throws": {
-          "effective": {
-            "display": "never"
-          },
-          "panics": [],
-          "errors": []
+          "display": "never"
         }
       }
     },
@@ -193,11 +177,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           "head": "T:baml.Null"
         },
         "throws": {
-          "effective": {
-            "display": "never"
-          },
-          "panics": [],
-          "errors": []
+          "display": "never"
         }
       }
     },
@@ -226,11 +206,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           "head": "T:baml.Null"
         },
         "throws": {
-          "effective": {
-            "display": "never"
-          },
-          "panics": [],
-          "errors": []
+          "display": "never"
         }
       }
     }

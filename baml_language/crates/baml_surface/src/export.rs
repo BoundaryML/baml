@@ -126,20 +126,6 @@ fn generic_export(param: &ParamTy, bounds: &[InterfaceBound]) -> GenericExport {
     }
 }
 
-/// The panics/errors-split throws surface.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ThrowsExport {
-    /// The written clause; absent when inferred.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub declared: Option<TyRef>,
-    /// The effective contract (declared-or-inferred).
-    pub effective: TyRef,
-    /// Leaves of the effective set in `baml.panics`.
-    pub panics: Vec<TyRef>,
-    /// Every other leaf.
-    pub errors: Vec<TyRef>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ParamExport {
     pub name: String,
@@ -155,7 +141,11 @@ pub struct SignatureExport {
     pub generics: Vec<GenericExport>,
     pub params: Vec<ParamExport>,
     pub returns: TyRef,
-    pub throws: ThrowsExport,
+    /// The effective contract — declared when written, inferred otherwise.
+    /// Only the effective set is exported: a consumer cares what a call can
+    /// raise, not whether the author wrote it down. The panics/errors split
+    /// stays on the handle layer, where `Throws` still carries it.
+    pub throws: TyRef,
 }
 
 /// Where a declaration lives: file plus byte span.
@@ -170,7 +160,16 @@ pub struct SourceExport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FunctionExport {
+    /// Where this record lives, unique across the document. A method reached
+    /// through an impl block is addressed under that block, because the same
+    /// declaration can be re-listed by many of them.
     pub id: String,
+    /// The declaring symbol's own id, when it has one — an inherited default
+    /// names the interface method it came from, and an override on a named type
+    /// names that type's member. Absent for a method declared only inside a
+    /// free impl block, which has no address other than [`id`](Self::id).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub declared_by: Option<String>,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docstring: Option<String>,
@@ -286,6 +285,12 @@ pub enum ItemDetail {
         impls: Vec<String>,
     },
     Interface {
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        generics: Vec<GenericExport>,
+        /// Fields an implementor must provide, resolved in the interface's own
+        /// scope (symbolic `Self`). Empty for the common method-only interface.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        fields: Vec<FieldExport>,
         assoc_types: Vec<AssocTypeExport>,
         required_methods: Vec<RequiredMethodExport>,
         default_methods: Vec<FunctionExport>,
@@ -414,30 +419,32 @@ fn source_export(
     }
 }
 
-fn throws_export(throws: &crate::Throws<'_>) -> ThrowsExport {
-    let refs = |tys: &[Ty]| {
-        let mut out: Vec<TyRef> = tys.iter().map(TyRef::of).collect();
-        out.sort_by(|a, b| a.display.cmp(&b.display));
-        out
-    };
-    ThrowsExport {
-        declared: throws.declared.map(TyRef::of),
-        effective: TyRef::of(throws.effective),
-        panics: refs(&throws.panics),
-        errors: refs(&throws.errors),
-    }
-}
-
-fn function_export(db: &dyn Db, function: Function<'_>, from_default: bool) -> FunctionExport {
+/// One function record. `block` is the id of the impl block this entry is
+/// listed under, when it is listed under one.
+///
+/// An impl entry is addressed under its block rather than by the declaring
+/// symbol's id: an inherited default is re-listed by every implementor (13
+/// impls inherit `baml.iter.Iterator.chain`), and a method declared in a free
+/// impl has no symbol id at all, so the declaration's id is not a key. The
+/// declaring id is kept in `declared_by`, which is what a consumer dedupes on
+/// when it wants to treat one declaration as one thing.
+fn function_export(
+    db: &dyn Db,
+    function: Function<'_>,
+    from_default: bool,
+    block: Option<&str>,
+) -> FunctionExport {
     let sig = function.signature(db);
     let name = function.name(db);
-    let id = SymbolId::of_symbol(db, Symbol::Function(function))
-        .map(|id| id.to_string())
-        // Free-impl methods have no SymbolId; address them textually under
-        // their (unnamed) block.
-        .unwrap_or_else(|| format!("impl-method:{name}"));
+    let declared = SymbolId::of_symbol(db, Symbol::Function(function)).map(|id| id.to_string());
+    let (id, declared_by) = match block {
+        Some(block) => (format!("{block}::{name}"), declared),
+        // A method of a named type: its declaration is its address.
+        None => (declared.unwrap_or_default(), None),
+    };
     FunctionExport {
         id,
+        declared_by,
         name: name.to_string(),
         docstring: function.docstring(db).map(str::to_string),
         synthetic: name.as_str().contains('$'),
@@ -461,7 +468,7 @@ fn function_export(db: &dyn Db, function: Function<'_>, from_default: bool) -> F
                 })
                 .collect(),
             returns: TyRef::of(&sig.return_type),
-            throws: throws_export(&function.throws(db)),
+            throws: TyRef::of(function.throws(db).effective),
         },
         source: source_export(db, function.file(db), function.span(db)),
     }
@@ -495,14 +502,6 @@ fn required_method_export(
         // A malformed required signature still exports, as unresolved.
         other => (&[][..], other, other),
     };
-    let (panics, errors): (Vec<Ty>, Vec<Ty>) = crate::facts::throws_leaves(throws)
-        .into_iter()
-        .partition(crate::handles::is_panic_type);
-    let refs = |tys: &[Ty]| {
-        let mut out: Vec<TyRef> = tys.iter().map(TyRef::of).collect();
-        out.sort_by(|a, b| a.display.cmp(&b.display));
-        out
-    };
     RequiredMethodExport {
         id: SymbolId::of_member(db, owner, crate::Member::RequiredMethod(method))
             .map(|id| id.to_string())
@@ -527,12 +526,7 @@ fn required_method_export(
                 })
                 .collect(),
             returns: TyRef::of(returns),
-            throws: ThrowsExport {
-                declared: Some(TyRef::of(throws)),
-                effective: TyRef::of(throws),
-                panics: refs(&panics),
-                errors: refs(&errors),
-            },
+            throws: TyRef::of(throws),
         },
     }
 }
@@ -560,7 +554,7 @@ fn export_impl(
     let mut methods: Vec<FunctionExport> = imp
         .all_methods(db)
         .into_iter()
-        .map(|m| function_export(db, m.function, m.from_default))
+        .map(|m| function_export(db, m.function, m.from_default, Some(&id)))
         .collect();
     methods.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -605,7 +599,7 @@ fn export_item<'db>(
             let mut methods: Vec<FunctionExport> = class
                 .methods(db)
                 .into_iter()
-                .map(|m| function_export(db, m, false))
+                .map(|m| function_export(db, m, false, None))
                 .collect();
             methods.sort_by(|a, b| a.name.cmp(&b.name));
             ItemDetail::Class {
@@ -642,10 +636,20 @@ fn export_item<'db>(
             let mut defaults: Vec<FunctionExport> = iface
                 .default_methods(db)
                 .into_iter()
-                .map(|m| function_export(db, m, false))
+                .map(|m| function_export(db, m, false, None))
                 .collect();
             defaults.sort_by(|a, b| a.name.cmp(&b.name));
             ItemDetail::Interface {
+                generics: iface
+                    .generic_params(db)
+                    .iter()
+                    .map(|(param, bounds)| generic_export(param, bounds))
+                    .collect(),
+                fields: iface
+                    .fields(db)
+                    .into_iter()
+                    .map(|f| field_export(db, symbol, f))
+                    .collect(),
                 assoc_types: iface
                     .assoc_types(db)
                     .into_iter()
@@ -670,7 +674,7 @@ fn export_item<'db>(
             resolved: TyRef::of(alias.resolved(db)),
         },
         Symbol::Function(function) => ItemDetail::Function {
-            signature: function_export(db, function, false).signature,
+            signature: function_export(db, function, false, None).signature,
         },
         Symbol::TemplateString(_)
         | Symbol::Client(_)
@@ -749,7 +753,7 @@ pub fn export_member<'db>(
 ) -> MemberExport {
     match member {
         crate::Member::Method(function) => {
-            MemberExport::Method(function_export(db, function, false))
+            MemberExport::Method(function_export(db, function, false, None))
         }
         crate::Member::RequiredMethod(required) => {
             MemberExport::RequiredMethod(required_method_export(db, owner, required))
