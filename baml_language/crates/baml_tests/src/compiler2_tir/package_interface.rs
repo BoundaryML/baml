@@ -1075,7 +1075,7 @@ pub(super) mod mounted {
         let mut db = make_db();
         db.set_mounted_packages([("app".to_string(), blob)].into());
         for (path, src) in files {
-            db.add_file(*path, *src);
+            db.add_file(path, src);
         }
         db
     }

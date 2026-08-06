@@ -1075,14 +1075,8 @@ fn lower_path(
                     // applies (`app.Status.Active` in a type position).
                     Ok(ResolvedTypeDefinition::Foreign(
                         crate::package_interface::ExportedType::Enum { qtn, variants },
-                    )) => {
-                        if variants.contains(variant) {
-                            return Ty::EnumVariant(
-                                qtn.clone(),
-                                variant.clone(),
-                                TyAttr::default(),
-                            );
-                        }
+                    )) if variants.contains(variant) => {
+                        return Ty::EnumVariant(qtn.clone(), variant.clone(), TyAttr::default());
                     }
                     _ => {}
                 }
