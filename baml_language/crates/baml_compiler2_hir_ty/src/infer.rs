@@ -2311,6 +2311,24 @@ impl<'db> InferenceContext<'db> {
     /// `method_resolution`; everything else is whatever the expression
     /// infers to.
     fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> (Ty, bool) {
+        // An INTERFACE-qualified direct call
+        // (`IqDescribable.describe(t)`): turbofish-aware instantiation
+        // with bounds registered - `Self`'s implements-bound becomes an
+        // obligation the argument discharges.
+        if let Expr::Path(segments) = &body.exprs[callee]
+            && segments.len() >= 2
+            && !self.path_resolves_locally(callee)
+            && let Some(member) = segments.last()
+            && let Some(method) =
+                self.interface_static_method(&segments[..segments.len() - 1], member)
+        {
+            let signature = function_signature(self.db, method);
+            let instantiation = self.instantiation_args(call, &signature.generic_params);
+            self.register_call_bounds(method, &instantiation, call);
+            let fn_ty = function_value_ty(signature, &instantiation);
+            self.result.type_of_expr.insert(callee, fn_ty.clone());
+            return (fn_ty, false);
+        }
         // `default.m(..)` inside an `implements` block: delegation to
         // the interface's DEFAULT implementation - a scoped receiver
         // like `self`, resolved from the body owner, never the value
@@ -2785,6 +2803,22 @@ impl<'db> InferenceContext<'db> {
         {
             return self.interface_member_value(interface_member);
         }
+        // An INTERFACE-qualified method as a VALUE (`Trait::method`):
+        // the uniform item road with every frame slot fresh - the call
+        // that consumes the value solves `Self` from its argument.
+        if segments.len() >= 2
+            && let Some(member) = segments.last()
+            && let Some(method) =
+                self.interface_static_method(&segments[..segments.len() - 1], member)
+        {
+            let signature = function_signature(self.db, method);
+            let instantiation: Vec<Ty> = signature
+                .generic_params
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            return function_value_ty(signature, &instantiation);
+        }
         // Enum VARIANT values (`Shape.Rectangle`): the variant's singleton
         // literal type - the same product the type-position path gives
         // (`lower_path` fallback 2; r-a resolves the value namespace to
@@ -2852,6 +2886,32 @@ impl<'db> InferenceContext<'db> {
             Some(Definition::Class(class)) => Some(class),
             _ => None,
         }
+    }
+
+    /// The method a TYPE-QUALIFIED interface path names
+    /// (`IqDescribable.describe` - Rust's `Trait::method`, r-a's
+    /// value-namespace trait path). Interface methods are ordinary
+    /// items since the uniform restructure, so the ordinary signature
+    /// road serves: `Self` instantiates fresh and its implements-bound
+    /// rides along through `function_generic_bounds`, solved by the
+    /// call's arguments.
+    fn interface_static_method(
+        &self,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+    ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+        use baml_compiler2_hir::contributions::Definition;
+        let Some(Definition::Interface(interface)) = self.lower.resolve_type_definition(prefix)
+        else {
+            return None;
+        };
+        baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+            .methods
+            .iter()
+            .copied()
+            .find(|&method| {
+                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+            })
     }
 
     /// Lambda typing (rust-analyzer's `deduce_closure_signature` shape).

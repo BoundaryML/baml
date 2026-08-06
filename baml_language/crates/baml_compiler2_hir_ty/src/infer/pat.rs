@@ -50,7 +50,7 @@ pub(super) struct PatternOutcome {
     pub consumes_matched: bool,
 }
 
-impl InferenceContext<'_> {
+impl<'db> InferenceContext<'db> {
     /// Match typing: lower every arm's pattern against the scrutinee,
     /// narrow the scrutinee binding per arm, type the bodies against the
     /// branch expectation, then run the usefulness matrix over the
@@ -311,6 +311,161 @@ impl InferenceContext<'_> {
         }
     }
 
+    /// A destructure pattern spelled with an INTERFACE name
+    /// (`MdidAnimal { name }` over an existential scrutinee): the
+    /// interface's declared FIELDS destructure like a class's, each
+    /// typed through the same member instantiation field access uses
+    /// (`member_on_interface`), the head being the existential view at
+    /// the written args - else the args a same-interface scrutinee
+    /// member carries.
+    fn lower_interface_pattern(
+        &mut self,
+        body: &ExprBody,
+        pat: PatId,
+        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        path: &[baml_type::Name],
+        field_pats: &[(baml_type::Name, PatId)],
+        scrut: &Ty,
+    ) -> PatternOutcome {
+        let attr = TyAttr::default;
+        let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+        let short = path.last().expect("type paths are never empty");
+        let qtn = self.lower.qualify_definition(
+            baml_compiler2_hir::contributions::Definition::Interface(interface),
+            short,
+        );
+
+        let written: Vec<Ty> = self
+            .type_refs
+            .pattern_class_args
+            .get(&pat)
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|&type_ref| self.lower_body_annotation(type_ref))
+            .collect();
+        // Written args win; else ADOPT the same-interface scrutinee
+        // member's args and pins (the class road's adoption rule).
+        let (args, pins): (Vec<Ty>, Vec<(baml_type::Name, Ty)>) = if !written.is_empty() {
+            (written, Vec::new())
+        } else {
+            let adopted = scrut_members(scrut).into_iter().find_map(|member| {
+                match member.kind() {
+                    TyKind::Interface(member_qtn, args, pins, _) if *member_qtn == qtn => {
+                        Some((args.to_vec(), pins.to_vec()))
+                    }
+                    _ => None,
+                }
+            });
+            adopted.unwrap_or_else(|| {
+                (
+                    (0..data.generic_params.len()).map(|_| Ty::error()).collect(),
+                    Vec::new(),
+                )
+            })
+        };
+        let head = Ty::intern(TyKind::Interface(
+            qtn.clone(),
+            args.clone().into_boxed_slice(),
+            pins.clone().into_boxed_slice(),
+            attr(),
+        ));
+        let target = crate::impls::InterfaceTarget {
+            name: qtn.clone(),
+            args,
+            pins,
+        };
+
+        let declared: Vec<baml_type::Name> = data
+            .fields
+            .iter()
+            .map(|field| field.name.clone())
+            .collect();
+        let mut field_covers = true;
+        let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
+        for (name, field_pat) in field_pats {
+            let field_ty = crate::method_resolution::member_on_interface(
+                self.db,
+                &self.facts,
+                &target,
+                &head,
+                name,
+                true,
+            )
+            .filter(|member| !member.is_method)
+            .map(|member| member.ty);
+            match field_ty {
+                Some(field_ty) => {
+                    let index = declared.iter().position(|field| field == name);
+                    let outcome = self.lower_pattern(body, *field_pat, &field_ty);
+                    field_covers &= outcome.covers_type;
+                    if let Some(index) = index {
+                        sub_dpats[index] = Some(outcome.dpat);
+                    }
+                }
+                None => {
+                    // Unknown field: S17's diagnostic; sub-bindings still
+                    // record (as Error).
+                    self.lower_pattern(body, *field_pat, &Ty::error());
+                    field_covers = false;
+                }
+            }
+        }
+        let fields: Vec<DPat> = declared
+            .iter()
+            .zip(sub_dpats)
+            .map(|(name, sub)| {
+                sub.unwrap_or_else(|| {
+                    let field_ty = crate::method_resolution::member_on_interface(
+                        self.db,
+                        &self.facts,
+                        &target,
+                        &head,
+                        name,
+                        true,
+                    )
+                    .map(|member| member.ty)
+                    .unwrap_or_else(Ty::error);
+                    DPat::wildcard(field_ty.to_plain())
+                })
+            })
+            .collect();
+        let head_covers = provable_subtype(scrut, &head, &self.facts);
+
+        // The matrix's single-ctor STRUCT VIEW of an existential
+        // (`Ctor::Interface`, rustc's non-enum struct treatment): field
+        // sub-patterns decompose, so refutable field arms COMPOSE to
+        // coverage (`{ active: true }` + `{ active: false }`).
+        let dpat = {
+            let iface_dpat = DPat::interface(head.to_plain(), fields, scrut.to_plain());
+            match scrut.kind() {
+                TyKind::Union(members, _) => {
+                    let claimed: Vec<&Ty> = members
+                        .iter()
+                        .filter(|member| {
+                            matches!(member.kind(), TyKind::Interface(member_qtn, _, _, _) if *member_qtn == qtn)
+                        })
+                        .collect();
+                    match claimed.as_slice() {
+                        [member] => DPat::union_member(
+                            member.to_plain(),
+                            iface_dpat,
+                            scrut.to_plain(),
+                        ),
+                        _ => iface_dpat,
+                    }
+                }
+                _ => iface_dpat,
+            }
+        };
+        PatternOutcome {
+            dpat,
+            matched_ty: if head_covers { scrut.clone() } else { head },
+            covers_type: head_covers && field_covers,
+            consumes_matched: field_covers,
+        }
+    }
+
     /// A type pattern (`let x: T`, literals, enum variants, `null`)
     /// against the scrutinee. Union scrutinees project onto claimed
     /// members; claiming requires PROVABLE overlap in either direction
@@ -501,8 +656,15 @@ impl InferenceContext<'_> {
         field_pats: &[(baml_type::Name, PatId)],
         scrut: &Ty,
     ) -> PatternOutcome {
-        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
-            self.lower.resolve_type_definition(class_path)
+        let definition = self.lower.resolve_type_definition(class_path);
+        // Destructure spelled with an INTERFACE name: the existential's
+        // declared FIELDS destructure like a class's.
+        if let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
+            definition
+        {
+            return self.lower_interface_pattern(body, pat, interface, class_path, field_pats, scrut);
+        }
+        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition
         else {
             for &(_, field_pat) in field_pats {
                 self.lower_pattern(body, field_pat, &Ty::error());
@@ -782,11 +944,55 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 })
                 .collect(),
             P::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
+            // An existential column is a single-constructor STRUCT VIEW
+            // over its declared fields (rustc's non-enum struct shape).
+            P::Interface(..) => vec![Ctor::Interface(ty.clone())],
             // Slice splitting owns list columns; empty defers to it.
             P::List(..) | P::EvolvingList(..) => vec![],
             // Everything else is an infinite or open alphabet.
             _ => vec![Ctor::NonExhaustive],
         }
+    }
+
+    /// The struct-view field types of an existential column, in declared
+    /// order - the same member instantiation field access uses.
+    fn interface_field_types(&self, iface_ty: &baml_type::Ty) -> Vec<baml_type::Ty> {
+        use baml_compiler2_hir::contributions::Definition;
+        let baml_type::Ty::Interface(qtn, args, pins, _) = iface_ty else {
+            return Vec::new();
+        };
+        let Some(Definition::Interface(interface)) =
+            self.infer.facts.definition_of(qtn)
+        else {
+            return Vec::new();
+        };
+        let head = Ty::from_plain(iface_ty);
+        let target = crate::impls::InterfaceTarget {
+            name: qtn.clone(),
+            args: args.iter().map(Ty::from_plain).collect(),
+            pins: pins
+                .iter()
+                .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                .collect(),
+        };
+        baml_compiler2_ppir::item_data::interface_data(self.infer.db, interface)
+            .fields
+            .iter()
+            .map(|field| {
+                crate::method_resolution::member_on_interface(
+                    self.infer.db,
+                    &self.infer.facts,
+                    &target,
+                    &head,
+                    &field.name,
+                    true,
+                )
+                .map(|member| member.ty.to_plain())
+                .unwrap_or_else(|| baml_type::Ty::Error {
+                    attr: TyAttr::default(),
+                })
+            })
+            .collect()
     }
 
     fn class_field_types(
