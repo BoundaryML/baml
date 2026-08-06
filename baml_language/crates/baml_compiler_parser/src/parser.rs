@@ -32,7 +32,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::TestSet => SyntaxKind::KW_TESTSET,
         TokenKind::RetryPolicy => SyntaxKind::KW_RETRY_POLICY,
         TokenKind::TemplateString => SyntaxKind::KW_TEMPLATE_STRING,
-        TokenKind::TypeBuilder => SyntaxKind::KW_TYPE_BUILDER,
         TokenKind::If => SyntaxKind::KW_IF,
         TokenKind::Else => SyntaxKind::KW_ELSE,
         TokenKind::For => SyntaxKind::KW_FOR,
@@ -45,7 +44,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Is => SyntaxKind::KW_IS,
-        TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
@@ -188,6 +186,12 @@ enum Event {
     },
     /// A syntax hint with a custom message (not using "Expected/found" format)
     SyntaxHint {
+        message: String,
+        span: Span,
+    },
+    /// Use of a removed language feature (E0098), e.g. legacy `type_builder`
+    /// blocks or `dynamic class`/`dynamic enum` definitions (BEP-066).
+    RemovedFeature {
         message: String,
         span: Span,
     },
@@ -813,10 +817,7 @@ impl<'a> Parser<'a> {
 
         i = self.skip_trivia_and_comments_from(i);
         let name_kind = self.tokens.get(i)?.kind;
-        if !matches!(
-            name_kind,
-            TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
-        ) {
+        if !matches!(name_kind, TokenKind::Word | TokenKind::Throws) {
             return None;
         }
         i += 1;
@@ -830,10 +831,7 @@ impl<'a> Parser<'a> {
 
             i = self.skip_trivia_and_comments_from(i);
             let segment_kind = self.tokens.get(i)?.kind;
-            if !matches!(
-                segment_kind,
-                TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
-            ) {
+            if !matches!(segment_kind, TokenKind::Word | TokenKind::Throws) {
                 return None;
             }
             i += 1;
@@ -1130,7 +1128,6 @@ impl<'a> Parser<'a> {
                     | TokenKind::TestSet
                     | TokenKind::RetryPolicy
                     | TokenKind::TemplateString
-                    | TokenKind::TypeBuilder
             )
         )
     }
@@ -1386,6 +1383,99 @@ impl<'a> Parser<'a> {
             }
         }
 
+        self.finish_node();
+        true
+    }
+
+    /// Consume a balanced `{ ... }` block, tracking nested braces.
+    /// Does nothing when the current token is not `{`.
+    fn skip_balanced_braces(&mut self) {
+        if !self.at(TokenKind::LBrace) {
+            return;
+        }
+        self.bump(); // consume '{'
+        let mut brace_depth = 1u32;
+        while !self.at_end() && brace_depth > 0 {
+            match self.current().map(|t| t.kind) {
+                Some(TokenKind::LBrace) => brace_depth += 1,
+                Some(TokenKind::RBrace) => brace_depth -= 1,
+                _ => {}
+            }
+            self.bump();
+        }
+    }
+
+    /// Recover from a legacy `type_builder { ... }` / `type_builder: { ... }`
+    /// block (BEP-066 removed the `TypeBuilder` feature; runtime type
+    /// construction is `baml.reflect` now). `type_builder` is a plain `Word`
+    /// today, so this is a cheap text check at positions where a declaration
+    /// or config entry may start. Emits E0098 and consumes the whole block
+    /// inside an ERROR node. Returns true if recovery was performed.
+    fn try_recover_removed_type_builder(&mut self) -> bool {
+        if !self.at_contextual_kw("type_builder") {
+            return false;
+        }
+        // Only fire when a block follows (`type_builder {` or
+        // `type_builder: {`); a bare `type_builder` word elsewhere is an
+        // ordinary identifier.
+        let block_follows = match self.peek(1).map(|t| t.kind) {
+            Some(TokenKind::LBrace) => true,
+            Some(TokenKind::Colon) => self.peek(2).map(|t| t.kind) == Some(TokenKind::LBrace),
+            _ => false,
+        };
+        if !block_follows {
+            return false;
+        }
+
+        let span = self.current().map(|t| t.span).unwrap_or_default();
+        self.events.push(Event::RemovedFeature {
+            message: "`type_builder` blocks were removed; runtime type construction is \
+                      `baml.reflect` (BEP-066)"
+                .to_string(),
+            span,
+        });
+
+        self.start_node(SyntaxKind::ERROR);
+        self.bump(); // `type_builder`
+        self.eat(TokenKind::Colon);
+        self.skip_balanced_braces();
+        self.finish_node();
+        true
+    }
+
+    /// Recover from a legacy `dynamic class Name { ... }` / `dynamic enum
+    /// Name { ... }` definition (BEP-066 removed the `TypeBuilder` feature;
+    /// runtime type construction is `baml.reflect` now). `dynamic` is a
+    /// plain `Word` today, so this is a cheap text check at positions where
+    /// a declaration or config entry may start. Emits E0098 and consumes the
+    /// whole definition inside an ERROR node. Returns true if recovery was
+    /// performed.
+    fn try_recover_removed_dynamic_def(&mut self) -> bool {
+        if !self.at_contextual_kw("dynamic") {
+            return false;
+        }
+        let keyword = match self.peek(1).map(|t| t.kind) {
+            Some(TokenKind::Class) => "class",
+            Some(TokenKind::Enum) => "enum",
+            _ => return false,
+        };
+
+        let span = self.current().map(|t| t.span).unwrap_or_default();
+        self.events.push(Event::RemovedFeature {
+            message: format!(
+                "`dynamic {keyword}` definitions were removed; runtime type construction is \
+                 `baml.reflect` (BEP-066)"
+            ),
+            span,
+        });
+
+        self.start_node(SyntaxKind::ERROR);
+        self.bump(); // `dynamic`
+        self.bump(); // `class` / `enum`
+        if self.at(TokenKind::Word) {
+            self.bump(); // type name
+        }
+        self.skip_balanced_braces();
         self.finish_node();
         true
     }
@@ -1726,6 +1816,9 @@ impl<'a> Parser<'a> {
                 }
                 Event::SyntaxHint { message, span } => {
                     errors.push(ParseError::InvalidSyntax { message, span });
+                }
+                Event::RemovedFeature { message, span } => {
+                    errors.push(ParseError::RemovedFeature { message, span });
                 }
             }
         }
@@ -2309,7 +2402,6 @@ impl<'a> Parser<'a> {
                     | TokenKind::TestSet
                     | TokenKind::RetryPolicy
                     | TokenKind::TemplateString
-                    | TokenKind::TypeBuilder
             ) && self.token_starts_line(i)
             {
                 return false;
@@ -2785,13 +2877,12 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::AtAt);
 
             // Attribute name (can be dotted like @@stream.done)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws) {
+            if p.at(TokenKind::Word) || p.at(TokenKind::Throws) {
                 p.bump();
                 // Handle dotted attribute names like @@stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws)
-                    {
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Throws) {
                         p.bump(); // consume next segment
                     } else {
                         p.error_unexpected_token("attribute name segment after dot".to_string());
@@ -4268,12 +4359,9 @@ impl<'a> Parser<'a> {
             let mut has_prompt = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
+                // Error recovery: if we see a top-level keyword (except Client)
                 // assume we missed a closing brace
-                if p.at_top_level_keyword()
-                    && !p.at(TokenKind::Client)
-                    && !p.at(TokenKind::TypeBuilder)
-                {
+                if p.at_top_level_keyword() && !p.at(TokenKind::Client) {
                     break;
                 }
 
@@ -4299,9 +4387,9 @@ impl<'a> Parser<'a> {
                     }
                     has_prompt = true;
                     p.parse_prompt_field();
-                } else if p.at(TokenKind::TypeBuilder) {
-                    // Parse type_builder block - HIR will emit proper error for non-test context
-                    p.parse_type_builder_block();
+                } else if p.try_recover_removed_type_builder() {
+                    // Legacy `type_builder { ... }` inside an LLM function —
+                    // E0098 emitted, block consumed.
                 } else if p.at(TokenKind::Comma) || p.at(TokenKind::Semicolon) {
                     // LLM-block fields are separated by a newline, not by `,`/`;`.
                     // Name the real requirement here instead of letting the value
@@ -4388,12 +4476,11 @@ impl<'a> Parser<'a> {
     }
 
     /// True when the parser is positioned at the start of an LLM-block field
-    /// (`client`, `prompt`, or `type_builder`). The unquoted client-value scan
-    /// uses this to stop at the next field so that fields written on a single
-    /// line (with no separating newline) are not merged into the client value.
+    /// (`client` or `prompt`). The unquoted client-value scan uses this to
+    /// stop at the next field so that fields written on a single line (with
+    /// no separating newline) are not merged into the client value.
     fn at_llm_field_start(&self) -> bool {
         self.at(TokenKind::Client)
-            || self.at(TokenKind::TypeBuilder)
             || (self.at(TokenKind::Word)
                 && self.current().map(|t| t.text == "prompt").unwrap_or(false))
     }
@@ -6258,7 +6345,9 @@ impl<'a> Parser<'a> {
                         return i;
                     }
                 }
-                Event::UnexpectedToken { .. } | Event::SyntaxHint { .. } => {}
+                Event::UnexpectedToken { .. }
+                | Event::SyntaxHint { .. }
+                | Event::RemovedFeature { .. } => {}
             }
         }
 
@@ -6318,7 +6407,9 @@ impl<'a> Parser<'a> {
                             && !matches!(text.as_str(), "null" | "true" | "false");
                     }
                 }
-                Event::UnexpectedToken { .. } | Event::SyntaxHint { .. } => {}
+                Event::UnexpectedToken { .. }
+                | Event::SyntaxHint { .. }
+                | Event::RemovedFeature { .. } => {}
             }
         }
         false
@@ -7552,14 +7643,10 @@ impl<'a> Parser<'a> {
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace.
                 // Exceptions - these keywords can appear as config keys:
                 // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
-                // - TypeBuilder: `type_builder { ... }` inside test blocks
-                // - Dynamic: `dynamic class Foo { ... }` inside type_builder blocks
                 // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
                 // - Class: `class "MyClass"` inside nested option maps
                 if p.at_top_level_keyword()
                     && !p.at(TokenKind::RetryPolicy)
-                    && !p.at(TokenKind::TypeBuilder)
-                    && !p.at(TokenKind::Dynamic)
                     && !p.at(TokenKind::Enum)
                     && !p.at(TokenKind::Class)
                 {
@@ -7581,21 +7668,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_item(&mut self) {
-        // Special handling for type_builder blocks inside test definitions
-        if self.at(TokenKind::TypeBuilder) {
-            self.parse_type_builder_block();
+        // Legacy BEP-066 syntax removed from config blocks: `type_builder {
+        // ... }` (old test blocks) and `dynamic class`/`dynamic enum`
+        // definitions. Catch them here for a targeted E0098 instead of a
+        // cascade of config-item errors.
+        if self.try_recover_removed_type_builder() {
+            return;
+        }
+        if self.try_recover_removed_dynamic_def() {
             return;
         }
 
-        // Special handling for dynamic type definitions inside type_builder blocks
-        if self.at(TokenKind::Dynamic) {
-            self.parse_dynamic_type_def();
-            return;
-        }
-
-        // Note: type_builder blocks handle class/enum declarations in their own loop
-        // (see parse_type_builder_block). In regular config blocks, "class" and "enum"
-        // should be treated as config keys (e.g., `enum ["celsius", "fahrenheit"]`).
+        // Note: in config blocks, "class" and "enum" should be treated as
+        // config keys (e.g., `enum ["celsius", "fahrenheit"]`).
 
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
             // Config key: identifier, keyword-as-identifier, or quoted/raw string
@@ -7643,69 +7728,6 @@ impl<'a> Parser<'a> {
             // Optional field attributes after config value (e.g., args { ... } @some_attr(...))
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_at_attribute();
-            }
-        });
-    }
-
-    /// Parse a `type_builder` block inside a test definition.
-    /// Contains class, enum, dynamic class, dynamic enum, and type alias definitions.
-    fn parse_type_builder_block(&mut self) {
-        self.with_node(SyntaxKind::TYPE_BUILDER_BLOCK, |p| {
-            p.expect(TokenKind::TypeBuilder);
-
-            // Optional colon
-            p.eat(TokenKind::Colon);
-
-            if !p.expect(TokenKind::LBrace) {
-                return;
-            }
-
-            while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword that's not valid in type_builder
-                if p.at_top_level_keyword()
-                    && !p.at(TokenKind::Class)
-                    && !p.at(TokenKind::Enum)
-                    && !p.at(TokenKind::Dynamic)
-                    && !p.at(TokenKind::TypeBuilder)
-                {
-                    break;
-                }
-
-                if p.at(TokenKind::Dynamic) {
-                    p.parse_dynamic_type_def();
-                } else if p.at(TokenKind::Class) {
-                    p.parse_class();
-                } else if p.at(TokenKind::Enum) {
-                    p.parse_enum();
-                } else if p.at(TokenKind::Word)
-                    && p.current().map(|t| t.text == "type").unwrap_or(false)
-                {
-                    p.parse_type_alias();
-                } else {
-                    p.error_unexpected_token(
-                        "class, enum, dynamic class, dynamic enum, or type alias".to_string(),
-                    );
-                    p.bump();
-                }
-            }
-
-            p.expect(TokenKind::RBrace);
-        });
-    }
-
-    /// Parse a dynamic type definition (dynamic class or dynamic enum).
-    fn parse_dynamic_type_def(&mut self) {
-        self.with_node(SyntaxKind::DYNAMIC_TYPE_DEF, |p| {
-            p.expect(TokenKind::Dynamic);
-
-            if p.at(TokenKind::Class) {
-                p.parse_class();
-            } else if p.at(TokenKind::Enum) {
-                p.parse_enum();
-            } else {
-                p.error_unexpected_token(
-                    "Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.".to_string()
-                );
             }
         });
     }
@@ -7928,6 +7950,8 @@ impl<'a> Parser<'a> {
             return true;
         };
         // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
+        // (`type_builder` is legacy BEP-066 syntax; routing it to config-block
+        // parsing surfaces the targeted E0098 removed-feature error there.)
         // There is no old-style form with parens — `test Name(...)` was never valid old-style
         // syntax (the old parser just emits a "remove parentheses" error).
         if next.kind == TokenKind::Word {
@@ -8223,6 +8247,12 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             parser.parse_let_stmt();
         } else if parser.at_header_comment_start() {
             parser.consume_header_comment();
+        } else if parser.try_recover_removed_type_builder() {
+            // Legacy `type_builder { ... }` at top level — E0098 emitted,
+            // block consumed.
+        } else if parser.try_recover_removed_dynamic_def() {
+            // Legacy `dynamic class`/`dynamic enum` at top level — E0098
+            // emitted, definition consumed.
         } else if parser.try_recover_invalid_block() {
             // Successfully recovered from invalid block like "classs Foo { ... }"
             // Continue parsing

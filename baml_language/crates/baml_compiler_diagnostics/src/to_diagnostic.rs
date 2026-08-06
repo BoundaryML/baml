@@ -45,6 +45,11 @@ impl ToDiagnostic for ParseError {
                 Diagnostic::error(DiagnosticId::InvalidSyntax, "invalid syntax")
                     .with_primary(*span, message.clone())
             }
+
+            ParseError::RemovedFeature { message, span } => {
+                Diagnostic::error(DiagnosticId::RemovedFeature, "removed language feature")
+                    .with_primary(*span, message.clone())
+            }
         };
         diag.with_phase(DiagnosticPhase::Parse)
     }
@@ -535,7 +540,7 @@ impl<C: ErrorContext> TypeError<C> {
             .with_primary_span(loc_fn(location)),
 
             TypeError::InstanceofRemoved { location } => Diagnostic::error(
-                DiagnosticId::InstanceofRemoved,
+                DiagnosticId::RemovedFeature,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
             )
             .with_primary_span(loc_fn(location)),

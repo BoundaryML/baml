@@ -49,7 +49,11 @@ use sha2::{Digest, Sha256};
 /// (BEP-062 `reflect.signature`).
 ///
 /// Version 3: diagnostic cache blobs gained `message_highlights` fields.
-pub const FORMAT_VERSION: u32 = 3;
+///
+/// Version 4: `DiagnosticId` dropped the legacy `TypeBuilder` variants
+/// (E0040–E0043, BEP-066 removal), shifting the borsh discriminants of all
+/// later variants.
+pub const FORMAT_VERSION: u32 = 4;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

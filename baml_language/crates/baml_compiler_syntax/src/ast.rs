@@ -168,8 +168,6 @@ ast_node!(PromptText, PROMPT_TEXT);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
-ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
-ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
 
@@ -2371,32 +2369,22 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name (e.g., "stream" from @@stream.done).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
     }
 
     /// Get the full attribute name including dot-separated modifiers.
-    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    /// For @@stream.done returns "stream.done".
     pub fn full_name(&self) -> Option<String> {
         let segments: Vec<String> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
             .map(|token| token.text().to_string())
             .collect();
 

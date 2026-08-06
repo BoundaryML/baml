@@ -489,7 +489,8 @@ fn parse_error_tainted_scopes(
         let span = match err {
             ParseError::UnexpectedToken { span, .. }
             | ParseError::UnexpectedEof { span, .. }
-            | ParseError::InvalidSyntax { span, .. } => span,
+            | ParseError::InvalidSyntax { span, .. }
+            | ParseError::RemovedFeature { span, .. } => span,
         };
         let fsid = index.scope_at_offset(span.range.start(), None);
         let scope = &index.scopes[fsid.index() as usize];

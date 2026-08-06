@@ -342,7 +342,7 @@ impl LoweringDiagnostic {
                 "invalid escape",
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
-                DiagnosticId::InstanceofRemoved,
+                DiagnosticId::RemovedFeature,
                 Severity::Error,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
