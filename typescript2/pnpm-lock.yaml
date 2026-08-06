@@ -1209,6 +1209,34 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@24.12.4)(typescript@5.9.3))(terser@5.49.1)(tsx@4.22.4)(yaml@2.8.3)
 
+  pkg-ts-tooling-e2e:
+    dependencies:
+      '@boundaryml/baml-tooling':
+        specifier: workspace:*
+        version: link:../pkg-baml-tooling
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.27
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
+      rollup:
+        specifier: ^4.0.0
+        version: 4.54.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.49.1)(tsx@4.22.4)(yaml@2.8.3)
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@20.19.27)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@20.19.27)(typescript@5.9.3))(terser@5.49.1)(tsx@4.22.4)(yaml@2.8.3)
+      webpack:
+        specifier: ^5.0.0
+        version: 5.109.2(esbuild@0.25.12)(lightningcss@1.32.0)
+
 packages:
 
   '@adobe/css-tools@4.4.4':

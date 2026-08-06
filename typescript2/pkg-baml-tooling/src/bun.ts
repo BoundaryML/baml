@@ -1,4 +1,5 @@
 import type { BamlPluginOptions, ProjectFactory } from './build-core.js';
+import { BamlBuildCore } from './build-core.js';
 
 interface BunBuild {
   onStart(callback: () => void | Promise<void>): void;
@@ -25,8 +26,17 @@ export function setup(
   options: BamlPluginOptions = {},
   factory?: ProjectFactory,
 ): void {
-  void build;
-  void options;
-  void factory;
-  throw new Error('not implemented');
+  const core = new BamlBuildCore(options, factory);
+  build.onStart(() => core.start());
+  build.onResolve(
+    { filter: /(?:\.baml$|^baml:client$|^\0baml:)/ },
+    async ({ path, importer }) => {
+      const resolved = await core.resolve(path, importer);
+      return resolved ? { namespace: 'baml', path: resolved } : undefined;
+    },
+  );
+  build.onLoad({ filter: /.*/, namespace: 'baml' }, ({ path }) => {
+    const loaded = core.load(path);
+    return loaded ? { contents: loaded.code, loader: 'js' } : undefined;
+  });
 }
