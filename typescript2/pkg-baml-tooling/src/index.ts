@@ -3,6 +3,7 @@ export { NativeBackend, request, WasmBackend } from './backend.js';
 export { DiskArtifactCache } from './cache.js';
 export {
   buildLineIndex,
+  LineIndexCache,
   utf8OffsetToUtf16,
   utf16OffsetToUtf8,
 } from './encoding.js';
@@ -15,11 +16,13 @@ export type { LoadProjectOptions } from './node.js';
 export { loadProject } from './node.js';
 export type { FileAccess, OpenProjectOptions } from './project.js';
 export {
+  BamlFileDiscovery,
   BamlProject,
   discoverBamlFiles,
   discoverProject,
   moduleSpecifier,
   projectId,
+  resolveBamlSpecifier,
 } from './project.js';
 export type {
   Capabilities,

@@ -1,15 +1,14 @@
+import { basename } from 'node:path';
+
 export function isBamlSidecar(path: string): boolean {
-  void path;
-  throw new Error('not implemented');
+  const name = basename(path);
+  return name.endsWith('.baml.ts') || name.endsWith('.baml.d.ts');
 }
 
 export function sidecarPath(source: string, declarationsOnly = true): string {
-  void source;
-  void declarationsOnly;
-  throw new Error('not implemented');
+  return declarationsOnly ? `${source}.d.ts` : `${source}.ts`;
 }
 
 export function sidecarFingerprint(text: string): string | undefined {
-  void text;
-  throw new Error('not implemented');
+  return /^\/\/ baml-fingerprint: ([a-f0-9]+)$/m.exec(text)?.[1];
 }

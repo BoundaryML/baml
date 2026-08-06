@@ -10,9 +10,16 @@ export function request(
   backend: ToolingBackend,
   value: ToolingRequest,
 ): ToolingResponse {
-  void backend;
-  void value;
-  throw new Error('not implemented');
+  const bytes = ToolingRequest.encode(value).finish();
+  const response = ToolingResponse.decode(backend.dispatch(bytes));
+  if (response.response?.$case === 'error') {
+    const error = new Error(response.response.error.message);
+    Object.assign(error, { code: response.response.error.code });
+    throw error;
+  }
+  if (!response.response)
+    throw new Error('BAML tooling bridge returned an empty response');
+  return response;
 }
 
 export interface NativeAddon {
@@ -29,25 +36,21 @@ export interface WasmBridge {
 
 export class NativeBackend implements ToolingBackend {
   readonly kind = 'native' as const;
+  readonly #bridge: { dispatch(request: Uint8Array): Uint8Array };
 
   constructor(addon: NativeAddon) {
-    void addon;
-    throw new Error('not implemented');
+    this.#bridge = new addon.BamlToolingBridge();
   }
 
   dispatch(value: Uint8Array): Uint8Array {
-    void value;
-    throw new Error('not implemented');
+    return this.#bridge.dispatch(value);
   }
 }
 
 export class WasmBackend implements ToolingBackend {
   readonly kind = 'wasm' as const;
-  constructor(readonly bridge: WasmBridge) {
-    throw new Error('not implemented');
-  }
+  constructor(readonly bridge: WasmBridge) {}
   dispatch(value: Uint8Array): Uint8Array {
-    void value;
-    throw new Error('not implemented');
+    return this.bridge.dispatch(value);
   }
 }
