@@ -3,7 +3,7 @@
 use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, PackageItems},
+    package::{PackageId, PackageItems, package_dependencies},
 };
 use rustc_hash::FxHashSet;
 
@@ -349,6 +349,14 @@ pub(crate) fn resolve_type_in<'db>(
     // `type.…` TYPE paths don't exist until the kind classes land.)
     let resolved = resolved.or_else(|| {
         if segments.len() >= 2 && segments[0].as_str() == "reflect" {
+            let owner_pkg = PackageId::new(db, package_items.package.clone());
+            let can_access_baml = package_items.package.as_str() == "baml"
+                || package_dependencies(db, owner_pkg)
+                    .iter()
+                    .any(|dep| dep.name(db).as_str() == "baml");
+            if !can_access_baml {
+                return None;
+            }
             let pkg_id = PackageId::new(db, baml_base::Name::new("baml"));
             let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
             let ns: Vec<baml_base::Name> = segments[..segments.len() - 1].to_vec();

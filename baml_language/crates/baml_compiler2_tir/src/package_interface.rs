@@ -636,10 +636,16 @@ impl<'db> PackageResolutionContext<'db> {
         // `baml.reflect`. Strictly after every user lookup above, so any
         // user-defined `reflect` shadows the shorthand.
         if path.len() >= 2 && path[0].as_str() == "reflect" && self.can_access_baml_package() {
-            let baml_items =
-                baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("baml")));
-            if let Some(def) = baml_items.lookup_type(&path[..path.len() - 1], item) {
-                return Some((ResolvedSource::Builtin, def_to_ty(db, def)));
+            let namespace = &path[..path.len() - 1];
+            if self.own_package_name.as_str() == "baml" {
+                if let Some(def) = self.own_items.lookup_type(namespace, item) {
+                    return Some((ResolvedSource::Builtin, def_to_ty(db, def)));
+                }
+            } else if let Some(exported) = self
+                .baml_dependency_interface()
+                .and_then(|interface| interface.lookup_type(namespace, item))
+            {
+                return Some((ResolvedSource::Builtin, exported.to_ty()));
             }
         }
 
@@ -651,11 +657,14 @@ impl<'db> PackageResolutionContext<'db> {
     /// BEP-066 keyword shorthands (`reflect` ≡ `baml.reflect`, `type` ≡
     /// `baml.type`) to resolve.
     fn can_access_baml_package(&self) -> bool {
-        self.own_package_name.as_str() == "baml"
-            || self
-                .dep_interfaces
-                .iter()
-                .any(|(n, _)| n.as_str() == "baml")
+        self.own_package_name.as_str() == "baml" || self.baml_dependency_interface().is_some()
+    }
+
+    fn baml_dependency_interface(&self) -> Option<&PackageInterface> {
+        self.dep_interfaces
+            .iter()
+            .find(|(name, _)| name.as_str() == "baml")
+            .map(|(_, interface)| interface)
     }
 
     fn resolve_type_in_own_then_deps(
@@ -728,9 +737,21 @@ impl<'db> PackageResolutionContext<'db> {
             && matches!(path[0].as_str(), "reflect" | "type")
             && self.can_access_baml_package()
         {
+            let namespace = &path[..path.len() - 1];
+            if self.own_package_name.as_str() != "baml"
+                && self
+                    .baml_dependency_interface()
+                    .and_then(|interface| interface.lookup_function(namespace, item))
+                    .is_none()
+            {
+                return None;
+            }
+            // Value consumers still need the source-backed `Definition` loc.
+            // The interface lookup above is the visibility gate; raw items are
+            // consulted only to materialize a function already proven exported.
             let baml_items =
                 baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("baml")));
-            if let Some(def) = baml_items.lookup_value(&path[..path.len() - 1], item) {
+            if let Some(def) = baml_items.lookup_value(namespace, item) {
                 return Some((ResolvedSource::Builtin, def));
             }
         }
