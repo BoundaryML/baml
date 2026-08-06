@@ -51,9 +51,11 @@ function provenance_changes(before: MatrixProvenance, now: MatrixProvenance) -> 
     changes
 }
 
-/// How the compared surface moved. A shrinking BAML surface or lost
-/// correspondences are regressions; more of either is an improvement. A moving
-/// TypeScript surface is neither — it reflects their release, not our work.
+/// How the compared surface moved. A shrinking BAML surface or lost matches are
+/// regressions; more of either is an improvement. A moving TypeScript surface is
+/// neither — it reflects their release, not our work. Symbols still awaiting a
+/// judgement are reported on their own: an unjudged symbol is work outstanding,
+/// not a finding either way.
 function count_changes(before: MatrixCounts, now: MatrixCounts) -> BaselineComparison {
     let comparison = BaselineComparison {
         up_to_date: false,
@@ -73,14 +75,13 @@ function count_changes(before: MatrixCounts, now: MatrixCounts) -> BaselineCompa
             .improvements
             .push(`the BAML surface grew, ${before.baml_symbols} → ${now.baml_symbols} symbols`);
     }
-    if (now.correspondences < before.correspondences) {
-        comparison
-            .regressions
-            .push(`correspondences lost, ${before.correspondences} → ${now.correspondences}`);
-    } else if (now.correspondences > before.correspondences) {
-        comparison
-            .improvements
-            .push(`correspondences gained, ${before.correspondences} → ${now.correspondences}`);
+    if (now.matched < before.matched) {
+        comparison.regressions.push(`counterparts lost, ${before.matched} → ${now.matched}`);
+    } else if (now.matched > before.matched) {
+        comparison.improvements.push(`counterparts gained, ${before.matched} → ${now.matched}`);
+    }
+    if (now.unjudged != before.unjudged) {
+        comparison.neutral.push(`symbols awaiting judgement ${before.unjudged} → ${now.unjudged}`);
     }
     if (now.ts_symbols != before.ts_symbols) {
         comparison

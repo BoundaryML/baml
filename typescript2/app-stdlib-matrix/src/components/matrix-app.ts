@@ -12,7 +12,7 @@ import './matrix-group';
 // The page: load a report, then show it from either language's point of view.
 //
 // The two stdlibs are not 1:1, so no single hierarchy serves both readers. The
-// report stores each side flat with correspondences as a relation, and each
+// report stores each side flat with judgements as a relation, and each
 // view groups its own side — BAML by owner, TypeScript by container — reading
 // the same links. Switching views re-groups; it does not reload or refilter.
 //
@@ -136,7 +136,7 @@ export class MatrixAppElement extends LitElement {
       if (!response.ok)
         throw new Error(`${response.status} ${response.statusText}`);
       const matrix = (await response.json()) as SymbolMatrix;
-      this.#links = new Links(matrix.correspondences);
+      this.#links = new Links(matrix);
       this.matrix = matrix;
       this.#followHash();
     } catch (cause) {
@@ -230,12 +230,13 @@ export class MatrixAppElement extends LitElement {
     const parts: Array<[number, string]> =
       this.side === 'baml'
         ? [
-            [c.baml_matched, 'with a TypeScript counterpart'],
-            [c.baml_unmatched, 'without'],
+            [c.matched, 'with a TypeScript counterpart'],
+            [c.unmatched, 'judged to have none'],
+            [c.unjudged, 'unjudged'],
           ]
         : [
-            [c.ts_symbols - c.ts_unmatched, 'with a BAML counterpart'],
-            [c.ts_unmatched, 'without'],
+            [c.ts_symbols - c.ts_unclaimed, 'with a BAML counterpart'],
+            [c.ts_unclaimed, 'without'],
           ];
     const total = this.side === 'baml' ? c.baml_symbols : c.ts_symbols;
     return html`<p class="mb-4 text-sm">

@@ -31,6 +31,11 @@ export interface SymbolSignature {
 }
 
 export interface BamlSymbol {
+  /** The export's own id for this declaration: stable across runs and unique
+   *  across the report. Judgements are recorded against it. */
+  id: string;
+  /** The declaration an impl entry re-lists, when it has an id of its own. */
+  declared_by: string | null;
   symbol: PathStep[];
   display: string;
   /** What it is, as declared: `class`, `enum`, `interface`, `type`,
@@ -49,11 +54,16 @@ export interface BamlSymbol {
   /** What an associated type falls back to when an implementor leaves it
    *  unbound — a fallback, not a definition, and most have none. */
   default: string | null;
+  /** The ids of the symbols this declaration names, resolved by the tool. */
+  references: string[];
   signature: SymbolSignature | null;
   doc: string | null;
 }
 
 export interface TsSymbol {
+  /** This symbol's address, as TypeScript writes it: the instance side is
+   *  reached through `prototype`, the static side on the constructor. */
+  id: string;
   symbol: string[];
   display: string;
   origin: string;
@@ -61,15 +71,35 @@ export interface TsSymbol {
   doc: string | null;
   /** The lib that introduced it — `es5`, `es2015`, `dom`, `node`. */
   since: string;
+  /** The ids of the symbols this signature names, resolved by the tool. */
+  references: string[];
 }
 
-/** A claimed equivalence. Both sides are indices into the symbol arrays. */
-export interface Correspondence {
-  baml: number;
-  ts: number;
+/**
+ * What was concluded about one BAML symbol, and on what grounds.
+ *
+ * Both sides are ids, not array indices: indices shift whenever the stdlib
+ * does. `verdict` is what is true — `match`, `divergent` (the same operation
+ * reached differently), or `none` (nothing on the other side does its job) —
+ * and `basis` is why it is believed.
+ */
+export interface Judgement {
+  baml: string;
+  ts: string | null;
+  verdict: 'match' | 'divergent' | 'none';
   basis: string;
   confidence: string | null;
   reason: string | null;
+  divergence: string | null;
+  rejected: string[];
+  verified: boolean;
+}
+
+/** A call that did not come back, recorded rather than swallowed. */
+export interface PassFailure {
+  pass: string;
+  subject: string;
+  reason: string;
 }
 
 export interface MatrixProvenance {
@@ -82,10 +112,14 @@ export interface MatrixProvenance {
 export interface MatrixCounts {
   baml_symbols: number;
   ts_symbols: number;
-  correspondences: number;
-  baml_matched: number;
-  baml_unmatched: number;
-  ts_unmatched: number;
+  judgements: number;
+  /** BAML symbols with a counterpart, exact or divergent. */
+  matched: number;
+  /** BAML symbols judged to have none. */
+  unmatched: number;
+  /** BAML symbols nothing has judged yet. */
+  unjudged: number;
+  ts_unclaimed: number;
 }
 
 export interface SymbolMatrix {
@@ -93,38 +127,49 @@ export interface SymbolMatrix {
   provenance: MatrixProvenance;
   baml: BamlSymbol[];
   ts: TsSymbol[];
-  correspondences: Correspondence[];
+  judgements: Judgement[];
+  failures: PassFailure[];
   counts: MatrixCounts;
 }
 
 export type Side = 'baml' | 'ts';
 
 /**
- * Correspondences indexed from both ends, so either view can answer "what does
- * this symbol correspond to" without scanning. The report deliberately stores
- * the relation once; this is the read-side projection of it.
+ * Judgements indexed from both ends, so either view can answer "what was
+ * concluded about this symbol" without scanning.
+ *
+ * The report keys on ids while the views address rows by array index, so this
+ * is also where the two meet: the id maps are built once from the symbol
+ * arrays, and every lookup after that is by index.
  */
 export class Links {
-  readonly fromBaml = new Map<number, Correspondence[]>();
-  readonly fromTs = new Map<number, Correspondence[]>();
+  readonly fromBaml = new Map<number, Judgement[]>();
+  readonly fromTs = new Map<number, Judgement[]>();
 
-  constructor(correspondences: Correspondence[]) {
-    for (const link of correspondences) {
-      push(this.fromBaml, link.baml, link);
-      push(this.fromTs, link.ts, link);
+  constructor(matrix: SymbolMatrix) {
+    const bamlIndex = indexById(matrix.baml);
+    const tsIndex = indexById(matrix.ts);
+    for (const judgement of matrix.judgements ?? []) {
+      const from = bamlIndex.get(judgement.baml);
+      if (from !== undefined) push(this.fromBaml, from, judgement);
+      // An absence has no other end to index from.
+      const to = judgement.ts === null ? undefined : tsIndex.get(judgement.ts);
+      if (to !== undefined) push(this.fromTs, to, judgement);
     }
   }
 
-  for(side: Side, index: number): Correspondence[] {
+  for(side: Side, index: number): Judgement[] {
     return (side === 'baml' ? this.fromBaml : this.fromTs).get(index) ?? [];
   }
 }
 
-function push(
-  map: Map<number, Correspondence[]>,
-  key: number,
-  link: Correspondence,
-) {
+function indexById(symbols: Array<{ id: string }>): Map<string, number> {
+  const byId = new Map<string, number>();
+  symbols.forEach((symbol, index) => byId.set(symbol.id, index));
+  return byId;
+}
+
+function push(map: Map<number, Judgement[]>, key: number, link: Judgement) {
   const bucket = map.get(key);
   if (bucket) bucket.push(link);
   else map.set(key, [link]);

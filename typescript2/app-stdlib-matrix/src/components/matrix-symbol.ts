@@ -14,7 +14,7 @@ import {
 import { bamlSignature, tsSignature } from '../signature';
 import type {
   BamlSymbol,
-  Correspondence,
+  Judgement,
   Links,
   Side,
   SymbolMatrix,
@@ -25,7 +25,7 @@ import type {
 // One symbol row, seen from whichever side the reader is viewing.
 //
 // The swatch answers "does this exist in the other language": striped when it
-// has correspondences, otherwise the viewing language's own colour.
+// has a counterpart, otherwise the viewing language's own colour.
 //
 // A row is only handed a `target` when it is on the path to one — its parent
 // passes it down to the one child that leads there — so holding it at all means
@@ -105,9 +105,18 @@ export class MatrixSymbolElement extends LitElement {
     return this.node.symbol;
   }
 
-  /** This symbol's own correspondences, not its children's. */
-  private get own(): Correspondence[] {
+  /** Judgements about this symbol, not about its children. */
+  private get own(): Judgement[] {
     return this.links.for(this.side, this.node.index);
+  }
+
+  /** The judgements that pair it with something, as opposed to recording an
+   *  absence. */
+  private get counterparts(): Judgement[] {
+    return this.own.filter(
+      (judgement) =>
+        judgement.verdict === 'match' || judgement.verdict === 'divergent',
+    );
   }
 
   // Light DOM: Tailwind's stylesheet cannot cross a shadow boundary, and this
@@ -117,7 +126,7 @@ export class MatrixSymbolElement extends LitElement {
   }
 
   private get swatch(): readonly [string, string] {
-    if (this.own.length > 0) return SWATCH.both;
+    if (this.counterparts.length > 0) return SWATCH.both;
     return this.side === 'baml' ? SWATCH.baml : SWATCH.ts;
   }
 
@@ -227,7 +236,7 @@ export class MatrixSymbolElement extends LitElement {
             : nothing
         }
         ${
-          this.own.length > 0
+          this.counterparts.length > 0
             ? html`
               <h4
                 class="mt-3 mb-1 text-[0.68rem] font-semibold tracking-wider
@@ -235,7 +244,7 @@ export class MatrixSymbolElement extends LitElement {
               >
                 ${other}
               </h4>
-              ${this.own.map((link) => this.counterpart(link))}
+              ${this.counterparts.map((link) => this.counterpart(link))}
             `
             : nothing
         }
@@ -243,17 +252,19 @@ export class MatrixSymbolElement extends LitElement {
     `;
   }
 
-  private counterpart(link: Correspondence): TemplateResult | typeof nothing {
+  private counterpart(link: Judgement): TemplateResult | typeof nothing {
     const otherSide: Side = this.side === 'baml' ? 'ts' : 'baml';
-    const symbol =
-      this.side === 'baml'
-        ? this.matrix.ts[link.ts]
-        : this.matrix.baml[link.baml];
+    // A judgement names its ends by id; the views address rows by index.
+    const wanted = this.side === 'baml' ? link.ts : link.baml;
+    const symbols: Array<BamlSymbol | TsSymbol> =
+      otherSide === 'ts' ? this.matrix.ts : this.matrix.baml;
+    const index = symbols.findIndex((candidate) => candidate.id === wanted);
+    const symbol = symbols[index];
     if (!symbol) return nothing;
     return html`
       <div class="my-1">
         <div class="font-mono text-[0.8rem]">
-          ${this.crossLink(otherSide, this.side === 'baml' ? link.ts : link.baml, symbol.display)}
+          ${this.crossLink(otherSide, index, symbol.display)}
         </div>
         <div class="font-mono text-xs text-zinc-500">
           ${this.signatureOf(symbol, otherSide)}

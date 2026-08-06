@@ -189,20 +189,31 @@ test "the symbol matrix relates both sides without privileging either" {
     assert.equal(matrix.counts.ts_symbols, 3);
 
     // index_of ↔ indexOf is deterministic name agreement, and both endpoints
-    // resolve back to real symbols through their indices.
-    assert.is_true(matrix.correspondences.length() >= 1);
-    if let first: Correspondence = matrix.correspondences.at(0) {
-        assert.equal(first.basis, "name");
-        if let baml_side: BamlSymbol = matrix.baml.at(first.baml) {
-            if let ts_side: TsSymbol = matrix.ts.at(first.ts) {
-                assert.equal(match_key(baml_name_of(baml_side)), match_key(ts_name_of(ts_side)));
-            } else {
-                baml.sys.panic("correspondence points past the TS list");
-            }
-        } else {
-            baml.sys.panic("correspondence points past the BAML list");
-        }
+    // address real symbols by id.
+    assert.is_true(matrix.judgements.length() >= 1);
+    let baml_ids: map<string, bool> = {};
+    for (let symbol in matrix.baml) {
+        let _ = baml_ids.set(symbol.id, true);
     }
+    let ts_ids: map<string, bool> = {};
+    for (let symbol in matrix.ts) {
+        let _ = ts_ids.set(symbol.id, true);
+    }
+    if let first: Judgement = matrix.judgements.at(0) {
+        assert.equal(first.basis, "name");
+        assert.equal(first.verdict, "match");
+        // A name match arrives unverified: it is a proposal like any other.
+        assert.is_true(!first.verified);
+        assert.is_true(baml_ids.has(first.baml));
+        assert.is_true(ts_ids.has(first.ts ?? ""));
+    } else {
+        baml.sys.panic("no judgement recorded for index_of");
+    }
+
+    // A symbol nothing has looked at carries no judgement, which is a different
+    // state from one judged to have no counterpart.
+    assert.is_true(matrix.counts.unjudged > 0);
+    assert.equal(matrix.counts.unmatched, 0);
 }
 
 // ── ratchet ─────────────────────────────────────────────────────────────────
@@ -266,7 +277,7 @@ test "the report's header round-trips through JSON" {
     let decoded = baml.json.to<ReportHeader>(baml.json.parse(baml.json.serialize(matrix)));
     assert.equal(decoded.provenance.baml_surface_sha256, "abc123def456789");
     assert.equal(decoded.counts.baml_symbols, matrix.counts.baml_symbols);
-    assert.equal(decoded.counts.correspondences, matrix.counts.correspondences);
+    assert.equal(decoded.counts.judgements, matrix.counts.judgements);
     // A round-tripped header must compare equal to its source, or the ratchet
     // would report drift on every run.
     assert.is_true(compare_to_baseline(decoded, matrix).up_to_date);
@@ -403,4 +414,44 @@ test "impl entries address themselves and name what they re-list" {
     } else {
         baml.sys.panic("the impl's compare is missing");
     }
+}
+
+test "every symbol in a matrix is addressed by exactly one id" {
+    let matrix = fixture_matrix("sha-ids", "5.8.3-test");
+    let seen: map<string, bool> = {};
+    let collisions: string[] = [];
+    for (let symbol in matrix.baml) {
+        if (seen.has(symbol.id)) {
+            collisions.push(symbol.id);
+        }
+        let _ = seen.set(symbol.id, true);
+    }
+    for (let symbol in matrix.ts) {
+        if (seen.has(symbol.id)) {
+            collisions.push(symbol.id);
+        }
+        let _ = seen.set(symbol.id, true);
+    }
+    // A collision is not a cosmetic flaw: a judgement keyed on a shared id is a
+    // statement about whichever symbol the reader happens to find first.
+    assert.equal(collisions.join(", "), "");
+}
+
+test "the static and instance sides of a container are addressed apart" {
+    // `Uint8Array.BYTES_PER_ELEMENT` is declared on both the constructor and
+    // the instance. They are different members, and TypeScript reaches them
+    // differently.
+    let instance = TsContainer { name: "Uint8Array", kind: "interface", members: [] };
+    let member = TsMember {
+        name: "BYTES_PER_ELEMENT",
+        static: false,
+        signatures: ["readonly BYTES_PER_ELEMENT: number"],
+        doc: null,
+        since: "es5",
+    };
+    assert.equal(ts_id_of(instance, member, "property"), "Uint8Array.prototype.BYTES_PER_ELEMENT");
+    assert.equal(ts_id_of(instance, member, "static_method"), "Uint8Array.BYTES_PER_ELEMENT");
+    // A free function has no receiver to be reached through.
+    let globals = TsContainer { name: "(globals)", kind: "functions", members: [] };
+    assert.equal(ts_id_of(globals, member, "free"), "(globals).BYTES_PER_ELEMENT");
 }

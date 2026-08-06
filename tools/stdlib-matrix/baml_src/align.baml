@@ -71,31 +71,30 @@ function first_line(doc: string?) -> string {
 /// reason about the set. Already-matched symbols are left out — the prepass has
 /// spoken for them.
 function align_batches(matrix: SymbolMatrix) -> AlignBatch[] {
-    let matched: map<string, bool> = {};
-    for (let link in matrix.correspondences) {
-        let _ = matched.set(link.baml.to_string(), true);
+    let judged: map<string, bool> = {};
+    let claimed: map<string, bool> = {};
+    for (let judgement in matrix.judgements) {
+        let _ = judged.set(judgement.baml, true);
+        if (judgement_pairs(judgement)) {
+            if let ts: string = judgement.ts {
+                let _ = claimed.set(ts, true);
+            }
+        }
     }
 
-    // The TypeScript menu is the whole unmatched surface, listed once per call.
+    // The TypeScript menu is the whole unclaimed surface, listed once per call.
     // It is the thing being searched, so trimming it would hide the answer.
     let menu: string[] = [];
-    let claimed: map<string, bool> = {};
-    for (let link in matrix.correspondences) {
-        let _ = claimed.set(link.ts.to_string(), true);
-    }
-    let ts_index = 0;
     for (let symbol in matrix.ts) {
-        if (!claimed.has(ts_index.to_string())) {
+        if (!claimed.has(symbol.id)) {
             menu.push(ts_line(symbol));
         }
-        ts_index += 1;
     }
 
     let groups: map<string, string[]> = {};
     let order: string[] = [];
-    let index = 0;
     for (let symbol in matrix.baml) {
-        if (!matched.has(index.to_string())) {
+        if (!judged.has(symbol.id)) {
             let group = baml_group_of(symbol);
             if (!groups.has(group)) {
                 let empty: string[] = [];
@@ -106,7 +105,6 @@ function align_batches(matrix: SymbolMatrix) -> AlignBatch[] {
                 bucket.push(baml_line(symbol));
             }
         }
-        index += 1;
     }
 
     let batches: AlignBatch[] = [];
@@ -171,30 +169,30 @@ class AlignOutcome {
 
 /// Folds verdicts into the matrix, keeping only claims that name symbols the
 /// model was actually offered.
+///
+/// Claims arrive as displays, which collide — 15 BAML displays do — so a claim
+/// is accepted only when it resolves to exactly one symbol that has not already
+/// been judged. Everything else is rejected by name and counted, so a prompt
+/// that starts hallucinating shows up as a number rather than as quietly worse
+/// data.
 function apply_alignments(matrix: SymbolMatrix, verdicts: BatchVerdict[]) -> AlignOutcome {
-    // Displays collide, so a display maps to every index that bears it; a claim
-    // is only accepted when it resolves to exactly one unmatched symbol.
-    let baml_by_display: map<string, int[]> = {};
-    let matched: map<string, bool> = {};
-    for (let link in matrix.correspondences) {
-        let _ = matched.set(link.baml.to_string(), true);
+    let judged: map<string, bool> = {};
+    for (let judgement in matrix.judgements) {
+        let _ = judged.set(judgement.baml, true);
     }
-    let index = 0;
+    let baml_by_display: map<string, string[]> = {};
     for (let symbol in matrix.baml) {
-        if (!matched.has(index.to_string())) {
-            let bucket: int[] = baml_by_display.get(symbol.display) ?? [];
-            bucket.push(index);
+        if (!judged.has(symbol.id)) {
+            let bucket: string[] = baml_by_display.get(symbol.display) ?? [];
+            bucket.push(symbol.id);
             let _ = baml_by_display.set(symbol.display, bucket);
         }
-        index += 1;
     }
-    let ts_by_display: map<string, int[]> = {};
-    let ts_index = 0;
+    let ts_by_display: map<string, string[]> = {};
     for (let symbol in matrix.ts) {
-        let bucket: int[] = ts_by_display.get(symbol.display) ?? [];
-        bucket.push(ts_index);
+        let bucket: string[] = ts_by_display.get(symbol.display) ?? [];
+        bucket.push(symbol.id);
         let _ = ts_by_display.set(symbol.display, bucket);
-        ts_index += 1;
     }
 
     let rejected: string[] = [];
@@ -202,11 +200,11 @@ function apply_alignments(matrix: SymbolMatrix, verdicts: BatchVerdict[]) -> Ali
     // A claim may arrive as the whole prompt line rather than just the name.
     // Trimming at the first space recovers the display without loosening what
     // counts as a match: the result still has to name exactly one symbol.
-    // A pre-typed empty, because `?? []` in a branch yields `int[] | _[]`
+    // A pre-typed empty, because `?? []` in a branch yields `string[] | _[]`
     // rather than unifying with the map's value type.
-    let none: int[] = [];
-    let resolve = (claimed: string, table: map<string, int[]>) -> {
-        let hits: int[] = table.get(claimed) ?? none;
+    let none: string[] = [];
+    let resolve = (claimed: string, table: map<string, string[]>) -> {
+        let hits: string[] = table.get(claimed) ?? none;
         if (hits.length() == 0) {
             if let cut: int = claimed.index_of(" ") {
                 hits = table.get(claimed.substring(0, cut)) ?? none;
@@ -220,7 +218,7 @@ function apply_alignments(matrix: SymbolMatrix, verdicts: BatchVerdict[]) -> Ali
             let baml_hits = resolve(pair.baml_display, baml_by_display);
             let ts_hits = resolve(pair.ts_display, ts_by_display);
             if (baml_hits.length() != 1) {
-                rejected.push(`${pair.baml_display} is not a single unmatched BAML symbol`);
+                rejected.push(`${pair.baml_display} is not a single unjudged BAML symbol`);
             } else if (ts_hits.length() != 1) {
                 rejected.push(`${pair.ts_display} is not a single TypeScript symbol`);
             } else if (consumed.has(pair.baml_display)) {
@@ -228,14 +226,18 @@ function apply_alignments(matrix: SymbolMatrix, verdicts: BatchVerdict[]) -> Ali
             } else {
                 let _ = consumed.set(pair.baml_display, true);
                 matrix
-                    .correspondences
+                    .judgements
                     .push(
-                        Correspondence {
-                            baml: baml_hits.at(0) ?? 0,
-                            ts: ts_hits.at(0) ?? 0,
+                        Judgement {
+                            baml: baml_hits.at(0) ?? "",
+                            ts: ts_hits.at(0) ?? "",
+                            verdict: "match",
                             basis: "model",
                             confidence: pair.confidence,
                             reason: pair.reason,
+                            divergence: null,
+                            rejected: none,
+                            verified: false,
                         },
                     );
                 applied += 1;
@@ -245,44 +247,6 @@ function apply_alignments(matrix: SymbolMatrix, verdicts: BatchVerdict[]) -> Ali
 
     matrix.counts = recount(matrix);
     AlignOutcome { matrix: matrix, applied: applied, rejected: rejected }
-}
-
-/// Recomputes the tallies after enrichment, from the relation rather than by
-/// adjusting the old numbers.
-function recount(matrix: SymbolMatrix) -> MatrixCounts {
-    let baml_linked: map<string, bool> = {};
-    let ts_linked: map<string, bool> = {};
-    for (let link in matrix.correspondences) {
-        let _ = baml_linked.set(link.baml.to_string(), true);
-        let _ = ts_linked.set(link.ts.to_string(), true);
-    }
-    let matched = 0;
-    let unmatched = 0;
-    let index = 0;
-    for (let symbol in matrix.baml) {
-        if (baml_linked.has(index.to_string())) {
-            matched += 1;
-        } else {
-            unmatched += 1;
-        }
-        index += 1;
-    }
-    let ts_unmatched = 0;
-    let scan = 0;
-    while (scan < matrix.ts.length()) {
-        if (!ts_linked.has(scan.to_string())) {
-            ts_unmatched += 1;
-        }
-        scan += 1;
-    }
-    MatrixCounts {
-        baml_symbols: matrix.baml.length(),
-        ts_symbols: matrix.ts.length(),
-        correspondences: matrix.correspondences.length(),
-        baml_matched: matched,
-        baml_unmatched: unmatched,
-        ts_unmatched: ts_unmatched,
-    }
 }
 
 /// Runs every batch concurrently and folds the results in.

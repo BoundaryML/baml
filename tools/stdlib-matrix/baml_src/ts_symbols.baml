@@ -16,8 +16,8 @@
 /// instance side, `property` for non-callable members, and `free` for the
 /// globals and module functions that belong to no container.
 class TsSymbol {
-    /// The dotted path, which is also this symbol's address: TypeScript's lib
-    /// types are flat, so `Array.map` names exactly one member.
+    /// This symbol's address, written the way TypeScript addresses it — see
+    /// `ts_id_of`.
     id: string,
     symbol: string[],
     display: string,
@@ -70,20 +70,37 @@ function ts_signature_of(member: TsMember) -> string {
     member.signatures.join("\n")
 }
 
+/// How TypeScript addresses this member, which is also its id.
+///
+/// The static and instance sides of a container are separate declarations that
+/// may share a name — `Uint8Array.BYTES_PER_ELEMENT` is both a constructor
+/// property and an instance one — so a bare `Container.member` is not an
+/// address. TypeScript's own answer is the one used here: the static side is
+/// reached on the constructor, the instance side through `prototype`. Free
+/// functions have no receiver and keep their container as written.
+function ts_id_of(container: TsContainer, member: TsMember, origin: string) -> string {
+    if (origin == "method" || origin == "property") {
+        `${container.name}.prototype.${member.name}`
+    } else {
+        `${container.name}.${member.name}`
+    }
+}
+
 function extract_ts_symbols(doc: TsSurfaceDoc) -> TsSymbol[] {
     let symbols: TsSymbol[] = [];
     for (let container in doc.containers) {
         for (let member in container.members) {
+            let origin = ts_origin_of(container, member);
             symbols
                 .push(
                     TsSymbol {
-                        id: `${container.name}.${member.name}`,
+                        id: ts_id_of(container, member, origin),
                         symbol: [container.name, member.name],
                         // Container-qualified throughout, including the `(globals)` and
                         // `node:*` pseudo-containers, so a display always says where a
                         // symbol came from.
                         display: `${container.name}.${member.name}`,
-                        origin: ts_origin_of(container, member),
+                        origin: origin,
                         signature: ts_signature_of(member),
                         doc: member.doc,
                         since: member.since,

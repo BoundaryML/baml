@@ -58,27 +58,40 @@ function baml_group_of(symbol: BamlSymbol) -> string {
     }
 }
 
+/// One row: the symbol, what was concluded about it, and on what grounds.
+///
+/// The state column distinguishes the three things a reader needs apart: a
+/// counterpart, a considered absence, and a symbol nothing has looked at yet.
 function render_symbol_row(
     symbol: BamlSymbol,
-    links: Correspondence[],
-    matrix: SymbolMatrix,
+    judgements: Judgement[],
+    ts_by_id: map<string, TsSymbol>,
 ) -> string {
     let counterparts: string[] = [];
-    for (let link in links) {
-        if let ts: TsSymbol = matrix.ts.at(link.ts) {
-            let note = if (link.basis == "model") {
-                ` (${link.confidence ?? "?"})`
+    let state = "unjudged";
+    for (let judgement in judgements) {
+        if (judgement_pairs(judgement)) {
+            state
+                = if (judgement.verdict == "divergent") {
+                    "divergent"
+                } else {
+                    "both"
+                };
+            let note = if (judgement.basis == "model") {
+                ` (${judgement.confidence ?? "?"})`
             } else {
                 ""
             };
-            counterparts.push(`${ts.display}${note}`);
+            let display = if let ts: TsSymbol = ts_by_id.get(judgement.ts ?? "") {
+                ts.display
+            } else {
+                judgement.ts ?? ""
+            };
+            counterparts.push(`${display}${note}`);
+        } else if (state == "unjudged") {
+            state = "BAML only";
         }
     }
-    let state = if (counterparts.length() > 0) {
-        "both"
-    } else {
-        "BAML only"
-    };
     [
         `| ${escape_cell(symbol.display)} `,
         `| ${escape_cell(symbol.signature?.display ?? "")} `,
@@ -90,35 +103,38 @@ function render_symbol_row(
 
 function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     let counts = matrix.counts;
-    let ts_matched = counts.ts_symbols - counts.ts_unmatched;
+    let ts_matched = counts.ts_symbols - counts.ts_unclaimed;
 
-    // Correspondences indexed from each side, mirroring the web view's Links.
-    let by_baml: map<string, Correspondence[]> = {};
+    // Judgements indexed by the symbol they are about, mirroring the web view.
+    let by_baml: map<string, Judgement[]> = {};
     let ts_claimed: map<string, bool> = {};
-    for (let link in matrix.correspondences) {
-        let key = link.baml.to_string();
-        let bucket: Correspondence[] = by_baml.get(key) ?? [];
-        bucket.push(link);
-        let _ = by_baml.set(key, bucket);
-        let _ = ts_claimed.set(link.ts.to_string(), true);
+    for (let judgement in matrix.judgements) {
+        let bucket: Judgement[] = by_baml.get(judgement.baml) ?? [];
+        bucket.push(judgement);
+        let _ = by_baml.set(judgement.baml, bucket);
+        if (judgement_pairs(judgement)) {
+            if let ts: string = judgement.ts {
+                let _ = ts_claimed.set(ts, true);
+            }
+        }
+    }
+    let ts_by_id: map<string, TsSymbol> = {};
+    for (let symbol in matrix.ts) {
+        let _ = ts_by_id.set(symbol.id, symbol);
     }
 
-    // Bucket BAML symbols by group, carrying each one's index so its
-    // correspondences stay reachable.
-    let groups: map<string, int[]> = {};
+    let groups: map<string, BamlSymbol[]> = {};
     let order: string[] = [];
-    let index = 0;
     for (let symbol in matrix.baml) {
         let group = baml_group_of(symbol);
         if (!groups.has(group)) {
-            let empty: int[] = [];
+            let empty: BamlSymbol[] = [];
             let _ = groups.set(group, empty);
             order.push(group);
         }
-        if let bucket: int[] = groups.get(group) {
-            bucket.push(index);
+        if let bucket: BamlSymbol[] = groups.get(group) {
+            bucket.push(symbol);
         }
-        index += 1;
     }
     order.sort_by_key((name) -> {
         name
@@ -136,15 +152,15 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     out.push("## Summary");
     out.push("");
     out.push(
-        `${counts.baml_matched} of ${counts.baml_symbols} BAML symbols have a TypeScript counterpart · ${counts.baml_unmatched} do not.`,
+        `${counts.matched} of ${counts.baml_symbols} BAML symbols have a TypeScript counterpart · ${counts.unmatched} were judged to have none · ${counts.unjudged} are still unjudged.`,
     );
     out.push("");
     out.push(
-        `${ts_matched} of ${counts.ts_symbols} TypeScript symbols have a BAML counterpart · ${counts.ts_unmatched} do not.`,
+        `${ts_matched} of ${counts.ts_symbols} TypeScript symbols are claimed by a BAML symbol · ${counts.ts_unclaimed} are not.`,
     );
     out.push("");
     out.push(
-        "A correspondence is either deterministic name agreement or a model's judgment, which carries its confidence in parentheses.",
+        "A counterpart rests either on deterministic name agreement or on a model's judgment, which carries its confidence in parentheses. `divergent` marks the same operation reached differently.",
     );
     out.push("");
     out.push("## BAML surface");
@@ -154,12 +170,10 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
         out.push("");
         out.push("| symbol | signature | state | TypeScript |");
         out.push("| --- | --- | --- | --- |");
-        let members: int[] = groups.get(group) ?? [];
+        let members: BamlSymbol[] = groups.get(group) ?? [];
         for (let member in members) {
-            if let symbol: BamlSymbol = matrix.baml.at(member) {
-                let links: Correspondence[] = by_baml.get(member.to_string()) ?? [];
-                out.push(render_symbol_row(symbol, links, matrix));
-            }
+            let judgements: Judgement[] = by_baml.get(member.id) ?? [];
+            out.push(render_symbol_row(member, judgements, ts_by_id));
         }
         out.push("");
     }
@@ -168,15 +182,25 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     out.push("");
     out.push("| symbol | signature | since |");
     out.push("| --- | --- | --- |");
-    let ts_index = 0;
     for (let symbol in matrix.ts) {
-        if (!ts_claimed.has(ts_index.to_string())) {
+        if (!ts_claimed.has(symbol.id)) {
             out.push(
                 `| ${escape_cell(symbol.display)} | ${escape_cell(symbol.signature)} | ${symbol.since} |`,
             );
         }
-        ts_index += 1;
     }
     out.push("");
+    if (matrix.failures.length() > 0) {
+        out.push("## Calls that did not come back");
+        out.push("");
+        out.push("| pass | subject | reason |");
+        out.push("| --- | --- | --- |");
+        for (let failure in matrix.failures) {
+            out.push(
+                `| ${failure.pass} | ${escape_cell(failure.subject)} | ${escape_cell(failure.reason)} |`,
+            );
+        }
+        out.push("");
+    }
     out.join("\n")
 }
