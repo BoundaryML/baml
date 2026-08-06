@@ -1075,7 +1075,7 @@ impl<'db> InferenceContext<'db> {
                 // Iterator protocol (the `iter.Iterable` Item projection).
                 let element = match collection_ty.kind() {
                     TyKind::List(element, _) => element.clone(),
-                    _ => self.iteration_item(&collection_ty),
+                    _ => self.iteration_item(&collection_ty, *collection),
                 };
                 self.lower_pattern(body, *binding, &element);
                 let entry_flow = self.flow.clone();
@@ -3832,7 +3832,7 @@ impl<'db> InferenceContext<'db> {
     /// and `implements` blocks on classes both answer). A projection the
     /// oracle cannot determine stays the error sentinel: iteration over
     /// a type with no `Iterable` evidence has no element type.
-    fn iteration_item(&self, collection: &Ty) -> Ty {
+    fn iteration_item(&mut self, collection: &Ty, at: ExprId) -> Ty {
         let iterable = baml_type::interned::InterfaceRef::new(
             baml_type::TypeName::new(
                 baml_type::Name::new("baml"),
@@ -3842,14 +3842,28 @@ impl<'db> InferenceContext<'db> {
             Box::new([]),
             Vec::new(),
         );
+        // rustc's for-desugar is an `into_iter` CALL: the iterability
+        // obligation registers against the collection (selection
+        // forces its vars; an unsatisfiable subject records the
+        // mismatch at the collection expression), and the element is
+        // the Item projection - resolved through the same structure
+        // demand receivers use, deferred while vars remain like any
+        // other projection.
+        self.register_obligation(obligations::Obligation::Implements {
+            ty: collection.clone(),
+            interface: iterable.clone(),
+            at,
+        });
         let projection = Ty::intern(TyKind::AssociatedTypeProjection {
             base: collection.clone(),
             interface: iterable,
             member: baml_type::Name::new("Item"),
             attr: baml_type::TyAttr::default(),
         });
-        let reduced = self.reduce_projections(&projection, PROJECTION_FINALIZE_FUEL);
-        if reduced.has_projection() {
+        let reduced = self.structurally_resolve(&projection);
+        if reduced.has_projection() && !reduced.has_infer() {
+            // Ground and irreducible: genuinely not iterable (the
+            // failed selection reports at the collection).
             return Ty::error();
         }
         reduced

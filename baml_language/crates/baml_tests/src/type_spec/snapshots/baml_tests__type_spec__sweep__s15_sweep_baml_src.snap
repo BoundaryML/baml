@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52446
+agreements: 52450
 one-sided (coverage): 264
-conflicts: 7995 across 1431 distinct pairs
+conflicts: 7991 across 1427 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -53,7 +53,7 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [66x] hir_ty=[bool] tir=[true]
     at ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`
     at ns_bigints/bigints.baml:5066..5073 `1n < 2n`
-[57x] hir_ty=[baml.iter.Iterator<Error = never, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = never>]
+[58x] hir_ty=[baml.iter.Iterator<Error = never, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = never>]
     at ns_iter/iter.baml:222..275 `let it: ba...or = never>`
     at ns_iter/iter.baml:230..275 `baml.iter....or = never>`
 [45x] hir_ty=[1] tir=[int]
@@ -113,15 +113,15 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [23x] hir_ty=[(arr: int[]) -> user.iter_impl_generics_only.core.ArrayIterator<int> throws never] tir=[(arr: T[]) -> user.iter_impl_generics_only.core.ArrayIterator<T> throws never]
     at ns_iter_impl_generics_only/iter.baml:364..415 `user.iter_...terator.new`
     at ns_iter_impl_generics_only/iter.baml:647..698 `user.iter_...terator.new`
+[23x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never] tir=[() -> int[] throws never]
+    at ns_iter/iter.baml:320..330 `it.collect`
+    at ns_iter/iter.baml:4217..4227 `it.collect`
 [23x] hir_ty=[(x: int) -> bool throws never] tir=[(x: int) -> bool throws E]
     at ns_arrays/arrays.baml:11395..11426 `(x: int) -... % 2 == 0 }`
     at ns_arrays/arrays.baml:11885..11911 `(x: int) -...l { x > 2 }`
 [23x] hir_ty=[string] tir=["done" | string]
     at ns_csv/csv.baml:22280..22450 `{\n       ...\n        }`
     at ns_csv/csv.baml:22280..22594 `{\n       ...\n        }`
-[22x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never] tir=[() -> int[] throws never]
-    at ns_iter/iter.baml:320..330 `it.collect`
-    at ns_iter/iter.baml:4217..4227 `it.collect`
 [21x] hir_ty=[(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.iter.Done throws baml.csv.CsvError | baml.errors.Io] tir=[() -> baml.csv.CsvRecord | baml.iter.Done throws baml.csv.CsvError | baml.errors.Io]
     at ns_csv/csv.baml:11245..11251 `r.next`
     at ns_csv/csv.baml:18813..18819 `r.next`
@@ -161,9 +161,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [17x] hir_ty=[int] tir=[int | 1 | 99]
     at ns_exceptions/exceptions.baml:22728..22835 `{\n    s9_...9\n    }\n}`
     at ns_exceptions/exceptions.baml:22734..22833 `s9_risky_9...> 99\n    }`
-[16x] hir_ty=[!error] tir=[int]
-    at ns_iter/iter.baml:1846..1851 `let x`
-    at ns_iter/iter.baml:1910..1911 `x`
 [16x] hir_ty=[() -> int throws baml.json.JsonDecodeError | baml.json.JsonParseError] tir=[() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError]
     at ns_from_json_interface/from_json_interface.baml:5419..5454 `nested_fie..._honored_fn`
     at ns_from_json_interface/from_json_interface.baml:7709..7753 `static_fro...type_arg_fn`
@@ -176,6 +173,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [15x] hir_ty=[() -> string throws baml.json.JsonParseError | baml.json.JsonSerializationError] tir=[() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError]
     at ns_json_auto_derive/json_auto_derive.baml:3353..3377 `array_of_int_to_json_str`
     at ns_json_auto_derive/json_auto_derive.baml:3943..3969 `array_of_c...to_json_str`
+[14x] hir_ty=[!error] tir=[int]
+    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
+    at ns_json_auto_derive/json_auto_derive.baml:24833..24949 `{\n    let...n    b.y\n}`
 [14x] hir_ty=[(a: bool[], b: bool[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_cancel_token/cancel_token.baml:1859..1875 `baml.deep_equals`
     at ns_closures/closures.baml:2227..2243 `baml.deep_equals`
@@ -1328,9 +1328,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(a: user.typed_outputs.Failure | user.typed_outputs.Success, b: user.typed_outputs.Failure | user.typed_outputs.Success) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_typed_outputs/typed_outputs.baml:3180..3196 `baml.deep_equals`
     at ns_typed_outputs/typed_outputs.baml:3425..3441 `baml.deep_equals`
-[2x] hir_ty=[(baml.iter.Iterator<Error = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Error | !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item> as baml.iter.Iterator).Item[]] tir=[int[]]
-    at ns_iter/iter.baml:10108..10322 `{\n  let a...ollect()\n}`
-    at ns_iter/iter.baml:10300..10320 `a.chain(b).collect()`
 [2x] hir_ty=[(body: (name: string) -> baml.TaggedString throws never) -> string throws never] tir=[(body: (name: string) -> baml.TaggedString throws __effect_param_0) -> string throws __effect_param_0]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:3016..3022 `tt_fmt`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:3545..3551 `tt_fmt`
@@ -1445,6 +1442,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, fn: (int, int) -> int throws never, initial: int) -> int throws never] tir=[(fn: (A, int) -> A throws E2, initial: A) -> A throws E2]
     at ns_iter/iter.baml:573..582 `it.reduce`
     at ns_iter/iter.baml:6716..6806 `baml.iter....  }).reduce`
+[2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, other: baml.iter.Iterable<Error = never, Item = int>) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(other: baml.iter.Iterable<Item = int, Error = E2>) -> baml.iter.Iterator<Item = int, Error = E2> throws never]
+    at ns_iter/iter.baml:8184..8203 `[1, 2].iter().chain`
+    at ns_iter/iter.baml:10300..10307 `a.chain`
 [2x] hir_ty=[(self: baml.llm.PromptAst) -> baml.llm.PromptMessage[] throws never] tir=[() -> baml.llm.PromptMessage[] throws never]
     at ns_promptast_accessors/promptast_accessors.baml:3029..3054 `paa_render...().messages`
     at ns_promptast_accessors/promptast_accessors.baml:3672..3692 `render(ctx).messages`
@@ -2459,8 +2459,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_iter/iter.baml:1154..1200 `baml.iter....3, 4]).find`
 [1x] hir_ty=[(self: baml.iter.Iterable<Error = never, Item = int>) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[() -> baml.iter.Iterator<Item = int, Error = never> throws never]
     at ns_iter/iter.baml:8951..8958 `xs.iter`
-[1x] hir_ty=[(self: baml.iter.Iterator<Error = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Error | !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item>) -> (baml.iter.Iterator<Error = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Error | !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item> as baml.iter.Iterator).Item[] throws (baml.iter.Iterator<Error = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Error | !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item> as baml.iter.Iterator).Error] tir=[() -> int[] throws never]
-    at ns_iter/iter.baml:10300..10318 `a.chain(b).collect`
 [1x] hir_ty=[(self: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = int>) -> int[] throws baml.csv.CsvError | baml.errors.Io] tir=[() -> int[] throws baml.csv.CsvError | baml.errors.Io]
     at ns_csv/csv.baml:33360..33424 `r.rows<Int... }).collect`
 [1x] hir_ty=[(self: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = user.csv.IntRow>, fn: (user.csv.IntRow) -> int throws never) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = int> throws never] tir=[(fn: (user.csv.IntRow) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = baml.csv.CsvError | baml.errors.Io | E2> throws never]
@@ -2473,10 +2471,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_iter/iter.baml:6886..6975 `baml.iter....}).for_each`
 [1x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, n: int) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(n: int) -> baml.iter.Iterator<Item = int, Error = never> throws never]
     at ns_iter/iter.baml:7574..7675 `baml.iter.... }).step_by`
-[1x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, other: baml.iter.Iterable<Error = !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item>) -> baml.iter.Iterator<Error = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Error | !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item> throws never] tir=[(other: baml.iter.Iterable<Item = int, Error = E2>) -> baml.iter.Iterator<Item = int, Error = E2> throws never]
-    at ns_iter/iter.baml:10300..10307 `a.chain`
-[1x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, other: baml.iter.Iterable<Error = never, Item = int>) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(other: baml.iter.Iterable<Item = int, Error = E2>) -> baml.iter.Iterator<Item = int, Error = E2> throws never]
-    at ns_iter/iter.baml:8184..8203 `[1, 2].iter().chain`
 [1x] hir_ty=[(self: baml.iter.Range) -> int[] throws never] tir=[() -> int[] throws never]
     at ns_iter/iter.baml:1404..1437 `baml.iter.... 5).collect`
 [1x] hir_ty=[(self: baml.iter.Range, n: int) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(n: int) -> baml.iter.Iterator<Item = int, Error = never> throws never]
@@ -3293,8 +3287,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_future_types/future_types.baml:1139..1172 `baml.futur...ing, never>`
 [1x] hir_ty=[R] tir=[R | user.iter_impl_generics_only.core.Done]
     at ns_iter_impl_generics_only/ns_core/core.baml:5409..5421 `self.func(x)`
-[1x] hir_ty=[baml.iter.Iterator<Error = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Error | !error, Item = (baml.iter.Iterator<Error = never, Item = int> as baml.iter.Iterator).Item>] tir=[baml.iter.Iterator<Item = int, Error = never>]
-    at ns_iter/iter.baml:10300..10310 `a.chain(b)`
 [1x] hir_ty=[baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = baml.csv.CsvError | baml.errors.Io>]
     at ns_csv/csv.baml:33360..33416 `r.rows<Int...ow.n * 2 })`
 [1x] hir_ty=[baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = user.csv.CsvSmokeIntRow>] tir=[baml.iter.Iterator<Item = user.csv.CsvSmokeIntRow, Error = baml.csv.CsvError | baml.errors.Io>]

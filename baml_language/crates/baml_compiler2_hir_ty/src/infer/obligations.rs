@@ -104,12 +104,19 @@ impl<'db> InferenceContext<'db> {
                     }
                     return Attempt::Done;
                 }
+                // Object candidates (rustc's
+                // `assemble_candidates_from_object_ty`): an existential
+                // subject has no impl to select - it proves the goal
+                // from its OWN reference plus its `requires` closure.
+                if matches!(ty.kind(), TyKind::Interface(..)) {
+                    return self.select_object(&ty, &interface, *at);
+                }
                 // Variable-bearing goal: rustc's SELECTION, licensed by a
                 // known concrete head (candidates filter by it). A goal
-                // whose head is itself unknown - a bare inference var, a
-                // rigid var, an existential - stays Stalled: nothing
-                // filters the candidate set, and guessing is the one
-                // thing fulfillment never does.
+                // whose head is itself unknown - a bare inference var or
+                // a rigid var - stays Stalled: nothing filters the
+                // candidate set, and guessing is the one thing
+                // fulfillment never does.
                 if crate::impls::is_concrete_receiver(&ty) {
                     return self.select_impl(&ty, &interface, *at);
                 }
@@ -170,6 +177,78 @@ impl<'db> InferenceContext<'db> {
             .expect("the unique applicable candidate re-confirms");
         self.register_impl_bound_obligations(facts, &instantiation, at);
         Attempt::Done
+    }
+
+    /// Object selection: the existential subject's own reference and its
+    /// `requires` closure are the candidate heads - a matching head
+    /// confirms by unifying args and the goal's pins (`Iterator<Error =
+    /// never>` proving `Iterable<Error = ?E2>` commits `?E2 := never`).
+    /// As in impl selection: exactly one applicable head commits,
+    /// several stall, none records the mismatch.
+    fn select_object(&mut self, subject: &Ty, goal: &InterfaceRef, at: ExprId) -> Attempt {
+        let TyKind::Interface(name, args, pins, _) = subject.kind() else {
+            return Attempt::Stalled;
+        };
+        let subject_target = InterfaceTarget {
+            name: name.clone(),
+            args: args.to_vec(),
+            pins: pins.to_vec(),
+        };
+        let mut heads = vec![subject_target.clone()];
+        heads.extend(crate::impls::direct_requires_closure(
+            self.db,
+            &subject_target,
+            subject,
+            8,
+        ));
+        let goal_target = target_of(goal);
+        let mut applicable = None;
+        for head in &heads {
+            let snapshot = self.table.snapshot();
+            let applies = self.confirm_object(head, &goal_target);
+            self.table.rollback_to(snapshot);
+            if applies {
+                if applicable.is_some() {
+                    return Attempt::Stalled;
+                }
+                applicable = Some(head);
+            }
+        }
+        let Some(head) = applicable else {
+            let expected = interface_as_existential(goal);
+            self.result
+                .type_mismatches
+                .insert(at, (expected, subject.clone()));
+            return Attempt::Done;
+        };
+        let confirmed = self.confirm_object(head, &goal_target);
+        debug_assert!(confirmed, "the unique applicable head re-confirms");
+        Attempt::Done
+    }
+
+    /// One object head against the goal: names equal, args unify
+    /// pairwise, and every goal pin unifies with the head's realization
+    /// of that member (the head may pin MORE; a member the head does not
+    /// realize cannot prove a pinned requirement).
+    fn confirm_object(&mut self, head: &InterfaceTarget, goal: &InterfaceTarget) -> bool {
+        if head.name != goal.name || head.args.len() != goal.args.len() {
+            return false;
+        }
+        for (have, want) in head.args.iter().zip(&goal.args) {
+            if self.table.unify(have, want).is_err() {
+                return false;
+            }
+        }
+        for (name, want_pin) in &goal.pins {
+            let Some((_, have_pin)) = head.pins.iter().find(|(have_name, _)| have_name == name)
+            else {
+                return false;
+            };
+            if self.table.unify(have_pin, want_pin).is_err() {
+                return false;
+            }
+        }
+        true
     }
 
     /// The impl's declared bounds at `instantiation` become NESTED
