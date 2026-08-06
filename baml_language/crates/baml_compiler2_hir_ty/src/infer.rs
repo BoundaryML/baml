@@ -2084,6 +2084,25 @@ impl<'db> InferenceContext<'db> {
     /// (unreachable-operand rule); Error/unknown operands suppress to the
     /// sentinel. Also the discharge rule for operator obligations.
     pub(super) fn dispatch_operator(&mut self, interface: &str, lhs: &Ty, rhs: Option<&Ty>) -> Ty {
+        // Normalize-then-dispatch (rustc normalizes obligations before
+        // selection): a ground projection operand reduces before the
+        // operator interface is consulted - `(T as Source).Item + ":"`
+        // dispatches Add on `string`.
+        let lhs_reduced;
+        let mut lhs = lhs;
+        if lhs.has_projection() && !lhs.has_infer() {
+            lhs_reduced = self.reduce_projections(lhs, PROJECTION_FINALIZE_FUEL);
+            lhs = &lhs_reduced;
+        }
+        let rhs_reduced;
+        let mut rhs = rhs;
+        if let Some(rhs_ty) = rhs
+            && rhs_ty.has_projection()
+            && !rhs_ty.has_infer()
+        {
+            rhs_reduced = self.reduce_projections(rhs_ty, PROJECTION_FINALIZE_FUEL);
+            rhs = Some(&rhs_reduced);
+        }
         let lhs = self.table.resolve_completely(lhs);
         let rhs = rhs.map(|ty| self.table.resolve_completely(ty));
         if matches!(lhs.kind(), TyKind::Never { .. })
@@ -3998,16 +4017,57 @@ impl<'db> InferenceContext<'db> {
     /// diagnostic).
     fn structurally_resolve(&mut self, ty: &Ty) -> Ty {
         let resolved = self.table.resolve_completely(ty);
-        let TyKind::Infer { var: Some(var), .. } = resolved.kind() else {
-            return resolved;
-        };
-        let var = *var;
-        let bounds = self.table.var_bounds(var);
-        if self.try_solve_bounded_var(var, &bounds) {
-            self.table.resolve_completely(&resolved)
+        let mut resolved = if let TyKind::Infer { var: Some(var), .. } = resolved.kind() {
+            let var = *var;
+            let bounds = self.table.var_bounds(var);
+            if self.try_solve_bounded_var(var, &bounds) {
+                self.table.resolve_completely(&resolved)
+            } else {
+                resolved
+            }
         } else {
             resolved
+        };
+        // A projection blocked behind inference vars cannot PROBE (a
+        // projection is no impl subject) - the base must resolve before
+        // the oracle can reduce. Force the occurring vars from their
+        // accumulated bounds: the same demand-point commitment head
+        // vars get (rustc would have unified them already). Fixpoint,
+        // since one class's solution can ground another's bounds.
+        // Class-headed var-carrying receivers never enter (no
+        // projection) - they keep the probe road.
+        if resolved.has_infer() && resolved.has_projection() {
+            loop {
+                let mut vars = Vec::new();
+                collect_infer_vars(&resolved, &mut vars);
+                vars.sort_by_key(|var| var.index());
+                vars.dedup();
+                let mut progressed = false;
+                for var in vars {
+                    let bounds = self.table.var_bounds(var);
+                    if self.try_solve_bounded_var(var, &bounds) {
+                        progressed = true;
+                    }
+                }
+                if !progressed {
+                    break;
+                }
+                resolved = self.table.resolve_completely(&resolved);
+                if !resolved.has_infer() {
+                    break;
+                }
+            }
         }
+        // rustc's `structurally_resolve_type` NORMALIZES as well as
+        // resolving: a ground reducible projection is not structure -
+        // `(T as Source).Item` coming back from a call IS `string`
+        // wherever a consumer demands shape. Var-carrying projections
+        // stay (the oracle's plain conversion erases inference vars);
+        // they relate lazily through the deferred residue instead.
+        if resolved.has_projection() && !resolved.has_infer() {
+            return self.reduce_projections(&resolved, PROJECTION_FINALIZE_FUEL);
+        }
+        resolved
     }
 
     /// Re-examines the deferred `Sub` residue now that resolution has run;
@@ -4023,6 +4083,18 @@ impl<'db> InferenceContext<'db> {
             }
         }
     }
+}
+
+/// Every unsolved inference var occurring in `ty`, for structural
+/// resolution's projection-base forcing.
+fn collect_infer_vars(ty: &Ty, out: &mut Vec<baml_type::interned::InferVar>) {
+    if !ty.has_infer() {
+        return;
+    }
+    if let TyKind::Infer { var: Some(var), .. } = ty.kind() {
+        out.push(*var);
+    }
+    baml_type::interned::for_each_child(ty.kind(), |child| collect_infer_vars(child, out));
 }
 
 /// Whether `source` and `target` share a head CONSTRUCTOR - the gate
