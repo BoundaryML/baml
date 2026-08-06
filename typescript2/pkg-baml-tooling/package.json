@@ -1,0 +1,118 @@
+{
+  "bin": {
+    "baml-ts-gen": "./dist/bin/baml-ts-gen.js"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.0.0",
+    "unplugin": "^2.3.5"
+  },
+  "description": "Compiler-backed TypeScript tooling for direct BAML imports",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist-cjs/index.cjs"
+    },
+    "./bun": {
+      "types": "./dist/bun.d.ts",
+      "import": "./dist/bun.js"
+    },
+    "./esbuild": {
+      "types": "./dist/unplugin.d.ts",
+      "import": "./dist/unplugin.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "require": "./dist-cjs/node.cjs"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js",
+      "require": "./dist-cjs/protocol.cjs"
+    },
+    "./rollup": {
+      "types": "./dist/unplugin.d.ts",
+      "import": "./dist/unplugin.js"
+    },
+    "./typescript-plugin": {
+      "types": "./dist/typescript-plugin.d.cts",
+      "require": "./dist/typescript-plugin.cjs",
+      "default": "./dist/typescript-plugin.cjs"
+    },
+    "./unplugin": {
+      "types": "./dist/unplugin.d.ts",
+      "import": "./dist/unplugin.js"
+    },
+    "./vite": {
+      "types": "./dist/unplugin.d.ts",
+      "import": "./dist/unplugin.js"
+    },
+    "./webpack": {
+      "types": "./dist/unplugin.d.ts",
+      "import": "./dist/unplugin.js"
+    }
+  },
+  "files": [
+    "dist",
+    "dist-cjs",
+    "typescript-plugin",
+    "README.md"
+  ],
+  "license": "Apache-2.0",
+  "main": "./dist-cjs/index.cjs",
+  "name": "@boundaryml/baml-tooling",
+  "optionalDependencies": {
+    "@boundaryml/baml-bridge-tooling": "0.15.0"
+  },
+  "peerDependencies": {
+    "esbuild": ">=0.20",
+    "rollup": ">=4",
+    "typescript": ">=5.5",
+    "vite": ">=5",
+    "webpack": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "esbuild": {
+      "optional": true
+    },
+    "rollup": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    },
+    "webpack": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "typescript2/pkg-baml-tooling",
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/baml.git"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && esbuild src/index.ts src/node.ts src/protocol.ts --bundle --platform=node --format=cjs --packages=external --outdir=dist-cjs --out-extension:.js=.cjs",
+    "generate:protocol": "pnpm --filter @b/pkg-proto generate && node scripts/sync-protocol.mjs",
+    "test": "pnpm build && vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "version": "0.15.0"
+}
