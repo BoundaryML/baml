@@ -824,6 +824,28 @@ impl<'db> InferenceContext<'db> {
             Some(ascribed) if !ascribed.has_error() => self.narrow_to(scrut, ascribed),
             _ => scrut.clone(),
         };
+        // Union scrutinee: claim the unique list member - the same
+        // member attribution class patterns get (`[_, let v, ..]`
+        // against `Wrap | int[]` claims `int[]`), so per-member arms
+        // compose to full coverage. Several list members stay
+        // unclaimed (ambiguous), as before.
+        let claimed_union = match effective.kind() {
+            TyKind::Union(members, _) => {
+                let lists: Vec<&Ty> = members
+                    .iter()
+                    .filter(|member| matches!(member.kind(), TyKind::List(..)))
+                    .collect();
+                match lists.as_slice() {
+                    [member] => Some((effective.clone(), (*member).clone())),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let effective = match &claimed_union {
+            Some((_, member)) => member.clone(),
+            None => effective,
+        };
         let element = match effective.kind() {
             TyKind::List(element, _) => element.clone(),
             _ => Ty::error(),
@@ -856,10 +878,19 @@ impl<'db> InferenceContext<'db> {
                 suffix: 0
             }
         );
+        let slice_dpat = DPat::slice(shape, sub_dpats, effective.to_plain());
+        let dpat = match &claimed_union {
+            Some((scrut_union, member)) => {
+                DPat::union_member(member.to_plain(), slice_dpat, scrut_union.to_plain())
+            }
+            None => slice_dpat,
+        };
         PatternOutcome {
-            dpat: DPat::slice(shape, sub_dpats, effective.to_plain()),
+            dpat,
             matched_ty: effective,
-            covers_type: covers && ascribed.is_none(),
+            // A member-claiming pattern narrows; it never covers the
+            // whole union.
+            covers_type: covers && ascribed.is_none() && claimed_union.is_none(),
             consumes_matched: covers,
         }
     }

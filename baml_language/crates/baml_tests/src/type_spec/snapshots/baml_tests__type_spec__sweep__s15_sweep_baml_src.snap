@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52450
+agreements: 52463
 one-sided (coverage): 264
-conflicts: 7991 across 1427 distinct pairs
+conflicts: 7978 across 1423 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -41,7 +41,7 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [89x] hir_ty=[() -> void throws baml.errors.InvalidArgument / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:17100..17328 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:17358..17580 `{\n    let...pected))\n}`
-[86x] hir_ty=[int] tir=[int | 0]
+[88x] hir_ty=[int] tir=[int | 0]
     at ns_array_rest_binding/array_rest_binding.baml:4058..4172 `{\n    mat...0\n    }\n}`
     at ns_array_rest_binding/array_rest_binding.baml:4064..4170 `match (v) ...=> 0\n    }`
 [83x] hir_ty=[int] tir=[int | -1]
@@ -173,9 +173,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [15x] hir_ty=[() -> string throws baml.json.JsonParseError | baml.json.JsonSerializationError] tir=[() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError]
     at ns_json_auto_derive/json_auto_derive.baml:3353..3377 `array_of_int_to_json_str`
     at ns_json_auto_derive/json_auto_derive.baml:3943..3969 `array_of_c...to_json_str`
-[14x] hir_ty=[!error] tir=[int]
-    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
-    at ns_json_auto_derive/json_auto_derive.baml:24833..24949 `{\n    let...n    b.y\n}`
 [14x] hir_ty=[(a: bool[], b: bool[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_cancel_token/cancel_token.baml:1859..1875 `baml.deep_equals`
     at ns_closures/closures.baml:2227..2243 `baml.deep_equals`
@@ -203,6 +200,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [13x] hir_ty=[throws never] tir=[throws __effect_param_0]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1191..1219 `tt_parts_b..._order_main`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1703..1735 `tt_capture..._local_main`
+[12x] hir_ty=[!error] tir=[int]
+    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
+    at ns_json_auto_derive/json_auto_derive.baml:24833..24949 `{\n    let...n    b.y\n}`
 [12x] hir_ty=["too big"] tir=[string]
     at ns_exceptions/exceptions.baml:18782..18783 `e`
     at ns_exceptions/exceptions.baml:18787..18788 `_`
@@ -368,9 +368,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [8x] hir_ty=[string] tir=[string | "LOST: cause chain wiped by the defer re-raise"]
     at ns_errorcontext/errorcontext.baml:8806..9005 `{\n  ec_de...  }\n  }\n}`
     at ns_errorcontext/errorcontext.baml:8810..9003 `ec_deferun...n    }\n  }`
-[7x] hir_ty=[!error[]] tir=[int[]]
-    at ns_arrays/arrays.baml:9326..9328 `[]`
-    at ns_arrays/arrays.baml:28982..28984 `[]`
 [7x] hir_ty=["fallback" | user.exceptions.AppError] tir=[string | user.exceptions.AppError]
     at ns_exceptions/exceptions.baml:21048..21049 `e`
     at ns_exceptions/exceptions.baml:21551..21552 `e`
@@ -461,9 +458,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [6x] hir_ty=[(x: int) -> int throws never] tir=[(x: int) -> int throws E2]
     at ns_iter/iter.baml:6100..6132 `(x: int) -...x + 10\n  }`
     at ns_iter/iter.baml:6454..6486 `(x: int) -...x * 10\n  }`
-[6x] hir_ty=[0 | !error] tir=[int | 0]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:9576..9695 `{\n    mat...0\n    }\n}`
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:9582..9693 `match (v) ...=> 0\n    }`
 [6x] hir_ty=[bool] tir=[bool | true]
     at ns_arrays/arrays.baml:22913..23076 `[1, 2, 3]....\n        }`
     at ns_http_server/http_server.baml:8283..8351 `{\n    tls...e\n    }\n}`
@@ -593,9 +587,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [5x] hir_ty=[throws "too big"] tir=[throws string]
     at ns_exceptions/exceptions.baml:18628..18638 `s6_risky_1`
     at ns_exceptions/exceptions.baml:18936..18946 `s6_risky_2`
-[4x] hir_ty=[!error] tir=[int[]]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:9262..9263 `_`
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:9265..9281 `[.., let v: int]`
 [4x] hir_ty=[!error] tir=[void]
     at ns_iter_closure_elements/iter_closure_elements.baml:650..654 `cb()`
     at ns_iter_impl_generics_only/iter.baml:6582..6685 `match (p.p...sh(x),\n  }`
@@ -740,6 +731,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[(x: int) -> int throws never] tir=[(x: T) -> T throws never / (x: int) -> int throws never]
     at ns_instantiation_expr/instantiation_expr.baml:593..606 `identity<int>`
     at ns_instantiation_expr/instantiation_expr.baml:1216..1229 `identity<int>`
+[4x] hir_ty=[0 | !error] tir=[int | 0]
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:12820..12894 `{\n    mat...0\n    }\n}`
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:12826..12892 `match (v) ...=> 0\n    }`
 [4x] hir_ty=[7] tir=[int]
     at ns_lexical_scoping/lexical_scoping.baml:6726..6731 `first`
     at ns_lexical_scoping/lexical_scoping.baml:6768..6774 `second`
@@ -800,6 +794,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[throws 42 | "boom"] tir=[throws int | string]
     at ns_exceptions/exceptions.baml:3920..3930 `s2_fails_7`
     at ns_exceptions/exceptions.baml:4550..4560 `s2_fails_9`
+[3x] hir_ty=[!error] tir=[int[]]
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:9262..9263 `_`
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:9265..9281 `[.., let v: int]`
 [3x] hir_ty=[!error] tir=[unknown]
     at ns_from_json_interface/from_json_interface.baml:7603..7621 `Box<int>.from_json`
     at ns_json_auto_derive/json_auto_derive.baml:16429..16448 `Box6<int>.from_json`
@@ -1987,8 +1984,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_json_auto_derive/json_auto_derive.baml:17192..17222 `Box7<Secre...rom_json(j)`
 [1x] hir_ty=[!error[]] tir=[_[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:25422..25424 `[]`
-[1x] hir_ty=[!error[]] tir=[int[][]]
-    at ns_array_rest_binding/array_rest_binding.baml:4134..4135 `_`
 [1x] hir_ty=["."] tir=[string]
     at ns_for_loops/for_loops.baml:6654..6657 `"."`
 [1x] hir_ty=["Blue" | "Green" | "Red"] tir=["Red" | "Green" | "Blue"]
@@ -3489,8 +3484,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_lexical_scoping/lexical_scoping.baml:6633..6637 `fail`
 [1x] hir_ty=[throws true] tir=[throws bool]
     at ns_exceptions/exceptions.baml:37402..37417 `s15_fails_opt_3`
-[1x] hir_ty=[user.array_rest_binding.ArbNumberBag | int[][]] tir=[int[][]]
-    at ns_array_rest_binding/array_rest_binding.baml:4109..4136 `[[..let fi...int[], .._]`
 [1x] hir_ty=[user.control_flow.Empty | user.control_flow.Err] tir=[user.control_flow.Err | user.control_flow.Empty]
     at ns_control_flow/control_flow.baml:3347..3348 `r`
 [1x] hir_ty=[user.control_flow.Empty | user.control_flow.Err | user.control_flow.Ok] tir=[user.control_flow.Ok | user.control_flow.Err | user.control_flow.Empty]
@@ -3521,5 +3514,3 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9261..9286 `[_, [.., l...: int], ..]`
 [1x] hir_ty=[user.patterns_new_runtime.Pair1 | user.patterns_new_runtime.Wrap1 | int[] | int[][]] tir=[user.patterns_new_runtime.Pair1 | user.patterns_new_runtime.Wrap1 | int[][]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9079..9286 `Pair1 { le...: int], ..]`
-[1x] hir_ty=[user.patterns_new_runtime.Wrap2 | int[][]] tir=[int[][]]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:9602..9619 `[[let x, ..], ..]`

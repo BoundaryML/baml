@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+76..84 'del_pair': throws never
+118..127 '{\n    a\n}': T
+124..125 'a': T
+137..150 'del_empty_arg': throws never
+175..248 '{\n   ...ned\n}': int[]
+181..191 'let joined': int[]
+194..202 'del_pair': hir_ty=[(a: int[], b: int[]) -> int[] throws never] tir=[(a: T, b: T) -> T throws never]
+194..214 'del_pa...], [])': int[]
+203..209 '[1, 2]': int[]
+204..205 '1': 1
+207..208 '2': 2
+211..213 '[]': int[]
+240..246 'joined': int[]
+258..272 'del_empty_deep': throws never
+296..386 '{\n   ...ame\n}': bool
+302..308 'let xs': int[]
+311..317 '[1, 2]': int[]
+312..313 '1': 1
+315..316 '2': 2
+322..330 'let same': bool
+333..349 'baml.d...equals': hir_ty=[(a: int[], b: int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+333..357 'baml.d...s, [])': bool
+350..352 'xs': int[]
+354..356 '[]': int[]
+380..384 'same': bool

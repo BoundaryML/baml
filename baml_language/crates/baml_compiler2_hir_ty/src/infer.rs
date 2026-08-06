@@ -3713,14 +3713,17 @@ impl<'db> InferenceContext<'db> {
     /// `Infer` reaches the result.
     fn finish(mut self) -> InferenceResult {
         // The fulfillment fixpoint: resolve what ground bounds determine,
-        // attempt obligations, repeat while either side progresses.
+        // attempt obligations, re-drive the deferred residue, repeat
+        // while any side progresses (rustc re-runs stalled obligations
+        // until quiescent - the deferred subs are our stalled goals).
         loop {
             self.resolve_bounded_vars();
-            if !self.discharge_obligations_once() {
+            let obligations = self.discharge_obligations_once();
+            let subs = self.drain_deferred_subs();
+            if !obligations && !subs {
                 break;
             }
         }
-        self.drain_deferred_subs();
         // BAML's only defaulting rule: an unconstrained EFFECT is `never`
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
@@ -4119,18 +4122,38 @@ impl<'db> InferenceContext<'db> {
         resolved
     }
 
-    /// Re-examines the deferred `Sub` residue now that resolution has run;
-    /// still-undecidable pairs are conservatively dropped (they become
-    /// diagnostics with S17 and obligations with I4).
-    fn drain_deferred_subs(&mut self) {
+    /// Re-drives the deferred `Sub` residue inside the finish fixpoint:
+    /// a pair whose counterpart has since RESOLVED decomposes through
+    /// `sub` again, landing bounds on the still-open side (`?E[] <= ?T`
+    /// re-drives as `?E[] <= int[]` once `?T` solves, so `?E` picks up
+    /// its upper). Pairs open on both sides wait for a later round;
+    /// ground pairs retire; a pair `sub` re-defers unchanged is not
+    /// progress. Whatever remains at quiescence is conservatively
+    /// dropped (S17 diagnostics and I4 obligations take over).
+    fn drain_deferred_subs(&mut self) -> bool {
         let deferred = std::mem::take(&mut self.deferred_subs);
+        let mut progressed = false;
         for (actual, expected) in deferred {
             let actual = self.table.resolve_completely(&actual);
             let expected = self.table.resolve_completely(&expected);
+            if actual.has_infer() && expected.has_infer() {
+                self.deferred_subs.push((actual, expected));
+                continue;
+            }
             if !actual.has_infer() && !expected.has_infer() {
                 let _ = is_subtype_interned(&actual, &expected, &self.facts);
+                continue;
+            }
+            let before = self.deferred_subs.len();
+            let _ = self.sub(&actual, &expected);
+            let re_deferred = self.deferred_subs[before..]
+                .iter()
+                .any(|(a, e)| *a == actual && *e == expected);
+            if !re_deferred {
+                progressed = true;
             }
         }
+        progressed
     }
 }
 
