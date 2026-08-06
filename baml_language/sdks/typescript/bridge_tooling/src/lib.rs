@@ -25,8 +25,11 @@ impl BamlToolingBridge {
     #[napi]
     #[allow(clippy::needless_pass_by_value)] // napi-rs owns JS Buffer arguments.
     pub fn dispatch(&self, request: Buffer) -> napi::Result<Buffer> {
-        let _ = request;
-        todo!("implemented in the bridge-sessions commit")
+        let mut protocol = self
+            .protocol
+            .lock()
+            .map_err(|_| napi::Error::from_reason("BAML tooling protocol lock was poisoned"))?;
+        Ok(protocol.dispatch(request.as_ref()).into())
     }
 }
 
