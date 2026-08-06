@@ -22,6 +22,7 @@ pub mod sdkgen_typescript_web;
 mod emit;
 mod leaf;
 mod routing;
+mod tooling;
 mod translate_ty;
 
 use std::{
@@ -32,6 +33,9 @@ use std::{
 
 use baml_codegen_types::SymbolPool;
 pub use baml_codegen_types::{NamingConvention, OutputType};
+pub use tooling::{
+    ToolingDeclarationRole, ToolingEmitOutput, ToolingMappedSpan, emit_tooling_module,
+};
 
 use crate::{
     emit::{build_emitted, typemap_file::render_typemap_module},
@@ -213,8 +217,10 @@ fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> Stri
 }
 
 /// Render `s` as a TypeScript double-quoted string literal. JS escaping
-/// rules are byte-compatible with Python's for the ASCII range.
-pub(crate) fn ts_string(s: &str) -> String {
+/// rules are byte-compatible with Python's for the ASCII range. Unlike Rust's
+/// `{:?}` formatting, the output never contains `\u{...}` braced escapes,
+/// which are syntax errors in JavaScript.
+pub fn ts_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for ch in s.chars() {

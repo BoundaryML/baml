@@ -1032,6 +1032,7 @@ dependencies = [
  "serde",
  "sys_jinja_types",
  "text-size",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1215,6 +1216,29 @@ dependencies = [
  "tokio",
  "walkdir",
  "wiremock",
+]
+
+[[package]]
+name = "baml_tooling_api"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_db",
+ "baml_lsp2_actions",
+ "baml_project",
+ "baml_surface",
+ "baml_version",
+ "borsh",
+ "bridge_ctypes",
+ "hex",
+ "insta",
+ "prost",
+ "sdkgen_typescript_shared",
+ "serde",
+ "sha2",
+ "tempfile",
+ "text-size",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1705,6 +1729,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridge_tooling"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_tooling_api",
+ "napi",
+ "napi-build",
+ "napi-derive",
+]
+
+[[package]]
 name = "bridge_typescript"
 version = "0.0.0-beta"
 dependencies = [
@@ -1742,6 +1776,7 @@ dependencies = [
 name = "bridge_wasm"
 version = "0.1.0"
 dependencies = [
+ "baml_tooling_api",
  "baml_type",
  "baml_version",
  "base64",
@@ -6812,6 +6847,8 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_surface",
+ "smol_str 0.3.6",
 ]
 
 [[package]]

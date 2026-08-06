@@ -23,6 +23,7 @@ rowan = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 text-size = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 baml_workspace = { workspace = true }

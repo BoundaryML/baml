@@ -582,7 +582,7 @@ fn find_field_definition_usages(
 ///
 /// We also always include `reference_file` itself, in case it contributes no
 /// top-level items (e.g. a file that is only a consumer, not a definer).
-fn collect_source_files(db: &dyn Db, reference_file: SourceFile) -> Vec<SourceFile> {
+pub(crate) fn collect_source_files(db: &dyn Db, reference_file: SourceFile) -> Vec<SourceFile> {
     use baml_compiler2_hir::{
         file_package::file_package,
         package::{PackageId, package_items},
