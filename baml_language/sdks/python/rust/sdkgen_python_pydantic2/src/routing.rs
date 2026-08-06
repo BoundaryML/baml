@@ -59,22 +59,26 @@ pub(crate) fn route(name: &Name, symbol: &Symbol) -> LeafPath {
 }
 
 /// Sanitize a path segment so it's a usable Python module identifier.
-/// Today only handles `assert` (the BAML stdlib package whose name
-/// collides with Python's `assert` keyword — `from . import assert` is
-/// a `SyntaxError`); the routed leaf becomes `vendor/assert_/…` and any
-/// cross-leaf type reference renders as `vendor.assert_.…`. The runtime
-/// BAML FQN passed to `_define_function` (e.g. `"assert.is_true"`) is
-/// built from `Name`, not from `LeafPath`, so it is *not* affected.
+/// Handles `assert` (the BAML stdlib package whose name collides with
+/// Python's `assert` keyword — `from . import assert` is a `SyntaxError`)
+/// and `type` (the `baml.type` carrier namespace, BEP-066: a submodule
+/// named `type` re-exported from `baml/__init__.pyi` shadows the builtin
+/// `type` in sibling annotations — pyright's reportInvalidTypeForm
+/// "Module cannot be used as a type"; BEP-066 H-1 prescribes the `type_`
+/// mangling). The routed leaf becomes `…/assert_/…` / `baml/type_/…` and
+/// cross-leaf references render accordingly. The runtime BAML FQN passed
+/// to `_define_function` is built from `Name`, not `LeafPath`, so it is
+/// *not* affected.
 ///
 /// TODO(reserved-keywords): generalize to all Python keywords and any
 /// other invalid identifiers. User packages or namespaces named after
 /// keywords (`class`, `def`, `pass`, …) would hit the same issue, but
 /// none exist today; broaden this set when one shows up.
 fn sanitize_python_module_segment(seg: &str) -> String {
-    if seg == "assert" {
-        "assert_".to_string()
-    } else {
-        seg.to_string()
+    match seg {
+        "assert" => "assert_".to_string(),
+        "type" => "type_".to_string(),
+        _ => seg.to_string(),
     }
 }
 
@@ -314,5 +318,21 @@ mod tests {
         let n = name("user", &["assert"], "Foo");
         let lp = route(&n, &class_sym(&n));
         assert_eq!(lp.segments, vec!["assert_".to_string()]);
+    }
+
+    #[test]
+    fn type_namespace_segment_is_sanitized() {
+        // The `baml.type` carrier namespace (BEP-066): a generated
+        // submodule literally named `type` shadows the builtin `type`
+        // in `baml/__init__.pyi` annotations (pyright
+        // reportInvalidTypeForm). H-1's `type_` mangling applies to the
+        // module segment; the runtime BAML FQN (`baml.type.of`) is
+        // unaffected.
+        let n = name("baml", &["type"], "of_value");
+        let lp = route(&n, &func_sym());
+        assert_eq!(
+            lp.segments,
+            vec!["baml".to_string(), "type_".to_string()]
+        );
     }
 }

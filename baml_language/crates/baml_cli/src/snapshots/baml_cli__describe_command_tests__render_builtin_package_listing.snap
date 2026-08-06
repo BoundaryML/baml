@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 417
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:30
@@ -270,6 +271,11 @@ interface        baml.random.Rng                  <builtin>/baml/ns_random/rando
 class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
 class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
 class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:114
+class            baml.reflect.Arg                 <builtin>/baml/ns_reflect/reflect.baml:2
+class            baml.reflect.Signature           <builtin>/baml/ns_reflect/reflect.baml:17
+class            baml.reflect.InvalidArgumentError <builtin>/baml/ns_reflect/reflect.baml:39
+function         baml.reflect.signature           <builtin>/baml/ns_reflect/reflect.baml:52
+function         baml.reflect.call_any            <builtin>/baml/ns_reflect/reflect.baml:67
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:5
 function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:12
 function         baml.schema.json_schema          <builtin>/baml/ns_schema/schema.baml:8
@@ -309,6 +315,8 @@ function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.ba
 function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:61
 function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:74
 class            baml.toml.TomlParseError         <builtin>/baml/ns_toml/toml.baml:83
+function         baml.type.of                     <builtin>/baml/ns_type/type.baml:18
+function         baml.type.of_value               <builtin>/baml/ns_type/type.baml:41
 class            baml.ws.WsStream                 <builtin>/baml/ns_ws/ws.baml:4
 function         baml.ws.connect                  <builtin>/baml/ns_ws/ws.baml:24
 function         baml.ws._connect                 <builtin>/baml/ns_ws/ws.baml:32
