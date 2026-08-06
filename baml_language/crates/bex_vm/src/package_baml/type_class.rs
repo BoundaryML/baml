@@ -17,7 +17,7 @@ impl BamlNamespaceType for PackageBamlImpl {
         let ty = vm
             .value_concrete_ty(*v)
             .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
-        Ok(Value::object(vm.tlab.alloc_type(ty)))
+        Ok(Value::object(vm.alloc_static_type(ty)))
     }
 }
 
@@ -35,7 +35,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
             return bex_str::BexStr::from("<type: ?>");
         };
         match vm.get_object(ptr) {
-            Object::Type(ty) => bex_str::BexStr::from(ty.to_string()),
+            Object::Type(type_value) => bex_str::BexStr::from(type_value.ty.to_string()),
             _ => bex_str::BexStr::from("<type: ?>"),
         }
     }
@@ -111,7 +111,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .collect();
         entries
             .into_iter()
-            .map(|(ty, _, _)| Value::object(vm.tlab.alloc(Object::Type(Box::new(ty)))))
+            .map(|(ty, _, _)| Value::object(vm.alloc_static_type(ty)))
             .collect()
     }
 }
@@ -120,7 +120,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
 /// primitive, container, …), or `None` if `value` isn't a `type`.
 fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RealizedTy> {
     match vm.get_object(value.as_object_ptr()?) {
-        Object::Type(ty) => Some(ty.as_ref().clone()),
+        Object::Type(type_value) => Some(type_value.ty.clone()),
         _ => None,
     }
 }
@@ -138,10 +138,10 @@ type RealizedTypeInstantiation = (
 /// interface instantiations.
 fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<RealizedTypeInstantiation> {
     let ptr = value.as_object_ptr()?;
-    let Object::Type(ty) = vm.get_object(ptr) else {
+    let Object::Type(type_value) = vm.get_object(ptr) else {
         return None;
     };
-    match ty.as_ref() {
+    match &type_value.ty {
         baml_type::RealizedTy::Class(name, args, _) => {
             Some((name.clone(), args.clone(), Vec::new()))
         }

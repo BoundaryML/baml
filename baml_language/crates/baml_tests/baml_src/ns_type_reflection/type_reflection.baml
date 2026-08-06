@@ -1,4 +1,5 @@
-// Tests for `Object::Type` structural equality via `baml.llm.get_return_type`.
+// Tests for BEP-066 minted `Object::Type` identity via
+// `baml.llm.get_return_type`.
 //
 // Converted from crates/baml_tests/tests/type_reflection.rs.
 //
@@ -73,23 +74,14 @@ test "deep_equals_type_values_different" {
     assert.is_true(baml.deep_equals(baml.deep_equals(a, b), false))
 }
 
-// ─── CHARACTERIZATION: `==` vs `baml.deep_equals` on permuted unions ────────
+// ─── BEP-066 PR 4: unified type equality on permuted unions ─────────────────
 //
-// These tests PIN A KNOWN INCONSISTENCY — they are not an endorsement of it.
-// BAML currently has divergent equality implementations for `type` values:
-//
-//   * `==` lowers through the `baml.ops.equals_equals` driver, which compares
-//     type values with `vm.equivalent(..)` — CANONICAL equivalence, so union
-//     member order does not matter (bex_vm/src/package_baml/ops.rs).
-//   * `baml.deep_equals` compares with the derived `PartialEq` on `RealizedTy`
-//     — SYNTACTIC equality, so union member order DOES matter
-//     (bex_vm/src/package_baml/root.rs).
-//
-// Both behave identically in test-block and function contexts (the historical
-// context divergence was #3782's lowering bug, now fixed). The follow-up
-// s1-mint-identity PR replaces all equality sites with a single mint-identity
-// comparison; when it lands these pins must be updated together with it.
-// Full diagnosis: thoughts/antonio/s1-vm-bug-diagnosis.md.
+// PR 1 deliberately pinned the old divergence: `==` canonicalized while
+// `baml.deep_equals` compared the `RealizedTy` payload syntactically. BEP-066
+// slice-1 PR 4 flips those pins: all three VM equality sites compare the same
+// mint. Static mints digest the canonical form, so union order is irrelevant
+// to both operations. Function and test-block contexts remain paired as the
+// regression net for #3782.
 
 function union_order_eq_fn() -> bool {
     // Same comparison as "union_order_eq_canonical_in_test_block", function context.
@@ -116,13 +108,13 @@ function union_order_deep_equals_fn() -> bool {
 }
 
 test "union_order_deep_equals_syntactic_in_function" {
-    // `baml.deep_equals` : permuted unions compare UNEQUAL (syntactic path),
-    // disagreeing with `==` above. Known bug, resolved by s1-mint-identity.
-    assert.is_true(baml.deep_equals(union_order_deep_equals_fn(), false))
+    // Flipped in BEP-066 slice-1 PR 4: deep_equals now uses the same static
+    // canonical mint as `==`.
+    assert.is_true(baml.deep_equals(union_order_deep_equals_fn(), true))
 }
 
 test "union_order_deep_equals_syntactic_in_test_block" {
     let a = type.of<int | string>();
     let b = type.of<string | int>();
-    assert.is_true(baml.deep_equals(baml.deep_equals(a, b), false))
+    assert.is_true(baml.deep_equals(baml.deep_equals(a, b), true))
 }

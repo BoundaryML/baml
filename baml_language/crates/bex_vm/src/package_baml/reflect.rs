@@ -83,7 +83,7 @@ fn alloc_arg(
         Some(n) => Value::object(vm.alloc_string(n.as_str())),
         None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
-    let ty = Value::object(vm.tlab.alloc_type(ty));
+    let ty = Value::object(vm.alloc_static_type(ty));
     copy::reflect::Arg { name, r#type: ty }.to_value(vm)
 }
 
@@ -124,8 +124,8 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     }
     let args = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
     let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
-    let returns = Value::object(vm.tlab.alloc_type(sig.ret.clone()));
-    let errors = Value::object(vm.tlab.alloc_type(sig.throws));
+    let returns = Value::object(vm.alloc_static_type(sig.ret.clone()));
+    let errors = Value::object(vm.alloc_static_type(sig.throws));
     let docstring = opt_string(vm, sig.docstring.as_ref());
     let name = opt_string(vm, sig.name.as_ref());
     Ok(copy::reflect::Signature {
@@ -147,8 +147,8 @@ fn raise_invalid_argument(
     got: RealizedTy,
 ) -> NativeCallResult {
     let argument = Value::object(vm.alloc_string(argument));
-    let expected = Value::object(vm.tlab.alloc_type(expected));
-    let got = Value::object(vm.tlab.alloc_type(got));
+    let expected = Value::object(vm.alloc_static_type(expected));
+    let got = Value::object(vm.alloc_static_type(got));
     let err = copy::reflect::InvalidArgumentError {
         argument,
         expected,

@@ -249,9 +249,9 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::int(),
                 "TypeArgRef(0) with class_type_args=[int] should yield int"
             );
@@ -299,9 +299,9 @@ fn method_frame_type_args_seeded_string() {
         panic!("expected Object")
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::string(),
                 "TypeArgRef(0) with class_type_args=[string] should yield string"
             );

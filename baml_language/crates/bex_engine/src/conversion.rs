@@ -5,7 +5,7 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
-use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
+use ::bex_vm_types::{HeapPtr, Object, ObjectType, Value, ValueKind};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
@@ -13,7 +13,7 @@ use bex_external_types::{
 };
 use bex_vm::BexVm;
 
-use crate::{BexEngine, EngineError};
+use crate::{BexEngine, EngineError, thread::BexThread};
 
 /// Narrow a host-supplied [`RuntimeTy`] to the [`baml_type::RealizedTy`] the VM
 /// heap stores for a value's type (an array's element type, a map's key/value
@@ -376,8 +376,9 @@ impl BexEngine {
             }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-                (**ty).clone().into(),
+            // Identity never crosses the host boundary (BEP-066 H-4).
+            Object::Type(type_value) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
+                type_value.ty.clone().into(),
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
@@ -713,9 +714,9 @@ impl BexEngine {
     /// external input — from `--json-args`, language bindings, or buggy
     /// sys ops — surfaces as a graceful error instead of crashing the
     /// process.
-    pub(crate) fn convert_external_to_vm_value<T: RootHaver + TlabHolder>(
+    pub(crate) fn convert_external_to_vm_value(
         &self,
-        holder: &mut impl HeapPermit<T>,
+        holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
     ) -> Result<Value, EngineError> {
         // Default: no declared-type context. Inbound `HostValue` arguments
@@ -731,9 +732,9 @@ impl BexEngine {
     /// context for their payload subtree; unannotated children inherit their
     /// list, map, or class-field type from the parent. This also lets nested
     /// `BexExternalValue::HostValue` values bind to an [`Object::HostClosure`].
-    pub(crate) fn convert_external_to_vm_value_with_ty<T: RootHaver + TlabHolder>(
+    pub(crate) fn convert_external_to_vm_value_with_ty(
         &self,
-        holder: &mut impl HeapPermit<T>,
+        holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
     ) -> Result<Value, EngineError> {
@@ -977,7 +978,9 @@ impl BexEngine {
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
                 let ty = realize_host_ty(ty)?;
-                Value::object(holder.holder_mut().tlab_mut().alloc_type(ty))
+                // The wire carries the definition only (H-4); derive a fresh
+                // static identity with the receiving VM's complete fact context.
+                Value::object(holder.holder_mut().vm.alloc_static_type(ty))
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 return Err(EngineError::CannotConvert {

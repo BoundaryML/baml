@@ -2387,15 +2387,19 @@ mod tests {
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RealizedTy::Int {
-            attr: baml_type::TyAttr::default(),
-        })));
+        let minted = bex_vm_types::types::TypeValue::from_parts(
+            baml_type::RealizedTy::int(),
+            bex_vm_types::types::MintId::Static(0xC0FFEE),
+        );
+        let ptr = tlab.alloc(Object::Type(Box::new(minted.clone())));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
-        let Object::Type(ty) = (unsafe { new_roots[0].get() }) else {
+        let Object::Type(tv) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(**ty, baml_type::RealizedTy::Int { .. }));
+        assert!(matches!(tv.ty, baml_type::RealizedTy::Int { .. }));
+        // The mint is inline data, so a GC copy preserves identity (I-4).
+        assert_eq!(**tv, minted);
     }
 
     #[test]
