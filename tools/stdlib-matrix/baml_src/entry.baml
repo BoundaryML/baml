@@ -24,15 +24,20 @@ class MatrixResult {
     queued: int,
 }
 
-/// `build_matrix_aligned`'s result: the same artifacts plus what the model
-/// contributed and what was rejected.
+/// `build_matrix_aligned`'s result: the same artifacts, what each pass
+/// contributed, and what was refused.
 class AlignedMatrixResult {
     markdown: string,
     output_file: string,
     json_file: string,
     report: SymbolMatrix,
-    applied: int,
+    carried: int,
+    proposed: int,
+    swept: int,
+    upheld: int,
+    refuted: int,
     rejected: string[],
+    failures: int,
 }
 
 class CheckResult {
@@ -136,18 +141,107 @@ function build_matrix_aligned(
         baml_surface_sha256 = baml_surface_sha256,
         previous_file = previous_file,
     );
-    //# enrich the carried report with model-judged correspondences
-    let outcome = align_matrix(base.report);
+    // The passes see the previous revision too: a symbol that changed still
+    // arrives with what was concluded about it last time, which is what makes
+    // `bless` an answer the model can give.
+    let revision: Revision? = if (previous_file.length() > 0) {
+        load_revision(previous_file)
+    } else {
+        null
+    };
+    //# propose, sweep, then verify everything either produced
+    let outcome = align_matrix(base.report, revision);
     AlignedMatrixResult {
         markdown: render_matrix_markdown(outcome.matrix),
         output_file: output_file,
         json_file: json_file,
         report: outcome.matrix,
-        applied: outcome.applied,
+        carried: base.carried,
+        proposed: outcome.proposed,
+        swept: outcome.swept,
+        upheld: outcome.upheld,
+        refuted: outcome.refuted,
         rejected: outcome.rejected,
+        failures: outcome.matrix.failures.length(),
     }
 }
 
 function main() -> MatrixResult {
     build_matrix()
+}
+
+/// What the passes would be asked, without asking. Inspection only.
+class PoolReport {
+    owners: int,
+    total_candidates: int,
+    dropped: int,
+    empty_owners: int,
+    pools: CandidatePool[],
+}
+
+function dump_pools(
+    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
+    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
+) -> PoolReport {
+    let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), "inspection");
+    let pools = build_pools(matrix, pending_symbols(matrix));
+    let total = 0;
+    let dropped = 0;
+    let empty = 0;
+    for (let pool in pools) {
+        total += pool.ts_ids.length();
+        dropped += pool.dropped;
+        if (pool.ts_ids.length() == 0) {
+            empty += 1;
+        }
+    }
+    PoolReport {
+        owners: pools.length(),
+        total_candidates: total,
+        dropped: dropped,
+        empty_owners: empty,
+        pools: pools,
+    }
+}
+
+/// What the passes would ask, rendered, without asking. Inspection only — this
+/// is how a prompt change is reviewed before it costs anything.
+class PlanReport {
+    propose_calls: int,
+    sweep_calls: int,
+    no_candidate_symbols: int,
+    sample_propose: string,
+    sample_sweep: string,
+}
+
+function dump_plan(
+    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
+    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
+    owner: string = "baml.time.Instant",
+    container: string = "node:child_process",
+) -> PlanReport {
+    let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), "inspection");
+    let pools = build_pools(matrix, pending_symbols(matrix));
+    let proposals = propose_requests(matrix, pools, null);
+    let empty = record_empty_pools(matrix, pools);
+    let sweeps = sweep_requests(matrix);
+    let sample_propose = "";
+    for (let request in proposals) {
+        if (request.owner == owner) {
+            sample_propose = render_turns(propose_turns(request));
+        }
+    }
+    let sample_sweep = "";
+    for (let request in sweeps) {
+        if (request.container == container) {
+            sample_sweep = render_turns(sweep_turns(request));
+        }
+    }
+    PlanReport {
+        propose_calls: proposals.length(),
+        sweep_calls: sweeps.length(),
+        no_candidate_symbols: empty,
+        sample_propose: sample_propose,
+        sample_sweep: sample_sweep,
+    }
 }

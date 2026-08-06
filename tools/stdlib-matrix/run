@@ -192,6 +192,14 @@ if ! "${baml_bin}" run --output-format json --from tools/stdlib-matrix "${target
     exit 2
 fi
 
+# The raw result, kept before anything is done with it. A --llm run costs
+# minutes of model time, and every step after this point — extracting fields,
+# formatting a summary — is one that could fail and take the run with it. This
+# file is what makes that recoverable rather than expensive.
+raw_result="${script_dir}/report/last-run.json"
+mkdir -p "$(dirname "${raw_result}")"
+cp "${temporary_dir}/result.json" "${raw_result}"
+
 if ((check_only == 1)); then
     if [[ "$(jq -er '.comparison.baseline_present' "${temporary_dir}/result.json")" != "true" ]]; then
         echo "stdlib-matrix: no baseline report at ${baseline_file}" >&2
@@ -246,19 +254,39 @@ write_artifact() {
 write_artifact "${resolved_json}" -e '.report'
 write_artifact "${resolved_output}" -er '.markdown'
 
-counts="$(jq -er '.report.counts' "${temporary_dir}/result.json")"
-baml_total="$(jq -er '.baml_symbols' <<<"${counts}")"
-baml_matched="$(jq -er '.baml_matched' <<<"${counts}")"
-ts_total="$(jq -er '.ts_symbols' <<<"${counts}")"
-ts_unmatched="$(jq -er '.ts_unmatched' <<<"${counts}")"
+# Reporting only, and never fatal. The artifacts are already on disk by this
+# point, and a run that spent minutes of model time must not be thrown away
+# because a summary line could not be formatted. `field` yields "?" for
+# anything missing rather than failing, so a report whose shape has moved on
+# still gets written and still says so.
+field() {
+    local value
+    value="$(jq -r "$1 // \"?\"" "${temporary_dir}/result.json" 2>/dev/null || echo "?")"
+    if [[ "${value}" == "?" ]]; then
+        # A count the report no longer carries: the two sides have drifted, and
+        # saying so beats printing a confident "?" and moving on.
+        echo "stdlib-matrix: the report has no ${1}; this wrapper is out of date" >&2
+    fi
+    printf '%s' "${value}"
+}
+
+echo "Wrote ${resolved_json} (canonical), ${resolved_output}, and ${raw_result} (raw)"
+echo "BAML: $(field .report.counts.matched) of $(field .report.counts.baml_symbols) symbols have a" \
+     "TypeScript counterpart · $(field .report.counts.unmatched) judged to have none ·" \
+     "$(field .report.counts.unjudged) unjudged"
+echo "TypeScript: $(field '(.report.counts.ts_symbols - .report.counts.ts_unclaimed)') of" \
+     "$(field .report.counts.ts_symbols) are claimed by a BAML symbol"
 
 if ((use_llm == 1)); then
-    applied="$(jq -er '.applied' "${temporary_dir}/result.json")"
-    rejected="$(jq -er '.rejected | length' "${temporary_dir}/result.json")"
-    echo "Model pass: ${applied} correspondences added, ${rejected} claims rejected"
-    jq -r '.rejected[] | "  rejected: \(.)"' "${temporary_dir}/result.json" >&2
+    echo "Passes: $(field .carried) carried · $(field .proposed) proposed · $(field .swept) swept ·" \
+         "$(field .upheld) upheld · $(field .refuted) refuted"
+    rejected_count="$(field '(.rejected | length)')"
+    if [[ "${rejected_count}" != "0" && "${rejected_count}" != "?" ]]; then
+        echo "${rejected_count} claims refused:" >&2
+        jq -r '.rejected[]? | "  refused: \(.)"' "${temporary_dir}/result.json" >&2 || true
+    fi
+    failures="$(field .failures)"
+    if [[ "${failures}" != "0" && "${failures}" != "?" ]]; then
+        echo "${failures} calls did not come back; see the report's failures list" >&2
+    fi
 fi
-
-echo "Wrote ${resolved_json} (canonical) and ${resolved_output}"
-echo "BAML: ${baml_matched} of ${baml_total} symbols have a TypeScript counterpart"
-echo "TypeScript: $((ts_total - ts_unmatched)) of ${ts_total} have a BAML counterpart"

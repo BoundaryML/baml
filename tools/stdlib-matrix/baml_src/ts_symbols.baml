@@ -77,9 +77,12 @@ function ts_signature_of(member: TsMember) -> string {
 /// property and an instance one — so a bare `Container.member` is not an
 /// address. TypeScript's own answer is the one used here: the static side is
 /// reached on the constructor, the instance side through `prototype`. Free
-/// functions have no receiver and keep their container as written.
+/// functions have no receiver and keep their container as written, and a
+/// namespace object has no prototype for anything to hang off.
 function ts_id_of(container: TsContainer, member: TsMember, origin: string) -> string {
-    if (origin == "method" || origin == "property") {
+    if ((container.singleton ?? false)) {
+        `${container.name}.${member.name}`
+    } else if (origin == "method" || origin == "property") {
         `${container.name}.prototype.${member.name}`
     } else {
         `${container.name}.${member.name}`

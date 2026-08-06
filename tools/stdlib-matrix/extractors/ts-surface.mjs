@@ -38,6 +38,14 @@ const ECMA_CONTAINERS = new Set([
 // static side; fold them into their value container.
 const CONSTRUCTOR_SUFFIX = "Constructor";
 
+// ECMAScript's namespace objects: single values whose members are reached on
+// the object itself, with no constructor and no prototype to speak of. The lib
+// declares them the same way it declares a class's instance side (`interface
+// JSON { parse(...) }` plus `declare var JSON: JSON`), so nothing in the
+// declaration distinguishes them — but `JSON.prototype.parse` is not a thing,
+// and an id that says otherwise is a wrong address. The list is closed.
+const NAMESPACE_OBJECTS = new Set(["JSON", "Math", "Reflect", "Atomics"]);
+
 const DOM_CONTAINERS = new Set([
   "Blob", "File", "WebSocket", "Request", "Response", "Headers", "URL",
   "URLSearchParams", "AbortController", "AbortSignal", "TextEncoder",
@@ -136,7 +144,9 @@ function memberName(member, sourceFile) {
   }
   if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
   // Computed / exotic names (e.g. `[Symbol.iterator]`): verbatim slice.
-  return sourceFile.text.slice(name.pos, name.end).trim();
+  // `getStart` rather than `pos`, which begins at the leading trivia and would
+  // fold the member's own jsdoc into its name.
+  return sourceFile.text.slice(name.getStart(sourceFile), name.end).replace(/\s+/g, " ").trim();
 }
 
 function addMember(container, member, sourceFile, { since, isStatic }) {
@@ -263,6 +273,7 @@ const doc = {
     .map((c) => ({
       name: c.name,
       kind: c.kind,
+      singleton: NAMESPACE_OBJECTS.has(c.name),
       sources: [...c.sources].sort(),
       members: [...c.members.values()]
         .map((m) => ({ ...m, signatures: [...m.signatures].sort() }))

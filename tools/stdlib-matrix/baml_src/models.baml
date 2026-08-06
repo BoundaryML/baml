@@ -162,6 +162,10 @@ class TsMember {
 class TsContainer {
     name: string,
     kind: string,
+    /// A namespace object — `JSON`, `Math` — whose members are reached on the
+    /// value itself. It has no prototype, so its members are addressed like
+    /// statics even though the lib declares them on an interface.
+    singleton: bool?,
     members: TsMember[],
 }
 

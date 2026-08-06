@@ -48,8 +48,19 @@ fn every_exported_id_is_unique() {
     };
     for item in json["items"].as_array().unwrap() {
         collect(item);
-        for key in ["fields", "methods", "variants", "assoc_types", "required_methods"] {
-            for member in item.get(key).and_then(serde_json::Value::as_array).into_iter().flatten() {
+        for key in [
+            "fields",
+            "methods",
+            "variants",
+            "assoc_types",
+            "required_methods",
+        ] {
+            for member in item
+                .get(key)
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+            {
                 collect(member);
             }
         }
