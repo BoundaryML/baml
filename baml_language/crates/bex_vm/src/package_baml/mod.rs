@@ -36,6 +36,7 @@ mod media;
 mod ops;
 mod ops_math;
 mod random;
+mod reflect;
 mod resolve;
 pub(crate) use resolve::ImplResolver;
 mod root;
@@ -392,10 +393,6 @@ type NativeResolver = fn(&str) -> Option<NativeFunction>;
 
 const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     ("baml.", PackageBamlImpl::get_native_fn),
-    (
-        "reflect.",
-        <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
-    ),
     (
         "boundary.",
         <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,

@@ -2055,7 +2055,7 @@ impl BexVm {
                     ObjectType::of(other)
                 ),
             },
-            // A `type` value (e.g. `reflect.type_of<T>()`) — its concrete type is
+            // A `type` value (e.g. `type.of<T>()`) — its concrete type is
             // the `type` primitive, the subject of `implement I for type`.
             Object::Type(_) => ConcreteRealizedTy::Type {
                 attr: TyAttr::default(),
@@ -2136,7 +2136,7 @@ impl BexVm {
             // A future carries the `<T, E>` it was spawned at (resolved against
             // the spawning frame), so its concrete type is the faithful
             // `Future<T, E>` — the subject of `is`/`match` arms and
-            // `reflect.type_of`.
+            // `type.of`.
             Object::Future(fut) => ConcreteRealizedTy::Future(
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
@@ -3949,7 +3949,7 @@ impl BexVm {
     /// `HeapPtr` is `callee` unchanged — keeping the `BoundMethod` identity so
     /// that `execute_call_from_locals_offset` can extract the receiver's
     /// `class_type_args` to seed `frame.type_args` (needed for
-    /// `reflect.type_of<T>()` inside generic methods invoked indirectly).
+    /// `type.of<T>()` inside generic methods invoked indirectly).
     /// `execute_call_from_locals_offset` and `load_function` both unwrap the
     /// `BoundMethod` to its inner `Function` for dispatch.
     fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
@@ -4568,7 +4568,7 @@ impl BexVm {
 
         // For GenericFunction callees (`let f = foo<int>; f(x)`), the bound
         // concrete type args seed frame.type_args so type-reifying bodies
-        // (reflect.type_of<T>, json natives) resolve T at runtime. (The
+        // (type.of<T>, json natives) resolve T at runtime. (The
         // Closure/BoundMethod type args are classified in the consolidated match
         // above; GenericFunction is specific to generic instantiation values.)
         let gf_type_args: Box<[baml_type::RealizedTy]> = match self.get_object(callee_ptr) {

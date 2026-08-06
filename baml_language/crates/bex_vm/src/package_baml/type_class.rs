@@ -1,7 +1,25 @@
 use bex_vm_types::types::{Object, Value};
 
-use super::{BamlClassTypeValue, PackageBamlImpl, resolve};
-use crate::BexVm;
+use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, resolve};
+use crate::{BexVm, errors::VmRustFnError};
+
+impl BamlNamespaceType for PackageBamlImpl {
+    /// BEP-066 K-13: `type.of_value(v)` — the runtime `type` value describing
+    /// `v`'s concrete type, reconstructed by [`BexVm::value_concrete_ty`].
+    ///
+    /// K-12 holds by construction: `value_concrete_ty` reports value types
+    /// (`int` for `5`), never literal types. A value with no reconstructable
+    /// BAML type — a compile-time definition object (package, class, enum,
+    /// interface, impl rule) or an opaque native handle — yields the `unknown`
+    /// type value, the same fail-open convention `reflect.signature` /
+    /// `reflect.call_any` use for unreconstructable argument types.
+    fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
+        let ty = vm
+            .value_concrete_ty(*v)
+            .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
+        Ok(Value::object(vm.tlab.alloc_type(ty)))
+    }
+}
 
 impl BamlClassTypeValue for PackageBamlImpl {
     /// Returns the `RealizedTy`'s display name.  Includes namespaces and (for
@@ -136,7 +154,7 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<RealizedTypeInstan
 }
 
 /// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type, so reflection on a
-/// primitive type value (`reflect.type_of<int>()`) has a name to key by, the way
+/// primitive type value (`type.of<int>()`) has a name to key by, the way
 /// non-primitive types carry their own `TypeName`. Impl *matching* for primitives is
 /// structural — the registry bakes their for-types as `Concrete(RuntimeTy::Int { .. })`
 /// etc. (`baml_compiler2_mir`'s `tir2_to_template`), matched by `resolve::match_template`

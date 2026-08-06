@@ -26,8 +26,8 @@ async fn permuted_union_double_equals_is_canonical() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            let a = reflect.type_of<int | string>();
-            let b = reflect.type_of<string | int>();
+            let a = type.of<int | string>();
+            let b = type.of<string | int>();
             a == b
         }
         "#
@@ -41,8 +41,8 @@ async fn permuted_union_deep_equals_is_syntactic() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            let a = reflect.type_of<int | string>();
-            let b = reflect.type_of<string | int>();
+            let a = type.of<int | string>();
+            let b = type.of<string | int>();
             baml.deep_equals(a, b)
         }
         "#

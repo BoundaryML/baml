@@ -1,66 +1,36 @@
-//! Native implementations for the `reflect` stdlib package (BEP-062):
-//! `reflect.signature` and `reflect.call_any`.
+//! Native implementations for the `baml.reflect` namespace (BEP-062, moved
+//! into the `baml` package by BEP-066): `reflect.signature` and
+//! `reflect.call_any` (`reflect` is the keyword shorthand for `baml.reflect`).
 //!
-//! Dispatch and the class constructors are generated from `reflect.baml` by
-//! `baml_builtins2_codegen`, exactly as for [`crate::package_baml`]: declaring
-//! a `$rust_function` adds a required trait method here, and each class gets a
-//! `copy::` struct whose fields are checked by the compiler. Adding to the
-//! package is therefore a single edit to `reflect.baml` plus the implementation
-//! it demands. (`reflect.type_of` is a compiler intrinsic, so it never reaches
-//! a native at all.)
+//! Dispatch and the class constructors are generated from
+//! `baml_std/baml/ns_reflect/reflect.baml` by `baml_builtins2_codegen` into
+//! the `baml` package's trait hierarchy: declaring a `$rust_function` there
+//! adds a required [`BamlNamespaceReflect`] method here, and each class gets a
+//! `copy::reflect::` struct whose fields are checked by the compiler. Adding
+//! to the namespace is therefore a single edit to `reflect.baml` plus the
+//! implementation it demands. (`type.of` is a compiler intrinsic, so it never
+//! reaches a native at all; `type.of_value` lives in
+//! [`crate::package_baml::type_class`].)
 
 use baml_type::{RealizedTy, Ty, TyAttr, normalize};
 use bex_heap::TlabHolder;
-// `Instance`/`Type`/the read guards are referenced by the generated module.
-use bex_vm_types::{
-    ArrayReadGuard, MapReadGuard,
-    types::{Instance, Value},
-};
+use bex_vm_types::types::Value;
 use indexmap::IndexMap;
 
+use super::{
+    BamlNamespaceReflect, NativeCallResult, PackageBamlImpl, PassThroughContinuation, copy,
+};
 use crate::{
     BexVm,
     errors::{VmBamlError, VmRustFnError},
-    package_baml::{
-        NativeCallResult, NativeFunction, NativeFunctionResult, PassThroughContinuation,
-    },
     vm::CallableSignature,
 };
 
 /// Element tag for the `Arg[]` / `map<string, Arg>` containers. The class
 /// instances themselves are built through the generated `copy::` structs.
-const ARG_FQN: &str = "reflect.Arg";
+const ARG_FQN: &str = "baml.reflect.Arg";
 
-// The `BamlPackageReflect` trait and its `get_native_fn` dispatcher, generated
-// from `reflect.baml` exactly like the `baml` package's (see
-// `crate::package_baml`). Declaring a `$rust_function` there adds a required
-// trait method here, so the two can never drift.
-#[allow(
-    unused_variables,
-    unsafe_code,
-    non_camel_case_types,
-    clippy::wildcard_imports,
-    clippy::pub_underscore_fields,
-    clippy::used_underscore_binding,
-    clippy::elidable_lifetime_names,
-    clippy::get_first,
-    clippy::iter_not_returning_iterator,
-    clippy::needless_lifetimes,
-    clippy::redundant_closure_call,
-    clippy::new_ret_no_self,
-    clippy::too_many_arguments,
-    non_snake_case
-)]
-mod generated {
-    use super::*;
-    include!(concat!(env!("OUT_DIR"), "/reflectfunctions_generated.rs"));
-}
-pub use generated::*;
-
-/// The VM's `reflect` native implementations.
-pub struct PackageReflectImpl;
-
-impl BamlPackageReflect for PackageReflectImpl {
+impl BamlNamespaceReflect for PackageBamlImpl {
     fn signature(vm: &mut BexVm, f: &Value) -> Result<Value, VmRustFnError> {
         signature_impl(vm, *f)
     }
@@ -114,7 +84,7 @@ fn alloc_arg(
         None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
     let ty = Value::object(vm.tlab.alloc_type(ty));
-    copy::Arg { name, r#type: ty }.to_value(vm)
+    copy::reflect::Arg { name, r#type: ty }.to_value(vm)
 }
 
 /// A `string?` field: the string, or null.
@@ -158,7 +128,7 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     let errors = Value::object(vm.tlab.alloc_type(sig.throws));
     let docstring = opt_string(vm, sig.docstring.as_ref());
     let name = opt_string(vm, sig.name.as_ref());
-    Ok(copy::Signature {
+    Ok(copy::reflect::Signature {
         name,
         args,
         opts,
@@ -179,7 +149,7 @@ fn raise_invalid_argument(
     let argument = Value::object(vm.alloc_string(argument));
     let expected = Value::object(vm.tlab.alloc_type(expected));
     let got = Value::object(vm.tlab.alloc_type(got));
-    let err = copy::InvalidArgumentError {
+    let err = copy::reflect::InvalidArgumentError {
         argument,
         expected,
         got,

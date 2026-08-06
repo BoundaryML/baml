@@ -142,7 +142,7 @@ async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
                     },
                 };
                 let prompt = baml.llm.assemble_prompt_ast(["Say hi"], []);
-                pc.build_request(prompt, reflect.type_of<string>()).headers
+                pc.build_request(prompt, type.of<string>()).headers
             }
         "#
     );
@@ -184,7 +184,7 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
                     },
                 };
                 let prompt = baml.llm.assemble_prompt_ast(["Say hi"], []);
-                let runtime = runtime_client.build_request(prompt, reflect.type_of<string>()).headers.get("x-api-key") ?? "missing";
+                let runtime = runtime_client.build_request(prompt, type.of<string>()).headers.get("x-api-key") ?? "missing";
                 { "declared": declared, "runtime": runtime }
             }
         "#

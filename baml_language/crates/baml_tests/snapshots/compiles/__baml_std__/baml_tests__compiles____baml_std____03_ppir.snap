@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2875
 ---
 === PPIR ===
 
@@ -1221,7 +1222,7 @@ class baml.llm.PlannerState$stream {
   rr_client_names: string[]
 }
 function baml.llm.__new_stream_cache() -> StreamCache<TStream, TFinal>  [expr] {
-  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } cache
+  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of(), type.of()) } cache
 }
 function baml.llm.build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> root.http.Request  [expr] {
   { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request(specialized_prompt, return_type)
@@ -1233,7 +1234,7 @@ function baml.llm.call_llm_function(client: Client, function_name: string, args:
   { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: T = client.execute_oneshot(context, 0) } result
 }
 function baml.llm.parse(json: string) -> TFinal  [expr] {
-  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache) catch (_) { root.errors.LlmClient { message: message } => throw root.errors.ParseError { message: message } }
+  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of(), type.of()) } __sap_parse_final(json, cache) catch (_) { root.errors.LlmClient { message: message } => throw root.errors.ParseError { message: message } }
 }
 function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Context) -> PromptAst throws never?) -> string  [expr] {
   {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }
@@ -1480,7 +1481,7 @@ class baml.llm.VertexAiOptions$stream {
 }
 enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
 function baml.llm.__make_stream(self: ?, sse: root.http.SseStream) -> baml.llm.Stream<TStream, TFinal>  [expr] {
-  { let primitive = self.to_primitive_client(); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
+  { let primitive = self.to_primitive_client(); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache<TStream, TFinal> = StreamCache.new(type.of(), type.of()) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
 }
 function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<TStream, TFinal>) -> TFinal  [builtin]
 function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<TStream, TFinal>) -> TStream | root.stream.StreamNoYield  [builtin]
@@ -1506,7 +1507,7 @@ function baml.llm.build_request(self: ?, prompt: baml.llm.PromptAst, return_type
 function baml.llm.build_request_stream(self: ?, prompt: baml.llm.PromptAst, return_type: type) -> root.http.Request  [builtin]
 function baml.llm.content(self: ?) -> string  [builtin]
 function baml.llm.execute_once_oneshot(self: ?, context: ExecutionContext, active_delay_ms: int) -> T  [expr] {
-  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure); let http_request = primitive.build_request(specialized, return_type); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: T = primitive.parse(body) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw e } } } result else { let error_body = http_response.text() catch (e) { _ => {  } "" }; if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw root.errors.DevOther { message: "HTTP request fail..." Add error_body } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: T = sub.execute_oneshot(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: T = self.sub_clients[idx].execute_oneshot(context, active_delay_ms); return result3 } }
+  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = type.of(); let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure); let http_request = primitive.build_request(specialized, return_type); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: T = primitive.parse(body) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw e } } } result else { let error_body = http_response.text() catch (e) { _ => {  } "" }; if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw root.errors.DevOther { message: "HTTP request fail..." Add error_body } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: T = sub.execute_oneshot(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: T = self.sub_clients[idx].execute_oneshot(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_once_stream(self: ?, context: ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<TStream, TFinal>  [expr] {
   {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = get_return_type(context.function_name); let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<TStream, TFinal> = self.__make_stream(sse); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<TStream, TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms); return result3 } }
@@ -1924,6 +1925,44 @@ function baml.random.random_int(self: ?) -> int  [expr] {
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
+
+--- <builtin>/baml/ns_reflect/reflect.baml ---
+class baml.reflect.Arg {
+  name: string
+  type: type
+}
+class baml.reflect.Arg$stream {
+  name: string | null
+  type: unknown
+}
+class baml.reflect.InvalidArgumentError {
+  argument: string
+  expected: type
+  got: type
+}
+class baml.reflect.InvalidArgumentError$stream {
+  argument: string | null
+  expected: unknown
+  got: unknown
+}
+class baml.reflect.Signature {
+  name: string?
+  args: baml.reflect.Arg[]
+  opts: map<string, baml.reflect.Arg>
+  returns: type
+  errors: type
+  docstring: string?
+}
+class baml.reflect.Signature$stream {
+  name: string | null
+  args: baml.reflect.Arg$stream[]
+  opts: map<string, baml.reflect.Arg$stream>
+  returns: unknown
+  errors: unknown
+  docstring: string | null
+}
+function baml.reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
+function baml.reflect.signature(f: baml.AnyFunction) -> baml.reflect.Signature  [builtin]
 
 --- <builtin>/baml/ns_sap/sap.baml ---
 function baml.sap.parse(text: string) -> T  [expr] {
@@ -2396,6 +2435,10 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table  [expr]
 function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.from(self.items)
 }
+
+--- <builtin>/baml/ns_type/type.baml ---
+function baml.type.of() -> type  [builtin]
+function baml.type.of_value(v: unknown) -> type  [builtin]
 
 --- <builtin>/baml/ns_ws/ws.baml ---
 class baml.ws.WsStream {

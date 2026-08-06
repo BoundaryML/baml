@@ -3698,7 +3698,7 @@ impl BexEngine {
     /// declaration order. Empty for a non-generic function. Sourced from the
     /// `Function`'s `display_type_params`, so it includes type params that
     /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
-    /// solely via `reflect.type_of<T>()`), which a signature-only scan misses.
+    /// solely via `type.of<T>()`), which a signature-only scan misses.
     fn function_generic_params(&self, name: &str) -> Vec<String> {
         let Some(resolved) = self.resolve_function_name(name) else {
             return vec![];

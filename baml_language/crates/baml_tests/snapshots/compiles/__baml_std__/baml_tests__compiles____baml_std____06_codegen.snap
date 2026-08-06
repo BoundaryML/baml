@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3105
 ---
 function baml.Array.at(self: baml.Array<#0>, index: int) -> #0 | null {
 }
@@ -6294,6 +6295,12 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
     return
 }
 
+function baml.reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
+}
+
+function baml.reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> baml.reflect.Signature {
+}
+
 function baml.sap.parse(text: string) -> #0 {
     load_type #0
     load_type #0
@@ -8322,6 +8329,9 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     load_var items
     init_instance baml.toml.Table .items
     return
+}
+
+function baml.type.of_value(v: unknown) -> type {
 }
 
 function baml.ws.WsStream.close(self: baml.ws.WsStream) -> null {

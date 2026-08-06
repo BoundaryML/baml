@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2915
 ---
 === TIR2 ===
 
@@ -1981,7 +1982,7 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
 }
 function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.errors.ParseError {
   { : TFinal
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of<TStream>(), type.of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     catch (__sap_parse_final<TFinal>(json, cache) : TFinal) : TFinal
       catch (_)
         root.errors.LlmClient { message: message } =>
@@ -1990,7 +1991,7 @@ function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.err
 }
 function baml.llm.__new_stream_cache<TStream, TFinal>() -> baml.llm.StreamCache<TStream, TFinal> throws never {
   { : baml.llm.StreamCache<TStream, TFinal>
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of<TStream>(), type.of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     cache : baml.llm.StreamCache<TStream, TFinal>
   }
 }
@@ -2283,7 +2284,7 @@ function baml.llm.Client.__make_stream<TStream, TFinal>(self: baml.llm.Client, s
   { : baml.llm.Stream<TStream, TFinal>
     let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
     let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of<TStream>(), type.of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
   }
 }
@@ -2340,7 +2341,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
       ClientType.Primitive =>
         { : T
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = reflect.type_of() : type
+          let return_type = type.of() : type
           let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
           let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
@@ -2986,6 +2987,42 @@ class baml.random.Xoshiro256PlusPlus$stream {
 }
 class baml.random.ChaCha20$stream {
   _state: $rust_type
+}
+
+--- <builtin>/baml/ns_reflect/reflect.baml ---
+class baml.reflect.Arg {
+  name: string
+  type: type
+}
+class baml.reflect.Signature {
+  name: string | null
+  args: baml.reflect.Arg[]
+  opts: map<string, baml.reflect.Arg>
+  returns: type
+  errors: type
+  docstring: string | null
+}
+class baml.reflect.InvalidArgumentError {
+  argument: string
+  expected: type
+  got: type
+}
+class baml.reflect.Arg$stream {
+  name: string | null
+  type: unknown
+}
+class baml.reflect.Signature$stream {
+  name: string | null
+  args: baml.reflect.Arg$stream[]
+  opts: map<string, baml.reflect.Arg$stream>
+  returns: unknown
+  errors: unknown
+  docstring: string | null
+}
+class baml.reflect.InvalidArgumentError$stream {
+  argument: string | null
+  expected: unknown
+  got: unknown
 }
 
 --- <builtin>/baml/ns_sap/sap.baml ---
@@ -3782,6 +3819,8 @@ class baml.toml.Table$stream {
 class baml.toml.TomlParseError$stream {
   message: string | null
 }
+
+--- <builtin>/baml/ns_type/type.baml ---
 
 --- <builtin>/baml/ns_ws/ws.baml ---
 class baml.ws.WsStream {

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
+assertion_line: 396
 expression: output
 ---
 namespace baml:
@@ -290,6 +291,12 @@ namespace baml.random:
   type Rng
   class SystemRandom { methods: [get, random, random_int] }
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
+namespace baml.reflect:
+  class Arg { methods: [] }
+  class InvalidArgumentError { methods: [] }
+  class Signature { methods: [] }
+  function call_any<R, E>
+  function signature
 namespace baml.sap:
   function parse<T>
   function parse_type
@@ -336,6 +343,9 @@ namespace baml.toml:
   function item_from_json
   function item_to_json
   function table_from_json
+namespace baml.type:
+  function of<T>
+  function of_value
 namespace baml.ws:
   class WsStream { methods: [send, next, close] }
   function _connect

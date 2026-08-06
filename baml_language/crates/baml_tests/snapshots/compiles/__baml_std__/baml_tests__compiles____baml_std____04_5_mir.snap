@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2966
 ---
 === MIR2 ===
 
@@ -9016,6 +9017,10 @@ fn baml.random.ChaCha20.Rng.random = builtin(vm)
 
 fn baml.random.ChaCha20.Rng.random_int = builtin(vm)
 
+fn baml.reflect.signature = builtin(vm)
+
+fn baml.reflect.call_any = builtin(vm)
+
 fn baml.sap.parse(text: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -12125,6 +12130,10 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
         return;
     }
 }
+
+fn baml.type.of = builtin(intrinsic)
+
+fn baml.type.of_value = builtin(vm)
 
 fn baml.ws.WsStream.send = builtin(io)
 

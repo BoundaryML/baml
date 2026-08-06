@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function $init() -> null {
     call $init_let_0
@@ -365,10 +366,4 @@ function boundary.id() -> boundary.LocalId {
 }
 
 function boundary.id.current() -> string {
-}
-
-function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }

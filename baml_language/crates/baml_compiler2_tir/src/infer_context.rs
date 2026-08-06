@@ -110,6 +110,10 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// The removed `reflect.type_of` spelling (BEP-066 I-9): the intrinsic was
+    /// renamed to `type.of`, and the old name errors with the replacement
+    /// spelled out rather than a bare "unresolved name".
+    RemovedReflectTypeOf,
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -820,6 +824,12 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
+            }
+            TirTypeError::RemovedReflectTypeOf => {
+                write!(
+                    f,
+                    "`reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`"
+                )
             }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {

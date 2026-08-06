@@ -341,6 +341,22 @@ pub(crate) fn resolve_type_in<'db>(
             None
         }
     });
+    // BEP-066 keyword shorthand in type position: a leading `reflect` resolves
+    // as `baml.reflect` (e.g. `reflect.Signature`, `reflect.InvalidArgumentError`
+    // in annotations and catch arms). Runs strictly after the user-name lookups
+    // above, so any user type/namespace spelled `reflect` shadows the shorthand.
+    // (`type` needs no arm here: a bare `type` is the primitive, and dotted
+    // `type.…` TYPE paths don't exist until the kind classes land.)
+    let resolved = resolved.or_else(|| {
+        if segments.len() >= 2 && segments[0].as_str() == "reflect" {
+            let pkg_id = PackageId::new(db, baml_base::Name::new("baml"));
+            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+            let ns: Vec<baml_base::Name> = segments[..segments.len() - 1].to_vec();
+            pkg.lookup_type(&ns, item)
+        } else {
+            None
+        }
+    });
     resolved.or_else(|| {
         let base = item.as_str().strip_suffix("$stream")?;
         let base_name = baml_base::Name::new(base);

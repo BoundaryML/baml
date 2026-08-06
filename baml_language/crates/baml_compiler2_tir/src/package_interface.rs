@@ -632,7 +632,30 @@ impl<'db> PackageResolutionContext<'db> {
             }
         }
 
+        // BEP-066 keyword shorthand: a leading `reflect` resolves as
+        // `baml.reflect`. Strictly after every user lookup above, so any
+        // user-defined `reflect` shadows the shorthand.
+        if path.len() >= 2 && path[0].as_str() == "reflect" && self.can_access_baml_package() {
+            let baml_items =
+                baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("baml")));
+            if let Some(def) = baml_items.lookup_type(&path[..path.len() - 1], item) {
+                return Some((ResolvedSource::Builtin, def_to_ty(db, def)));
+            }
+        }
+
         None
+    }
+
+    /// Whether the `baml` package's items are visible from this package (it is
+    /// the own package or a declared dependency) — the precondition for the
+    /// BEP-066 keyword shorthands (`reflect` ≡ `baml.reflect`, `type` ≡
+    /// `baml.type`) to resolve.
+    fn can_access_baml_package(&self) -> bool {
+        self.own_package_name.as_str() == "baml"
+            || self
+                .dep_interfaces
+                .iter()
+                .any(|(n, _)| n.as_str() == "baml")
     }
 
     fn resolve_type_in_own_then_deps(
@@ -694,6 +717,21 @@ impl<'db> PackageResolutionContext<'db> {
                         return Some((ResolvedSource::Builtin, def));
                     }
                 }
+            }
+        }
+
+        // BEP-066 keyword shorthands: a leading `reflect` resolves as
+        // `baml.reflect`, a leading `type` (the `type.of` / `type.of_value`
+        // expression form, K-13) as `baml.type`. Strictly after every user
+        // lookup above, so any user-defined name shadows the shorthand.
+        if path.len() >= 2
+            && matches!(path[0].as_str(), "reflect" | "type")
+            && self.can_access_baml_package()
+        {
+            let baml_items =
+                baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("baml")));
+            if let Some(def) = baml_items.lookup_value(&path[..path.len() - 1], item) {
+                return Some((ResolvedSource::Builtin, def));
             }
         }
         None

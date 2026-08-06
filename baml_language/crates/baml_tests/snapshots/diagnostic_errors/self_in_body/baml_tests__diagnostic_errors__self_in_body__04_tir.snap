@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 44972
 ---
 === TIR2 ===
 class user.Box {
@@ -42,9 +43,9 @@ function user.Box.nested_self(self: user.Box<T>, w: user.Box<!error>) -> int thr
 }
 function user.Box.turbofish_self(self: user.Box<T>) -> string throws never {
   { : string
-    reflect.type_of<Self>().to_string() : string
+    type.of<Self>().to_string() : string
   }
-  !! 1609..1632: unresolved type: Self
+  !! 1609..1624: unresolved type: Self
 }
 function user.Tester.check(self: user.Tester, other: Self) -> bool throws never {
   { : bool
@@ -53,7 +54,7 @@ function user.Tester.check(self: user.Tester, other: Self) -> bool throws never 
 }
 function user.Tester.describe(self: user.Tester) -> string throws never {
   { : string
-    reflect.type_of<Self>().to_string() : string
+    type.of<Self>().to_string() : string
   }
 }
 function user.Tester.bind_self(self: user.Tester, other: Self) -> bool throws never {

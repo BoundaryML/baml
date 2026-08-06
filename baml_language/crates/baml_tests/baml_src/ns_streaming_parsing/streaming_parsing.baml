@@ -80,7 +80,7 @@ function repoint_request(req: baml.http.Request, addr: string) -> baml.http.Requ
 // Pin for the `$parse_stream` companion's type-arg threading: its body is
 // synthesized by PPIR as `CLIENT.__make_stream<STREAM_EXPANDED, ORIGINAL>(sse)`
 // (see `synthesize_llm_make_stream_call`), so `StreamCache.new` gets its types
-// from the frame via `reflect.type_of` — no function-name string is involved.
+// from the frame via `type.of` — no function-name string is involved.
 // Class-typed and namespaced to exercise resolution of the PPIR-synthetic
 // `Doc$stream` in the explicit type args. The two chunks split mid-string so
 // the partial parser sees an incomplete object before the final one.

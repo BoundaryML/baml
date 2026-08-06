@@ -2768,7 +2768,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `!explicit_args_used`.)
                 //
                 // An uninferable parameter records `Ty::Error`, NOT `unknown`: erasing it to
-                // the top type is silent unsoundness (observable via `reflect.type_of<T>()`),
+                // the top type is silent unsoundness (observable via `type.of<T>()`),
                 // so the recorded arg stays a loud error rather than a compatible-with-anything
                 // sentinel (the diagnostic is emitted by the call-site inference).
                 let ty = bindings
@@ -10138,6 +10138,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if !matches!(root_ty, Ty::Unknown { .. }) {
                     return self.infer_local_rooted_path(segments, expr_id, false);
                 }
+                // 3.5. BEP-066 keyword shorthands: a bare leading `reflect` is
+                //      `baml.reflect`, a bare leading `type` (the expression
+                //      path-head form, K-13) is `baml.type`. Deliberately last
+                //      before the error path: any user definition of the name
+                //      (a local, checked above; a user package, step 1; a user
+                //      class/enum, step 3) shadows the shorthand, which only
+                //      kicks in on a full resolution miss. Delegate entirely —
+                //      the aliased lookup owns the diagnostics for its misses
+                //      (including the I-9 removed-`reflect.type_of` message).
+                if matches!(segments[0].as_str(), "reflect" | "type") {
+                    let mut aliased: Vec<Name> = Vec::with_capacity(segments.len() + 1);
+                    aliased.push(Name::new("baml"));
+                    aliased.extend_from_slice(segments);
+                    return self.infer_multi_segment_path(&aliased, expr_id);
+                }
                 // 4. Truly unresolved — report error if not a known namespace/package name.
                 let is_dep_package = self
                     .res_ctx
@@ -10330,6 +10345,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         match self.resolve_package_item(pkg_items, &item_path, expr_id) {
             Some(ty) => ty,
             None => {
+                // I-9 (BEP-066): `reflect.type_of` was *removed*, not aliased —
+                // name the replacement instead of a bare "unresolved name".
+                // Both spellings funnel here: the bare `reflect.type_of` (via
+                // the keyword-shorthand alias) and the explicit
+                // `baml.reflect.type_of`.
+                if pkg_name.as_str() == "baml"
+                    && item_path.len() == 2
+                    && item_path[0].as_str() == "reflect"
+                    && item_path[1].as_str() == "type_of"
+                {
+                    self.context
+                        .report_simple(TirTypeError::RemovedReflectTypeOf, expr_id);
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
                 // Find the first invalid segment in the path.
                 // The path is [ns_0, ns_1, ..., ns_n, item].
                 // Check each prefix of the namespace path to find the first invalid segment.

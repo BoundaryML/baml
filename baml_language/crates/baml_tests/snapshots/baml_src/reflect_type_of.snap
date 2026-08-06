@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function reflect_type_of.$init_test_ns_reflect_type_of_reflect_type_of(registry: testing.TestCollector) -> null {
     load_var registry
@@ -156,7 +157,75 @@ function reflect_type_of.$init_test_ns_reflect_type_of_reflect_type_of(registry:
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_int"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 22)>, 0
     load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_never_yields_a_literal_type"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_string_and_bool"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_class_instance"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_array_reports_element_type"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_of_a_type_value_is_type"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_widened_unknown_slot"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_function_value_reports_function_type"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "reflect_signature_bare_and_qualified_agree"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function reflect_type_of.of_value_helper(q: string) -> string {
+    load_var q
     return
 }
 

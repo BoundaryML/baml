@@ -93,7 +93,7 @@ test "deep_equals_type_values_different" {
 
 function union_order_eq_fn() -> bool {
     // Same comparison as "union_order_eq_canonical_in_test_block", function context.
-    reflect.type_of<int | string>() == reflect.type_of<string | int>()
+    type.of<int | string>() == type.of<string | int>()
 }
 
 test "union_order_eq_canonical_in_function" {
@@ -104,14 +104,14 @@ test "union_order_eq_canonical_in_function" {
 test "union_order_eq_canonical_in_test_block" {
     // Same comparison inline in a test block — must agree with the function
     // context (regression for the pre-#3782 context divergence).
-    let a = reflect.type_of<int | string>();
-    let b = reflect.type_of<string | int>();
+    let a = type.of<int | string>();
+    let b = type.of<string | int>();
     assert.is_true(baml.deep_equals(a == b, true))
 }
 
 function union_order_deep_equals_fn() -> bool {
-    let a = reflect.type_of<int | string>();
-    let b = reflect.type_of<string | int>();
+    let a = type.of<int | string>();
+    let b = type.of<string | int>();
     baml.deep_equals(a, b)
 }
 
@@ -122,7 +122,7 @@ test "union_order_deep_equals_syntactic_in_function" {
 }
 
 test "union_order_deep_equals_syntactic_in_test_block" {
-    let a = reflect.type_of<int | string>();
-    let b = reflect.type_of<string | int>();
+    let a = type.of<int | string>();
+    let b = type.of<string | int>();
     assert.is_true(baml.deep_equals(baml.deep_equals(a, b), false))
 }

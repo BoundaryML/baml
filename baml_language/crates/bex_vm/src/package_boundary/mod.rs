@@ -1,9 +1,9 @@
 //! Native implementations for the `boundary` stdlib package.
 //!
 //! Dispatch and the class constructors are generated from `boundary`'s `.baml`
-//! sources by `baml_builtins2_codegen`, exactly as for [`crate::package_baml`]
-//! and [`crate::package_reflect`]: declaring a `$rust_function` adds a required
-//! trait method, so the declaration and its implementation cannot drift.
+//! sources by `baml_builtins2_codegen`, exactly as for [`crate::package_baml`]:
+//! declaring a `$rust_function` adds a required trait method, so the
+//! declaration and its implementation cannot drift.
 
 pub(crate) mod id;
 

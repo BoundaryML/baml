@@ -8367,6 +8367,47 @@ mod tests {
         );
     }
 
+    /// BEP-066 K-13 (M-9): `type` as an expression path head. `type` is a
+    /// contextual keyword, so in expression position `type.of<int>()` /
+    /// `type.of_value(x)` parse as ordinary member-call paths (a `Word` head);
+    /// no dedicated lookahead is needed because the type-alias form only
+    /// dispatches at the top level, where expressions cannot occur.
+    #[test]
+    fn type_as_expression_path_head_parses() {
+        let source = "function main() -> string {\n  let t = type.of<int>();\n  let u = type.of_value(1);\n  type.of<int[]>();\n  t.to_string()\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        // The heads lower as plain path segments: WORD("type") followed by DOT.
+        let type_head_paths = root
+            .descendants_with_tokens()
+            .filter(|elem| {
+                matches!(
+                    elem,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD
+                        && t.text() == "type"
+                )
+            })
+            .count();
+        assert_eq!(type_head_paths, 3, "all three `type.` heads parse as words");
+    }
+
+    /// The `type.of` expression form must not steal top-level `type X = ...`
+    /// alias declarations (their dispatch is unchanged).
+    #[test]
+    fn type_alias_declarations_unaffected_by_type_of() {
+        let source =
+            "type MyAlias = int | string\nfunction main() -> type {\n  type.of<MyAlias>()\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let has_alias = root
+            .descendants()
+            .any(|n| n.kind() == SyntaxKind::TYPE_ALIAS_DEF);
+        assert!(
+            has_alias,
+            "top-level `type X = ...` still parses as an alias"
+        );
+    }
+
     /// Parsing must stay lossless: the original source — shebang included —
     /// reconstructs exactly from the syntax tree. If `baml fmt` ever dropped
     /// or moved the shebang, the file would stop being executable.

@@ -856,7 +856,7 @@ pub fn synthesize_llm_builtin_call(
 /// the only argument is a single `json` identifier (a path expression)
 /// rather than a map of parent params. The explicit type args carry the
 /// stream-expanded and original return types so the stdlib `parse` can
-/// reify them via `reflect.type_of` instead of a name-keyed registry
+/// reify them via `type.of` instead of a name-keyed registry
 /// lookup (same threading as `call_llm_function<T>`).
 pub(crate) fn synthesize_llm_parse_call(
     type_args: Vec<crate::ast::TypeExpr>,
@@ -913,7 +913,7 @@ pub(crate) fn synthesize_llm_parse_call(
 ///
 /// Used by the PPIR to generate `$parse_stream` companion function bodies.
 /// The explicit type args carry the stream-expanded and original return
-/// types into `__make_stream`'s frame, where `reflect.type_of` reifies them
+/// types into `__make_stream`'s frame, where `type.of` reifies them
 /// for `StreamCache.new`.
 pub fn synthesize_llm_make_stream_call(
     type_args: Vec<crate::ast::TypeExpr>,
