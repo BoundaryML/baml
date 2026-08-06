@@ -11929,7 +11929,24 @@ fn conjunction_ambiguous_source_fields_keep_field_diagnostic() {
             return value.value
         }
         "#,
-        "field `value`",
+        "field `value` on class",
+    );
+}
+
+#[test]
+fn conjunction_ambiguous_source_fields_diagnostic_names_ambiguity() {
+    // The assertion above pins the field; this pins the ambiguity wording so a
+    // different `value`-mentioning diagnostic (unknown field, bound failure)
+    // cannot satisfy the suite (PR #4332 review).
+    assert_compile_error_contains(
+        r#"
+        interface Left { value: string }
+        interface Right { value: int }
+        function read<T extends Left & Right>(value: T) -> string {
+            return value.value
+        }
+        "#,
+        "is ambiguous because it is declared by multiple interfaces",
     );
 }
 
