@@ -110,6 +110,13 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// A CALL whose callee resolves into a MOUNTED (source-less) dependency
+    /// package (BEP-066 slice 6a). The reference itself types fine from the
+    /// exported signature, but lowering the call needs a loc-backed
+    /// `MemberResolution` for MIR, which a blob cannot provide yet — calls
+    /// into mounted packages land in the next PR. `path` is the dotted
+    /// callee path for the message (`app.add`).
+    MountedPackageCallUnsupported { path: Name },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -820,6 +827,13 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
+            }
+            TirTypeError::MountedPackageCallUnsupported { path } => {
+                write!(
+                    f,
+                    "cannot call `{path}`: calls into mounted packages are not supported yet \
+                     (the mounted package has no compiled body to link against in this build)"
+                )
             }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {

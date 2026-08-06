@@ -524,17 +524,26 @@ impl<'db> TypeInferenceBuilder<'db> {
         // `Repeat<int>` receiver is `Iterator<int, never>`, never the raw pattern form): those
         // declaring `member` as a method, and (separately) those declaring it as a field.
         // Coherence forbids two impls of the same realized interface, so dedup defensively.
-        let mut method_candidates: Vec<(baml_type::Interface, _, _, _)> = Vec::new();
+        let mut method_candidates: Vec<(baml_type::Interface, _, _, _, _)> = Vec::new();
         for resolved_impl in &impls {
             let Some(resolved_method) = resolved_impl.get_method(db, member) else {
                 continue;
             };
-            let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
+            let Some(data) = resolved_impl.data(db) else {
+                continue;
+            };
+            // A mounted blob impl (or an impl of a mounted interface) has no
+            // locs to record for MIR's concrete dispatch — method calls
+            // through those land with the mounted-call lowering PR, so the
+            // candidate is skipped (the member reports unresolved).
+            let (Some(impl_loc), Some(iface_loc)) =
+                (resolved_impl.impl_loc(), data.interface_loc())
+            else {
                 continue;
             };
             let realized = resolved_impl.implemented_interface(db);
             if !method_candidates.iter().any(|(r, ..)| *r == realized) {
-                method_candidates.push((realized, resolved_impl.impl_loc, data, resolved_method));
+                method_candidates.push((realized, impl_loc, iface_loc, data, resolved_method));
             }
         }
         let field_sources = self.concrete_interface_field_sources(&impls, member);
@@ -593,14 +602,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             });
         }
-        let (realized, impl_loc, data, resolved_method) = method_candidates.into_iter().next()?;
+        let (realized, impl_loc, iface_loc, data, resolved_method) =
+            method_candidates.into_iter().next()?;
 
         // The realized interface declares the member; build its `Ty::Function` with `Self`
         // pinned to the concrete receiver (the impl conforms, so the signature is the
         // interface's). The view lowers the interface's declared types in its own package.
         let access = MemberAccess { member, at, bound };
         let view = InterfaceView {
-            loc: data.interface,
+            loc: iface_loc,
             realized,
         };
         let ty =
@@ -654,10 +664,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let mut sources: Vec<ConcreteFieldSource<'db>> = Vec::new();
         for resolved_impl in impls {
-            let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
+            let Some(data) = resolved_impl.data(db) else {
                 continue;
             };
-            let declares_field = baml_compiler2_ppir::item_data::interface_data(db, data.interface)
+            // Mounted interfaces export no field declarations reachable here;
+            // interface-field views through mounted impls land with the
+            // call-lowering PR.
+            let Some(iface_loc) = data.interface_loc() else {
+                continue;
+            };
+            let declares_field = baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
                 .fields
                 .iter()
                 .any(|f| &f.name == field);
@@ -677,7 +693,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .map(|(_, class_field)| class_field.clone())
                 .unwrap_or_else(|| field.clone());
             sources.push(ConcreteFieldSource {
-                iface_loc: data.interface,
+                iface_loc,
                 interface,
                 class_field,
             });
@@ -836,11 +852,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .type_impls(arm)
                 .iter()
                 .filter_map(|resolved_impl| {
-                    let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
-                        return None;
-                    };
+                    // Mounted rows without a source-backed interface loc are
+                    // skipped: the union-member view reads the interface's
+                    // declared members through its loc (call-lowering PR).
+                    let iface_loc = resolved_impl.data(db)?.interface_loc()?;
                     Some(ArmInterface {
-                        iface_loc: data.interface,
+                        iface_loc,
                         interface: resolved_impl.implemented_interface(db),
                     })
                 })

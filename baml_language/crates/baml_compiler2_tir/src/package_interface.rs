@@ -139,14 +139,19 @@ pub enum ExportedType {
         /// scope (the same data [`crate::interfaces::resolve_interface_fields`]
         /// carries), plus schema attributes.
         fields: Vec<(Name, Ty, ExportedFieldAttrs)>,
-        /// Required methods first (declaration order), then default methods
-        /// (declaration order) — `InterfaceData` splits them, so the original
-        /// interleaving is not recoverable here. Signatures keep `Self`
-        /// symbolic; a default method's `callable_throws` is the body-inferred
-        /// contract from [`crate::callable::callable_throws`], a required
-        /// method's is its declared clause (`unknown` when unwritten, matching
-        /// `signature::lower_signature`'s `Missing` slot convention).
-        methods: Vec<ExportedFunction>,
+        /// Required methods in declaration order (no body — an implementor must
+        /// provide each). Signatures keep `Self` symbolic; `callable_throws` is
+        /// the declared clause (`unknown` when unwritten, matching
+        /// `signature::lower_signature`'s `Missing` slot convention). Split
+        /// from [`default_methods`](Self::Interface::default_methods) exactly
+        /// as `InterfaceData` splits them — a source-less consumer needs the
+        /// distinction for conformance (E0113 required-method coverage) and
+        /// method-default fallback.
+        required_methods: Vec<ExportedFunction>,
+        /// Default methods in declaration order (the interface provides a
+        /// body). `callable_throws` is the body-inferred contract from
+        /// [`crate::callable::callable_throws`].
+        default_methods: Vec<ExportedFunction>,
     },
 }
 
@@ -426,6 +431,30 @@ impl PackageInterface {
     pub fn lookup_function(&self, namespace: &[Name], item: &Name) -> Option<&ExportedFunction> {
         self.functions.get(namespace)?.get(item)
     }
+}
+
+/// The mounted (source-less) package interface for `pkg_name`, or `None` when
+/// `pkg_name` is not a mounted package (BEP-066 slice 6a). The single entry
+/// point for foreign (blob-backed) lookups: callers holding a package-prefixed
+/// path or a foreign `QualifiedTypeName` consult the blob's rows through this
+/// instead of raw `package_items` (which is empty for a mounted package).
+pub(crate) fn mounted_interface<'db>(
+    db: &'db dyn crate::Db,
+    pkg_name: &Name,
+) -> Option<&'db PackageInterface> {
+    if !baml_compiler2_hir::package::is_mounted_package(db, pkg_name) {
+        return None;
+    }
+    Some(package_interface(db, PackageId::new(db, pkg_name.clone())))
+}
+
+/// Look up an exported type row in a mounted package by qualified name.
+/// `None` when `qtn`'s package is not mounted or the row does not exist.
+pub(crate) fn mounted_type_row<'db>(
+    db: &'db dyn crate::Db,
+    qtn: &QualifiedTypeName,
+) -> Option<&'db ExportedType> {
+    mounted_interface(db, qtn.package())?.lookup_type(qtn.namespace(), qtn.name())
 }
 
 impl ExportedType {
@@ -779,9 +808,10 @@ fn lower_interface_export<'db>(
         })
         .collect();
 
-    // Required methods first, then default methods — each list in declaration
-    // order (`InterfaceData` splits them; the original interleaving is lost).
-    let mut methods = Vec::new();
+    // Required and default methods, each list in declaration order — exported
+    // split (as `InterfaceData` splits them) so a source-less consumer can run
+    // conformance (E0113) and default fallback.
+    let mut required_methods = Vec::new();
     let resolved_required = crate::interfaces::resolve_interface_required_methods(db, iface_loc);
     for (sig, resolved) in iface.required_methods.iter().zip(resolved_required) {
         // A required method has no body: its effective throws contract is its
@@ -790,9 +820,10 @@ fn lower_interface_export<'db>(
         if let Some(exported) =
             exported_interface_method(&qtn, resolved, sig.throws.is_some(), None, None)
         {
-            methods.push(exported);
+            required_methods.push(exported);
         }
     }
+    let mut default_methods = Vec::new();
     let resolved_default = crate::interfaces::resolve_interface_default_methods(db, iface_loc);
     for (&func_loc, resolved) in iface.default_methods.iter().zip(resolved_default) {
         let declared_throws_written =
@@ -810,7 +841,7 @@ fn lower_interface_export<'db>(
             Some(callable_throws),
             builtin_kind,
         ) {
-            methods.push(exported);
+            default_methods.push(exported);
         }
     }
 
@@ -822,7 +853,8 @@ fn lower_interface_export<'db>(
         requires,
         associated_types,
         fields,
-        methods,
+        required_methods,
+        default_methods,
     }
 }
 
@@ -977,6 +1009,26 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
         }
     }
 
+    // Mounted-package arm (BEP-066 slice 6a): a source-less dependency mounted
+    // as a blob serves its captured interface verbatim — the same seed
+    // mechanism generalized to any (non-reserved) alias. Distinct from the
+    // stdlib seed above: the stdlib map is an *optimization* over packages
+    // whose source is present, while a mounted package has NO files, so this
+    // arm is its only interface. `is_mounted_package` filters reserved names,
+    // so a blob can never shadow the stdlib or the user package. A corrupt
+    // blob falls through to honest derivation, which is empty for a file-less
+    // package — every reference then fails with the ordinary unresolved
+    // diagnostics rather than a panic.
+    if baml_compiler2_hir::package::is_mounted_package(db, &pkg_name) {
+        if let Some(mounted) = db.mounted_packages() {
+            if let Some(bytes) = mounted.by_package(db).get(pkg_name.as_str()) {
+                if let Ok(iface) = borsh::from_slice::<PackageInterface>(bytes) {
+                    return iface;
+                }
+            }
+        }
+    }
+
     // Honest derivation. Count stdlib-package derivations so a warm run can
     // assert zero (the seed served every stdlib package). The authoritative set
     // of stdlib packages is the embedded builtin manifest — a package is stdlib
@@ -1011,7 +1063,7 @@ fn exported_impls<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> Vec<Ex
         let Ok(data) = crate::interfaces::impl_data(db, impl_loc).as_ref() else {
             continue;
         };
-        let Some(iface_qtn) = crate::interfaces::interface_loc_qtn(db, data.interface) else {
+        let Some(iface_qtn) = data.interface_qtn(db) else {
             continue;
         };
         // The impl's own file namespace — the scope its block lowered in
@@ -1124,8 +1176,23 @@ fn exported_impl_method<'db>(
         generic_param_bounds.push(ifaces);
     }
 
-    let iface_env = crate::generic_env::interface_generic_env(db, data.interface);
-    let (iface_self_param, _) = iface_env.interface_param_parts();
+    // The interface's symbolic `Self` parameter: from its generic env when the
+    // target is source-backed, from the mounted row otherwise (a user impl of
+    // a mounted interface still exports — its overrides are source-backed).
+    let iface_self_param: ParamTy = match &data.interface {
+        crate::interfaces::ImplInterfaceTarget::Source(loc) => {
+            crate::generic_env::interface_generic_env(db, *loc)
+                .interface_param_parts()
+                .0
+                .clone()
+        }
+        crate::interfaces::ImplInterfaceTarget::Mounted(qtn) => {
+            match crate::package_interface::mounted_type_row(db, qtn) {
+                Some(ExportedType::Interface { self_param, .. }) => self_param.clone(),
+                _ => return None,
+            }
+        }
+    };
     let self_bound =
         baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), Vec::new());
     let realized = crate::interfaces::realize_with_symbolic_self(
@@ -1133,7 +1200,7 @@ fn exported_impl_method<'db>(
         pkg_items,
         ns,
         &scope_generics,
-        iface_self_param,
+        &iface_self_param,
         &bounds,
         &self_bound,
         &data.for_ty_pattern,
@@ -1324,12 +1391,15 @@ impl<'db> PackageResolutionContext<'db> {
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
                     if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
-                        // Interface rows are exported (BEP-066 slice 6a) but not
-                        // yet consumable through this path — treat them exactly
-                        // as the pre-export derivation did (absent), preserving
-                        // resolution byte-for-byte until the dualized resolution
-                        // context lands in a follow-up PR.
-                        if !matches!(exported, ExportedType::Interface { .. }) {
+                        // Interface rows resolve only for MOUNTED (source-less)
+                        // dependencies (BEP-066 slice 6a) — their rows are the
+                        // sole representation. A source-backed dependency's
+                        // interface rows stay invisible here, preserving the
+                        // pre-export resolution (its interfaces resolve through
+                        // source items on the loc path).
+                        if !matches!(exported, ExportedType::Interface { .. })
+                            || baml_compiler2_hir::package::is_mounted_package(db, dep_name)
+                        {
                             return Some((ResolvedSource::Builtin, exported.to_ty()));
                         }
                     }
@@ -1350,11 +1420,13 @@ impl<'db> PackageResolutionContext<'db> {
             let ty = def_to_ty(db, def);
             return Some((ResolvedSource::Item, ty));
         }
-        for (_dep_name, dep_iface) in &self.dep_interfaces {
+        for (dep_name, dep_iface) in &self.dep_interfaces {
             if let Some(exported) = dep_iface.lookup_type(namespace, item) {
-                // See the interface-row guard in `resolve_type`: exported but
-                // deliberately invisible here until consumption lands.
-                if !matches!(exported, ExportedType::Interface { .. }) {
+                // See the interface-row gate in `resolve_type`: interface rows
+                // resolve only for mounted dependencies.
+                if !matches!(exported, ExportedType::Interface { .. })
+                    || baml_compiler2_hir::package::is_mounted_package(db, dep_name)
+                {
                     return Some((ResolvedSource::Builtin, exported.to_ty()));
                 }
             }

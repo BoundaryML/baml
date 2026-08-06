@@ -685,6 +685,30 @@ pub(crate) fn associated_type_declared_bound(
     interface: &baml_type::Interface,
     member: &Name,
 ) -> Vec<baml_type::Interface> {
+    // A MOUNTED (source-less) interface's bounds live pre-realized (identity
+    // args, symbolic `Self`) on its exported row: realize at the qualifier's
+    // arguments by substitution; `Self` stays symbolic per this oracle's
+    // contract (BEP-066 slice 6a). Sibling pins ride `Self.<name>`
+    // projections and stay symbolic (fail-safe: an unreduced projection only
+    // makes the bound-satisfaction check conservative).
+    if let Some(crate::package_interface::ExportedType::Interface {
+        generic_params,
+        associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &interface.name)
+    {
+        if generic_params.len() != interface.generics.len() {
+            return Vec::new();
+        }
+        let Some(assoc) = associated_types.iter().find(|a| &a.name == member) else {
+            return Vec::new();
+        };
+        let Some(bound) = &assoc.bound else {
+            return Vec::new();
+        };
+        let bindings = crate::generics::bind_type_vars(generic_params, &interface.generics);
+        return vec![bound.map_tys(|ty| crate::generics::substitute_ty(ty, &bindings))];
+    }
     let Some(iface_loc) = resolve_interface_loc(db, &interface.name) else {
         return Vec::new();
     };
@@ -913,6 +937,13 @@ pub(crate) fn resolve_concrete_projection(
 
 /// Whether interface `qtn` declares associated type `member` directly.
 fn interface_declares_member(db: &dyn crate::Db, qtn: &QualifiedTypeName, member: &Name) -> bool {
+    // A MOUNTED interface answers from its exported row (BEP-066 slice 6a).
+    if let Some(crate::package_interface::ExportedType::Interface {
+        associated_types, ..
+    }) = crate::package_interface::mounted_type_row(db, qtn)
+    {
+        return associated_types.iter().any(|a| &a.name == member);
+    }
     resolve_interface_loc(db, qtn).is_some_and(|loc| interface_declares_member_at(db, loc, member))
 }
 

@@ -115,6 +115,13 @@ enum ClassMethodLookup<'db> {
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
+    /// A method of a MOUNTED (source-less) dependency's class, typed from its
+    /// exported signature (BEP-066 slice 6a). Carries no locs — a reference
+    /// types fine, but a call cannot record a `MemberResolution` for MIR and
+    /// is reported reserved (see `foreign_callable_exprs`).
+    ForeignFound {
+        ty: Ty,
+    },
     DuplicateInherent,
     DeferToInterfaces,
     NotFound,
@@ -935,6 +942,14 @@ pub struct TypeInferenceBuilder<'db> {
     /// reference an owner param (`<U extends Eq<C>>` on `class Box<C>`) that is
     /// otherwise absent from the call-site bindings.
     owner_type_arg_binding_seed: FxHashMap<ExprId, Vec<(crate::ty::ParamTy, Ty)>>,
+    /// Callee-position expressions that resolved to a MOUNTED (source-less)
+    /// package's function or method (BEP-066 slice 6a), keyed by the resolved
+    /// expression with the dotted path for the message. A *reference* types
+    /// fine (the exported signature), but an actual CALL needs a
+    /// `MemberResolution` for MIR — which a blob cannot provide until the
+    /// call-lowering PR — so the call arms report
+    /// [`TirTypeError::MountedPackageCallUnsupported`] for any marked callee.
+    foreign_callable_exprs: FxHashMap<ExprId, Name>,
     /// For a Self-pinned interface method call (resolved through a type-variable
     /// receiver — `self` in a default method, or a generic `T extends I`), the
     /// rigid `Self` type variable, keyed by the callee (member-access) expr.
@@ -1214,6 +1229,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             path_member_resolutions: FxHashMap::default(),
             interface_method_generic_params: FxHashMap::default(),
             owner_type_arg_binding_seed: FxHashMap::default(),
+            foreign_callable_exprs: FxHashMap::default(),
             self_pinned_rigid_var: FxHashMap::default(),
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
@@ -6366,6 +6382,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
+    /// Report the reserved BEP-066 slice 6a diagnostic when a call's callee
+    /// resolved into a MOUNTED package (see `foreign_callable_exprs`): the
+    /// reference typed fine, but the call needs a `MemberResolution` for MIR,
+    /// which a source-less blob cannot provide until the call-lowering PR.
+    fn report_reserved_mounted_call(&mut self, callee: ExprId, at: ExprId) {
+        if let Some(path) = self.foreign_callable_exprs.get(&callee).cloned() {
+            self.context
+                .report_simple(TirTypeError::MountedPackageCallUnsupported { path }, at);
+        }
+    }
+
     fn check_call_expr(
         &mut self,
         expr_id: ExprId,
@@ -7197,9 +7224,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 callee,
                 type_args,
                 args,
-            } => self.check_call_expr(expr_id, body, expected, *callee, type_args, args),
+            } => {
+                let ty = self.check_call_expr(expr_id, body, expected, *callee, type_args, args);
+                self.report_reserved_mounted_call(*callee, expr_id);
+                ty
+            }
             Expr::OptionalCall { callee, args } => {
-                self.check_optional_call_expr(expr_id, body, expected, *callee, args)
+                let ty = self.check_optional_call_expr(expr_id, body, expected, *callee, args);
+                self.report_reserved_mounted_call(*callee, expr_id);
+                ty
             }
             // Catch: propagate expected type to the base expression
             // `a ?? b` in checking position: the expected type propagates into the
@@ -10409,6 +10442,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         }
 
+        // A MOUNTED (source-less) package answers from its interface blob —
+        // its raw items are empty by design (BEP-066 slice 6a).
+        if let Some(mounted) =
+            crate::package_interface::mounted_interface(self.context.db(), &pkg_items.package)
+        {
+            let pkg_name = pkg_items.package.clone();
+            return self.resolve_mounted_package_item(mounted, &pkg_name, path, expr_id);
+        }
+
         // Try as a value (function) in a nested namespace
         let item = path.last().expect("non-empty path");
         let lookup_val = pkg_items.lookup_value(&path[..path.len() - 1], item);
@@ -10514,7 +10556,115 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         });
                     }
+                    ClassMethodLookup::ForeignFound { ty } => {
+                        // A mounted class's method: no locs to record — the
+                        // reference types, a call is reported reserved.
+                        self.foreign_callable_exprs.insert(
+                            expr_id,
+                            Name::new(path.iter().map(Name::as_str).collect::<Vec<_>>().join(".")),
+                        );
+                        return Some(ty);
+                    }
                     ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => {}
+                }
+            }
+        }
+
+        None
+    }
+
+    /// The MOUNTED-package arm of [`Self::resolve_package_item`] (BEP-066
+    /// slice 6a): answer a `pkg.…` value/type path from the mounted interface
+    /// blob. Mirrors the raw-items arm — functions type from their exported
+    /// signature (but record NO `MemberResolution`, so a CALL of the result is
+    /// reported reserved via `foreign_callable_exprs`); classes/enums/
+    /// interfaces produce the same bare value-position types as
+    /// `resolve_package_item`'s type arm; enum variants verify against the
+    /// exported variant list. UFCS method paths (`app.Widget.describe`) type
+    /// through the exported class methods, also call-reserved.
+    fn resolve_mounted_package_item(
+        &mut self,
+        iface: &'db crate::package_interface::PackageInterface,
+        pkg_name: &Name,
+        path: &[Name],
+        expr_id: ExprId,
+    ) -> Option<Ty> {
+        use crate::package_interface::ExportedType;
+
+        let dotted = |path: &[Name]| {
+            let mut parts = vec![pkg_name.as_str()];
+            parts.extend(path.iter().map(Name::as_str));
+            Name::new(parts.join("."))
+        };
+        let item = path.last().expect("non-empty path");
+        let ns = &path[..path.len() - 1];
+
+        // Free function: the exported signature is the reference type.
+        if let Some(f) = iface.lookup_function(ns, item) {
+            self.foreign_callable_exprs.insert(expr_id, dotted(path));
+            return Some(Ty::Function {
+                params: f.params.clone(),
+                ret: Box::new(f.return_type.clone()),
+                throws: Box::new(f.callable_throws.clone()),
+                attr: TyAttr::default(),
+            });
+        }
+
+        // A type in value position — the same bare shapes as the raw-items arm.
+        if let Some(row) = iface.lookup_type(ns, item) {
+            match row {
+                ExportedType::Class { qtn, .. } => {
+                    return Some(Ty::Class(qtn.clone(), vec![], TyAttr::default()));
+                }
+                ExportedType::Enum { qtn, .. } => {
+                    return Some(Ty::Enum(qtn.clone(), TyAttr::default()));
+                }
+                ExportedType::Interface { qtn, .. } => {
+                    return Some(Ty::Interface(
+                        qtn.clone(),
+                        vec![],
+                        vec![],
+                        TyAttr::default(),
+                    ));
+                }
+                ExportedType::TypeAlias { .. } => {}
+            }
+        }
+
+        // Enum variant (`app.Status.Active`), verified against the exported
+        // variant list.
+        for split in 1..path.len() {
+            let ns = &path[..split - 1];
+            let type_name = &path[split - 1];
+            if let Some(ExportedType::Enum { qtn, variants }) = iface.lookup_type(ns, type_name) {
+                if split + 1 != path.len() {
+                    continue;
+                }
+                let variant_name = &path[split];
+                if variants.contains(variant_name) {
+                    return Some(Ty::EnumVariant(
+                        qtn.clone(),
+                        variant_name.clone(),
+                        TyAttr::default(),
+                    ));
+                }
+            }
+        }
+
+        // UFCS method path (`app.Widget.describe`) through the exported class.
+        for split in 1..path.len() {
+            let ns = &path[..split - 1];
+            let type_name = &path[split - 1];
+            if let Some(ExportedType::Class { qtn, .. }) = iface.lookup_type(ns, type_name) {
+                if split + 1 != path.len() {
+                    continue;
+                }
+                let method_name = &path[split];
+                if let ClassMethodLookup::ForeignFound { ty } =
+                    self.lookup_class_method(qtn, &[], method_name)
+                {
+                    self.foreign_callable_exprs.insert(expr_id, dotted(path));
+                    return Some(ty);
                 }
             }
         }
@@ -10852,6 +11002,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                         class_loc,
                         func_loc,
                     } => Some((ty, class_loc, func_loc)),
+                    ClassMethodLookup::ForeignFound { ty } => {
+                        // A mounted class's method: the reference types from
+                        // the exported signature (self stripped for a bound
+                        // access), but no `MemberResolution` exists — a call
+                        // of the result is reported reserved.
+                        self.foreign_callable_exprs
+                            .insert(at, Name::new(format!("{class_name}.{member}")));
+                        if bound
+                            && let Ty::Function {
+                                params,
+                                ret,
+                                throws,
+                                attr,
+                            } = ty
+                        {
+                            let stripped_params =
+                                crate::generics::skip_self_param(&params).to_vec();
+                            return Ty::Function {
+                                params: stripped_params,
+                                ret,
+                                throws,
+                                attr,
+                            };
+                        }
+                        return ty;
+                    }
                     ClassMethodLookup::DuplicateInherent => {
                         return Ty::Error {
                             attr: TyAttr::default(),
@@ -12246,6 +12422,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         _include_aliases: bool,
     ) -> Vec<(Name, Ty)> {
         let mut out: Vec<(Name, Ty)> = Vec::new();
+        // A MOUNTED (source-less) dependency's class: fields come from its
+        // exported row, generics substituted at this receiver (BEP-066 6a).
+        if let Some(crate::package_interface::ExportedType::Class {
+            generic_params,
+            fields,
+            ..
+        }) = crate::package_interface::mounted_type_row(self.context.db(), class_name)
+        {
+            let bindings = crate::generics::bind_type_vars(generic_params, class_type_args);
+            for (name, ty, _attrs) in fields {
+                let field_ty = if bindings.is_empty() {
+                    ty.clone()
+                } else {
+                    crate::generics::substitute_ty(ty, &bindings)
+                };
+                out.push((name.clone(), field_ty));
+            }
+            return out;
+        }
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
             return out;
         };
@@ -12530,6 +12725,43 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_type_args: &[Ty],
         method_name: &Name,
     ) -> ClassMethodLookup<'db> {
+        // A MOUNTED (source-less) dependency's class: type the method from its
+        // exported signature (BEP-066 slice 6a) — declaration-scoped, with the
+        // class generics substituted at this receiver's type args. No locs.
+        if let Some(crate::package_interface::ExportedType::Class {
+            generic_params,
+            methods,
+            ..
+        }) = crate::package_interface::mounted_type_row(self.context.db(), class_name)
+        {
+            let Some(method) = methods.iter().find(|m| &m.name == method_name) else {
+                return ClassMethodLookup::NotFound;
+            };
+            let bindings = crate::generics::bind_type_vars(generic_params, class_type_args);
+            let substitute = |ty: &Ty| {
+                if bindings.is_empty() {
+                    ty.clone()
+                } else {
+                    crate::generics::substitute_ty(ty, &bindings)
+                }
+            };
+            return ClassMethodLookup::ForeignFound {
+                ty: Ty::Function {
+                    params: method
+                        .params
+                        .iter()
+                        .map(|p| crate::ty::FunctionParamTy {
+                            name: p.name.clone(),
+                            ty: substitute(&p.ty),
+                            mode: p.mode,
+                        })
+                        .collect(),
+                    ret: Box::new(substitute(&method.return_type)),
+                    throws: Box::new(substitute(&method.callable_throws)),
+                    attr: TyAttr::default(),
+                },
+            };
+        }
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
             return ClassMethodLookup::NotFound;
         };

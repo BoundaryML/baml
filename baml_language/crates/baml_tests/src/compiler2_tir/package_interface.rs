@@ -214,7 +214,8 @@ fn interface_export_carries_full_symbolic_surface() {
         requires,
         associated_types,
         fields,
-        methods,
+        required_methods,
+        default_methods,
     } = lookup(iface, &[], "Source")
     else {
         panic!("Source must export as ExportedType::Interface");
@@ -264,8 +265,9 @@ fn interface_export_carries_full_symbolic_surface() {
     assert_eq!(attrs.alias.as_deref(), Some("lbl"));
     assert_eq!(attrs.description.as_deref(), Some("source label"));
 
-    // Required AND default methods, signatures with symbolic `Self`.
-    let next = method(methods, "next");
+    // Required AND default methods (exported split), signatures with
+    // symbolic `Self`.
+    let next = method(required_methods, "next");
     assert!(
         matches!(&next.params[0].ty, Ty::TypeVar(p, _) if p.as_str() == "Self"),
         "required-method receiver stays the symbolic Self"
@@ -279,7 +281,7 @@ fn interface_export_carries_full_symbolic_surface() {
     assert_eq!(next.callable_fqn, "user.Source.next");
     assert!(next.interface_target.is_none());
 
-    let twice = method(methods, "twice");
+    let twice = method(default_methods, "twice");
     assert!(
         matches!(&twice.params[0].ty, Ty::TypeVar(p, _) if p.as_str() == "Self"),
         "default-method receiver stays the symbolic Self"
@@ -518,7 +520,8 @@ fn stdlib_interfaces_derive_enriched() {
     let ExportedType::Interface {
         requires,
         associated_types,
-        methods,
+        required_methods,
+        default_methods,
         ..
     } = lookup(baml, &["iter"], "Iterator")
     else {
@@ -551,10 +554,10 @@ fn stdlib_interfaces_derive_enriched() {
         "`type Error = never` exports its default"
     );
 
-    let next = method(methods, "next");
+    let next = method(required_methods, "next");
     assert_eq!(next.callable_fqn, "baml.iter.Iterator.next");
     assert!(matches!(&next.params[0].ty, Ty::TypeVar(p, _) if p.as_str() == "Self"));
-    let map = method(methods, "map");
+    let map = method(default_methods, "map");
     assert_eq!(
         map.generic_params
             .iter()
@@ -641,10 +644,13 @@ interface M {
     );
 
     // Method-level generic bound using `Self` (already symbolic — pinned).
-    let ExportedType::Interface { methods, .. } = lookup(iface, &[], "M") else {
+    let ExportedType::Interface {
+        required_methods, ..
+    } = lookup(iface, &[], "M")
+    else {
         panic!("M must export as ExportedType::Interface");
     };
-    let f = method(methods, "f");
+    let f = method(required_methods, "f");
     assert!(
         matches!(&f.generic_param_bounds[0][0].generics[0], Ty::TypeVar(p, _) if p.as_str() == "Self"),
         "method-bound `Self` must stay symbolic, got {:?}",
@@ -823,13 +829,13 @@ fn generic_impl_exports_params_bounds_and_patterns() {
 }
 
 #[test]
-fn dep_interface_rows_stay_invisible_to_resolution() {
-    // BEP-066 slice 6a exports dependency interface rows but nothing may
-    // consume them yet: both `PackageResolutionContext::resolve_type` paths
-    // (the namespace-qualified `resolve_type_in_own_then_deps` walk and the
-    // package-prefixed dep search) carry explicit guards that treat an
-    // `ExportedType::Interface` row as absent, preserving pre-export
-    // resolution byte-for-byte until the dualized resolution context lands.
+fn dep_interface_rows_resolve_only_for_mounted_packages() {
+    // BEP-066 slice 6a: an `ExportedType::Interface` row resolves through both
+    // `PackageResolutionContext::resolve_type` paths ONLY when the dependency
+    // is a MOUNTED (source-less) package — its rows are the sole
+    // representation. A source-backed dependency's interface rows stay
+    // invisible (its interfaces resolve through source items on the loc path),
+    // preserving pre-export resolution for every source-backed dep.
     use baml_compiler2_tir::package_interface::package_resolution_context;
 
     let mut db = make_db();
@@ -837,11 +843,21 @@ fn dep_interface_rows_stay_invisible_to_resolution() {
         "main.baml",
         "function f() -> int throws never {\n    1\n}\n",
     );
+    db.set_mounted_packages(
+        [(
+            "app".to_string(),
+            mounted::app_blob(&[(
+                "lib.baml",
+                "interface Marker {\n    function id(self) -> string throws never\n}\n",
+            )]),
+        )]
+        .into(),
+    );
     let res_ctx = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
 
     let path = |parts: &[&str]| -> Vec<Name> { parts.iter().map(|p| Name::new(*p)).collect() };
 
-    // The row IS exported…
+    // The source-backed row IS exported…
     let baml = package_interface(&db, PackageId::new(&db, Name::new("baml")));
     assert!(
         matches!(
@@ -851,25 +867,29 @@ fn dep_interface_rows_stay_invisible_to_resolution() {
         "baml.iter.Iterator is exported as an interface row"
     );
 
-    // …but the package-prefixed dep search must not resolve through it.
+    // …but the package-prefixed dep search must not resolve through it
+    // (baml has source; its interfaces resolve via source items).
     assert!(
         res_ctx
             .resolve_type(&db, &path(&["baml", "iter", "Iterator"]), &[])
             .is_none(),
-        "dep interface row must be invisible to package-prefixed resolution"
+        "source-backed dep interface row must stay invisible to package-prefixed resolution"
     );
-
-    // The namespace-qualified own-then-deps walk hits the same row via the
-    // dep's namespace and must skip it too.
     assert!(
         res_ctx
             .resolve_type(&db, &path(&["iter", "Iterator"]), &[])
             .is_none(),
-        "dep interface row must be invisible to the own-then-deps walk"
+        "source-backed dep interface row must stay invisible to the own-then-deps walk"
     );
 
+    // A MOUNTED dependency's interface row resolves on both paths.
+    let (_, ty) = res_ctx
+        .resolve_type(&db, &path(&["app", "Marker"]), &[])
+        .expect("mounted interface row resolves via the package-prefixed path");
+    assert!(matches!(ty, Ty::Interface(ref qtn, _, _, _) if qtn.name().as_str() == "Marker"));
+
     // Contrast: a dep CLASS in the same namespace still resolves through the
-    // interface rows on both paths — the guard is interface-specific.
+    // interface rows on both paths — the gate is interface-specific.
     let (_, ty) = res_ctx
         .resolve_type(&db, &path(&["baml", "iter", "Range"]), &[])
         .expect("dep class resolves via the package-prefixed path");
@@ -1006,4 +1026,434 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
         Some(baml_compiler2_ast::BuiltinKind::Vm),
         "`$rust_function` bodies keep their builtin kind"
     );
+}
+
+// ── Mounted source-less packages (PR 3: type-position consumption) ─────────
+
+/// BEP-066 slice 6a, PR 3: a package mounted as a `borsh(PackageInterface)`
+/// blob — with NO source files — resolves in TYPE positions at check level.
+/// Each test compiles a fixture "library" package (files under
+/// `<builtin>/app/…` so `file_package` assigns them the package name `app`),
+/// captures its interface blob, mounts it in a FRESH database as `app`, and
+/// runs `collect_diagnostics` over consumer code. Calls into mounted packages
+/// are NOT yet supported (next PR) and are rejected with a dedicated
+/// diagnostic.
+pub(super) mod mounted {
+    use baml_base::Name;
+    use baml_compiler2_hir::package::PackageId;
+    use baml_compiler2_tir::package_interface::package_interface;
+    use baml_project::{ProjectDatabase, testing::assert_no_diagnostic_errors};
+
+    use super::super::support::make_db;
+
+    /// Compile `files` as the source of a library package named `app` and
+    /// capture its `borsh(PackageInterface)` blob. The files ride under
+    /// `<builtin>/app/…` so `file_package` assigns them the `app` package —
+    /// the blob's qualified names therefore read `app.…`, matching the mount
+    /// alias exactly (re-aliasing a blob under a different name is out of
+    /// scope for this PR).
+    pub(crate) fn app_blob(files: &[(&str, &str)]) -> Vec<u8> {
+        let mut db = make_db();
+        for (path, src) in files {
+            // The extra-files channel: `compiler2_all_files` filters ordinary
+            // project files with `<builtin>/` paths, so library fixtures ride
+            // the same input the stdlib stubs do.
+            db.add_compiler2_virtual_file(format!("<builtin>/app/{path}"), src);
+        }
+        assert_no_diagnostic_errors(&db);
+        let iface = package_interface(&db, PackageId::new(&db, Name::new("app")));
+        assert!(
+            iface.types.values().any(|ns| !ns.is_empty()),
+            "the library fixture must export at least one type"
+        );
+        borsh::to_vec(iface).expect("serialize app interface")
+    }
+
+    /// A fresh consumer database with `blob` mounted as `app` and NO `app`
+    /// source anywhere.
+    fn consumer_db(blob: Vec<u8>, files: &[(&str, &str)]) -> ProjectDatabase {
+        let mut db = make_db();
+        db.set_mounted_packages([("app".to_string(), blob)].into());
+        for (path, src) in files {
+            db.add_file(*path, *src);
+        }
+        db
+    }
+
+    /// The check-level error messages (with codes) for user files of `db`.
+    fn error_messages(db: &ProjectDatabase) -> Vec<String> {
+        baml_project::collect_diagnostics(db)
+            .iter()
+            .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
+            .map(|d| format!("[{}] {}", d.code(), d.message))
+            .collect()
+    }
+
+    #[track_caller]
+    fn assert_clean(db: &ProjectDatabase) {
+        let errors = error_messages(db);
+        assert!(errors.is_empty(), "expected no errors, got:\n{errors:#?}");
+    }
+
+    #[track_caller]
+    fn assert_error_containing(db: &ProjectDatabase, needle: &str) {
+        let errors = error_messages(db);
+        assert!(
+            errors.iter().any(|msg| msg.contains(needle)),
+            "expected an error containing {needle:?}, got:\n{errors:#?}"
+        );
+    }
+
+    /// The shared library fixture: a class implementing a library interface
+    /// (in-body impl), blob-side `Equals`/`Compare` impls, an enum, an alias,
+    /// and a free function.
+    const LIB: &str = r#"
+interface Describable {
+    function describe(self) -> string throws never
+}
+
+class Widget {
+    x int
+    label string
+
+    implements Describable {
+        function describe(self) -> string throws never {
+            self.label
+        }
+    }
+}
+
+implement baml.ops.Equals for Widget {
+    function eq(self, other: Self) -> bool throws never {
+        self.x == other.x
+    }
+}
+
+implement baml.ops.Compare for Widget {
+    function lt(self, other: Self) -> bool throws never {
+        self.x < other.x
+    }
+}
+
+enum Status {
+    Active
+    Retired
+}
+
+type Score = int
+
+interface Taggable {
+    function tag(self) -> string throws never
+}
+
+implement<T> Taggable for T {
+    function tag(self) -> string throws never {
+        "any"
+    }
+}
+
+function add(a: int, b: int) -> int throws never {
+    a + b
+}
+"#;
+
+    fn lib_blob() -> Vec<u8> {
+        app_blob(&[("lib.baml", LIB)])
+    }
+
+    #[test]
+    fn class_resolves_in_type_position() {
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function f() -> int throws never {
+    let w: app.Widget[] = []
+    let o: app.Widget? = null
+    0
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+    }
+
+    #[test]
+    fn interface_annotation_and_bound_consult_blob_impls() {
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function pick<T extends app.Describable>(a: T, b: T) -> T throws never {
+    a
+}
+
+function g(w: app.Widget) -> app.Widget throws never {
+    pick(w, w)
+}
+
+function h(w: app.Widget) -> int throws never {
+    let d: app.Describable = w
+    0
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+    }
+
+    #[test]
+    fn user_impl_of_mounted_interface_checks_conformance() {
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+class Card {
+    title string
+
+    implements app.Describable {
+        function describe(self) -> string throws never {
+            self.title
+        }
+    }
+}
+
+function f(c: Card) -> int throws never {
+    let d: app.Describable = c
+    0
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+    }
+
+    #[test]
+    fn user_impl_of_mounted_interface_missing_method_is_rejected() {
+        // E0113: the blob row's REQUIRED method list drives coverage.
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+class Card {
+    title string
+
+    implements app.Describable {
+    }
+}
+"#,
+            )],
+        );
+        assert_error_containing(&db, "describe");
+    }
+
+    #[test]
+    fn user_impl_of_mounted_interface_signature_mismatch_is_rejected() {
+        // E0120: the override must conform to the blob row's symbolic-Self
+        // signature.
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+class Card {
+    title string
+
+    implements app.Describable {
+        function describe(self) -> int throws never {
+            1
+        }
+    }
+}
+"#,
+            )],
+        );
+        assert_error_containing(&db, "describe");
+    }
+
+    #[test]
+    fn match_over_mounted_enum_is_exhaustiveness_checked() {
+        let blob = lib_blob();
+        let db = consumer_db(
+            blob.clone(),
+            &[(
+                "main.baml",
+                r#"
+function m(s: app.Status) -> int throws never {
+    match s {
+        app.Status.Active => 1
+        app.Status.Retired => 2
+    }
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+
+        // A missing arm gets the normal non-exhaustive diagnostic, fed by the
+        // blob's variant list.
+        let db = consumer_db(
+            blob,
+            &[(
+                "main.baml",
+                r#"
+function m(s: app.Status) -> int throws never {
+    match s {
+        app.Status.Active => 1
+    }
+}
+"#,
+            )],
+        );
+        assert_error_containing(&db, "Retired");
+    }
+
+    #[test]
+    fn alias_from_blob_expands() {
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function a(s: app.Score) -> int throws never {
+    let t: app.Score = 5
+    s + t
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+    }
+
+    #[test]
+    fn operators_resolve_through_blob_impl_rows() {
+        // `==` is universal; `<` is the check-observable consumer of the blob's
+        // `Equals`/`Compare` rows (ordering requires `baml.ops.Compare`
+        // membership, discharged through the mounted impls table).
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function cmp(a: app.Widget, b: app.Widget) -> bool throws never {
+    let eq: bool = a == b
+    a < b
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+    }
+
+    #[test]
+    fn absent_name_gets_normal_unresolved_diagnostic() {
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function n() -> int throws never {
+    let x: app.Nope = 1
+    0
+}
+"#,
+            )],
+        );
+        assert_error_containing(&db, "Nope");
+    }
+
+    #[test]
+    fn function_reference_types_but_call_is_reserved() {
+        // A dep-function REFERENCE types correctly (the exported signature)…
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function use_f(f: (a: int, b: int) -> int) -> int throws never {
+    0
+}
+
+function r() -> int throws never {
+    use_f(app.add)
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+
+        // …but a CALL is rejected with the reserved not-yet diagnostic
+        // (calls into mounted packages land in the next PR).
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function c() -> int throws never {
+    app.add(1, 2)
+}
+"#,
+            )],
+        );
+        assert_error_containing(&db, "mounted");
+    }
+
+    #[test]
+    fn user_impl_overlapping_mounted_blanket_impl_is_coherence_checked() {
+        // The blob exports `implement<T> Taggable for T`. A user impl of
+        // `app.Taggable` for a local class overlaps it — E0132, attributed
+        // primary-only at the user's impl (the blob row has no span), with
+        // the partner rendered structurally.
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+class Mine {
+    x int
+}
+
+implement app.Taggable for Mine {
+    function tag(self) -> string throws never {
+        "mine"
+    }
+}
+"#,
+            )],
+        );
+        assert_error_containing(&db, "overlapping interface implementations");
+        assert_error_containing(&db, "mounted dependency");
+    }
+
+    #[test]
+    fn stream_companion_of_mounted_class_stays_unresolvable() {
+        // The blob exports no `$stream` rows, and `resolve_type_in`'s
+        // `$stream`-companion fallback deliberately consults raw source items
+        // only — so a companion reference to a mounted class cannot resolve
+        // (a compiler-synthesized one degrades to the ordinary E0002).
+        // A USER-written `$`-suffixed spelling never reaches type lowering at
+        // all (the parser drops the annotation without diagnostics —
+        // pre-existing behavior, identical for source-backed classes), so
+        // this pins the observable pieces: the `$stream` line neither
+        // resolves-to-something-bogus nor wedges the checker, and sibling
+        // resolution still runs (the E0002 on the next line).
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function s() -> int throws never {
+    let w: app.Widget$stream? = null
+    let v: app.Nope? = null
+    0
+}
+"#,
+            )],
+        );
+        assert_error_containing(&db, "app.Nope");
+    }
 }

@@ -950,7 +950,11 @@ fn resolution_to_item_ref(
             let data = baml_compiler2_tir::interfaces::impl_data(db, *impl_loc)
                 .as_ref()
                 .ok()?;
-            let iface_loc = data.interface;
+            // A mounted-interface target has no loc; TIR never records an
+            // `InterfaceConcreteMethod` for one (mounted calls are reserved
+            // until the BEP-066 call-lowering PR), so this is unreachable —
+            // fail soft rather than panic if it ever regresses.
+            let iface_loc = data.interface_loc()?;
             let pkg_info = file_package(db, iface_loc.file(db));
             let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);

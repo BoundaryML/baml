@@ -170,6 +170,16 @@ pub struct ProjectDatabase {
     /// handle would leave a stale memo on a reused database, e.g. the LSP's
     /// long-lived `ProjectDatabase`).
     seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
+    /// Source-less dependency packages mounted as `borsh(PackageInterface)`
+    /// blobs, keyed by the mount alias (BEP-066 slice 6a).
+    ///
+    /// Same present-from-construction discipline as the `seeded_*` inputs
+    /// above: a real `#[salsa::input]` handle created **once** (empty) in the
+    /// constructors and thereafter mutated in place via its Salsa setter, so it
+    /// is always `Some` and `package_dependencies` / `package_interface` read
+    /// the mount map through a **tracked** dependency (an absent-then-added
+    /// handle would leave a stale memo on a reused database).
+    mounted_packages: Option<baml_workspace::MountedPackages>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     ///
     /// `Arc`-wrapped (with `Arc::make_mut` at the mutation sites) so cloning a
@@ -224,6 +234,10 @@ impl baml_workspace::Db for ProjectDatabase {
 
     fn seeded_callable_throws(&self) -> Option<baml_workspace::SeededCallableThrows> {
         self.seeded_callable_throws
+    }
+
+    fn mounted_packages(&self) -> Option<baml_workspace::MountedPackages> {
+        self.mounted_packages
     }
 }
 
@@ -313,6 +327,7 @@ impl ProjectDatabase {
             seeded_throw_facts: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
+            mounted_packages: None,
             file_map: Arc::new(HashMap::new()),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: Arc::new(HashMap::new()),
@@ -327,6 +342,10 @@ impl ProjectDatabase {
             std::collections::BTreeMap::new(),
         ));
         db.seeded_callable_throws = Some(baml_workspace::SeededCallableThrows::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
+        db.mounted_packages = Some(baml_workspace::MountedPackages::new(
             &db,
             std::collections::BTreeMap::new(),
         ));
@@ -397,6 +416,55 @@ impl ProjectDatabase {
             .seeded_callable_throws
             .expect("SeededCallableThrows input is created in ProjectDatabase::new");
         seeds.set_by_path(self).to(by_path);
+    }
+
+    /// Add a compiler2-only virtual source file (a `<builtin>/…` path) to the
+    /// `Compiler2ExtraFiles` input — the channel `compiler2_all_files` reads
+    /// builtin stubs from (ordinary project files with a `<builtin>/` path are
+    /// filtered out there).
+    ///
+    /// Fixture/testing hook (BEP-066 slice 6a): compiling library files under
+    /// `<builtin>/<pkg>/…` makes `file_package` assign them the package name
+    /// `<pkg>`, so a test can derive a real `PackageInterface` blob for a
+    /// package that is not `user` and mount it elsewhere. Requires
+    /// `set_project_root` to have run (it creates the input).
+    pub fn add_compiler2_virtual_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+        content: &str,
+    ) -> SourceFile {
+        let path = path.as_ref().to_path_buf();
+        let file = self.add_file_internal(&path, content);
+        let file_id = file.file_id(self);
+        Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
+        self.compiler2_file_map.insert(path, file);
+        let extra = self
+            .compiler2_extra_files
+            .expect("set_project_root creates the Compiler2ExtraFiles input");
+        let mut files = extra.files(self).clone();
+        files.push(file);
+        extra.set_files(self).to(files);
+        file
+    }
+
+    /// Mount source-less dependency packages as serialized `PackageInterface`
+    /// blobs, keyed by the mount alias (BEP-066 slice 6a); each value is
+    /// `borsh(PackageInterface)`.
+    ///
+    /// Mutates the always-present `MountedPackages` input (created in `new`)
+    /// through its Salsa setter, so it bumps the revision and correctly
+    /// invalidates any already-computed `package_dependencies` /
+    /// `package_interface` memo — safe to call before *or* after queries have
+    /// run. Aliases colliding with the reserved package set (the stdlib
+    /// packages, `user`, `root`, `env`) are ignored by the readers.
+    pub fn set_mounted_packages(
+        &mut self,
+        by_package: std::collections::BTreeMap<String, Vec<u8>>,
+    ) {
+        let mounts = self
+            .mounted_packages
+            .expect("MountedPackages input is created in ProjectDatabase::new");
+        mounts.set_by_package(self).to(by_package);
     }
 
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
@@ -1317,9 +1385,9 @@ impl ProjectDatabase {
         )
         .into_iter()
         .filter(|resolved| {
-            baml_compiler2_tir::interfaces::impl_data(self, resolved.impl_loc)
-                .as_ref()
-                .is_ok_and(|data| data.interface == iface_loc)
+            resolved
+                .data(self)
+                .is_some_and(|data| data.interface_loc() == Some(iface_loc))
         })
         .filter_map(|resolved| resolved.get_method(self, method_name));
         let method = methods.next()?;

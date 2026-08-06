@@ -53,7 +53,7 @@ pub trait TypeExprContext<'db> {
     fn resolve_type(
         &self,
         segments: &[baml_base::Name],
-    ) -> Result<Definition<'db>, Box<[baml_base::Name]>>;
+    ) -> Result<ResolvedTypeDefinition<'db>, Box<[baml_base::Name]>>;
 
     /// What `Self` lowers to here, or `None` where `Self` is not in scope
     /// (free functions, type aliases).
@@ -165,7 +165,7 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
     fn resolve_type(
         &self,
         segments: &[baml_base::Name],
-    ) -> Result<Definition<'db>, Box<[baml_base::Name]>> {
+    ) -> Result<ResolvedTypeDefinition<'db>, Box<[baml_base::Name]>> {
         resolve_type_in(self.db, self.package_items, self.ns_context, segments)
             .ok_or_else(|| type_suggestions(self.package_items, segments))
     }
@@ -310,16 +310,32 @@ fn interface_base_without_member_pin(
     }
 }
 
+/// A type-position resolution result: a definition in a source-backed package
+/// (a loc), or an exported row of a MOUNTED source-less dependency (BEP-066
+/// slice 6a) — which has no loc, only its blob-captured typed surface. The two
+/// heads of every declaration-site type path; `lower_path`'s arms build the
+/// corresponding `Ty` from either.
+#[derive(Debug, Clone, Copy)]
+pub enum ResolvedTypeDefinition<'db> {
+    /// A source-backed definition (own package or a source-backed dependency).
+    Own(Definition<'db>),
+    /// A mounted dependency's exported row, served from its interface blob.
+    Foreign(&'db crate::package_interface::ExportedType),
+}
+
 /// Resolve a type name/path to its definition, with `ns_context` as the namespace
 /// prefix. Tries the namespace-qualified own-package lookup, then a cross-package lookup
-/// (`root.ns.Name` or `pkg.ns.Name`), then the `$stream` companion (whose base class/alias
-/// the caller re-qualifies under the `$stream` name). `None` when unresolved.
+/// (`root.ns.Name` or `pkg.ns.Name` — a MOUNTED package resolves through its interface
+/// blob instead of raw items), then the `$stream` companion (whose base class/alias
+/// the caller re-qualifies under the `$stream` name; mounted packages export no
+/// `$stream` rows, so their companions stay unresolved — the ordinary E0002).
+/// `None` when unresolved.
 pub(crate) fn resolve_type_in<'db>(
     db: &'db dyn crate::Db,
     package_items: &PackageItems<'db>,
     ns_context: &[baml_base::Name],
     segments: &[baml_base::Name],
-) -> Option<Definition<'db>> {
+) -> Option<ResolvedTypeDefinition<'db>> {
     let item = segments.last().expect("non-empty path");
     let seg_ns = &segments[..segments.len() - 1];
     let resolved = if !ns_context.is_empty() {
@@ -327,15 +343,27 @@ pub(crate) fn resolve_type_in<'db>(
         package_items.lookup_type(&ns, item)
     } else {
         package_items.lookup_type(seg_ns, item)
-    };
+    }
+    .map(ResolvedTypeDefinition::Own);
     let resolved = resolved.or_else(|| {
         if segments.len() >= 2 {
             if segments[0].as_str() == "root" {
-                package_items.lookup_type(&segments[1..segments.len() - 1], item)
+                package_items
+                    .lookup_type(&segments[1..segments.len() - 1], item)
+                    .map(ResolvedTypeDefinition::Own)
+            } else if let Some(mounted) =
+                crate::package_interface::mounted_interface(db, &segments[0])
+            {
+                // Mounted (source-less) package: the blob's rows are the only
+                // representation — raw `package_items` is empty by design.
+                mounted
+                    .lookup_type(&segments[1..segments.len() - 1], item)
+                    .map(ResolvedTypeDefinition::Foreign)
             } else {
                 let pkg_id = PackageId::new(db, segments[0].clone());
                 let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
                 pkg.lookup_type(&segments[1..segments.len() - 1], item)
+                    .map(ResolvedTypeDefinition::Own)
             }
         } else {
             None
@@ -365,7 +393,8 @@ pub(crate) fn resolve_type_in<'db>(
             }
         })?;
         // Only classes and aliases get a `$stream` companion.
-        matches!(base_def, Definition::Class(_) | Definition::TypeAlias(_)).then_some(base_def)
+        matches!(base_def, Definition::Class(_) | Definition::TypeAlias(_))
+            .then_some(ResolvedTypeDefinition::Own(base_def))
     })
 }
 
@@ -780,7 +809,17 @@ fn lower_path(
         return ty;
     }
     match ctx.resolve_type(segments) {
-        Ok(def) => {
+        Ok(ResolvedTypeDefinition::Foreign(row)) => lower_foreign_path(
+            store,
+            row,
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ctx,
+            diagnostics,
+            position,
+        ),
+        Ok(ResolvedTypeDefinition::Own(def)) => {
             let short = segments.last().expect("non-empty path");
             match def {
                 Definition::Class(class_loc) => {
@@ -1016,19 +1055,36 @@ fn lower_path(
             if segments.len() >= 2 {
                 let (variant, enum_path) = segments.split_last().unwrap();
                 let enum_short = enum_path.last().unwrap();
-                if let Ok(def @ Definition::Enum(enum_loc)) = ctx.resolve_type(enum_path) {
-                    // Verify the variant actually exists on the enum;
-                    // otherwise `Status.Typo` would silently produce a
-                    // bogus `Ty::EnumVariant` and downstream code would
-                    // never see `UnresolvedType`.
-                    let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
-                    if enum_data.variants.iter().any(|v| v.name == *variant) {
-                        return Ty::EnumVariant(
-                            qualify_def(db, def, enum_short),
-                            variant.clone(),
-                            TyAttr::default(),
-                        );
+                match ctx.resolve_type(enum_path) {
+                    Ok(ResolvedTypeDefinition::Own(def @ Definition::Enum(enum_loc))) => {
+                        // Verify the variant actually exists on the enum;
+                        // otherwise `Status.Typo` would silently produce a
+                        // bogus `Ty::EnumVariant` and downstream code would
+                        // never see `UnresolvedType`.
+                        let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
+                        if enum_data.variants.iter().any(|v| v.name == *variant) {
+                            return Ty::EnumVariant(
+                                qualify_def(db, def, enum_short),
+                                variant.clone(),
+                                TyAttr::default(),
+                            );
+                        }
                     }
+                    // A mounted dependency's enum: the exported row carries the
+                    // variant names, so the same verified-variant fallback
+                    // applies (`app.Status.Active` in a type position).
+                    Ok(ResolvedTypeDefinition::Foreign(
+                        crate::package_interface::ExportedType::Enum { qtn, variants },
+                    )) => {
+                        if variants.contains(variant) {
+                            return Ty::EnumVariant(
+                                qtn.clone(),
+                                variant.clone(),
+                                TyAttr::default(),
+                            );
+                        }
+                    }
+                    _ => {}
                 }
             }
             // Associated type projection fallback: after ordinary type
@@ -1112,6 +1168,176 @@ fn lower_path(
             Ty::Error {
                 attr: TyAttr::default(),
             }
+        }
+    }
+}
+
+/// The [`lower_path`] arm for a *foreign* resolution — an exported row of a
+/// mounted source-less dependency (BEP-066 slice 6a). Mirrors the `Own` arms
+/// exactly, drawing every declared fact (qtn, generic arity, associated types
+/// with pre-lowered symbolic-`Self` defaults) from the row instead of per-loc
+/// queries, so a blob-backed and a source-backed dependency lower the same
+/// spelling to the same `Ty`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the exact lower_path parameter surface, plus the resolved row"
+)]
+fn lower_foreign_path(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    row: &crate::package_interface::ExportedType,
+    segments: &[baml_base::Name],
+    generic_args: &[baml_compiler2_hir::type_ref::TypeRefId],
+    associated_type_bindings: &[baml_compiler2_hir::type_ref::AssociatedTypeBindingRef],
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+    position: TypePosition,
+) -> Ty {
+    use crate::package_interface::ExportedType;
+    let short = segments.last().expect("non-empty path");
+    match row {
+        ExportedType::Class {
+            qtn,
+            generic_params,
+            ..
+        } => {
+            let mut lowered_args: Vec<Ty> = generic_args
+                .iter()
+                .map(|&ga| lower_type_ref(store, ga, ctx, diagnostics))
+                .collect();
+            enforce_generic_arity(
+                &mut lowered_args,
+                generic_params.len(),
+                short,
+                position,
+                diagnostics,
+            );
+            // No `baml.future.Future` special case: `baml` is a reserved name a
+            // mount can never claim, so a foreign class is never that class.
+            Ty::Class(qtn.clone(), lowered_args, TyAttr::default())
+        }
+        ExportedType::Interface {
+            qtn,
+            self_param,
+            generic_params,
+            associated_types,
+            ..
+        } => {
+            let mut lowered_args: Vec<Ty> = generic_args
+                .iter()
+                .map(|&ga| lower_type_ref(store, ga, ctx, diagnostics))
+                .collect();
+            enforce_generic_arity(
+                &mut lowered_args,
+                generic_params.len(),
+                short,
+                position,
+                diagnostics,
+            );
+            let known_associated_types: FxHashSet<baml_base::Name> = associated_types
+                .iter()
+                .map(|assoc| assoc.name.clone())
+                .collect();
+            // Written bindings: unknown or re-bound names are diagnosed and
+            // dropped, exactly as in the `Own` interface arm.
+            let mut seen_associated_bindings = FxHashSet::default();
+            let mut associated_bindings: Vec<(baml_base::Name, Ty)> = associated_type_bindings
+                .iter()
+                .filter_map(|binding| {
+                    let value = lower_type_ref(store, binding.ty, ctx, diagnostics);
+                    if !known_associated_types.contains(&binding.name) {
+                        diagnostics.push(TirTypeError::UnresolvedType {
+                            name: binding.name.clone(),
+                            suggestions: known_associated_types.iter().cloned().collect(),
+                        });
+                        return None;
+                    }
+                    if !seen_associated_bindings.insert(binding.name.clone()) {
+                        diagnostics.push(TirTypeError::DuplicateAssociatedTypeBinding {
+                            interface: qtn.clone(),
+                            name: binding.name.clone(),
+                        });
+                        return None;
+                    }
+                    Some((binding.name.clone(), value))
+                })
+                .collect();
+            // §1.7(a): an existential eagerly fills omitted defaulted members.
+            // The row's defaults are pre-lowered with symbolic `Self` (exactly
+            // what `interface_associated_type_default` produces), so filling is
+            // pure substitution — the same `realize_associated_default` the
+            // `Own` arm runs.
+            if position == TypePosition::Existential {
+                for assoc in associated_types {
+                    if associated_bindings.iter().any(|(n, _)| *n == assoc.name) {
+                        continue;
+                    }
+                    if let Some(default) = &assoc.default {
+                        let self_ty = Ty::Interface(
+                            qtn.clone(),
+                            lowered_args.clone(),
+                            associated_bindings.clone(),
+                            TyAttr::default(),
+                        );
+                        let filled = crate::interfaces::realize_associated_default(
+                            default,
+                            generic_params,
+                            &lowered_args,
+                            self_param,
+                            &self_ty,
+                        );
+                        associated_bindings.push((assoc.name.clone(), filled));
+                    }
+                }
+                let missing: Vec<baml_base::Name> = associated_types
+                    .iter()
+                    .map(|assoc| assoc.name.clone())
+                    .filter(|name| !associated_bindings.iter().any(|(n, _)| n == name))
+                    .collect();
+                if !missing.is_empty() {
+                    for name in &missing {
+                        associated_bindings.push((
+                            name.clone(),
+                            Ty::Error {
+                                attr: TyAttr::default(),
+                            },
+                        ));
+                    }
+                    diagnostics.push(TirTypeError::MissingAssociatedTypeBindings {
+                        interface: qtn.clone(),
+                        missing,
+                    });
+                }
+            }
+            Ty::Interface(
+                qtn.clone(),
+                lowered_args,
+                associated_bindings,
+                TyAttr::default(),
+            )
+        }
+        ExportedType::Enum { qtn, .. } => {
+            for &ga in generic_args {
+                let _ = lower_type_ref(store, ga, ctx, diagnostics);
+            }
+            if !generic_args.is_empty() {
+                diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                    type_name: short.clone(),
+                    kind: "enum",
+                });
+            }
+            Ty::Enum(qtn.clone(), TyAttr::default())
+        }
+        ExportedType::TypeAlias { qtn, .. } => {
+            for &ga in generic_args {
+                let _ = lower_type_ref(store, ga, ctx, diagnostics);
+            }
+            if !generic_args.is_empty() {
+                diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                    type_name: short.clone(),
+                    kind: "type alias",
+                });
+            }
+            Ty::TypeAlias(qtn.clone(), TyAttr::default())
         }
     }
 }

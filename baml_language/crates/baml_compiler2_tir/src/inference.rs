@@ -223,6 +223,21 @@ pub(crate) fn interface_associated_type_names_for_qtn(
     db: &dyn crate::Db,
     qtn: &crate::ty::QualifiedTypeName,
 ) -> FxHashSet<Name> {
+    // A MOUNTED (source-less) interface answers from its exported row; its
+    // `requires` rows are the pre-flattened transitive closure, so one level
+    // of name collection per entry covers inheritance (BEP-066 slice 6a).
+    if let Some(crate::package_interface::ExportedType::Interface {
+        associated_types,
+        requires,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, qtn)
+    {
+        let mut names: FxHashSet<Name> = associated_types.iter().map(|a| a.name.clone()).collect();
+        for required in requires {
+            names.extend(interface_associated_type_names_for_qtn(db, &required.name));
+        }
+        return names;
+    }
     let pkg_id = PackageId::new(db, qtn.package().clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let Some(Definition::Interface(iface_loc)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
@@ -2716,6 +2731,14 @@ pub fn collect_type_aliases<'db>(
 /// lookup, but resolved on demand and reaching every dependency (not only the aliases a
 /// package happens to re-export).
 pub fn alias_def(db: &dyn crate::Db, qtn: &crate::ty::QualifiedTypeName) -> Option<Ty> {
+    // A mounted (source-less) package's aliases live pre-resolved on its
+    // interface blob (BEP-066 slice 6a).
+    if let Some(row) = crate::package_interface::mounted_type_row(db, qtn) {
+        let crate::package_interface::ExportedType::TypeAlias { resolved, .. } = row else {
+            return None;
+        };
+        return Some(resolved.clone());
+    }
     let pkg_id = PackageId::new(db, qtn.package().clone());
     let items = baml_compiler2_ppir::package_items(db, pkg_id);
     match items.lookup_type(qtn.namespace(), qtn.name())? {
@@ -2737,6 +2760,14 @@ pub fn enum_variants<'db>(
     res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
     enum_name: &crate::ty::QualifiedTypeName,
 ) -> Option<Vec<Name>> {
+    // A mounted (source-less) package's enums live on its interface blob
+    // (BEP-066 slice 6a); its raw items are empty by design.
+    if let Some(row) = crate::package_interface::mounted_type_row(db, enum_name) {
+        let crate::package_interface::ExportedType::Enum { variants, .. } = row else {
+            return None;
+        };
+        return Some(variants.clone());
+    }
     let items = res_ctx.items_for_package(db, enum_name.package())?;
     let Some(Definition::Enum(enum_loc)) =
         items.lookup_type(enum_name.namespace(), enum_name.name())
