@@ -2421,6 +2421,27 @@ impl<'db> InferenceContext<'db> {
         match &body.exprs[callee] {
             Expr::MemberAccess { base, member } => {
                 let member = member.clone();
+                // TYPE-qualified member spelling: when the receiver
+                // carries written type args (`Box<int>.from_json(j)`),
+                // lowering keeps the callee a MemberAccess and hoists
+                // the `<int>` onto the CALL's type-arg channel
+                // (BEP-039) - so this is the path ladder's static road
+                // in member clothing. One ladder, two spellings.
+                if let Expr::Path(segments) = &body.exprs[*base]
+                    && !self.path_resolves_locally(*base)
+                {
+                    let base_expr = *base;
+                    let segments = segments.clone();
+                    if let Some(fn_ty) = self.type_qualified_member_callee(
+                        call,
+                        base_expr,
+                        &segments,
+                        &member,
+                    ) {
+                        self.result.type_of_expr.insert(callee, fn_ty.clone());
+                        return (fn_ty, false);
+                    }
+                }
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let (ty, bound) = self.member_callee(call, &receiver, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
@@ -2873,6 +2894,57 @@ impl<'db> InferenceContext<'db> {
         Ty::error()
     }
 
+    /// The MemberAccess spelling of a TYPE-QUALIFIED callee
+    /// (`Box<int>.from_json(j)`, `Temp.from_json(j)` when lowering kept
+    /// the FieldAccess): the same ladder the Path spelling walks -
+    /// interface static, class static, then the `from_json` decode
+    /// desugar with the class applied at the CALL's type-arg channel
+    /// (where BEP-039 hoisted the receiver's written args). A real
+    /// `from_json` static outranks the sugar, as in the path road.
+    fn type_qualified_member_callee(
+        &mut self,
+        call: ExprId,
+        base_expr: ExprId,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+    ) -> Option<Ty> {
+        if let Some(method) = self.interface_static_method(prefix, member) {
+            let signature = function_signature(self.db, method);
+            let instantiation = self.instantiation_args(call, &signature.generic_params);
+            self.register_call_bounds(method, &instantiation, call);
+            return Some(function_value_ty(signature, &instantiation));
+        }
+        let class = self.static_class_for(prefix)?;
+        let frame = crate::lower::class_generic_frame(self.db, class);
+        let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+            .methods
+            .iter()
+            .copied()
+            .find(|&method| {
+                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+            });
+        if let Some(method) = method {
+            let signature = function_signature(self.db, method);
+            let mut instantiation: Vec<Ty> =
+                (0..frame.len()).map(|_| self.table.new_var_ty()).collect();
+            let own_params = signature.generic_params[frame.len()..].to_vec();
+            instantiation.extend(self.instantiation_args(call, &own_params));
+            return Some(function_value_ty(signature, &instantiation));
+        }
+        if member.as_str() == "from_json" {
+            let args = self.instantiation_args(call, &frame);
+            let target = crate::lower::class_ty(
+                crate::lower::class_qualified_name(self.db, class),
+                args,
+            );
+            if let Some(fn_ty) = self.json_desugar_callee("to", target.clone()) {
+                self.result.type_of_expr.insert(base_expr, target);
+                return Some(fn_ty);
+            }
+        }
+        None
+    }
+
     /// The class owning a TYPE-QUALIFIED static path's members: a
     /// resolved class path (`Array.filled`, `baml.Array.generate`), or a
     /// primitive KEYWORD head (`float.nan()`, `int.max_value()`) mapped
@@ -2891,18 +2963,24 @@ impl<'db> InferenceContext<'db> {
         let [single] = prefix else {
             return None;
         };
-        let name = match single.as_str() {
-            "int" => "Int",
-            "bigint" => "Bigint",
-            "float" => "Float",
-            "string" => "String",
-            "bool" => "Bool",
-            "uint8array" => "Uint8Array",
+        let (path, name): (&[&str], &str) = match single.as_str() {
+            "int" => (&[], "Int"),
+            "bigint" => (&[], "Bigint"),
+            "float" => (&[], "Float"),
+            "string" => (&[], "String"),
+            "bool" => (&[], "Bool"),
+            "uint8array" => (&[], "Uint8Array"),
+            // The media half of the correspondence, mirroring the
+            // `TyKind::Media` arm of the S11 receiver-class table.
+            "image" => (&["media"], "Image"),
+            "audio" => (&["media"], "Audio"),
+            "video" => (&["media"], "Video"),
+            "pdf" => (&["media"], "Pdf"),
             _ => return None,
         };
         let qtn = baml_type::TypeName::new(
             baml_type::Name::new("baml"),
-            Vec::new(),
+            path.iter().map(|segment| baml_type::Name::new(segment)).collect(),
             baml_type::Name::new(name),
         );
         match self.facts.definition_of(&qtn) {

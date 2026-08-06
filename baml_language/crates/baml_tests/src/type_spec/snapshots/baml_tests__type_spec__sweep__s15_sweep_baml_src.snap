@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52463
+agreements: 52470
 one-sided (coverage): 264
-conflicts: 7978 across 1423 distinct pairs
+conflicts: 7971 across 1420 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -797,9 +797,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[!error] tir=[int[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9262..9263 `_`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9265..9281 `[.., let v: int]`
-[3x] hir_ty=[!error] tir=[unknown]
-    at ns_from_json_interface/from_json_interface.baml:7603..7621 `Box<int>.from_json`
-    at ns_json_auto_derive/json_auto_derive.baml:16429..16448 `Box6<int>.from_json`
 [3x] hir_ty=["X" | "from_b"] tir=[string]
     at ns_defer/defer.baml:6966..6967 `e`
     at ns_defer/defer.baml:6975..6976 `_`
@@ -1055,12 +1052,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[user.patterns_new_runtime.Wrap2 | int[][]] tir=[int[][] | user.patterns_new_runtime.Wrap2]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9589..9590 `v`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9602..9666 `[[let x, ....t x, ..]] }`
-[2x] hir_ty=[!error] tir=[(url: string, mime_type: string | null) -> image throws never]
-    at ns_json_to_from_string/json_to_from_string.baml:9711..9725 `image.from_url`
-    at ns_json_to_from_string/json_to_from_string.baml:10006..10020 `image.from_url`
-[2x] hir_ty=[!error] tir=[image]
-    at ns_json_to_from_string/json_to_from_string.baml:9711..9767 `image.from...image/png")`
-    at ns_json_to_from_string/json_to_from_string.baml:10006..10062 `image.from...image/png")`
 [2x] hir_ty=["A" | "B" | "C" | "X"] tir=[string]
     at ns_errorcontext/errorcontext.baml:6551..6552 `e`
     at ns_errorcontext/errorcontext.baml:6565..6566 `_`
@@ -1970,18 +1961,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[void] tir=[never]
     at ns_errorcontext/errorcontext.baml:6433..6446 `{ throw "B" }`
     at ns_errorcontext/errorcontext.baml:6455..6468 `{ throw "C" }`
-[1x] hir_ty=[!error] tir=[user.from_json_interface.Box]
-    at ns_from_json_interface/from_json_interface.baml:7603..7611 `Box<int>`
-[1x] hir_ty=[!error] tir=[user.from_json_interface.Box<int>]
-    at ns_from_json_interface/from_json_interface.baml:7603..7624 `Box<int>.from_json(j)`
-[1x] hir_ty=[!error] tir=[user.json_auto_derive.Box6]
-    at ns_json_auto_derive/json_auto_derive.baml:16429..16438 `Box6<int>`
-[1x] hir_ty=[!error] tir=[user.json_auto_derive.Box6<int>]
-    at ns_json_auto_derive/json_auto_derive.baml:16429..16451 `Box6<int>.from_json(j)`
-[1x] hir_ty=[!error] tir=[user.json_auto_derive.Box7]
-    at ns_json_auto_derive/json_auto_derive.baml:17192..17209 `Box7<SecretReset>`
-[1x] hir_ty=[!error] tir=[user.json_auto_derive.Box7<user.json_auto_derive.SecretReset>]
-    at ns_json_auto_derive/json_auto_derive.baml:17192..17222 `Box7<Secre...rom_json(j)`
 [1x] hir_ty=[!error[]] tir=[_[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:25422..25424 `[]`
 [1x] hir_ty=["."] tir=[string]
@@ -2252,6 +2231,8 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces/interfaces.baml:24258..24280 `gbr_first_name<GbrDog>`
 [1x] hir_ty=[(j: baml.json.json) -> string throws baml.json.JsonDecodeError] tir=[(j: baml.json.json) -> T throws baml.json.JsonDecodeError]
     at ns_yaml/yaml.baml:523..542 `baml.json.from_json`
+[1x] hir_ty=[(j: baml.json.json) -> user.from_json_interface.Box<int> throws baml.json.JsonDecodeError] tir=[unknown]
+    at ns_from_json_interface/from_json_interface.baml:7603..7621 `Box<int>.from_json`
 [1x] hir_ty=[(j: baml.json.json) -> user.from_json_interface.Outer throws baml.json.JsonDecodeError] tir=[(j: baml.json.json) -> T throws baml.json.JsonDecodeError]
     at ns_from_json_interface/from_json_interface.baml:5319..5331 `baml.json.to`
 [1x] hir_ty=[(j: baml.json.json) -> user.from_json_interface.Temp throws baml.json.JsonDecodeError] tir=[(j: baml.json.json) -> T throws baml.json.JsonDecodeError]
@@ -2272,6 +2253,10 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_json_auto_derive/json_auto_derive.baml:22352..22369 `AOnlyTo.from_json`
 [1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.AOverride throws baml.json.JsonDecodeError] tir=[unknown]
     at ns_json_auto_derive/json_auto_derive.baml:13797..13816 `AOverride.from_json`
+[1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.Box6<int> throws baml.json.JsonDecodeError] tir=[unknown]
+    at ns_json_auto_derive/json_auto_derive.baml:16429..16448 `Box6<int>.from_json`
+[1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.Box7<user.json_auto_derive.SecretReset> throws baml.json.JsonDecodeError] tir=[unknown]
+    at ns_json_auto_derive/json_auto_derive.baml:17192..17219 `Box7<Secre...>.from_json`
 [1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.C3 throws baml.json.JsonDecodeError] tir=[unknown]
     at ns_json_auto_derive/json_auto_derive.baml:12738..12750 `C3.from_json`
 [1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.C4 throws baml.json.JsonDecodeError] tir=[unknown]
@@ -3490,6 +3475,8 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_control_flow/control_flow.baml:3300..3301 `r`
 [1x] hir_ty=[user.control_flow.Other | user.control_flow.Wrapper] tir=[user.control_flow.Wrapper | user.control_flow.Other]
     at ns_control_flow/control_flow.baml:3687..3692 `inner`
+[1x] hir_ty=[user.from_json_interface.Box<int>] tir=[user.from_json_interface.Box]
+    at ns_from_json_interface/from_json_interface.baml:7603..7611 `Box<int>`
 [1x] hir_ty=[user.generic_union_returns.PendingCalls | T] tir=[T | user.generic_union_returns.PendingCalls]
     at ns_generic_union_returns/generic_union_returns.baml:441..496 `baml.llm.p...Calls>(raw)`
 [1x] hir_ty=[user.inferred_generic_type_args.Dog<int>] tir=[user.inferred_generic_type_args.Dog<42>]
@@ -3506,6 +3493,10 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces_associated_types/interfaces_associated_types.baml:7672..7684 `holder.get()`
 [1x] hir_ty=[user.iter_impl_generics_only.core.Done | user.iter_impl_generics_only.core.Iterable<R, E3>] tir=[user.iter_impl_generics_only.core.Iterable<R, E3> | user.iter_impl_generics_only.core.Done]
     at ns_iter_impl_generics_only/ns_core/core.baml:8003..8019 `self.iter.next()`
+[1x] hir_ty=[user.json_auto_derive.Box6<int>] tir=[user.json_auto_derive.Box6]
+    at ns_json_auto_derive/json_auto_derive.baml:16429..16438 `Box6<int>`
+[1x] hir_ty=[user.json_auto_derive.Box7<user.json_auto_derive.SecretReset>] tir=[user.json_auto_derive.Box7]
+    at ns_json_auto_derive/json_auto_derive.baml:17192..17209 `Box7<SecretReset>`
 [1x] hir_ty=[user.match_types.Failure | user.match_types.Success] tir=[user.match_types.Success | user.match_types.Failure]
     at ns_match_types/match_types.baml:6731..6737 `result`
 [1x] hir_ty=[user.match_types.FailureCode | user.match_types.SuccessCode] tir=[user.match_types.SuccessCode | user.match_types.FailureCode]

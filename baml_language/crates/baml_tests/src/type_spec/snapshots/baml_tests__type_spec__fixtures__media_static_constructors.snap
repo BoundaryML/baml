@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+84..93 'med_image': throws never
+118..218 '{\n   ...img\n}': image
+124..131 'let img': image
+134..148 'image.from_url': (url: string, mime_type: string | null) -> image throws never
+134..190 'image..../png")': image
+149..176 '"https...a.png"': "https://example.com/a.png"
+178..189 '"image/png"': "image/png"
+213..216 'img': image
+228..235 'med_pdf': throws never
+258..342 '{\n   ...doc\n}': pdf
+264..271 'let doc': pdf
+274..289 'pdf.from_base64': (base64: string, mime_type: string | null) -> pdf throws never
+274..316 'pdf.fr.../pdf")': pdf
+290..296 '"aGk="': "aGk="
+298..315 '"appli...n/pdf"': "application/pdf"
+337..340 'doc': pdf
