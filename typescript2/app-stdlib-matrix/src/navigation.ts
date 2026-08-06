@@ -9,14 +9,20 @@ import {
 
 // Going from a reference to the thing it names.
 //
-// A signature spells its types as text — `baml.fs.DirEntry[]`, `map<string,
-// unknown>` — while the report addresses symbols by array index. This is the
-// bridge: it names every place in both trees, so a type mentioned in one row
-// can be found and opened wherever it is actually declared.
+// The report addresses symbols by id and the views address rows by index, so
+// this is the bridge between them: it locates every symbol in both trees and
+// answers, for an id or an address, which row that is.
 //
-// Resolution is by name rather than by index, because a name survives a
-// regenerated report and can therefore live in the URL. Indices cannot: they
-// shift whenever the stdlib does.
+// It no longer decides *what* a name in a signature refers to. That rule — a
+// dotted name says where it lives, a bare one walks enclosing scopes, a name
+// two declarations answer to points at neither — lives in the pipeline's
+// references.baml, which records the resolved ids per symbol. A second
+// implementation of it here is what once pointed `Item` in `baml.iter` at an
+// unrelated `Item` in `baml.toml`.
+//
+// What is left is addressing: `resolve` reads back what `addressOf` wrote, so
+// a deep link survives a regenerated report. Names rather than indices, because
+// indices shift whenever the stdlib does.
 
 /** Where a symbol sits in its own side's tree. */
 export interface Ref {
@@ -165,10 +171,15 @@ export class SymbolIndex {
 
   readonly #groups: Record<Side, Array<[string, TreeNode[]]>>;
   readonly #places: Record<Side, Map<number, Ref>>;
-  /** What a type reference can land on: declarations, by every name they can be
-   *  written under. Members are deliberately absent — a type position names a
-   *  type, and letting it reach a method is how a name match becomes a lie. */
-  readonly #types: Record<Side, NameMap>;
+  /** Container names, for addressing a group heading. A TypeScript container
+   *  has no row of its own. */
+  readonly #groupNames: Record<Side, Set<string>>;
+  /** Where each symbol sits, by its id — the report's judgements and
+   *  references both name symbols that way. */
+  readonly #byId: Record<Side, Map<string, Ref>>;
+  /** How each symbol is written, by its id. A reference is recorded as an id
+   *  but spelled in a signature as a display: `T:baml.String` is `string`. */
+  readonly #displays: Record<Side, Map<string, string>>;
   /** Every symbol by its dotted path, for addressing one from the URL. */
   readonly #symbols: Record<Side, NameMap>;
   /** Each symbol's own dotted path, for writing a destination into the URL. */
@@ -183,7 +194,12 @@ export class SymbolIndex {
       baml: places('baml', this.#groups.baml),
       ts: places('ts', this.#groups.ts),
     };
-    this.#types = { baml: new Map(), ts: new Map() };
+    this.#groupNames = {
+      baml: new Set(this.#groups.baml.map(([name]) => name)),
+      ts: new Set(this.#groups.ts.map(([name]) => name)),
+    };
+    this.#byId = { baml: new Map(), ts: new Map() };
+    this.#displays = { baml: new Map(), ts: new Map() };
     this.#symbols = { baml: new Map(), ts: new Map() };
     this.#paths = { baml: new Map(), ts: new Map() };
     this.#nameBaml(matrix.baml);
@@ -193,40 +209,27 @@ export class SymbolIndex {
   #nameBaml(symbols: BamlSymbol[]) {
     symbols.forEach((symbol, index) => {
       const place = this.#places.baml.get(index);
+      if (!place) return;
+      this.#byId.baml.set(symbol.id, place);
+      this.#displays.baml.set(symbol.id, symbol.display);
       // An impl method's path names its receiver rather than a namespace, so it
-      // has no spelling a signature could mention. It is still reachable — as a
+      // has no spelling a URL could carry. It is still reachable — as a
       // counterpart, or by opening its type — just not by name.
-      if (!place || symbol.symbol.some((step) => typeof step !== 'string'))
-        return;
-      const names = symbol.symbol as string[];
-      const dotted = names.join('.');
+      if (symbol.symbol.some((step) => typeof step !== 'string')) return;
+      const dotted = (symbol.symbol as string[]).join('.');
       this.#paths.baml.set(index, dotted);
       register(this.#symbols.baml, dotted, place);
-      if (symbol.origin !== 'type') return;
-      register(this.#types.baml, dotted, place);
-      if (symbol.display === names.at(-1)) return;
-      // A companion class is displayed as the type it backs — `string`, `T[]`,
-      // `map<K, V>` — and that spelling is what signatures use, so it addresses
-      // globally. `map<K, V>` is also referred to by its head alone.
-      register(this.#types.baml, symbol.display, place);
-      const head = symbol.display.indexOf('<');
-      if (head > 0)
-        register(this.#types.baml, symbol.display.slice(0, head), place);
     });
   }
 
   #nameTs(symbols: TsSymbol[]) {
-    // A TypeScript container has no row of its own — it is the group — so its
-    // name leads to the heading.
-    for (const [group] of this.#groups.ts) {
-      register(this.#types.ts, group, { group, path: [], side: 'ts' });
-    }
     symbols.forEach((symbol, index) => {
       const place = this.#places.ts.get(index);
       if (!place) return;
-      const dotted = symbol.symbol.join('.');
-      this.#paths.ts.set(index, dotted);
-      register(this.#symbols.ts, dotted, place);
+      this.#byId.ts.set(symbol.id, place);
+      this.#displays.ts.set(symbol.id, symbol.display);
+      this.#paths.ts.set(index, symbol.id);
+      register(this.#symbols.ts, symbol.id, place);
     });
   }
 
@@ -240,28 +243,41 @@ export class SymbolIndex {
   }
 
   /**
-   * What a name written in a signature — or in the URL — refers to.
+   * Where a reference points.
    *
-   * A signature may spell a type relative to where it was declared, so an
-   * unqualified name is tried against each enclosing scope, innermost first,
-   * before being taken as global: the same walk the compiler does. Nothing else
-   * makes an unqualified name match, because matching bare names across the
-   * whole surface pairs `Item` in `baml.iter` with an unrelated `Item` in
-   * `baml.toml` — the failure the report's own owner-gate exists to prevent.
-   *
-   * A name that carries a dot has already said where it lives, so it may reach
-   * anything, member or type: `Symbol.iterator` names a property, and that
-   * property is where the reader wants to land.
+   * A reference is usually a symbol id, but the TypeScript side also records
+   * bare container names — `Promise`, `URL` — because a container has no row of
+   * its own to address. Both resolve here, so a caller need not know which kind
+   * it is holding.
    */
-  resolve(side: Side, name: string, scope: string[] = []): Ref | null {
-    const types = this.#types[side];
-    for (let depth = scope.length; depth > 0; depth -= 1) {
-      const found = types.get(`${scope.slice(0, depth).join('.')}.${name}`);
-      if (found) return found;
-    }
-    const direct = types.get(name);
-    if (direct) return direct;
-    return name.includes('.') ? (this.#symbols[side].get(name) ?? null) : null;
+  byId(side: Side, id: string): Ref | null {
+    return this.#byId[side].get(id) ?? this.#groupRef(side, id);
+  }
+
+  /** How a referenced symbol is written, when it is a symbol rather than a
+   *  container. */
+  displayOf(side: Side, id: string): string | null {
+    return this.#displays[side].get(id) ?? null;
+  }
+
+  /**
+   * What a name from the URL refers to.
+   *
+   * Only the dotted path a symbol addresses itself by — deep links are written
+   * by `addressOf`, so this reads back exactly what that wrote. Resolving a
+   * name as a *signature* would spell it is no longer done here: the pipeline
+   * resolves references and records the ids, and a second implementation of
+   * that rule in the view is how `Item` in `baml.iter` came to point at an
+   * unrelated `Item` in `baml.toml`.
+   */
+  resolve(side: Side, name: string): Ref | null {
+    return this.#symbols[side].get(name) ?? this.#groupRef(side, name);
+  }
+
+  #groupRef(side: Side, name: string): Ref | null {
+    return this.#groupNames[side].has(name)
+      ? { group: name, path: [], side }
+      : null;
   }
 
   /**
@@ -275,7 +291,7 @@ export class SymbolIndex {
     const last = ref.path.at(-1);
     if (last !== undefined) return this.nameOf(ref.side, last);
     // The group heading, which is the container's own name.
-    return this.#types[ref.side].has(ref.group) ? ref.group : null;
+    return this.#groupNames[ref.side].has(ref.group) ? ref.group : null;
   }
 
   /**

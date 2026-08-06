@@ -55,3 +55,26 @@
     var(--color-ts) 4px 8px
   );
 }
+
+/* Present in both, reached differently. One clean split rather than the
+   blended stripes: the two languages are both here, and they are not the same
+   thing. */
+.swatch-divergent {
+  background: linear-gradient(
+    135deg,
+    var(--color-baml) 0 50%,
+    var(--color-ts) 50% 100%
+  );
+}
+
+/* Nothing has looked at it yet. Hollow rather than pale — an empty square reads
+   as an open question, where a faded one reads as a weaker version of an
+   answer. */
+.swatch-unjudged-baml {
+  background: transparent;
+  border-color: var(--color-baml);
+}
+.swatch-unjudged-ts {
+  background: transparent;
+  border-color: var(--color-ts);
+}

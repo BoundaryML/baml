@@ -23,11 +23,29 @@ import './matrix-group';
 // `#<side>/<name>` for a symbol within it. Following a reference writes that
 // fragment, so the back button retraces the path and a link can be shared.
 
-const LEGEND = [
-  ['swatch-both', 'in both'],
-  ['swatch-baml', 'BAML only'],
-  ['swatch-ts', 'TypeScript only'],
-] as const;
+/**
+ * What the squares mean, for the side being viewed.
+ *
+ * Side-aware because the states are: an absence is recorded against the BAML
+ * symbol, so only that side can distinguish "examined and found to have none"
+ * from "nothing has looked yet". Naming both languages in one fixed list would
+ * describe squares that are not on screen.
+ */
+function legendFor(side: Side): ReadonlyArray<readonly [string, string]> {
+  const solid = side === 'baml' ? 'swatch-baml' : 'swatch-ts';
+  const other = side === 'baml' ? 'TypeScript' : 'BAML';
+  const shared = [
+    ['swatch-both', 'in both'],
+    ['swatch-divergent', 'in both, reached differently'],
+  ] as const;
+  return side === 'baml'
+    ? [
+        ...shared,
+        [solid, `no ${other} counterpart`],
+        ['swatch-unjudged-baml', 'not yet judged'],
+      ]
+    : [...shared, [solid, `no ${other} counterpart`]];
+}
 
 export class MatrixAppElement extends LitElement {
   static properties = {
@@ -167,15 +185,47 @@ export class MatrixAppElement extends LitElement {
       <h1 class="mb-1 text-xl font-semibold">BAML ↔ TypeScript stdlib matrix</h1>
       ${this.#provenance()} ${this.#tabs()}
       <div class="mb-5 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
-        ${LEGEND.map(
+        ${legendFor(this.side).map(
           ([cls, label]) =>
             html`<span class="flex items-center gap-1.5"
               ><i class="size-3 ${cls}"></i>${label}</span
             >`,
         )}
       </div>
-      ${this.#counts()} ${this.#body()}
+      ${this.#counts()} ${this.#failures()} ${this.#body()}
     `;
+  }
+
+  /**
+   * Calls that did not come back.
+   *
+   * Rendered here rather than left to the report, because a run that half
+   * failed produces a report that reads exactly like a complete one: the
+   * symbols it never got to are simply unjudged, which is also what a symbol
+   * nobody has reached yet looks like. This is the only place the difference
+   * is visible.
+   */
+  #failures(): TemplateResult | typeof nothing {
+    const failures = this.matrix?.failures ?? [];
+    if (failures.length === 0) return nothing;
+    return html`<div
+      class="mb-5 rounded-lg border border-amber-400/60 bg-amber-50 px-3 py-2
+             text-sm dark:border-amber-500/40 dark:bg-amber-950/30"
+    >
+      <p class="font-semibold">
+        ${failures.length} ${failures.length === 1 ? 'call' : 'calls'} did not come back
+      </p>
+      <p class="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+        Whatever those calls would have judged is unjudged below, which is
+        indistinguishable from not having been reached.
+      </p>
+      <ul class="mt-1.5 space-y-0.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+        ${failures.map(
+          (failure) =>
+            html`<li>${failure.pass} · ${failure.subject} — ${failure.reason}</li>`,
+        )}
+      </ul>
+    </div>`;
   }
 
   #provenance() {

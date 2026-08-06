@@ -28,16 +28,55 @@ const PUNCT = 'text-zinc-400 dark:text-zinc-600';
 // styling appears only while the modifier is held (see `.type-ref` in
 // index.css) and a plain click still belongs to the row.
 
-/** What a type mentioned in one symbol's signature can be resolved against. */
+/**
+ * What a type mentioned in one symbol's signature can be resolved against:
+ * the symbols that symbol actually names, and nothing else.
+ *
+ * The view used to resolve names itself — walking enclosing scopes against a
+ * global index — which was a second implementation of a rule the pipeline
+ * already applies, and the one that pointed `Item` in `baml.iter` at an
+ * unrelated `Item` in `baml.toml`. The report now carries the resolved ids per
+ * symbol, so resolution here is a lookup in a table of at most a dozen entries.
+ *
+ * Type parameters need no special handling for the same reason: `T` is not
+ * among a symbol's references, so it cannot be linked. The shadow set that used
+ * to keep them out existed only to compensate for the global index.
+ */
 interface Refs {
   index: SymbolIndex;
   side: Side;
-  /** Where the signature was written, so a type it spells relative to its own
-   *  declaration still resolves. */
-  scope: string[];
-  /** Names the signature binds itself: type parameters, and `Self`. They look
-   *  like references but name nothing the reader can navigate to. */
-  shadowed: Set<string>;
+  /** Every spelling of a referenced symbol, to the place it addresses. */
+  targets: Map<string, Ref>;
+}
+
+/**
+ * The names a symbol's references can be written as.
+ *
+ * Two spellings reach the same declaration: its dotted path, and its display.
+ * They differ exactly for the companion classes — `T:baml.String` is written
+ * `string` in every signature — which is why both are keyed.
+ */
+function targetsOf(
+  symbol: BamlSymbol | TsSymbol,
+  side: Side,
+  matrix: SymbolMatrix,
+): Map<string, Ref> {
+  const index = SymbolIndex.for(matrix);
+  const targets = new Map<string, Ref>();
+  for (const id of symbol.references) {
+    const ref = index.byId(side, id);
+    if (!ref) continue;
+    // The kind prefix is addressing, not spelling: `T:baml.errors.Io` is
+    // written `baml.errors.Io`. A TypeScript container is already its own name.
+    targets.set(id.includes(':') ? id.slice(id.indexOf(':') + 1) : id, ref);
+    const display = index.displayOf(side, id);
+    if (display === null) continue;
+    targets.set(display, ref);
+    // `map<K, V>` is also written by its head alone.
+    const head = display.indexOf('<');
+    if (head > 0) targets.set(display.slice(0, head), ref);
+  }
+  return targets;
 }
 
 function activate(event: MouseEvent, ref: Ref, address: string | null) {
@@ -53,8 +92,7 @@ function activate(event: MouseEvent, ref: Ref, address: string | null) {
  *  when it does not. A name from outside — another package, a bound, `never` —
  *  has nowhere to go, and an affordance that leads nowhere is worse than none. */
 function reference(name: string, refs: Refs): TemplateResult | string {
-  if (refs.shadowed.has(name)) return name;
-  const ref = refs.index.resolve(refs.side, name, refs.scope);
+  const ref = refs.targets.get(name);
   if (!ref) return name;
   const address = refs.index.addressOf(ref);
   return html`<a
@@ -156,20 +194,8 @@ export function bamlSignature(
   const declared = spellsOwnGenerics(name) ? [] : symbol.generics;
   const refs: Refs = {
     index: SymbolIndex.for(matrix),
-    // Everything enclosing the symbol, which is what an unqualified type in its
-    // signature would have been written relative to.
-    scope: symbol.symbol
-      .filter((step): step is string => typeof step === 'string')
-      .slice(0, -1),
-    // The names, not the whole declarations: a bounded parameter is written
-    // `I: baml.iter.Iterable`, and it is `I` that shadows.
-    shadowed: new Set([
-      'Self',
-      ...[...symbol.generics, ...(signature?.generic_params ?? [])].map(
-        (param) => declaredParam(param).name,
-      ),
-    ]),
     side: 'baml',
+    targets: targetsOf(symbol, 'baml', matrix),
   };
   return html`<span class="font-mono text-[0.82rem] break-words"
     ><span class=${KEYWORD}>${symbol.kind}</span> <span class=${PATH}>${path}</span
@@ -326,9 +352,8 @@ export function tsSignature(
   // string)` to the `Error.message` property.
   const refs: Refs = {
     index: SymbolIndex.for(matrix),
-    scope: [],
-    shadowed: new Set(),
     side: 'ts',
+    targets: targetsOf(symbol, 'ts', matrix),
   };
   return html`<span class="font-mono text-[0.82rem] break-words"
     ><span class=${KEYWORD}>${tsKeyword(symbol, modifiers)}</span> <span class=${PATH}
