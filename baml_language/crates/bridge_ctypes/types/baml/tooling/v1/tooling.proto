@@ -1,0 +1,203 @@
+syntax = "proto3";
+
+package baml.tooling.v1;
+
+// Versioned, additive-only contract shared by the native and WASM tooling
+// bridges. Hosts may use the typed messages directly or serialize them as
+// protobuf bytes across the bridge.
+message ToolingRequest {
+  oneof request {
+    ProjectOpen open = 1;
+    ProjectUpdate update = 2;
+    ProjectCheck check = 3;
+    ModuleRequest module = 4;
+    PositionRequest definition = 5;
+    PositionRequest references = 6;
+    PositionRequest hover = 7;
+    PositionRequest completions = 8;
+    RenameRequest rename = 9;
+    ProjectRequest layout = 10;
+    ProjectRequest capabilities = 11;
+    PositionRequest prepare_rename = 12;
+    ProjectRequest runtime_module = 13;
+    ProjectRequest close = 14;
+  }
+}
+
+message ToolingResponse {
+  oneof response {
+    ProjectState project = 1;
+    CheckResult check = 2;
+    VirtualModule module = 3;
+    Locations locations = 4;
+    Hover hover = 5;
+    Completions completions = 6;
+    WorkspaceEdit rename = 7;
+    ProjectLayout layout = 8;
+    Capabilities capabilities = 9;
+    ToolingError error = 10;
+    Location rename_check = 11;
+    RuntimeModule runtime_module = 12;
+    ProjectClosed closed = 13;
+  }
+}
+
+message ProjectOpen {
+  string project_root = 1;
+  repeated SourceFile files = 2;
+  string target = 3;
+}
+
+message ProjectUpdate {
+  string project_id = 1;
+  SourceFile file = 2;
+  uint64 version = 3;
+  bool remove = 4;
+}
+
+message ProjectCheck { string project_id = 1; }
+message ProjectRequest { string project_id = 1; }
+
+// Acknowledges a `close`: the project's compiler database and every host
+// allocation behind it are dropped, and the project id is dead. Closing is
+// idempotent — `released` is false when the session was already gone, which
+// is a success, not an error.
+message ProjectClosed { bool released = 1; }
+
+message ModuleRequest {
+  string project_id = 1;
+  string specifier = 2;
+  string importer = 3;
+}
+
+message PositionRequest {
+  string project_id = 1;
+  string path = 2;
+  uint32 offset_utf8 = 3;
+  string symbol_id = 4;
+}
+
+message RenameRequest {
+  string project_id = 1;
+  string path = 2;
+  uint32 offset_utf8 = 3;
+  string symbol_id = 4;
+  string new_name = 5;
+}
+
+message SourceFile {
+  string path = 1;
+  string text = 2;
+}
+
+message ProjectState {
+  string project_id = 1;
+  uint64 revision = 2;
+  string fingerprint = 3;
+}
+
+message ProjectLayout {
+  string config_path = 1;
+  repeated string roots = 2;
+  repeated string source_files = 3;
+  repeated string watch_files = 4;
+}
+
+message Capabilities {
+  string protocol = 1;
+  repeated string features = 2;
+  string compiler_version = 3;
+}
+
+message CheckResult {
+  uint64 revision = 1;
+  repeated Diagnostic diagnostics = 2;
+}
+
+message Diagnostic {
+  string code = 1;
+  string message = 2;
+  string severity = 3;
+  Location location = 4;
+}
+
+message VirtualModule {
+  string id = 1;
+  string code = 2;
+  string declaration = 3;
+  SegmentMap map = 4;
+  repeated string watch_files = 5;
+  string fingerprint = 6;
+  uint64 revision = 7;
+  bool stale = 8;
+  string runtime_id = 9;
+}
+
+message RuntimeModule {
+  string id = 1;
+  string code = 2;
+  repeated string watch_files = 3;
+  string fingerprint = 4;
+  uint64 revision = 5;
+}
+
+message GeneratedFile {
+  string path = 1;
+  string contents = 2;
+  SegmentMap map = 3;
+}
+
+message SegmentMap {
+  uint32 version = 1;
+  string generated_file = 2;
+  repeated string sources = 3;
+  repeated string source_hashes = 4;
+  repeated Segment segments = 5;
+}
+
+message Segment {
+  uint32 gen_start_utf16 = 1;
+  uint32 gen_length_utf16 = 2;
+  uint32 source_file = 3;
+  uint32 source_start_utf8 = 4;
+  uint32 source_length_utf8 = 5;
+  string symbol_id = 6;
+  string signature_id = 7;
+  string role = 8;
+}
+
+message Location {
+  string path = 1;
+  uint32 start_utf8 = 2;
+  uint32 length_utf8 = 3;
+}
+
+message Locations { repeated Location locations = 1; }
+
+message Hover {
+  string markdown = 1;
+  Location location = 2;
+  string symbol_id = 3;
+}
+
+message CompletionItem {
+  string label = 1;
+  string kind = 2;
+  string detail = 3;
+  string documentation = 4;
+  string symbol_id = 5;
+}
+
+message Completions { repeated CompletionItem items = 1; }
+
+message TextEdit {
+  Location location = 1;
+  string new_text = 2;
+}
+
+message WorkspaceEdit { repeated TextEdit edits = 1; }
+
+message ToolingError {
+  string code = 1;
+  string message = 2;
+}

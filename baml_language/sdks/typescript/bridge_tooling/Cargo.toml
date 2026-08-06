@@ -1,0 +1,28 @@
+[package]
+name = "bridge_tooling"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "baml_tooling_node"
+crate-type = [ "cdylib" ]
+test = false
+doctest = false
+
+[dependencies]
+baml_tooling_api = { workspace = true }
+napi = { workspace = true, features = [ "napi5" ] }
+napi-derive = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

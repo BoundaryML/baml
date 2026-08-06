@@ -41,7 +41,20 @@ fn main() -> std::io::Result<()> {
         .collect();
     prost_build::compile_protos(&proto_strs, &["types"])?;
 
-    // Vendor the same prost output into baml_bridge (the published Rust
+    // Runtime SDKs intentionally receive only the runtime ABI protos. The
+    // tooling protocol is a separate opt-in product surface and must not
+    // alter any v0/runtime artifact.
+    let runtime_protos: Vec<&PathBuf> = protos
+        .iter()
+        .filter(|p| p.components().any(|c| c.as_os_str() == "cffi"))
+        .collect();
+    let runtime_proto_strs: Vec<&str> = runtime_protos
+        .iter()
+        .map(|p| p.strip_prefix(&manifest_dir).unwrap())
+        .map(|p| p.to_str().unwrap())
+        .collect();
+
+    // Vendor the runtime prost output into baml_bridge (the published Rust
     // SDK runtime): it ships committed generated code so consumers need
     // neither protoc nor this crate's engine-coupled codecs. The
     // proto-sync CI job keeps the committed copy honest, like the
@@ -58,7 +71,7 @@ fn main() -> std::io::Result<()> {
     // reformats it either: `src/wire/mod.rs` pulls it in with `include!`, and
     // rustfmt only walks `mod` declarations, not `include!` targets.
     vendor_config.format(false);
-    vendor_config.compile_protos(&proto_strs, &["types"])?;
+    vendor_config.compile_protos(&runtime_proto_strs, &["types"])?;
 
     // Generate Python pb2 + pyi.
     let python_out = manifest_dir.join("../../sdks/python/src");
@@ -66,7 +79,7 @@ fn main() -> std::io::Result<()> {
     cmd.arg(format!("--proto_path={}", proto_dir.display()));
     cmd.arg(format!("--python_out={}", python_out.display()));
     cmd.arg(format!("--pyi_out={}", python_out.display()));
-    for proto in &protos {
+    for proto in &runtime_protos {
         cmd.arg(proto);
     }
     let status = cmd.status().expect("failed to run protoc");

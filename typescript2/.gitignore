@@ -3,6 +3,7 @@ node_modules/
 
 # Build outputs
 dist/
+dist-cjs/
 .next/
 .next-build/
 .next-dev/

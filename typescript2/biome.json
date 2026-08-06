@@ -16,6 +16,7 @@
       "**",
       "!dist/**",
       "!**/dist/**",
+      "!**/dist-cjs/**",
       "!node_modules/**",
       "!**/node_modules/**",
       "!**/.next/**",
@@ -29,7 +30,8 @@
       "!**/build/**",
       "!**/.git/**",
       "!**/coverage/**",
-      "!**/.nyc_output/**"
+      "!**/.nyc_output/**",
+      "!pkg-baml-tooling/src/generated/**"
     ]
   },
   "formatter": {
@@ -96,6 +98,28 @@
       }
     }
   },
+  "overrides": [
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedKeys": "off"
+          }
+        }
+      },
+      "includes": ["pkg-baml-tooling/package.json"]
+    },
+    {
+      "includes": ["pkg-baml-tooling/src/typescript-plugin.cts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noCommonJs": "off"
+          }
+        }
+      }
+    }
+  ],
   "vcs": {
     "clientKind": "git",
     "defaultBranch": "canary",

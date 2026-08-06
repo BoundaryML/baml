@@ -1,5 +1,18 @@
 # BAML Playground v2
 
+## Direct BAML imports (opt-in)
+
+The v1 TypeScript tooling packages add compiler-backed direct imports without changing `baml generate` or the generated SDK:
+
+```ts
+import { b, type Resume } from './baml_src/resume.baml'
+import { b as client } from 'baml:client'
+```
+
+Use the `@boundaryml/baml-tooling/vite`, `/rollup`, `/webpack`, `/esbuild`, or `/bun` entry point for builds. Configure `@boundaryml/baml-tooling/typescript-plugin` in `compilerOptions.plugins` and select workspace TypeScript for cross-language definition, references, rename, diagnostics, completion, and hover. For plain CI typechecking, run `baml-ts-gen` before `tsc --noEmit`; generated sidecars carry a compiler fingerprint so stale declarations are detectable. Build hosts watch `baml.toml` and all compiler-reported source contributors and use one shared runtime module per project.
+
+Maintainer design notes: [TypeScript tooling architecture](docs/ts-tooling-architecture.md).
+
 VSCode extension and web app for the BAML Playground.
 
 ## Project Structure

@@ -21,6 +21,14 @@ pub mod baml_bridge {
     }
 }
 
+/// Generated protobuf module for the host-neutral tooling protocol.
+pub mod baml_tooling {
+    pub mod v1 {
+        #![allow(clippy::doc_markdown, clippy::empty_structs_with_brackets)]
+        include!(concat!(env!("OUT_DIR"), "/baml.tooling.v1.rs"));
+    }
+}
+
 pub use error::CtypesError;
 pub use handle_table::{
     CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,

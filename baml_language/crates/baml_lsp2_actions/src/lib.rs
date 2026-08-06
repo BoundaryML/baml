@@ -50,6 +50,7 @@ pub mod env_vars;
 pub mod fixes;
 pub mod listing;
 pub mod outline;
+pub mod rename;
 pub mod search;
 pub mod tokens;
 pub mod type_info;
@@ -102,6 +103,7 @@ pub use listing::{
     resolve_builtin_type_target, resolve_target,
 };
 pub use outline::{OutlineItem, file_outline};
+pub use rename::{RenameError, RenameTarget, prepare_rename, rename};
 pub use search::{SymbolInfo, search_symbols};
 pub use tokens::{
     ModifierSet, SemanticToken, SemanticTokenType, TOKEN_MODIFIERS, TOKEN_TYPES,

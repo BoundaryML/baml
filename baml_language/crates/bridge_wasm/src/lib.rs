@@ -52,6 +52,7 @@ mod host_value {
 mod send_wrapper {
     pub(crate) use sys_wasm::{SendFuture, SendWrapper};
 }
+mod tooling;
 mod wasm_env;
 mod wasm_fs;
 mod wasm_http;
@@ -103,6 +104,7 @@ pub use sys_wasm::{
     complete_host_call, mint_host_value_key, register_host_callable,
     register_host_value_release_callback, release_host_callable,
 };
+pub use tooling::BamlToolingBridge;
 use wasm_bindgen::prelude::*;
 pub use wasm_lsp::LspNotification;
 

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "paths": {
+      "@boundaryml/baml-tooling": ["../pkg-baml-tooling/src/index.ts"],
+      "@boundaryml/baml-tooling/typescript-plugin": [
+        "../pkg-baml-tooling/src/typescript-plugin.cts"
+      ],
+      "@boundaryml/baml-tooling/unplugin": [
+        "../pkg-baml-tooling/src/unplugin.ts"
+      ]
+    },
+    "types": ["node", "vitest/globals"]
+  },
+  "extends": "../tsconfig.base.json",
+  "include": ["test"]
+}

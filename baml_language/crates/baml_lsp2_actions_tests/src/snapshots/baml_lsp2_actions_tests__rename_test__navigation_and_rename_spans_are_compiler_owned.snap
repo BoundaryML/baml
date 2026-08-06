@@ -1,0 +1,21 @@
+---
+source: crates/baml_lsp2_actions_tests/src/rename_test.rs
+expression: "format!(\"prepare: {}..{}\\ndefinition: {}..{}\\nreferences:\\n{}\\nrename edits:\\n{}\\nhover:\\n{}\",\nu32::from(prepared.definition.range.start()),\nu32::from(prepared.definition.range.end()),\nu32::from(definition.range.start()), u32::from(definition.range.end()),\nrender(&references), render(&edits), hover,)"
+---
+prepare: 22..28
+definition: 22..28
+references:
+22..28 "Person"
+61..67 "Person"
+72..78 "Person"
+rename edits:
+22..28 "Person"
+61..67 "Person"
+72..78 "Person"
+hover:
+```baml
+/// Person docs
+class Person {
+    name: string,
+}
+```
