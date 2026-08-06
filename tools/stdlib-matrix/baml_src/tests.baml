@@ -15,9 +15,10 @@ function fixture_export_text() -> string {
               "kind": "class",
               "name": "Foo",
               "docstring": "see \"throws\": here",
-              "fields": [{"name": "_size", "ty": {"display": "int"}}],
+              "fields": [{"id": "F:baml.Foo._size", "name": "_size", "ty": {"display": "int"}}],
               "methods": [
                 {
+                  "id": "M:baml.Foo.index_of",
                   "name": "index_of",
                   "signature": {
                     "params": [{"name": "self", "ty": {"display": "baml.Foo"}}],
@@ -26,10 +27,12 @@ function fixture_export_text() -> string {
                   }
                 },
                 {
+                  "id": "M:baml.Foo.from_parts",
                   "name": "from_parts",
                   "signature": {"params": [{"name": "parts", "ty": {"display": "int"}}], "returns": {"display": "baml.Foo"}}
                 },
                 {
+                  "id": "M:baml.Foo.sort_helper",
                   "name": "sort_helper",
                   "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}]}
                 }
@@ -51,6 +54,7 @@ function fixture_export_text() -> string {
               "for_ty": {"display": "baml.Foo"},
               "methods": [
                 {
+                  "id": "X:baml.impl[baml.Comparable for baml.Foo]::compare",
                   "name": "compare",
                   "signature": {
                     "params": [{"name": "self", "ty": {"display": "baml.Foo"}}],
@@ -58,7 +62,7 @@ function fixture_export_text() -> string {
                     "throws": {"display": "CompareError"}
                   }
                 },
-                {"name": "index_of", "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}]}}
+                {"id": "X:baml.impl[baml.Comparable for baml.Foo]::index_of", "declared_by": "M:baml.Foo.index_of", "name": "index_of", "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}]}}
               ]
             }
           ]
@@ -276,4 +280,127 @@ test "the markdown view renders both sides" {
     assert.is_true(markdown.includes("TypeScript symbols with no BAML counterpart"));
     // An impl method groups under the impl it arrives through.
     assert.is_true(markdown.includes("baml.Foo as baml.Comparable"));
+}
+
+test "a rendered type is split into the names it mentions" {
+    assert.is_true(baml.deep_equals(type_names("baml.fs.DirEntry[]"), ["baml.fs.DirEntry"]));
+    assert
+        .is_true(baml.deep_equals(type_names("map<string, unknown>"), ["map", "string", "unknown"]));
+    // A dotted path is one name, and the punctuation around a projection does
+    // not glue onto either side of it.
+    assert
+        .is_true(
+            baml.deep_equals(
+                type_names("(Self as baml.Comparable).CompareError"),
+                ["Self", "as", "baml.Comparable", "CompareError"],
+            ),
+        );
+    // String-literal contents survive as names that resolve to nothing.
+    assert.is_true(baml.deep_equals(type_names("\"r\" | \"w+\""), ["r", "w"]));
+}
+
+test "a generic parameter splits from its bound" {
+    assert.equal(generic_param_name("T"), "T");
+    assert.equal(generic_param_bound("T"), "");
+    assert.equal(generic_param_name("I: baml.iter.Iterable"), "I");
+    assert.equal(generic_param_bound("I: baml.iter.Iterable"), "baml.iter.Iterable");
+}
+
+test "references resolve to declarations, never to members or to nothing" {
+    let symbols = extract_symbols(parse_export_text(fixture_export_text()));
+    let by_display: map<string, BamlSymbol> = {};
+    for (let symbol in symbols) {
+        let _ = by_display.set(symbol.display, symbol);
+    }
+
+    // `index_of(self: baml.Foo) -> int` names its own receiver and the int
+    // companion; `int` is not in this fixture, so only Foo resolves. The symbol
+    // is not its own reference.
+    if let index_of: BamlSymbol = by_display.get("Foo.index_of") {
+        assert.is_true(baml.deep_equals(index_of.references, ["T:baml.Foo"]));
+    } else {
+        baml.sys.panic("Foo.index_of missing");
+    }
+
+    // A type declaration names nothing by existing.
+    if let foo: BamlSymbol = by_display.get("Foo") {
+        let none: string[] = [];
+        assert.is_true(baml.deep_equals(foo.references, none));
+    } else {
+        baml.sys.panic("Foo missing");
+    }
+
+    // `compare` throws `CompareError`, which nothing in this package declares:
+    // an unresolvable name is dropped rather than guessed at.
+    let compares = symbols.filter((symbol) -> {
+        symbol.origin == "impl_method" && symbol.display.includes("compare")
+    });
+    if let compare: BamlSymbol = compares.at(0) {
+        assert.is_true(baml.deep_equals(compare.references, ["T:baml.Foo"]));
+    } else {
+        baml.sys.panic("the impl's compare is missing");
+    }
+}
+
+test "a bare name resolves through its own scope, never across the surface" {
+    let index = NameIndex { types: {}, all: {} };
+    let _ = index_put(index.types, "baml.iter.Chain", "T:baml.iter.Chain");
+    let _ = index_put(index.types, "baml.toml.Item", "T:baml.toml.Item");
+
+    // Written inside `baml.iter`, `Chain` finds its neighbour.
+    assert
+        .equal(
+            resolve_reference(index, "Chain", ["baml", "iter", "ArrayIterator"]) ?? "",
+            "T:baml.iter.Chain",
+        );
+    // `Item` inside `baml.iter` is an associated type, not `baml.toml.Item`.
+    // Matching bare names across the whole surface is what would pair them.
+    assert.is_true(resolve_reference(index, "Item", ["baml", "iter"]) == null);
+    // Qualified, it resolves from anywhere.
+    assert
+        .equal(
+            resolve_reference(index, "baml.toml.Item", ["baml", "iter"]) ?? "",
+            "T:baml.toml.Item",
+        );
+}
+
+test "a name two declarations answer to points at neither" {
+    let index = NameIndex { types: {}, all: {} };
+    let _ = index_put(index.types, "Ambiguous", "T:a.Ambiguous");
+    let _ = index_put(index.types, "Ambiguous", "T:b.Ambiguous");
+    let no_scope: string[] = [];
+    assert.is_true(resolve_reference(index, "Ambiguous", no_scope) == null);
+}
+
+test "impl entries address themselves and name what they re-list" {
+    let symbols = extract_symbols(parse_export_text(fixture_export_text()));
+    let impl_methods = symbols.filter((symbol) -> {
+        symbol.origin == "impl_method"
+    });
+    let ids: string[] = [];
+    for (let method in impl_methods) {
+        ids.push(method.id);
+    }
+    assert
+        .is_true(
+            baml.deep_equals(
+                ids,
+                [
+                    "X:baml.impl[baml.Comparable for baml.Foo]::compare",
+                    "X:baml.impl[baml.Comparable for baml.Foo]::index_of",
+                ],
+            ),
+        );
+    // The re-listed one carries the declaration it came from; the override
+    // declared only in the block has no other address.
+    if let relisted: BamlSymbol = impl_methods.at(1) {
+        assert.equal(relisted.declared_by ?? "", "M:baml.Foo.index_of");
+    } else {
+        baml.sys.panic("the impl's index_of is missing");
+    }
+    if let own: BamlSymbol = impl_methods.at(0) {
+        assert.is_true(own.declared_by == null);
+    } else {
+        baml.sys.panic("the impl's compare is missing");
+    }
 }

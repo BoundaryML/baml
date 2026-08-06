@@ -16,6 +16,9 @@
 /// instance side, `property` for non-callable members, and `free` for the
 /// globals and module functions that belong to no container.
 class TsSymbol {
+    /// The dotted path, which is also this symbol's address: TypeScript's lib
+    /// types are flat, so `Array.map` names exactly one member.
+    id: string,
     symbol: string[],
     display: string,
     origin: string,
@@ -24,6 +27,8 @@ class TsSymbol {
     /// The lib file that introduced it (`es5`, `es2015`, `dom`, `node`) — the
     /// closest TypeScript has to a stability marker.
     since: string,
+    /// The ids of the symbols this signature names — see references.baml.
+    references: string[],
 }
 
 /// `(globals)` and `node:*` hold free functions; everything else is a type
@@ -72,6 +77,7 @@ function extract_ts_symbols(doc: TsSurfaceDoc) -> TsSymbol[] {
             symbols
                 .push(
                     TsSymbol {
+                        id: `${container.name}.${member.name}`,
                         symbol: [container.name, member.name],
                         // Container-qualified throughout, including the `(globals)` and
                         // `node:*` pseudo-containers, so a display always says where a
@@ -81,10 +87,12 @@ function extract_ts_symbols(doc: TsSurfaceDoc) -> TsSymbol[] {
                         signature: ts_signature_of(member),
                         doc: member.doc,
                         since: member.since,
+                        references: [],
                     },
                 );
         }
     }
+    attach_ts_references(symbols);
     symbols
 }
 

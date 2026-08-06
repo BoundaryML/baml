@@ -56,19 +56,26 @@ class ExportSignature {
     }
 }
 
+/// Every member record carries the id that addresses it. Ids are the export's
+/// stable identity — content-derived, unique across the document, and
+/// unaffected by declaration order — which is what makes a judgement about a
+/// symbol survive into the next revision.
 class ExportField {
+    id: string,
     name: string,
     docstring: string?,
     ty: TyRef?,
 }
 
 class ExportMethod {
+    id: string,
     name: string,
     docstring: string?,
     signature: ExportSignature?,
 }
 
 class ExportVariant {
+    id: string,
     name: string,
     docstring: string?,
 }
@@ -76,6 +83,7 @@ class ExportVariant {
 /// An interface's associated type. `default` is present when the interface
 /// gives the type a default an implementor may leave alone.
 class ExportAssocType {
+    id: string,
     name: string,
     default: TyRef?,
 }
@@ -102,7 +110,14 @@ class ExportItem {
     default_methods: ExportMethod[]?,
 }
 
+/// A method as an impl block lists it. `id` addresses this entry — under the
+/// block, since one declaration is re-listed by every implementor that inherits
+/// it — while `declared_by` names the declaration itself, when it has an id of
+/// its own. Two entries sharing a `declared_by` are the same code reached
+/// through different receivers, which is what lets one judgement cover both.
 class ExportImplMethod {
+    id: string,
+    declared_by: string?,
     name: string,
     docstring: string?,
     signature: ExportSignature?,

@@ -87,6 +87,13 @@ class SymbolSignature {
 /// definition. They are separate kinds carrying separate fields so that no
 /// reader has to know which meaning a shared field held.
 class BamlSymbol {
+    /// The export's own id for this declaration: stable across runs, unique
+    /// across the document, and what a judgement is recorded against.
+    id: string,
+    /// The declaration an impl entry re-lists, when it has an id of its own.
+    /// Entries sharing one are the same code reached through different
+    /// receivers.
+    declared_by: string?,
     symbol: PathStep[],
     display: string,
     kind: string,
@@ -104,6 +111,9 @@ class BamlSymbol {
     default: string?,
     signature: SymbolSignature?,
     doc: string?,
+    /// The ids of the symbols this declaration names — see references.baml.
+    /// Filled after extraction, once the whole set is known.
+    references: string[],
 }
 
 /// Containers are invariant, so a `string[]` is not a `PathStep[]` even though
@@ -239,6 +249,8 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
 
         if (item.kind == "function") {
             symbols.push(BamlSymbol {
+                id: item.id,
+                declared_by: null,
                 symbol: owner_path,
                 display: qualified,
                 kind: "function",
@@ -249,11 +261,14 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 default: null,
                 signature: symbol_signature(item.signature),
                 doc: item.docstring,
+                references: [],
             });
             continue;
         }
 
         symbols.push(BamlSymbol {
+            id: item.id,
+            declared_by: null,
             symbol: owner_path,
             display: owner_display,
             // `type_alias` is spelled `type` in source.
@@ -266,6 +281,7 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
             default: null,
             signature: null,
             doc: item.docstring,
+            references: [],
         });
 
         let fields: ExportField[] = item.fields ?? [];
@@ -274,6 +290,8 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 continue;
             }
             symbols.push(BamlSymbol {
+                id: field.id,
+                declared_by: null,
                 symbol: member_steps(qualified, field.name),
                 display: `${owner_display}.${field.name}`,
                 kind: "field",
@@ -284,12 +302,15 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 default: null,
                 signature: null,
                 doc: field.docstring,
+                references: [],
             });
         }
 
         let variants: ExportVariant[] = item.variants ?? [];
         for (let variant in variants) {
             symbols.push(BamlSymbol {
+                id: variant.id,
+                declared_by: null,
                 symbol: member_steps(qualified, variant.name),
                 display: `${owner_display}.${variant.name}`,
                 kind: "variant",
@@ -300,6 +321,7 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 default: null,
                 signature: null,
                 doc: variant.docstring,
+                references: [],
             });
         }
 
@@ -309,6 +331,8 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
         let assoc_types: ExportAssocType[] = item.assoc_types ?? [];
         for (let assoc in assoc_types) {
             symbols.push(BamlSymbol {
+                id: assoc.id,
+                declared_by: null,
                 symbol: member_steps(qualified, assoc.name),
                 display: `${owner_display}.${assoc.name}`,
                 kind: "associated type",
@@ -319,6 +343,7 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 default: normalize_optional_ty(assoc.default),
                 signature: null,
                 doc: null,
+                references: [],
             });
         }
 
@@ -330,6 +355,8 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 continue;
             }
             symbols.push(BamlSymbol {
+                id: method.id,
+                declared_by: null,
                 symbol: member_steps(qualified, method.name),
                 display: `${owner_display}.${method.name}`,
                 kind: "function",
@@ -340,6 +367,7 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 default: null,
                 signature: symbol_signature(method.signature),
                 doc: method.docstring,
+                references: [],
             });
         }
     }
@@ -356,6 +384,8 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
             let impl_path: PathStep[] = [step];
             impl_path.push(method.name);
             symbols.push(BamlSymbol {
+                id: method.id,
+                declared_by: method.declared_by,
                 symbol: impl_path,
                 display: `(${impl_record.for_ty.display} as ${impl_record.interface}).${method.name}`,
                 kind: "function",
@@ -366,10 +396,12 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                 default: null,
                 signature: symbol_signature(method.signature),
                 doc: method.docstring,
+                references: [],
             });
         }
     }
 
+    attach_baml_references(symbols);
     symbols
 }
 
