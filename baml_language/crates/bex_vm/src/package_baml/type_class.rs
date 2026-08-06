@@ -5,7 +5,7 @@ use crate::{BexVm, errors::VmRustFnError};
 
 impl BamlNamespaceType for PackageBamlImpl {
     /// BEP-066 K-13: `type.of_value(v)` — the runtime `type` value describing
-    /// `v`'s concrete type, reconstructed by [`BexVm::value_concrete_ty`].
+    /// `v`'s concrete type, reconstructed by `BexVm::value_concrete_ty`.
     ///
     /// K-12 holds by construction: `value_concrete_ty` reports value types
     /// (`int` for `5`), never literal types. A value with no reconstructable
