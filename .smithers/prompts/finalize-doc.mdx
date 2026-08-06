@@ -1,0 +1,10 @@
+You OWN the one-page maintainer architecture doc for this feature. The implementation is approved; finalize the doc and draft the PR text.
+
+1. Take the draft at {props.docDraftPath} (the plan at {props.planPath} names the intended final location) and finalize it into a single tight page a BAML maintainer can read in five minutes: what was added, the package boundaries, how the language-service features work, source-map strategy, caching/HMR, how to run the tests. Keep it to one page.
+2. Commit the finalized doc on the current branch with an explicit pathspec.
+3. Draft the pull-request text for a DRAFT PR from the user's fork branch {props.featureBranch} to {props.upstreamRepo} {props.baseBranch}: a clear title and a body covering motivation, design summary, the feature list, how it was tested (with the commands), rollout notes, and an explicit note that the Smithers workflow scaffolding used to build this PR is removed in the final commit of the branch.
+
+{props.noTevmRule}
+{props.noSmithersRule}
+
+Report the final repo-relative doc path, the PR title, the full PR body (markdown), and a short summary of what you changed in the doc.

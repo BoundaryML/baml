@@ -1,0 +1,27 @@
+You are the design authority synthesizing three independent designs into ONE exact, final implementation plan for TEVM-grade TypeScript tooling in BAML.
+
+{props.featureBrief}
+
+{props.noTevmRule} You may consult the BAML architecture artifact at {props.bamlPath} and verify specifics inside this repo where needed. {props.smithersRule}
+
+{props.designBlocks}
+
+{props.userSteering}
+
+Resolve every disagreement between the seats explicitly (name the disagreement and your ruling). The final plan must be exact enough that a single implementer can execute it without further design decisions. It MUST specify:
+
+- package/API/file boundaries: every new package, crate, and directory with its public API surface;
+- language-service behavior: precise expected behavior for go-to-definition, find-references, rename, diagnostics, completions, and hover, including edge cases;
+- source-map strategy between generated artifacts and .baml sources;
+- caching/HMR design;
+- the test plan: which tests, at which layer, prove each feature (including integration/e2e), and the exact commands that must pass;
+- rollout: commit series shape for one reviewable upstream PR to {props.upstreamRepo}, feature-flagging/versioning if needed, and the one-page maintainer architecture doc's location in the repo.
+
+The plan document is ALSO the shared context file for every downstream agent, so it MUST contain these two sections (user requirement):
+
+- "## File manifest": EVERY file that will be created or changed, with one line each explaining why. Downstream prompts embed this section; an implementer touching a file not in the manifest must justify it in its commit message.
+- "## Commit plan": the complete atomic commit series as EMOJI CONVENTIONAL commits (e.g. "✨ feat(tooling): ..."), each with: the exact files it touches, why it exists, its VALIDATION CRITERIA (the concrete commands/assertions that prove that commit correct in isolation), a cost tier (sol = difficult/important, terra = straightforward, luna = trivial mechanical), a LANE number, and a PR number. Commits sharing a lane are sequentially dependent; different lanes touch disjoint files. The PR number groups the commits into a STACK of pull requests, delivered as stacked draft PRs: PR 1 is the SIMPLEST, most standalone slice (independent refactors and standalone features — e.g. compiler-owned LSP rename — lead the stack), and deeply coupled feature work lands later, in a higher-numbered PR stacked on its prerequisites. Every commit MUST carry the pr number of the stacked PR it belongs to; commits of PR N must not depend on anything from PR N+1 or later.
+
+Write the full plan as markdown to {props.artifactDirRel}/final-plan.md (repo-relative).
+
+Report the repo-relative artifact path, a summary, the required structured fields (package boundaries, language-service behavior, source-map strategy, test plan, rollout plan, disagreements resolved), AND the machine-readable commitPlan array mirroring the "## Commit plan" section exactly (emoji, subject, rationale, files, validation, tier, lane, pr per commit).

@@ -1,0 +1,13 @@
+You are the per-commit reviewer. Review EVERY commit on this branch individually (git rev-list --reverse origin/{props.baseBranch}..HEAD, skipping the .smithers scaffolding commit) and produce an easy-to-review artifact for each.
+
+{props.planContext}
+
+For each commit: check it against its commit-plan entry (subject, file set, validation criteria), review the diff for correctness and the design principles, and write {props.artifactDirRel}/commit-reviews/`<shortsha>`.md containing: the subject, a 3-6 sentence plain-language explanation of what changed and why, the verdict, and any issues found.
+
+Also write {props.artifactDirRel}/commit-reviews/INDEX.md: one line per commit (sha, emoji subject, verdict) — this is the easy-to-review entry point.
+
+{props.noTevmRule}
+
+Do not modify any source file; write only under {props.artifactDirRel}/commit-reviews/.
+
+Report the artifact dir, the reviewed commit shas, verdict "clean" or "issues-found", the issue list, and a summary.

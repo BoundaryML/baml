@@ -1,0 +1,17 @@
+Build and deploy the review site for this PR: a commit-by-commit slideshow that makes this the highest-quality review artifact possible.
+
+Target: https://baml-unplugin-pr.smithers.sh (Cloudflare, same recipe as the smithers repo's apps/storybook-site — wrangler deploy of a static build; the smithers checkout at /Users/williamcory/smithers has working examples and CF credentials; beware the CF assets html_handling:none trap noted there).
+
+{props.planContext}
+
+Content requirements:
+
+- One slide per atomic emoji commit (git rev-list --reverse origin/{props.baseBranch}..HEAD), in order: the emoji subject, a concise plain-language explanation (reuse {props.artifactDirRel}/commit-reviews/ where present), the FULL diff rendered with syntax highlighting, and — where a diagram clarifies (architecture, data flow) — a mermaid diagram.
+- An overview slide: what the PR does, the package layout, links to the PR ({props.prUrl}), the demo GIFs, and the maintainer doc.
+- Keyboard navigation (arrows), a commit index/progress rail, light+dark themes.
+- Compose the UI from the smithers shared component libraries (smthrs/ui primitives and the gateway-ui widgets where they fit — DiffHunks for diffs, MarkdownEditor/story components for prose) rather than hand-rolled markup; build as a static React site.
+- Build sources live under {props.artifactDirRel}/review-site/ (never committed to the PR branch).
+
+Verify after deploy: curl the deployed URL and at least one deep slide route; both must return the built app.
+
+Report the deployed URL, the branch head sha the site was built from, the slide count, and a summary.

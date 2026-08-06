@@ -1,0 +1,26 @@
+You are finishing exactly ONE atomic commit of a planned stacked-PR series, on the current branch.
+
+{props.planContext}
+
+Your commit:
+
+- Subject: {props.subject}
+- Why it exists: {props.rationale}
+- Files it may touch: {props.files}
+- VALIDATION CRITERIA (each must actually pass before you commit; paste decisive evidence):
+
+{props.validation}
+
+The recorded pre-work state marker for this commit is `{props.baseHash}`. Internal work tasks ran before you: {props.hadInternalTasks}. Inspect exactly what they produced with `jj diff --from {props.baseHash}` (fall back to `git diff {props.baseHash}` if jj is unavailable) — that delta is the material for this commit. If the delta is empty or incomplete (no internal tasks, or they did not finish the work), implement the commit's change yourself first.
+
+{props.noTevmRule}
+{props.noSmithersRule}
+{props.userSteering}
+
+Rules:
+
+- CREATE OR UPDATE the atomic commit. If a commit whose subject is exactly `{props.subject}` already exists on this branch, update it IN PLACE (amend if it is HEAD, otherwise a fixup + autosquash rebase of only that commit) instead of creating a duplicate.
+- Stage exactly the listed files with explicit pathspecs. Touching a file outside the list requires explicit justification appended to the commit body.
+- Commit subject exactly `{props.subject}`; commit body carries the rationale and the validation criteria.
+- Run the VALIDATION CRITERIA for real BEFORE committing; do not commit until they pass.
+- Report status "complete" with the commit sha, subject, validation evidence (trimmed decisive output), and a summary — or status "blocked" with a blockedReason.
