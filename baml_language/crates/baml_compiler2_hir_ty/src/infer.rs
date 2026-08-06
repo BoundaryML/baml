@@ -254,9 +254,14 @@ fn infer_body_impl(db: &dyn baml_compiler2_ppir::Db, owner: BodyOwnerId<'_>) -> 
         BodyOwnerId::Function(function) => crate::lower::function_generic_bounds(db, function),
         BodyOwnerId::Let(_) => FxHashMap::default(),
     };
+    let concrete_self = match owner {
+        BodyOwnerId::Function(function) => crate::lower::owner_self_ty(db, function, &frame),
+        BodyOwnerId::Let(_) => None,
+    };
     let lower = lower_ctx_for_file(db, owner.file(db))
         .with_frame(frame)
-        .with_bounds(bounds.clone());
+        .with_bounds(bounds.clone())
+        .with_self_ty(concrete_self);
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
     let plain_bounds = bounds
         .into_iter()

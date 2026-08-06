@@ -45,6 +45,12 @@ pub struct LowerCtx<'db> {
     /// The flattened generic frame, innermost params last (lookup searches
     /// in reverse so inner frames shadow outer ones).
     generic_params: Vec<ParamTy>,
+    /// The concrete `Self` an enclosing impl provides (r-a's
+    /// `Resolver::impl_def` self type): set for class-owned and
+    /// free-impl method signatures/bodies, `None` for interface owners
+    /// (there `Self` is the frame's universal slot 0, found by the
+    /// param fallback first).
+    self_ty: Option<Ty>,
     /// The frame's declared interface bounds (I2's param env): each
     /// param's CONJUNCTION. Projections (`T.Output`) determine their
     /// interface through these.
@@ -65,6 +71,7 @@ pub fn lower_ctx_for_file(
         package_items,
         ns_context: info.namespace_path,
         generic_params: Vec::new(),
+        self_ty: None,
         bounds: FxHashMap::default(),
     }
 }
@@ -75,6 +82,12 @@ impl<'db> LowerCtx<'db> {
         self.generic_params = frame;
         self
     }
+    /// See [`LowerCtx::self_ty`].
+    pub fn with_self_ty(mut self, self_ty: Option<Ty>) -> Self {
+        self.self_ty = self_ty;
+        self
+    }
+
 
     #[must_use]
     pub fn with_bounds(
@@ -335,6 +348,16 @@ impl<'db> LowerCtx<'db> {
                 .find(|param| param.name() == &segments[0])
         {
             return Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+        }
+
+        // Fallback 1b: bare `Self` under a concrete impl owner (r-a's
+        // resolver-provided self type). Interface frames never reach
+        // here - their `Self` is a param, caught by fallback 1.
+        if segments.len() == 1
+            && segments[0].as_str() == "Self"
+            && let Some(self_ty) = &self.self_ty
+        {
+            return self_ty.clone();
         }
 
         // Fallback 2: `Enum.Variant` read as a literal type.
@@ -961,6 +984,35 @@ fn function_signature_cycle_initial<'db>(
     }
 }
 
+/// The concrete `Self` a method's OWNER provides - the class's self
+/// type, or a free impl's for-target (lowered in `frame`, whose prefix
+/// is the impl's params). `None` for interface owners and free
+/// functions: an interface method's `Self` is its frame's universal
+/// slot, never a concrete type.
+pub fn owner_self_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+    frame: &[baml_type::ParamTy],
+) -> Option<Ty> {
+    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+        Some(MethodOwner::Class(class)) => Some(class_self_ty(db, class)),
+        Some(MethodOwner::FreeImpl(impl_loc)) => {
+            let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+            match &data.subject {
+                baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
+                    let ctx = lower_ctx_for_file(db, impl_loc.file(db))
+                        .with_frame(frame.to_vec());
+                    Some(ctx.lower_type_ref(&data.type_refs, *for_target))
+                }
+                baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+                    Some(class_self_ty(db, *class))
+                }
+            }
+        }
+        _ => None,
+    }
+}
+
 /// TRACKED (S2/S3): the signature firewall - a body edit that leaves the
 /// signature unchanged cuts off every caller's re-inference.
 #[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
@@ -971,14 +1023,17 @@ pub fn function_signature<'db>(
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
+    // The owner's concrete `Self` (r-a's resolver-provided self type)
+    // serves BOTH jobs at once: written `Self` in any signature
+    // position resolves through the ctx, and an unannotated `self`
+    // receiver (elaboration leaves its slot `Unknown`) takes it
+    // directly. Interface owners provide none - their `Self` is the
+    // frame's universal slot 0, resolved as a param.
+    let concrete_self = owner_self_ty(db, function, &frame);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.clone())
-        .with_bounds(bounds);
-    // An unannotated `self` (elaboration leaves its slot `Unknown`) is
-    // typed by the owner: the class's self type (through the builtin
-    // bridging, so Array's `self` is `T[]`), or the interface's `Self`
-    // type variable (frame position 0 by construction). Free-impl `self`
-    // is the for-target - it arrives with the impl frames (I3).
+        .with_bounds(bounds)
+        .with_self_ty(concrete_self.clone());
     let owner = baml_compiler2_ppir::item_data::method_owner(db, function);
     let self_ty = |param: &baml_compiler2_ppir::item_data::ElaboratedParamData| {
         if param.name.as_str() != "self"
@@ -987,30 +1042,11 @@ pub fn function_signature<'db>(
             return None;
         }
         match owner {
-            Some(MethodOwner::Class(class)) => Some(class_self_ty(db, class)),
             Some(MethodOwner::Interface(_)) => Some(Ty::intern(TyKind::TypeVar(
                 frame.first().cloned().expect("interface frame starts with Self"),
                 TyAttr::default(),
             ))),
-            // Free-impl `self` is the for-target (`T[]` in
-            // `implements<T> J for T[]`), lowered in the impl's frame -
-            // the prefix of this function's frame, so indices line up.
-            Some(MethodOwner::FreeImpl(impl_loc)) => {
-                let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-                match &data.subject {
-                    baml_compiler2_ppir::item_data::ImplSubjectData::Free {
-                        for_target, ..
-                    } => {
-                        let ictx = lower_ctx_for_file(db, impl_loc.file(db))
-                            .with_frame(frame.clone());
-                        Some(ictx.lower_type_ref(&data.type_refs, *for_target))
-                    }
-                    baml_compiler2_ppir::item_data::ImplSubjectData::InClass {
-                        class, ..
-                    } => Some(class_self_ty(db, *class)),
-                }
-            }
-            None => None,
+            _ => concrete_self.clone(),
         }
     };
     let params = data
