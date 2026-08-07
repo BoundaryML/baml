@@ -57,14 +57,18 @@ function runEmitLogsChild(bamlLog: string | undefined, marker: string): string {
   return output;
 }
 
-describe.runIf(isTestRuntime("node") && !isLogSinkChild)(
+// The parent/child split within the Node runtime is gated at runtime via
+// ctx.skip() rather than in the runIf condition: the parity lint only
+// understands plain isTestRuntime(...) runtime conditions.
+describe.runIf(isTestRuntime("node"))(
   "function_calls — BAML_LOG stderr sink",
   () => {
     // SDK_PARITY_LINT(skip): requires subprocess-level SDK harness support
     it(
       "baml_log_env_var_streams_logs_to_stderr",
       { timeout: 180_000 },
-      () => {
+      (ctx) => {
+        if (isLogSinkChild) return ctx.skip();
         const output = runEmitLogsChild("info", "ts-log-marker");
         expect(output).toContain("[INFO] info ts-log-marker");
         expect(output).toContain("[WARN] warn ts-log-marker");
@@ -75,18 +79,15 @@ describe.runIf(isTestRuntime("node") && !isLogSinkChild)(
     );
 
     // SDK_PARITY_LINT(skip): requires subprocess-level SDK harness support
-    it("baml_logs_stay_off_without_baml_log", { timeout: 180_000 }, () => {
+    it("baml_logs_stay_off_without_baml_log", { timeout: 180_000 }, (ctx) => {
+      if (isLogSinkChild) return ctx.skip();
       const output = runEmitLogsChild(undefined, "ts-quiet-marker");
       expect(output).not.toContain("info ts-quiet-marker");
     });
-  },
-);
 
-describe.runIf(isTestRuntime("node") && isLogSinkChild)(
-  "function_calls — BAML_LOG stderr sink child",
-  () => {
-    // SDK_PARITY_LINT(skip): child-process entry point for the tests above
-    it("baml_log_sink_child", () => {
+    // SDK_PARITY_LINT(skip): child-process entry point for the BAML_LOG stderr tests
+    it("baml_log_sink_child", (ctx) => {
+      if (!isLogSinkChild) return ctx.skip();
       const marker = process.env.BAML_MARKER ?? "ts-log-marker";
       expect(emit_logs(marker)).toBe(marker);
     });

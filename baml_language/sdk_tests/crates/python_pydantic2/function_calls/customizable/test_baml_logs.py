@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-# SDK_PARITY_LINT(skip): requires fd-level stderr capture harness support
+# SDK_PARITY_LINT(skip): requires subprocess-level SDK harness support
 def test_baml_log_env_var_streams_logs_to_stderr(capfd, monkeypatch):
     monkeypatch.setenv("BAML_LOG", "info")
     assert emit_logs("py-log-marker") == "py-log-marker"
@@ -32,7 +32,7 @@ def test_baml_log_env_var_streams_logs_to_stderr(capfd, monkeypatch):
     assert "debug py-log-marker" not in err
 
 
-# SDK_PARITY_LINT(skip): requires fd-level stderr capture harness support
+# SDK_PARITY_LINT(skip): requires subprocess-level SDK harness support
 def test_baml_logs_stay_off_without_baml_log(capfd, monkeypatch):
     monkeypatch.delenv("BAML_LOG", raising=False)
     assert emit_logs("py-quiet-marker") == "py-quiet-marker"

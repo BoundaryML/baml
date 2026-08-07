@@ -42,7 +42,7 @@ func Test_baml_logs_stay_off_without_baml_log(t *testing.T) {
 
 // The child re-runs this test binary with BAML_GO_LOG_SINK_CHILD set, calls
 // emit_logs, and exits; captured BAML logs land on the child's stderr.
-// SDK_PARITY_LINT(skip): child-process entry point for the stderr tests above
+// SDK_PARITY_LINT(skip): child-process entry point for the BAML_LOG stderr tests
 func Test_baml_log_sink_child(t *testing.T) {
 	if os.Getenv("BAML_GO_LOG_SINK_CHILD") == "" {
 		t.Skip("child-process entry point; driven by the BAML_LOG stderr tests")
