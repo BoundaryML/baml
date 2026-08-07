@@ -19,6 +19,33 @@ class Labeled {
     }
 }
 
+class MediaBundle {
+    picture image
+    sound audio
+    clip video
+    document pdf
+}
+
+class MediaEnvelope {
+    primary MediaBundle
+    gallery MediaBundle[]
+    lookup map<string, MediaBundle>
+}
+
+class LabeledMedia {
+    label Labeled
+    picture image
+}
+
+class RedactedMedia {
+    picture image
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            "REDACTED"
+        }
+    }
+}
+
 class Person {
     name string
     age int
@@ -125,6 +152,87 @@ test "prompt_interpolation_honors_to_string_override" {
     )
 }
 
+// Structural media interpolation (B-1039)
+
+function pt_media_bundle_fn() -> MediaBundle {
+    MediaBundle {
+        picture: image.from_url("https://example.com/picture.png", "image/png"),
+        sound: audio.from_url("https://example.com/sound.wav", "audio/wav"),
+        clip: video.from_url("https://example.com/clip.mp4", "video/mp4"),
+        document: pdf.from_url("https://example.com/document.pdf", "application/pdf"),
+    }
+}
+
+function pt_media_string_interp_fn() -> string {
+    let picture = image.from_url("https://example.com/picture.png", "image/png")
+    `Image ${picture}`
+}
+
+test "ordinary_string_interpolation_keeps_media_tostring_behavior" {
+    assert.equal(
+        pt_media_string_interp_fn(),
+        "Image Image { _data: <rust_data> }"
+    )
+}
+
+function pt_nested_media_fn() -> string {
+    let bundle = pt_media_bundle_fn()
+    let envelope = MediaEnvelope {
+        primary: bundle,
+        gallery: [bundle],
+        lookup: { "copy": bundle },
+    }
+    let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = baml.llm.Context { client: cc, tags: {} }
+    let render = prompt`${role("user")}Inspect ${envelope}`
+    render(ctx).text()
+}
+
+test "prompt_preserves_media_nested_in_classes_arrays_and_maps" {
+    let rendered = pt_nested_media_fn()
+    assert.contains(rendered, "[user]\nInspect MediaEnvelope")
+    assert.contains(rendered, "primary: MediaBundle")
+    assert.contains(rendered, "gallery: [MediaBundle")
+    assert.contains(rendered, "lookup: {\"copy\": MediaBundle")
+    assert.contains(rendered, "image::url(https://example.com/picture.png, loaded=false)")
+    assert.contains(rendered, "audio::url(https://example.com/sound.wav, loaded=false)")
+    assert.contains(rendered, "video::url(https://example.com/clip.mp4, loaded=false)")
+    assert.contains(rendered, "pdf::url(https://example.com/document.pdf, loaded=false)")
+    assert.is_true(rendered.includes("rust_data") == false)
+}
+
+function pt_nested_tostring_and_media_fn() -> string {
+    let value = LabeledMedia {
+        label: Labeled { tag: "hi" },
+        picture: image.from_url("https://example.com/picture.png", "image/png"),
+    }
+    let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = baml.llm.Context { client: cc, tags: {} }
+    let render = prompt`${value}`
+    render(ctx).text()
+}
+
+test "prompt_preserves_nested_tostring_overrides_beside_media" {
+    assert.equal(
+        pt_nested_tostring_and_media_fn(),
+        "LabeledMedia { label: LBL<hi>, picture: image::url(https://example.com/picture.png, loaded=false) }"
+    )
+}
+
+function pt_parent_tostring_owns_media_fn() -> string {
+    let value = RedactedMedia {
+        picture: image.from_url("https://example.com/secret.png", "image/png"),
+    }
+    let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = baml.llm.Context { client: cc, tags: {} }
+    let render = prompt`${value}`
+    render(ctx).text()
+}
+
+test "prompt_parent_tostring_override_owns_media_subtree" {
+    assert.equal(pt_parent_tostring_owns_media_fn(), "REDACTED")
+}
+
 // ─── ${ctx.output_format} (M5b) ───────────────────────────────────────────────
 
 // BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
@@ -145,6 +253,21 @@ test "prompt_interpolates_ctx_output_format" {
     // The rendered output_format lists the Person fields.
     assert.contains(pt_ctx_output_format_fn(), "name")
     assert.contains(pt_ctx_output_format_fn(), "age")
+}
+
+function PtRenderPerson() -> Person {
+    client "openai/gpt-4o-mini"
+    prompt `Make a person.${ctx.output_format}`
+}
+
+function pt_render_prompt_companion_output_format_fn() -> string {
+    PtRenderPerson$render_prompt().text()
+}
+
+test "render_prompt_companion_interpolates_ctx_output_format" {
+    assert.contains(pt_render_prompt_companion_output_format_fn(), "Make a person.")
+    assert.contains(pt_render_prompt_companion_output_format_fn(), "name")
+    assert.contains(pt_render_prompt_companion_output_format_fn(), "age")
 }
 
 // BEP-049 M5b.2: `${ctx.output_format_with(prefix=..., ...)}` re-renders the

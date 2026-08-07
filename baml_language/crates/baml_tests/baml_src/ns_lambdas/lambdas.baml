@@ -210,6 +210,43 @@ test "explicit_throwing_lambda_catches_error" {
     assert.is_true(baml.deep_equals(lambdas_explicit_throwing_lambda_catches_error(), -1))
 }
 
+function lambda_effect_invoke<T, E>(f: () -> T throws E) -> T throws E {
+    f()
+}
+
+function lambda_effect_forward<E>(f: () -> int throws E) -> int throws E {
+    lambda_effect_invoke(() -> { f() })
+}
+
+function lambda_effect_fail() -> int throws string {
+    throw "callback"
+}
+
+function lambda_effect_main() -> int {
+    lambda_effect_forward(lambda_effect_fail) catch (e) {
+        string => 1
+    }
+}
+
+test "callback_effect_param_is_inferred_from_unannotated_lambda_body" {
+    assert.equal(lambda_effect_main(), 1)
+}
+
+function lambda_contextual_call(cb: (x: int) -> int throws int | string) -> int throws int | string {
+    cb(1)
+}
+
+function lambda_contextual_main() -> int {
+    lambda_contextual_call((x: int) -> int { throw "contextual" }) catch (e) {
+        string => 1,
+        int => 2,
+    }
+}
+
+test "contextual_lambda_preserves_omitted_throws_surface" {
+    assert.equal(lambda_contextual_main(), 1)
+}
+
 // ─── lambda_inside_catch_base_keeps_parameter_scope ───────────────────────────
 
 function lambdas_lambda_inside_catch_base_keeps_parameter_scope() -> int {
@@ -389,4 +426,37 @@ function lambdas_lambda_param_shadows_annotated_outer_local() -> int {
 
 test "lambda_param_shadows_annotated_outer_local" {
     assert.is_true(baml.deep_equals(lambdas_lambda_param_shadows_annotated_outer_local(), 12))
+}
+
+
+// ─── inferred_signature_is_reconstructed ─────────────────────────────────────
+
+// A lambda's runtime signature carries the types it actually HAS, not only the
+// ones it spells. An omitted return type and an omitted `throws` clause are
+// filled from inference, so a closure value reconstructs as precisely as an
+// annotated declaration would — `-> int throws never` here, not the
+// `-> unknown throws unknown` its syntax alone says.
+function lambdas_inferred_signature() -> string {
+    let inferred = (x: int) -> { x * 2 }
+    let sig = reflect.signature(inferred)
+    sig.returns.to_string() + "/" + sig.errors.to_string()
+}
+
+test "inferred_signature_is_reconstructed" {
+    assert.is_true(baml.deep_equals(lambdas_inferred_signature(), "int/never"))
+}
+
+// The same for a throwing body: the inferred `throws` surface is the error set
+// the body can actually raise, so it is testable rather than an open claim.
+function lambdas_inferred_throwing_signature() -> string {
+    let inferred = (x: int) -> {
+        if (x < 0) { throw "negative" }
+        x * 2
+    }
+    let sig = reflect.signature(inferred)
+    sig.returns.to_string() + "/" + sig.errors.to_string()
+}
+
+test "inferred_throwing_signature_is_reconstructed" {
+    assert.is_true(baml.deep_equals(lambdas_inferred_throwing_signature(), "int/string"))
 }

@@ -13,7 +13,7 @@ use std::{
 use baml_base::{Literal, MediaKind, Name as BaseName, TyAttr, TyAttrValue};
 use baml_codegen_types::{
     CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function,
-    FunctionArgument, Name, Symbol, Ty,
+    FunctionArgument, Name, ParamTy, Symbol, Ty,
 };
 use sha2::{Digest, Sha256};
 
@@ -336,6 +336,7 @@ pub(crate) fn generate_program(
         model,
         None,
         program_bytes,
+        None,
         cli_version,
         required_bridge_version,
         program_identity,
@@ -346,6 +347,7 @@ pub(crate) fn generate_program_with_runtime_identities(
     model: &CodegenModel,
     runtime_identities: &RuntimeCallableIdentities,
     program_bytes: &[u8],
+    embedded_baml_toml: &str,
     cli_version: &str,
     required_bridge_version: &str,
     program_identity: &str,
@@ -354,6 +356,7 @@ pub(crate) fn generate_program_with_runtime_identities(
         model,
         Some(runtime_identities),
         program_bytes,
+        Some(embedded_baml_toml),
         cli_version,
         required_bridge_version,
         program_identity,
@@ -365,6 +368,7 @@ fn generate_program_inner(
     model: &CodegenModel,
     runtime_identities: Option<&RuntimeCallableIdentities>,
     program_bytes: &[u8],
+    embedded_baml_toml: Option<&str>,
     cli_version: &str,
     required_bridge_version: &str,
     program_identity: &str,
@@ -691,8 +695,7 @@ fn generate_program_inner(
             &registry_request,
             &instance_request,
             &deferred_instance_request,
-            cli_version,
-            required_bridge_version,
+            embedded_baml_toml,
         ),
     )?;
     plan.prepare(GenerationInput::new(
@@ -799,7 +802,7 @@ impl RenderContext<'_> {
             Ty::TypeVar(name, _) => parameters
                 .iter()
                 .rev()
-                .find(|parameter| parameter.name == name)
+                .find(|parameter| parameter.name == name.name())
                 .map(|parameter| {
                     allocated(self.names, &parameter.request)
                         .source()
@@ -2010,7 +2013,16 @@ fn class_receiver_type(class: &ClassSpec<'_>) -> Ty {
             .class
             .generic_params
             .iter()
-            .map(|parameter| Ty::TypeVar(parameter.clone(), TyAttr::EMPTY))
+            .enumerate()
+            .map(|(index, parameter)| {
+                Ty::TypeVar(
+                    ParamTy::new(
+                        u32::try_from(index).expect("generic parameter index fits in u32"),
+                        parameter.clone(),
+                    ),
+                    TyAttr::EMPTY,
+                )
+            })
             .collect(),
         TyAttr::EMPTY,
     )
@@ -2035,7 +2047,7 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
             method
                 .generic_params
                 .first()
-                .map(|parameter| Ty::TypeVar(parameter.clone(), TyAttr::EMPTY))
+                .map(|parameter| Ty::TypeVar(ParamTy::new(0, parameter.clone()), TyAttr::EMPTY))
                 .into_iter()
                 .collect(),
             attr.clone(),
@@ -2045,7 +2057,16 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
             class
                 .generic_params
                 .iter()
-                .map(|parameter| Ty::TypeVar(parameter.clone(), TyAttr::EMPTY))
+                .enumerate()
+                .map(|(index, parameter)| {
+                    Ty::TypeVar(
+                        ParamTy::new(
+                            u32::try_from(index).expect("generic parameter index fits in u32"),
+                            parameter.clone(),
+                        ),
+                        TyAttr::EMPTY,
+                    )
+                })
                 .collect(),
             attr.clone(),
         ),
@@ -2518,7 +2539,7 @@ fn render_generic_type_token(
             let parameter = function
                 .generic_params
                 .iter()
-                .find(|parameter| parameter.name == name)
+                .find(|parameter| parameter.name == name.name())
                 .unwrap_or_else(|| panic!("unbound generated type variable {name}"));
             let index = function
                 .generic_params
@@ -2851,7 +2872,7 @@ fn substitute_type_variables(ty: &Ty, parameters: &[BaseName], arguments: &[Ty])
     match ty {
         Ty::TypeVar(name, _) => parameters
             .iter()
-            .position(|parameter| parameter == name)
+            .position(|parameter| parameter == name.name())
             .and_then(|index| arguments.get(index))
             .cloned()
             .unwrap_or_else(|| ty.clone()),
@@ -3169,7 +3190,7 @@ fn render_method_type_token(
             let index = method
                 .type_params
                 .iter()
-                .rposition(|parameter| parameter.name == name)
+                .rposition(|parameter| parameter.name == name.name())
                 .unwrap_or_else(|| panic!("unbound generated method type variable {name}"));
             allocated(render.names, &method.locals.type_requests[index])
                 .source()
@@ -3212,8 +3233,7 @@ fn render_program(
     registry_request: &CSharpNameRequest,
     instance_request: &CSharpNameRequest,
     deferred_instance_request: &CSharpNameRequest,
-    cli_version: &str,
-    required_bridge_version: &str,
+    embedded_baml_toml: Option<&str>,
 ) -> String {
     let namespace = rendered_namespace(render.names, namespace_requests);
     let program_type = allocated(render.names, program_type_request).source();
@@ -3413,9 +3433,10 @@ fn render_program(
         ));
     }
     source.push_str(&format!(
-        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {generated_version},\n            {bridge_version},\n            {registry});\n\n",
-        generated_version = csharp_string(cli_version),
-        bridge_version = csharp_string(required_bridge_version),
+        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {embedded_baml_toml},\n            {registry});\n\n",
+        embedded_baml_toml = embedded_baml_toml
+            .map(csharp_string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     for ty in render.type_specs {
         source.push_str(&render_codec(
@@ -3596,8 +3617,60 @@ fn render_function_codec(
         "            return context.HostCallable(\n                value,\n                new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n                {result},\n                static (callback, arguments, cancellationToken) =>\n                    global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n                        (({delegate_type})callback)({invocation})));\n",
         invocation = invocation_arguments.join(", "),
     );
+    let parameter_declarations = params
+        .iter()
+        .enumerate()
+        .map(|(index, parameter)| {
+            let source = render.type_source(&parameter.ty);
+            let source = if parameter.mode == CodegenFunctionParamMode::Optional {
+                format!("global::Baml.BamlOptional<{source}>")
+            } else {
+                source
+            };
+            format!("{source} argument{index}")
+        })
+        .chain(std::iter::once(
+            "global::System.Threading.CancellationToken cancellationToken".to_string(),
+        ))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let argument_encoding = params
+        .iter()
+        .enumerate()
+        .map(|(index, parameter)| {
+            let wire_name = csharp_string(
+                parameter
+                    .name
+                    .as_ref()
+                    .map_or_else(|| format!("arg{index}"), |name| name.as_str().to_string())
+                    .as_str(),
+            );
+            let encoded = format!(
+                "context.EncodeFresh({}, argument{index})",
+                render.type_field(&parameter.ty)
+            );
+            match parameter.mode {
+                CodegenFunctionParamMode::Required => format!(
+                    "                arguments.Add(new global::System.Collections.Generic.KeyValuePair<string, global::Baml.Generated.V1.BamlGeneratedValue>({wire_name}, {encoded}));\n"
+                ),
+                CodegenFunctionParamMode::Optional => format!(
+                    "                if (argument{index}.TryGetValue(out var value{index}))\n                {{\n                    arguments.Add(new global::System.Collections.Generic.KeyValuePair<string, global::Baml.Generated.V1.BamlGeneratedValue>({wire_name}, context.EncodeFresh({}, value{index})));\n                }}\n",
+                    render.type_field(&parameter.ty)
+                ),
+            }
+        })
+        .collect::<String>();
+    let decode_result = if matches!(ret, Ty::Void { .. }) {
+        "                _ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n".to_string()
+    } else {
+        format!(
+            "                var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n                return context.Decode({}, result);\n",
+            render.type_field(ret)
+        )
+    };
     let decode = format!(
-        "            return context.Fail<{delegate_type}>(\n                \"Native BAML closures cannot be decoded as managed delegates.\",\n                \"The C# v1 bridge supports host callables only in the managed-to-BAML direction.\");\n"
+        "            var nativeFunction = context.NativeFunction(value);\n            return async ({parameter_declarations}) =>\n            {{\n                var arguments = new global::System.Collections.Generic.List<global::System.Collections.Generic.KeyValuePair<string, global::Baml.Generated.V1.BamlGeneratedValue>>({});\n{argument_encoding}{decode_result}            }};\n",
+        params.len()
     );
     (encode, decode)
 }
@@ -3954,7 +4027,7 @@ fn render_generic_class_type_token(
             let parameter = class
                 .generic_params
                 .iter()
-                .find(|parameter| parameter.name == name)
+                .find(|parameter| parameter.name == name.name())
                 .unwrap_or_else(|| panic!("unbound generated class type variable {name}"));
             format!(
                 "type_{}",
@@ -4897,6 +4970,92 @@ mod tests {
             .join("\n")
     }
 
+    fn returned_callable_codec_source() -> String {
+        let namespace = vec![BaseName::new("returned_callable_codec")];
+        let make_function = |name: &str, ret: Ty| {
+            let callable = Ty::Function {
+                params: vec![
+                    CallableParam {
+                        name: Some(BaseName::new("value")),
+                        ty: primitive_int(),
+                        mode: CodegenFunctionParamMode::Required,
+                    },
+                    CallableParam {
+                        name: Some(BaseName::new("label")),
+                        ty: primitive_string(),
+                        mode: CodegenFunctionParamMode::Optional,
+                    },
+                ],
+                ret: Box::new(ret),
+                throws: Box::new(Ty::Never {
+                    attr: TyAttr::EMPTY,
+                }),
+                attr: TyAttr::EMPTY,
+            };
+            baml_codegen_types::Function {
+                name: BaseName::new(name),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![],
+                return_type: callable,
+                throws: None,
+                watchers: vec![],
+                origin: baml_codegen_types::Origin {
+                    source_file_path: "returned_callable_codec.baml".to_string(),
+                    span_start: 0,
+                },
+            }
+        };
+        let int_name = Name::new(
+            BaseName::new("user"),
+            namespace.clone(),
+            BaseName::new("MakeInt"),
+        );
+        let void_name = Name::new(BaseName::new("user"), namespace, BaseName::new("MakeVoid"));
+        let mut symbols = HashMap::new();
+        symbols.insert(
+            int_name.clone(),
+            Symbol::Function(make_function("MakeInt", primitive_int())),
+        );
+        symbols.insert(
+            void_name.clone(),
+            Symbol::Function(make_function(
+                "MakeVoid",
+                Ty::Void {
+                    attr: TyAttr::EMPTY,
+                },
+            )),
+        );
+        let mut callables = HashMap::new();
+        for (name, wire) in [
+            (int_name, BaseName::new("MakeInt")),
+            (void_name, BaseName::new("MakeVoid")),
+        ] {
+            callables.insert(
+                CallableKey::Free(name),
+                CallableIdentity {
+                    family_name: wire.clone(),
+                    wire_name: wire,
+                    variant: CallableVariant::Execute,
+                    receiver: None,
+                },
+            );
+        }
+        let tree = generate_program(
+            &CodegenModel { symbols, callables },
+            &[1, 2, 3],
+            "0.0.0-test",
+            "0.0.0-test",
+            "returned-callable-codec",
+        )
+        .expect("returned callable codecs should generate");
+        tree.files
+            .iter()
+            .map(|file| String::from_utf8_lossy(&file.contents))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     fn mixed_closed_generic_source() -> String {
         let namespace = vec![BaseName::new("mixed_closed")];
         let color_name = Name::new(
@@ -4996,7 +5155,7 @@ mod tests {
                 vec![type_parameter.clone()],
                 vec![property(
                     "value",
-                    Ty::TypeVar(type_parameter, TyAttr::EMPTY),
+                    Ty::TypeVar(ParamTy::new(0, type_parameter), TyAttr::EMPTY),
                 )],
             ),
         );
@@ -5607,8 +5766,8 @@ mod tests {
         );
         let parameter_t = BaseName::new("T");
         let parameter_r = BaseName::new("R");
-        let type_t = Ty::TypeVar(parameter_t.clone(), TyAttr::EMPTY);
-        let type_r = Ty::TypeVar(parameter_r.clone(), TyAttr::EMPTY);
+        let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()), TyAttr::EMPTY);
+        let type_r = Ty::TypeVar(ParamTy::new(1, parameter_r.clone()), TyAttr::EMPTY);
         let callback = Ty::Function {
             params: vec![CallableParam {
                 name: Some(BaseName::new("value")),
@@ -6263,6 +6422,27 @@ mod tests {
         assert!(!source.contains("context.StreamState("));
         assert!(!source.contains("context.ReadStreamState("));
         assert!(!source.contains("BamlOptional<long?>"));
+    }
+
+    #[test]
+    fn returned_callable_decode_lambdas_preserve_task_shapes_and_optional_presence() {
+        let source = returned_callable_codec_source();
+        assert!(source.contains(
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<long>>"
+        ));
+        assert!(source.contains(
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task>"
+        ));
+        assert!(source.contains(
+            "return async (long argument0, global::Baml.BamlOptional<string> argument1, global::System.Threading.CancellationToken cancellationToken) =>"
+        ));
+        assert!(source.contains("if (argument1.TryGetValue(out var value1))"));
+        assert!(source.contains(
+            "var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+        ));
+        assert!(source.contains(
+            "_ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+        ));
     }
 
     #[test]

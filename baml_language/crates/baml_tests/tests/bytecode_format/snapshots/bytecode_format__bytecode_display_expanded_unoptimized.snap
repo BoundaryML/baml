@@ -89,7 +89,7 @@ function assert.contains(haystack: string, needle: string) -> null {
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
   50   0    load_var2 1 2          
-       1    call 652 ntypeargs=0   (baml.ops.equals_equals)
+       1    call 651 ntypeargs=0   (baml.ops.equals_equals)
        2    unary_op !             
        3    pop_jump_if_false +2   (to 5)
        4    jump +3                (to 7)
@@ -118,9 +118,10 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 }
 
 function assert.format_operand(value: unknown) -> string {
-  32   0   load_var 1             (value)
-       1   call 138 ntypeargs=0   (baml.String.from)
-       2   return                 
+  32   0   load_type 0            
+       1   load_var 1             (value)
+       2   call 138 ntypeargs=1   (baml.String.from)
+       3   return                 
 }
 
 function assert.is_true(condition: bool) -> null {
@@ -141,7 +142,7 @@ function assert.is_true(condition: bool) -> null {
 function assert.not_null(value: unknown | null) -> null {
   14   0   load_var 1             (value)
        1   load_const 0           (null)
-       2   call 652 ntypeargs=0   (baml.ops.equals_equals)
+       2   call 651 ntypeargs=0   (baml.ops.equals_equals)
        3   pop_jump_if_false +2   (to 5)
        4   jump +3                (to 7)
 
@@ -163,7 +164,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
 function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
@@ -176,7 +177,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  102   0   make_closure 1501 0   
+  102   0   make_closure 1500 0   
         1   store_var 1           (_0)
         2   load_var 1            (_0)
         3   return                
@@ -203,7 +204,7 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
        15   pop 1                  
 
   74   16   load_var 1             (threshold)
-       17   make_closure 1496 1    
+       17   make_closure 1495 1    
        18   store_var 2            (_0)
        19   load_var 2             (_0)
        20   return                 
@@ -244,7 +245,7 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
        27   pop 1                  
 
   10   28   load_var2 1 2          
-       29   make_closure 1480 2    
+       29   make_closure 1479 2    
        30   store_var 3            (_0)
        31   load_var 3             (_0)
        32   return                 
@@ -265,14 +266,14 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
        9    pop 1                  
 
   41   10   load_var 1             (max_attempts)
-       11   make_closure 1490 1    
+       11   make_closure 1489 1    
        12   store_var 2            (_0)
        13   load_var 2             (_0)
        14   return                 
 }
 
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  96   0   make_closure 1499 0   
+  96   0   make_closure 1498 0   
        1   store_var 1           (_0)
        2   load_var 1            (_0)
        3   return                
@@ -1243,7 +1244,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
 
   362   58    load_var 13                        (outcome)
         59    load_const 10                      ("pass")
-        60    call 652 ntypeargs=0               (baml.ops.equals_equals)
+        60    call 651 ntypeargs=0               (baml.ops.equals_equals)
         61    pop_jump_if_false +2               (to 63)
         62    jump +59                           (to 121)
 
@@ -1310,7 +1311,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
 
   377   114   load_var 13                        (outcome)
         115   load_const 16                      ("error")
-        116   call 652 ntypeargs=0               (baml.ops.equals_equals)
+        116   call 651 ntypeargs=0               (baml.ops.equals_equals)
         117   pop_jump_if_false -97              (to 20)
 
   378   118   load_const 17                      (true)
@@ -1590,7 +1591,7 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
         57    load_var 15             (nested)
         58    load_field 0            (outcome)
         59    load_const 3            ("pass")
-        60    call 652 ntypeargs=0    (baml.ops.equals_equals)
+        60    call 651 ntypeargs=0    (baml.ops.equals_equals)
         61    store_var 16            (nested_tolerated)
 
   804   62    load_var 15             (nested)
@@ -1670,7 +1671,7 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
 
   794   130   load_field 0            (outcome)
         131   load_const 7            ("pass")
-        132   call 652 ntypeargs=0    (baml.ops.equals_equals)
+        132   call 651 ntypeargs=0    (baml.ops.equals_equals)
         133   pop_jump_if_false +2    (to 135)
         134   jump +18                (to 152)
 
@@ -1766,7 +1767,7 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
 
   841   47   load_field 0                       (outcome)
         48   load_const 10                      ("pass")
-        49   call 652 ntypeargs=0               (baml.ops.equals_equals)
+        49   call 651 ntypeargs=0               (baml.ops.equals_equals)
         50   unary_op !                         
         51   pop_jump_if_false -15              (to 36)
 
@@ -2144,7 +2145,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
         37    load_var 13                        (tsr)
         38    load_field 0                       (outcome)
         39    load_const 7                       ("pass")
-        40    call 652 ntypeargs=0               (baml.ops.equals_equals)
+        40    call 651 ntypeargs=0               (baml.ops.equals_equals)
         41    store_var 14                       (ft)
 
   687   42    load_var 13                        (tsr)
@@ -2197,7 +2198,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
 
   677   82    load_field 0                       (outcome)
         83    load_const 8                       ("pass")
-        84    call 652 ntypeargs=0               (baml.ops.equals_equals)
+        84    call 651 ntypeargs=0               (baml.ops.equals_equals)
         85    pop_jump_if_false +2               (to 87)
         86    jump +18                           (to 104)
 
@@ -2343,7 +2344,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
   709   0     load_var 1             (report)
         1     load_field 0           (outcome)
         2     load_const 0           ("pass")
-        3     call 652 ntypeargs=0   (baml.ops.equals_equals)
+        3     call 651 ntypeargs=0   (baml.ops.equals_equals)
         4     store_var 3            (top_tolerated)
 
   710   5     load_var 1             (report)
@@ -2634,7 +2635,7 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
   485   98    load_var2 1 2           
         99    call 155 ntypeargs=0    (baml.String.index_of)
         100   load_const 6            (null)
-        101   call 652 ntypeargs=0    (baml.ops.equals_equals)
+        101   call 651 ntypeargs=0    (baml.ops.equals_equals)
         102   unary_op !              
         103   return                  
 }
@@ -2764,7 +2765,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         16   load_var 4                         (_4)
         17   is_type 5                          
         18   pop_jump_if_false +2               (to 20)
-        19   jump +16                           (to 35)
+        19   jump +18                           (to 37)
         20   load_const 6                       (null)
         21   make_cell                          
         22   store_var 5                        (child)
@@ -2772,30 +2773,26 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         24   store_deref 5                      
 
   399   25   load_var 5                         (child)
-        26   make_closure 1383 1                
+        26   make_closure 1381 1                
         27   load_const 6                       (null)
         28   load_const 6                       (null)
-        29   spawn                              
-        30   store_var 6                        (_11)
-        31   load_var2 2 6                      
-        32   call 4 ntypeargs=0                 (baml.Array.push)
-        33   pop 1                              
-        34   jump -23                           (to 11)
+        29   load_type 7                        
+        30   load_type 8                        
+        31   spawn                              
+        32   store_var 6                        (_11)
+        33   load_var2 2 6                      
+        34   call 4 ntypeargs=0                 (baml.Array.push)
+        35   pop 1                              
+        36   jump -25                           (to 11)
 
-  403   35   load_type 7                        
-        36   load_type 8                        
-        37   load_var 2                         (futures)
-        38   call 522 ntypeargs=2               (baml.future.all_complete)
-        39   await                              
-        40   jump +5                            (to 45)
-        41   load_var 7                         (e)
-        42   throw_if_panic                     
+  405   37   load_type 7                        
+        38   load_type 8                        
+        39   load_var 2                         (futures)
+        40   call 521 ntypeargs=2               (baml.future.all_complete)
+        41   await                              
 
-  404   43   load_const 9                       ("unexpected test child failure")
-        44   call 247 ntypeargs=0               (baml.sys.panic)
-
-  406   45   call 761 ntypeargs=0               (testing.aggregate_reports)
-        46   return                             
+  406   42   call 761 ntypeargs=0               (testing.aggregate_reports)
+        43   return                             
 }
 
 function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
@@ -2857,7 +2854,7 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
         47   pop 1                              
         48   load_var 8                         (outcome)
         49   load_const 7                       ("pass")
-        50   call 652 ntypeargs=0               (baml.ops.equals_equals)
+        50   call 651 ntypeargs=0               (baml.ops.equals_equals)
         51   unary_op !                         
         52   pop_jump_if_false -44              (to 8)
 
@@ -2876,7 +2873,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   411   3    load_var 1             (body)
-        4    make_closure 1393 1    
+        4    make_closure 1392 1    
         5    store_var 3            (base_run)
 
   435   6    load_var 2             (runner)
@@ -3051,13 +3048,13 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
         21   load_const 6                       ("*")
         22   call 155 ntypeargs=0               (baml.String.index_of)
         23   load_const 7                       (null)
-        24   call 652 ntypeargs=0               (baml.ops.equals_equals)
+        24   call 651 ntypeargs=0               (baml.ops.equals_equals)
         25   jump_if_false +7                   (to 32)
         26   pop 1                              
         27   load_var2 3 6                      
         28   call 155 ntypeargs=0               (baml.String.index_of)
         29   load_const 7                       (null)
-        30   call 652 ntypeargs=0               (baml.ops.equals_equals)
+        30   call 651 ntypeargs=0               (baml.ops.equals_equals)
         31   unary_op !                         
         32   pop_jump_if_false +2               (to 34)
         33   jump +11                           (to 44)
@@ -3141,7 +3138,7 @@ function testing.test_child(name: string, body: () -> void throws unknown, runne
   294   6    load_var2 1 2         
 
   296   7    load_var 3            (runner)
-        8    make_closure 1360 2   
+        8    make_closure 1358 2   
         9    init_instance 0       (testing.TestSetChild .name, .run)
         10   store_var 4           (_0)
         11   load_var 4            (_0)
@@ -3160,7 +3157,7 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
         7    load_field 0          (name)
 
   303   8    load_var2 1 2         
-        9    make_closure 1362 2   
+        9    make_closure 1360 2   
         10   init_instance 0       (testing.TestSetChild .name, .run)
         11   store_var 3           (_0)
         12   load_var 3            (_0)
@@ -3183,7 +3180,7 @@ function testing.testset_child_selected(registry: testing.TestRegistry, ts: test
 
   315   11   load_var2 1 2         
         12   load_var 3            (names)
-        13   make_closure 1364 3   
+        13   make_closure 1362 3   
         14   init_instance 0       (testing.TestSetChild .name, .run)
         15   store_var 4           (_0)
         16   load_var 4            (_0)

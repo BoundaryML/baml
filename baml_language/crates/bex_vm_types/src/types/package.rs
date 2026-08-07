@@ -89,6 +89,10 @@ pub struct ProgramImplRule {
     pub interface_args: Vec<TyTemplate>,
     pub interface_assoc: Vec<(Name, TyTemplate)>,
     pub methods: IndexMap<Name, ProgramMethodImpl>,
+    /// See [`RuntimeImplRule::field_links`](super::RuntimeImplRule::field_links).
+    /// Positional, so — unlike the name-keyed maps — it needs no canonical ordering
+    /// pass in [`ProgramPackage::sort_maps`].
+    pub field_links: Box<[u32]>,
 }
 
 /// The global-index-keyed twin of [`MethodImpl`](super::MethodImpl); `fqn` is the

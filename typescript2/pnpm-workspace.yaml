@@ -17,12 +17,16 @@ allowBuilds:
   '@vercel/speed-insights': false
   # postinstall only prints a funding banner
   core-js: false
+  # postinstall only prints an informational message in Russian time zones
+  es5-ext: false
   esbuild: true
   msw: true
   # native build needs system liblzma headers, which CI/Vercel images lack.
   # Was `pnpm.neverBuiltDependencies` in package.json before pnpm 11 stopped
   # reading that field; just-bash (app-promptfiddle) works without it.
   node-liblzma: false
+  # postinstall only warns about incompatible dependency version prefixes
+  protobufjs: false
   # selects/downloads prebuilt libvips; Next image optimization needs it
   sharp: true
   # downloads the prebuilt tree-sitter binary (pkg-grammar-treesitter)

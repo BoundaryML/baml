@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
 
 // ============================================================================
 // Optimization Level
@@ -116,21 +116,27 @@ pub enum MirFunctionKind {
 /// runtime reflection (BEP-062 `reflect.signature` / `reflect.call_any`),
 /// function-value type reconstruction, and display surfaces
 /// (`baml run --list`, bytecode listings).
+///
+/// Every type here is the one the declaration actually has, not the one it
+/// spells: an unwritten position takes TIR's inferred type, so a lambda's
+/// reconstructed signature is as precise as an annotated declaration's. Both
+/// producers reconstruct the same value type for the same callable.
 #[derive(Debug, Clone)]
 pub struct RuntimeSignature {
     /// Parameter names, in declaration order.
     pub param_names: Vec<String>,
-    /// Parameter types, parallel to `param_names`.
-    pub param_types: Vec<baml_type::RuntimeTy>,
+    /// Parameter types, parallel to `param_names`, as templates over the
+    /// callee frame's De Bruijn type-arg slots.
+    pub param_types: Vec<baml_type::TyTemplate>,
     /// Whether each parameter has a default, parallel to `param_names`.
     pub param_has_default: Vec<bool>,
-    /// The declared return type; `unknown` when unannotated.
-    pub return_type: baml_type::RuntimeTy,
-    /// The throws type. `None` == cannot throw. Top-level declarations carry
-    /// TIR's inferred transitive throw set; a lambda carries its declared
-    /// clause (`throws never` == `None`, unannotated == `Some(unknown)`, no
-    /// claim).
-    pub throws_type: Option<baml_type::RuntimeTy>,
+    /// The return type. A template over the callee frame's type-arg slots (see
+    /// [`Self::param_types`]).
+    pub return_type: baml_type::TyTemplate,
+    /// The throws type, as a template over the callee frame's type-arg slots.
+    /// `never` == cannot throw (the same spelling a function type uses), so a
+    /// reconstructed value signature and a written type agree.
+    pub throws_type: baml_type::TyTemplate,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,
     /// The name the declaration was written with; `None` for lambdas
@@ -315,6 +321,20 @@ pub enum StatementKind {
     /// Lowered from calls to `$compiler_intrinsic` functions.
     Intrinsic { op: IntrinsicOp, args: Vec<Operand> },
 
+    /// Write an interface field on a receiver whose concrete type is not known
+    /// statically — the store counterpart of [`Rvalue::VirtualFieldAccess`], with
+    /// the same operand meaning and the same resolution.
+    ///
+    /// A statement rather than an `Assign` to a `Place`, because the destination
+    /// slot is only known once the receiver's impl is resolved at run time.
+    VirtualFieldStore {
+        iface: TyTemplateInterface,
+        receiver: Operand,
+        field_index: u32,
+        field: Name,
+        value: Operand,
+    },
+
     /// No-op (placeholder for removed statements).
     Nop,
 }
@@ -414,7 +434,7 @@ pub enum Terminator {
         /// The interface to resolve against, as a template the emitter pushes
         /// with `LoadType`. Non-generic today (`baml.ops.Equals`/`Compare`); a
         /// parameterized interface bakes its arguments into the template.
-        iface: TyTemplate,
+        iface: TyTemplateInterface,
         /// The interface method to dispatch (e.g. `"eq"`, `"lt"`, `"neq"`).
         method: String,
         /// `args[..ntypeargs]` are the method-level type-argument values
@@ -482,6 +502,9 @@ pub enum Terminator {
         /// Boxed to keep `Terminator`'s footprint down (clippy
         /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
         config: Option<Box<Operand>>,
+        /// The `T`/`E` of the `Future<T, E>` this spawn yields. Boxed for the
+        /// same footprint reason as `config`.
+        future_ty: Box<SpawnFutureTy>,
         /// Where to store the resulting Future handle.
         future: Place,
         /// Block to resume after the spawn schedules.
@@ -560,6 +583,22 @@ pub enum Terminator {
         eval_rhs: BlockId,
         join: BlockId,
     },
+}
+
+/// The type arguments of the `Future<T, E>` a [`Terminator::Spawn`] yields.
+///
+/// Held as [`TyTemplate`]s rather than resolved types so a spawn inside a
+/// generic function (`fn f<T>(x: T) { spawn { x } }`) resolves against the
+/// frame's type arguments at runtime, exactly as an array literal's element
+/// type does. The runtime stores the resolved pair on the heap `Future` so
+/// reflection and `is`/`match` can see the future's generic parameters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpawnFutureTy {
+    /// The `T` of `Future<T, E>` — the value the spawned body returns.
+    pub returns: TyTemplate,
+    /// The `E` of `Future<T, E>` — what the spawned body may throw. A body that
+    /// statically cannot throw spells this `never`.
+    pub throws: TyTemplate,
 }
 
 impl Terminator {
@@ -736,10 +775,28 @@ pub enum Rvalue {
     /// correctly at runtime via `TypeArgRef` substitution.  A fully-realized
     /// template narrows to a `RealizedTy`, which the emitter handles on the
     /// same tag / class-identity fast path as before.
+    ///
+    /// The template is *complete* by type — `TyTemplate` has no match-any
+    /// holes — so the test always denotes exactly one type per frame. The
+    /// deliberately-coarse container test carries its own rvalue instead
+    /// ([`Rvalue::IsTypeTag`], a proven-sufficient tag).
     IsType {
         operand: Operand,
         ty_template: TyTemplate,
     },
+
+    /// Coarse runtime type-tag test: `is_type_tag(_1, LIST)`.
+    ///
+    /// Used when MIR lowering has *proven* the coarse tag equivalent to the
+    /// element-precise structural test for this scrutinee (the container
+    /// tag-sufficiency analysis) — the tag is the whole check, deliberately
+    /// blind to generic arguments. Carrying the decision explicitly keeps
+    /// `IsType`'s template a complete type: previously the same intent was
+    /// smuggled as a container template with `Wildcard` elements for the
+    /// emitter to sniff out. `tag` is a `baml_type::typetag` constant; the
+    /// emitter lowers this to the same `IsType`-against-`Int` bytecode as the
+    /// other coarse tag checks.
+    IsTypeTag { operand: Operand, tag: i64 },
 
     /// Allocate a closure object from a child lambda function.
     ///
@@ -775,7 +832,7 @@ pub enum Rvalue {
     MakeVirtualBoundMethod {
         /// The interface to resolve against, as a template the emitter pushes
         /// with `LoadType` (like [`Terminator::VirtualCall`]'s `iface`).
-        iface: TyTemplate,
+        iface: TyTemplateInterface,
         /// The interface method's name.
         method: String,
         /// The receiver whose runtime concrete type is the `Self` to resolve on.
@@ -785,6 +842,31 @@ pub enum Rvalue {
         /// Appended to the resolved impl frame by the VM — dropping them would
         /// lose the method's own generics.
         type_args: Vec<TyTemplate>,
+    },
+
+    /// Read an interface field from a receiver whose concrete type is not known
+    /// statically — the field analogue of [`Terminator::VirtualCall`], and the
+    /// structural twin of [`Rvalue::MakeVirtualBoundMethod`].
+    ///
+    /// A `Place::Field` cannot express this: its index is a slot in the receiver's
+    /// own layout, and two classes implementing the same interface link the same
+    /// interface field to different slots. `field_index` is instead the field's
+    /// position in the *interface's* declared field list, which the VM maps to a
+    /// slot through the resolved impl's `field_links`.
+    VirtualFieldAccess {
+        /// The interface resolved through, pushed by the emitter with `LoadType` —
+        /// so an interface argument that is an enclosing generic (`Slot<T>`)
+        /// arrives at the resolver realized against the caller's frame, which is
+        /// what discriminates a class implementing one interface family at several
+        /// instantiations with different links.
+        iface: TyTemplateInterface,
+        /// The receiver whose runtime concrete type is the `Self` to resolve on.
+        receiver: Operand,
+        /// Index into `iface`'s declared fields.
+        field_index: u32,
+        /// The field's name — for the pretty-printer and the emitter's
+        /// `OperandMeta` only. Dispatch reads `field_index`.
+        field: Name,
     },
 
     /// Create a generic-function value (`foo<T>`) whose type arguments depend on

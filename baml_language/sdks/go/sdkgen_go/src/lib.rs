@@ -27,7 +27,7 @@ use baml_codegen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
     SymbolPool, Ty, TypeAlias,
 };
-use baml_type::{RESERVED_USER_PACKAGE, TyAttr};
+use baml_type::{ParamTy, RESERVED_USER_PACKAGE, TyAttr};
 
 mod names;
 mod packages;
@@ -90,9 +90,33 @@ pub fn try_to_source_code_with_bytecode_and_options(
     baml_bytecode: &[u8],
     options: &GoGenOptions<'_>,
 ) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+    try_to_source_code_with_bytecode_metadata_and_options(pool, baml_bytecode, None, options)
+}
+
+pub fn try_to_source_code_with_bytecode_and_metadata_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    options: &GoGenOptions<'_>,
+) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+    try_to_source_code_with_bytecode_metadata_and_options(
+        pool,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        options,
+    )
+}
+
+fn try_to_source_code_with_bytecode_metadata_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    options: &GoGenOptions<'_>,
+) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
     formatting::gofmt_generated_files(render_source_code_with_bytecode_and_options(
         pool,
         baml_bytecode,
+        embedded_baml_toml,
         options,
     ))
 }
@@ -100,6 +124,7 @@ pub fn try_to_source_code_with_bytecode_and_options(
 fn render_source_code_with_bytecode_and_options(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
     options: &GoGenOptions<'_>,
 ) -> HashMap<PathBuf, String> {
     assert!(
@@ -119,7 +144,7 @@ fn render_source_code_with_bytecode_and_options(
     let cyclic_edges = cyclic_class_edges(pool, &renderable_classes);
     let mut files = HashMap::from([(
         PathBuf::from("internal/bootstrap/bootstrap.go"),
-        render_bootstrap(baml_bytecode),
+        render_bootstrap(baml_bytecode, embedded_baml_toml),
     )]);
 
     for package in packages.iter() {
@@ -1243,8 +1268,21 @@ fn supported_function(
                     !matches!(projection.project(&argument.ty), GoTy::Function(_))
                 })))
         && !projected_contains_type_var_dynamic_union(&projection.project(&function.return_type))
-        && (supported_wire_type(&function.return_type, wireable_classes, projection)
-            || function_returns_only_error(&function.return_type))
+        && match &function.return_type {
+            Ty::Function { params, .. } => params.iter().all(|param| param.name.is_some()),
+            _ => true,
+        }
+        && (match projection.project(&function.return_type) {
+            GoTy::Function(key) => {
+                key.params()
+                    .iter()
+                    .all(|param| supported_go_type(param.ty(), wireable_classes))
+                    && key
+                        .ret()
+                        .is_none_or(|ret| supported_go_type(ret, wireable_classes))
+            }
+            _ => supported_wire_type(&function.return_type, wireable_classes, projection),
+        } || function_returns_only_error(&function.return_type))
 }
 
 fn supported_function_argument(
@@ -1650,7 +1688,7 @@ fn render_functions(
                 out,
                 "func {receiver}{go_name}{type_parameter_clause}({}) ({}, {error_type}) {{",
                 params.join(", "),
-                function_go_type(
+                function_return_go_type(
                     &function.return_type,
                     current_baml_package,
                     current_package,
@@ -1670,7 +1708,7 @@ fn render_functions(
             let _ = writeln!(
                 out,
                 "\t\tvar {zero_local} {}",
-                function_go_type(
+                function_return_go_type(
                     &function.return_type,
                     current_baml_package,
                     current_package,
@@ -1703,7 +1741,17 @@ fn render_functions(
                         .generic_params
                         .iter()
                         .cloned()
-                        .map(|name| Ty::TypeVar(name, TyAttr::default()))
+                        .enumerate()
+                        .map(|(index, name)| {
+                            Ty::TypeVar(
+                                ParamTy::new(
+                                    u32::try_from(index)
+                                        .expect("generic parameter index fits in u32"),
+                                    name,
+                                ),
+                                TyAttr::default(),
+                            )
+                        })
                         .collect(),
                     TyAttr::default(),
                 );
@@ -1771,7 +1819,17 @@ fn render_functions(
                             .generic_params
                             .iter()
                             .cloned()
-                            .map(|name| Ty::TypeVar(name, TyAttr::default()))
+                            .enumerate()
+                            .map(|(index, name)| {
+                                Ty::TypeVar(
+                                    ParamTy::new(
+                                        u32::try_from(index)
+                                            .expect("generic parameter index fits in u32"),
+                                        name,
+                                    ),
+                                    TyAttr::default(),
+                                )
+                            })
                             .collect(),
                         TyAttr::default(),
                     );
@@ -1840,7 +1898,7 @@ fn render_functions(
             let _ = writeln!(
                 out,
                 "\t\tvar {zero_local} {}",
-                function_go_type(
+                function_return_go_type(
                     &function.return_type,
                     current_baml_package,
                     current_package,
@@ -2196,6 +2254,28 @@ fn function_go_type(
     )
 }
 
+fn function_return_go_type(
+    ty: &Ty,
+    current_baml_package: &BaseName,
+    current_package: &GoPackageName,
+    names: &GoNames,
+    projection: &GoTypeProjection<'_>,
+    type_vars: TypeVarScope<'_>,
+) -> String {
+    match projection.project(ty) {
+        GoTy::Function(key) => {
+            render_returned_callback_go_type(&key, current_baml_package, current_package, names)
+        }
+        projected => render_projected_go_type(
+            &projected,
+            current_baml_package,
+            current_package,
+            names,
+            type_vars,
+        ),
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 struct TypeVarScope<'a> {
     helper: Option<&'a BamlFqn>,
@@ -2419,6 +2499,22 @@ fn render_callback_go_type(
         (None, false) => format!("func({params})"),
         (None, true) => format!("func({params}) {}", GeneratorIdent::ErrorType),
     }
+}
+
+fn render_returned_callback_go_type(
+    key: &GoFunctionKey,
+    current_baml_package: &BaseName,
+    current_package: &GoPackageName,
+    names: &GoNames,
+) -> String {
+    let rendered = render_callback_go_type(key, current_baml_package, current_package, names);
+    rendered
+        .replacen(
+            "func(",
+            &format!("func({}.Context, ", GeneratorIdent::ContextPackage),
+            1,
+        )
+        .replace("Context, )", "Context)")
 }
 
 fn media_go_type(kind: MediaKind) -> &'static str {
@@ -2679,9 +2775,13 @@ fn projected_output_decoder(
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => codecs
             .union_ident(current_baml_package, key, UnionCodecDirection::Decode)
             .to_string(),
-        GoTy::Function(_) => unreachable!("function values are input-only in the Go SDK"),
+        GoTy::Function(key) => callback_decoder_ident(codecs, current_baml_package, key),
         GoTy::Unsupported => unreachable!("unsupported Go type reached output codec"),
     }
+}
+
+fn callback_decoder_ident(codecs: &WireCodecs, package: &BaseName, key: &GoFunctionKey) -> String {
+    format!("{}_decode", codecs.callback_ident(package, key))
 }
 
 fn projected_generic_output_decoder(
@@ -3334,6 +3434,8 @@ fn render_callback_codecs(
         }
         let encoder = codecs.callback_ident(package, key);
         let go_type = render_callback_go_type(key, package, current_package, names);
+        let returned_go_type =
+            render_returned_callback_go_type(key, package, current_package, names);
         if key.has_optional_params() {
             let option_names = names.callback_options(package, key);
             let option_type = option_names.type_name().identifier(current_package);
@@ -3516,6 +3618,168 @@ fn render_callback_codecs(
             }
         }
         out.push_str("\t})\n}\n\n");
+
+        let decoder = callback_decoder_ident(codecs, package, key);
+        let mut closure_parameters = vec![format!(
+            "{} {}.Context",
+            GeneratorIdent::ContextParameter,
+            GeneratorIdent::ContextPackage
+        )];
+        closure_parameters.extend(key.required_params().enumerate().map(|(index, param)| {
+            format!(
+                "{} {}",
+                CallbackArgumentIdent::new(index),
+                render_projected_go_type(
+                    param.ty(),
+                    package,
+                    current_package,
+                    names,
+                    TypeVarScope::default(),
+                )
+            )
+        }));
+        if key.has_optional_params() {
+            closure_parameters.push(format!(
+                "{options} {}",
+                names
+                    .callback_options(package, key)
+                    .type_name()
+                    .identifier(current_package)
+            ));
+        }
+        let _ = writeln!(
+            out,
+            "func {decoder}({value} {runtime}.Value) ({returned_go_type}, error) {{"
+        );
+        let _ = writeln!(out, "\tfunction, {error} := {value}.Function()");
+        let _ = writeln!(out, "\tif {error} != nil {{ return nil, {error} }}");
+        let _ = writeln!(
+            out,
+            "\treturn func({}){} {{",
+            closure_parameters.join(", "),
+            match (key.ret(), key.throws()) {
+                (Some(ret), false) => format!(
+                    " {}",
+                    render_projected_go_type(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        TypeVarScope::default(),
+                    )
+                ),
+                (Some(ret), true) => format!(
+                    " ({}, error)",
+                    render_projected_go_type(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        TypeVarScope::default(),
+                    )
+                ),
+                (None, false) => String::new(),
+                (None, true) => " error".to_string(),
+            }
+        );
+        let _ = writeln!(out, "\t\trequiredArgs_ := []{runtime}.Input{{");
+        for (index, param) in key.required_params().enumerate() {
+            let argument = CallbackArgumentIdent::new(index);
+            let _ = writeln!(
+                out,
+                "\t\t\t{}({argument}),",
+                projected_input_encoder(
+                    param.ty(),
+                    package,
+                    current_package,
+                    names,
+                    codecs,
+                    TypeVarScope::default(),
+                )
+            );
+        }
+        out.push_str("\t\t}\n");
+        let _ = writeln!(out, "\t\toptionalArgs_ := map[string]{runtime}.Input{{}}");
+        if key.has_optional_params() {
+            let option_names = names.callback_options(package, key);
+            for param in key.optional_params() {
+                let wire_name = param
+                    .name()
+                    .expect("optional callback parameter must have a wire name");
+                let field = option_names.field(wire_name).identifier(current_package);
+                let encoder = projected_input_encoder(
+                    param.ty(),
+                    package,
+                    current_package,
+                    names,
+                    codecs,
+                    TypeVarScope::default(),
+                );
+                let _ = writeln!(
+                    out,
+                    "\t\tif optionalValue_, ok_ := {options}.{field}.Get(); ok_ {{ optionalArgs_[{:?}] = {encoder}(optionalValue_) }}",
+                    wire_name.as_str()
+                );
+            }
+        }
+        let result_binding = if key.ret().is_some() {
+            result.to_string()
+        } else {
+            "_".to_string()
+        };
+        let _ = writeln!(
+            out,
+            "\t\t{result_binding}, {error} := function.CallPositional({}, requiredArgs_, optionalArgs_)",
+            GeneratorIdent::ContextParameter
+        );
+        if key.throws() {
+            match key.ret() {
+                Some(ret) => {
+                    let ret_ty = render_projected_go_type(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        TypeVarScope::default(),
+                    );
+                    let _ = writeln!(
+                        out,
+                        "\t\tif {error} != nil {{ var zero {ret_ty}; return zero, {error} }}"
+                    );
+                    let output_decoder = projected_output_decoder(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        codecs,
+                        TypeVarScope::default(),
+                    );
+                    let _ = writeln!(out, "\t\treturn {output_decoder}({result})");
+                }
+                None => {
+                    let _ = writeln!(out, "\t\treturn {error}");
+                }
+            }
+        } else {
+            let _ = writeln!(out, "\t\tif {error} != nil {{ panic({error}) }}");
+            if let Some(ret) = key.ret() {
+                let output_decoder = projected_output_decoder(
+                    ret,
+                    package,
+                    current_package,
+                    names,
+                    codecs,
+                    TypeVarScope::default(),
+                );
+                let _ = writeln!(
+                    out,
+                    "\t\t{decoded_local}, {error} := {output_decoder}({result})"
+                );
+                let _ = writeln!(out, "\t\tif {error} != nil {{ panic({error}) }}");
+                let _ = writeln!(out, "\t\treturn {decoded_local}");
+            }
+        }
+        out.push_str("\t}, nil\n}\n\n");
     }
 }
 
@@ -4302,7 +4566,7 @@ fn render_go_literal_value(literal: &GoLiteral, runtime: &str) -> String {
     }
 }
 
-fn render_bootstrap(bytecode: &[u8]) -> String {
+fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     let mut out = String::from(BANNER);
     out.push_str("package bootstrap\n\n");
     out.push_str("import (\n\t\"sync\"\n\n");
@@ -4318,8 +4582,15 @@ fn render_bootstrap(bytecode: &[u8]) -> String {
         let _ = writeln!(out, "\t{line},");
     }
     out.push_str("}\n\n");
+    if let Some(embedded_baml_toml) = embedded_baml_toml {
+        let _ = writeln!(out, "const embeddedBamlToml = {embedded_baml_toml:?}\n");
+    }
     out.push_str("func Ensure() error {\n");
-    out.push_str("\tonce.Do(func() { initializeErr = baml_go.Initialize(bytecode) })\n");
+    if embedded_baml_toml.is_some() {
+        out.push_str("\tonce.Do(func() { initializeErr = baml_go.InitializeWithMetadata(bytecode, embeddedBamlToml) })\n");
+    } else {
+        out.push_str("\tonce.Do(func() { initializeErr = baml_go.Initialize(bytecode) })\n");
+    }
     out.push_str("\treturn initializeErr\n}\n");
     out
 }
@@ -4358,6 +4629,7 @@ mod tests {
         render_source_code_with_bytecode_and_options(
             pool,
             baml_bytecode,
+            None,
             &GoGenOptions {
                 naming_convention,
                 sdk_import_path,
@@ -4371,7 +4643,7 @@ mod tests {
         baml_bytecode: &[u8],
         options: &GoGenOptions<'_>,
     ) -> HashMap<PathBuf, String> {
-        render_source_code_with_bytecode_and_options(pool, baml_bytecode, options)
+        render_source_code_with_bytecode_and_options(pool, baml_bytecode, None, options)
     }
 
     fn without_horizontal_whitespace(value: &str) -> String {
@@ -4460,7 +4732,7 @@ mod tests {
     }
 
     fn ty_type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(name, TyAttr::default())
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name), TyAttr::default())
     }
 
     fn ty_media(kind: baml_base::MediaKind) -> Ty {
@@ -5558,8 +5830,17 @@ mod tests {
         );
         let root = &files[&PathBuf::from("functions.go")];
         let models = &files[&PathBuf::from("packages/models/functions.go")];
-        assert_eq!(root.matches("func _bamlEncodeCallback").count(), 1);
-        assert_eq!(models.matches("func _bamlEncodeCallback").count(), 1);
+        assert_eq!(root.matches("func _bamlEncodeCallback0(").count(), 1);
+        assert_eq!(models.matches("func _bamlEncodeCallback0(").count(), 1);
+        assert!(root.contains("_decode(value_ baml_go.Value)"));
+        assert!(root.contains(
+            "_decode(value_ baml_go.Value) (func(context.Context, int64) string, error)"
+        ));
+        assert!(
+            root.contains("return func(ctx_ context.Context, _bamlCallbackArg0_ int64) string")
+        );
+        assert!(root.contains("function.CallPositional(ctx_, requiredArgs_, optionalArgs_)"));
+        assert!(!root.contains("function.CallPositional(context.Background()"));
         assert!(root.contains("if value_ == nil"));
         assert!(root.contains("InvalidInput(\"BAML host callable is nil\")"));
         assert!(

@@ -19,20 +19,21 @@ pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
+pub(crate) mod describe_render;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
+pub(crate) mod feedback_command;
 pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
-pub(crate) mod grep_command;
+pub(crate) mod help_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;
 pub(crate) mod manifest;
 pub(crate) mod output;
 pub(crate) mod pack_command;
-pub(crate) mod pack_elf;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
@@ -116,7 +117,7 @@ impl From<ExitCode> for u32 {
 
 /// Run the CLI with the given arguments.
 ///
-/// Dispatches to one of: `run`, `describe`, `generate`, `grep`, `test`,
+/// Dispatches to one of: `run`, `describe`, `generate`, `test`,
 /// `format`, or `language-server`. `baml run` is the top-level entry for
 /// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {

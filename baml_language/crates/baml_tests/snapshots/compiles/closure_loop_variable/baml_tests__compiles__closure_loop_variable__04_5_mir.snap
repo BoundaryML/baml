@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9156
 ---
 === MIR2 ===
 fn user.sum_array(arr: int[]) -> int {
@@ -28,11 +27,11 @@ fn user.sum_array(arr: int[]) -> int {
     bb0: {
         _2 = const 0_i64;
         _3 = []: never[];
-        _4 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _1) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -50,11 +49,11 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb4: {
         _11 = copy _3;
-        _12 = virtual_call iter as baml.iter.Iterable<Item = () -> void throws never, Error = never>(copy _11) -> [bb5];
+        _12 = virtual_call iter as baml.iter.Iterable<Error = never, Item = () -> void throws never>(copy _11) -> [bb5];
     }
 
     bb5: {
-        _13 = virtual_call next as baml.iter.Iterator<Item = () -> void throws never, Error = never>(copy _12) -> [bb6];
+        _13 = virtual_call next as baml.iter.Iterator<Error = never, Item = () -> void throws never>(copy _12) -> [bb6];
     }
 
     bb6: {
@@ -81,9 +80,9 @@ fn user.sum_array(arr: int[]) -> int {
 }
 
 // lambda[0]
-fn .<lambda(sum_array, 0)>() -> null {
+fn .<lambda(sum_array, 0)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: int
 
     bb0: {

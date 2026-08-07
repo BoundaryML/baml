@@ -22,7 +22,7 @@ use baml_sdk::host_callable_tests::{
     call_callback_with_optional_args_all_unset, call_callback_with_optional_args_partially_set,
     call_int_callback, call_repeatedly, call_with_callback, call_with_class_callback,
     call_with_throwing, call_with_two_args, call_with_typed_throws,
-    call_with_typed_throws_propagating,
+    call_with_typed_throws_propagating, make_adder, make_counter, make_pair_builder,
 };
 
 /// Stand-in for python's builtin `ValueError`: an arbitrary host error value
@@ -73,6 +73,39 @@ fn test_host_callables_int_return_callable_round_trip() {
 
     let result = call_int_callback(cb, 21).unwrap();
     assert_eq!(result, 42);
+}
+
+#[test]
+fn test_baml_closure_is_a_native_callable_with_host_language_arguments() {
+    let add_ten = make_adder(10).unwrap();
+    assert_eq!(add_ten.call((5,)).unwrap(), 15);
+    assert_eq!(add_ten.call((7,)).unwrap(), 17);
+}
+
+#[test]
+fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
+    let build = make_pair_builder(30).unwrap();
+    assert_eq!(
+        build.call((12, "Ada".to_string())).unwrap(),
+        Person {
+            name: "Ada".to_string(),
+            age: 42,
+        }
+    );
+    assert_eq!(
+        build.call((5, "Grace".to_string())).unwrap(),
+        Person {
+            name: "Grace".to_string(),
+            age: 35,
+        }
+    );
+}
+
+#[test]
+fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
+    let next_value = make_counter(40).unwrap();
+    assert_eq!(next_value.call(()).unwrap(), 41);
+    assert_eq!(next_value.call(()).unwrap(), 42);
 }
 
 #[test]

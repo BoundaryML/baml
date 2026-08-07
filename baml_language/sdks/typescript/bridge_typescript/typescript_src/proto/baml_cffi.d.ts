@@ -820,6 +820,12 @@ export namespace baml_bridge {
 
                 /** CallFunctionArgs typeArgs */
                 typeArgs?: (baml_bridge.cffi.v1.IBamlTyArg[]|null);
+
+                /** CallFunctionArgs functionName */
+                functionName?: (string|null);
+
+                /** CallFunctionArgs functionHandle */
+                functionHandle?: (number|Long|null);
             }
 
             /** Represents a CallFunctionArgs. */
@@ -839,6 +845,15 @@ export namespace baml_bridge {
 
                 /** CallFunctionArgs typeArgs. */
                 public typeArgs: baml_bridge.cffi.v1.IBamlTyArg[];
+
+                /** CallFunctionArgs functionName. */
+                public functionName?: (string|null);
+
+                /** CallFunctionArgs functionHandle. */
+                public functionHandle?: (number|Long|null);
+
+                /** CallFunctionArgs callTarget. */
+                public callTarget?: ("functionName"|"functionHandle");
 
                 /**
                  * Creates a new CallFunctionArgs instance using the specified properties.
@@ -3609,6 +3624,9 @@ export namespace baml_bridge {
 
                 /** BamlTyTypeVar name */
                 name?: (string|null);
+
+                /** BamlTyTypeVar index */
+                index?: (number|null);
             }
 
             /** Represents a BamlTyTypeVar. */
@@ -3622,6 +3640,9 @@ export namespace baml_bridge {
 
                 /** BamlTyTypeVar name. */
                 public name: string;
+
+                /** BamlTyTypeVar index. */
+                public index: number;
 
                 /**
                  * Creates a new BamlTyTypeVar instance using the specified properties.

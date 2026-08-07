@@ -724,20 +724,106 @@ function or_deep_class() -> int {
     }
 }
 
-// dispatch helpers — these were generic in Rust; here we use concrete variants
-// to avoid the type-argument inference issues with generic top-level functions.
-function dispatch_int_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
+// ─── dispatch by function signature ──────────────────────────────────────────
+
+// A function-typed arm is a real, signature-precise test: the value matcher
+// applies the canonical function relation (contravariant parameters, covariant
+// return and throws) to the type the callable value reconstructs. Every
+// callable reconstructs faithfully — a closure, generic function, or bound
+// method materializes its stored signature templates against the realized
+// frame it carries — so which arm a callable takes is decided by its actual
+// signature, whatever flavor of callable it is.
+
+function dispatch_cb(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> string {
     match (cb) {
-        let f: (int) -> int throws never => f(5),
-        let f: (string) -> int throws never => f("x")
+        let f: (int) -> int throws never => "int:" + f(2).to_string(),
+        let g: (string) -> string throws never => "str:" + g("x")
     }
 }
 
-function dispatch_union_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
+function test_dispatches_int_callback() -> string {
+    dispatch_cb((n: int) -> int { n * 10 })
+}
+
+function test_dispatches_string_callback() -> string {
+    dispatch_cb((s: string) -> string { s + "!" })
+}
+
+class DispatchCounter {
+    n: int
+    function bump(self, d: int) -> int throws never { self.n + d }
+}
+
+// A bound method carries its complete curried frame, and its reconstructed
+// type drops the applied receiver — so it dispatches as the `(int) -> int` it
+// is from the caller's side.
+function test_dispatches_bound_method() -> string {
+    let c = DispatchCounter { n: 100 }
+    dispatch_cb(c.bump)
+}
+
+// A closure minted inside a generic frame: its stored signature references
+// that frame's slots, and substituting the args the value captured yields
+// `(int) -> int` — not a coarsened `unknown`.
+function make_generic_cb<T>(v: T) -> (int) -> T throws never {
+    (n: int) -> T { v }
+}
+
+function test_dispatches_generic_frame_closure() -> string {
+    dispatch_cb(make_generic_cb<int>(7))
+}
+
+// A non-final function-typed arm ahead of a wildcard: its test is emitted and
+// decides, rather than being elided or answering constant-false.
+function test_fn_arm_before_wildcard(cb: ((int) -> int throws never) | int) -> string {
     match (cb) {
-        let f: (int) -> int throws never => f(5),
-        let f: (string) -> int throws never => f("hello")
+        let f: (int) -> int throws never => "fn:" + f(3).to_string(),
+        _ => "other"
     }
+}
+
+function test_fn_arm_before_wildcard_fn() -> string {
+    test_fn_arm_before_wildcard((n: int) -> int { n + 1 })
+}
+
+function test_fn_arm_before_wildcard_int() -> string {
+    test_fn_arm_before_wildcard(5)
+}
+
+// `is` against a function type: a coarser `throws` accepts (covariant), a
+// different parameter type rejects.
+function test_fn_is_matching() -> bool {
+    ((n: int) -> int { n }) is (int) -> int throws unknown
+}
+
+function test_fn_is_mismatched() -> bool {
+    ((n: int) -> int { n }) is (string) -> string throws unknown
+}
+
+test "dispatches_int_callback" {
+    assert.is_true(baml.deep_equals(test_dispatches_int_callback(), "int:20"))
+}
+
+test "dispatches_string_callback" {
+    assert.is_true(baml.deep_equals(test_dispatches_string_callback(), "str:x!"))
+}
+
+test "dispatches_bound_method_by_receiver_dropped_signature" {
+    assert.is_true(baml.deep_equals(test_dispatches_bound_method(), "int:102"))
+}
+
+test "dispatches_closure_minted_in_generic_frame" {
+    assert.is_true(baml.deep_equals(test_dispatches_generic_frame_closure(), "int:7"))
+}
+
+test "non_final_fn_arm_decides_against_wildcard" {
+    assert.is_true(baml.deep_equals(test_fn_arm_before_wildcard_fn(), "fn:4"))
+    assert.is_true(baml.deep_equals(test_fn_arm_before_wildcard_int(), "other"))
+}
+
+test "fn_is_test_discriminates_by_signature" {
+    assert.is_true(test_fn_is_matching())
+    assert.is_true(!test_fn_is_mismatched())
 }
 
 // Per-test helpers that need unique names
@@ -1220,20 +1306,6 @@ test "match_bind_with_type_ascription" {
     assert.is_true(baml.deep_equals(test_match_bind_type_ascription(), 101))
 }
 
-test "match_dispatches_int_callback" {
-    assert.is_true(baml.deep_equals(
-        dispatch_int_cb((n: int) -> int { n * 10 }),
-        50
-    ))
-}
-
-test "match_dispatches_string_callback" {
-    assert.is_true(baml.deep_equals(
-        dispatch_union_cb((s: string) -> int { 42 }),
-        42
-    ))
-}
-
 test "match_or_of_chain_bindings_swapped" {
     assert.is_true(baml.deep_equals(test_match_or_chain_swapped(), 14))
 }
@@ -1635,4 +1707,63 @@ test "rustc_port_optional_literal_or_arm_null" {
 
 test "rustc_port_optional_literal_or_arm_other" {
     assert.equal(score_int_optional(99), 0)
+}
+
+// ─── `unknown` is the top type, including in a refutable position ────────────
+// An exhaustive final `let v: unknown` arm has its test elided, so the bug this
+// pins is only reachable when the arm must actually be tested — here a guard
+// forces that. Emitting the tagless `unknown` leaf as a coarse type-tag check
+// used to fall through to constant-FALSE, so every value fell past the arm.
+
+class UnknownArmBox {
+    v: int
+}
+
+function unknown_arm_tested(x: unknown, gate: bool) -> string {
+    match (x) {
+        let v: unknown if gate => "top",
+        _ => "fell-through",
+    }
+}
+
+function unknown_arm_int_fn() -> string {
+    unknown_arm_tested(5, true)
+}
+
+test "guarded_unknown_arm_matches_int" {
+    assert.equal(unknown_arm_int_fn(), "top")
+}
+
+function unknown_arm_class_fn() -> string {
+    unknown_arm_tested(UnknownArmBox { v: 1 }, true)
+}
+
+test "guarded_unknown_arm_matches_class" {
+    assert.equal(unknown_arm_class_fn(), "top")
+}
+
+function unknown_arm_closure_fn() -> string {
+    unknown_arm_tested((n: int) -> int throws never { n }, true)
+}
+
+test "guarded_unknown_arm_matches_closure" {
+    assert.equal(unknown_arm_closure_fn(), "top")
+}
+
+function unknown_arm_null_fn() -> string {
+    unknown_arm_tested(null, true)
+}
+
+test "guarded_unknown_arm_matches_null" {
+    assert.equal(unknown_arm_null_fn(), "top")
+}
+
+// The guard still decides: a false gate falls through, so the arm is a real
+// test rather than an unconditional jump.
+function unknown_arm_gate_false_fn() -> string {
+    unknown_arm_tested(5, false)
+}
+
+test "guarded_unknown_arm_respects_guard" {
+    assert.equal(unknown_arm_gate_false_fn(), "fell-through")
 }

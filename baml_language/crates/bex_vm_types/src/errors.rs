@@ -264,10 +264,23 @@ pub enum VmInternalError {
     #[error("virtual call could not resolve interface method `{method}`")]
     UnresolvedVirtualCall { method: String },
 
+    /// A `VirtualLoadField`/`VirtualStoreField` could not resolve interface field
+    /// `field_index` of `interface` for the receiver's runtime concrete type — either
+    /// the impl registry has no rule for the pair, or the rule's `field_links` table
+    /// is shorter than the interface's declared field list. The type checker proves
+    /// the receiver implements the interface before emitting the access, and E0124
+    /// makes the table total, so either is a compiler/VM inconsistency rather than a
+    /// user-reachable condition.
+    #[error("virtual field access could not resolve field #{field_index} of `{interface}`")]
+    UnresolvedVirtualFieldAccess {
+        interface: String,
+        field_index: usize,
+    },
+
     /// A `LoadType` (or other materialization) could not fully realize a
     /// `TyTemplate` against the frame's realized type arguments — a frame
-    /// reference out of range, a `Wildcard` hole reaching a materialization
-    /// position, or an associated-type projection that did not reduce. Runtime
+    /// reference out of range, or an associated-type projection that did not
+    /// reduce. Runtime
     /// type arguments are realized, so the compiler guarantees such templates
     /// realize; a failure here is a compiler/VM inconsistency, surfaced loudly
     /// rather than erased to `unknown`.

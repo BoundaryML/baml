@@ -77,53 +77,77 @@ public final class BamlRuntime: @unchecked Sendable {
         String(decoding: BamlApi.takeBuffer(BamlApi.version()), as: UTF8.self)
     }
 
+    public static func toolchainVersion() -> String {
+        BamlBridgeIdentity.toolchainVersion
+    }
+
+    public static func bridgeRuntimeVersion() -> String {
+        BamlBridgeIdentity.bridgeRuntimeVersion
+    }
+
     /// Load compiled BAML bytecode into the (process-global) native
     /// runtime, register this bridge's identity, and register the
     /// completion callback. Idempotent; generated SDK roots call this
     /// from their `_initialized` once.
     ///
-    /// `sdkVersion` is the canonical BAML product version stamped into
-    /// the generated SDK at codegen time; `register_bridge` requires an
-    /// exact match with the native library's version, so a generated SDK
-    /// can never silently run against a different runtime release.
-    public func initialize(bytecode: Data, sdkVersion: String? = nil) {
+    /// `sdkVersion` remains as a compatibility argument for older generated
+    /// SDKs. Registration uses the bridge's stamped toolchain and package
+    /// identities, while new generated SDKs provide `embeddedBamlToml`.
+    public func initialize(
+        bytecode: Data,
+        sdkVersion: String? = nil,
+        embeddedBamlToml: String? = nil
+    ) {
         lock.lock()
         defer { lock.unlock() }
         guard !initialized else { return }
 
-        if let sdkVersion {
-            let versionBytes = Array(sdkVersion.utf8)
-            let registerError = versionBytes.withUnsafeBufferPointer { buf -> BamlBuffer in
+        _ = sdkVersion
+        let versionBytes = Array(BamlBridgeIdentity.toolchainVersion.utf8)
+        let nameBytes = Array(BamlBridgeIdentity.runtimeName.utf8)
+        let runtimeVersionBytes = Array(BamlBridgeIdentity.bridgeRuntimeVersion.utf8)
+        let registerError = versionBytes.withUnsafeBufferPointer { versionBuffer -> BamlBuffer in
+            nameBytes.withUnsafeBufferPointer { nameBuffer in
+                runtimeVersionBytes.withUnsafeBufferPointer { runtimeVersionBuffer in
                 var info = BamlBridgeInfoV1(
                     struct_size: MemoryLayout<BamlBridgeInfoV1>.size,
                     language: BAML_BRIDGE_LANGUAGE_SWIFT.rawValue,
-                    sdk_version: buf.baseAddress,
-                    sdk_version_len: buf.count
+                    sdk_version: versionBuffer.baseAddress,
+                    sdk_version_len: versionBuffer.count,
+                    bridge_runtime_name: nameBuffer.baseAddress,
+                    bridge_runtime_name_len: nameBuffer.count,
+                    bridge_runtime_version: runtimeVersionBuffer.baseAddress,
+                    bridge_runtime_version_len: runtimeVersionBuffer.count
                 )
                 return BamlApi.registerBridge(&info)
             }
-            let message = String(decoding: BamlApi.takeBuffer(registerError), as: UTF8.self)
-            if !message.isEmpty {
-                // A version mismatch means the generated SDK and the
-                // linked native library came from different releases —
-                // misconfiguration, not a runtime condition.
-                fatalError("BAML bridge registration failed: \(message)")
             }
+        }
+        let message = String(decoding: BamlApi.takeBuffer(registerError), as: UTF8.self)
+        if !message.isEmpty {
+            fatalError(message)
         }
 
         BamlApi.registerUnhandledSpawnErrorCallback(bamlGlobalUnhandledSpawnError)
 
         let errorBuffer = bytecode.withUnsafeBytes { buf -> BamlBuffer in
-            BamlApi.initializeRuntimeFromBytecode(
-                buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                buf.count
-            )
+            if let embeddedBamlToml {
+                return embeddedBamlToml.withCString { manifest in
+                    BamlApi.initializeRuntimeFromBytecodeWithMetadata(
+                        buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        buf.count,
+                        manifest
+                    )
+                }
+            }
+            return BamlApi.initializeRuntimeFromBytecode(
+                buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count)
         }
         let initError = String(decoding: BamlApi.takeBuffer(errorBuffer), as: UTF8.self)
         if !initError.isEmpty {
             // Init failure is unrecoverable misconfiguration (corrupt
             // inlined bytecode), not a runtime condition.
-            fatalError("BAML runtime initialization failed: \(initError)")
+            fatalError(initError)
         }
 
         BamlApi.registerCallback(bamlGlobalCompletion)
@@ -178,6 +202,17 @@ public final class BamlRuntime: @unchecked Sendable {
         }
     }
 
+    public func callHandleRaw(
+        _ handleKey: UInt64,
+        args: [(String, (any BamlEncodable)?)]
+    ) async throws -> BamlOutboundValue {
+        do {
+            return try unwrapEnvelope(await invokeHandleAsync(handleKey, args: args))
+        } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
+            throw CancellationError()
+        }
+    }
+
     public func callSyncVoid(
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
@@ -218,7 +253,11 @@ public final class BamlRuntime: @unchecked Sendable {
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(args, callId: protoCallId)
+        let payload = try encodeCallArgs(
+            args,
+            callId: protoCallId,
+            callTarget: .functionName(fqn)
+        )
 
         let box = ResultBox()
         let semaphore = DispatchSemaphore(value: 0)
@@ -226,7 +265,7 @@ public final class BamlRuntime: @unchecked Sendable {
             box.store(result)
             semaphore.signal()
         }
-        dispatch(fqn, payload: payload, callbackId: callbackId)
+        dispatch(payload: payload, callbackId: callbackId)
         semaphore.wait()
         return try box.take().get()
     }
@@ -236,20 +275,48 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(args, callId: protoCallId)
+        let payload = try encodeCallArgs(
+            args,
+            callId: protoCallId,
+            callTarget: .functionName(fqn)
+        )
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let callbackId = registerPending { result in
                     continuation.resume(with: result)
                 }
-                dispatch(fqn, payload: payload, callbackId: callbackId)
+                dispatch(payload: payload, callbackId: callbackId)
             }
         } onCancel: {
             // Reserve-based cancel: the engine delivers a Cancelled
             // panic through the normal completion path, which resumes
             // the continuation. (Translating that into Swift's
             // CancellationError is the cancellation phase.)
+            _ = BamlApi.cancelFunctionCall(protoCallId)
+        }
+    }
+
+    private func invokeHandleAsync(
+        _ handleKey: UInt64,
+        args: [(String, (any BamlEncodable)?)]
+    ) async throws -> Data {
+        precondition(handleKey != 0, "cannot invoke a zero BAML function handle")
+        let protoCallId = BamlApi.newFunctionCall()
+        let payload = try encodeCallArgs(
+            args,
+            callId: protoCallId,
+            callTarget: .functionHandle(handleKey)
+        )
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let callbackId = registerPending { result in
+                    continuation.resume(with: result)
+                }
+                dispatch(payload: payload, callbackId: callbackId)
+            }
+        } onCancel: {
             _ = BamlApi.cancelFunctionCall(protoCallId)
         }
     }
@@ -276,19 +343,16 @@ public final class BamlRuntime: @unchecked Sendable {
         completion?(.success(payload))
     }
 
-    private func dispatch(_ fqn: String, payload: Data, callbackId: UInt32) {
+    private func dispatch(payload: Data, callbackId: UInt32) {
         // `call_function` fully decodes the args buffer before it
         // returns (verified in bridge_cffi::call_function_inner), so
         // scoping the pointers to this call is sound.
         payload.withUnsafeBytes { buf in
-            fqn.withCString { name in
-                BamlApi.callFunction(
-                    name,
-                    buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                    buf.count,
-                    callbackId
-                )
-            }
+            BamlApi.callFunction(
+                buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                buf.count,
+                callbackId
+            )
         }
     }
 

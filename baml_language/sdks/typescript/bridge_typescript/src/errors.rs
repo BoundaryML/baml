@@ -27,13 +27,13 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
             "BamlError: BamlClientError: Internal error: lock poisoned",
         ),
         BridgeError::Runtime(runtime_error) => runtime_error_to_napi(runtime_error),
-        BridgeError::NullFunctionName => napi::Error::new(
+        BridgeError::MissingCallTarget => napi::Error::new(
             Status::InvalidArg,
-            "BamlError: BamlInvalidArgumentError: Null function name pointer",
+            "BamlError: BamlInvalidArgumentError: Call target is missing",
         ),
-        BridgeError::InvalidFunctionName(e) => napi::Error::new(
+        err @ BridgeError::FunctionHandleTypeArgs => napi::Error::new(
             Status::InvalidArg,
-            format!("BamlError: BamlInvalidArgumentError: Invalid UTF-8 in function name: {e}"),
+            format!("BamlError: BamlInvalidArgumentError: {err}"),
         ),
         BridgeError::FunctionNotFound { name } => napi::Error::new(
             Status::InvalidArg,
@@ -66,6 +66,7 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
             Status::GenericFailure,
             format!("BamlError: BamlClientError: Internal error: {msg}"),
         ),
+        BridgeError::Startup(message) => napi::Error::new(Status::GenericFailure, message),
     }
 }
 

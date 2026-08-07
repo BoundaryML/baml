@@ -329,7 +329,7 @@ async fn signature_bound_method_drops_receiver() {
 }
 
 #[tokio::test]
-async fn generic_function_reflects_coarsely_and_dispatches() {
+async fn instantiated_generic_function_reflects_precisely_and_dispatches() {
     let output = baml_test!(
         r#"
         function ident<T>(x: T) -> T throws never {
@@ -337,9 +337,9 @@ async fn generic_function_reflects_coarsely_and_dispatches() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction = ident
-            // A generic callable's unresolved slots erase to `unknown` rather
-            // than refusing reflection, and call_any still dispatches.
+            // An instantiated generic callable carries its realized frame, so its
+            // signature reconstructs at that instantiation rather than coarsely.
+            let f: baml.AnyFunction = ident<int>
             let sig = reflect.signature(f)
             let r = reflect.call_any(f, { "x": 42 }) catch (e) {
                 _ => -1
@@ -354,7 +354,34 @@ async fn generic_function_reflects_coarsely_and_dispatches() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("unknown|1|42".into()))
+        Ok(BexExternalValue::String("int|1|42".into()))
+    );
+}
+
+/// An *uninstantiated* generic reference — no turbofish and nothing to infer
+/// from — is a compile error: a callable value must carry a realized frame, so
+/// there is no such thing as a half-generic one to reflect on. Ignored until
+/// that diagnostic exists; today the reference is accepted and only fails later,
+/// at `reflect.signature`, with a misleading "expects a function value".
+#[ignore = "pending the uninstantiated-generic-reference diagnostic"]
+#[tokio::test]
+async fn uninstantiated_generic_function_reference_is_a_compile_error() {
+    let output = baml_test!(
+        r#"
+        function ident<T>(x: T) -> T throws never {
+            return x
+        }
+
+        function main() -> string throws never {
+            let f: baml.AnyFunction = ident
+            return "unreachable"
+        }
+        "#
+    );
+    assert!(
+        output.result.is_err(),
+        "expected a compile error naming the uninferable type parameter, got {:?}",
+        output.result
     );
 }
 

@@ -22,6 +22,9 @@ function user.let_annotation() -> int  [expr] {
 function user.list_param(cbs: (value: int) -> int[]) -> int  [expr] {
   {  } 0
 }
+function user.match_pattern(cb: (value: int) -> int) -> int  [expr] {
+  {  } match (cb) { f: (value: int) -> int => f(1) }
+}
 function user.nested_param(cb: ((value: int) -> int) -> int) -> int  [expr] {
   {  } cb((value: int) -> int { {  } value })
 }

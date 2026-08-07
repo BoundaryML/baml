@@ -266,6 +266,10 @@ pub enum DiagnosticId {
     UnconstrainedImplTypeParam,
     /// `Self` used in an interface FIELD type (only valid in method signatures).
     SelfInInterfaceField,
+    /// Bare `Self` used in an associated type's DEFAULT. `Self` is universal, so it
+    /// cannot be resolved where the interface is used as an interface-existential
+    /// type (the implementor is hidden).
+    SelfInAssociatedTypeDefault,
     /// An `implements … for <target>` whose `for` target is not a single concrete
     /// type — a union, optional, interface ("dyn"), or `unknown`. Interfaces can
     /// only be implemented for a concrete type (or a concrete type constructor
@@ -355,6 +359,14 @@ pub enum DiagnosticId {
     /// interface (`baml.AnyFunction`) that is only legal as a value type
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
+
+    // Projection bases (E0156)
+    /// The dotted projection shorthand (`Base.Member`) was written with the
+    /// interface itself as the base (`Iterator.Element`). A projection's base
+    /// is an implementor type, a bounded type variable, or `Self` — naming
+    /// the interface explicitly takes a qualified projection
+    /// (`(Base as Iterator).Element`). Rust's E0223 analog.
+    InterfaceProjectionBase,
 }
 
 impl DiagnosticId {
@@ -550,6 +562,7 @@ impl DiagnosticId {
             DiagnosticId::ImplTargetNotConcrete => "E0138",
             DiagnosticId::ImplViolatesOrphanRule => "E0139",
             DiagnosticId::ToStringMustImplementInterface => "E0140",
+            DiagnosticId::SelfInAssociatedTypeDefault => "E0157",
             DiagnosticId::DeferControlFlowEscape => "E0141",
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
@@ -568,8 +581,13 @@ impl DiagnosticId {
 
             // Numeric literal validation
             DiagnosticId::InvalidNumericLiteral => "E0152",
+            // BUG(e-code-collision): "E0153" is also assigned to
+            // `GenericSysOpMethodInInterfaceImpl` above. One of the two needs
+            // a fresh code; renumbering changes user-facing diagnostics, so it
+            // deserves its own change.
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
+            DiagnosticId::InterfaceProjectionBase => "E0156",
         }
     }
 }

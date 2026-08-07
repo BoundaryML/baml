@@ -314,7 +314,7 @@ function json_to_from_string.enum_variant_roundtrip_eq() -> bool {
     return
 }
 
-function json_to_from_string.fetch_as(s: string) -> T {
+function json_to_from_string.fetch_as(s: string) -> #0 {
     load_type #0
     load_var s
     call baml.json.from_string
@@ -398,28 +398,28 @@ function json_to_from_string.generic_forwarding_user_name() -> string {
     return
 }
 
-function json_to_from_string.level1(s: string) -> T {
+function json_to_from_string.level1(s: string) -> #0 {
     load_type #0
     load_var s
     call baml.json.from_string
     return
 }
 
-function json_to_from_string.level2(s: string) -> T {
+function json_to_from_string.level2(s: string) -> #0 {
     load_type #0
     load_var s
     call user.json_to_from_string.level1
     return
 }
 
-function json_to_from_string.level3(s: string) -> T {
+function json_to_from_string.level3(s: string) -> #0 {
     load_type #0
     load_var s
     call user.json_to_from_string.level2
     return
 }
 
-function json_to_from_string.make_decoder() -> (string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function json_to_from_string.make_decoder() -> (string) -> #0 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
     load_type #0
     make_closure .<lambda(make_decoder, 0)>, captures=0, ntypeargs=1
     return

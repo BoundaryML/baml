@@ -1,10 +1,10 @@
-# baml-sys
+# BAML v0 — Rust FFI bindings
 
-Low-level FFI bindings to the BAML runtime library with runtime dynamic loading.
+Low-level FFI bindings to the BAML v0 runtime library with runtime dynamic loading.
 
 ## Overview
 
-This crate provides the FFI bindings to `libbaml_cffi`, the C FFI interface to the BAML runtime.
+This crate provides the FFI bindings to `libbaml_cffi`, the C FFI interface to the BAML v0 runtime.
 Unlike traditional `-sys` crates that link at compile time, `baml-sys` loads the library
 dynamically at runtime using `libloading`.
 

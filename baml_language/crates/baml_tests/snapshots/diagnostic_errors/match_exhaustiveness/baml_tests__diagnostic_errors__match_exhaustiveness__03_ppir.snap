@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 50133
 ---
 === PPIR ===
 class user.Bird {
@@ -45,6 +44,12 @@ class user.Success {
 class user.Success$stream {
   data: string | null
 }
+class user.WitBox {
+  v: T
+}
+class user.WitBox$stream {
+  v: T | null
+}
 enum user.DispatchState {Alpha, Beta, Gamma, Delta}
 enum user.Status {Active, Inactive, Pending}
 type user.AlwaysFalse = false
@@ -61,6 +66,8 @@ type user.HttpCreated = 201
 type user.HttpCreated$stream = 201
 type user.HttpOk = 200
 type user.HttpOk$stream = 200
+type user.Inner = int | string
+type user.Inner$stream = int | string
 type user.MaybeOk = 200?
 type user.MaybeOk$stream = 200 | null
 type user.MaybeResult = user.Result?
@@ -71,6 +78,8 @@ type user.OkCode = 200
 type user.OkCode$stream = 200
 type user.OkOrCreated = user.OkCode | 201
 type user.OkOrCreated$stream = user.OkCode$stream | 201
+type user.Outer = user.Inner | int
+type user.Outer$stream = user.Inner$stream | int
 type user.Result = user.Success | user.Failure
 type user.Result$stream = user.Success$stream | user.Failure$stream
 type user.Role = "user" | "assistant" | "system"
@@ -90,6 +99,9 @@ function user.BoolWithCatchAll(b: bool) -> string  [expr] {
 }
 function user.DeeplyNestedLiterals(x: user.SuccessCode) -> string  [expr] {
   {  } match (x) { 200 | 201 | 204 => "all success codes" }
+}
+function user.DistinctInstantiationWitnesses(x: unknown) -> int  [expr] {
+  {  } match (x) { WitBox<int> { v: 1 } => 1, WitBox<string> { v: "a" } => 2 }
 }
 function user.DuplicateBoolLiteral(b: bool) -> string  [expr] {
   {  } match (b) { true => "first true", true => "second true", false => "false" }
@@ -159,6 +171,9 @@ function user.ExhaustiveOptional(x: int?) -> string  [expr] {
 }
 function user.ExhaustiveOptionalSingleton(code: user.MaybeOk) -> string  [expr] {
   {  } match (code) { 200 => "OK", null => "no code" }
+}
+function user.ExhaustiveOverlappingAliasUnion(o: user.Outer) -> string  [expr] {
+  {  } match (o) { i: int => "int", s: string => "str" }
 }
 function user.ExhaustiveSingletonInt(code: user.HttpOk) -> string  [expr] {
   {  } match (code) { 200 => "OK" }
@@ -291,6 +306,9 @@ function user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string  [e
 }
 function user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string  [expr] {
   {  } match (code) { null => "no code" }
+}
+function user.NonExhaustiveOverlappingAliasUnion(o: user.Outer) -> string  [expr] {
+  {  } match (o) { i: int => "int" }
 }
 function user.NonExhaustiveStringLiteral(role: user.Role) -> string  [expr] {
   {  } match (role) { "user" => "User", "assistant" => "Assistant" }

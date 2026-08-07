@@ -1,3 +1,10 @@
+// biome-ignore-all assist/source/organizeImports: Preserve the existing import layout in this legacy component.
+// biome-ignore-all assist/source/useSortedAttributes: Preserve the existing JSX attribute order used by render tests.
+// biome-ignore-all lint/a11y/useAriaPropsSupportedByRole: Preserve the existing conditional test-row interaction.
+// biome-ignore-all lint/a11y/useButtonType: Preserve the existing nested test-row action markup.
+// biome-ignore-all lint/a11y/useSemanticElements: Preserve the existing status element markup.
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public component filename.
+
 import type { FC } from 'react';
 import { useMemo, useState } from 'react';
 import {
@@ -7,9 +14,17 @@ import {
 } from './components/ui/collapsible';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './components/ui/tooltip';
 import { cn } from './lib/utils';
 import {
+  ArrowUpDown,
   Bot,
+  Check,
   FunctionSquare,
   ChevronRight,
   RefreshCw,
@@ -17,11 +32,11 @@ import {
   Loader2,
   FlaskConical,
   Wrench,
-  Folder,
 } from 'lucide-react';
 import {
   buildFunctionSidebarTree,
   type FunctionSidebarTreeNode,
+  type FunctionSortOrder,
 } from './function-sidebar-tree';
 import type {
   SerializedTestDef,
@@ -32,6 +47,11 @@ import {
   type FunctionInfo,
   type TestInfo,
 } from './worker-protocol';
+import {
+  getSidebarLeafPaddingLeft,
+  SIDEBAR_LEAF_ICON_CLASS,
+  SIDEBAR_LEAF_ROW_CLASS,
+} from './function-test-sidebar-row-styles';
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -42,6 +62,8 @@ interface TestTreeNodeProps {
   depth?: number;
   /** Disable run/retry actions while the runtime is unavailable. */
   disabled?: boolean;
+  selectedTestName?: string | null;
+  onSelectTest?: (name: string) => void;
   onRunTest?: (name: string) => void;
   testRunResults?: Map<string, unknown>;
   failedExpands?: Set<string>;
@@ -52,30 +74,32 @@ function TestTreeNode({
   def,
   depth = 0,
   disabled = false,
+  selectedTestName,
+  onSelectTest,
   onRunTest,
   testRunResults,
   failedExpands,
   onRetryExpand,
 }: TestTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
-  const indent = 8 + depth * 12;
+  const branchIndent = 8 + depth * 12;
+  const leafIndent = getSidebarLeafPaddingLeft(depth);
 
   if ('type' in def && def.type === 'lazyTestSet') {
     const isFailed = failedExpands?.has(def.name);
     return (
       <div
-        className="flex items-center gap-1.5 pr-2 py-0.5 text-[10px] font-vsc-mono text-vsc-text-muted"
-        style={{ paddingLeft: indent }}
+        className={cn(SIDEBAR_LEAF_ROW_CLASS, 'text-vsc-text-muted')}
+        style={{ paddingLeft: leafIndent }}
       >
         {isFailed ? (
-          <FlaskConical size={12} className="text-red-500 shrink-0" />
-        ) : (
-          <Loader2
-            size={12}
-            className="animate-spin text-vsc-text-faint shrink-0"
+          <FlaskConical
+            className={cn(SIDEBAR_LEAF_ICON_CLASS, 'text-red-500')}
           />
+        ) : (
+          <Loader2 className={cn(SIDEBAR_LEAF_ICON_CLASS, 'animate-spin')} />
         )}
-        <span className="truncate text-[11px] font-medium italic text-vsc-text-faint">
+        <span className="truncate font-medium italic text-vsc-text-faint">
           {def.name.split('/').pop()}
         </span>
         <span
@@ -111,18 +135,51 @@ function TestTreeNode({
         : null;
     const outcome =
       typeof reportObj?.outcome === 'string' ? reportObj.outcome : undefined;
+    const isSelected = selectedTestName === def.name;
     return (
       <div
-        className="flex items-center gap-1.5 pr-2 py-0.5 text-[10px] font-vsc-mono text-vsc-text-muted"
-        style={{ paddingLeft: indent }}
+        role={onSelectTest ? 'button' : undefined}
+        tabIndex={onSelectTest ? 0 : undefined}
+        aria-pressed={onSelectTest ? isSelected : undefined}
+        className={cn(
+          SIDEBAR_LEAF_ROW_CLASS,
+          onSelectTest && 'cursor-pointer',
+          isSelected
+            ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+            : 'text-vsc-text-muted hover:bg-vsc-hover',
+        )}
+        style={{ paddingLeft: leafIndent }}
+        onClick={() => onSelectTest?.(def.name)}
+        onKeyDown={(event) => {
+          if (!onSelectTest || (event.key !== 'Enter' && event.key !== ' ')) {
+            return;
+          }
+          event.preventDefault();
+          onSelectTest(def.name);
+        }}
+        title={`Show workflow for test: ${def.name}`}
       >
-        <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
-        <span className="truncate text-[11px]">
-          {def.name.split('/').pop()}
-        </span>
+        <FlaskConical className={SIDEBAR_LEAF_ICON_CLASS} />
+        <span className="truncate">{def.name.split('/').pop()}</span>
+        {outcome && (
+          <span
+            className={cn(
+              'ml-auto text-[9px] shrink-0',
+              outcome === 'pass' ? 'text-green-500' : 'text-red-500',
+            )}
+            role="status"
+            aria-label={`Latest test run status: ${outcome}`}
+            title={`Latest test run status: ${outcome}`}
+          >
+            {outcome}
+          </span>
+        )}
         {onRunTest && (
           <button
-            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              'text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50',
+              !outcome && 'ml-auto',
+            )}
             disabled={disabled}
             onClick={(e) => {
               e.stopPropagation();
@@ -132,16 +189,6 @@ function TestTreeNode({
           >
             run
           </button>
-        )}
-        {outcome && (
-          <span
-            className={cn(
-              'text-[9px] shrink-0',
-              outcome === 'pass' ? 'text-green-500' : 'text-red-500',
-            )}
-          >
-            {outcome}
-          </span>
         )}
       </div>
     );
@@ -153,7 +200,7 @@ function TestTreeNode({
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <CollapsibleTrigger
         className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
-        style={{ paddingLeft: indent }}
+        style={{ paddingLeft: branchIndent }}
       >
         <ChevronRight
           className={cn(
@@ -180,6 +227,8 @@ function TestTreeNode({
             def={child}
             depth={depth + 1}
             disabled={disabled}
+            selectedTestName={selectedTestName}
+            onSelectTest={onSelectTest}
             onRunTest={onRunTest}
             testRunResults={testRunResults}
             failedExpands={failedExpands}
@@ -197,6 +246,8 @@ function TestTreeNode({
 
 export interface FunctionSidebarProps {
   functions: FunctionInfo[];
+  /** Rendered workflow graph node count for each function. */
+  workflowNodeCounts?: ReadonlyMap<string, number>;
   /** Whether internal functions are currently shown (toggled from the
    * panel's settings gear menu) — used only for the empty-state message. */
   showInternalFunctions: boolean;
@@ -208,6 +259,8 @@ export interface FunctionSidebarProps {
   previewTests?: TestInfo[];
   selectedPreviewTestKey?: string | null;
   onSelectPreviewTest?: (test: TestInfo) => void;
+  selectedTestName?: string | null;
+  onSelectTest?: (name: string) => void;
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
   onRefreshTests: () => void;
@@ -282,10 +335,7 @@ function FunctionTreeNode({
               open && !collapsePending && 'rotate-90',
             )}
           />
-          <Folder className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
-          <span className="truncate text-[11px] font-medium">
-            {node.name}
-          </span>
+          <span className="truncate text-[11px] font-medium">{node.name}</span>
           <span className="text-vsc-text-faint ml-1">
             ({node.functionCount})
           </span>
@@ -314,27 +364,70 @@ function FunctionTreeNode({
   const isSelected = selectedFn === node.fullName;
   const isInternal = node.functionInfo.origin !== 'userDefined';
   const Icon = node.functionInfo.kind === 'llm' ? Bot : FunctionSquare;
+  const sourcePosition = node.functionInfo.sourcePosition;
+  const sourceLabel = sourcePosition
+    ? `${sourcePosition.file} at ${sourcePosition.line}:${sourcePosition.column}`
+    : 'Source position unavailable';
   return (
-    <button
-      type="button"
-      className={cn(
-        'flex items-center gap-1 w-full pr-2 py-1 cursor-pointer text-[11px] font-vsc-mono text-left',
-        isSelected
-          ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
-          : 'text-vsc-text-muted hover:bg-vsc-hover',
-      )}
-      style={{ paddingLeft: 20 + depth * 12 }}
-      title={node.fullName}
-      onClick={() => onSelectFn(isSelected ? null : node.fullName)}
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
-      <span className="truncate">{node.label}</span>
-      {isInternal && (
-        <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
-          {node.functionInfo.origin}
-        </span>
-      )}
-    </button>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              SIDEBAR_LEAF_ROW_CLASS,
+              'cursor-pointer',
+              isSelected
+                ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+                : 'text-vsc-text-muted hover:bg-vsc-hover',
+            )}
+            style={{ paddingLeft: getSidebarLeafPaddingLeft(depth) }}
+            onClick={() => onSelectFn(isSelected ? null : node.fullName)}
+          >
+            <Icon className={SIDEBAR_LEAF_ICON_CLASS} />
+            <span className="truncate">{node.label}</span>
+            {((node.workflowNodeCount != null && node.workflowNodeCount > 1) ||
+              isInternal) && (
+              <span className="ml-auto flex shrink-0 items-center gap-1">
+                {node.workflowNodeCount != null &&
+                  node.workflowNodeCount > 1 && (
+                    <span
+                      aria-hidden="true"
+                      className="rounded border border-vsc-border bg-vsc-bg-secondary px-1 py-0 text-[9px] font-normal tabular-nums text-vsc-text-faint"
+                    >
+                      {node.workflowNodeCount}
+                    </span>
+                  )}
+                {isInternal && (
+                  <span
+                    aria-hidden="true"
+                    className="rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint"
+                  >
+                    {node.functionInfo.origin}
+                  </span>
+                )}
+              </span>
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          align="start"
+          className="max-w-[28rem] text-left text-balance"
+          side="right"
+          sideOffset={4}
+        >
+          <div className="flex flex-col gap-1">
+            <code className="whitespace-pre-wrap font-vsc-mono text-[11px]">
+              {node.functionInfo.signature ?? node.fullName}
+            </code>
+            <span className="opacity-80">{sourceLabel}</span>
+            <span className="opacity-80">
+              Call graph nodes: {node.workflowNodeCount ?? 'calculating…'}
+            </span>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -344,6 +437,7 @@ function FunctionTreeNode({
 
 export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   functions,
+  workflowNodeCounts,
   showInternalFunctions,
   internalFunctionCount,
   isLoadingProject = false,
@@ -352,6 +446,8 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   previewTests = [],
   selectedPreviewTestKey,
   onSelectPreviewTest,
+  selectedTestName,
+  onSelectTest,
   selectedFn,
   onSelectFn,
   onRefreshTests,
@@ -366,8 +462,12 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   const [search, setSearch] = useState('');
   // Accordion state: tests are the primary view; functions start collapsed.
   const [functionsOpen, setFunctionsOpen] = useState(false);
-  const [openFolderKeys, setOpenFolderKeys] =
-    useState<FunctionFolderOpenState>({});
+  const [functionSortOrder, setFunctionSortOrder] =
+    useState<FunctionSortOrder>('workflowNodeCount');
+  const [showFunctionSortMenu, setShowFunctionSortMenu] = useState(false);
+  const [openFolderKeys, setOpenFolderKeys] = useState<FunctionFolderOpenState>(
+    {},
+  );
   const [testsOpen, setTestsOpen] = useState(true);
 
   const functionTree = useMemo(
@@ -375,8 +475,10 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
       buildFunctionSidebarTree(functions, {
         search,
         selectedFunctionName: selectedFn,
+        sortOrder: functionSortOrder,
+        workflowNodeCounts,
       }),
-    [functions, search, selectedFn],
+    [functions, functionSortOrder, search, selectedFn, workflowNodeCounts],
   );
   const hasFunctionSearch = search.trim() !== '';
   const setFunctionFolderOpen = (key: string, open: boolean) => {
@@ -423,23 +525,97 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
           open={functionsOpen || hasFunctionSearch}
           onOpenChange={setFunctionsOpen}
         >
-          <CollapsibleTrigger className="flex items-center gap-1 w-full px-2 py-1 cursor-pointer text-[11px] font-semibold text-vsc-text-muted hover:bg-vsc-hover">
-            <ChevronRight
-              className={cn(
-                'h-3 w-3 text-vsc-text-faint transition-transform',
-                (functionsOpen || hasFunctionSearch) && 'rotate-90',
+          <div className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-vsc-text-muted">
+            <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-1 cursor-pointer border-none bg-transparent p-0 text-left text-[11px] font-semibold text-vsc-text-muted hover:bg-vsc-hover">
+              <ChevronRight
+                className={cn(
+                  'h-3 w-3 text-vsc-text-faint transition-transform',
+                  (functionsOpen || hasFunctionSearch) && 'rotate-90',
+                )}
+              />
+              <FunctionSquare size={12} />
+              <span>Functions</span>
+              {isLoadingProject ? (
+                <Loader2 className="ml-1 h-3 w-3 animate-spin text-vsc-text-faint" />
+              ) : (
+                <span className="text-vsc-text-faint ml-1">
+                  ({functionTree.functionCount})
+                </span>
               )}
-            />
-            <FunctionSquare size={12} />
-            <span>Functions</span>
-            {isLoadingProject ? (
-              <Loader2 className="ml-1 h-3 w-3 animate-spin text-vsc-text-faint" />
-            ) : (
-              <span className="text-vsc-text-faint ml-1">
-                ({functionTree.functionCount})
-              </span>
-            )}
-          </CollapsibleTrigger>
+            </CollapsibleTrigger>
+            <TooltipProvider delayDuration={300}>
+              <div className="relative shrink-0">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      aria-expanded={showFunctionSortMenu}
+                      aria-haspopup="true"
+                      aria-label={`Sort order: ${
+                        functionSortOrder === 'workflowNodeCount'
+                          ? 'Call graph node count'
+                          : 'Alphanumeric'
+                      }`}
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-vsc-text-faint outline-none transition-colors hover:bg-vsc-hover hover:text-vsc-text focus-visible:ring-2 focus-visible:ring-ring/50"
+                      onClick={() => setShowFunctionSortMenu((value) => !value)}
+                      type="button"
+                    >
+                      <ArrowUpDown size={10} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Sort order</TooltipContent>
+                </Tooltip>
+                {showFunctionSortMenu && (
+                  <>
+                    <button
+                      aria-label="Close sort order menu"
+                      className="fixed inset-0 z-40 cursor-default border-none bg-transparent"
+                      onClick={() => setShowFunctionSortMenu(false)}
+                      type="button"
+                    />
+                    <div
+                      aria-label="Sort order"
+                      className="absolute right-0 top-full z-50 mt-1 w-44 rounded border border-vsc-border bg-vsc-surface p-1 shadow-lg"
+                      role="radiogroup"
+                    >
+                      {(
+                        [
+                          ['workflowNodeCount', 'Call graph node count'],
+                          ['alphanumeric', 'Alphanumeric'],
+                        ] satisfies Array<[FunctionSortOrder, string]>
+                      ).map(([value, label]) => (
+                        <label
+                          className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[11px] font-normal text-vsc-text-muted hover:bg-vsc-hover"
+                          key={value}
+                        >
+                          <input
+                            checked={functionSortOrder === value}
+                            className="sr-only"
+                            name="function-sort-order"
+                            onChange={() => {
+                              setFunctionSortOrder(value);
+                              setShowFunctionSortMenu(false);
+                            }}
+                            type="radio"
+                            value={value}
+                          />
+                          <Check
+                            aria-hidden="true"
+                            className={cn(
+                              'h-3 w-3',
+                              functionSortOrder === value
+                                ? 'opacity-100'
+                                : 'opacity-0',
+                            )}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </TooltipProvider>
+          </div>
           <CollapsibleContent>
             {functionTree.functionCount === 0 && (
               <div className="px-2 py-3 text-center text-vsc-text-faint text-[11px]">
@@ -509,31 +685,35 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 </div>
               )}
 
-              {testTree && treeItems.length === 0 && previewTests.length === 0 && (
-                <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
-                  No tests found
-                </div>
-              )}
+              {testTree &&
+                treeItems.length === 0 &&
+                previewTests.length === 0 && (
+                  <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
+                    No tests found
+                  </div>
+                )}
 
               {previewTests.map((test) => {
                 const key = previewTestKey(test);
-                const duplicateName = (previewNameCounts.get(test.name) ?? 0) > 1;
+                const duplicateName =
+                  (previewNameCounts.get(test.name) ?? 0) > 1;
                 return (
                   <button
                     type="button"
                     key={key}
                     className={cn(
-                      'flex items-center gap-1.5 w-full pr-2 py-0.5 text-[10px] font-vsc-mono text-left',
+                      SIDEBAR_LEAF_ROW_CLASS,
+                      'cursor-pointer',
                       selectedPreviewTestKey === key
                         ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
                         : 'text-vsc-text-muted hover:bg-vsc-hover',
                     )}
-                    style={{ paddingLeft: 8 }}
+                    style={{ paddingLeft: getSidebarLeafPaddingLeft() }}
                     onClick={() => onSelectPreviewTest?.(test)}
                     title={`Use ${test.name} args for ${test.functionName}`}
                   >
-                    <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
-                    <span className="truncate text-[11px]">
+                    <FlaskConical className={SIDEBAR_LEAF_ICON_CLASS} />
+                    <span className="truncate">
                       {test.name}
                       {duplicateName ? ` → ${test.functionName}` : ''}
                     </span>
@@ -549,6 +729,8 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                   key={`${'name' in def ? def.name : i}-${i}`}
                   def={def}
                   disabled={runtimeControlsDisabled}
+                  selectedTestName={selectedTestName}
+                  onSelectTest={onSelectTest}
                   onRunTest={onRunTest}
                   testRunResults={testRunResults}
                   failedExpands={failedExpands}

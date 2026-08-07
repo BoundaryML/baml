@@ -1313,6 +1313,7 @@ impl BexHeap {
 mod tests {
     use std::sync::Arc;
 
+    use baml_type::RealizedTy;
     use bex_vm_types::{Object, Value};
 
     use super::*;
@@ -2228,6 +2229,8 @@ mod tests {
             closure,
             name: Some(name),
             config: None,
+            returns: RealizedTy::int(),
+            throws: RealizedTy::never(),
         })));
 
         let roots = vec![future_ptr];
@@ -2249,6 +2252,8 @@ mod tests {
         // `HeapPtr` to pass to `settle_ready` for its write-barrier hook.
         let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
+            RealizedTy::unknown(),
+            RealizedTy::unknown(),
             bex_vm_types::types::CancellationToken::new(),
         )));
         let Object::Future(future) = (unsafe { future_ptr.get() }) else {
@@ -2286,6 +2291,8 @@ mod tests {
 
         let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
+            RealizedTy::unknown(),
+            RealizedTy::unknown(),
             bex_vm_types::types::CancellationToken::new(),
         )));
         let Object::Future(future) = (unsafe { future_ptr.get() }) else {
@@ -2776,6 +2783,8 @@ mod tests {
             closure: leaf_for_future,
             name: None,
             config: None,
+            returns: RealizedTy::int(),
+            throws: RealizedTy::never(),
         })));
 
         // --- Container: Object::Instance ---

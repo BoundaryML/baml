@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use baml_base::SourceFile;
 pub use builder::SemanticIndexBuilder;
-pub use semantic_index::PathResolution;
+pub use semantic_index::{ExprMetadataKey, ExprMetadataScope, PathResolution};
 
 use crate::{
     contributions::FileSymbolContributions,

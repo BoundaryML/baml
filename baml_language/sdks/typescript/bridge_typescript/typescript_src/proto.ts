@@ -15,6 +15,8 @@ import {
     registerHostCallable,
     releaseHostCallable,
     completeHostCall,
+    getRuntime,
+    newFunctionCall,
 } from './native.js';
 import { BamlStream } from './stream.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
@@ -78,6 +80,8 @@ function rollbackHostCallables(keys: HandleKey[]): void {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    functionName?: string;
+    functionHandle?: HandleKey;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -301,6 +305,9 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
+    if (options.functionName !== undefined && options.functionHandle !== undefined) {
+        throw new TypeError('exactly one BAML call target may be set');
+    }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
@@ -319,6 +326,8 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             kwargs: entries,
             callId: callId.toString(),
             typeArgs,
+            functionName: options.functionName,
+            functionHandle: options.functionHandle,
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
@@ -426,6 +435,9 @@ function decodeValueHolder(
             throw new BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
         }
         const handle = new BamlHandle(holder.handleValue.key, ht);
+        if (ht === BamlHandleType.FUNCTION_REF) {
+            return decodeBamlClosure(handle, holder.handleValue.ty?.function);
+        }
         if (ht === BamlHandleType.ADT_MEDIA_IMAGE) return BamlImage._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_AUDIO) return BamlAudio._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_VIDEO) return BamlVideo._fromHandle(handle);
@@ -458,6 +470,55 @@ function decodeValueHolder(
     // Any remaining unset oneof is a legitimate null: an all-default holder is a
     // null BAML result.
     return null;
+}
+
+function decodeBamlClosure(
+    handle: BamlHandle,
+    functionTy: baml_bridge.cffi.v1.IBamlTyFunction | null | undefined,
+): (...args: unknown[]) => unknown {
+    const params = functionTy?.params ?? [];
+    const required = params.filter(
+        (param) => param.mode !== baml_bridge.cffi.v1.BamlTyFunctionParamMode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL,
+    );
+    const optional = params.filter(
+        (param) => param.mode === baml_bridge.cffi.v1.BamlTyFunctionParamMode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL,
+    );
+    const requiredNames = required.map((param, index) => param.name ?? `arg${index}`);
+    const optionalNames = new Set(optional.map((param, index) => param.name ?? `arg${required.length + index}`));
+
+    return (...args: unknown[]): unknown => {
+        if (args.length > requiredNames.length + 1) {
+            throw new TypeError(
+                `got ${args.length} arguments but this BAML closure accepts ` +
+                `${requiredNames.length} required arguments and one optional-arguments object`,
+            );
+        }
+        const kwargs: Record<string, unknown> = {};
+        const positionalCount = Math.min(args.length, requiredNames.length);
+        for (let index = 0; index < positionalCount; index += 1) {
+            kwargs[requiredNames[index]] = args[index];
+        }
+        if (args.length > requiredNames.length) {
+            const options = args[requiredNames.length];
+            if (options === null || Array.isArray(options) || typeof options !== 'object') {
+                throw new TypeError('optional BAML closure arguments must be passed as an object');
+            }
+            for (const [name, value] of Object.entries(options as Record<string, unknown>)) {
+                if (!optionalNames.has(name)) {
+                    throw new TypeError(`unknown optional argument ${JSON.stringify(name)}`);
+                }
+                if (value !== undefined) kwargs[name] = value;
+            }
+        }
+        const runtime = getRuntime();
+        const callId = BigInt(newFunctionCall());
+        const encodedArgs = encodeCallArgs(kwargs, {
+            syncMode: true,
+            callId,
+            functionHandle: handle.key,
+        });
+        return decodeCallResult(runtime.callFunctionSync(encodedArgs));
+    };
 }
 
 /**

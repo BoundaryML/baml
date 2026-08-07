@@ -27,6 +27,10 @@ internal unsafe struct BamlBridgeInfoV1
     internal uint Language;
     internal byte* SdkVersion;
     internal nuint SdkVersionLength;
+    internal byte* BridgeRuntimeName;
+    internal nuint BridgeRuntimeNameLength;
+    internal byte* BridgeRuntimeVersion;
+    internal nuint BridgeRuntimeVersionLength;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -38,7 +42,7 @@ internal unsafe struct BamlApiV1
     internal delegate* unmanaged[Cdecl]<byte*, nuint, BamlBuffer> InitializeRuntimeFromBytecode;
     internal delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
     internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>, void> RegisterCallback;
-    internal delegate* unmanaged[Cdecl]<byte*, byte*, nuint, uint, void> CallFunction;
+    internal delegate* unmanaged[Cdecl]<byte*, nuint, uint, void> CallFunction;
     internal delegate* unmanaged[Cdecl]<ulong> NewFunctionCall;
     internal delegate* unmanaged[Cdecl]<ulong, int> CancelFunctionCall;
     internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>, void> RegisterHostDispatchCallback;
@@ -54,11 +58,14 @@ internal unsafe struct BamlApiV1
     internal delegate* unmanaged[Cdecl]<ulong, int, BamlBuffer*, BamlCffiStatus> MediaBase64;
     internal delegate* unmanaged[Cdecl]<ulong, int, BamlBuffer*, BamlCffiStatus> MediaMimeType;
     internal delegate* unmanaged[Cdecl]<BamlBridgeInfoV1*, BamlBuffer> RegisterBridge;
+    internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<sbyte*, nuint, int, void>, void> RegisterUnhandledSpawnErrorCallback;
+    internal delegate* unmanaged[Cdecl]<BamlBuffer> ShutdownRuntime;
+    internal delegate* unmanaged[Cdecl]<byte*, nuint, byte*, BamlBuffer> InitializeRuntimeFromBytecodeWithMetadata;
 }
 
 internal static unsafe class BamlApiV1Layout
 {
-    internal static readonly nuint RequiredPrefixSize = EndOf(nameof(BamlApiV1.RegisterBridge));
+    internal static readonly nuint RequiredPrefixSize = EndOf(nameof(BamlApiV1.InitializeRuntimeFromBytecodeWithMetadata));
 
     private static nuint EndOf(string field) =>
         checked((nuint)Marshal.OffsetOf<BamlApiV1>(field) + (nuint)IntPtr.Size);

@@ -9,27 +9,40 @@ use baml_fmt::FormatOptions;
 use baml_workspace::discover_baml_files;
 use clap::Args;
 
-use crate::{project_load::find_project_root_from, reporter::Reporter};
+use crate::{project_load::resolve_project_layout, reporter::Reporter};
 
+/// Format BAML source files.
+///
+/// With explicit paths, formats those files or directories. With no paths,
+/// discovers the nearest BAML project and formats all of its `.baml` files.
+/// If no project is found, the command succeeds without changing anything.
 #[derive(Args, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Format the nearest project:
+    baml fmt
+
+  Format a specific file:
+    baml fmt baml_src/main.baml
+
+  Preview formatted output:
+    baml fmt --dry-run")]
 pub struct FormatArgs {
     #[arg(
         help = "Specific files to format. If omitted, all `.baml` files in the project are formatted."
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Project search starting point for default file discovery. Mirrors
-    /// `baml run`/`baml pack`'s `--from`. When the
-    /// directory has neither a `baml.toml` nor a `baml_src/` subdirectory,
-    /// there's nothing to format and `baml fmt` is a no-op success.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
     #[arg(
         short = 'n',
         long = "dry-run",
         help = "Write formatter changes to stdout instead of files.",
-        default_value = "false"
+        default_value = "false",
+        help_heading = "Output options"
     )]
     pub dry_run: bool,
 }
@@ -171,21 +184,18 @@ fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
     expanded
 }
 
-/// Walk a resolved project root and return every `.baml` file inside it.
-/// Requires a `baml.toml` or `baml_src/` marker in the search path or its
-/// ancestors so `baml fmt` doesn't accidentally rewrite every `.baml` under an
-/// unrelated directory, and prefers the `baml_src/` subtree when present so
-/// loose top-level fixtures aren't touched.
+/// Walk a resolved source root and return every `.baml` file inside it.
+/// Omitted `--from` requires a `baml.toml` or `baml_src/` marker so `baml fmt`
+/// doesn't accidentally rewrite every `.baml` below an unrelated cwd.
+/// An explicit `--from` is itself a safe opt-in to format that source tree.
 ///
 /// Returns `Ok(None)` when neither marker is present. The caller turns `None`
 /// into a no-op success rather than a hard error.
 fn discover_project_files(from: Option<&Path>) -> Result<Option<Vec<PathBuf>>> {
-    let Some(root) = find_project_root_from(from)? else {
+    let Some(layout) = resolve_project_layout(from)? else {
         return Ok(None);
     };
-    let baml_src = root.join("baml_src");
-    let walk_root = if baml_src.is_dir() { baml_src } else { root };
-    Ok(Some(discover_baml_files(&walk_root)))
+    Ok(Some(discover_baml_files(&layout.source_root)))
 }
 
 #[cfg(test)]
@@ -269,5 +279,29 @@ mod tests {
 
         let files = discover_project_files(Some(&nested_dir)).unwrap().unwrap();
         assert_eq!(files, vec![main]);
+    }
+
+    #[test]
+    fn explicit_sibling_source_is_not_redirected_to_primary_baml_src() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"fmt-test\"\n",
+        )
+        .unwrap();
+        let primary = tmp.path().join("baml_src");
+        let alternate = tmp.path().join("baml_src_temp2");
+        fs::create_dir(&primary).unwrap();
+        fs::create_dir(&alternate).unwrap();
+        fs::write(
+            primary.join("primary.baml"),
+            "function primary() -> int { 1 }\n",
+        )
+        .unwrap();
+        let alternate_file = alternate.join("alternate.baml");
+        fs::write(&alternate_file, "function alternate() -> int { 2 }\n").unwrap();
+
+        let files = discover_project_files(Some(&alternate)).unwrap().unwrap();
+        assert_eq!(files, vec![fs::canonicalize(alternate_file).unwrap()]);
     }
 }

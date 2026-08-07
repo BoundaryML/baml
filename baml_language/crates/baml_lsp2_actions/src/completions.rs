@@ -156,6 +156,16 @@ pub enum CompletionKind {
     Parameter,
 }
 
+/// How an editor should interpret [`Completion::insert_text`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompletionInsertTextFormat {
+    /// Insert the text literally.
+    #[default]
+    PlainText,
+    /// Interpret LSP snippet tabstops such as `$0` and `${1:Name}`.
+    Snippet,
+}
+
 // ── Completion ────────────────────────────────────────────────────────────────
 
 /// A single completion item returned by `completions_at`.
@@ -171,6 +181,8 @@ pub struct Completion {
     pub detail: Option<String>,
     /// Text inserted on acceptance (defaults to `label` if `None`).
     pub insert_text: Option<String>,
+    /// Whether `insert_text` is literal text or an LSP snippet.
+    pub insert_text_format: CompletionInsertTextFormat,
     /// Sort key (lower sorts first).
     pub sort_text: Option<String>,
 }
@@ -183,6 +195,7 @@ impl Completion {
             kind,
             detail: None,
             insert_text: None,
+            insert_text_format: CompletionInsertTextFormat::PlainText,
             sort_text: None,
         }
     }
@@ -199,6 +212,12 @@ impl Completion {
 
     fn with_insert_text(mut self, insert_text: impl Into<String>) -> Self {
         self.insert_text = Some(insert_text.into());
+        self
+    }
+
+    fn with_snippet(mut self, snippet: impl Into<String>) -> Self {
+        self.insert_text = Some(snippet.into());
+        self.insert_text_format = CompletionInsertTextFormat::Snippet;
         self
     }
 }
@@ -1011,7 +1030,7 @@ fn completions_for_class_methods(
 /// For a `Ty::Class`, looks up resolved class fields and returns the field's type.
 fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, type_args, _) => {
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
@@ -1021,10 +1040,15 @@ fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
                 return None;
             };
 
+            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
+            let bindings =
+                baml_compiler2_tir::generics::bind_type_vars(&class_generic_params, type_args);
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             for (name, field_ty, _) in &resolved.fields {
                 if name.as_str() == field_name {
-                    return Some(field_ty.clone());
+                    return Some(baml_compiler2_tir::generics::substitute_ty(
+                        field_ty, &bindings,
+                    ));
                 }
             }
             None
@@ -1117,7 +1141,7 @@ fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxTok
 /// Returns completions for the members of `ty`.
 fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Completion> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, type_args, _) => {
             // Find the class definition and return its fields and methods.
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
@@ -1130,18 +1154,24 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
 
             let mut items = Vec::new();
 
-            // Fields from resolved class fields.
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
+            let bindings =
+                baml_compiler2_tir::generics::bind_type_vars(&class_generic_params, type_args);
+
+            // Fields from resolved class fields, specialized for the receiver's
+            // concrete type arguments.
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             for (field_name, field_ty, _field_attrs) in &resolved.fields {
+                let field_ty = baml_compiler2_tir::generics::substitute_ty(field_ty, &bindings);
                 items.push(
                     Completion::new(field_name.as_str(), CompletionKind::Field)
-                        .with_detail(utils::display_ty_for_file(db, file, field_ty))
+                        .with_detail(utils::display_ty_for_file(db, file, &field_ty))
                         .with_sort(format!("0_{}", field_name.as_str())),
                 );
             }
 
             // Methods from the class's firewall data.
-            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             for &func_loc in &class_data.methods {
                 let method = baml_compiler2_ppir::item_data::function_data(db, func_loc);
                 items.push(
@@ -1307,9 +1337,9 @@ fn local_variable_ty(
             }
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(_) => {
-            // Search all scopes for the binding type. This handles variables
-            // inside lambdas (test bodies, closures) where the variable's
-            // StmtId is in a nested ExprBody, not the outer function's body.
+            // Handles variables declared inside lambdas (test bodies,
+            // closures) as well as directly in the function body — both index
+            // the same arena.
             find_binding_ty_for_local(db, file, at_offset, site)
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_)
@@ -1323,12 +1353,9 @@ fn local_variable_ty(
 /// (which may be a nested lambda body for test/testset code) and looking up the
 /// binding type from TIR inference.
 ///
-/// For `Statement` bindings, we walk the scope tree to build a nesting path from
-/// the cursor's innermost Lambda scope up to the enclosing Function scope, then
-/// descend through the `ExprBody` tree using each body's source map to match
-/// lambda expression spans against scope ranges. This ensures we find the correct
-/// `ExprBody` even for deeply nested testset/test lambdas, where `func_def.span`
-/// may not match the scope range set by the HIR builder.
+/// For `Statement` bindings, the `StmtId` indexes the enclosing function's
+/// `ExprBody`. Lambda bodies are lowered into that same arena, so the statement
+/// resolves against it however deeply the cursor sits inside nested lambdas.
 fn find_binding_ty_for_local(
     db: &dyn Db,
     file: SourceFile,
@@ -1339,23 +1366,17 @@ fn find_binding_ty_for_local(
 
     let pat_id = match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-            // 1. Build the scope nesting path from cursor to enclosing Function.
-            //    lambda_ranges: innermost-first Lambda scope ranges.
-            //    func_range: the enclosing Function scope range.
+            // Walk out to the enclosing Function scope, which owns the arena
+            // every statement in it — lambda bodies included — lives in.
             let scope_id = index.scope_at_offset(at_offset, None);
             let ancestors = index.ancestor_scopes(scope_id);
 
-            let mut lambda_ranges_rev: Vec<text_size::TextRange> = Vec::new();
             let mut func_range: Option<text_size::TextRange> = None;
             for ancestor_id in &ancestors {
                 let s = &index.scopes[ancestor_id.index() as usize];
-                match s.kind {
-                    ScopeKind::Lambda => lambda_ranges_rev.push(s.range),
-                    ScopeKind::Function => {
-                        func_range = Some(s.range);
-                        break;
-                    }
-                    _ => {}
+                if s.kind == ScopeKind::Function {
+                    func_range = Some(s.range);
+                    break;
                 }
             }
 
@@ -1367,21 +1388,7 @@ fn find_binding_ty_for_local(
                 return None;
             };
 
-            // 3. If cursor is directly in the Function (no lambda nesting), use it.
-            if lambda_ranges_rev.is_empty() {
-                extract_pat_from_stmt(top_body, stmt_id)
-            } else {
-                // Get the top-level source map and descend through nested lambdas.
-                let top_source_map =
-                    baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
-
-                // Reverse to get outermost→innermost order for descent.
-                lambda_ranges_rev.reverse();
-
-                let target_body =
-                    descend_into_lambdas(top_body, &top_source_map, &lambda_ranges_rev)?;
-                extract_pat_from_stmt(target_body, stmt_id)
-            }
+            extract_pat_from_stmt(top_body, stmt_id)
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id)
         | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(pat_id) => Some(pat_id),
@@ -1418,39 +1425,6 @@ fn extract_pat_from_stmt(
         } => Some(*pattern),
         _ => None,
     }
-}
-
-/// Descend through nested lambda bodies following the given scope ranges.
-///
-/// `lambda_ranges` is ordered outermost→innermost. At each level, finds the
-/// `Expr::Lambda` whose expression span (from the current body's source map)
-/// matches the target range, then recurses into that lambda's body. This uses
-/// the **same** source map the HIR builder used when creating scope ranges,
-/// guaranteeing a match even for deeply nested testset/test lambdas.
-fn descend_into_lambdas<'a>(
-    body: &'a baml_compiler2_ast::ExprBody,
-    source_map: &baml_compiler2_ast::AstSourceMap,
-    lambda_ranges: &[text_size::TextRange],
-) -> Option<&'a baml_compiler2_ast::ExprBody> {
-    if lambda_ranges.is_empty() {
-        return Some(body);
-    }
-    let target_range = lambda_ranges[0];
-    for (expr_id, expr) in body.exprs.iter() {
-        if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
-            let expr_span = source_map.expr_span(expr_id);
-            if expr_span == target_range {
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                    ref nested_body,
-                    ref nested_sm,
-                )) = func_def.body
-                {
-                    return descend_into_lambdas(nested_body, nested_sm, &lambda_ranges[1..]);
-                }
-            }
-        }
-    }
-    None
 }
 
 // ── Value-position completions ────────────────────────────────────────────────
@@ -1586,33 +1560,45 @@ fn completions_for_top_level() -> Vec<Completion> {
     vec![
         Completion::new("class", CompletionKind::Keyword)
             .with_detail("class declaration")
+            .with_snippet("class ${1:Name} {\n  ${2:field} ${3:string}\n  $0\n}")
             .with_sort("00_class"),
         Completion::new("enum", CompletionKind::Keyword)
             .with_detail("enum declaration")
+            .with_snippet("enum ${1:Name} {\n  ${2:Value}\n  $0\n}")
             .with_sort("01_enum"),
         Completion::new("function", CompletionKind::Keyword)
             .with_detail("function declaration")
+            .with_snippet("function ${1:Name}(${2}) -> ${3:string} {\n  $0\n}")
             .with_sort("02_function"),
         Completion::new("client", CompletionKind::Keyword)
             .with_detail("LLM client declaration")
+            .with_snippet(
+                "client<llm> ${1:Name} {\n  provider ${2:openai}\n  options {\n    model ${3:gpt-4o}\n  }\n  $0\n}",
+            )
             .with_sort("03_client"),
         Completion::new("test", CompletionKind::Keyword)
             .with_detail("test case declaration")
+            .with_snippet("test \"${1:test name}\" {\n  $0\n}")
             .with_sort("05_test"),
         Completion::new("retry_policy", CompletionKind::Keyword)
             .with_detail("retry policy declaration")
+            .with_snippet("retry_policy ${1:Name} {\n  max_retries ${2:3}\n  $0\n}")
             .with_sort("06_retry_policy"),
         Completion::new("template_string", CompletionKind::Keyword)
             .with_detail("template string declaration")
+            .with_snippet("template_string ${1:Name}(${2}) #\"\n  $0\n\"#")
             .with_sort("07_template_string"),
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")
+            .with_snippet("type ${1:Name} = ${2:string}$0")
             .with_sort("08_type"),
         Completion::new("interface", CompletionKind::Keyword)
             .with_detail("interface declaration")
+            .with_snippet("interface ${1:Name} {\n  $0\n}")
             .with_sort("09_interface"),
         Completion::new("implements", CompletionKind::Keyword)
             .with_detail("out-of-body interface implementation")
+            .with_snippet("implements ${1:Interface} for ${2:Class} {\n  $0\n}")
             .with_sort("10_implements"),
     ]
 }

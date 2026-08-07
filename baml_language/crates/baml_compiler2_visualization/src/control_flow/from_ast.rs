@@ -34,7 +34,18 @@ pub fn build_control_flow_graph_from_ast(
     function_name: &str,
     body: &ast::ExprBody,
 ) -> ControlFlowGraph {
-    let Some(root_expr) = body.root_expr else {
+    build_control_flow_graph_from_expr(function_name, body, body.root_expr)
+}
+
+/// [`build_control_flow_graph_from_ast`] rooted at an arbitrary expression of
+/// `body`, for callables whose body is an expression *inside* another body —
+/// a lambda, which owns no `ExprBody` of its own.
+pub fn build_control_flow_graph_from_expr(
+    function_name: &str,
+    body: &ast::ExprBody,
+    root: Option<ast::ExprId>,
+) -> ControlFlowGraph {
+    let Some(root_expr) = root else {
         // No root expression — return a graph with just the root node.
         let mut graph = GraphAccumulator::default();
         let root_id = graph.allocate_id();
@@ -991,8 +1002,10 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         },
 
-        // Leaves (no nested expressions in this body's arena). Lambda bodies
-        // live in their own ExprBody, so they cannot be walked from here.
+        // Leaves for this walk. A lambda's body is an expression in this same
+        // arena, but it is deliberately not followed: a lambda is a separate
+        // callable, so the calls it makes are its own graph's edges, not this
+        // one's.
         ast::Expr::Literal(_)
         | ast::Expr::ByteStringLiteral(_)
         | ast::Expr::Null

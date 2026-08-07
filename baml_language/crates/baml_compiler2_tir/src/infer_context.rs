@@ -564,6 +564,19 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         missing: Vec<Name>,
     },
+    /// The dotted projection shorthand (`Base.Member`) was written with the
+    /// interface itself as the base (`Iterator.Element`). The base of a
+    /// projection is an *implementor* — a concrete type
+    /// (`ArrayIterator.Element`), a bounded type variable (`T.Element`), or
+    /// `Self` inside a body — never the interface: an associated type is
+    /// defined per `(interface, implementor, member)` triple, so the
+    /// interface alone does not determine it (Rust's E0223). Naming the
+    /// interface explicitly takes a qualified projection
+    /// (`(Base as Iterator).Element`).
+    InterfaceProjectionBase {
+        interface: crate::ty::QualifiedTypeName,
+        member: Name,
+    },
     /// A *bare* interface destructure pattern (`Source { value }`, no written generic
     /// args or associated bindings) adopts its associated-type bindings from the
     /// scrutinee — so the scrutinee must determine them uniquely. A scrutinee admitting
@@ -724,11 +737,24 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         field: Name,
     },
-    /// An interface's `requires` clause names a type that is not an interface (a class, enum, or
-    /// alias). Only interfaces can be required. Interface-declaration well-formedness (E0133).
+    /// Bare `Self` appears in an associated type's *default*. `Self` is universal — it
+    /// denotes each implementor, not the existential — so at an interface-existential
+    /// type (`I<…>`, where the implementor is hidden) such a default has nothing to
+    /// resolve against. Defaulting it to the existential itself would pin the member to
+    /// a type no impl ever binds, making the existential uninhabited. A `Self.Assoc`
+    /// projection is fine: the existential's own pins already fix it.
+    /// Interface-declaration well-formedness (E0157).
+    SelfInAssociatedTypeDefault {
+        interface: crate::ty::QualifiedTypeName,
+        associated_type: Name,
+    },
+    /// An interface's `requires` clause names a type that is not an interface (a class, enum,
+    /// alias, or any structural type — the clause parses a full type expression). Only
+    /// interfaces can be required, exactly as only interfaces can be generic bounds (see
+    /// [`Self::GenericBoundNotInterface`]). Interface-declaration well-formedness (E0133).
     InterfaceRequiresNonInterface {
         interface: crate::ty::QualifiedTypeName,
-        target: Name,
+        target: Ty,
     },
     /// An interface's transitive `requires` graph cycles back to itself. Interface-declaration well-formedness (E0118).
     /// `chain` is the witnessing name path `[root, …, root]`.
@@ -1538,6 +1564,16 @@ impl fmt::Display for TirTypeError {
                     interface.render_user_facing(),
                 )
             }
+            TirTypeError::InterfaceProjectionBase { interface, member } => {
+                write!(
+                    f,
+                    "cannot project `{member}` directly off interface `{0}`: a projection's \
+                     base is an implementor type, a bounded type variable, or `Self` — to name \
+                     the interface explicitly, write a qualified projection \
+                     (`(Base as {0}).{member}`)",
+                    interface.render_user_facing(),
+                )
+            }
             TirTypeError::AmbiguousInterfacePatternBindings {
                 interface,
                 candidates,
@@ -1761,11 +1797,27 @@ impl fmt::Display for TirTypeError {
                     interface.render_user_facing()
                 )
             }
+            TirTypeError::SelfInAssociatedTypeDefault {
+                interface,
+                associated_type,
+            } => {
+                write!(
+                    f,
+                    "`Self` is not allowed in the default for associated type `{associated_type}` \
+                     on `{}`: `Self` names each implementor, so it has no meaning where `{0}` is \
+                     used as an interface-existential type and the implementor is hidden. Drop the \
+                     default and let each `implements` block bind `{associated_type}` (uses as a \
+                     bound are unaffected; uses as an interface-existential type then write \
+                     `{0}<…, {associated_type} = …>`). A `Self.Assoc` projection is allowed",
+                    interface.render_user_facing()
+                )
+            }
             TirTypeError::InterfaceRequiresNonInterface { interface, target } => {
                 write!(
                     f,
-                    "interface `{}` cannot require `{target}`, which is not an interface",
-                    interface.render_user_facing()
+                    "interface `{}` cannot require `{}`, which is not an interface",
+                    interface.render_user_facing(),
+                    target.render_user_facing()
                 )
             }
             TirTypeError::InterfaceRequiresCycle { chain } => {

@@ -230,14 +230,14 @@ function tostring_sugar.sugar_match_via_sugar() -> string {
     return
 }
 
-function tostring_sugar.tostring_show(x: T) -> string {
+function tostring_sugar.tostring_show(x: #0) -> string {
     load_type #0
     load_var x
     call baml.String.from
     return
 }
 
-function tostring_sugar.tostring_show_never(x: T) -> string {
+function tostring_sugar.tostring_show_never(x: #0) -> string {
     load_type #0
     load_var x
     call baml.String.from

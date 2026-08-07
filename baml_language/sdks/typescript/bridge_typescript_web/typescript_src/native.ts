@@ -6,6 +6,8 @@ import initWasm, {
   completeWebHostCall,
   configureWebSysops,
   flushEvents as flushWasmEvents,
+  getBridgeRuntimeVersion as getWasmBridgeRuntimeVersion,
+  getToolchainVersion as getWasmToolchainVersion,
   getVersion as getWasmVersion,
   mediaBase64 as mediaWasmBase64,
   mediaFile as mediaWasmFile,
@@ -384,10 +386,10 @@ export class Collector {
 }
 
 export class BamlRuntime {
-  static initializeRuntimeFromBytecode(bytecode: Uint8Array): BamlRuntime {
+  static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
-      stageRuntimeBytecode(bytecode);
+      stageRuntimeBytecode(bytecode, embeddedBamlToml);
     } catch (error) {
       throw wrapNativeError(error);
     }
@@ -404,16 +406,16 @@ export class BamlRuntime {
     runtime = new BamlRuntime();
     return runtime;
   }
-  callFunctionSync(functionName: string, encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Uint8Array {
+  callFunctionSync(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Uint8Array {
     try {
-      return callWasmFunctionSync(functionName, encodedArgs);
+      return callWasmFunctionSync(encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
-  async callFunction(functionName: string, encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Promise<Uint8Array> {
+  async callFunction(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Promise<Uint8Array> {
     try {
-      return await callWasmFunction(functionName, encodedArgs);
+      return await callWasmFunction(encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
@@ -437,6 +439,8 @@ export function cancelFunctionCall(callId: bigint | string): boolean {
 }
 export function flushEvents(): void { flushWasmEvents(); }
 export function getVersion(): string { return getWasmVersion(); }
+export function getToolchainVersion(): string { return getWasmToolchainVersion(); }
+export function getBridgeRuntimeVersion(): string { return getWasmBridgeRuntimeVersion(); }
 export function mintHostValueKey(): HandleKey { return keyFromBigint(mintWebHostValueKey()); }
 export function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void {
   hostRelease = callback;

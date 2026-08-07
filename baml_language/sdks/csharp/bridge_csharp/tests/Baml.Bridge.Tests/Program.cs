@@ -1232,8 +1232,8 @@ internal static unsafe class Program
     private static void VerifyNativeAbiLayoutAndValidation()
     {
         Require(sizeof(BamlBuffer) == 16, "BamlBuffer layout changed");
-        Require(sizeof(BamlBridgeInfoV1) == 32, "BamlBridgeInfoV1 layout changed");
-        Require(sizeof(BamlApiV1) == 176, "BamlApiV1 layout changed");
+        Require(sizeof(BamlBridgeInfoV1) == 64, "BamlBridgeInfoV1 layout changed");
+        Require(sizeof(BamlApiV1) == 200, "BamlApiV1 layout changed");
         (string Field, int Offset)[] layout =
         [
             (nameof(BamlApiV1.AbiVersion), 0),
@@ -1258,6 +1258,9 @@ internal static unsafe class Program
             (nameof(BamlApiV1.MediaBase64), 152),
             (nameof(BamlApiV1.MediaMimeType), 160),
             (nameof(BamlApiV1.RegisterBridge), 168),
+            (nameof(BamlApiV1.RegisterUnhandledSpawnErrorCallback), 176),
+            (nameof(BamlApiV1.ShutdownRuntime), 184),
+            (nameof(BamlApiV1.InitializeRuntimeFromBytecodeWithMetadata), 192),
         ];
         foreach ((string field, int offset) in layout)
         {
@@ -1269,7 +1272,7 @@ internal static unsafe class Program
         BamlApiV1 table = CreateValidTable();
         NativeApi.ValidateTable(&table);
         Require(
-            BamlApiV1Layout.RequiredPrefixSize == 176,
+            BamlApiV1Layout.RequiredPrefixSize == 200,
             "BamlApiV1 required prefix changed");
         table = CreateValidTable();
         table.StructSize += 64;
@@ -1280,12 +1283,12 @@ internal static unsafe class Program
         table.AbiVersion = 999;
         ExpectInvalidTable(table);
         table = CreateValidTable();
-        table.StructSize = 168;
+        table.StructSize = 192;
         ExpectInvalidTable(table);
         table = CreateValidTable();
         table.RegisterBridge = null;
         ExpectInvalidTable(table);
-        for (int field = 0; field < 20; field++)
+        for (int field = 0; field < 23; field++)
         {
             table = CreateValidTable();
             ClearRequiredFunction(ref table, field);
@@ -1928,10 +1931,10 @@ internal static unsafe class Program
         {
             Task<byte[]> canceled = api.InvokeFunctionAsync(
                 "test.encode-cancel",
-                _ =>
+                callId =>
                 {
                     canceledDuringEncoding.Cancel();
-                    return [1, 2, 3];
+                    return new CallFunctionArgs { CallId = callId }.ToByteArray();
                 },
                 canceledDuringEncoding.Token);
             ExpectCanceled(canceled, canceledDuringEncoding.Token);
@@ -1943,7 +1946,7 @@ internal static unsafe class Program
         {
             Task<byte[]> canceled = api.InvokeFunctionAsync(
                 "test.cancel",
-                _ => [4, 5, 6],
+                callId => new CallFunctionArgs { CallId = callId }.ToByteArray(),
                 cancelAfterDispatch.Token);
             uint callbackId = lastFakeCallbackId;
             cancelAfterDispatch.Cancel();
@@ -1977,7 +1980,7 @@ internal static unsafe class Program
         {
             Task<byte[]> completed = api.InvokeFunctionAsync(
                 "test.result-wins",
-                _ => [7, 8, 9],
+                callId => new CallFunctionArgs { CallId = callId }.ToByteArray(),
                 cancelAfterResult.Token);
             Require(completed.GetAwaiter().GetResult().SequenceEqual(fakeResult), "result bytes changed");
             cancelAfterResult.Cancel();
@@ -2475,7 +2478,7 @@ internal static unsafe class Program
 
     private static BamlApiV1 CreateValidTable() => new()
     {
-        AbiVersion = 1,
+        AbiVersion = 2,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
         InitializeRuntimeFromBytecode = &Initialize,
@@ -2497,6 +2500,9 @@ internal static unsafe class Program
         MediaBase64 = &MediaBase64,
         MediaMimeType = &MediaMimeType,
         RegisterBridge = &RegisterBridge,
+        RegisterUnhandledSpawnErrorCallback = &RegisterUnhandledSpawnError,
+        ShutdownRuntime = &Shutdown,
+        InitializeRuntimeFromBytecodeWithMetadata = &InitializeWithMetadata,
     };
 
     private static void ExpectInvalidTable(BamlApiV1 table, bool passNull = false)
@@ -2537,6 +2543,9 @@ internal static unsafe class Program
             case 17: table.MediaBase64 = null; break;
             case 18: table.MediaMimeType = null; break;
             case 19: table.RegisterBridge = null; break;
+            case 20: table.RegisterUnhandledSpawnErrorCallback = null; break;
+            case 21: table.ShutdownRuntime = null; break;
+            case 22: table.InitializeRuntimeFromBytecodeWithMetadata = null; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }
@@ -2576,6 +2585,9 @@ internal static unsafe class Program
     private static BamlBuffer Initialize(byte* bytes, nuint length) => default;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlBuffer InitializeWithMetadata(byte* bytes, nuint length, byte* embeddedBamlToml) => default;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void FreeBuffer(BamlBuffer buffer)
     {
         Interlocked.Increment(ref releasedBuffers);
@@ -2591,17 +2603,20 @@ internal static unsafe class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void Call(byte* name, byte* args, nuint length, uint callbackId)
+    private static void Call(byte* args, nuint length, uint callbackId)
     {
         if (length > int.MaxValue || (length != 0 && args is null))
         {
             throw new InvalidDataException("fake call received an invalid argument buffer");
         }
 
-        lastFakeFunction = Marshal.PtrToStringUTF8((nint)name);
         lastFakeArguments = length == 0
             ? []
             : new ReadOnlySpan<byte>(args, checked((int)length)).ToArray();
+        CallFunctionArgs call = CallFunctionArgs.Parser.ParseFrom(lastFakeArguments);
+        lastFakeFunction = call.CallTargetCase == CallFunctionArgs.CallTargetOneofCase.FunctionName
+            ? call.FunctionName
+            : null;
         lastFakeCallbackId = callbackId;
         Interlocked.Increment(ref fakeCallCount);
         byte[]? result = fakeResult;
@@ -2767,6 +2782,15 @@ internal static unsafe class Program
         Interlocked.Increment(ref bridgeRegistrations);
         return default;
     }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void RegisterUnhandledSpawnError(
+        delegate* unmanaged[Cdecl]<sbyte*, nuint, int, void> callback)
+    {
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlBuffer Shutdown() => default;
 
     private static TException Expect<TException>(Action action)
         where TException : Exception

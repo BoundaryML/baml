@@ -1,4 +1,8 @@
 #[cfg(test)]
+mod lsp_issues_authoring;
+#[cfg(test)]
+mod lsp_issues_generic_hover;
+#[cfg(test)]
 mod memoization;
 pub mod parser;
 pub mod runner;

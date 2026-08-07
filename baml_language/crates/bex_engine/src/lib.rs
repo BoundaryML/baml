@@ -107,7 +107,7 @@ use bex_vm::{
 };
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, Value, ValueKind, VmGlobals,
+    TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -377,6 +377,14 @@ impl VmCallInputCaptureHook for EngineCallInputCaptureHook {
 pub enum BexCallArg {
     Provided(Box<BexExternalValue>),
     OmittedDefault,
+}
+
+enum CallableArgs {
+    Positional(Vec<BexExternalValue>),
+    Named {
+        required: indexmap::IndexMap<String, BexExternalValue>,
+        optional: indexmap::IndexMap<String, BexExternalValue>,
+    },
 }
 
 // ============================================================================
@@ -822,10 +830,10 @@ pub struct BexEngine {
     unhandled_spawn_state: Mutex<UnhandledSpawnState>,
     unhandled_spawn_delivery: tokio::sync::Mutex<()>,
 
-    /// Loaded packages (name → `Object::Package` pointer), shared with every VM
-    /// so spawned workers see the same index. The source of truth for interface
-    /// dispatch, recursive aliases, and named-item lookup.
-    packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
+    /// Loaded packages plus the program-wide interface → impl-rules index, shared
+    /// with every VM so spawned workers see the same index. The source of truth
+    /// for interface dispatch, recursive aliases, and named-item lookup.
+    packages: Arc<bex_vm::package_load::PackageIndex>,
 
     /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
     /// from `packages` and shared with every spawned VM (each `BexVm` would
@@ -1299,6 +1307,34 @@ fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Opti
 // Host call syntax is Python for now (subscript `f[int](...)` / `_types=`); a
 // per-host renderer is future work (see `03c-impl-guide`).
 
+/// The declared, still-*symbolic* form of a stored signature template: each
+/// frame slot becomes the type variable that slot names.
+///
+/// The host boundary infers a generic call's type arguments by matching the
+/// declared types against incoming wire values (`collect_type_var_bindings`),
+/// which keys on type-variable *names*. Substituting an empty frame instead
+/// would collapse every slot to `unknown` and erase exactly what that inference
+/// reads — turning "infer `T` from the argument" into "there is no `T`".
+fn declared_symbolic(template: &baml_type::TyTemplate, func: &bex_vm_types::Function) -> RuntimeTy {
+    // `display_type_params` is De Bruijn ordered, so a param's position *is* its
+    // frame slot — the index a `ParamTy` identity carries.
+    let slot_vars: Vec<RuntimeTy> = func
+        .display_type_params
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            RuntimeTy::TypeVar(
+                baml_type::ParamTy::new(
+                    u32::try_from(i).unwrap_or(u32::MAX),
+                    baml_type::Name::new(p.split_whitespace().next().unwrap_or(p)),
+                ),
+                baml_type::TyAttr::default(),
+            )
+        })
+        .collect();
+    template.substitute_symbolic(&slot_vars)
+}
+
 /// The bare name the host caller used (e.g. `one_type_arg`), stripped of the
 /// engine's namespace/package qualification (`user.generic_tests.one_type_arg`)
 /// so the call examples in an error message match what the user actually typed.
@@ -1590,13 +1626,13 @@ impl BexEngine {
         // Create the unified heap with compile-time objects, additionally
         // allocating the per-package `Object::Package` / `Object::ImplRule`
         // objects and the `vm.packages` index.
-        let (heap, vm_packages) = bex_vm::package_load::build_heap_with_packages(
+        let (heap, package_index) = bex_vm::package_load::build_heap_with_packages(
             compile_time_objects,
             &bytecode.packages,
         );
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
-        let packages = Arc::new(vm_packages);
+        let packages = Arc::new(package_index);
         // Resolve the builtin error/panic class pointers once; shared with every
         // spawned VM rather than re-resolved per `BexVm::new`.
         let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
@@ -2000,7 +2036,7 @@ impl BexEngine {
                         sys_types::LlmFunctionInfo {
                             prompt_template: prompt_template.clone(),
                             client_name: client.clone(),
-                            return_type: func.return_type.clone(),
+                            return_type: declared_symbolic(&func.return_type, func),
                         },
                     );
                 }
@@ -3104,15 +3140,56 @@ impl BexEngine {
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_callable_with_trace(handle, args, call_ctx, copy_objects)
-            .await
-            .and_then(|result| result.value)
+        self.call_callable_with_trace_impl(
+            handle,
+            CallableArgs::Positional(args),
+            call_ctx,
+            copy_objects,
+        )
+        .await
+        .and_then(|result| result.value)
     }
 
     pub async fn call_callable_with_trace(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
         args: Vec<BexExternalValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexCallResult, EngineError> {
+        self.call_callable_with_trace_impl(
+            handle,
+            CallableArgs::Positional(args),
+            call_ctx,
+            copy_objects,
+        )
+        .await
+    }
+
+    /// Invoke a host-returned callable using ordered required arguments and
+    /// named supplied optionals, matching the cross-SDK callable convention.
+    pub async fn call_callable_named(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        required: indexmap::IndexMap<String, BexExternalValue>,
+        optional: indexmap::IndexMap<String, BexExternalValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        self.call_callable_with_trace_impl(
+            handle,
+            CallableArgs::Named { required, optional },
+            call_ctx,
+            copy_objects,
+        )
+        .await
+        .and_then(|result| result.value)
+    }
+
+    async fn call_callable_with_trace_impl(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: CallableArgs,
         FunctionCallContext {
             host_call_id,
             boundary,
@@ -3189,10 +3266,26 @@ impl BexEngine {
                         | baml_type::RealizedTy::Void { .. } => None,
                         ty => Some(RuntimeTy::from(ty.clone())),
                     };
-                    let param_types = host
+                    let param_types: Vec<RuntimeTy> = host
                         .params
                         .iter()
                         .map(|param| RuntimeTy::from(param.ty.clone()))
+                        .collect::<Vec<_>>();
+                    let param_names = host
+                        .params
+                        .iter()
+                        .enumerate()
+                        .map(|(index, param)| {
+                            param
+                                .name
+                                .as_ref()
+                                .map_or_else(|| format!("arg{index}"), ToString::to_string)
+                        })
+                        .collect();
+                    let param_has_default = host
+                        .params
+                        .iter()
+                        .map(baml_type::RealizedFunctionParamTy::is_optional)
                         .collect();
                     (
                         entry_ptr,
@@ -3204,6 +3297,8 @@ impl BexEngine {
                             throws_type,
                             host.arity,
                             param_types,
+                            param_names,
+                            param_has_default,
                             Vec::new(),
                         )),
                     )
@@ -3219,47 +3314,87 @@ impl BexEngine {
         // parameter types (including `self` for methods) for type-directed
         // coercion; lambdas leave it empty (types inferred, not stored), so the
         // real arity comes from `arity` and coercion is best-effort.
-        let (mut return_type, throws_type, arity, param_types, generic_param_names) =
-            if let Some(signature) = host_signature {
-                signature
-            } else {
-                match thread
-                    .vm
-                    .get_object(func_ptr.expect("non-host callable must resolve to a function"))
-                {
-                    Object::Function(func) => {
-                        // A value referencing an unresolved native builtin can't be an
-                        // entry point (parity with `call_function_bound_args`).
-                        if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
-                            return Err(EngineError::NotInvokableAsEntry {
-                                name: func.name.clone(),
-                                kind: format!("{:?}", func.kind),
-                            });
-                        }
-                        // De Bruijn-ordered generic-param names (enclosing class
-                        // params first, then the function's own), bounds stripped to
-                        // the bare TypeVar — used to lower the positional `seed_type_args`
-                        // onto the named `type_args` channel below.
-                        let generic_param_names: Vec<String> = func
-                            .display_type_params
-                            .iter()
-                            .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
-                            .collect();
-                        (
-                            func.return_type.clone(),
-                            func.throws_type.clone(),
-                            func.arity,
-                            func.param_types.clone(),
-                            generic_param_names,
-                        )
-                    }
-                    _ => {
-                        return Err(EngineError::TypeMismatch {
-                            message: "call_callable: value does not wrap a function".to_string(),
+        let (
+            mut return_type,
+            throws_type,
+            arity,
+            param_types,
+            param_names,
+            param_has_default,
+            generic_param_names,
+        ) = if let Some(signature) = host_signature {
+            signature
+        } else {
+            match thread
+                .vm
+                .get_object(func_ptr.expect("non-host callable must resolve to a function"))
+            {
+                Object::Function(func) => {
+                    // A value referencing an unresolved native builtin can't be an
+                    // entry point (parity with `call_function_bound_args`).
+                    if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
+                        return Err(EngineError::NotInvokableAsEntry {
+                            name: func.name.clone(),
+                            kind: format!("{:?}", func.kind),
                         });
                     }
+                    // De Bruijn-ordered generic-param names (enclosing class
+                    // params first, then the function's own), bounds stripped to
+                    // the bare TypeVar — used to lower the positional `seed_type_args`
+                    // onto the named `type_args` channel below.
+                    let generic_param_names: Vec<String> = func
+                        .display_type_params
+                        .iter()
+                        .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                        .collect();
+                    // The stored signature is templated over this callee's frame
+                    // slots, in the same De Bruijn order as both `seed_type_args`
+                    // and `generic_param_names`. Fill each slot with the seeded
+                    // type where the caller supplied one, and otherwise with that
+                    // slot's own type variable: an unseeded slot must stay *named*
+                    // and symbolic, because the host boundary infers it from the
+                    // incoming wire values by matching them against these declared
+                    // types (see `collect_type_var_bindings`). Collapsing it to
+                    // `unknown` would erase what that inference reads.
+                    let slot_types: Vec<RuntimeTy> = (0..generic_param_names.len())
+                        .map(|i| {
+                            seed_type_args.get(i).map_or_else(
+                                || {
+                                    RuntimeTy::TypeVar(
+                                        baml_type::ParamTy::new(
+                                            u32::try_from(i).unwrap_or(u32::MAX),
+                                            baml_type::Name::new(generic_param_names[i].as_str()),
+                                        ),
+                                        baml_type::TyAttr::default(),
+                                    )
+                                },
+                                |t| t.as_runtime_ty().clone(),
+                            )
+                        })
+                        .collect();
+                    (
+                        func.return_type.substitute_symbolic(&slot_types),
+                        match &func.throws_type {
+                            baml_type::TyTemplate::Never { .. } => None,
+                            t => Some(t.substitute_symbolic(&slot_types)),
+                        },
+                        func.arity,
+                        func.param_types
+                            .iter()
+                            .map(|t| t.substitute_symbolic(&slot_types))
+                            .collect(),
+                        func.param_names.clone(),
+                        func.param_has_default.clone(),
+                        generic_param_names,
+                    )
                 }
-            };
+                _ => {
+                    return Err(EngineError::TypeMismatch {
+                        message: "call_callable: value does not wrap a function".to_string(),
+                    });
+                }
+            }
+        };
 
         // For a bound method on a generic class, substitute the declared return
         // type's class type vars from the receiver's concrete type args (seeded
@@ -3285,22 +3420,83 @@ impl BexEngine {
         // it (the receiver is injected below), so the visible arity drops by one.
         let self_offset = usize::from(receiver.is_some());
         let user_arity = arity.saturating_sub(self_offset);
-        if args.len() != user_arity {
-            return Err(EngineError::TypeMismatch {
-                message: format!(
-                    "callable expects {user_arity} argument(s), got {}",
-                    args.len()
-                ),
-            });
-        }
+        let args = match args {
+            CallableArgs::Positional(args) => {
+                if args.len() != user_arity {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "callable expects {user_arity} argument(s), got {}",
+                            args.len()
+                        ),
+                    });
+                }
+                args.into_iter()
+                    .map(|arg| BexCallArg::Provided(Box::new(arg)))
+                    .collect()
+            }
+            CallableArgs::Named {
+                required,
+                mut optional,
+            } => {
+                let required_arity = (self_offset..arity)
+                    .filter(|idx| !param_has_default.get(*idx).copied().unwrap_or(false))
+                    .count();
+                if required.len() != required_arity {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "callable expects {required_arity} required argument(s), got {}",
+                            required.len()
+                        ),
+                    });
+                }
+                let mut required = required.into_values();
+                let mut ordered = Vec::with_capacity(user_arity);
+                for idx in self_offset..arity {
+                    if !param_has_default.get(idx).copied().unwrap_or(false) {
+                        ordered.push(BexCallArg::Provided(Box::new(
+                            required
+                                .next()
+                                .expect("required callable arity was validated"),
+                        )));
+                        continue;
+                    }
+                    let name = param_names
+                        .get(idx)
+                        .ok_or_else(|| EngineError::TypeMismatch {
+                            message: format!("callable parameter {idx} has no name"),
+                        })?;
+                    if let Some(value) = optional.shift_remove(name) {
+                        ordered.push(BexCallArg::Provided(Box::new(value)));
+                    } else {
+                        ordered.push(BexCallArg::OmittedDefault);
+                    }
+                }
+                if !optional.is_empty() {
+                    let mut extra = optional.keys().cloned().collect::<Vec<_>>();
+                    extra.sort();
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "callable got unexpected argument(s): {}",
+                            extra.join(", ")
+                        ),
+                    });
+                }
+                ordered
+            }
+        };
 
         // Coerce each provided arg to its declared param type (offset by `self`
         // for bound methods).
-        let coerced: Vec<BexExternalValue> = args
+        let coerced: Vec<BexCallArg> = args
             .into_iter()
             .enumerate()
             .map(|(idx, arg)| match param_types.get(idx + self_offset) {
-                Some(ty) => self.coerce_inbound_arg(arg, ty),
+                Some(ty) => match arg {
+                    BexCallArg::Provided(value) => self
+                        .coerce_inbound_arg(*value, ty)
+                        .map(|value| BexCallArg::Provided(Box::new(value))),
+                    BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
+                },
                 None => Ok(arg),
             })
             .collect::<Result<_, _>>()?;
@@ -3312,11 +3508,14 @@ impl BexEngine {
             vm_args.push(receiver);
         }
         for (idx, arg) in coerced.into_iter().enumerate() {
-            vm_args.push(self.convert_external_to_vm_value_with_ty(
-                &mut thread,
-                arg,
-                param_types.get(idx + self_offset),
-            )?);
+            vm_args.push(match arg {
+                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
+                    &mut thread,
+                    *arg,
+                    param_types.get(idx + self_offset),
+                )?,
+                BexCallArg::OmittedDefault => Value::OMITTED_ARG,
+            });
         }
 
         // The legacy span label stays "<callable>" (host-facing name for a
@@ -3440,7 +3639,7 @@ impl BexEngine {
         // SAFETY: ptr is from resolved_function_names, a compile-time object
         let obj = unsafe { ptr.get() };
         match obj {
-            Object::Function(func) => Some(func.return_type.clone()),
+            Object::Function(func) => Some(declared_symbolic(&func.return_type, func)),
             _ => None,
         }
     }
@@ -3452,16 +3651,16 @@ impl BexEngine {
         // SAFETY: ptr is from resolved_function_names, a compile-time object
         let obj = unsafe { ptr.get() };
         match obj {
-            Object::Function(func) => func.throws_type.clone(),
+            Object::Function(func) => match &func.throws_type {
+                baml_type::TyTemplate::Never { .. } => None,
+                t => Some(declared_symbolic(t, func)),
+            },
             _ => None,
         }
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
-    pub fn function_params(
-        &self,
-        name: &str,
-    ) -> Result<Vec<(&str, &RuntimeTy, bool)>, EngineError> {
+    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, RuntimeTy, bool)>, EngineError> {
         let resolved = self
             .resolve_function_name(name)
             .ok_or(EngineError::FunctionNotFound {
@@ -3484,7 +3683,7 @@ impl BexEngine {
                 .map(|(idx, (name, ty))| {
                     (
                         name.as_str(),
-                        ty,
+                        declared_symbolic(ty, func),
                         func.param_has_default.get(idx).copied().unwrap_or(false),
                     )
                 })
@@ -3649,9 +3848,13 @@ impl BexEngine {
                             display_name,
                             origin: func.origin,
                             param_names: func.param_names.clone(),
-                            param_types: func.param_types.clone(),
+                            param_types: func
+                                .param_types
+                                .iter()
+                                .map(|t| declared_symbolic(t, func))
+                                .collect(),
                             param_has_default: func.param_has_default.clone(),
-                            return_type: func.return_type.clone(),
+                            return_type: declared_symbolic(&func.return_type, func),
                             display_type_params: func.display_type_params.clone(),
                             display_param_types,
                             display_return_type,
@@ -5062,14 +5265,18 @@ impl BexEngine {
                     // BEP-034: pull the closure + name off the
                     // `UnscheduledFuture` heap object and hand them to
                     // `spawn_thread`, which allocates the future and
-                    // dispatches the body on a fresh `BexThread`. The
-                    let (closure, name_ptr, config_ptr) = {
-                        let unscheduled = thread
-                            .vm
-                            .unscheduled_future(unscheduled)
-                            .map_err(EngineError::VmInternalError)?;
-                        (unscheduled.closure, unscheduled.name, unscheduled.config)
-                    };
+                    // dispatches the body on a fresh `BexThread`.
+                    let unscheduled = thread
+                        .vm
+                        .unscheduled_future(unscheduled)
+                        .map_err(EngineError::VmInternalError)?;
+                    let UnscheduledFuture {
+                        closure,
+                        name: name_ptr,
+                        config: config_ptr,
+                        returns,
+                        throws,
+                    } = unscheduled.clone();
                     let spawn_name: Option<String> =
                         name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
                             Object::String(s) => Some(s.to_string()),
@@ -5135,7 +5342,8 @@ impl BexEngine {
 
                     let future_ptr = {
                         let mut guard = self.futures.acquire(thread.proof()).await;
-                        let (future_id, future_ptr) = guard.new_future(child_cancel.clone());
+                        let (future_id, future_ptr) =
+                            guard.new_future(returns, throws, child_cancel.clone());
                         drop(guard);
                         Arc::clone(self)
                             .spawn_thread(

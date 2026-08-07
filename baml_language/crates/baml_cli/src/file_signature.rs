@@ -83,9 +83,11 @@ pub(crate) fn file_signature_hash(db: &ProjectDatabase, file: SourceFile) -> [u8
 ///
 /// This is [`file_signature_hash`] narrowed to the declarations whose *shape* a
 /// type's layout is baked from — class field order/types, enum variant
-/// order/discriminants, interface method-signature order (vtable slots), type
-/// alias targets, generic-parameter lists, and the `cleanup`-method signature —
-/// and nothing else. A free function's signature, a client, a test, a template
+/// order/discriminants, interface method-signature order (vtable slots),
+/// interface *field* order and the in-body `implements` field links (together
+/// these fix `RuntimeImplRule::field_links`, the interface-field-index → class-slot
+/// table a virtual field access indexes), type alias targets, generic-parameter
+/// lists, and the `cleanup`-method signature — and nothing else. A free function's signature, a client, a test, a template
 /// string, and every function body are all excluded. Blanking bodies matches
 /// the signature hash's body-invariance: a field offset, a discriminant, a type
 /// tag, and a vtable slot are all fixed by *declarations*, never by a body

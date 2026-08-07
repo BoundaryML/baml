@@ -327,6 +327,33 @@ function $init_test(registry: unknown) -> null {
     load_var ?1
     call ?
     pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
     load_const ?
     return
 }
@@ -340,7 +367,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
 function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {

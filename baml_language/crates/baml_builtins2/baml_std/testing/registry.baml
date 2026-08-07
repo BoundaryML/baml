@@ -393,16 +393,16 @@ function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {
   }
 }
 
-function run_children_parallel(children: TestSetChild[]) -> TestSetReport {
-  let futures: baml.future.Future<NamedChildReport, null>[] = []
+function run_children_parallel(children: TestSetChild[]) -> TestSetReport throws never {
+  let futures: baml.future.Future<NamedChildReport, never>[] = []
   for (let child in children) {
     futures.push(spawn {
       NamedChildReport { name: child.name, report: child.run() }
     })
   }
-  let named_results = (await baml.future.all_complete(futures)) catch_all (e) {
-    _ => baml.sys.panic("unexpected test child failure")
-  }
+  // No catch: the children's bodies cannot throw, so the futures are
+  // `Future<NamedChildReport, never>` and awaiting them is infallible.
+  let named_results = await baml.future.all_complete(futures)
   root.aggregate_reports(named_results)
 }
 
@@ -413,7 +413,7 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     let result = {
       body()
       RunReport { outcome: "pass", duration_ms: 0, message: null }
-    } catch_all (e) {
+    } catch_all (e, ctx) {
       let p: baml.panics.UserPanic => {
         RunReport { outcome: "fail", duration_ms: 0, message: p.message }
       },
@@ -421,10 +421,10 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
         RunReport { outcome: "fail", duration_ms: 0, message: p.message }
       },
       baml.panics.Panic => {
-        RunReport { outcome: "fail", duration_ms: 0, message: null }
+        RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
       },
       _ => {
-        RunReport { outcome: "fail", duration_ms: 0, message: null }
+        RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
       }
     }
     TestReport {

@@ -31,6 +31,14 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
+  × type `Box` expects 1 type argument(s), got 0
+     ╭─[classes.baml:123:35]
+ 123 │ function wrong_arity_missing() -> Box {
+     ·                                   ───
+     ╰────
+
+  [type] E0001
+
   × type `Box` expects 1 type argument(s), got 2
      ╭─[classes.baml:128:33]
  128 │ function wrong_arity_extra() -> Box<int, string> {
@@ -63,15 +71,6 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × mismatched types
-     ╭─[classes.baml:134:35]
- 134 │     Pair<int> { first: 1, second: "two" }
-     ·                                   ──┬──
-     ·                                     ╰── expected `B`, found `"two"`
-     ╰────
-
-  [type] E0001
-
   × type `Plain` expects 0 type argument(s), got 1
      ╭─[classes.baml:145:42]
  145 │ function wrong_arity_on_non_generic() -> Plain<int> {
@@ -86,12 +85,20 @@ source: crates/baml_tests/src/generated_tests.rs
      ·     ────────────────────────────
      ╰────
 
-  [type] E0063
+  [type] E0001
 
-  × unreachable arm
-     ╭─[classes.baml:197:21]
- 197 │             null => default,
-     ·                     ───────
+  × type `Foo` expects 1 type argument(s), got 0
+     ╭─[classes.baml:234:33]
+ 234 │ function bare_in_union_param(f: Foo<int> | Foo) -> string {
+     ·                                 ──────────────
+     ╰────
+
+  [type] E0001
+
+  × type `Foo` expects 1 type argument(s), got 0
+     ╭─[classes.baml:237:9]
+ 237 │         Foo      => "bare",
+     ·         ───
      ╰────
 
   [type] E0003

@@ -40,59 +40,88 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{resolve_standalone_file, validate_file_from_flags},
+    project_load::{resolve_standalone_file, validate_file_project_flags},
     reporter::Reporter,
 };
 
-/// `baml pack` — compile one or more targets into a standalone executable.
+/// Package one or more BAML targets as a standalone executable.
+///
+/// A positional target produces a single-entry executable. One or more
+/// `--function` flags produce an executable whose generated CLI has one
+/// subcommand per function. Function parameters are derived from BAML types.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Package one function:
+    baml pack main
+
+  Choose the executable path:
+    baml pack main --output ./my-tool
+
+  Package multiple functions as subcommands:
+    baml pack --function Extract --function Classify --output ./baml-tools
+
+  Package a function from a standalone file:
+    baml pack --file script.baml main")]
 pub struct PackArgs {
-    /// Positional target: a function name to pack as the binary's only
-    /// entry point. Mutually exclusive with `-f/--function`.
-    #[arg(value_name = "TARGET")]
+    #[command(flatten)]
+    pub compiler: crate::commands::CompilerArgs,
+
+    /// Function to package as the executable's only entry point.
+    ///
+    /// Mutually exclusive with `--function`.
+    #[arg(value_name = "FUNCTION")]
     pub target: Option<String>,
 
-    /// Pack a specific function as a subcommand of the produced binary.
-    /// Repeatable: each `-f` adds another subcommand. With one `-f` the
-    /// binary still has a subcommand layer (vs. a bare positional, which
-    /// produces a single-entry binary with no subcommand).
-    #[arg(short = 'f', long = "function", value_name = "NAME")]
+    /// Add a function as a generated executable subcommand. Repeatable.
+    ///
+    /// Even one `--function` creates a subcommand. Use a positional `<TARGET>`
+    /// to produce an executable with no subcommand layer.
+    #[arg(
+        short = 'f',
+        long = "function",
+        value_name = "NAME",
+        help_heading = "Target options"
+    )]
     pub functions: Vec<String>,
 
-    /// Standalone single-file source. Loads only this file (no project
-    /// discovery). Mutually exclusive with `--from`.
-    #[arg(long, value_name = "PATH")]
+    /// Load one standalone source file instead of discovering a project.
+    ///
+    /// Mutually exclusive with `--project`.
+    #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
 
-    /// Output path for the packaged executable. Defaults to the
-    /// `[package].name` from `baml.toml`; for a manifest-less `baml_src/`
-    /// project, falls back to the project directory name; in `--file` mode,
-    /// to the file stem.
-    #[arg(short, long)]
+    /// Path for the packaged executable.
+    ///
+    /// Defaults to `[package].name`, the project directory name, or the source
+    /// file stem, depending on the project mode.
+    #[arg(short, long, help_heading = "Build options")]
     pub output: Option<PathBuf>,
 
     /// Target triple for the packaged executable.
-    /// Defaults to the host platform. When this differs from the host,
-    /// `baml pack` downloads the matching pack host from GitHub release
-    /// artifacts.
-    #[arg(long = "target", value_name = "TRIPLE")]
+    ///
+    /// Defaults to the host platform. Cross-compilation downloads the matching
+    /// pack host from the BAML release artifacts.
+    #[arg(long = "target", value_name = "TRIPLE", help_heading = "Build options")]
     pub target_triple: Option<String>,
 
-    /// Output format baked into the binary. Defaults to `json`; packaged
-    /// binaries are production tools whose primary reader is another
-    /// program. Use `debug` for human-readable output.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+    #[arg(
+        long,
+        value_enum,
+        value_name = "FORMAT",
+        help = "Format returned values [default: json] [possible values: debug, json]",
+        hide_default_value = true,
+        hide_possible_values = true,
+        default_value_t = OutputFormat::Json,
+        help_heading = "Runtime options"
+    )]
     pub output_format: OutputFormat,
 
-    /// Project search starting point. Mutually exclusive with `--file`.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
-    /// `-e/--expression` is recognized only so we can reject it with a
-    /// targeted message — `baml pack` doesn't support expression mode.
-    /// Without this flag declared, `baml pack -e '...'` falls through to
-    /// clap's positional handling and surfaces a confusing parse error.
-    #[arg(short = 'e', long = "expression", value_name = "EXPR")]
+    #[arg(short = 'e', long = "expression", value_name = "EXPR", hide = true)]
     pub expression: Option<String>,
 }
 
@@ -198,10 +227,10 @@ impl PackArgs {
                  pass a positional `<TARGET>` or `-f <NAME>` instead."
             );
         }
-        // `--file` and `--from` both name a source location. Reject the
+        // `--file` and `--project` both name a source location. Reject the
         // combination up front instead of silently preferring one. Same rule
         // as `baml run`.
-        validate_file_from_flags(self.file.as_deref(), self.from.as_deref())?;
+        validate_file_project_flags(self.file.as_deref(), self.from.as_deref())?;
         if let Some(target) = self.target.as_deref() {
             if looks_like_path(target) {
                 anyhow::bail!(
@@ -630,10 +659,8 @@ fn write_executable(
     target_triple: &str,
 ) -> Result<()> {
     if target_triple.contains("linux") {
-        // Not `libsui::Elf::append`: it places the embedded note at a virtual
-        // address that can overlap the host's `.bss`, corrupting the envelope
-        // (and the host's BSS globals) at startup. See `pack_elf`.
-        crate::pack_elf::append_note(host_bytes, PACK_SECTION_NAME, data, writer)
+        libsui::Elf::new(host_bytes)
+            .append(PACK_SECTION_NAME, data, writer)
             .context("failed to write ELF binary")?;
     } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
@@ -678,6 +705,7 @@ mod tests {
 
     fn pack_args() -> PackArgs {
         PackArgs {
+            compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
             file: None,

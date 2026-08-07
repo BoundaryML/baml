@@ -36,7 +36,7 @@ env:
 
 jobs:
   # Determine if runtime-related files have changed
-  # This job enables auto-pass when only baml_language/ or typescript/apps/beps/ files are modified
+  # This job enables auto-pass when only baml_language/ or typescript2/app-beps/ files are modified
   determine_changes:
     name: "Determine changes"
     runs-on: ubuntu-latest
@@ -90,7 +90,7 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          # Check if ALL changed files are in baml_language/ or typescript/apps/beps/ (auto-skip paths)
+          # Check if ALL changed files are in baml_language/ or typescript2/app-beps/ (auto-skip paths)
           # If any file is outside these paths, we need to run the tests
           RUNTIME_CHANGED="false"
           ONLY_BAML_LANGUAGE="true"
@@ -105,18 +105,18 @@ jobs:
               ONLY_BAML_LANGUAGE="false"
             fi
 
-            # Check if file is in typescript/apps/beps/
-            if [[ ! "$file" =~ ^typescript/apps/beps/ ]]; then
+            # Check if file is in typescript2/app-beps/
+            if [[ ! "$file" =~ ^typescript2/app-beps/ ]]; then
               ONLY_BEPS="false"
             fi
 
             # Check if file is in a path that requires runtime tests
-            # Runtime tests are needed for: engine/, typescript/ (except beps), integ-tests/, .github/workflows/primary.yml
+            # Runtime tests are needed for: engine/, typescript/, integ-tests/, .github/workflows/primary.yml
             if [[ "$file" =~ ^engine/ ]] || \
                [[ "$file" =~ ^integ-tests/ ]] || \
                [[ "$file" == ".github/workflows/primary.yml" ]] || \
                [[ "$file" =~ ^\.github/actions/ ]] || \
-               ([[ "$file" =~ ^typescript/ ]] && [[ ! "$file" =~ ^typescript/apps/beps/ ]]); then
+               [[ "$file" =~ ^typescript/ ]]; then
               RUNTIME_CHANGED="true"
             fi
           done <<< "$CHANGED_FILES"
@@ -127,9 +127,9 @@ jobs:
             if [[ "$ONLY_BAML_LANGUAGE" == "true" ]]; then
               SKIP_REASON="Only baml_language/ files changed - these are covered by CI - BAML Language workflow"
             elif [[ "$ONLY_BEPS" == "true" ]]; then
-              SKIP_REASON="Only typescript/apps/beps/ files changed - these are covered by CI - BAML Language BEPs workflow"
+              SKIP_REASON="Only typescript2/app-beps/ files changed - these are covered by the TypeScript2 workflow"
             else
-              SKIP_REASON="No runtime-related files changed (only baml_language/ or typescript/apps/beps/)"
+              SKIP_REASON="No runtime-related files changed (only baml_language/ or typescript2/app-beps/)"
             fi
           fi
 
@@ -166,20 +166,13 @@ jobs:
     strategy:
       matrix:
         check:
-          [typescript-lint, rust-format, rust-lint, rust-lint-wasm, python-lint]
+          [rust-format, rust-lint, rust-lint-wasm, python-lint]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-
-      # Setup Node.js for TypeScript lint
-      - name: Setup Node.js
-        if: matrix.check == 'typescript-lint'
-        uses: ./.github/actions/setup-node
-        with:
-          node-action-version: "v6"
 
       # Setup Rust for Rust checks
       - name: Setup Rust
@@ -198,10 +191,6 @@ jobs:
         uses: ./.github/actions/setup-python
         with:
           cache: "false"
-
-      - name: Run TypeScript lint
-        if: matrix.check == 'typescript-lint'
-        run: pnpm format:ci
 
       - name: Run Rust format check
         if: matrix.check == 'rust-format'

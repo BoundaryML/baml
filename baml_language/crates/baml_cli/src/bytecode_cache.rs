@@ -915,7 +915,7 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
         if let Some(id) = func.throws {
             add_type_ref_display(&func.type_refs, id, &mut names);
         }
-        for id in func.generic_param_bounds.iter().flatten() {
+        for id in func.generic_params.iter().flat_map(|p| &p.bounds) {
             add_type_ref_display(&func.type_refs, *id, &mut names);
         }
     }
@@ -927,10 +927,10 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
     }
     for &loc in file_classes(db, file) {
         let class = class_data(db, loc);
-        for id in class.fields.iter().filter_map(|f| f.type_ref) {
+        for id in class.fields.iter().map(|f| f.type_ref) {
             add_type_ref_display(&class.type_refs, id, &mut names);
         }
-        for id in class.generic_param_bounds.iter().flatten() {
+        for id in class.generic_params.iter().flat_map(|p| &p.bounds) {
             add_type_ref_display(&class.type_refs, *id, &mut names);
         }
         for block in &class.implements {
@@ -939,13 +939,13 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
     }
     for &loc in file_interfaces(db, file) {
         let iface = interface_data(db, loc);
-        for id in iface.fields.iter().filter_map(|f| f.type_ref) {
+        for id in iface.fields.iter().map(|f| f.type_ref) {
             add_type_ref_display(&iface.type_refs, id, &mut names);
         }
         for id in &iface.requires {
             add_type_ref_display(&iface.type_refs, *id, &mut names);
         }
-        for id in iface.generic_param_bounds.iter().flatten() {
+        for id in iface.generic_params.iter().flat_map(|p| &p.bounds) {
             add_type_ref_display(&iface.type_refs, *id, &mut names);
         }
         for method in &iface.required_methods {
@@ -958,7 +958,7 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
             if let Some(id) = method.throws {
                 add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            for id in method.generic_param_bounds.iter().flatten() {
+            for id in method.generic_params.iter().flat_map(|p| &p.bounds) {
                 add_type_ref_display(&iface.type_refs, *id, &mut names);
             }
         }
@@ -3480,9 +3480,9 @@ mod tests {
                 _ => None,
             })
             .expect("stable function");
-        stable_fn.throws_type = Some(baml_type::RuntimeTy::String {
+        stable_fn.throws_type = baml_type::TyTemplate::String {
             attr: baml_type::TyAttr::default(),
-        });
+        };
 
         let prepared = prepare_reuse_plan(&mut db2, Some(plan))
             .expect("the unaffected clean unit remains reusable");

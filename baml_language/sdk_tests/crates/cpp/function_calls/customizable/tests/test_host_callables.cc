@@ -45,6 +45,28 @@ BAML_TEST(host_callables_int_return_callable_round_trip) {
   BAML_ASSERT_EQ(result, int64_t{42});
 }
 
+BAML_TEST(baml_closure_is_a_native_callable_with_host_language_arguments) {
+  const auto add_ten = baml_sdk::host_callable_tests::make_adder(10);
+  BAML_ASSERT_EQ(add_ten(5), int64_t{15});
+  BAML_ASSERT_EQ(add_ten(7), int64_t{17});
+}
+
+BAML_TEST(baml_closure_decodes_multiple_args_and_structured_return_values) {
+  const auto build = baml_sdk::host_callable_tests::make_pair_builder(30);
+  const Person ada = build(12, "Ada");
+  BAML_ASSERT_EQ(ada.name, std::string("Ada"));
+  BAML_ASSERT_EQ(ada.age, int64_t{42});
+  const Person grace = build(5, "Grace");
+  BAML_ASSERT_EQ(grace.name, std::string("Grace"));
+  BAML_ASSERT_EQ(grace.age, int64_t{35});
+}
+
+BAML_TEST(baml_closure_is_reusable_and_retains_mutable_captures) {
+  const auto next_value = baml_sdk::host_callable_tests::make_counter(40);
+  BAML_ASSERT_EQ(next_value(), int64_t{41});
+  BAML_ASSERT_EQ(next_value(), int64_t{42});
+}
+
 BAML_TEST(
     host_callables_throwing_callable_round_trips_original_host_exception) {
   // A native C++ exception thrown inside a host callable surfaces back to

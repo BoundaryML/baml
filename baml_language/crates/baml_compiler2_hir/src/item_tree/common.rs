@@ -1,3 +1,7 @@
+/// Re-exported unchanged: a generic parameter carries only a name and its
+/// bounds (themselves `ast::TypeExpr`s, as everywhere else in the `ItemTree`),
+/// so there is nothing for a mirror struct to strip.
+pub use ast::GenericParam;
 use baml_base::Name;
 use baml_compiler2_ast::ast;
 

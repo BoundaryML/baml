@@ -214,36 +214,35 @@ fn determine_interface(
         Ty::Interface(qtn, args, assoc, _) => {
             let root = baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone());
             let undeclared = AssocContainer::Interface(root.name.clone());
-            resolve_via_roots(ctx, vec![root], explicit, member, undeclared, &base)
+            resolve_via_roots(ctx, vec![root], explicit, member, undeclared, &base, true)
         }
         // A type variable searches the closure of *every* interface in its bound
         // conjunction (`T extends A & B`). No bound at all means it cannot be proven
         // to implement any interface, so no interface can declare `member`.
-        Ty::TypeVar(name, _) => match ctx.type_var_bounds(name) {
-            // A `Ty::TypeVar` projection base is always an in-scope generic parameter — a
-            // bare path lowers to a type variable only when it *is* one, and a rigid `Self`
-            // receiver is registered in `generic_params` wherever its `self_ty` is set. So
-            // this is unreachable; if a lowering site ever sets a type variable / `Self`
-            // receiver without threading it into `generic_params`, that bug surfaces here.
-            None => unreachable!(
-                "type variable `{name}` projected but not in this scope's generic_params — \
-                 a lowering site failed to thread it"
-            ),
+        Ty::TypeVar(param, _) => match ctx.type_var_bounds(param) {
             // Declared but genuinely unbounded: it implements nothing, so an explicit
             // qualifier cannot hold and an unqualified member is undeclared.
-            Some(bounds) if bounds.is_empty() => match explicit {
+            bounds if bounds.is_empty() => match explicit {
                 Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
                     subject: base.clone(),
                     qualifier,
                 },
                 None => Determination::Undeclared {
-                    container: AssocContainer::TypeVar(name.clone()),
+                    container: AssocContainer::TypeVar(param.name().clone()),
                 },
             },
-            Some(bounds) => {
+            bounds => {
                 // Report against the first bound if none declares `member`.
                 let undeclared = AssocContainer::Interface(bounds[0].name.clone());
-                resolve_via_roots(ctx, bounds.into_vec(), explicit, member, undeclared, &base)
+                resolve_via_roots(
+                    ctx,
+                    bounds.into_vec(),
+                    explicit,
+                    member,
+                    undeclared,
+                    &base,
+                    false,
+                )
             }
         },
         // Concrete receivers resolve through their own impls: an associated type
@@ -331,16 +330,25 @@ fn resolve_via_roots(
     member: &Name,
     undeclared: AssocContainer,
     subject: &Ty,
+    // Whether the closure walk fills unpinned defaulted members. An
+    // existential root denotes one complete instantiation (defaults filled at
+    // type lowering), so its closure view fills too; a RIGID root (a type
+    // variable's bound, a chained projection's declared bound) leaves them
+    // unpinned — the eventual implementor may override a default, so the
+    // projection must stay symbolic and realize per-receiver.
+    fill_defaults: bool,
 ) -> Determination {
     match explicit {
-        None => resolve_through_roots(ctx.db(), roots, member, undeclared),
-        Some(qualifier) => match realize_qualifier_through_roots(ctx, &roots, &qualifier) {
-            Some(realized) => Determination::Determined(realized),
-            None => Determination::SubjectDoesNotImplementQualifier {
-                subject: subject.clone(),
-                qualifier,
-            },
-        },
+        None => resolve_through_roots(ctx.db(), roots, member, undeclared, fill_defaults),
+        Some(qualifier) => {
+            match realize_qualifier_through_roots(ctx, &roots, &qualifier, fill_defaults) {
+                Some(realized) => Determination::Determined(realized),
+                None => Determination::SubjectDoesNotImplementQualifier {
+                    subject: subject.clone(),
+                    qualifier,
+                },
+            }
+        }
     }
 }
 
@@ -355,6 +363,7 @@ fn realize_qualifier_through_roots(
     ctx: &dyn TypeExprContext<'_>,
     roots: &[baml_type::Interface],
     qualifier: &baml_type::Interface,
+    fill_defaults: bool,
 ) -> Option<baml_type::Interface> {
     let db = ctx.db();
     for root in roots {
@@ -366,7 +375,7 @@ fn realize_qualifier_through_roots(
             root_loc,
             &root.generics,
             &root.associated_types,
-            true,
+            fill_defaults,
         ) {
             if let Some(qtn) = crate::interfaces::interface_loc_qtn(db, loc)
                 && qtn == qualifier.name
@@ -474,6 +483,7 @@ fn resolve_through_roots(
     roots: Vec<baml_type::Interface>,
     member: &Name,
     undeclared: AssocContainer,
+    fill_defaults: bool,
 ) -> Determination {
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
     let mut push = |interface: baml_type::Interface| {
@@ -485,7 +495,7 @@ fn resolve_through_roots(
         if interface_declares_member(db, &root.name, member) {
             push(root);
         } else {
-            for declarer in closure_declarers(db, &root, member) {
+            for declarer in closure_declarers(db, &root, member, fill_defaults) {
                 push(declarer);
             }
         }
@@ -545,7 +555,15 @@ fn determine_chained(
         };
     };
     let container = AssocContainer::Interface(root.name.clone());
-    resolve_via_roots(ctx, vec![root], explicit, member, container, projection)
+    resolve_via_roots(
+        ctx,
+        vec![root],
+        explicit,
+        member,
+        container,
+        projection,
+        false,
+    )
 }
 
 /// The interface bound declared on associated type `member` of the interface at
@@ -570,8 +588,10 @@ fn associated_type_bound_interface(
     // The bound is realized at the projection: `Self` is the projection's base, the
     // interface's generics are the realized ones, and each sibling associated type is
     // its inner pin.
-    let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
-    bindings.insert(Name::new("Self"), self_ty.clone());
+    let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let self_param = generic_env.interface_param_parts().0.clone();
+    let mut bindings: FxHashMap<crate::ty::ParamTy, Ty> = FxHashMap::default();
+    bindings.insert(self_param.clone(), self_ty.clone());
     // `realized` should carry exactly one argument per declared generic parameter; a mismatch
     // is a malformed bound (an under-instantiated generic interface, reported as
     // `WrongNumberOfTypeArgs` at its declaration). Bind any un-provided parameter to
@@ -584,9 +604,13 @@ fn associated_type_bound_interface(
         realized.generics.len(),
         iface.generic_params.len(),
     );
-    for (i, param) in iface.generic_params.iter().enumerate() {
+    for (i, declared) in iface.generic_params.iter().enumerate() {
         let arg = realized.generics.get(i).cloned().unwrap_or_else(error_ty);
-        bindings.insert(param.clone(), arg);
+        let param = generic_env
+            .resolve_param(&declared.name)
+            .expect("interface generic parameter is in its environment")
+            .clone();
+        bindings.insert(param, arg);
     }
     // Every associated type is an in-scope name in the bound expression (`type A extends
     // Inner<C>` references sibling `C`), so each must be bound. Use its realized pin, or —
@@ -606,34 +630,36 @@ fn associated_type_bound_interface(
                 member: assoc.name.clone(),
                 attr: TyAttr::default(),
             });
-        bindings.insert(assoc.name.clone(), value);
+        let param = generic_env
+            .resolve_any_param(&assoc.name)
+            .expect("associated type parameter is in its interface environment")
+            .clone();
+        bindings.insert(param, value);
     }
 
     // The bound is written in the interface's own scope: `Self` is bounded by the
     // interface itself (so `Self.member` in the bound resolves), plus the interface's
     // declared parameter bounds; its generics and associated names are in scope.
     let mut bounds = crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
-    bounds.insert(Name::new("Self"), vec![realized.clone()]);
-    let generic_params: Vec<Name> = iface
-        .generic_params
-        .iter()
-        .cloned()
-        .chain(iface.associated_types.iter().map(|a| a.name.clone()))
-        .chain(std::iter::once(Name::new("Self")))
-        .collect();
+    bounds.insert(self_param.clone(), vec![realized.clone()]);
 
     let scope = crate::lower_type_expr::ScopeCtx {
         db,
         package_items: pkg_items,
         ns_context: &pkg.namespace_path,
-        generic_params: &generic_params,
+        generic_params: generic_env.params(),
         bounds: &bounds,
-        self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+        self_ty: Some(Ty::TypeVar(self_param, TyAttr::default())),
     };
     // The bound is checked at the interface's declaration; diagnostics are discarded here.
     let mut diags = Vec::new();
     let lowered = crate::generics::substitute_ty(
-        &crate::lower_type_expr::lower_type_ref(&iface.type_refs, bound_ref, &scope, &mut diags),
+        &crate::lower_type_expr::lower_constraint_head_type_ref(
+            &iface.type_refs,
+            bound_ref,
+            &scope,
+            &mut diags,
+        ),
         &bindings,
     );
     lowered.as_interface()
@@ -673,7 +699,9 @@ pub(crate) fn associated_type_declared_bound(
     if !arity_ok {
         return Vec::new();
     }
-    let symbolic_self = Ty::TypeVar(Name::new("Self"), TyAttr::default());
+    let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let self_param = generic_env.interface_param_parts().0.clone();
+    let symbolic_self = Ty::TypeVar(self_param, TyAttr::default());
     associated_type_bound_interface(db, iface_loc, interface, &symbolic_self, member)
         .into_iter()
         .collect()
@@ -719,6 +747,7 @@ fn closure_declarers(
     db: &dyn crate::Db,
     root: &baml_type::Interface,
     member: &Name,
+    fill_defaults: bool,
 ) -> Vec<baml_type::Interface> {
     let Some(root_loc) = resolve_interface_loc(db, &root.name) else {
         return Vec::new();
@@ -728,7 +757,7 @@ fn closure_declarers(
         root_loc,
         &root.generics,
         &root.associated_types,
-        true,
+        fill_defaults,
     );
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();

@@ -458,7 +458,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
               }
           }
       }
-    let outcome: Outcome = : "error" | "pass" | "fail" -> "pass" | "fail" | "error"
+    let outcome: Outcome = : "error" | "pass" | "fail" -> "error" | "fail" | "pass"
       if (has_error : bool) : "error" | "pass" | "fail"
         { : "error"
           "error" : "error"
@@ -477,16 +477,12 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
 }
 function testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    let futures: baml.future.Future<NamedChildReport, null>[] = [] : Future<testing.NamedChildReport, null>[]
+    let futures: baml.future.Future<NamedChildReport, never>[] = [] : Future<testing.NamedChildReport, never>[]
     for child in children
       { : int
         futures.push(spawn { () -> { ... } }) : int
       }
-    let named_results = : testing.NamedChildReport[]
-      catch (await baml.future.all_complete(futures) : testing.NamedChildReport[]) : testing.NamedChildReport[]
-        catch_all (e)
-          _ =>
-            baml.sys.panic("unexpected test c...") : never
+    let named_results = await baml.future.all_complete(futures) : testing.NamedChildReport[]
     root.aggregate_reports(named_results) : testing.TestSetReport
   }
 }
@@ -507,7 +503,7 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
         base_run() : testing.TestReport
       r: TestRunner =>
         { : testing.TestReport
-          let wrapped: TestReportThunk = r(base_run) : testing.TestReportThunk -> () -> testing.TestReport throws never
+          let wrapped: TestReportThunk = r(base_run) : () -> testing.TestReport throws never
           wrapped() : testing.TestReport
         }
   }

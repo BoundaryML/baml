@@ -81,6 +81,10 @@ impl CffiHandleTableEntry {
                     MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
                     MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
                 },
+                BexExternalAdt::TaggedHeapHandle {
+                    ty: bex_project::RuntimeTy::Function { .. },
+                    ..
+                } => BamlHandleType::FunctionRef,
                 BexExternalAdt::TaggedHeapHandle { .. } => BamlHandleType::AdtTaggedHeapHandle,
             },
         }

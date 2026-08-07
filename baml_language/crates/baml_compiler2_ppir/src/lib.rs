@@ -248,14 +248,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // Transform each field in-place
                 stream_class.fields.retain_mut(|field| {
-                    let ppir_ty = field
-                        .type_expr
-                        .as_ref()
-                        .map(PpirTy::from_type_expr)
-                        .unwrap_or(PpirTy::CannotBeStreamed {
-                            origin: ty::CannotBeStreamedOrigin::Unknown,
-                            attrs: PpirTypeAttrs::default(),
-                        });
+                    let ppir_ty = PpirTy::from_type_expr(&field.type_expr);
                     let ctx = ExpandCtx {
                         package_name: &package_name,
                         namespace_path: &pkg_info.namespace_path,
@@ -287,22 +280,17 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     }
 
                     // Preserve non-stream type attributes from the original outermost TypeExpr
-                    if let Some(orig_spanned) = &field.type_expr {
-                        for attr in orig_spanned.attrs() {
-                            if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
-                                type_expr.attrs_mut().push(attr.clone());
-                            }
+                    for attr in field.type_expr.attrs() {
+                        if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
+                            type_expr.attrs_mut().push(attr.clone());
                         }
                     }
 
                     // Replace the field's type expr (preserves field.name, field.attributes, field.span, etc.)
-                    field.type_expr = Some(ast::TypeExpr {
-                        span: field
-                            .type_expr
-                            .as_ref()
-                            .map_or(TextRange::default(), |s| s.span),
+                    field.type_expr = ast::TypeExpr {
+                        span: field.type_expr.span,
                         ..type_expr
-                    });
+                    };
 
                     // Strip stream.* from field-level attributes (preserve @alias, @description, @skip, etc.)
                     field.attributes.retain(|a| !a.name.starts_with("stream."));
@@ -481,14 +469,15 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),
-                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params: func.params.clone(),
                         defaults: func.defaults.clone(),
                         return_type: Some(companion_stream_return_type.clone()),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
+                        metadata: ast::FunctionMetadata::user_facing(
+                            ast::FunctionOrigin::Companion,
+                        ),
                         is_tagged_template_tag: func.is_tagged_template_tag,
                         attributes: vec![],
                         docstring: func.docstring.clone(),
@@ -542,14 +531,15 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
-                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params,
                         defaults: func.defaults.clone(),
                         return_type: Some(companion_stream_return_type),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
+                        metadata: ast::FunctionMetadata::user_facing(
+                            ast::FunctionOrigin::Companion,
+                        ),
                         is_tagged_template_tag: func.is_tagged_template_tag,
                         attributes: vec![],
                         docstring: func.docstring.clone(),
@@ -750,14 +740,20 @@ pub fn elaborated_function_signature<'db>(
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
-    let reserved_effect_param_names = item_tree
+    let reserved_effect_param_names: Vec<Name> = item_tree
         .enclosing_type_generic_params(function.id(db))
-        .to_vec();
+        .iter()
+        .map(|param| param.name.clone())
+        .collect();
 
     Arc::new(
         baml_compiler2_hir::signature::elaborate_function_signature_parts(
             func_data.name.clone(),
-            func_data.generic_params.clone(),
+            func_data
+                .generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect(),
             &reserved_effect_param_names,
             params,
             return_type,

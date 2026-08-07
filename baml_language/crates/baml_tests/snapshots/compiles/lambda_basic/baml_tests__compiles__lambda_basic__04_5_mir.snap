@@ -20,9 +20,9 @@ fn user.test_annotated() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_annotated, 0)>(x: int) -> null {
+fn .<lambda(test_annotated, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -53,9 +53,9 @@ fn user.test_inferred_return() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_inferred_return, 0)>(x: int) -> null {
+fn .<lambda(test_inferred_return, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -86,9 +86,9 @@ fn user.test_zero_param() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_zero_param, 0)>() -> null {
+fn .<lambda(test_zero_param, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = const 42_i64;
@@ -124,10 +124,10 @@ fn user.test_map_inferred() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_inferred, 0)>(x: null) -> null {
+fn .<lambda(test_map_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 * const 2_i64;
@@ -157,9 +157,9 @@ fn user.test_throws() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_throws, 0)>(x: int) -> null {
+fn .<lambda(test_throws, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
     let _2: bool
 
@@ -202,9 +202,9 @@ fn user.test_capture() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_capture, 0)>(x: int) -> null {
+fn .<lambda(test_capture, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
     let _2: int
 
@@ -237,9 +237,9 @@ fn user.test_nested() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_nested, 0)>(x: int) -> null {
+fn .<lambda(test_nested, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param [captured]
     let _2: (int) -> int throws never // inner
     let _3: (int) -> int throws never
@@ -256,9 +256,9 @@ fn .<lambda(test_nested, 0)>(x: int) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> null {
+fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // y // param
     let _2: int
 
@@ -291,9 +291,9 @@ fn user.test_multi_param() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_multi_param, 0)>(a: int, b: int) -> null {
+fn .<lambda(test_multi_param, 0)>(a: int, b: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // a // param
     let _2: int // b // param
 

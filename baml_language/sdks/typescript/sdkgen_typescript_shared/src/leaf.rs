@@ -585,7 +585,9 @@ fn write_preamble_ts(
         out.push_str("import { _TYPE_MAP } from \"./_typemap.js\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
-        out.push_str("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);\n");
+        out.push_str(
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n",
+        );
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
@@ -1416,7 +1418,9 @@ mod tests {
         let mut kids = BTreeSet::new();
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
+        assert!(ts.contains(
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+        ));
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));

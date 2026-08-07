@@ -31,6 +31,21 @@ pub fn to_source_code_with_bytecode(
     to_source_code(pool, baml_bytecode, naming_convention)
 }
 
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    crate::to_source_code_with_metadata(
+        pool,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        naming_convention,
+        crate::GeneratorConfig::new(RUNTIME_PACKAGE),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
@@ -77,7 +92,12 @@ mod tests {
         let root = &output[&PathBuf::from("index.ts")];
         let typemap = &output[&PathBuf::from("_typemap.ts")];
 
-        assert!(root.contains("pnpm add @boundaryml/baml-bridge-web"));
+        assert!(root.contains(
+            "//  $ pnpm add @boundaryml/baml-bridge-web\n\
+             //  $ npm install @boundaryml/baml-bridge-web\n\
+             //  $ yarn add @boundaryml/baml-bridge-web"
+        ));
+        assert!(!root.contains("baml package"));
         assert!(root.contains("from \"@boundaryml/baml-bridge-web\";"));
         assert!(typemap.contains("from \"@boundaryml/baml-bridge-web\";"));
         assert!(!root.contains("from \"@boundaryml/baml-bridge\";"));

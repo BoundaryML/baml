@@ -96,6 +96,10 @@ message CallFunctionArgs {
   // generic params (see `set_entry_point_with_type_args`). Empty for
   // non-generic calls.
   repeated BamlTyArg type_args = 3;
+  oneof call_target {
+    string function_name = 4;
+    uint64 function_handle = 5;
+  }
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

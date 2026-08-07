@@ -7,10 +7,15 @@
 use super::{BamlBridgeInfoV1, ffi::handle::BamlCffiStatus};
 use crate::Buffer;
 
-/// ABI version represented by `BamlApiV1`.
+/// ABI revision represented by `BamlApiV1`.
 ///
 /// This identifies the function-table contract, not the BAML product release.
-pub const BAML_API_V1_ABI_VERSION: u32 = 1;
+///
+/// Revision 2 changes the `call_function` slot from the legacy four-argument
+/// name-plus-payload signature to the unified three-argument payload signature.
+/// Hosts and runtimes built against different revisions must reject one another
+/// before reading that slot.
+pub const BAML_API_V1_ABI_VERSION: u32 = 2;
 
 /// Valid `media_kind` values for media constructors.
 ///
@@ -91,14 +96,12 @@ pub type BamlUnhandledSpawnErrorCallback =
 pub type BamlVersionFn = extern "C" fn() -> Buffer;
 pub type BamlInitializeRuntimeFromBytecodeFn =
     extern "C" fn(bytecode: *const u8, length: usize) -> Buffer;
+pub type BamlInitializeRuntimeFromBytecodeWithMetadataFn =
+    extern "C" fn(bytecode: *const u8, length: usize, baml_toml: *const libc::c_char) -> Buffer;
 pub type BamlFreeBufferFn = extern "C" fn(buffer: Buffer);
 pub type BamlRegisterCallbackFn = extern "C" fn(callback: BamlResultCallback);
-pub type BamlCallFunctionFn = extern "C" fn(
-    function_name: *const libc::c_char,
-    encoded_args: *const u8,
-    length: usize,
-    callback_id: u32,
-);
+pub type BamlCallFunctionFn =
+    extern "C" fn(encoded_args: *const u8, length: usize, callback_id: u32);
 pub type BamlNewFunctionCallFn = extern "C" fn() -> u64;
 pub type BamlCancelFunctionCallFn = extern "C" fn(id: u64) -> i32;
 pub type BamlRegisterHostDispatchCallbackFn = extern "C" fn(callback: BamlHostDispatchCallback);
@@ -177,10 +180,11 @@ pub struct BamlApiV1 {
     pub register_callback: BamlRegisterCallbackFn,
     /// Enqueue a BAML function call and return immediately.
     ///
-    /// `function_name` is a borrowed NUL-terminated UTF-8 string. `encoded_args`
-    /// is borrowed for `length` bytes; zero length permits null. Both inputs
-    /// need remain valid only for this call. Completion is delivered later to
-    /// the registered result callback using `callback_id`.
+    /// `encoded_args` is a borrowed protobuf-encoded `CallFunctionArgs` whose
+    /// `call_target` selects either a function name or an owned function handle.
+    /// It is borrowed for `length` bytes and need remain valid only for this
+    /// call. Completion is delivered later to the registered result callback
+    /// using `callback_id`.
     pub call_function: BamlCallFunctionFn,
     /// Allocate a nonzero process-unique BAML function-call identifier.
     pub new_function_call: BamlNewFunctionCallFn,
@@ -236,7 +240,7 @@ pub struct BamlApiV1 {
     pub media_base64: BamlMediaAccessorFn,
     /// Read a media MIME type. Ownership rules match `media_url`.
     pub media_mime_type: BamlMediaAccessorFn,
-    /// Register the calling bridge and require an exact product-version match.
+    /// Register the calling bridge and require an exact toolchain-version match.
     ///
     /// `info` and its version bytes are borrowed only for this call. The
     /// returned owned buffer is empty on success or a UTF-8 diagnostic on
@@ -248,6 +252,9 @@ pub struct BamlApiV1 {
     pub register_unhandled_spawn_error_callback: BamlRegisterUnhandledSpawnErrorCallbackFn,
     /// Wait for spawned work, report unreachable errors, and release the runtime.
     pub shutdown_runtime: BamlShutdownRuntimeFn,
+    /// Replace the runtime from bytecode after validating embedded generation metadata.
+    pub initialize_runtime_from_bytecode_with_metadata:
+        BamlInitializeRuntimeFromBytecodeWithMetadataFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -275,6 +282,8 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     register_bridge: crate::register_bridge_ffi,
     register_unhandled_spawn_error_callback: crate::register_unhandled_spawn_error_callback,
     shutdown_runtime: crate::shutdown_runtime_ffi,
+    initialize_runtime_from_bytecode_with_metadata:
+        crate::initialize_runtime_from_bytecode_with_metadata,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -296,6 +305,11 @@ mod tests {
         let api = unsafe { &*baml_get_api_v1() };
         assert_eq!(api.abi_version, BAML_API_V1_ABI_VERSION);
         assert_eq!(api.struct_size, std::mem::size_of::<BamlApiV1>());
+    }
+
+    #[test]
+    fn unified_call_target_uses_a_new_abi_revision() {
+        assert_eq!(BAML_API_V1_ABI_VERSION, 2);
     }
 
     #[test]
@@ -341,6 +355,10 @@ mod tests {
             crate::register_unhandled_spawn_error_callback
         );
         assert_same_function!(api.shutdown_runtime, crate::shutdown_runtime_ffi);
+        assert_same_function!(
+            api.initialize_runtime_from_bytecode_with_metadata,
+            crate::initialize_runtime_from_bytecode_with_metadata
+        );
     }
 
     #[test]
@@ -369,6 +387,8 @@ mod tests {
         let _: BamlRegisterUnhandledSpawnErrorCallbackFn =
             api.register_unhandled_spawn_error_callback;
         let _: BamlShutdownRuntimeFn = api.shutdown_runtime;
+        let _: BamlInitializeRuntimeFromBytecodeWithMetadataFn =
+            api.initialize_runtime_from_bytecode_with_metadata;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 

@@ -123,6 +123,30 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
     }
 }
 
+/// Number of times the emission strategy chosen by [`analyze_switch`] pulls
+/// the discriminant operand. Derived from the same `SwitchStrategy` value the
+/// emitter dispatches on, so the stack-carry simulation (`stack_carry`) and
+/// the emitters cannot disagree about pull counts:
+///
+/// - `JumpTable` / `PerfectHash` / `BinarySearch` pull exactly once
+///   (`BinarySearch` keeps the value on the stack via `Copy` thereafter);
+/// - `IfElseChain` re-loads the discriminant once per emitted comparison —
+///   `arms.len()` minus the exhaustive-final elision — including ZERO pulls
+///   for its no-comparison forms (no arms; a single exhaustive arm).
+///
+/// A stack-carried discriminant is only sound at exactly one pull: the carried
+/// value is consumed by the first pull, so later pulls would pop unrelated
+/// stack slots and a zero-pull form would orphan it (see `stack_carry`'s
+/// `Terminator::Switch` arm, the sole consumer).
+pub(crate) fn switch_discriminant_pulls(arms: &[(i64, BlockId)], exhaustive: bool) -> usize {
+    match analyze_switch(arms) {
+        SwitchStrategy::JumpTable { .. }
+        | SwitchStrategy::PerfectHash(_)
+        | SwitchStrategy::BinarySearch => 1,
+        SwitchStrategy::IfElseChain => arms.len().saturating_sub(usize::from(exhaustive)),
+    }
+}
+
 /// Result of a successful perfect hash search.
 #[derive(Debug)]
 struct PerfectHashResult {
@@ -788,10 +812,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.place_reads_spawn_captured_local(place, seen)
             }
             Rvalue::IsType { operand, .. }
+            | Rvalue::IsTypeTag { operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
             }
             | Rvalue::MakeVirtualBoundMethod {
+                receiver: operand, ..
+            }
+            | Rvalue::VirtualFieldAccess {
                 receiver: operand, ..
             } => self.operand_reads_spawn_captured_local(operand, seen),
             Rvalue::MakeClosure { captures, .. } => captures
@@ -1030,7 +1058,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            return_type: baml_type::RuntimeTy::Null {
+            return_type: baml_type::TyTemplate::Null {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -1039,7 +1067,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             display_type_params: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
-            throws_type: None,
+            throws_type: baml_type::TyTemplate::Never {
+                attr: baml_type::TyAttr::default(),
+            },
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
@@ -1404,6 +1434,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     }
                     Place::Field { .. } | Place::Index { .. } => unreachable!(),
                 }
+            }
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                field,
+                value,
+            } => {
+                // Stack: receiver, value, then the interface type — the opcode pops
+                // the interface, the value, and the receiver in that order.
+                self.emit_operand_pull(receiver);
+                self.emit_operand_pull(value);
+                let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+                let inst = self.emit(Instruction::LoadType(iface_const));
+                self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+                let inst = self.emit(Instruction::VirtualStoreField(*field_index as usize));
+                self.set_operand(inst, OperandMeta::Field(field.to_string()));
             }
             StatementKind::Drop(place) => {
                 unwrap_infallible(pull_semantics::walk_drop_statement(self, place));
@@ -1830,7 +1877,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadType(const_idx));
                 self.set_operand(inst, OperandMeta::Const(template.to_string()));
             }
-            let iface_const = self.add_constant(ConstValue::Type(iface.clone()));
+            let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
             let inst = self.emit(Instruction::LoadType(iface_const));
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             self.emit_constant(&Constant::String(method.clone()));
@@ -1838,6 +1885,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
             });
             self.set_operand(inst, OperandMeta::Callable(method.clone()));
+            return;
+        }
+        if let Rvalue::VirtualFieldAccess {
+            iface,
+            receiver,
+            field_index,
+            field,
+        } = rvalue
+        {
+            // Stack: receiver, then the interface type (resolved against the frame
+            // by `LoadType`) — the opcode pops the interface, then the receiver.
+            self.emit_operand_pull(receiver);
+            let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+            let inst = self.emit(Instruction::LoadType(iface_const));
+            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            let inst = self.emit(Instruction::VirtualLoadField(*field_index as usize));
+            self.set_operand(inst, OperandMeta::Field(field.to_string()));
             return;
         }
         // `MakeGenericFunction` needs no special handling here (it has no value
@@ -2244,7 +2308,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // interface, then the `ntypeargs` method type args, then reads the
                 // receiver (first value arg) to resolve the impl at runtime.
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let iface_const = self.add_constant(ConstValue::Type(iface.clone()));
+                let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
@@ -2320,17 +2384,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 closure,
                 name,
                 config,
+                future_ty,
                 future,
                 resume,
             } => {
-                // Push closure, name, then config. The runtime `OpCode::Spawn`
-                // pops them in reverse: config first, then name, then closure.
-                // Config is null when there is no `with` clause, so a fixed
-                // three values are always pushed (BEP-034 spawn options).
+                // Push closure, name, config, then the future's `T`/`E`. The
+                // runtime `OpCode::Spawn` pops them in reverse. Config is null
+                // when there is no `with` clause, so a fixed five values are
+                // always pushed (BEP-034 spawn options).
                 self.emit_operand_pull(closure);
                 self.emit_operand_pull(name);
                 let null_config = Operand::Constant(Constant::Null);
                 self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
+                unwrap_infallible(self.load_type(&future_ty.returns));
+                unwrap_infallible(self.load_type(&future_ty.throws));
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
@@ -3069,9 +3136,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
                 // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
-                // MakeBoundMethod / MakeVirtualBoundMethod must also be handled specially:
-                // neither is handled by `walk_rvalue_pull` (which panics on them), so route
-                // through `emit_rvalue_pull`.
+                // MakeBoundMethod / MakeVirtualBoundMethod / VirtualFieldAccess must
+                // also be handled specially: none is handled by `walk_rvalue_pull`
+                // (which panics on them), so route through `emit_rvalue_pull`.
                 // BinaryOp must be routed through `emit_rvalue_pull` so that the
                 // type-aware specialization in `try_specialize_binary_op` can fire
                 // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
@@ -3082,6 +3149,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Rvalue::MakeClosure { .. }
                         | Rvalue::MakeBoundMethod { .. }
                         | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::VirtualFieldAccess { .. }
                         | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
                             kind: baml_compiler2_mir::AggregateKind::Class { .. },
@@ -3297,6 +3365,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = this.emit(Instruction::LoadConst(idx));
             this.set_operand(inst, OperandMeta::Const("false".to_string()));
         };
+        let emit_true = |this: &mut Self| {
+            this.emit(Instruction::Pop(1));
+            let idx = this.add_constant(ConstValue::Bool(true));
+            let inst = this.emit(Instruction::LoadConst(idx));
+            this.set_operand(inst, OperandMeta::Const("true".to_string()));
+        };
         // Hand the whole template to the VM's value matcher
         // (`type_match::value_matches_template`) via a raw `ConstValue::Type`:
         // it resolves the template's frame refs against `frame.type_args` and
@@ -3308,15 +3382,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = this.emit(Instruction::IsType(c));
             this.set_operand(inst, OperandMeta::Const(template.to_string()));
         };
-        // A template position is a match-any hole (`_`) when it is a bare
-        // `Wildcard` — the only leaf that matches any type at its slot.
-        let is_match_any = |t: &TyTemplate| matches!(t, TyTemplate::Wildcard);
-
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
             // Every class (monomorphic `Foo`, concrete `Foo<int>`, or generic
             // `Foo<T>`) is a `Class` template. Non-empty args → `ClassWithTypeArgs`
-            // so the VM compares each arg; empty args → class-pointer identity.
+            // so the VM compares each arg invariantly; empty args →
+            // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates, _) => {
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
@@ -3338,78 +3409,53 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 }
             }
 
-            // ── Containers ───────────────────────────────────────────────────
-            // A list/map whose element positions are all match-any holes is
-            // exactly the coarse "any list" / "any map" check, so the cheap type
-            // tag suffices — and this preserves an erased `T[]` / `_[]` pattern's
-            // "any list" semantics. When an element carries a discriminating type
-            // the tag would conflate `int[]` with `string[]`, so route the whole
-            // template through the structural matcher instead.
-            TyTemplate::List(elem, _) if is_match_any(elem) => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::LIST));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
-            TyTemplate::Map { key, value, .. } if is_match_any(key) && is_match_any(value) => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::MAP));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
-
             // ── Structural (value matcher) ───────────────────────────────────
-            // Element/key/value discriminates, a bare frame reference (`T`,
-            // `T[]`), an interface existential (membership resolved at runtime
-            // against the impl registry — never a compile-time implementor
-            // enumeration), or a union that may carry any of these: the VM value
-            // matcher. The deprecated `TypeArgRefOrWildcard` is no longer
-            // produced (typevars now lower to `TypeArgRef`), but is still routed
-            // here defensively — `substitute` resolves it to the same frame slot
-            // as `TypeArgRef`.
-            #[expect(
-                deprecated,
-                reason = "TypeArgRefOrWildcard is a still-defined (unemitted) template variant until type erasure is removed"
-            )]
+            // A container (element/key/value may discriminate — a coarse tag
+            // would conflate `int[]` with `string[]`; the proven-sufficient
+            // coarse test is its own `is_type_tag` sink), a bare frame
+            // reference (`T`), an interface existential (membership resolved at
+            // runtime against the impl registry — never a compile-time
+            // implementor enumeration), an associated projection over a frame
+            // base (`(#0 as Holder).Item` — `substitute` reduces it through
+            // the registry at test time, which is total: every baked rule
+            // carries a binding for every declared member, pinned or
+            // defaulted), or a union that may carry any of these: the VM
+            // value matcher.
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
+            | TyTemplate::Future(..)
             | TyTemplate::TypeArgRef(_)
-            | TyTemplate::TypeArgRefOrWildcard(_)
             | TyTemplate::Interface(..)
+            | TyTemplate::AssociatedTypeProjection { .. }
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
-            // Every function template — realized, frame-referencing, or holey —
-            // keeps the legacy coarse FUNCTION-tag check ("is it a callable").
-            //
-            // FIXME(function-type-matching): signature-precise matching through
-            // the value matcher is blocked on the empty-`throws` convention
-            // mismatch: a function *type* writes "never throws" as `never`,
-            // while a function *value*'s reconstructed signature writes it as
-            // `void` (see `bex_vm`'s `function_object_ty`), and the canonical
-            // covariant throws relation has no bridge (`void <: never` is
-            // false) — so a structural test would constant-false every
-            // never-throwing closure. Unify the convention first, then route
-            // hole-free signatures through the matcher (which already applies
-            // contravariant params / covariant return correctly).
-            TyTemplate::Function { .. } => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::FUNCTION));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
+            // Signature-precise, via the same value matcher every other
+            // structural template uses: it applies the canonical function
+            // relation (contravariant parameters, covariant return and
+            // throws), and every callable value now reconstructs a faithful
+            // function type to compare against — a closure, generic function,
+            // or bound method materializes its stored signature templates
+            // against the frame it carries. A coarse "is it callable" tag test
+            // would answer `true` for a callable of the wrong signature.
+            TyTemplate::Function { .. } => emit_structural(self, ty_template),
 
-            // A bare wildcard is the erased/unrepresentable fallback — an
-            // unresolved `Self` or associated projection lowered to a hole. Keep
-            // it constant-false rather than over-matching every value; faithful
-            // `Self` and projection lowering land in later units.
-            TyTemplate::Wildcard => emit_false(self),
+            // `unknown` is the top type: every value inhabits it, so the test is
+            // constant-true. It is a realized *leaf* with no type tag, so without
+            // this arm it falls into the tagless-leaf fallback below and compiles
+            // to constant-FALSE — silently misrouting every value, not just the
+            // valueless ones. (Only refutable positions reach here at all: an
+            // exhaustive final `let v: unknown` arm has its test elided.)
+            TyTemplate::BuiltinUnknown { .. } => emit_true(self),
 
             // Everything else keeps its existing coarse check.
             other => {
                 // A fully-realized leaf (primitive, enum, alias, literal, …):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag. The only non-realized template reaching here is an
-                // associated projection, which has no representable check yet
-                // (a value's concrete type carries no unresolved projection to
-                // unify with).
+                // tag. Every non-realized template kind has its own arm above,
+                // so the narrowing below succeeds for everything that reaches
+                // here; the `emit_false` fallbacks guard absent objects and
+                // tagless leaves, not template residue.
                 if let Ok(realized) = <&RealizedTy>::try_from(other) {
                     if let RealizedTy::TypeAlias(tn, _) = realized {
                         if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
@@ -3453,6 +3499,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn is_type_tag(&mut self, tag: i64) -> Result<(), Self::Error> {
+        // The proven coarse-tag test: identical `IsType`-against-`Int` bytecode
+        // to the tag checks `is_type` emits for realized leaves. The operand
+        // meta reproduces the strings the wildcarded container templates used
+        // to render (`_[]` / `map<_, _>`) so bytecode display stays stable
+        // across the `IsTypeTag` re-home; other tags have no MIR producer.
+        let c = self.add_constant(ConstValue::Int(tag));
+        let inst = self.emit(Instruction::IsType(c));
+        let meta = match tag {
+            baml_type::typetag::LIST => "_[]".to_string(),
+            baml_type::typetag::MAP => "map<_, _>".to_string(),
+            other => format!("type tag {other}"),
+        };
+        self.set_operand(inst, OperandMeta::Const(meta));
         Ok(())
     }
 
@@ -3718,6 +3781,37 @@ mod tests {
                 )),
             "expected branch bytecode to load the condition before PopJumpIfFalse, got: {:?}",
             function.bytecode.instructions
+        );
+    }
+
+    /// Pin `switch_discriminant_pulls` to each strategy's emitted pull count —
+    /// the contract the stack-carry simulation rejects candidates against. A
+    /// drift here (a strategy pulling more or less than reported) recreates
+    /// the stray-pop miscompile: pulls 2..N of an if-else chain popping
+    /// unrelated stack slots under a stack-carried discriminant.
+    #[test]
+    fn switch_discriminant_pull_counts_per_strategy() {
+        use super::switch_discriminant_pulls;
+        let arms = |values: &[i64]| -> Vec<(i64, BlockId)> {
+            values.iter().map(|&v| (v, BlockId(0))).collect()
+        };
+
+        // If-else chain (< 4 arms): one pull per emitted comparison; the
+        // exhaustive final arm is elided, and its no-comparison forms (no
+        // arms; a single exhaustive arm) pull zero times.
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2]), false), 3);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2]), true), 2);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1]), true), 1);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0]), true), 0);
+        assert_eq!(switch_discriminant_pulls(&arms(&[]), false), 0);
+        assert_eq!(switch_discriminant_pulls(&arms(&[]), true), 0);
+
+        // Dense 4+ arms: jump table, single pull.
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2, 3]), false), 1);
+        // Sparse 4+ arms: perfect hash (or binary search), single pull either way.
+        assert_eq!(
+            switch_discriminant_pulls(&arms(&[10, 2000, 300_000, 40_000_000]), false),
+            1
         );
     }
 }

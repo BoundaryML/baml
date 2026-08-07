@@ -129,11 +129,11 @@ fn user.for_loop_restores_outer() -> int {
     bb0: {
         _1 = const 1_i64;
         _2 = [const 2_i64, const 3_i64]: int[];
-        _3 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -217,9 +217,9 @@ fn user.capture_before_after_shadow() -> int {
 }
 
 // lambda[0]
-fn .<lambda(capture_before_after_shadow, 0)>() -> null {
+fn .<lambda(capture_before_after_shadow, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0];
@@ -232,9 +232,9 @@ fn .<lambda(capture_before_after_shadow, 0)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(capture_before_after_shadow, 1)>() -> null {
+fn .<lambda(capture_before_after_shadow, 1)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0];
@@ -266,9 +266,9 @@ fn user.nested_lambda_capture() -> int {
 }
 
 // lambda[0]
-fn .<lambda(nested_lambda_capture, 0)>() -> null {
+fn .<lambda(nested_lambda_capture, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: () -> int throws never // inner
     let _2: () -> int throws never
 
@@ -284,9 +284,9 @@ fn .<lambda(nested_lambda_capture, 0)>() -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(nested_lambda_capture, 0)>, 1)>() -> null {
+fn .<lambda(<lambda(nested_lambda_capture, 0)>, 1)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0];

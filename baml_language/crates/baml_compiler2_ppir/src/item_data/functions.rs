@@ -7,7 +7,8 @@ use baml_compiler2_hir::{
 use text_size::TextRange;
 
 use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData,
+    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData, GenericParamData,
+    lower_generic_params,
 };
 
 /// Span-free semantic data for a function's *signature*.
@@ -22,17 +23,16 @@ use crate::item_data::common::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionData {
     pub name: Name,
-    pub generic_params: Vec<Name>,
+    /// Generic type parameters, each with its conjunction of bounds.
+    pub generic_params: Vec<GenericParamData>,
     /// Every type reference in this function's signature — bounds, parameter
     /// types, return type, throws. Scoped to the item, so edits to sibling items
     /// cannot renumber these ids.
     pub type_refs: TypeRefStore,
-    /// Parallel to `generic_params`. `Some` means `T extends <bound>`.
-    pub generic_param_bounds: Vec<Option<TypeRefId>>,
     pub params: Vec<FunctionParamData>,
     pub return_type: Option<TypeRefId>,
     pub throws: Option<TypeRefId>,
-    pub origin: ast::FunctionOrigin,
+    pub metadata: ast::FunctionMetadata,
     pub docstring: Option<String>,
     /// Set when the fn def had a `//baml:tagged_string` marker.
     pub is_tagged_template_tag: bool,
@@ -386,11 +386,7 @@ fn lower<'db>(
 
     let mut type_refs = TypeRefBuilder::new();
 
-    let generic_param_bounds = data
-        .generic_param_bounds
-        .iter()
-        .map(|bound| bound.as_ref().map(|te| type_refs.lower(te)))
-        .collect();
+    let generic_params = lower_generic_params(&data.generic_params, &mut type_refs);
 
     let params: Vec<FunctionParamData> = data
         .params
@@ -410,13 +406,12 @@ fn lower<'db>(
     (
         FunctionData {
             name: data.name.clone(),
-            generic_params: data.generic_params.clone(),
+            generic_params,
             type_refs: store,
-            generic_param_bounds,
             params,
             return_type,
             throws,
-            origin: data.origin,
+            metadata: data.metadata,
             docstring: data.docstring.clone(),
             is_tagged_template_tag: data.is_tagged_template_tag,
         },

@@ -21,10 +21,9 @@ use baml_compiler2_hir::{
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    infer_context::TirTypeError,
     lower_type_expr::qualify_def,
     throw_inference::{FunctionThrowSets, function_throw_sets},
-    ty::{FunctionParamMode, FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
+    ty::{FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr},
 };
 
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
@@ -70,7 +69,7 @@ pub enum ExportedType {
         qtn: QualifiedTypeName,
         fields: Vec<(Name, Ty)>,
         methods: Vec<ExportedFunction>,
-        generic_params: Vec<Name>,
+        generic_params: Vec<ParamTy>,
     },
     Enum {
         qtn: QualifiedTypeName,
@@ -92,7 +91,7 @@ pub struct ExportedFunction {
     pub callable_throws: Ty,
     /// Function-level generic parameters, including any synthetic callback
     /// effect parameters introduced by bounded signature elaboration.
-    pub generic_params: Vec<Name>,
+    pub generic_params: Vec<ParamTy>,
     pub builtin_kind: Option<BuiltinKind>,
 }
 
@@ -137,7 +136,7 @@ pub struct ResolvedFunction {
     pub return_type: Ty,
     pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
-    pub generic_params: Vec<Name>,
+    pub generic_params: Vec<ParamTy>,
     pub builtin_kind: Option<BuiltinKind>,
 }
 
@@ -145,7 +144,7 @@ pub struct ResolvedFunction {
 pub struct ResolvedMethod {
     pub function: ResolvedFunction,
     pub class_name: Name,
-    pub class_generic_params: Vec<Name>,
+    pub class_generic_params: Vec<ParamTy>,
 }
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
@@ -258,113 +257,22 @@ impl ExportedType {
     }
 }
 
-fn exported_function_param(name: Name, ty: Ty, has_default: bool) -> FunctionParamTy {
-    FunctionParamTy {
-        name: Some(name),
-        ty,
-        mode: if has_default {
-            FunctionParamMode::Optional
-        } else {
-            FunctionParamMode::Required
-        },
-    }
-}
-
-struct LoweredClassMethodSignature {
-    params: Vec<FunctionParamTy>,
-    return_type: Ty,
-    declared_throws: Option<Ty>,
-    callable_throws: Ty,
-    generic_params: Vec<Name>,
-    builtin_kind: Option<BuiltinKind>,
-}
-
-fn lower_class_method_signature<'db>(
+/// Assemble an [`ExportedFunction`] from the declaration-site signature query
+/// plus the effective-throws oracle. The one place the two facts are paired.
+fn exported_function<'db>(
     db: &'db dyn crate::Db,
-    pkg_items: &PackageItems<'db>,
-    class_data: &baml_compiler2_ppir::item_data::ClassData<'db>,
-    method_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    ns_path: &[Name],
-    diags: &mut Vec<TirTypeError>,
-) -> LoweredClassMethodSignature {
-    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc);
-    let body = baml_compiler2_ppir::function_body(db, method_loc);
-
-    let mut all_generic_params = class_data.generic_params.clone();
-    all_generic_params.extend(sig.user_generic_params.iter().cloned());
-    all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
-
-    // `Self` is the enclosing class's full receiver type (`Foo<T>`, or `Array<T>`→`List<T>`
-    // for the builtin containers) — resolved through the lowering context, not erased to a
-    // bare `Ty::Class` by a name-substitution pre-pass.
-    let self_ty = crate::lower_type_expr::self_type_for_class_data(
-        class_data,
-        ns_path,
-        file_package::file_package(db, method_loc.file(db)).package,
-    );
-    // The method's in-scope type-variable bounds (its own params plus the enclosing
-    // class's) so an associated-type projection `T.member` in the signature can resolve
-    // `T`'s declaring interface.
-    let method_bounds =
-        crate::lower_type_expr::function_in_scope_generic_param_bounds(db, method_loc);
-    let ctx = crate::lower_type_expr::ScopeCtx {
-        db,
-        package_items: pkg_items,
-        ns_context: ns_path,
-        generic_params: &all_generic_params,
-        bounds: method_bounds,
-        self_ty: Some(self_ty.clone()),
-    };
-    let lower_with_self = |id: baml_compiler2_hir::type_ref::TypeRefId,
-                           diags: &mut Vec<TirTypeError>| {
-        crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &ctx, diags)
-    };
-
-    let mut params = Vec::new();
-    for param in &sig.params {
-        let param_ty = if param.name.as_str() == "self"
-            && matches!(
-                sig.type_refs[param.type_ref].kind,
-                baml_compiler2_hir::type_ref::TypeRefKind::Unknown
-            ) {
-            self_ty.clone()
-        } else {
-            lower_with_self(param.type_ref, diags)
-        };
-        params.push(exported_function_param(
-            param.name.clone(),
-            param_ty,
-            param.has_default,
-        ));
-    }
-
-    let return_type = sig.return_type.map_or(
-        Ty::Unknown {
-            attr: TyAttr::default(),
-        },
-        |id| lower_with_self(id, diags),
-    );
-
-    let declared_throws = sig.throws.map(|id| lower_with_self(id, diags));
-    let callable_throws = crate::callable::callable_throws(db, method_loc).clone();
-
-    let builtin_kind = match body.as_ref() {
-        baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
-        _ => None,
-    };
-
-    LoweredClassMethodSignature {
-        params,
-        return_type,
-        declared_throws,
-        callable_throws,
-        generic_params: sig
-            .user_generic_params
-            .iter()
-            .chain(sig.synthetic_effect_params.iter())
-            .cloned()
-            .collect(),
-        builtin_kind,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    name: &Name,
+) -> ExportedFunction {
+    let sig = crate::callable::function_signature_ty(db, func_loc);
+    ExportedFunction {
+        name: name.clone(),
+        params: sig.params.clone(),
+        return_type: sig.return_type.clone(),
+        declared_throws: sig.declared_throws.clone(),
+        callable_throws: crate::callable::callable_throws(db, func_loc).clone(),
+        generic_params: sig.generic_params.clone(),
+        builtin_kind: sig.builtin_kind,
     }
 }
 
@@ -380,6 +288,7 @@ fn lower_class_export<'db>(
     name: &Name,
 ) -> ExportedType {
     let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+    let class_generic_env = crate::generic_env::class_generic_env(db, class_loc);
     let class_ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
 
     // Lower fields. The class's type-variable bounds let an associated-type
@@ -388,48 +297,27 @@ fn lower_class_export<'db>(
         db,
         package_items: pkg_items,
         ns_context: &class_ns,
-        generic_params: &class_data.generic_params,
+        generic_params: class_generic_env.source_params(),
         bounds: crate::lower_type_expr::class_generic_param_bounds(db, class_loc),
         self_ty: None,
     };
     let mut fields = Vec::new();
     let mut diags = Vec::new();
     for field in &class_data.fields {
-        if let Some(type_ref) = field.type_ref {
-            let field_ty = crate::lower_type_expr::lower_type_ref(
-                &class_data.type_refs,
-                type_ref,
-                &field_scope,
-                &mut diags,
-            );
-            fields.push((field.name.clone(), field_ty));
-        } else {
-            fields.push((
-                field.name.clone(),
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                },
-            ));
-        }
+        let field_ty = crate::lower_type_expr::lower_type_ref(
+            &class_data.type_refs,
+            field.type_ref,
+            &field_scope,
+            &mut diags,
+        );
+        fields.push((field.name.clone(), field_ty));
     }
 
     // Lower methods
     let mut methods = Vec::new();
     for &method_loc in &class_data.methods {
         let method_data = baml_compiler2_ppir::item_data::function_data(db, method_loc);
-        let lowered = lower_class_method_signature(
-            db, pkg_items, class_data, method_loc, &class_ns, &mut diags,
-        );
-
-        methods.push(ExportedFunction {
-            name: method_data.name.clone(),
-            params: lowered.params,
-            return_type: lowered.return_type,
-            declared_throws: lowered.declared_throws,
-            callable_throws: lowered.callable_throws,
-            generic_params: lowered.generic_params,
-            builtin_kind: lowered.builtin_kind,
-        });
+        methods.push(exported_function(db, method_loc, &method_data.name));
     }
 
     let qtn = qualify_def(db, Definition::Class(class_loc), name);
@@ -437,7 +325,7 @@ fn lower_class_export<'db>(
         qtn,
         fields,
         methods,
-        generic_params: class_data.generic_params.clone(),
+        generic_params: class_generic_env.params().to_vec(),
     }
 }
 
@@ -492,74 +380,10 @@ fn lower_alias_export<'db>(
 /// Lower a free-function definition into its `ExportedFunction`.
 fn lower_function_export<'db>(
     db: &'db dyn crate::Db,
-    pkg_items: &PackageItems<'db>,
     func_loc: FunctionLoc<'db>,
     name: &Name,
 ) -> ExportedFunction {
-    let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
-    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
-    let body = baml_compiler2_ppir::function_body(db, func_loc);
-    let mut diags = Vec::new();
-    let function_generic_params: Vec<Name> = sig
-        .user_generic_params
-        .iter()
-        .chain(sig.synthetic_effect_params.iter())
-        .cloned()
-        .collect();
-
-    // One lowering scope for the whole signature. The function's in-scope
-    // type-variable bounds let an associated-type projection `T.member`
-    // resolve `T`'s declaring interface.
-    let sig_scope = crate::lower_type_expr::ScopeCtx {
-        db,
-        package_items: pkg_items,
-        ns_context: &func_ns,
-        generic_params: &function_generic_params,
-        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc),
-        self_ty: None,
-    };
-
-    let mut params = Vec::new();
-    for param in &sig.params {
-        let param_ty = crate::lower_type_expr::lower_type_ref(
-            &sig.type_refs,
-            param.type_ref,
-            &sig_scope,
-            &mut diags,
-        );
-        params.push(exported_function_param(
-            param.name.clone(),
-            param_ty,
-            param.has_default,
-        ));
-    }
-
-    let return_type = sig.return_type.map_or(
-        Ty::Unknown {
-            attr: TyAttr::default(),
-        },
-        |id| crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &sig_scope, &mut diags),
-    );
-
-    let declared_throws = sig.throws.map(|id| {
-        crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &sig_scope, &mut diags)
-    });
-    let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
-
-    let builtin_kind = match body.as_ref() {
-        baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
-        _ => None,
-    };
-
-    ExportedFunction {
-        name: name.clone(),
-        params,
-        return_type,
-        declared_throws,
-        callable_throws,
-        generic_params: function_generic_params,
-        builtin_kind,
-    }
+    exported_function(db, func_loc, name)
 }
 
 // ── file_interface_fragment Salsa query ────────────────────────────────────
@@ -619,10 +443,7 @@ pub fn file_interface_fragment(db: &dyn crate::Db, file: SourceFile) -> FileInte
             continue;
         }
         if let Definition::Function(func_loc) = contrib.definition {
-            functions.insert(
-                name.clone(),
-                lower_function_export(db, pkg_items, func_loc, name),
-            );
+            functions.insert(name.clone(), lower_function_export(db, func_loc, name));
         }
     }
 
@@ -944,35 +765,28 @@ impl<'db> PackageResolutionContext<'db> {
             return None;
         };
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-        let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let mut diags = Vec::new();
 
         for &method_loc in &class_data.methods {
             let method_data = baml_compiler2_ppir::item_data::function_data(db, method_loc);
             if &method_data.name != method_name {
                 continue;
             }
-            let lowered = lower_class_method_signature(
-                db,
-                &self.own_items,
-                class_data,
-                method_loc,
-                &ns,
-                &mut diags,
-            );
+            let exported = exported_function(db, method_loc, &method_data.name);
 
             return Some(ResolvedMethod {
                 function: ResolvedFunction {
-                    name: method_data.name.clone(),
-                    params: lowered.params,
-                    return_type: lowered.return_type,
-                    declared_throws: lowered.declared_throws,
-                    callable_throws: lowered.callable_throws,
-                    generic_params: lowered.generic_params,
-                    builtin_kind: lowered.builtin_kind,
+                    name: exported.name,
+                    params: exported.params,
+                    return_type: exported.return_type,
+                    declared_throws: exported.declared_throws,
+                    callable_throws: exported.callable_throws,
+                    generic_params: exported.generic_params,
+                    builtin_kind: exported.builtin_kind,
                 },
                 class_name: class_name.name().clone(),
-                class_generic_params: class_data.generic_params.clone(),
+                class_generic_params: crate::generic_env::class_generic_env(db, class_loc)
+                    .params()
+                    .to_vec(),
             });
         }
         None
@@ -1005,8 +819,8 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             // Declared generics live on the type as `TypeVar` args, matching
             // `ExportedType::to_ty` so own-package and dependency resolution
             // produce the same `Ty::Class(qtn, [TypeVar…])` shape.
-            let args = baml_compiler2_ppir::item_data::class_data(db, loc)
-                .generic_params
+            let args = crate::generic_env::class_generic_env(db, loc)
+                .params()
                 .iter()
                 .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
                 .collect();

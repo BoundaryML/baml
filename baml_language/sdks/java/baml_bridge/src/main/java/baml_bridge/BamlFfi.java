@@ -5,8 +5,11 @@ import baml_bridge.internal.NativeLibraryLoader;
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -176,7 +179,11 @@ public final class BamlFfi {
     // ---- Native methods (implemented in sdks/java/bridge_java) --------------
 
     /** Initialize the process-global runtime from serialized BAML bytecode. */
-    static native void nativeInitFromBytecode(byte[] bytecode);
+    static native void nativeInitFromBytecode(
+            byte[] bytecode,
+            String embeddedBamlToml,
+            String bridgeRuntimeVersion,
+            String toolchainVersion);
 
     static native void nativeShutdownRuntime();
 
@@ -191,7 +198,7 @@ public final class BamlFfi {
      * {@code BamlOutboundResult} bytes (engine errors/panics ride inside those
      * bytes; a thrown {@code RuntimeException} means a JNI-glue failure).
      */
-    static native byte[] nativeCallSync(String fqn, byte[] encodedCallFunctionArgs);
+    static native byte[] nativeCallSync(byte[] encodedCallFunctionArgs);
 
     /**
      * Run a BAML function asynchronously. Encodes the identical
@@ -203,7 +210,7 @@ public final class BamlFfi {
      * completion is routed even if the args fail to decode. A thrown
      * {@code RuntimeException} means a JNI-glue failure before hand-off.
      */
-    static native void nativeCallAsync(long callId, String fqn, byte[] encodedCallFunctionArgs);
+    static native void nativeCallAsync(long callId, byte[] encodedCallFunctionArgs);
 
     /** Mint a process-unique, nonzero function-call id from the engine counter. */
     static native long nativeNewCallId();
@@ -273,7 +280,27 @@ public final class BamlFfi {
 
     /** Initialize the runtime from embedded bytecode (idempotent; replaces). */
     public static void initFromBytecode(byte[] bytecode) {
-        nativeInitFromBytecode(bytecode);
+        nativeInitFromBytecode(
+                bytecode,
+                null,
+                BamlVersion.BRIDGE_RUNTIME_VERSION,
+                BamlVersion.TOOLCHAIN_VERSION);
+    }
+
+    public static void initFromBytecode(byte[] bytecode, String embeddedBamlToml) {
+        nativeInitFromBytecode(
+                bytecode,
+                embeddedBamlToml,
+                BamlVersion.BRIDGE_RUNTIME_VERSION,
+                BamlVersion.TOOLCHAIN_VERSION);
+    }
+
+    public static String getToolchainVersion() {
+        return BamlVersion.TOOLCHAIN_VERSION;
+    }
+
+    public static String getBridgeRuntimeVersion() {
+        return BamlVersion.BRIDGE_RUNTIME_VERSION;
     }
 
     /**
@@ -288,6 +315,91 @@ public final class BamlFfi {
      */
     public static Object callSync(String fqn, String[] names, Object[] args) {
         return callSync(fqn, names, args, null, null);
+    }
+
+    public static Object callHandleSync(
+            BamlHandle handle, String[] names, Object[] args, BamlType returnDesc) {
+        Objects.requireNonNull(handle, "handle");
+        Objects.requireNonNull(names, "names");
+        Objects.requireNonNull(args, "args");
+        if (handle.handleType() != BamlHandle.FUNCTION_REF) {
+            throw new IllegalArgumentException(
+                    "expected a FUNCTION_REF handle, received " + handle.handleType());
+        }
+        if (names.length != args.length) {
+            throw new IllegalArgumentException("function handle argument names and values differ in length");
+        }
+        long callId = newCallId();
+        byte[] request =
+                ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
+        return decodeResult(nativeCallSync(request), returnDesc);
+    }
+
+    public static <T> T returnedClosure(
+            Class<T> callableType,
+            Object value,
+            String[] names,
+            BamlType returnDesc) {
+        Objects.requireNonNull(callableType, "callableType");
+        if (!(value instanceof BamlHandle handle)) {
+            throw new IllegalStateException(
+                    "Expected a returned BAML function handle, received "
+                            + (value == null ? "null" : value.getClass().getName()));
+        }
+        InvocationHandler handler =
+                (proxy, method, arguments) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return switch (method.getName()) {
+                            case "toString" -> "BAML closure " + handle.key();
+                            case "hashCode" -> System.identityHashCode(proxy);
+                            case "equals" -> proxy == arguments[0];
+                            default -> throw new UnsupportedOperationException(method.toString());
+                        };
+                    }
+                    Object[] supplied = arguments == null ? new Object[0] : arguments;
+                    if (supplied.length != names.length) {
+                        throw new IllegalArgumentException(
+                                "BAML closure expected "
+                                        + names.length
+                                        + " arguments, received "
+                                        + supplied.length);
+                    }
+                    return callHandleSync(handle, names, supplied, returnDesc);
+                };
+        Object proxy =
+                Proxy.newProxyInstance(
+                        callableType.getClassLoader(),
+                        new Class<?>[] {callableType},
+                        handler);
+        return callableType.cast(proxy);
+    }
+
+    public static <T> CompletableFuture<T> returnedClosureAsync(
+            CompletableFuture<Object> source,
+            Class<T> callableType,
+            String[] names,
+            BamlType returnDesc) {
+        Objects.requireNonNull(source, "source");
+        CompletableFuture<T> mapped = new CompletableFuture<>();
+        source.whenComplete(
+                (value, error) -> {
+                    if (error != null) {
+                        mapped.completeExceptionally(error);
+                    } else {
+                        try {
+                            mapped.complete(returnedClosure(callableType, value, names, returnDesc));
+                        } catch (Throwable failure) {
+                            mapped.completeExceptionally(failure);
+                        }
+                    }
+                });
+        mapped.whenComplete(
+                (ignored, error) -> {
+                    if (mapped.isCancelled()) {
+                        source.cancel(true);
+                    }
+                });
+        return mapped;
     }
 
     /**
@@ -340,8 +452,10 @@ public final class BamlFfi {
             ctx.attach(callId);
         }
         try {
-            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, typeArgs);
-            byte[] response = nativeCallSync(fqn, request);
+            byte[] request =
+                    ProtoWriter.encodeNamedCallFunctionArgs(
+                            fqn, names, args, callId, typeArgs);
+            byte[] response = nativeCallSync(request);
             return decodeResult(response, returnDesc);
         } finally {
             if (ctx != null) {
@@ -421,8 +535,10 @@ public final class BamlFfi {
             ctx.attach(callId);
         }
         try {
-            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, typeArgs);
-            nativeCallAsync(callId, fqn, request);
+            byte[] request =
+                    ProtoWriter.encodeNamedCallFunctionArgs(
+                            fqn, names, args, callId, typeArgs);
+            nativeCallAsync(callId, request);
         } catch (Throwable t) {
             // Arg-encode / JNI-glue failure before the engine took ownership of
             // the call: it will never call completeCall for this id, so

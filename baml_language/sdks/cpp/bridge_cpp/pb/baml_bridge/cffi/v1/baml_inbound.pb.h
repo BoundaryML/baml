@@ -2013,6 +2013,11 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const CallFunctionArgs*>(
         &_CallFunctionArgs_default_instance_);
   }
+  enum CallTargetCase {
+    kFunctionName = 4,
+    kFunctionHandle = 5,
+    CALL_TARGET_NOT_SET = 0,
+  };
   static constexpr int kIndexInFileMessages = 7;
   friend void swap(CallFunctionArgs& a, CallFunctionArgs& b) { a.Swap(&b); }
   inline void Swap(CallFunctionArgs* PROTOBUF_NONNULL other) {
@@ -2101,6 +2106,8 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     kKwargsFieldNumber = 1,
     kTypeArgsFieldNumber = 3,
     kCallIdFieldNumber = 2,
+    kFunctionNameFieldNumber = 4,
+    kFunctionHandleFieldNumber = 5,
   };
   // repeated .baml_bridge.cffi.v1.InboundMapEntry kwargs = 1;
   int kwargs_size() const;
@@ -2146,12 +2153,45 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   void _internal_set_call_id(::uint64_t value);
 
   public:
+  // string function_name = 4;
+  bool has_function_name() const;
+  void clear_function_name() ;
+  const ::std::string& function_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_function_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_function_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_function_name();
+  void set_allocated_function_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_function_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_function_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_function_name();
+
+  public:
+  // uint64 function_handle = 5;
+  bool has_function_handle() const;
+  void clear_function_handle() ;
+  ::uint64_t function_handle() const;
+  void set_function_handle(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_function_handle() const;
+  void _internal_set_function_handle(::uint64_t value);
+
+  public:
+  void clear_call_target();
+  CallTargetCase call_target_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.CallFunctionArgs)
  private:
   class _Internal;
+  void set_has_function_name();
+  void set_has_function_handle();
+  inline bool has_call_target() const;
+  inline void clear_has_call_target();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   2, 0,
+  static const ::google::protobuf::internal::TcParseTable<2, 5,
+                                   2, 58,
                                    2>
       _table_;
 
@@ -2175,6 +2215,13 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::InboundMapEntry > kwargs_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyArg > type_args_;
     ::uint64_t call_id_;
+    union CallTargetUnion {
+      constexpr CallTargetUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::internal::ArenaStringPtr function_name_;
+      ::uint64_t function_handle_;
+    } call_target_;
+    ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4058,6 +4105,133 @@ CallFunctionArgs::_internal_mutable_type_args() {
   return &_impl_.type_args_;
 }
 
+// string function_name = 4;
+inline bool CallFunctionArgs::has_function_name() const {
+  return call_target_case() == kFunctionName;
+}
+inline void CallFunctionArgs::set_has_function_name() {
+  _impl_._oneof_case_[0] = kFunctionName;
+}
+inline void CallFunctionArgs::clear_function_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (call_target_case() == kFunctionName) {
+    _impl_.call_target_.function_name_.Destroy();
+    clear_has_call_target();
+  }
+}
+inline const ::std::string& CallFunctionArgs::function_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CallFunctionArgs.function_name)
+  return _internal_function_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CallFunctionArgs::set_function_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (call_target_case() != kFunctionName) {
+    clear_call_target();
+
+    set_has_function_name();
+    _impl_.call_target_.function_name_.InitDefault();
+  }
+  _impl_.call_target_.function_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.CallFunctionArgs.function_name)
+}
+inline ::std::string* PROTOBUF_NONNULL CallFunctionArgs::mutable_function_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_function_name();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.CallFunctionArgs.function_name)
+  return _s;
+}
+inline const ::std::string& CallFunctionArgs::_internal_function_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (call_target_case() != kFunctionName) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.call_target_.function_name_.Get();
+}
+inline void CallFunctionArgs::_internal_set_function_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (call_target_case() != kFunctionName) {
+    clear_call_target();
+
+    set_has_function_name();
+    _impl_.call_target_.function_name_.InitDefault();
+  }
+  _impl_.call_target_.function_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CallFunctionArgs::_internal_mutable_function_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (call_target_case() != kFunctionName) {
+    clear_call_target();
+
+    set_has_function_name();
+    _impl_.call_target_.function_name_.InitDefault();
+  }
+  return _impl_.call_target_.function_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CallFunctionArgs::release_function_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.CallFunctionArgs.function_name)
+  if (call_target_case() != kFunctionName) {
+    return nullptr;
+  }
+  clear_has_call_target();
+  return _impl_.call_target_.function_name_.Release();
+}
+inline void CallFunctionArgs::set_allocated_function_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_call_target()) {
+    clear_call_target();
+  }
+  if (value != nullptr) {
+    set_has_function_name();
+    _impl_.call_target_.function_name_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.CallFunctionArgs.function_name)
+}
+
+// uint64 function_handle = 5;
+inline bool CallFunctionArgs::has_function_handle() const {
+  return call_target_case() == kFunctionHandle;
+}
+inline void CallFunctionArgs::set_has_function_handle() {
+  _impl_._oneof_case_[0] = kFunctionHandle;
+}
+inline void CallFunctionArgs::clear_function_handle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (call_target_case() == kFunctionHandle) {
+    _impl_.call_target_.function_handle_ = ::uint64_t{0u};
+    clear_has_call_target();
+  }
+}
+inline ::uint64_t CallFunctionArgs::function_handle() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CallFunctionArgs.function_handle)
+  return _internal_function_handle();
+}
+inline void CallFunctionArgs::set_function_handle(::uint64_t value) {
+  if (call_target_case() != kFunctionHandle) {
+    clear_call_target();
+    set_has_function_handle();
+  }
+  _impl_.call_target_.function_handle_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.CallFunctionArgs.function_handle)
+}
+inline ::uint64_t CallFunctionArgs::_internal_function_handle() const {
+  if (call_target_case() == kFunctionHandle) {
+    return _impl_.call_target_.function_handle_;
+  }
+  return ::uint64_t{0u};
+}
+
+inline bool CallFunctionArgs::has_call_target() const {
+  return call_target_case() != CALL_TARGET_NOT_SET;
+}
+inline void CallFunctionArgs::clear_has_call_target() {
+  _impl_._oneof_case_[0] = CALL_TARGET_NOT_SET;
+}
+inline CallFunctionArgs::CallTargetCase CallFunctionArgs::call_target_case() const {
+  return CallFunctionArgs::CallTargetCase(_impl_._oneof_case_[0]);
+}
 // -------------------------------------------------------------------
 
 // CallAck

@@ -9,4 +9,5 @@ pub struct TypeAlias {
     pub type_expr: Option<ast::TypeExpr>,
     /// Full source span of the type alias declaration.
     pub span: TextRange,
+    pub docstring: Option<String>,
 }

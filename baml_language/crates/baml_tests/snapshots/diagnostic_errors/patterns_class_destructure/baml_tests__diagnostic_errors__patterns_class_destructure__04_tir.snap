@@ -104,7 +104,7 @@ function user.generic_class_type_pattern_requires_type_args(boxed: user.Box<int>
       Box =>
         1 : 1
   }
-  !! 3074..3077: type mismatch: expected Box<int>, got Box
+  !! 3074..3077: type `Box` expects 1 type argument(s), got 0
 }
 function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user.Box<int>) -> int throws never {
   { : 1
@@ -112,7 +112,7 @@ function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user
       value: Box =>
         1 : 1
   }
-  !! 3210..3224: type mismatch: expected Box<int>, got Box
+  !! 3221..3224: type `Box` expects 1 type argument(s), got 0
 }
 function user.generic_class_destructure_requires_type_args(boxed: user.Box<int>) -> int throws never {
   { : T

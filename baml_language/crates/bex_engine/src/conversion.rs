@@ -343,9 +343,16 @@ impl BexEngine {
                 })
             }
 
-            Object::Function(_) => Err(EngineError::CannotConvert {
-                type_name: "function".to_string(),
-            }),
+            Object::Function(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::GenericFunction(_) => {
+                let handle = self.heap.create_handle(ptr);
+                Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                    ty: effective_type.clone(),
+                    heap_handle: handle,
+                }))
+            }
             Object::Interface(_) => Err(EngineError::CannotConvert {
                 type_name: "interface".to_string(),
             }),
@@ -375,15 +382,6 @@ impl BexEngine {
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
                 .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
-            Object::Closure(_) => Err(EngineError::CannotConvert {
-                type_name: "closure".to_string(),
-            }),
-            Object::BoundMethod(_) => Err(EngineError::CannotConvert {
-                type_name: "bound_method".to_string(),
-            }),
-            Object::GenericFunction(_) => Err(EngineError::CannotConvert {
-                type_name: "generic_function".to_string(),
-            }),
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
             }),
@@ -633,12 +631,8 @@ impl BexEngine {
         let mut args: Vec<RuntimeTy> = (0..arity).map(|_| unknown()).collect();
         self.with_resolved_class(class_name, |class| {
             for field in &class.fields {
-                // `TypeArgRefOrWildcard` is a deprecated type-erasure bandaid in
-                // `baml_type`; it's still a live template variant we must match.
-                #[allow(deprecated)]
                 let slot = match &field.field_template {
-                    baml_type::TyTemplate::TypeArgRef(n)
-                    | baml_type::TyTemplate::TypeArgRefOrWildcard(n) => *n as usize,
+                    baml_type::TyTemplate::TypeArgRef(n) => *n as usize,
                     _ => continue,
                 };
                 if let Some(value) = fields.get(&field.name) {
@@ -1589,7 +1583,8 @@ pub(crate) fn infer_bindings_runtime(
     actual: &RuntimeTy,
     out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
-    let mut bindings: rustc_hash::FxHashMap<baml_type::Name, Ty> = rustc_hash::FxHashMap::default();
+    let mut bindings: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> =
+        rustc_hash::FxHashMap::default();
     baml_type_runtime::infer_value_bindings(&Ty::from(formal), &Ty::from(actual), &mut bindings);
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the
@@ -1667,13 +1662,10 @@ pub(crate) struct ParamVarPositions {
 /// The highest `TypeArgRef(N)` index appearing anywhere in a field template, or
 /// `None` if the template references no class type-arg. Used to compute a
 /// generic class's arity from its fields.
-// `TypeArgRefOrWildcard` is a deprecated type-erasure bandaid in `baml_type`;
-// it's still a live template variant this walk must account for.
-#[allow(deprecated)]
 fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
     use baml_type::TyTemplate as T;
     match t {
-        T::TypeArgRef(n) | T::TypeArgRefOrWildcard(n) => Some(*n),
+        T::TypeArgRef(n) => Some(*n),
         T::List(inner, _) => template_max_type_arg_ref(inner),
         T::Map { key, value, .. } | T::Future(key, value, _) => template_max_type_arg_ref(key)
             .into_iter()
@@ -1709,7 +1701,7 @@ fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
                     .filter_map(template_max_type_arg_ref),
             )
             .max(),
-        // Realized leaves and `Wildcard` carry no frame ref.
+        // Realized leaves carry no frame ref.
         _ => None,
     }
 }
@@ -3301,13 +3293,7 @@ fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_type::MediaK
     if !args.is_empty() {
         return None;
     }
-    match name.render_dotted(false).as_str() {
-        "baml.media.Image" => Some(baml_type::MediaKind::Image),
-        "baml.media.Audio" => Some(baml_type::MediaKind::Audio),
-        "baml.media.Video" => Some(baml_type::MediaKind::Video),
-        "baml.media.Pdf" => Some(baml_type::MediaKind::Pdf),
-        _ => None,
-    }
+    baml_type::MediaKind::from_wrapper_class_name(&name.render_dotted(false))
 }
 
 fn resolve_runtime_alias<'a>(
@@ -3662,7 +3648,7 @@ fn coerce_arg_to_declared_type_with_aliases(
         // shell before validating/materializing the annotated node.
         (BexExternalValue::Instance { mut fields, .. }, media_ty @ RuntimeTy::Media(..)) => {
             let data = fields
-                .shift_remove("_data")
+                .shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
                 .ok_or_else(|| EngineError::TypeMismatch {
                     message: format!(
                         "host media payload for `{media_ty}` is missing its `_data` handle"
@@ -5132,7 +5118,10 @@ mod inference_unifier_tests {
     use super::*;
 
     fn tv(name: &str) -> RuntimeTy {
-        RuntimeTy::TypeVar(Name::new(name), TyAttr::default())
+        RuntimeTy::TypeVar(
+            baml_type::ParamTy::new(0, Name::new(name)),
+            TyAttr::default(),
+        )
     }
     fn int() -> RuntimeTy {
         RuntimeTy::int()

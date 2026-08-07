@@ -33,6 +33,7 @@ use prost::Message;
 struct DecodedCallArgs {
     kwargs: BexArgs,
     call_id: CallId,
+    target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
     /// Explicit, named `TypeVar` bindings for a generic call, in De Bruijn
     /// order (empty for non-generic calls). See `CallFunctionArgs.type_args`.
     type_args: IndexMap<String, RuntimeTy>,
@@ -45,6 +46,8 @@ struct DecodedCallArgs {
 /// into the structured `BamlOutboundResult` envelope, exactly like
 /// `bridge_python` does — the Java side then decodes + raises uniformly.
 fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::BridgeError> {
+    use bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget;
+
     let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
         .map_err(bridge_ctypes::CtypesError::from)?;
 
@@ -53,12 +56,19 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
     }
 
     let call_id = CallId(args.call_id);
+    let target = args
+        .call_target
+        .ok_or(bridge_cffi::BridgeError::MissingCallTarget)?;
+    if matches!(target, CallTarget::FunctionHandle(_)) && !args.type_args.is_empty() {
+        return Err(bridge_cffi::BridgeError::FunctionHandleTypeArgs);
+    }
     let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
     Ok(DecodedCallArgs {
         kwargs: kwargs.into(),
         call_id,
+        target,
         type_args,
     })
 }
@@ -69,7 +79,7 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
 /// `BamlOutboundResult` envelope rather than thrown, so the returned bytes
 /// decode + raise uniformly on the Java side. The `catch_unwind` + engine
 /// error handling already lives in `bridge_cffi::call_and_encode`.
-fn call_sync_to_bytes(function_name: String, args_proto: &[u8]) -> Vec<u8> {
+fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
         let runtime = bridge_cffi::get_runtime()?;
         let decoded = decode_args(args_proto)?;
@@ -88,15 +98,27 @@ fn call_sync_to_bytes(function_name: String, args_proto: &[u8]) -> Vec<u8> {
 
     // Block on the shared multi-thread tokio runtime, like the pyo3 sync path
     // (`rt.block_on(...)`). Returns the encoded `BamlOutboundResult` bytes.
-    rt.block_on(bridge_cffi::call_and_encode(
-        runtime,
-        function_name,
-        decoded.kwargs,
-        call_ctx,
-    ))
+    match decoded.target {
+        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(
+            function_name,
+        ) => rt.block_on(bridge_cffi::call_and_encode(
+            runtime,
+            function_name,
+            decoded.kwargs,
+            call_ctx,
+        )),
+        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(
+            handle_key,
+        ) => rt.block_on(bridge_cffi::call_handle_and_encode(
+            runtime,
+            handle_key,
+            decoded.kwargs,
+            call_ctx,
+        )),
+    }
 }
 
-/// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode)`.
+/// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
 ///
 /// Initialize the process-global runtime from serialized BAML bytecode
 /// (`bridge_cffi::initialize_runtime_from_bytecode`, the same path
@@ -110,6 +132,9 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     mut env: JNIEnv<'_>,
     class: JClass<'_>,
     bytecode: JByteArray<'_>,
+    embedded_baml_toml: JString<'_>,
+    bridge_runtime_version: JString<'_>,
+    toolchain_version: JString<'_>,
 ) {
     // Capture the JVM + `BamlFfi` class ref (idempotent) so the host-dispatch
     // and host-release trampolines can call back into Java from an engine
@@ -134,12 +159,29 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
         bridge_cffi::register_unhandled_spawn_error_callback(unhandled_spawn_error_trampoline);
     });
 
-    // Register this bridge with the versioned ABI (idempotent; mirrors
-    // bridge_python). A canonical-version mismatch is a real deployment
-    // error and surfaces as a Java exception via the panic handler.
+    let bridge_runtime_version: String = match env.get_string(&bridge_runtime_version) {
+        Ok(value) => value.into(),
+        Err(e) => {
+            throw_runtime_exception(
+                &mut env,
+                &format!("failed to read bridge runtime version: {e}"),
+            );
+            return;
+        }
+    };
+    let toolchain_version: String = match env.get_string(&toolchain_version) {
+        Ok(value) => value.into(),
+        Err(e) => {
+            throw_runtime_exception(&mut env, &format!("failed to read toolchain version: {e}"));
+            return;
+        }
+    };
+    // Register the same stamped versions exposed by BamlFfi's public getters.
     if let Err(e) = bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::Java,
-        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+        bridge_runtime_name: BRIDGE_RUNTIME_NAME.to_string(),
+        bridge_runtime_version,
+        toolchain_version,
     }) {
         throw_runtime_exception(&mut env, &format!("BAML bridge registration failed: {e}"));
         return;
@@ -151,9 +193,25 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
             return;
         }
     };
+    let embedded_baml_toml: Option<String> = if embedded_baml_toml.is_null() {
+        None
+    } else {
+        match env.get_string(&embedded_baml_toml) {
+            Ok(value) => Some(value.into()),
+            Err(e) => {
+                throw_runtime_exception(
+                    &mut env,
+                    &format!("failed to read embedded baml.toml: {e}"),
+                );
+                return;
+            }
+        }
+    };
 
-    if let Err(e) = bridge_cffi::initialize_runtime_from_bytecode(&bytes) {
-        throw_runtime_exception(&mut env, &format!("runtime initialization failed: {e}"));
+    if let Err(e) =
+        bridge_cffi::initialize_runtime_from_bytecode(&bytes, embedded_baml_toml.as_deref())
+    {
+        throw_runtime_exception_exact(&mut env, &e.to_string());
     }
 }
 
@@ -169,29 +227,19 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeShutdownRuntime(
     }
 }
 
-/// `baml_bridge.BamlFfi.nativeCallSync(String fqn, byte[] encodedCallFunctionArgs) -> byte[]`.
+/// `baml_bridge.BamlFfi.nativeCallSync(byte[] encodedCallFunctionArgs) -> byte[]`.
 ///
 /// Decode/dispatch exactly like `bridge_python`'s sync call: parse the
 /// `CallFunctionArgs` bytes, run the function (blocking), and return the
 /// serialized `BamlOutboundResult` bytes. Engine errors/panics are carried
 /// inside those bytes, not thrown here — the Java side inspects the envelope.
-/// A `RuntimeException` is thrown only for JNI-glue failures (bad UTF-8 fqn,
-/// array read/alloc failure).
+/// A `RuntimeException` is thrown only for JNI-glue failures (array read/alloc failure).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallSync<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
-    fqn: JString<'local>,
     encoded_args: JByteArray<'local>,
 ) -> JByteArray<'local> {
-    let function_name: String = match env.get_string(&fqn) {
-        Ok(js) => String::from(js),
-        Err(e) => {
-            throw_runtime_exception(&mut env, &format!("failed to read fqn string: {e}"));
-            return JByteArray::default();
-        }
-    };
-
     let args_proto = match env.convert_byte_array(&encoded_args) {
         Ok(b) => b,
         Err(e) => {
@@ -200,7 +248,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallSync<'local>(
         }
     };
 
-    let out = call_sync_to_bytes(function_name, &args_proto);
+    let out = call_sync_to_bytes(&args_proto);
 
     match env.byte_array_from_slice(&out) {
         Ok(arr) => arr,
@@ -254,6 +302,7 @@ const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
 /// re-register — `register_host_release_callback` logs a diagnostic on a second
 /// call, which would be spurious noise on every re-init.
 static REGISTER_HOST_CALLBACKS: Once = Once::new();
+const BRIDGE_RUNTIME_NAME: &str = "com.boundaryml:baml-bridge";
 
 /// Capture the JVM handle and a `GlobalRef` to the `BamlFfi` class (idempotent,
 /// first-call-wins). `class` is the `baml_bridge.BamlFfi` class object the JVM
@@ -272,7 +321,7 @@ fn ensure_completion_route(
     Ok(())
 }
 
-/// `baml_bridge.BamlFfi.nativeCallAsync(long callId, String fqn, byte[] encodedCallFunctionArgs)`.
+/// `baml_bridge.BamlFfi.nativeCallAsync(long callId, byte[] encodedCallFunctionArgs)`.
 ///
 /// Non-blocking sibling of [`Java_baml_1bridge_BamlFfi_nativeCallSync`]: it
 /// decodes/dispatches the identical `CallFunctionArgs` payload but spawns the
@@ -281,14 +330,13 @@ fn ensure_completion_route(
 /// route stays keyed even if the args fail to decode. Completion — ok value,
 /// thrown error, panic, or a pre-call host-boundary failure — is delivered as
 /// one `BamlOutboundResult` envelope to `completeCall(call_id, bytes)`. A
-/// `RuntimeException` is thrown only for JNI-glue failures (bad UTF-8 fqn, array
-/// read) that happen before the call is handed off.
+/// `RuntimeException` is thrown only for JNI-glue failures while reading the
+/// argument array before the call is handed off.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
     mut env: JNIEnv<'local>,
     class: JClass<'local>,
     call_id: jlong,
-    fqn: JString<'local>,
     encoded_args: JByteArray<'local>,
 ) {
     if let Err(e) = ensure_completion_route(&mut env, &class) {
@@ -299,14 +347,6 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
         return;
     }
 
-    let function_name: String = match env.get_string(&fqn) {
-        Ok(js) => String::from(js),
-        Err(e) => {
-            throw_runtime_exception(&mut env, &format!("failed to read fqn string: {e}"));
-            return;
-        }
-    };
-
     let args_proto = match env.convert_byte_array(&encoded_args) {
         Ok(b) => b,
         Err(e) => {
@@ -315,7 +355,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
         }
     };
 
-    spawn_async_call(call_id as u64, function_name, args_proto);
+    spawn_async_call(call_id as u64, args_proto);
 }
 
 /// Spawn the engine call and route its `BamlOutboundResult` envelope back to
@@ -324,7 +364,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
 /// failures (uninitialized runtime, malformed args, no tokio runtime) are
 /// encoded into the same envelope and delivered immediately, so they decode +
 /// raise identically to a sync pre-call failure.
-fn spawn_async_call(call_id: u64, function_name: String, args_proto: Vec<u8>) {
+fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
         let runtime = bridge_cffi::get_runtime()?;
         let decoded = decode_args(&args_proto)?;
@@ -345,6 +385,7 @@ fn spawn_async_call(call_id: u64, function_name: String, args_proto: Vec<u8>) {
     let DecodedCallArgs {
         kwargs,
         call_id: engine_call_id,
+        target,
         type_args,
     } = decoded;
     let call_ctx = bridge_cffi::function_call_context_builder(engine_call_id)
@@ -357,12 +398,16 @@ fn spawn_async_call(call_id: u64, function_name: String, args_proto: Vec<u8>) {
         // silently dropping the task and hanging the future. `call_and_encode`
         // already turns an engine-call panic into that envelope itself; this
         // guards the rarer encode-time panic, exactly as the C-ABI path does.
-        let inner = tokio::spawn(bridge_cffi::call_and_encode(
-            runtime,
-            function_name,
-            kwargs,
-            call_ctx,
-        ));
+        let inner = tokio::spawn(async move {
+            match target {
+                bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
+                    bridge_cffi::call_and_encode(runtime, function_name, kwargs, call_ctx).await
+                }
+                bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(handle_key) => {
+                    bridge_cffi::call_handle_and_encode(runtime, handle_key, kwargs, call_ctx).await
+                }
+            }
+        });
         let bytes = match inner.await {
             Ok(bytes) => bytes,
             Err(join_err) => encode_task_failure(join_err),
@@ -967,4 +1012,8 @@ fn throw_runtime_exception(env: &mut JNIEnv<'_>, message: &str) {
         "java/lang/RuntimeException",
         format!("bridge_java: {message}"),
     );
+}
+
+fn throw_runtime_exception_exact(env: &mut JNIEnv<'_>, message: &str) {
+    let _ = env.throw_new("java/lang/RuntimeException", message);
 }

@@ -264,7 +264,7 @@ impl<'a> GoTypeProjection<'a> {
                 Literal::Float(value) => GoLiteral::Float(value.clone()),
                 Literal::Bool(value) => GoLiteral::Bool(*value),
             }),
-            Ty::TypeVar(name, _) => GoTy::TypeVar(name.clone()),
+            Ty::TypeVar(param, _) => GoTy::TypeVar(param.name().clone()),
             Ty::Class(name, arguments, _) => GoTy::Class(
                 name.clone(),
                 arguments
@@ -1057,7 +1057,7 @@ mod tests {
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,
-                    Ty::TypeVar(BaseName::new("T"), a()),
+                    Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new("T")), a()),
                 )],
                 Ty::String { attr: a() },
                 never(),
@@ -1121,7 +1121,10 @@ mod tests {
             projection.project(&callable(
                 vec![],
                 Ty::String { attr: a() },
-                Ty::TypeVar(BaseName::new("__effect_param_0"), a()),
+                Ty::TypeVar(
+                    baml_codegen_types::ParamTy::new(0, BaseName::new("__effect_param_0")),
+                    a(),
+                ),
             )),
             GoTy::Function(key) if !key.throws()
         ));

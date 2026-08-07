@@ -778,6 +778,7 @@ fn merge_package_fragment(
                 interface_args: rule.interface_args.clone(),
                 interface_assoc: rule.interface_assoc.clone(),
                 methods,
+                field_links: rule.field_links.clone(),
             });
         }
         pkg.impl_rules
@@ -827,14 +828,18 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: baml_type::RuntimeTy::unknown(),
+            return_type: baml_type::TyTemplate::BuiltinUnknown {
+                attr: baml_type::TyAttr::default(),
+            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
-            throws_type: None,
+            throws_type: baml_type::TyTemplate::Never {
+                attr: baml_type::TyAttr::default(),
+            },
             origin: FunctionOrigin::UserDefined,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),

@@ -61,10 +61,14 @@ type pendingCall struct {
 // serialized program. Generated projects normally call this through their
 // internal bootstrap package exactly once.
 func Initialize(bytecode []byte) error {
+	return InitializeWithMetadata(bytecode, "")
+}
+
+func InitializeWithMetadata(bytecode []byte, embeddedBamlToml string) error {
 	if err := ensureNativeRuntime(context.Background()); err != nil {
 		return err
 	}
-	return nativeInitialize(bytecode)
+	return nativeInitialize(bytecode, embeddedBamlToml)
 }
 
 func ensureNativeRuntime(ctx context.Context) error {
@@ -87,7 +91,7 @@ func ensureNativeRuntime(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := nativeRegisterBridge(requiredRuntimeVersion()); err != nil {
+	if err := nativeRegisterBridge(BridgeRuntimeName, GetToolchainVersion(), GetBridgeRuntimeVersion()); err != nil {
 		nativeCloseAfterLoadFailure()
 		return err
 	}
@@ -334,13 +338,62 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
 
-	encoded, transaction, err := encodeCallForDispatchWithTypeArgs(engineCallID, args, typeArgs)
+	encoded, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(
+		engineCallID,
+		args,
+		typeArgs,
+		namedCallTarget(function),
+	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
 		return Value{}, err
 	}
 	defer transaction.rollback()
-	nativeCall(function, encoded, callbackID)
+	nativeCall(encoded, callbackID)
+	transaction.commitHostValues()
+
+	payload, err := waitForCallResult(ctx, call.result)
+	if err != nil {
+		pendingCalls.Delete(callbackID)
+		nativeCancel(engineCallID)
+		return Value{}, err
+	}
+	return decodeResult(payload)
+}
+
+func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (Value, error) {
+	if ctx == nil {
+		return Value{}, errors.New("baml_go.Function.Call: nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return Value{}, err
+	}
+	if handleKey == 0 {
+		return Value{}, errors.New("baml_go.Function.Call: zero handle")
+	}
+	if err := ensureNativeRuntime(ctx); err != nil {
+		return Value{}, err
+	}
+	registerCallbackOnce.Do(nativeRegisterCallback)
+
+	engineCallID := nativeNewFunctionCall()
+	if engineCallID == 0 {
+		return Value{}, errors.New("BAML returned an invalid zero call ID")
+	}
+	call := &pendingCall{result: make(chan []byte, 1)}
+	callbackID := reservePendingCall(call)
+	encoded, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(
+		engineCallID,
+		args,
+		nil,
+		handleCallTarget(handleKey),
+	)
+	if err != nil {
+		pendingCalls.Delete(callbackID)
+		return Value{}, err
+	}
+	defer transaction.rollback()
+	nativeCall(encoded, callbackID)
 	transaction.commitHostValues()
 
 	payload, err := waitForCallResult(ctx, call.result)
@@ -399,6 +452,28 @@ func encodeCallForDispatch(callID uint64, args map[string]Input) ([]byte, *input
 }
 
 func encodeCallForDispatchWithTypeArgs(callID uint64, args map[string]Input, typeArgs []TypeArgument) ([]byte, *inputTransaction, error) {
+	return encodeCallForDispatchWithTargetAndTypeArgs(callID, args, typeArgs, nil)
+}
+
+type callTarget struct {
+	functionName   *string
+	functionHandle *uint64
+}
+
+func namedCallTarget(name string) *callTarget {
+	return &callTarget{functionName: &name}
+}
+
+func handleCallTarget(handle uint64) *callTarget {
+	return &callTarget{functionHandle: &handle}
+}
+
+func encodeCallForDispatchWithTargetAndTypeArgs(
+	callID uint64,
+	args map[string]Input,
+	typeArgs []TypeArgument,
+	target *callTarget,
+) ([]byte, *inputTransaction, error) {
 	transaction := &inputTransaction{}
 	failed := true
 	defer func() {
@@ -445,7 +520,17 @@ func encodeCallForDispatchWithTypeArgs(callID uint64, args map[string]Input, typ
 		})
 	}
 
-	payload, err := proto.Marshal(&cffi.CallFunctionArgs{CallId: callID, Kwargs: kwargs, TypeArgs: encodedTypeArgs})
+	callArgs := &cffi.CallFunctionArgs{
+		CallId:   callID,
+		Kwargs:   kwargs,
+		TypeArgs: encodedTypeArgs,
+	}
+	if target != nil && target.functionName != nil {
+		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionName{FunctionName: *target.functionName}
+	} else if target != nil && target.functionHandle != nil {
+		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionHandle{FunctionHandle: *target.functionHandle}
+	}
+	payload, err := proto.Marshal(callArgs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode BAML call: %w", err)
 	}

@@ -578,6 +578,12 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                     // Record uses in the rvalue
                     collect_uses_in_rvalue(value, block.id, stmt_ref, &mut def_use);
                 }
+                StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    collect_uses_in_operand(receiver, block.id, stmt_ref, &mut def_use);
+                    collect_uses_in_operand(value, block.id, stmt_ref, &mut def_use);
+                }
                 StatementKind::Drop(place) => {
                     collect_uses_in_place(place, block.id, stmt_ref, &mut def_use);
                 }
@@ -699,7 +705,7 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             walk_place_locals(place, f);
         }
-        Rvalue::IsType { operand, .. } => {
+        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
             walk_operand_locals(operand, f);
         }
         Rvalue::MakeClosure { captures, .. } => {
@@ -708,7 +714,8 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
             }
         }
         Rvalue::MakeBoundMethod { receiver, .. }
-        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. }
+        | Rvalue::VirtualFieldAccess { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
@@ -1214,6 +1221,10 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
         // These modify the stack
         StatementKind::Assign { .. } => false,
         StatementKind::Drop(_) => false,
+        // Pushes receiver, value and the interface type, then the opcode pops all
+        // three — net neutral, but it touches the stack in between, so a value
+        // parked there for `Return` would be buried.
+        StatementKind::VirtualFieldStore { .. } => false,
     }
 }
 
@@ -1533,10 +1544,13 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             place_has_projection(place)
         }
-        Rvalue::IsType { operand, .. } => operand_has_projection(operand),
+        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
+            operand_has_projection(operand)
+        }
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
         Rvalue::MakeBoundMethod { receiver, .. }
-        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => operand_has_projection(receiver),
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. }
+        | Rvalue::VirtualFieldAccess { receiver, .. } => operand_has_projection(receiver),
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => false,
         Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
     }
@@ -1637,6 +1651,8 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
+        // A write through an interface field mutates the receiver.
+        StatementKind::VirtualFieldStore { .. } => true,
         StatementKind::Nop => false,
     }
 }

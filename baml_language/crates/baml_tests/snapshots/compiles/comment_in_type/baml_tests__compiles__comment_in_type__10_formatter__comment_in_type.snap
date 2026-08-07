@@ -11,13 +11,15 @@ client<llm> TestClient {
 function FunctionWithComments(
     a: string,
     b: int, // comment after param type
-) -> string {
+) -> // Comment after arrow
+    string {
     client: TestClient
     prompt: #"test"#
 }
 
 // Another test - comment immediately after arrow
-function CommentAfterArrow() -> string {
+function CommentAfterArrow() -> // inline comment
+    string {
     client: TestClient
     prompt: #"test"#
 }

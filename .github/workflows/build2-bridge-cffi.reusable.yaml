@@ -158,6 +158,7 @@ jobs:
         with:
           targets: ${{ matrix._.target }}
           enable-cache: false
+          skip-protoc: true
 
       - name: Exclude optional AWS-LC jitter exports on Windows
         if: contains(matrix._.target, 'windows-msvc')

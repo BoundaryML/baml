@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A bound must name an interface directly (E0145). A type alias denotes a
+// *type* — for an interface body, the interface-existential type — never the
+// interface itself, so an aliased bound is rejected like any other
+// non-interface bound: bare, pinning, and alias-to-alias spellings alike.
+// With no interface bound in force, a projection on the variable fails too
+// (E0002) instead of silently adopting the alias's existential view.
+
+interface Tagged {
+    type Label = string
+
+    function id(self) -> int throws never
+}
+
+type TagAlias = Tagged;
+
+type TagPinned = Tagged<Label = int>;
+
+type TagChain = TagAlias;
+
+function bare_alias_bound<T extends TagAlias>(t: T, v: unknown) -> bool {
+    v is T.Label
+}
+
+function pinning_alias_bound<T extends TagPinned>(t: T) -> int {
+    0
+}
+
+function chained_alias_bound<T extends TagChain>(t: T) -> int {
+    0
+}
+
+class AliasBounded<T extends TagAlias> {
+    value: T,
+}

@@ -299,17 +299,34 @@ inline const loaded_api& load_api() {
               "runtime or predates the versioned ABI");
     }
     const BamlApiV1* table = get_api();
-    if (table == nullptr || table->abi_version != 1 ||
+    if (table == nullptr || table->abi_version != 2 ||
         table->struct_size < sizeof(BamlApiV1)) {
       throw runtime_error("BAML_RUNTIME_ABI_MISMATCH",
-                          "expected ABI v1 table of at least " +
+                          "expected ABI revision 2 table of at least " +
                               std::to_string(sizeof(BamlApiV1)) +
                               " bytes from " + chosen);
     }
-    if (table->register_unhandled_spawn_error_callback == nullptr ||
-        table->shutdown_runtime == nullptr) {
-      throw runtime_error("BAML_RUNTIME_ABI_MISMATCH",
-                          "runtime has no unhandled-spawn lifecycle support");
+    if (table->version == nullptr ||
+        table->initialize_runtime_from_bytecode == nullptr ||
+        table->free_buffer == nullptr || table->register_callback == nullptr ||
+        table->call_function == nullptr ||
+        table->new_function_call == nullptr ||
+        table->cancel_function_call == nullptr ||
+        table->register_host_dispatch_callback == nullptr ||
+        table->register_host_release_callback == nullptr ||
+        table->complete_host_call == nullptr ||
+        table->handle_clone == nullptr || table->handle_release == nullptr ||
+        table->media_from_url == nullptr || table->media_from_file == nullptr ||
+        table->media_from_base64 == nullptr || table->media_url == nullptr ||
+        table->media_file == nullptr || table->media_base64 == nullptr ||
+        table->media_mime_type == nullptr ||
+        table->register_bridge == nullptr ||
+        table->register_unhandled_spawn_error_callback == nullptr ||
+        table->shutdown_runtime == nullptr ||
+        table->initialize_runtime_from_bytecode_with_metadata == nullptr) {
+      throw runtime_error(
+          "BAML_RUNTIME_ABI_MISMATCH",
+          "runtime ABI table contains a null required operation");
     }
 
     api_loaded_flag() = true;
@@ -327,16 +344,26 @@ inline const BamlApiV1& api() { return *load_api().table; }
 // runtime; the contract-required first semantic operation. Idempotent.
 // A non-empty diagnostic from the runtime (version mismatch, conflicting
 // registration) throws with the runtime's shared message preserved.
-inline void ensure_registered(const char* sdk_version) {
+inline void ensure_registered(const char* toolchain_version,
+                              const char* bridge_runtime_name,
+                              const char* bridge_runtime_version) {
   static std::once_flag flag;
-  std::call_once(flag, [sdk_version] {
+  std::call_once(flag, [toolchain_version, bridge_runtime_name,
+                        bridge_runtime_version] {
     const BamlApiV1& table = api();
-    const std::string version(sdk_version);
+    const std::string version(toolchain_version);
+    const std::string name(bridge_runtime_name);
+    const std::string runtime_version(bridge_runtime_version);
     BamlBridgeInfoV1 info;
     info.struct_size = sizeof(BamlBridgeInfoV1);
     info.language = BAML_BRIDGE_LANGUAGE_CPP;
     info.sdk_version = reinterpret_cast<const uint8_t*>(version.data());
     info.sdk_version_len = version.size();
+    info.bridge_runtime_name = reinterpret_cast<const uint8_t*>(name.data());
+    info.bridge_runtime_name_len = name.size();
+    info.bridge_runtime_version =
+        reinterpret_cast<const uint8_t*>(runtime_version.data());
+    info.bridge_runtime_version_len = runtime_version.size();
     BamlBuffer diagnostic = table.register_bridge(&info);
     if (diagnostic.ptr != nullptr && diagnostic.len != 0) {
       std::string message(reinterpret_cast<const char*>(diagnostic.ptr),

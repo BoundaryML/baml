@@ -10,6 +10,10 @@
 // bounded by the interface, so body-position `Self` (patterns, `is`,
 // turbofish, `let` annotations) resolves symbolically and is NOT an error —
 // the interface half below compiles clean.
+//
+// In an IMPLEMENTS-BLOCK body (in-body or free) `Self` is statically
+// substituted to the block's `for` target and is likewise not an error —
+// exercised as runtime tests in `ns_self_frame_slot`, not pinned here.
 
 // ── Class-body method: match arm, `is`, and turbofish ────────────────────────
 

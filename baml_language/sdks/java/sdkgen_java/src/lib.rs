@@ -98,6 +98,15 @@ pub fn to_source_code(
     baml_bytecode: &[u8],
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
+    to_source_code_internal(pool, baml_bytecode, None, naming_convention)
+}
+
+fn to_source_code_internal(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
     // Only `PreserveCase` is wired up so far.
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
@@ -384,6 +393,16 @@ pub fn to_source_code(
     let anchor_body = format!(
         "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
     );
+    let anchor_body = if embedded_baml_toml.is_some() {
+        anchor_body.replace(
+            "            baml_bridge.BamlFfi.initFromBytecode(bytecode);",
+            &format!(
+                "            try (java.io.InputStream manifestIn = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.toml\")) {{\n                if (manifestIn == null) {{\n                    throw new IllegalStateException(\"baml_sdk/inlinedbaml.toml not found on the classpath\");\n                }}\n                String embeddedBamlToml = new String(manifestIn.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);\n                baml_bridge.BamlFfi.initFromBytecode(bytecode, embeddedBamlToml);\n            }}"
+            ),
+        )
+    } else {
+        anchor_body
+    };
     out.insert(
         java_file_path(&root, anchor_ident),
         with_package(&root, &anchor_body),
@@ -397,6 +416,12 @@ pub fn to_source_code(
         PathBuf::from("inlinedbaml.b64"),
         base64_encode(baml_bytecode),
     );
+    if let Some(embedded_baml_toml) = embedded_baml_toml {
+        out.insert(
+            PathBuf::from("inlinedbaml.toml"),
+            embedded_baml_toml.to_string(),
+        );
+    }
 
     // Prepend the do-not-edit banner to every `.java` file.
     for (path, content) in &mut out {
@@ -418,6 +443,20 @@ pub fn to_source_code_with_bytecode(
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     to_source_code(pool, baml_bytecode, naming_convention)
+}
+
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    to_source_code_internal(
+        pool,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        naming_convention,
+    )
 }
 
 /// A structural string token for a type, used ONLY as the emitter-internal
@@ -645,7 +684,7 @@ mod tests {
         Ty::Uint8Array { attr: a() }
     }
     fn t_typevar(n: &str) -> Ty {
-        Ty::TypeVar(BaseName::new(n), a())
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new(n)), a())
     }
     fn t_union(items: Vec<Ty>) -> Ty {
         Ty::Union(items, a())
@@ -1326,6 +1365,77 @@ mod tests {
         assert!(
             iface.contains("public java.lang.@org.jspecify.annotations.Nullable Long z() {"),
             "{iface}"
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Java generation does not yet support optional parameters on returned callable"
+    )]
+    fn optional_returned_callable_fails_generation_instead_of_emitting_an_unsafe_cast() {
+        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+
+        let returned = Ty::Function {
+            params: vec![CallableParam {
+                name: Some(BaseName::new("value")),
+                ty: t_int(),
+                mode: CodegenFunctionParamMode::Optional,
+            }],
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        };
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &[], "make_optional"),
+            Symbol::Function(Function {
+                name: BaseName::new("make_optional"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: Vec::new(),
+                return_type: returned,
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let _ = emit_sdk(&pool);
+    }
+
+    #[test]
+    fn unnamed_returned_callable_uses_its_canonical_positional_wire_name() {
+        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+
+        let returned = Ty::Function {
+            params: vec![CallableParam {
+                name: None,
+                ty: t_int(),
+                mode: CodegenFunctionParamMode::Required,
+            }],
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        };
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &[], "make_unnamed"),
+            Symbol::Function(Function {
+                name: BaseName::new("make_unnamed"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: Vec::new(),
+                return_type: returned,
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let out = emit_sdk(&pool);
+        let fns = &out[&PathBuf::from("Fns.java")];
+        assert!(fns.contains("new java.lang.String[] {\"arg0\"}"), "{fns}");
+        assert!(
+            fns.contains("baml_bridge.BamlFfi.returnedClosure("),
+            "{fns}"
         );
     }
 

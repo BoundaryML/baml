@@ -155,7 +155,7 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     let args = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
     let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
     let returns = Value::object(vm.tlab.alloc_type(sig.ret.clone()));
-    let errors = Value::object(vm.tlab.alloc_type(sig.throws.unwrap_or_else(ty_never)));
+    let errors = Value::object(vm.tlab.alloc_type(sig.throws));
     let docstring = opt_string(vm, sig.docstring.as_ref());
     let name = opt_string(vm, sig.name.as_ref());
     Ok(copy::Signature {
@@ -193,13 +193,13 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
     RealizedTy::Function {
         params: sig.params.clone(),
         ret: Box::new(sig.ret.clone()),
-        throws: Box::new(sig.throws.clone().unwrap_or_else(ty_never)),
+        throws: Box::new(sig.throws.clone()),
         attr: TyAttr::default(),
     }
 }
 
-/// A value's reconstructed type, `unknown` when it has none (a nested function
-/// value, a future, an opaque handle).
+/// A value's reconstructed type, `unknown` when it has none (a bound method, an
+/// opaque handle). A future reconstructs to the `Future<T, E>` it was spawned at.
 fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
     vm.value_concrete_ty(value)
         .map_or_else(RealizedTy::unknown, RealizedTy::from)
@@ -207,27 +207,18 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
 
 /// Whether `value` fits the parameter type `expected`, by the canonical
 /// algebra over the runtime context. Fails OPEN when the value's type cannot
-/// be reconstructed (futures, opaque handles, bound methods): the stored
-/// signature may itself carry erased `unknown` slots, so refusing what we
-/// cannot check would reject working calls; the callee remains dynamically
-/// safe either way (values stay tagged).
+/// be reconstructed — an opaque native handle (see `value_concrete_ty`) has no
+/// BAML type to compare against, and refusing what we cannot check would
+/// reject working calls; the callee remains dynamically safe either way
+/// (values stay tagged).
 fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     let Some(actual) = vm.value_concrete_ty(value) else {
         return true;
     };
-    let mut actual: Ty = actual.into();
-    // A reconstructed closure signature spells "cannot throw" as `void`
-    // (`function_object_ty`); the static algebra spells it `never`. Patch the
-    // top level so passing a non-throwing function where one is expected
-    // works; nested occurrences keep the known convention gap
-    // (`FIXME(function-type-matching)` in emit).
-    if let Ty::Function { throws, .. } = &mut actual
-        && matches!(**throws, Ty::Void { .. })
-    {
-        **throws = Ty::Never {
-            attr: TyAttr::default(),
-        };
-    }
+    // No convention patching is needed on the way in: a reconstructed
+    // signature spells "cannot throw" as `never`, exactly as the static
+    // algebra does.
+    let actual: Ty = actual.into();
     let expected: Ty = expected.clone().into();
     // The VM itself is the runtime `TypeContext`.
     normalize::is_subtype(&actual, &expected, vm)

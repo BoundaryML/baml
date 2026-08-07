@@ -42,6 +42,8 @@ public final class ProtoWriter {
     private static final int CALL_ARGS_KWARGS = 1;
     private static final int CALL_ARGS_CALL_ID = 2;
     private static final int CALL_ARGS_TYPE_ARGS = 3;
+    private static final int CALL_ARGS_FUNCTION_NAME = 4;
+    private static final int CALL_ARGS_FUNCTION_HANDLE = 5;
 
     // BamlTyArg (one explicit TypeVar binding).
     private static final int TY_ARG_TYPE_VAR = 1;
@@ -152,6 +154,29 @@ public final class ProtoWriter {
                 w.writeMessage(CALL_ARGS_TYPE_ARGS, encodeTypeArg(binding.getKey(), binding.getValue()));
             }
         }
+        return w.toByteArray();
+    }
+
+    public static byte[] encodeNamedCallFunctionArgs(
+            String functionName,
+            String[] names,
+            Object[] args,
+            long callId,
+            BamlTypes typeArgs) {
+        WireWriter w = new WireWriter();
+        w.writeRawBytes(encodeCallFunctionArgs(names, args, callId, typeArgs));
+        w.writeString(CALL_ARGS_FUNCTION_NAME, functionName);
+        return w.toByteArray();
+    }
+
+    public static byte[] encodeHandleCallFunctionArgs(
+            long functionHandle, String[] names, Object[] args, long callId) {
+        if (functionHandle <= 0) {
+            throw new IllegalArgumentException("function handle must be positive");
+        }
+        WireWriter w = new WireWriter();
+        w.writeRawBytes(encodeCallFunctionArgs(names, args, callId, null));
+        w.writeInt64(CALL_ARGS_FUNCTION_HANDLE, functionHandle);
         return w.toByteArray();
     }
 

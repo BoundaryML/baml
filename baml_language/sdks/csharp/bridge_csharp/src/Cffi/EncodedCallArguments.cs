@@ -1,3 +1,6 @@
+using BamlBridge.Cffi.V1;
+using Google.Protobuf;
+
 namespace Baml.Cffi;
 
 internal sealed class EncodedCallArguments : IDisposable
@@ -14,6 +17,20 @@ internal sealed class EncodedCallArguments : IDisposable
     }
 
     internal byte[] Bytes { get; private set; }
+
+    internal void SetCallTarget(string functionName)
+    {
+        CallFunctionArgs call = CallFunctionArgs.Parser.ParseFrom(Bytes);
+        call.FunctionName = functionName;
+        Bytes = call.ToByteArray();
+    }
+
+    internal void SetCallTarget(ulong functionHandle)
+    {
+        CallFunctionArgs call = CallFunctionArgs.Parser.ParseFrom(Bytes);
+        call.FunctionHandle = functionHandle;
+        Bytes = call.ToByteArray();
+    }
 
     internal void SetBytes(byte[] bytes)
     {

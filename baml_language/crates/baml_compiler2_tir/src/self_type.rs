@@ -16,15 +16,13 @@
 //! This module owns the first two (which are pure functions of a declaration); the impl case
 //! is an ordinary `TypeExpr` lowering and needs no helper here.
 
-use baml_base::Name;
-
-use crate::ty::{QualifiedTypeName, Ty, TyAttr};
+use crate::ty::{ParamTy, QualifiedTypeName, Ty, TyAttr};
 
 /// The rigid `Self` type variable for an interface's own default-method body. Its interface
 /// bound is recorded separately (in the lowering context's `bounds`), so `Self.Assoc`
 /// projects through that bound rather than collapsing to a concrete type.
-pub fn self_type_for_interface_default() -> Ty {
-    Ty::TypeVar(Name::new("Self"), TyAttr::default())
+pub fn self_type_for_interface_default(param: &ParamTy) -> Ty {
+    Ty::TypeVar(param.clone(), TyAttr::default())
 }
 
 /// Build a class receiver type at explicit generic `args` (`TypeVar`s or concrete): the builtin

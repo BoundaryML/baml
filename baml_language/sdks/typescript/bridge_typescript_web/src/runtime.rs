@@ -5,12 +5,20 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(js_name = stageRuntimeBytecode)]
-pub fn stage_runtime_bytecode(bytecode: &[u8]) -> Result<(), JsValue> {
+#[allow(clippy::needless_pass_by_value)] // wasm-bindgen requires an owned optional string at the JS boundary.
+pub fn stage_runtime_bytecode(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<String>,
+) -> Result<(), JsValue> {
     let sys_ops = sys_wasm::build()
         .map_err(|error| crate::errors::setup_error(crate::errors::CLIENT, error))?;
-    bridge_cffi::initialize_runtime_from_bytecode_with_sys_ops(bytecode, sys_ops)
-        .map(|_| ())
-        .map_err(|error| crate::errors::bridge_error(&error))
+    bridge_cffi::initialize_runtime_from_bytecode_with_sys_ops(
+        bytecode,
+        embedded_baml_toml.as_deref(),
+        sys_ops,
+    )
+    .map(|_| ())
+    .map_err(|error| crate::errors::bridge_error(&error))
 }
 
 #[wasm_bindgen(js_name = stageRuntimeSources)]
@@ -30,13 +38,11 @@ pub fn stage_runtime_sources(root_path: &str, files: JsValue) -> Result<(), JsVa
 }
 
 #[wasm_bindgen(js_name = callFunctionSync)]
-pub fn call_function_sync(function_name: &str, encoded_args: &[u8]) -> Vec<u8> {
-    sys_wasm::with_web_sync_mode(|| {
-        bridge_cffi::call_function_in_wasm_sync(function_name, encoded_args)
-    })
+pub fn call_function_sync(encoded_args: &[u8]) -> Vec<u8> {
+    sys_wasm::with_web_sync_mode(|| bridge_cffi::call_function_in_wasm_sync(encoded_args))
 }
 
 #[wasm_bindgen(js_name = callFunction)]
-pub async fn call_function(function_name: &str, encoded_args: &[u8]) -> Vec<u8> {
-    bridge_cffi::call_function_in_wasm(function_name, encoded_args).await
+pub async fn call_function(encoded_args: &[u8]) -> Vec<u8> {
+    bridge_cffi::call_function_in_wasm(encoded_args).await
 }

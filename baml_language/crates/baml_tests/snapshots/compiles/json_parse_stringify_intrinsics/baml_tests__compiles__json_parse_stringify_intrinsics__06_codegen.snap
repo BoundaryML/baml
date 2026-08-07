@@ -10,7 +10,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
 function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
@@ -68,10 +68,6 @@ function user.match_parsed(s: string) -> string {
     jump L6
 
   L5:
-    load_var j
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L13
     load_const "null"
     jump L12
 
@@ -102,9 +98,6 @@ function user.match_parsed(s: string) -> string {
 
   L12:
     return
-
-  L13:
-    unreachable
 }
 
 function user.parse_and_roundtrip(s: string) -> string {

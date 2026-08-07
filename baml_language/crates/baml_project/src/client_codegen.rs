@@ -16,7 +16,7 @@ use baml_compiler2_tir::{
     ty::{QualifiedTypeName, Ty as TirTy},
 };
 use baml_db::Name;
-use baml_type::{Freshness, TyAttr};
+use baml_type::{Freshness, ParamTy, TyAttr};
 
 use crate::ProjectDatabase;
 
@@ -152,13 +152,13 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
             let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), class.name.clone());
-            let class_generic_params: Vec<Name> = class.generic_params.clone();
+            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
             let class_self_ty = TirTy::Class(
                 QualifiedTypeName::new(pkg.clone(), ns_path.clone(), class.name.clone()),
                 class_generic_params
                     .iter()
                     .cloned()
-                    .map(|name| TirTy::TypeVar(name, TyAttr::default()))
+                    .map(|param| TirTy::TypeVar(param, TyAttr::default()))
                     .collect(),
                 TyAttr::default(),
             );
@@ -169,7 +169,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     let ty = resolve_type_ref(
                         db,
                         &class.type_refs,
-                        field.type_ref,
+                        Some(field.type_ref),
                         pkg_items,
                         &pkg_info.namespace_path,
                         &class_generic_params,
@@ -197,7 +197,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // by `auto_derive_json`) are language-level plumbing, not
                 // user-facing API. Skip them so client SDKs don't surface
                 // them as static / instance methods on every class.
-                if matches!(method.origin, FunctionOrigin::AutoDerive) {
+                if method.metadata.is_language_internal
+                    || matches!(method.metadata.origin, FunctionOrigin::AutoDerive)
+                {
                     continue;
                 }
 
@@ -229,9 +231,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 let method_own_generics: Vec<Name> = sig.user_generic_params.clone();
                 // Generics in scope inside the method body: the class's TypeVars
                 // first, then the method's own user + synthetic effect params.
-                let mut method_scope_generics: Vec<Name> = class_generic_params.clone();
-                method_scope_generics.extend(sig.user_generic_params.iter().cloned());
-                method_scope_generics.extend(sig.synthetic_effect_params.iter().cloned());
+                let method_scope_generics =
+                    baml_compiler2_tir::function_generic_params(db, method_loc);
                 // Empty bounds match the prior raw-AST lowering (see the
                 // free-function path).
                 let method_bounds = lower_type_expr::TypeVarBoundsMap::default();
@@ -305,7 +306,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 cg_name.clone(),
                 cg::Symbol::Class(cg::Class {
                     name: cg_name,
-                    generic_params: class_generic_params,
+                    generic_params: class
+                        .generic_params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect(),
                     docstring: class.docstring.clone(),
                     properties,
                     static_methods: Vec::new(),
@@ -409,7 +414,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // Internal-origin functions (e.g. `<Client>$new` synthesized for
             // primitive clients) are runtime plumbing, not user-callable —
             // skip them so they don't end up as Python factory bindings.
-            if matches!(func.origin, FunctionOrigin::Internal) {
+            if func.metadata.is_language_internal
+                || matches!(func.metadata.origin, FunctionOrigin::Internal)
+            {
                 continue;
             }
 
@@ -446,12 +453,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // consumer that needs the throws type recovers it from the callback
             // parameter (the Rust SDK, via each callback's associated error
             // type).
-            let scope_generics: Vec<Name> = sig
-                .user_generic_params
-                .iter()
-                .chain(sig.synthetic_effect_params.iter())
-                .cloned()
-                .collect();
+            let scope_generics = baml_compiler2_tir::function_generic_params(db, func_loc);
             let func_generic_params: Vec<Name> = sig.user_generic_params.clone();
             // Empty bounds match the prior raw-AST lowering: this path resolves
             // only in-scope typevars (incl. the effect params), not associated
@@ -548,7 +550,7 @@ fn resolve_type_ref(
     id: Option<baml_compiler2_hir::type_ref::TypeRefId>,
     package_items: &baml_compiler2_hir::package::PackageItems<'_>,
     ns_context: &[Name],
-    generic_params: &[Name],
+    generic_params: &[ParamTy],
     alias_map: &HashMap<QualifiedTypeName, TirTy>,
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {

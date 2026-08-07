@@ -206,6 +206,27 @@ impl MirBuilder {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
+    /// Emit an open-world interface-field store.
+    pub(crate) fn virtual_field_store(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        receiver: Operand,
+        field_index: u32,
+        field: baml_base::Name,
+        value: Operand,
+    ) {
+        self.push_statement(
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                field,
+                value,
+            },
+            None,
+        );
+    }
+
     /// Emit a drop statement.
     pub(crate) fn drop(&mut self, place: Place) {
         self.push_statement(StatementKind::Drop(place), None);
@@ -385,7 +406,7 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,
@@ -410,7 +431,7 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call_with_runtime_id(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,
@@ -551,6 +572,7 @@ impl MirBuilder {
         closure: Operand,
         name: Operand,
         config: Option<Box<Operand>>,
+        future_ty: Box<crate::ir::SpawnFutureTy>,
         future: Place,
         resume: BlockId,
     ) {
@@ -562,6 +584,7 @@ impl MirBuilder {
             closure,
             name,
             config,
+            future_ty,
             future,
             resume,
         });

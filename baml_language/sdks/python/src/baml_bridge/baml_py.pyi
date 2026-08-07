@@ -21,6 +21,8 @@ __all__ = [
     "cancel_function_call",
     "flush_events",
     "get_runtime",
+    "get_bridge_runtime_version",
+    "get_toolchain_version",
     "get_version",
     "lookup_host_value",
     "new_function_call",
@@ -155,6 +157,10 @@ class BamlPyHandle:
         r"""
         Clone this handle for inbound wire ownership.
         """
+    def _key_for_call(self) -> builtins.int:
+        r"""
+        Borrow this handle key as a call target without transferring ownership.
+        """
 
 @typing.final
 class BamlRuntime:
@@ -178,7 +184,7 @@ class BamlRuntime:
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int]) -> BamlRuntime:
+    def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
 
@@ -188,15 +194,14 @@ class BamlRuntime:
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
+    def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
+    def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
         r"""
         Call a BAML function synchronously (blocking).
         """
-
 @typing.final
 class BamlVideo:
     @staticmethod
@@ -459,6 +464,8 @@ def get_runtime() -> BamlRuntime:
     """
 
 def get_version() -> builtins.str: ...
+def get_toolchain_version() -> builtins.str: ...
+def get_bridge_runtime_version() -> builtins.str: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""

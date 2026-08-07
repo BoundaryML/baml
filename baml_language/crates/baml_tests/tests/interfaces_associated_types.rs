@@ -525,13 +525,14 @@ fn vm_metadata_preserves_unresolved_generic_associated_projection_symbolically()
     );
 
     // `T` and its associated projection cannot be resolved statically here, but they
-    // are *not* erased: `RuntimeTy` carries the type variable and the symbolic
-    // projection so the runtime can resolve them from the receiver's actual type. The
-    // projection is carried in its resolved form `(T as BoxLike).Item` — the declaring
-    // interface is determined at lowering, which is strictly more precise than the
-    // bare `T.Item` for runtime resolution.
-    assert_eq!(params, vec!["T"]);
-    assert_eq!(return_type, "(T as BoxLike).Item");
+    // are *not* erased: the stored signature is a template over the callee frame, so
+    // `T` is carried as the frame slot it occupies (`#0`) and the projection keeps its
+    // resolved form — the declaring interface is determined at lowering, which is
+    // strictly more precise than the bare `T.Item` for runtime resolution. Naming the
+    // slot rather than the variable is what lets a *value* of this function
+    // substitute the realized args it carries (see `bex_vm`'s `function_object_ty`).
+    assert_eq!(params, vec!["#0"]);
+    assert_eq!(return_type, "(#0 as BoxLike).Item");
 }
 
 #[test]
@@ -3696,7 +3697,7 @@ fn unknown_projection_on_interface_errors() {
 
         type Missing = Iterator.Element
         "#,
-        "unknown associated type `Element`",
+        "cannot project `Element` directly off interface `Iterator`",
     );
 }
 
@@ -3711,7 +3712,7 @@ fn unknown_projection_on_interface_alias_errors() {
         type IntIterator = Iterator<Item = int>
         type Missing = IntIterator.Element
         "#,
-        "unknown associated type `Element`",
+        "cannot project `Element` directly off interface `Iterator`",
     );
 }
 
@@ -3781,6 +3782,11 @@ fn interface_destructure_head_associated_binding_controls_field_type() {
 
 #[test]
 fn associated_interface_alias_projection_compiles() {
+    // The one interface-headed base the projection shorthand accepts: an
+    // alias whose written spelling pins the projected member — the
+    // projection collapses to the pin, no implementor needed. (A bare
+    // interface base is rejected — see
+    // `unknown_projection_on_interface_errors`.)
     assert_zero_compile_errors(
         r#"
         interface Source {

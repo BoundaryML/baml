@@ -8,11 +8,14 @@ ruby = "3.2.2"
 node = "22"         # For pnpm
 java = "temurin-23"
 gradle = "8.14"     # sdk_tests/crates/java fixtures (compiled with --release 17)
+dotnet = "10.0.301"
 
 uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
 clang = "22.1.7" # LLVM tools for CI, including llvm-strip
+cmake = "4.3.3"
+ninja = "1.13.2"
 
 # Rust tools
 "cargo:bacon" = "latest"
@@ -34,9 +37,10 @@ clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 
 # Protobuf compiler — needed by sdks/go/bridge_go/build.sh (bridge_ctypes uses vendored protoc).
 protoc = "27.1"
+"spm:apple/swift-protobuf" = "1.38.1"
 
 # Python tools
-"pipx:ruff" = "latest"
+"pipx:ruff" = "0.15.22"
 "pipx:maturin" = "latest"
 
 # Node tools

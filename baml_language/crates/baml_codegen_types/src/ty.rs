@@ -6,5 +6,5 @@
 
 pub use baml_type::{
     CodegenFunctionParamTy as CallableParam, CodegenTy as Ty, Freshness,
-    FunctionParamMode as CodegenFunctionParamMode, QualifiedTypeName as Name,
+    FunctionParamMode as CodegenFunctionParamMode, ParamTy, QualifiedTypeName as Name,
 };

@@ -1,28 +1,47 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use baml_workspace::{find_baml_project_root, resolve_project_search_start};
 use clap::Args;
 
-use crate::project_load::{SourceLocation, resolve_source_location};
+use crate::project_load::{SourceLocation, load_project_from, resolve_source_location};
 
+/// Open the BAML playground in a browser.
+///
+/// Serves either a discovered BAML project or one standalone source file. By
+/// default, the server selects the first available port starting at 4265 and
+/// opens a browser unless the session is headless.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Open the nearest project:
+    baml playground
+
+  Serve a specific project without opening a browser:
+    baml playground --project ./my-project --no-open
+
+  Serve a standalone file on a fixed port:
+    baml playground --file script.baml --port 4265")]
 pub struct PlaygroundArgs {
+    #[command(flatten)]
+    pub compiler: crate::commands::CompilerArgs,
+
     /// Standalone single-file source. Loads only this file (no project discovery).
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
 
-    /// Project search starting point. Ignored when `--file` is set.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
     /// Listen on exactly this port (errors if unavailable).
     /// Default: the first free port from 4265.
-    #[arg(long, value_name = "PORT")]
+    #[arg(long, value_name = "PORT", help_heading = "Server options")]
     pub port: Option<u16>,
 
     /// Do not open a browser. Opening is also skipped automatically in
     /// headless sessions (SSH, or no display on Linux).
-    #[arg(long)]
+    #[arg(long, help_heading = "Server options")]
     pub no_open: bool,
 }
 
@@ -56,16 +75,31 @@ fn is_headless_session(has_env: impl Fn(&str) -> bool) -> bool {
 }
 
 fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathBuf>> {
-    let location = resolve_source_location(from, file, None)?;
-    match location {
-        SourceLocation::Project { root, files } => {
-            if files.is_empty() {
-                anyhow::bail!("no `.baml` files found in {}", root.display());
-            }
-            Ok(vec![root])
-        }
-        SourceLocation::StandaloneFile { file, .. } => Ok(vec![file]),
+    // The playground's LSP currently discovers projects from marker-bearing
+    // workspace roots. Unlike the compile/run commands, it cannot yet carry a
+    // settings root and a disjoint source root as one project, so retain its
+    // marker requirement instead of accepting a root it would silently ignore.
+    if file.is_some() {
+        return match resolve_source_location(from, file, None)? {
+            SourceLocation::StandaloneFile { file, .. } => Ok(vec![file]),
+            SourceLocation::Project { .. } => unreachable!("file mode resolved as a project"),
+        };
     }
+
+    let search_start = resolve_project_search_start(from)
+        .with_context(|| "could not resolve playground project search path")?;
+    let Some(marked_root) = find_baml_project_root(&search_start) else {
+        anyhow::bail!(
+            "`{}` doesn't look like it belongs to a BAML project — no `baml.toml` \
+             and no `baml_src/` directory found in it or its ancestors.",
+            search_start.display()
+        );
+    };
+    let (_db, root, files) = load_project_from(Some(&marked_root))?;
+    if files.is_empty() {
+        anyhow::bail!("no `.baml` files found in {}", root.display());
+    }
+    Ok(vec![root])
 }
 
 fn resolve_playground_assets() -> Result<Option<PathBuf>> {

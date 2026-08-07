@@ -65,6 +65,39 @@ internal static class PrimitiveProtocol
         }
     }
 
+    internal static EncodedCallArguments EncodeOwnedHandleArguments(
+        IReadOnlyList<KeyValuePair<string, BamlGeneratedValue>> arguments,
+        ulong callId,
+        NativeApi api)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        ArgumentNullException.ThrowIfNull(api);
+        callId = NativeApi.RequireFunctionCallIdentifier(callId);
+        var ownership = new EncodedCallArguments([]);
+        try
+        {
+            var call = new CallFunctionArgs { CallId = callId };
+            foreach ((string name, BamlGeneratedValue value) in arguments)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(name);
+                ArgumentNullException.ThrowIfNull(value);
+                call.Kwargs.Add(new InboundMapEntry
+                {
+                    StringKey = name,
+                    Value = Encode(value, api, ownership, callId),
+                });
+            }
+
+            ownership.SetBytes(call.ToByteArray());
+            return ownership;
+        }
+        catch
+        {
+            ownership.Dispose();
+            throw;
+        }
+    }
+
     internal static EncodedCallArguments EncodeOwnedCallArguments<TResult>(
         BamlGeneratedGenericArguments<TResult> arguments,
         ulong callId,
@@ -143,7 +176,7 @@ internal static class PrimitiveProtocol
                 StringKey = "self",
                 Value = new InboundValue
                 {
-                    Handle = new BamlBridge.Cffi.V1.BamlHandle
+                    Handle = new global::BamlBridge.Cffi.V1.BamlHandle
                     {
                         Key = transferred.Key,
                         HandleType = BamlHandleType.AdtTaggedHeapHandle,
@@ -764,7 +797,7 @@ internal static class PrimitiveProtocol
         ownership.AddTransfer(transferred);
         return new InboundValue
         {
-            Handle = new BamlBridge.Cffi.V1.BamlHandle
+            Handle = new global::BamlBridge.Cffi.V1.BamlHandle
             {
                 Key = transferred.Key,
                 HandleType = value.HandleType,
@@ -976,6 +1009,7 @@ internal static class PrimitiveProtocol
 
         string fqn = wire.HandleType switch
         {
+            BamlHandleType.FunctionRef => "baml.internal.Function",
             BamlHandleType.UntaggedRustData => "baml.internal.RustData",
             BamlHandleType.UntaggedBexHeap => "baml.internal.HeapValue",
             BamlHandleType.AdtPromptAst => "baml.llm.PromptAst",

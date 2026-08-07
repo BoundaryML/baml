@@ -10,18 +10,18 @@ func nativeOpen(string) (string, error) {
 
 func nativeCloseAfterLoadFailure() {}
 
-func nativeRegisterBridge(string) error { return unsupportedNativeOperation() }
+func nativeRegisterBridge(string, string, string) error { return unsupportedNativeOperation() }
 
 func nativeRuntimeTarget() (string, error) {
 	return "", unsupportedNativeOperation()
 }
 
-func nativeInitialize([]byte) error               { return unsupportedNativeOperation() }
+func nativeInitialize([]byte, string) error       { return unsupportedNativeOperation() }
 func nativeRegisterCallback()                     {}
 func nativeRegisterUnhandledSpawnErrorCallback()  {}
 func nativeShutdown() error                       { return unsupportedNativeOperation() }
 func nativeNewFunctionCall() uint64               { return 0 }
-func nativeCall(string, []byte, uint32)           {}
+func nativeCall([]byte, uint32)                   {}
 func nativeCancel(uint64) int32                   { return 1 }
 func nativeCompleteHostCall(uint32, bool, []byte) {}
 func nativeHandleClone(uint64) (uint64, error) {

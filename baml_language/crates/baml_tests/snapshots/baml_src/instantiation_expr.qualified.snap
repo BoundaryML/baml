@@ -7,7 +7,7 @@ function instantiation_expr.qualified.q_describe() -> string {
     return
 }
 
-function instantiation_expr.qualified.q_id(x: T) -> T {
+function instantiation_expr.qualified.q_id(x: #0) -> #0 {
     load_var x
     return
 }

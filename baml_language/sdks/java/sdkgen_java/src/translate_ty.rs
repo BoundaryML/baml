@@ -939,7 +939,7 @@ mod tests {
         Ty::TypeAlias(n, a())
     }
     fn typevar(n: BaseName) -> Ty {
-        Ty::TypeVar(n, a())
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, n), a())
     }
     fn callable(params: Vec<CallableParam>, ret: Ty) -> Ty {
         Ty::Function {

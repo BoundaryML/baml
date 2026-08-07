@@ -42,7 +42,7 @@ test "three_level_nested_spawn_sum" {
     assert.is_true(baml.deep_equals(three_level_nested_spawn_sum_fn(), 111))
 }
 
-function spawn_child() -> baml.future.Future<int, null> {
+function spawn_child() -> baml.future.Future<int, never> {
     spawn { 99 }
 }
 

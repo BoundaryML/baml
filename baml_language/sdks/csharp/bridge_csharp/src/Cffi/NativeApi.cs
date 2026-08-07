@@ -4,7 +4,7 @@ namespace Baml.Cffi;
 
 internal sealed unsafe partial class NativeApi
 {
-    private const uint AbiVersion = 1;
+    private const uint AbiVersion = 2;
     private const uint CSharpBridgeLanguage = 5;
 
     private static readonly Lazy<NativeApi> Current = new(
@@ -12,10 +12,6 @@ internal sealed unsafe partial class NativeApi
         LazyThreadSafetyMode.ExecutionAndPublication);
 
     private readonly BamlApiV1* table;
-
-    private static readonly UTF8Encoding StrictUtf8 = new(
-        encoderShouldEmitUTF8Identifier: false,
-        throwOnInvalidBytes: true);
 
     internal NativeApi(BamlApiV1* table, string productVersion)
     {
@@ -58,23 +54,29 @@ internal sealed unsafe partial class NativeApi
         return identifier;
     }
 
-    internal void InitializeRuntime(ReadOnlySpan<byte> bytecode)
+    internal void InitializeRuntime(ReadOnlySpan<byte> bytecode, string? embeddedBamlToml)
     {
-        if (bytecode.IsEmpty)
-        {
-            throw new BamlProgramIntegrityException(
-                "Generated BAML bytecode must not be empty.");
-        }
-
         fixed (byte* pointer = bytecode)
         {
+            byte[]? manifest = embeddedBamlToml is null
+                ? null
+                : Encoding.UTF8.GetBytes(embeddedBamlToml + "\0");
+            BamlBuffer status;
+            fixed (byte* manifestPointer = manifest)
+            {
+                status = embeddedBamlToml is null
+                    ? table->InitializeRuntimeFromBytecode(pointer, (nuint)bytecode.Length)
+                    : table->InitializeRuntimeFromBytecodeWithMetadata(
+                        pointer,
+                        (nuint)bytecode.Length,
+                        manifestPointer);
+            }
             string diagnostic = NativeBuffer.ReadUtf8AndFree(
                 table,
-                table->InitializeRuntimeFromBytecode(pointer, (nuint)bytecode.Length));
+                status);
             if (diagnostic.Length != 0)
             {
-                throw new BamlProgramIntegrityException(
-                    $"Native BAML program initialization failed: {diagnostic}");
+                throw new BamlProgramIntegrityException(diagnostic);
             }
         }
     }
@@ -94,6 +96,15 @@ internal sealed unsafe partial class NativeApi
         CancellationToken cancellationToken) =>
         NativeCallCompletion.CompleteManagedOperationAsync(StartOwnedFunction(
             functionIdentity,
+            encodeArguments,
+            cancellationToken));
+
+    internal Task<byte[]> InvokeOwnedHandleAsync(
+        ulong handleKey,
+        Func<ulong, EncodedCallArguments> encodeArguments,
+        CancellationToken cancellationToken) =>
+        NativeCallCompletion.CompleteManagedOperationAsync(StartOwnedHandle(
+            handleKey,
             encodeArguments,
             cancellationToken));
 
@@ -119,23 +130,12 @@ internal sealed unsafe partial class NativeApi
                 "The function identity contained an interior NUL byte.");
         }
 
-        byte[] name;
-        try
-        {
-            name = StrictUtf8.GetBytes(functionIdentity + "\0");
-        }
-        catch (EncoderFallbackException error)
-        {
-            throw new BamlProtocolException(
-                "A generated BAML function identity is not valid Unicode.",
-                error.Message);
-        }
-
         ulong callId = NewFunctionCall();
         HostValueRegistry.Shared.BeginFunctionCall(callId, cancellationToken);
         try
         {
             using EncodedCallArguments arguments = encodeArguments(callId);
+            arguments.SetCallTarget(functionIdentity);
             (uint callbackId, Task<byte[]> completion) = NativeCallbacks.AddPending();
             var cancellation = new CallCancellation(
                 this,
@@ -149,11 +149,75 @@ internal sealed unsafe partial class NativeApi
                 registration = cancellationToken.Register(
                     static state => ((CallCancellation)state!).Cancel(),
                     cancellation);
-                fixed (byte* namePointer = name)
                 fixed (byte* argumentPointer = arguments.Bytes)
                 {
                     if (cancellation.Dispatch(
-                        namePointer,
+                        argumentPointer,
+                        (nuint)arguments.Bytes.Length))
+                    {
+                        arguments.Commit();
+                    }
+                }
+            }
+            catch
+            {
+                _ = NativeCallbacks.TryDiscard(callbackId);
+                registration.Dispose();
+                throw;
+            }
+
+            return new NativeFunctionCall(
+                callId,
+                NativeCallCompletion.CompleteAsync(completion, registration));
+        }
+        catch
+        {
+            HostValueRegistry.Shared.CompleteFunctionCall(callId);
+            throw;
+        }
+    }
+
+    internal NativeFunctionCall StartOwnedHandle(
+        ulong handleKey,
+        Func<ulong, EncodedCallArguments> encodeArguments,
+        CancellationToken cancellationToken)
+    {
+        if (handleKey == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(handleKey));
+        }
+
+        ArgumentNullException.ThrowIfNull(encodeArguments);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new NativeFunctionCall(
+                FunctionCallId: 0,
+                Task.FromCanceled<byte[]>(cancellationToken));
+        }
+
+        NativeCallbacks.ThrowIfCallbackFailed();
+        ulong callId = NewFunctionCall();
+        HostValueRegistry.Shared.BeginFunctionCall(callId, cancellationToken);
+        try
+        {
+            using EncodedCallArguments arguments = encodeArguments(callId);
+            arguments.SetCallTarget(handleKey);
+            (uint callbackId, Task<byte[]> completion) = NativeCallbacks.AddPending();
+            var cancellation = new CallCancellation(
+                this,
+                callId,
+                callbackId,
+                cancellationToken);
+            CancellationTokenRegistration registration = default;
+
+            try
+            {
+                registration = cancellationToken.Register(
+                    static state => ((CallCancellation)state!).Cancel(),
+                    cancellation);
+                fixed (byte* argumentPointer = arguments.Bytes)
+                {
+                    if (cancellation.Dispatch(
                         argumentPointer,
                         (nuint)arguments.Bytes.Length))
                     {
@@ -200,6 +264,7 @@ internal sealed unsafe partial class NativeApi
 
         Require(api->Version is not null, "version");
         Require(api->InitializeRuntimeFromBytecode is not null, "initialize_runtime_from_bytecode");
+        Require(api->InitializeRuntimeFromBytecodeWithMetadata is not null, "initialize_runtime_from_bytecode_with_metadata");
         Require(api->FreeBuffer is not null, "free_buffer");
         Require(api->RegisterCallback is not null, "register_callback");
         Require(api->CallFunction is not null, "call_function");
@@ -218,6 +283,8 @@ internal sealed unsafe partial class NativeApi
         Require(api->MediaBase64 is not null, "media_base64");
         Require(api->MediaMimeType is not null, "media_mime_type");
         Require(api->RegisterBridge is not null, "register_bridge");
+        Require(api->RegisterUnhandledSpawnErrorCallback is not null, "register_unhandled_spawn_error_callback");
+        Require(api->ShutdownRuntime is not null, "shutdown_runtime");
     }
 
     private static NativeApi Load()
@@ -255,21 +322,28 @@ internal sealed unsafe partial class NativeApi
 
     internal static void RegisterBridge(BamlApiV1* api)
     {
-        byte[] version = Encoding.UTF8.GetBytes(RuntimeIdentity.PackageVersion);
-        fixed (byte* versionPointer = version)
+        byte[] toolchainVersion = Encoding.UTF8.GetBytes(RuntimeIdentity.ToolchainVersion);
+        byte[] runtimeName = Encoding.UTF8.GetBytes(RuntimeIdentity.RuntimeName);
+        byte[] runtimeVersion = Encoding.UTF8.GetBytes(RuntimeIdentity.BridgeRuntimeVersion);
+        fixed (byte* toolchainVersionPointer = toolchainVersion)
+        fixed (byte* runtimeNamePointer = runtimeName)
+        fixed (byte* runtimeVersionPointer = runtimeVersion)
         {
             BamlBridgeInfoV1 info = new()
             {
                 StructSize = (nuint)sizeof(BamlBridgeInfoV1),
                 Language = CSharpBridgeLanguage,
-                SdkVersion = versionPointer,
-                SdkVersionLength = (nuint)version.Length,
+                SdkVersion = toolchainVersionPointer,
+                SdkVersionLength = (nuint)toolchainVersion.Length,
+                BridgeRuntimeName = runtimeNamePointer,
+                BridgeRuntimeNameLength = (nuint)runtimeName.Length,
+                BridgeRuntimeVersion = runtimeVersionPointer,
+                BridgeRuntimeVersionLength = (nuint)runtimeVersion.Length,
             };
             string diagnostic = NativeBuffer.ReadUtf8AndFree(api, api->RegisterBridge(&info));
             if (diagnostic.Length != 0)
             {
-                throw new BamlVersionMismatchException(
-                    $"Native bridge registration rejected Baml.Bridge {RuntimeIdentity.PackageVersion}: {diagnostic}");
+                throw new BamlVersionMismatchException(diagnostic);
             }
         }
     }
@@ -291,7 +365,7 @@ internal sealed unsafe partial class NativeApi
         private readonly Lock gate = new();
         private bool started;
 
-        internal bool Dispatch(byte* name, byte* arguments, nuint argumentsLength)
+        internal bool Dispatch(byte* arguments, nuint argumentsLength)
         {
             lock (gate)
             {
@@ -302,7 +376,6 @@ internal sealed unsafe partial class NativeApi
 
                 started = true;
                 api.table->CallFunction(
-                    name,
                     arguments,
                     argumentsLength,
                     callbackId);
