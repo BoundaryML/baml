@@ -23,11 +23,6 @@ use crate::HeapPtr;
 pub struct DynTypeDefs {
     pub classes: IndexMap<QualifiedTypeName, HeapPtr>,
     pub enums: IndexMap<QualifiedTypeName, HeapPtr>,
-    /// Runtime interface witnesses owned by this mint.  Unlike source impls,
-    /// these rules are value-scoped: keeping the type value alive keeps the
-    /// witness (and its method handles) alive; dropping it makes the rule
-    /// eligible for the same sweep as the runtime class definition.
-    pub impl_rules: Vec<HeapPtr>,
 }
 
 impl DynTypeDefs {
@@ -35,7 +30,6 @@ impl DynTypeDefs {
         Self {
             classes: IndexMap::from([(name, ptr)]),
             enums: IndexMap::new(),
-            impl_rules: Vec::new(),
         }
     }
 
@@ -43,7 +37,6 @@ impl DynTypeDefs {
         Self {
             classes: IndexMap::new(),
             enums: IndexMap::from([(name, ptr)]),
-            impl_rules: Vec::new(),
         }
     }
 
@@ -54,11 +47,10 @@ impl DynTypeDefs {
         for (name, ptr) in &other.enums {
             self.enums.entry(name.clone()).or_insert(*ptr);
         }
-        self.impl_rules.extend(other.impl_rules.iter().copied());
     }
 
     pub fn is_empty(&self) -> bool {
-        self.classes.is_empty() && self.enums.is_empty() && self.impl_rules.is_empty()
+        self.classes.is_empty() && self.enums.is_empty()
     }
 }
 
