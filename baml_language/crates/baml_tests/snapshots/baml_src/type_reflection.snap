@@ -105,6 +105,7 @@ function type_reflection.GetBar$build_request(client: baml.llm.Client) -> baml.h
     store_var client
 
   L0:
+    load_type type_reflection.Bar
     load_var client
     load_const "GetBar"
     load_type string
@@ -124,6 +125,7 @@ function type_reflection.GetBar$build_request_stream(client: baml.llm.Client) ->
     store_var client
 
   L0:
+    load_type type_reflection.Bar
     load_var client
     load_const "GetBar"
     load_type string
@@ -175,6 +177,7 @@ function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    load_type type_reflection.Bar
     load_var client
     load_const "GetBar"
     load_type string
@@ -235,6 +238,7 @@ function type_reflection.GetFoo$build_request(client: baml.llm.Client) -> baml.h
     store_var client
 
   L0:
+    load_type type_reflection.Foo
     load_var client
     load_const "GetFoo"
     load_type string
@@ -254,6 +258,7 @@ function type_reflection.GetFoo$build_request_stream(client: baml.llm.Client) ->
     store_var client
 
   L0:
+    load_type type_reflection.Foo
     load_var client
     load_const "GetFoo"
     load_type string
@@ -305,6 +310,7 @@ function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    load_type type_reflection.Foo
     load_var client
     load_const "GetFoo"
     load_type string

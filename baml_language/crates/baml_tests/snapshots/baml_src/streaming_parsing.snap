@@ -51,6 +51,7 @@ function streaming_parsing.ExtractDoc$build_request(input: string, client: baml.
     store_var client
 
   L0:
+    load_type streaming_parsing.Doc
     load_var client
     load_const "ExtractDoc"
     load_var input
@@ -72,6 +73,7 @@ function streaming_parsing.ExtractDoc$build_request_stream(input: string, client
     store_var client
 
   L0:
+    load_type streaming_parsing.Doc
     load_var client
     load_const "ExtractDoc"
     load_var input
@@ -125,6 +127,7 @@ function streaming_parsing.ExtractDoc$render_prompt(input: string, client: baml.
     store_var client
 
   L0:
+    load_type streaming_parsing.Doc
     load_var client
     load_const "ExtractDoc"
     load_var input
@@ -191,6 +194,7 @@ function streaming_parsing.SayHello$build_request(input: string, client: baml.ll
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "SayHello"
     load_var input
@@ -212,6 +216,7 @@ function streaming_parsing.SayHello$build_request_stream(input: string, client: 
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "SayHello"
     load_var input
@@ -265,6 +270,7 @@ function streaming_parsing.SayHello$render_prompt(input: string, client: baml.ll
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "SayHello"
     load_var input

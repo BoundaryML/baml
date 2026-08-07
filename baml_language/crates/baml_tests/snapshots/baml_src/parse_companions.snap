@@ -49,6 +49,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$build_request(client:
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsAliasPayload
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
@@ -68,6 +69,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$build_request_stream(
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsAliasPayload
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
@@ -119,6 +121,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt(client:
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsAliasPayload
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
@@ -179,6 +182,7 @@ function parse_companions.ParseCompanionsParseOptPayload$build_request(client: b
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsOptPayload
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
@@ -198,6 +202,7 @@ function parse_companions.ParseCompanionsParseOptPayload$build_request_stream(cl
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsOptPayload
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
@@ -249,6 +254,7 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt(client: b
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsOptPayload
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
