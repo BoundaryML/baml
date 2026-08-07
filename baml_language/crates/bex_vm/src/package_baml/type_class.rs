@@ -366,10 +366,14 @@ fn first_open_interface(
             .find_map(|param| first_open_interface(vm, &param.ty, defs, path, visited))
             .or_else(|| first_open_interface(vm, ret, defs, path, visited))
             .or_else(|| first_open_interface(vm, throws, defs, path, visited)),
-        baml_type::RealizedTy::TypeAlias(name, _) => vm
-            .recursive_type_alias(name)
-            .and_then(|alias| baml_type::RealizedTy::try_from(alias.clone()).ok())
-            .and_then(|alias| first_open_interface(vm, &alias, defs, path, visited)),
+        baml_type::RealizedTy::TypeAlias(name, _) => {
+            if !visited.insert(name.clone()) {
+                return None;
+            }
+            vm.recursive_type_alias(name)
+                .and_then(|alias| baml_type::RealizedTy::try_from(alias.clone()).ok())
+                .and_then(|alias| first_open_interface(vm, &alias, defs, path, visited))
+        }
         _ => None,
     }
 }
