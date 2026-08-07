@@ -108,6 +108,7 @@ struct CallOptions<'a> {
     runtime_id: Option<Value>,
     type_args: &'a [baml_type::RealizedTy],
     type_defs: &'a DynTypeDefs,
+    runtime_type_check: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -4602,6 +4603,7 @@ impl BexVm {
         locals_offset: StackIndex,
         arg_count: usize,
         runtime_id: Option<Value>,
+        runtime_type_check: bool,
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
@@ -4758,12 +4760,14 @@ impl BexVm {
         // sees the realized type.  Do this before arity handling, profiling,
         // argument draining, or frame creation: a failure is a catchable
         // CompilationError and the callee cannot observe any side effect.
-        let needs_bound_check = callee_generic_param_bounds
-            .iter()
-            .any(|bounds| !bounds.is_empty());
-        let needs_argument_check = callee_param_types
-            .iter()
-            .any(|param| !param.is_fully_concrete());
+        let needs_bound_check = runtime_type_check
+            && callee_generic_param_bounds
+                .iter()
+                .any(|bounds| !bounds.is_empty());
+        let needs_argument_check = runtime_type_check
+            && callee_param_types
+                .iter()
+                .any(|param| !param.is_fully_concrete());
         let effective_type_args = if needs_bound_check || needs_argument_check {
             let mut type_args = if !bound_method_class_type_args.is_empty() {
                 bound_method_class_type_args.to_vec()
@@ -4937,6 +4941,7 @@ impl BexVm {
                                 runtime_id: None,
                                 type_args: &callback_type_args,
                                 type_defs: &DynTypeDefs::default(),
+                                runtime_type_check: false,
                             },
                             frame_idx,
                             function,
@@ -5222,6 +5227,7 @@ impl BexVm {
             locals_offset,
             arg_count,
             options.runtime_id,
+            options.runtime_type_check,
             frame_idx,
             function,
         );
@@ -5820,6 +5826,7 @@ impl BexVm {
                                 runtime_id: None,
                                 type_args: &callback_type_args,
                                 type_defs: &DynTypeDefs::default(),
+                                runtime_type_check: false,
                             },
                             &mut frame_idx,
                             &mut function,
@@ -6537,7 +6544,8 @@ impl BexVm {
                 // ── Call ──────────────────────────────────────────────────────
                 OpCode::Call | OpCode::CallWithRuntimeId => {
                     let raw = read_u32_unchecked(code, pc);
-                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let (ntypeargs, runtime_type_check) =
+                        bex_vm_types::bytecode::decode_call_type_args(read_u16_unchecked(code, pc));
                     let runtime_id = if matches!(op, OpCode::CallWithRuntimeId) {
                         Some(self.stack.ensure_pop())
                     } else {
@@ -6571,6 +6579,7 @@ impl BexVm {
                             runtime_id,
                             type_args: &type_args,
                             type_defs: &type_defs,
+                            runtime_type_check,
                         },
                         frame_idx,
                         function,
@@ -6585,7 +6594,8 @@ impl BexVm {
                 // `[arg_0 (receiver), …, arg_{nargs-1}, iface_type, method_name]`.
                 OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
                     let nargs = read_u16_unchecked(code, pc) as usize;
-                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let (ntypeargs, runtime_type_check) =
+                        bex_vm_types::bytecode::decode_call_type_args(read_u16_unchecked(code, pc));
                     let runtime_id = if matches!(op, OpCode::VirtualCallWithRuntimeId) {
                         Some(self.stack.ensure_pop())
                     } else {
@@ -6684,6 +6694,7 @@ impl BexVm {
                             runtime_id,
                             type_args: &type_args,
                             type_defs: &type_defs,
+                            runtime_type_check,
                         },
                         frame_idx,
                         function,
@@ -6786,6 +6797,7 @@ impl BexVm {
                             locals_offset,
                             full_arity,
                             runtime_id,
+                            false,
                             frame_idx,
                             function,
                         )? {
@@ -6805,6 +6817,7 @@ impl BexVm {
                             locals_offset,
                             arg_count,
                             runtime_id,
+                            false,
                             frame_idx,
                             function,
                         )? {

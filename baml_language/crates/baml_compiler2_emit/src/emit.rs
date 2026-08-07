@@ -2248,6 +2248,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
+                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
@@ -2271,12 +2272,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let instruction = if runtime_id.is_some() {
                         Instruction::CallWithRuntimeId {
                             callee: global_callee,
-                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                                *ntypeargs,
+                                *runtime_type_check,
+                            ),
                         }
                     } else {
                         Instruction::Call {
                             callee: global_callee,
-                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                                *ntypeargs,
+                                *runtime_type_check,
+                            ),
                         }
                     };
                     let inst = self.emit(instruction);
@@ -2286,6 +2293,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 } else {
+                    debug_assert!(
+                        !runtime_type_check,
+                        "unreflect type arguments on indirect calls require a checked indirect opcode"
+                    );
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
@@ -2305,6 +2316,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
+                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
@@ -2327,12 +2339,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let instruction = if runtime_id.is_some() {
                     Instruction::VirtualCallWithRuntimeId {
                         nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                            *ntypeargs,
+                            *runtime_type_check,
+                        ),
                     }
                 } else {
                     Instruction::VirtualCall {
                         nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
+                            *ntypeargs,
+                            *runtime_type_check,
+                        ),
                     }
                 };
                 let inst = self.emit(instruction);

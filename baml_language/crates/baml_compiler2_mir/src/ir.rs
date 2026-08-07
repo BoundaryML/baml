@@ -423,6 +423,10 @@ pub enum Terminator {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
+        /// At least one explicit type argument was supplied through
+        /// `unreflect(...)`. The emitter encodes this on the call instruction so
+        /// the VM performs M-5/M-6 checks only for marker-instantiated calls.
+        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         ///
         /// This is not part of ordinary call arity. Emitters push it above the
@@ -463,6 +467,9 @@ pub enum Terminator {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
+        /// Whether this call carries an `unreflect(...)` type argument and must
+        /// execute the runtime generic gate before entering the resolved method.
+        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         runtime_id: Option<Operand>,
         /// Where to store the result.
