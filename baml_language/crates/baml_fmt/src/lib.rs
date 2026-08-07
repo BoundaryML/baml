@@ -601,6 +601,65 @@ mod linear_formatter_regression_tests {
 }
 
 #[cfg(test)]
+mod contextual_keyword_name_tests {
+    //! Regression tests for contextual keywords used as names. The lexer
+    //! emits a dedicated keyword kind for `client` (`KW_CLIENT`), and the
+    //! parser accepts it as a class field, parameter, and member-access
+    //! name (BEP-049 §10 `ctx.client`). The formatter used to reject those
+    //! files with "Expected token/node of kind WORD, but found `KW_CLIENT`".
+
+    use super::*;
+
+    fn assert_round_trips(source: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).unwrap_or_else(|error| {
+            panic!("formatter should accept contextual keyword name: {error:?}\nsource:\n{source}")
+        });
+        assert_eq!(formatted, source);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn client_as_class_field_name() {
+        assert_round_trips("class Agent {\n    client: string?,\n    name: string,\n}\n");
+    }
+
+    #[test]
+    fn client_as_function_parameter_name() {
+        // A `let` statement keeps the body classified as an expression
+        // function; a bare `client` tail expression would trip the parser's
+        // LLM-function-body heuristic, which is out of the formatter's hands.
+        assert_round_trips(
+            "function call_llm(client: string, function_name: string) -> string {\n    let out = client;\n    out\n}\n",
+        );
+    }
+
+    #[test]
+    fn client_as_member_access_name() {
+        assert_round_trips(
+            "class Agent {\n    client: string?,\n}\n\nfunction f(a: Agent) -> string? {\n    let c = a.client;\n    c\n}\n",
+        );
+    }
+
+    #[test]
+    fn client_as_object_literal_key() {
+        assert_round_trips(
+            "class Agent {\n    client: string?,\n}\n\nfunction make(client: string?) -> Agent {\n    let a = Agent { client: client };\n    a\n}\n",
+        );
+    }
+
+    #[test]
+    fn keyword_method_names_round_trip() {
+        // `implements` and friends stay valid as member names (reflection
+        // API, e.g. `dog_t.implements(animal_t)`).
+        assert_round_trips(
+            "function f(dog_t: type, animal_t: type) -> bool {\n    dog_t.implements(animal_t)\n}\n",
+        );
+    }
+}
+
+#[cfg(test)]
 mod spawn_and_hug_format_tests {
     use super::*;
 
