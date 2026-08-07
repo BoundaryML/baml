@@ -5139,13 +5139,15 @@ impl BexVm {
         self.pending_call_type_args = previous_type_args;
         self.pending_call_type_values = previous_type_values;
         if !options.type_args.is_empty()
-            && self.frames.len() > frames_before
-            && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(*frame_idx)
+            && self.frames.len() == frames_before + 1
+            && *frame_idx == frames_before
+            && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)
         {
+            frame.type_values.resize(frame.type_args.len(), None);
             frame.type_args.extend_from_slice(options.type_args);
-            frame
-                .type_values
-                .extend(options.type_values.iter().cloned().map(Some));
+            frame.type_values.extend(
+                (0..options.type_args.len()).map(|slot| options.type_values.get(slot).cloned()),
+            );
         }
         result
     }

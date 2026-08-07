@@ -150,6 +150,26 @@ async fn scenario_5_compiles_parses_and_encodes_runtime_schema() {
 }
 
 #[tokio::test]
+async fn exact_runtime_types_do_not_regress_static_generic_json_calls() {
+    let output = baml_test!(
+        r#"
+class User {
+  name string
+  age int
+}
+
+function main() -> string throws unknown {
+  let original = User { name: "Ada", age: 30 }
+  let encoded = original.to_json()
+  let decoded = User.from_json(encoded)
+  decoded.name
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("Ada".into())));
+}
+
+#[tokio::test]
 async fn render_prompt_uses_runtime_package_schema() {
     let output = baml_test!(baml: SCENARIO_SOURCE, entry: "rendered_schema");
     let Ok(BexExternalValue::String(prompt)) = output.result else {
