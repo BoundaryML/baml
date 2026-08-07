@@ -1,0 +1,41 @@
+[package]
+name = "baml_query"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "SQL queries over SQLite rows with transparently hydrated values"
+
+[lib]
+doctest = false
+
+[[bench]]
+name = "query_bench"
+harness = false
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+bytes = { workspace = true }
+datafusion = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [ "fs", "macros", "rt-multi-thread", "sync" ] }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+divan = { package = "codspeed-divan-compat-walltime", version = "4.7.0" }
+tempfile = { workspace = true }
