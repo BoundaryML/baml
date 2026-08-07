@@ -164,7 +164,7 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     );
     out.push("");
     out.push(
-        "A counterpart rests either on deterministic name agreement or on a model's judgment, which carries its confidence in parentheses. `divergent` marks the same operation reached differently, and `unnecessary` marks one BAML does not need — the language answers it, so the question does not arise.",
+        "Every counterpart rests on a model's judgment, which carries its confidence in parentheses. `divergent` marks the same operation reached differently, and `unnecessary` marks one BAML does not need — the language answers it, so the question does not arise.",
     );
     out.push("");
     out.push("## TypeScript surface");

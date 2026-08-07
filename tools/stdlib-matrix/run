@@ -150,8 +150,8 @@ if ((review_all == 1)); then
         exit 2
     fi
     # Without the passes, "review everything again" means "carry nothing and
-    # ask no one", which would replace a report full of judgements with one
-    # holding only name matches.
+    # ask no one", which would replace a report full of judgements with an
+    # empty one — nothing else concludes anything.
     if ((use_llm == 0)); then
         echo "stdlib-matrix: --review-all needs --llm — reviewing means asking, and without it this" \
              "would discard the previous report's judgements rather than re-examine them" >&2

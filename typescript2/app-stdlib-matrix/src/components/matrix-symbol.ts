@@ -43,7 +43,6 @@ const SECTION = (label: string) => html`<h4
 /** What a judgement rests on, said in words rather than in the report's slug. */
 const BASIS: Record<string, string> = {
   model: 'judged by a model',
-  name: 'names and owners agree',
   'no-candidates': 'nothing comparable exists to consider',
 };
 
@@ -395,9 +394,9 @@ export class MatrixSymbolElement extends LitElement {
    * How much weight a judgement carries: what established it, how sure it was,
    * and whether anything checked it.
    *
-   * Shown for every judgement rather than only model ones. A name match that no
-   * judge has examined and a pairing an adversarial judge upheld are different
-   * claims, and they used to render identically.
+   * Shown for every judgement, because a proposal no judge has examined and a
+   * pairing an adversarial judge upheld are different claims, and they used to
+   * render identically.
    */
   private provenance(judgement: Judgement): TemplateResult {
     const parts: string[] = [BASIS[judgement.basis] ?? judgement.basis];

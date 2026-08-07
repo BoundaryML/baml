@@ -109,12 +109,6 @@ function fixture_ts_text() -> string {
     "#
 }
 
-test "match keys meet across snake_case and camelCase" {
-    assert.equal(match_key("to_upper_case"), "touppercase");
-    assert.equal(match_key("toUpperCase"), "touppercase");
-    assert.equal(match_key("index_of"), match_key("indexOf"));
-}
-
 test "id helpers split kind prefixes and path segments" {
     assert
         .equal(
@@ -237,7 +231,7 @@ test "TypeScript symbols separate callables from properties" {
     }
 }
 
-test "the symbol matrix relates both sides without privileging either" {
+test "a fresh matrix relates both sides and concludes nothing" {
     let matrix = build_symbol_matrix(
         parse_export_text(fixture_export_text()),
         baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()),
@@ -247,35 +241,18 @@ test "the symbol matrix relates both sides without privileging either" {
     // `Foo`, its four members, and `parseFixture`.
     assert.equal(matrix.counts.ts_symbols, 6);
 
-    // index_of ↔ indexOf is deterministic name agreement, and both endpoints
-    // address real symbols by id.
-    assert.is_true(matrix.judgements.length() >= 1);
-    let baml_ids: map<string, bool> = {};
-    for (let symbol in matrix.baml) {
-        let _ = baml_ids.set(symbol.id, true);
-    }
-    let ts_ids: map<string, bool> = {};
-    for (let symbol in matrix.ts) {
-        let _ = ts_ids.set(symbol.id, true);
-    }
-    if let first: Judgement = matrix.judgements.at(0) {
-        assert.equal(first.basis, "name");
-        assert.equal(first.verdict, "match");
-        // A name match arrives unverified: it is a proposal like any other.
-        assert.is_true(!first.verified);
-        assert.is_true(ts_ids.has(first.ts));
-        assert.is_true(first.baml.length() > 0);
-        for (let id in first.baml) {
-            assert.is_true(baml_ids.has(id));
-        }
-    } else {
-        baml.sys.panic("no judgement recorded for index_of");
-    }
+    // Nothing pairs the two sides deterministically. `Foo.prototype.indexOf`
+    // and `baml.Foo.index_of` agree on their name and their owner, and that
+    // agreement is no longer taken as evidence of anything — it is the model
+    // passes that decide, with reasons attached.
+    assert.equal(matrix.judgements.length(), 0);
 
-    // A symbol nothing has looked at carries no judgement, which is a different
-    // state from one judged to have no counterpart.
-    assert.is_true(matrix.counts.unjudged > 0);
+    // Every symbol is unjudged, which is a different state from judged to have
+    // no counterpart: nobody has looked yet.
+    assert.equal(matrix.counts.unjudged, matrix.counts.ts_symbols);
     assert.equal(matrix.counts.unmatched, 0);
+    assert.equal(matrix.counts.matched, 0);
+    assert.equal(matrix.counts.baml_unclaimed, matrix.counts.baml_symbols);
 }
 
 // ── ratchet ─────────────────────────────────────────────────────────────────
@@ -290,6 +267,16 @@ function fixture_header(sha: string, ts_version: string) -> ReportHeader {
     }
 }
 
+/// A fixture that has been judged, standing in for what a model pass produces.
+///
+/// The correspondences are stated here rather than derived, because nothing
+/// derives them any more: `build_symbol_matrix` concludes nothing. That is also
+/// the more honest fixture for the revision machinery, whose whole job is
+/// carrying model judgements — a heuristic's output was never what it had to
+/// preserve.
+///
+/// `clone` is the one that names a type: its signature returns `Foo`, so it is
+/// what proves a judgement goes stale when something it *refers to* moves.
 function fixture_matrix(sha: string, ts_version: string) -> SymbolMatrix {
     let matrix = build_symbol_matrix(
         parse_export_text(fixture_export_text()),
@@ -297,7 +284,26 @@ function fixture_matrix(sha: string, ts_version: string) -> SymbolMatrix {
         sha,
     );
     matrix.provenance.typescript_version = ts_version;
+    matrix.judgements.push(fixture_judgement("Foo.prototype.indexOf", "M:baml.Foo.index_of"));
+    matrix.judgements.push(fixture_judgement("Foo.prototype.clone", "M:baml.Foo.clone"));
+    matrix.counts = recount(matrix);
     matrix
+}
+
+function fixture_judgement(ts: string, baml: string) -> Judgement {
+    let none: string[] = [];
+    Judgement {
+        ts: ts,
+        baml: [baml],
+        verdict: "match",
+        basis: "model",
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        rejected: none,
+        verified: true,
+        example: null,
+    }
 }
 
 test "an unchanged run matches its baseline" {
@@ -854,9 +860,8 @@ test "an unnecessary symbol is neither matched nor missing" {
     }
     matrix.counts = recount(matrix);
     assert.equal(matrix.counts.unnecessary, 1);
-    // The symbol it was recorded against already had a name match, which
-    // outranks it, so the matched tally is untouched and nothing was double
-    // counted.
+    // It was recorded against a symbol nothing else speaks for, so the matched
+    // tally is untouched and nothing was double counted.
     assert.equal(matrix.counts.matched, before);
     assert
         .equal(

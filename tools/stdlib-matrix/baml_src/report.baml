@@ -71,9 +71,11 @@ class CodeExample {
 /// only hold symbols.
 ///
 /// `basis` is why it is believed:
-///   - `name`           — deterministic agreement of name and owner
 ///   - `model`          — a model judged it, and said why
 ///   - `no-candidates`  — no plausible counterpart existed to ask about
+///
+/// There is no `name` basis. Deterministic name agreement was tried and
+/// removed; see `build_symbol_matrix`.
 ///
 /// There is no `carried` basis. A judgement held over from a previous revision
 /// is the same judgement on the same evidence — see revision.baml — and marking
@@ -229,111 +231,25 @@ function recount(matrix: SymbolMatrix) -> MatrixCounts {
     }
 }
 
-/// A TS symbol's own name — the last path step.
-function ts_name_of(symbol: TsSymbol) -> string {
-    symbol.symbol.at(symbol.symbol.length() - 1) ?? symbol.display
-}
-
-/// The owner two symbols must share for a name match to mean anything.
+/// Builds the matrix from both symbol layers, with no correspondences at all.
 ///
-/// Matching on the member name alone is far too loose: `baml.env.get` collides
-/// with `Headers.get`, `Map.get`, and `URLSearchParams.get`, none of which have
-/// anything to do with environment variables. Requiring the owners to agree
-/// kills that whole class of coincidence.
+/// There is deliberately no deterministic pass here. Name agreement was tried
+/// and removed: it produced 99 pairings it could not explain and one it could
+/// not detect was wrong — `node:http.request` against `baml.http.Request`,
+/// which agree on owner and, after normalization, on name, and which are a
+/// function that sends a request and the type of a received one. Tightening the
+/// rule only moves that line; nothing in a pair of names says whether the
+/// agreement means anything.
 ///
-/// The two languages spell the same owner differently, so both sides normalize
-/// to a common key: case and underscores are dropped, node's module decoration
-/// is stripped, and a short table covers the places where the spellings simply
-/// differ — BAML's `T[]` against TypeScript's `Array`, BAML's three numeric
-/// types against TypeScript's one `Number`.
+/// What made it not worth keeping is what happens downstream. A judgement
+/// carries the reasoning that justifies it, and a name match has none to carry,
+/// so it reaches the reader as a bare assertion and reaches the next run as a
+/// conclusion no later pass will revisit. A model pairing costs a call and
+/// arrives with its reasons, its confidence, and something a verifier can
+/// refute.
 ///
-/// This is a heuristic and it is deliberately biased toward precision. It will
-/// miss real pairs whose owners do not correspond (`baml.time.Instant.now`
-/// against `Date.now`); those are what the model passes are for. A false match
-/// is worse, because it arrives already labelled as agreement.
-function owner_key(name: string) -> string {
-    let normalized = name.to_lower_case().replace_all("node:", "").replace_all("/promises", "").replace_all("_", "");
-    match (normalized) {
-        "t[]" => "array",
-        "readonlyarray" => "array",
-        "map<k, v>" => "map",
-        // BAML splits the numeric tower TypeScript keeps as one `number`.
-        "int" => "number",
-        "float" => "number",
-        "bigint" => "number",
-        "bool" => "boolean",
-        _ => normalized,
-    }
-}
-
-/// A BAML symbol's owner: the type it is declared on, the namespace it lives
-/// in, or — for an impl method — the receiver the impl is written for.
-function baml_owner_key(symbol: BamlSymbol) -> string {
-    let names: string[] = [];
-    let base = "";
-    for (let step in symbol.symbol) {
-        match (step) {
-            let plain: string => {
-                names.push(plain);
-            },
-            let node: ImplStep => {
-                base = node.base;
-            },
-        }
-    }
-    if (base.length() > 0) {
-        owner_key(base)
-    } else if (names.length() > 1) {
-        owner_key(type_display_name(names.slice(0, names.length() - 1).join(".")))
-    } else {
-        ""
-    }
-}
-
-/// The owner a TypeScript symbol shares with its BAML counterpart.
-///
-/// A member's owner is the container that holds it — `Foo` in
-/// `[(globals), Foo, indexOf]` — never the module, which groups but does not
-/// own. Something reached on the module itself (`os.hostname`, `parseInt`) has
-/// the module for an owner, and a container has none at all: it *is* one, and
-/// two containers agreeing on a name is a different question.
-function ts_owner_key(symbol: TsSymbol) -> string {
-    if (symbol.origin == "container") {
-        ""
-    } else if (symbol.symbol.length() >= 3) {
-        owner_key(symbol.symbol.at(1) ?? "")
-    } else {
-        owner_key(symbol.symbol.at(0) ?? "")
-    }
-}
-
-/// A BAML symbol's own name. An impl method matches on its method name, not on
-/// the interface it arrives through.
-function baml_name_of(symbol: BamlSymbol) -> string {
-    let name = "";
-    for (let step in symbol.symbol) {
-        match (step) {
-            let plain: string => {
-                name = plain;
-            },
-            _ => {},
-        }
-    }
-    name
-}
-
-/// Builds the matrix from both symbol layers using deterministic name matching
-/// only.
-///
-/// A name match is a *proposal*, not a conclusion: it arrives unverified, and
-/// the verify pass is expected to look at it like any other. Name agreement
-/// after normalization is a good heuristic and nothing more — `baml.env.get`
-/// and `Headers.get` agree on their name and on nothing else.
-///
-/// Symbols this pass says nothing about get no judgement at all. Silence and a
-/// judged absence are different states, and conflating them would make the
-/// first run indistinguishable from one where a model considered every symbol
-/// and found nothing.
+/// So every TypeScript symbol starts unjudged, which is the honest state: no
+/// one has looked yet.
 function build_symbol_matrix(
     export_doc: PackageExportDoc,
     ts_doc: TsSurfaceDoc,
@@ -341,51 +257,7 @@ function build_symbol_matrix(
 ) -> SymbolMatrix {
     let baml_symbols = extract_symbols(export_doc);
     let ts_symbols = extract_ts_symbols(ts_doc);
-
-    let by_key: map<string, BamlSymbol[]> = {};
-    for (let symbol in baml_symbols) {
-        let key = match_key(baml_name_of(symbol));
-        let bucket: BamlSymbol[] = by_key.get(key) ?? [];
-        bucket.push(symbol);
-        let _ = by_key.set(key, bucket);
-    }
-
     let judgements: Judgement[] = [];
-    for (let symbol in ts_symbols) {
-        let owner = ts_owner_key(symbol);
-        // A container has no owner to agree about, and two containers sharing a
-        // name is a coincidence rather than a correspondence.
-        if (owner.length() == 0) {
-            continue;
-        }
-        let bucket: BamlSymbol[] = by_key.get(match_key(ts_name_of(symbol))) ?? [];
-        let counterparts: string[] = [];
-        for (let candidate in bucket) {
-            // The name agreeing is not enough; the owners must too.
-            if (owner == baml_owner_key(candidate)) {
-                counterparts.push(candidate.id);
-            }
-        }
-        if (counterparts.length() > 0) {
-            let none: string[] = [];
-            judgements
-                .push(
-                    Judgement {
-                        ts: symbol.id,
-                        baml: counterparts,
-                        verdict: "match",
-                        basis: "name",
-                        confidence: null,
-                        reason: null,
-                        divergence: null,
-                        rejected: none,
-                        verified: false,
-                        example: null,
-                    },
-                );
-        }
-    }
-
     let no_failures: PassFailure[] = [];
     let matrix = SymbolMatrix {
         format_version: 2,

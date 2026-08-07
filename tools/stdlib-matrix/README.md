@@ -8,11 +8,15 @@ The tool is itself a BAML program (`baml_src/`). `run` is a wrapper that
 regenerates its two inputs, invokes it, and writes the artifacts.
 
 ```sh
-tools/stdlib-matrix/run                                   # name matching only, no model, no cost
-tools/stdlib-matrix/run --llm                             # + the three model passes
+tools/stdlib-matrix/run                                   # both surfaces, no judgements, no cost
+tools/stdlib-matrix/run --llm                             # + the model passes
 tools/stdlib-matrix/run --llm --previous report/matrix.json   # only re-judge what moved
 tools/stdlib-matrix/run --help                            # every flag
 ```
+
+Without `--llm` the run extracts both surfaces and concludes nothing: every
+symbol comes out unjudged. Nothing pairs the two sides deterministically, by
+design — see `build_symbol_matrix`.
 
 `--llm` needs `ANTHROPIC_API_KEY`; locally, `infisical run -- tools/stdlib-matrix/run --llm`.
 

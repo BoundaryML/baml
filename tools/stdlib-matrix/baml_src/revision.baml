@@ -297,11 +297,9 @@ function judgement_carries(
 
 /// Folds a previous revision into a fresh matrix.
 ///
-/// A carried judgement replaces whatever the deterministic pass proposed for
-/// that symbol, because it is the more considered answer: a name match is a
-/// heuristic, and a judgement that survived a previous run's scrutiny outranks
-/// one minted seconds ago. Symbols that are not fresh keep their proposals and
-/// are left for the passes.
+/// A fresh matrix proposes nothing, so this does not have to choose between a
+/// carried judgement and a competing one — it fills in what a previous run
+/// concluded and leaves everything else unjudged for the passes.
 function apply_revision(matrix: SymbolMatrix, before: Revision) -> CarryOutcome {
     let now = current_texts(matrix);
     let grew = baml_surface_grew(matrix, before);
