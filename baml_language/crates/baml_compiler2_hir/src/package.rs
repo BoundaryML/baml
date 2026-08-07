@@ -445,10 +445,12 @@ pub fn package_dependencies<'db>(
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
         // User packages depend on public builtin packages — plus every mounted
-        // source-less package (BEP-066 slice 6a). A mounted package itself
-        // keeps the stdlib list only: blobs were compiled against the stdlib,
-        // and mounted packages do not see each other (no mount declares a
-        // dependency on another mount).
+        // source-less package (BEP-066 slice 6a) and every auxiliary source
+        // package installed through `compiler2_extra_files`. The latter makes
+        // the source side of the source-vs-blob contract real: a package such
+        // as `<builtin>/app/…` is the same direct dependency whether its source
+        // or its mounted interface is present. A mounted/auxiliary package
+        // itself keeps the stdlib list only, avoiding dependency cycles.
         name => {
             let mut deps = vec![
                 PackageId::new(db, Name::new("baml")),
@@ -464,6 +466,23 @@ pub fn package_dependencies<'db>(
                     mounted
                         .into_iter()
                         .map(|mounted_name| PackageId::new(db, mounted_name)),
+                );
+            }
+            if name == "user" {
+                let source_packages: std::collections::BTreeSet<Name> =
+                    crate::compiler2_all_files(db)
+                        .into_iter()
+                        .map(|file| crate::file_package::file_package(db, file).package)
+                        .filter(|package| {
+                            package.as_str() != name
+                                && !is_reserved_package_name(package.as_str())
+                                && !is_mounted_package(db, package)
+                        })
+                        .collect();
+                deps.extend(
+                    source_packages
+                        .into_iter()
+                        .map(|package| PackageId::new(db, package)),
                 );
             }
             deps

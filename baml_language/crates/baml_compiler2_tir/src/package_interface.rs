@@ -182,11 +182,9 @@ pub struct ExportedFunction {
     pub return_type: Ty,
     pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
-    /// Function-level generic parameters. Ordinary function/interface/class
-    /// exports include synthetic callback-effect parameters introduced by
-    /// signature elaboration; `ExportedImplMethod` currently carries only the
-    /// override's declared params. Runtime layout erases synthetic effects in
-    /// either case.
+    /// Function-level generic parameters: user-declared parameters followed by
+    /// synthetic callback-effect parameters introduced by signature
+    /// elaboration. Runtime layout erases the synthetic effects.
     pub generic_params: Vec<ParamTy>,
     /// Per-parameter interface-bound conjunctions, parallel to
     /// `generic_params` (when synthetic effect parameters are present they are
@@ -273,7 +271,7 @@ pub enum ExportedImplOrigin {
 /// One impl-body method override, exported with a *structural* identity: the
 /// owner is the enclosing [`ExportedImpl`] itself (interface head + for-type),
 /// and `name` picks the interface member it overrides. Deliberately NOT MIR's
-/// `{iface-display}$for${target-display}` source-text naming — the consumer PR
+/// `{iface-display}$for${target-display}` source-text naming — the consumer
 /// reconstructs MIR's symbol from this structural pair. `sig.callable_fqn`
 /// alone is NOT unique for a free-impl method (it renders owner-less,
 /// `pkg.ns….name`); identity is `(enclosing impl, name)`.
@@ -530,9 +528,7 @@ impl ExportedType {
             ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
             ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
             // Mirrors `def_to_ty`'s Interface arm (empty args/assoc — the
-            // own-package resolution shape). Unreachable through today's
-            // resolution paths, which skip dep-interface rows until the
-            // dualized resolution context lands (BEP-066 slice 6a follow-up).
+            // unspecialized declaration shape).
             ExportedType::Interface { qtn, .. } => {
                 Ty::Interface(qtn.clone(), vec![], vec![], TyAttr::default())
             }
@@ -1202,9 +1198,19 @@ fn exported_impl_method<'db>(
         .iter()
         .map(|(param, _)| param.clone())
         .collect();
-    let scope_generics =
-        crate::generic_env::append_params(&impl_param_names, &spec.generic_param_names());
-    let own_params = &scope_generics[impl_param_names.len()..];
+    // Unlike `InterfaceMethodSpec`, whose generic list is the user-written
+    // declaration, the function environment also contains signature
+    // elaboration's synthetic callback-effect params. They must cross the blob
+    // boundary too: source and mounted call inference consult the same free
+    // type variables even though runtime layout later erases them.
+    let impl_param_count = impl_param_names.len();
+    let scope_generics = crate::function_generic_params(db, method_loc);
+    debug_assert_eq!(
+        &scope_generics[..impl_param_count],
+        impl_param_names.as_slice(),
+        "an impl method's function environment must begin with the impl parameters"
+    );
+    let own_params = &scope_generics[impl_param_count..];
     let mut bounds: crate::lower_type_expr::TypeVarBoundsMap =
         data.generic_params.iter().cloned().collect();
     // Lowering diagnostics are dropped, matching every export path: the
@@ -1213,7 +1219,11 @@ fn exported_impl_method<'db>(
     let mut diags = Vec::new();
     let mut generic_params = Vec::new();
     let mut generic_param_bounds = Vec::new();
-    for (param, declared) in own_params.iter().zip(spec.generic_bounds()) {
+    let declared_count = spec.generic_bounds().len();
+    for (param, declared) in own_params[..declared_count]
+        .iter()
+        .zip(spec.generic_bounds())
+    {
         let ifaces = crate::interfaces::lower_generic_param_interface_bounds(
             db,
             spec.bound_store(),
@@ -1226,6 +1236,11 @@ fn exported_impl_method<'db>(
         bounds.insert(param.clone(), ifaces.clone());
         generic_params.push(param.clone());
         generic_param_bounds.push(ifaces);
+    }
+    for param in &own_params[declared_count..] {
+        bounds.insert(param.clone(), Vec::new());
+        generic_params.push(param.clone());
+        generic_param_bounds.push(Vec::new());
     }
 
     // The interface's symbolic `Self` parameter: from its generic env when the

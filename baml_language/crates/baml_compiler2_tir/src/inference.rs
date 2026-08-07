@@ -852,10 +852,9 @@ pub struct ExternalCallable {
     /// `treat_as_static_method` distinction in `callee_declared_generics`.
     pub owner_generic_params: Vec<crate::ty::ParamTy>,
     /// The callee's exported generic params: user-declared params first, then
-    /// any synthetic effect params preserved by the export kind. Impl-method
-    /// rows currently carry the declared prefix only. Only user-declared
-    /// params are call-site suppliable ([`Self::user_generic_params`]), and
-    /// `RuntimeGenericLayout` erases effects from every runtime frame.
+    /// any synthetic effect params. Only user-declared params are call-site
+    /// suppliable ([`Self::user_generic_params`]), and `RuntimeGenericLayout`
+    /// erases effects from every runtime frame.
     pub generic_params: Vec<crate::ty::ParamTy>,
     /// Per-param interface-bound conjunctions, parallel to
     /// [`generic_params`](Self::generic_params) (when synthetic effect params

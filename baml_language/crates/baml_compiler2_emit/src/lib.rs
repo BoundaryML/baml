@@ -497,6 +497,74 @@ fn build_packages(
             }
         }
     }
+    // Mounted interfaces contribute the same declaration-side runtime facts as
+    // source interfaces. Their compiled objects/functions already live in the
+    // linked base image; these loc-free rows let a USER impl inherit a mounted
+    // default method, bake an associated default, and construct field links.
+    // Without this prepass a source `implements app.Named {}` got
+    // `label=app.Named.label`, while the blob path emitted an empty method
+    // table — a check-clean program whose virtual dispatch differed at runtime.
+    for package in baml_compiler2_hir::package::mounted_package_names(db) {
+        let Some(package_interface) =
+            baml_compiler2_tir::package_interface::mounted_interface(db, &package)
+        else {
+            continue;
+        };
+        let mut interfaces: Vec<_> = package_interface
+            .types
+            .values()
+            .flat_map(|namespace| namespace.values())
+            .filter_map(|exported| match exported {
+                baml_compiler2_tir::package_interface::ExportedType::Interface {
+                    qtn,
+                    self_param,
+                    generic_params,
+                    associated_types,
+                    fields,
+                    default_methods,
+                    ..
+                } => Some((
+                    qtn,
+                    self_param,
+                    generic_params,
+                    associated_types,
+                    fields,
+                    default_methods,
+                )),
+                _ => None,
+            })
+            .collect();
+        interfaces.sort_by_key(|(qtn, ..)| qtn.render_dotted(false));
+        for (qtn, self_param, generic_params, associated_types, fields, default_methods) in
+            interfaces
+        {
+            if !fields.is_empty() {
+                iface_field_decls
+                    .entry(qtn.clone())
+                    .or_insert_with(|| fields.iter().map(|(name, ..)| name.clone()).collect());
+            }
+            if !associated_types.is_empty() {
+                iface_assoc_decls.entry(qtn.clone()).or_insert_with(|| {
+                    (
+                        self_param.clone(),
+                        generic_params.clone(),
+                        associated_types
+                            .iter()
+                            .map(|associated| (associated.name.clone(), associated.default.clone()))
+                            .collect(),
+                    )
+                });
+            }
+            if !default_methods.is_empty() {
+                let entry = iface_defaults.entry(qtn.clone()).or_default();
+                for method in default_methods {
+                    entry
+                        .entry(method.name.clone())
+                        .or_insert_with(|| method.callable_fqn.clone());
+                }
+            }
+        }
+    }
     // The frame an inherited default of `iface_tn` is invoked with, for a rule
     // implementing it at `for_ty_pattern` / `interface_args` / `interface_assoc`:
     // the implementor type (`Self`) at slot 0, then the interface's generic args,
@@ -1177,6 +1245,34 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
+/// Failure while compiling a consumer against independently emitted mounted
+/// dependency units.
+#[derive(Debug)]
+pub enum MountedPackageLinkError {
+    /// The dependency units did not form a valid, self-contained prefix image.
+    DependencyLink(bex_vm_types::link::LinkError),
+    /// The consumer failed during ordinary MIR lowering or bytecode emission.
+    Consumer(LoweringError),
+}
+
+impl std::fmt::Display for MountedPackageLinkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DependencyLink(error) => write!(f, "link mounted dependency units: {error}"),
+            Self::Consumer(error) => write!(f, "compile mounted-package consumer: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for MountedPackageLinkError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::DependencyLink(error) => Some(error),
+            Self::Consumer(error) => Some(error),
+        }
+    }
+}
+
 /// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
 ///
 /// Returns `(description, alias, skip)`. Invalid attribute usage is diagnosed
@@ -1316,6 +1412,54 @@ pub fn generate_project_bytecode_with_stdlib(
     base: &Program,
 ) -> Result<Program, LoweringError> {
     generate_impl(db, options, opt, Some(base), false, None)
+}
+
+/// Compile and link a source consumer against independently emitted mounted
+/// dependency units.
+///
+/// This is the supported slice-6 seam between a package's two artifacts:
+///
+/// - `db` must already contain the dependency's serialized package-interface
+///   blobs through its mounted-packages input; those blobs drive checking and
+///   loc-free call resolution.
+/// - `dependency_units` are the matching runtime artifact, normally returned by
+///   [`emit_units`] in the dependency build. Together they must be one complete,
+///   duplicate-free prefix image in deterministic discovery order, including
+///   the builtin units exactly once, and must use the same compiler build and
+///   optimization level as the consumer.
+///
+/// The units are first linked symbolically. Their resulting image seeds the
+/// ordinary consumer emitter, whose fully-qualified imports resolve against the
+/// dependency definitions. The output is a single runnable [`Program`]. A bad
+/// dependency unit set is reported as
+/// [`MountedPackageLinkError::DependencyLink`]; consumer lowering and project
+/// diagnostics retain the ordinary [`LoweringError`] surface through
+/// [`MountedPackageLinkError::Consumer`].
+///
+/// # Slice 6a residue ledger
+///
+/// - E0158 remains only for mounted compiler/VM builtin-kind callables, which
+///   have no loc-free bytecode link contract.
+/// - Mounted declarations have no source spans, so definition navigation,
+///   rename, and other location-owning LSP handles remain unavailable.
+/// - Mount aliases must equal the package identity encoded in the blob;
+///   transitive re-export and package re-aliasing are not implemented.
+/// - Canonical `$stream` companion types are exported and consumer LLM
+///   expansion checks, but live Package.compile/sys-op loading is slice 6.
+/// - Artifact compatibility/version validation and loading into an already-live
+///   VM are slice 6 concerns; this seam produces a new combined `Program`.
+/// - First-class interface-method values still depend on the compiler's general
+///   synthesized-dispatcher support; direct, UFCS, and virtual calls are linked.
+pub fn generate_project_bytecode_with_mounted_units(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    dependency_units: &[CompilationUnit],
+) -> Result<Program, MountedPackageLinkError> {
+    let base = bex_vm_types::link::link(dependency_units)
+        .map_err(MountedPackageLinkError::DependencyLink)?;
+    generate_impl(db, options, opt, Some(&base), false, None)
+        .map_err(MountedPackageLinkError::Consumer)
 }
 
 /// Incremental compile that lowers function bodies only for dirty files, reuses
