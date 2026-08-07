@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 27723
 ---
 function $init() -> null {
     call $init_let_0
@@ -69,6 +68,7 @@ function user.ClassifySentiment$build_request(text: string, client: baml.llm.Cli
     store_var client
 
   L0:
+    load_type Sentiment
     load_var client
     load_const "ClassifySentiment"
     load_var text
@@ -90,6 +90,7 @@ function user.ClassifySentiment$build_request_stream(text: string, client: baml.
     store_var client
 
   L0:
+    load_type Sentiment
     load_var client
     load_const "ClassifySentiment"
     load_var text
@@ -143,6 +144,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     store_var client
 
   L0:
+    load_type Sentiment
     load_var client
     load_const "ClassifySentiment"
     load_var text
@@ -209,6 +211,7 @@ function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Cl
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "ClassifySentiment2"
     load_var text
@@ -230,6 +233,7 @@ function user.ClassifySentiment2$build_request_stream(text: string, client: baml
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "ClassifySentiment2"
     load_var text
@@ -283,6 +287,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "ClassifySentiment2"
     load_var text
@@ -412,6 +417,7 @@ function user.GenerateTests$build_request(count: int, topic: string, client: bam
     store_var client
 
   L0:
+    load_type string[]
     load_var client
     load_const "GenerateTests"
     load_var2 1 2
@@ -434,6 +440,7 @@ function user.GenerateTests$build_request_stream(count: int, topic: string, clie
     store_var client
 
   L0:
+    load_type string[]
     load_var client
     load_const "GenerateTests"
     load_var2 1 2
@@ -488,6 +495,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     store_var client
 
   L0:
+    load_type string[]
     load_var client
     load_const "GenerateTests"
     load_var2 1 2

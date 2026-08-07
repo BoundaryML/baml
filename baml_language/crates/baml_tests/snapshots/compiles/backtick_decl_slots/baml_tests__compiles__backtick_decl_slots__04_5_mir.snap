@@ -99,6 +99,7 @@ fn user.Greet$build_request(name: string, client: baml.llm.Client) -> baml.http.
     let _4: map<string, unknown>
     let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
     let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -117,7 +118,8 @@ fn user.Greet$build_request(name: string, client: baml.llm.Client) -> baml.http.
     }
 
     bb3: {
-        _0 = call const fn baml.llm.build_request(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
+        _7 = load_type(string);
+        _0 = call const fn baml.llm.build_request<copy _7>(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
     }
 
     bb4: {
@@ -157,6 +159,7 @@ fn user.Greet$build_request_stream(name: string, client: baml.llm.Client) -> bam
     let _4: map<string, unknown>
     let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
     let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -175,7 +178,8 @@ fn user.Greet$build_request_stream(name: string, client: baml.llm.Client) -> bam
     }
 
     bb3: {
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
+        _7 = load_type(string);
+        _0 = call const fn baml.llm.build_request_stream<copy _7>(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
     }
 
     bb4: {
@@ -275,6 +279,7 @@ fn user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml.llm.P
     let _4: map<string, unknown>
     let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
     let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -293,7 +298,8 @@ fn user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml.llm.P
     }
 
     bb3: {
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
+        _7 = load_type(string);
+        _0 = call const fn baml.llm.render_prompt<copy _7>(copy _2, const "Greet", copy _4, copy _5) -> [bb4];
     }
 
     bb4: {

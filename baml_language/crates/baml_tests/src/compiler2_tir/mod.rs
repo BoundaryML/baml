@@ -253,7 +253,15 @@ pub(crate) mod support {
                 let ty_args_str = if type_args.is_empty() {
                     String::new()
                 } else {
-                    let tys: Vec<_> = type_args.iter().map(|t| t.to_string()).collect();
+                    let tys: Vec<_> = type_args
+                        .iter()
+                        .map(|arg| match arg {
+                            baml_compiler2_ast::TypeArg::Static(ty) => ty.to_string(),
+                            baml_compiler2_ast::TypeArg::Unreflect(operand) => {
+                                format!("unreflect({})", expr_desc(*operand, body))
+                            }
+                        })
+                        .collect();
                     format!("<{}>", tys.join(", "))
                 };
                 let arg_strs: Vec<String> = args

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 12111
 ---
 function $init() -> null {
     call $init_let_0
@@ -47,6 +46,7 @@ function user.ExtractAny$build_request(client: baml.llm.Client) -> baml.http.Req
     store_var client
 
   L0:
+    load_type baml.json.json
     load_var client
     load_const "ExtractAny"
     load_type string
@@ -66,6 +66,7 @@ function user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.h
     store_var client
 
   L0:
+    load_type baml.json.json
     load_var client
     load_const "ExtractAny"
     load_type string
@@ -117,6 +118,7 @@ function user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.Prom
     store_var client
 
   L0:
+    load_type baml.json.json
     load_var client
     load_const "ExtractAny"
     load_type string

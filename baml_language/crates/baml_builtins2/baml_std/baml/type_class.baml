@@ -33,6 +33,16 @@ class TypeValue {
     //baml:vm
     function as_function(self) -> baml.reflect.function.Type? throws never { $rust_function }
 
+    /// Pair this type value with schema metadata without changing its mint.
+    //baml:mut_vm
+    function meta(
+      self,
+      alias: string? = null,
+      description: string? = null,
+      docstring: string? = null,
+      other: map<string, string>? = null,
+    ) -> baml.reflect.WithMeta<type> throws never { $rust_function }
+
     /// Returns the type name as a human-readable string.
     implements baml.ToString {
         function to_string(self) -> string throws never {

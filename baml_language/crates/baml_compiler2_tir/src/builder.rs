@@ -2532,8 +2532,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn resolve_explicit_type_args(
         &mut self,
         callee_id: ExprId,
-        type_args: &[TypeExpr],
+        type_args: &[ast::TypeArg],
         call_expr_id: ExprId,
+        body: &ExprBody,
     ) -> Option<FxHashMap<crate::ty::ParamTy, Ty>> {
         let (declared_params, callee_name) = self.callee_declared_generic_params(callee_id)?;
 
@@ -2557,20 +2558,34 @@ impl<'db> TypeInferenceBuilder<'db> {
         let scope_bounds = self.scope_type_var_bounds();
         let self_ty = self.body_self_ty.clone();
         let suppress_diags = self.is_auto_derived_body;
-        for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
+        for (param_name, type_arg) in declared_params.iter().zip(type_args.iter()) {
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr(
-                type_arg_expr,
-                &crate::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: self.package_items,
-                    ns_context: &ns,
-                    generic_params: &caller_generic_params,
-                    bounds: &scope_bounds,
-                    self_ty: self_ty.clone(),
-                },
-                &mut diags,
-            );
+            let ty = match type_arg {
+                ast::TypeArg::Static(type_arg_expr) => crate::lower_type_expr::lower_type_expr(
+                    type_arg_expr,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: self.package_items,
+                        ns_context: &ns,
+                        generic_params: &caller_generic_params,
+                        bounds: &scope_bounds,
+                        self_ty: self_ty.clone(),
+                    },
+                    &mut diags,
+                ),
+                ast::TypeArg::Unreflect(operand) => {
+                    self.check_expr(
+                        *operand,
+                        body,
+                        &Ty::Type {
+                            attr: TyAttr::default(),
+                        },
+                    );
+                    Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    }
+                }
+            };
             // Auto-derived bodies (`to_json` / `from_json` synthesized by
             // `auto_derive_json`) reference field types verbatim. When a
             // class has malformed/unresolved field types (parser error
@@ -6464,9 +6479,29 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expected: &Ty,
         callee: ExprId,
-        type_args: &[TypeExpr],
+        type_args: &[ast::TypeArg],
         args: &[ast::CallArg],
     ) -> Ty {
+        if type_args
+            .iter()
+            .any(|arg| matches!(arg, ast::TypeArg::Unreflect(_)))
+        {
+            let callee_name = match &body.exprs[callee] {
+                Expr::Path(segments) => segments.last(),
+                Expr::MemberAccess { member, .. } => Some(member),
+                _ => None,
+            };
+            if let Some(name) = callee_name
+                && (name.as_str().ends_with("$stream") || name.as_str() == "__make_stream")
+            {
+                self.context.report_simple(
+                    TirTypeError::RuntimeTypeArgumentOnStreamingCall {
+                        callee_name: name.clone(),
+                    },
+                    expr_id,
+                );
+            }
+        }
         let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
         if matches!(&body.exprs[callee], Expr::OptionalMemberAccess { .. })
             && self.in_optional_chain > 0
@@ -6631,6 +6666,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // structurally). The receiver type IS the call's result type, so the
         // type-arg threads concretely (`Box<int>` decodes to `Box<int>`).
         let from_json_callee = arg_exprs.len() == 1
+            && type_args
+                .iter()
+                .all(|arg| matches!(arg, ast::TypeArg::Static(_)))
             && crate::throws_analysis::is_from_json_call_callee(&body.exprs[callee])
             && match &body.exprs[callee] {
                 // Receiver must be a type name (unbound static call), not a value.
@@ -6666,7 +6704,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Some(Ty::Class(qtn, _, attr)) if !type_args.is_empty() => {
                             let resolved: Vec<Ty> = type_args
                                 .iter()
-                                .map(|te| self.resolve_type_expr(te, expr_id))
+                                .filter_map(|arg| match arg {
+                                    ast::TypeArg::Static(te) => {
+                                        Some(self.resolve_type_expr(te, expr_id))
+                                    }
+                                    ast::TypeArg::Unreflect(_) => None,
+                                })
                                 .collect();
                             Some(Ty::Class(qtn, resolved, attr))
                         }
@@ -6679,7 +6722,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Expr::Path(segs) => {
                         let recv_expr = TypeExprKind::Path {
                             segments: segs[..segs.len() - 1].to_vec(),
-                            generic_args: type_args.to_vec(),
+                            generic_args: type_args
+                                .iter()
+                                .filter_map(|arg| match arg {
+                                    ast::TypeArg::Static(te) => Some(te.clone()),
+                                    ast::TypeArg::Unreflect(_) => None,
+                                })
+                                .collect(),
                             associated_type_bindings: vec![],
                             attrs: vec![],
                         }
@@ -6741,7 +6790,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // as `Errored` so the unresolved-parameter check doesn't cascade on the params it
         // failed to fill.
         let explicit_type_args = if !type_args.is_empty() {
-            match self.resolve_explicit_type_args(callee, type_args, expr_id) {
+            match self.resolve_explicit_type_args(callee, type_args, expr_id, body) {
                 Some(bindings) => ExplicitTypeArgs::Resolved(bindings),
                 None => ExplicitTypeArgs::Errored,
             }

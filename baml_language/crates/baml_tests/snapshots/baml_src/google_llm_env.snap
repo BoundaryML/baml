@@ -80,6 +80,7 @@ function google_llm_env.GoogleEnvEnterprisePrompt$build_request(input: string, c
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
     load_var input
@@ -101,6 +102,7 @@ function google_llm_env.GoogleEnvEnterprisePrompt$build_request_stream(input: st
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
     load_var input
@@ -154,6 +156,7 @@ function google_llm_env.GoogleEnvEnterprisePrompt$render_prompt(input: string, c
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
     load_var input

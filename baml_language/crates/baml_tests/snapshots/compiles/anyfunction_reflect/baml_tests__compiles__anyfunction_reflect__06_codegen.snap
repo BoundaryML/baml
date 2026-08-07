@@ -1,7 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3718
 ---
+function $init() -> null {
+    call $init_let_0
+    store_global user.RuntimeEnumClient
+    load_const null
+    return
+}
+
 function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
 
@@ -9,6 +15,178 @@ function boundary.id() -> boundary.LocalId {
 }
 
 function boundary.id.current() -> string {
+}
+
+function user.RuntimeClassify(input: string, client: baml.llm.Client) -> #0 {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.RuntimeEnumClient
+    store_var client
+
+  L0:
+    load_type #0
+    load_var client
+    load_const "RuntimeClassify"
+    load_var input
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.RuntimeClassify$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.RuntimeEnumClient
+    store_var client
+
+  L0:
+    load_type #0
+    load_var client
+    load_const "RuntimeClassify"
+    load_var input
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.build_request
+    return
+}
+
+function user.RuntimeClassify$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.RuntimeEnumClient
+    store_var client
+
+  L0:
+    load_type #0
+    load_var client
+    load_const "RuntimeClassify"
+    load_var input
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.build_request_stream
+    return
+}
+
+function user.RuntimeClassify$parse(json: string, client: baml.llm.Client) -> #0 {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.RuntimeEnumClient
+    store_var client
+
+  L0:
+    load_type #0 | null
+    load_type #0
+    load_var json
+    call baml.llm.parse
+    return
+}
+
+function user.RuntimeClassify$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<#0 | null, #0> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.RuntimeEnumClient
+    store_var client
+
+  L0:
+    load_type #0 | null
+    load_type #0
+    load_var2 2 1
+    call baml.llm.Client.__make_stream
+    return
+}
+
+function user.RuntimeClassify$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.RuntimeEnumClient
+    store_var client
+
+  L0:
+    load_type #0
+    load_var client
+    load_const "RuntimeClassify"
+    load_var input
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.render_prompt
+    return
+}
+
+function user.RuntimeClassify$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<#0 | null, #0> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.RuntimeEnumClient
+    store_var client
+
+  L0:
+    load_type #0 | null
+    load_type #0
+    load_var client
+    load_const "RuntimeClassify"
+    load_var input
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.stream_llm_function
+    return
+}
+
+function user.RuntimeEnumClient$new(lenient: bool) -> null {
+    load_const "RuntimeEnumClient"
+    load_const "openai"
+    load_const "gpt-4o-mini"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "test-key"
+    load_const null
+    load_const null
+    load_type string
+    load_type string
+    alloc_map 0
+    load_type string
+    load_type string
+    alloc_map 0
+    load_type string
+    load_type unknown
+    alloc_map 0
+    init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
+    init_instance baml.llm.PrimitiveClient .name, .provider, .options
+    return
 }
 
 function user.bare_and_pinned() -> int {
@@ -31,6 +209,38 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
     load_type string
     load_type baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>
     alloc_map 2
+    return
+}
+
+function user.runtime_enum_llm_companions_compile() -> string {
+    load_const "RED"
+    load_const "k7"
+    load_const "warm"
+    load_const <omitted>
+    load_const <omitted>
+    call baml.reflect.enum.value
+    store_var _3
+    load_const "Category"
+    load_var _3
+    load_const "BLUE"
+    load_type string | baml.reflect.enum.Value
+    alloc_array 2
+    call baml.reflect.enum.new
+    store_var category
+    load_var category
+    load_const "sample"
+    load_const <omitted>
+    call user.RuntimeClassify$render_prompt
+    sys_op baml.llm.PromptAst.text
+    store_var prompt
+    load_var category
+    load_const "\"k7\""
+    load_const <omitted>
+    call user.RuntimeClassify$parse
+    call baml.reflect.enum.get_value
+    store_var _10
+    load_var2 3 4
+    bin_op +
     return
 }
 

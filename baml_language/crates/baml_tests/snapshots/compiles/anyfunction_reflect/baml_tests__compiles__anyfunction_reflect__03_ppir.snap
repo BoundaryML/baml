@@ -14,6 +14,30 @@ class user.ToolError {
 class user.ToolError$stream {
   message: string | null
 }
+function user.RuntimeClassify(input: string, client: baml.llm.Client = RuntimeEnumClient) -> T  [llm] {
+  baml.llm.call_llm_function(client, "RuntimeClassify", map { "input": input })
+}
+function user.RuntimeClassify$build_request(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.http.Request  [expr] {
+  baml.llm.build_request(client, "RuntimeClassify", map { "input": input })
+}
+function user.RuntimeClassify$build_request_stream(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.http.Request  [expr] {
+  baml.llm.build_request_stream(client, "RuntimeClassify", map { "input": input })
+}
+function user.RuntimeClassify$parse(json: string, client: baml.llm.Client = RuntimeEnumClient) -> T  [expr] {
+  baml.llm.parse(json)
+}
+function user.RuntimeClassify$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.Stream<T | null, T>  [expr] {
+  client.__make_stream(sse)
+}
+function user.RuntimeClassify$render_prompt(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(client, "RuntimeClassify", map { "input": input })
+}
+function user.RuntimeClassify$stream(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.Stream<T | null, T>  [expr] {
+  baml.llm.stream_llm_function(client, "RuntimeClassify", map { "input": input })
+}
+function user.RuntimeEnumClient$new(lenient: bool) -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "RuntimeEnumClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+}
 function user.bare_and_pinned() -> int  [expr] {
   { let f: baml.AnyFunction = web_search; let g: baml.AnyFunction<Returns = user.Doc[] | string, Throws = user.ToolError> = web_search; let widened: baml.AnyFunction<Returns = user.Doc[] | string | int, Throws = user.ToolError> = g; let bare: baml.AnyFunction = g; return 0 }
 }
@@ -22,6 +46,9 @@ function user.current_time() -> string  [expr] {
 }
 function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = user.Doc[] | string, Throws = user.ToolError>>  [expr] {
   { return map { "search": web_search, "now": current_time } }
+}
+function user.runtime_enum_llm_companions_compile() -> string  [expr] {
+  { let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]); let prompt = RuntimeClassify$render_prompt("sample").text(); let parsed = RuntimeClassify$parse(`...`); return prompt Add reflect.enum.get_value(parsed) }
 }
 function user.signature_access(f: baml.AnyFunction) -> string  [expr] {
   { let sig = reflect.signature(f); let parts = sig.returns.to_string() Add sig.errors.to_string() Add sig.args.length().to_string(); for arg in sig.args { parts = parts Add arg.name Add arg.type.to_string() }; for key in sig.opts.keys() { let opt = sig.opts.get(key) } if (opt Ne null) { parts = parts Add key Add opt.type.to_string() }; return parts }

@@ -189,6 +189,23 @@ impl std::ops::Deref for TypeExpr {
     }
 }
 
+/// One explicit generic argument at an expression call site.
+///
+/// Static arguments retain the existing type grammar. `Unreflect` is a
+/// contextual whole-argument marker whose operand is an ordinary expression
+/// in the enclosing body arena; it is never a type-expression atom.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeArg {
+    Static(TypeExpr),
+    Unreflect(ExprId),
+}
+
+impl From<TypeExpr> for TypeArg {
+    fn from(value: TypeExpr) -> Self {
+        Self::Static(value)
+    }
+}
+
 impl std::ops::DerefMut for TypeExpr {
     fn deref_mut(&mut self) -> &mut TypeExprKind {
         &mut self.kind
@@ -545,7 +562,15 @@ impl ExprBody {
                 let ty_args_str = if type_args.is_empty() {
                     String::new()
                 } else {
-                    let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
+                    let tys: Vec<_> = type_args
+                        .iter()
+                        .map(|arg| match arg {
+                            TypeArg::Static(ty) => ty.to_string(),
+                            TypeArg::Unreflect(expr) => {
+                                format!("unreflect({})", self.display_expr_inner(*expr, depth + 1))
+                            }
+                        })
+                        .collect();
                     format!("<{}>", tys.join(", "))
                 };
                 let args_str: Vec<_> = args
@@ -872,7 +897,7 @@ pub enum Expr {
         callee: ExprId,
         /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
         /// Empty vec when no `<...>` was written.
-        type_args: Vec<TypeExpr>,
+        type_args: Vec<TypeArg>,
         args: Vec<CallArg>,
     },
     Object {

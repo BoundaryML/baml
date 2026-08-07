@@ -8,7 +8,38 @@
 //! data carried inline in the object, so GC copies and `baml.deep_copy`
 //! preserve identity by construction (I-1: a copy *is* the same type value).
 
-use baml_type::{RealizedTy, normalize::TypeContext};
+use baml_type::{QualifiedTypeName, RealizedTy, normalize::TypeContext};
+use indexmap::IndexMap;
+
+use crate::HeapPtr;
+
+/// Runtime schema definitions carried by a minted `type` value.
+///
+/// The map is a per-value overlay, never a process/global registry. Heap
+/// pointers keep the ordinary `Object::Enum` definitions authoritative for
+/// reflection and parsed variants; the owning `Object::Type` traces them.
+#[derive(Debug, Clone, Default)]
+pub struct DynTypeDefs {
+    pub enums: IndexMap<QualifiedTypeName, HeapPtr>,
+}
+
+impl DynTypeDefs {
+    pub fn with_enum(name: QualifiedTypeName, ptr: HeapPtr) -> Self {
+        Self {
+            enums: IndexMap::from([(name, ptr)]),
+        }
+    }
+
+    pub fn merge_from(&mut self, other: &Self) {
+        for (name, ptr) in &other.enums {
+            self.enums.entry(name.clone()).or_insert(*ptr);
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.enums.is_empty()
+    }
+}
 
 /// A minted identity token for a runtime `type` value.
 ///
@@ -45,6 +76,7 @@ pub struct TypeValue {
     /// The type this value denotes.
     pub ty: RealizedTy,
     mint: MintId,
+    defs: DynTypeDefs,
 }
 
 impl TypeValue {
@@ -61,6 +93,7 @@ impl TypeValue {
         Self {
             ty,
             mint: MintId::Static(digest),
+            defs: DynTypeDefs::default(),
         }
     }
 
@@ -72,12 +105,28 @@ impl TypeValue {
     /// caller owns the invariant that `mint` was produced for `ty` — a
     /// mismatched pair breaks type-value equality program-wide.
     pub fn from_parts(ty: RealizedTy, mint: MintId) -> Self {
-        Self { ty, mint }
+        Self {
+            ty,
+            mint,
+            defs: DynTypeDefs::default(),
+        }
+    }
+
+    pub fn from_parts_with_defs(ty: RealizedTy, mint: MintId, defs: DynTypeDefs) -> Self {
+        Self { ty, mint, defs }
     }
 
     /// This value's identity token.
     pub fn mint(&self) -> MintId {
         self.mint
+    }
+
+    pub fn defs(&self) -> &DynTypeDefs {
+        &self.defs
+    }
+
+    pub fn defs_mut(&mut self) -> &mut DynTypeDefs {
+        &mut self.defs
     }
 }
 

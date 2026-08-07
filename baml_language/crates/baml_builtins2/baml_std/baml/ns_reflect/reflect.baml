@@ -18,6 +18,31 @@ class Meta {
   other map<string, string>
 }
 
+/// A value paired with schema metadata. For type values this lets metadata be
+/// attached without mutating the minted definition.
+class WithMeta<T> {
+  ty T
+  alias string?
+  description string?
+  docstring string?
+  other map<string, string>
+}
+
+/// A source range attached to a compiler diagnostic. Runtime constructor
+/// validation has no source file and therefore reports `span = null`.
+class Span {
+  file string?
+  start int
+  end int
+}
+
+/// The stable structured diagnostic surfaced by reflection constructors.
+class Diagnostic {
+  code string
+  span Span?
+  message string
+}
+
 /// Common identity-preserving surface shared by every reflection kind view.
 interface TypeView {
   function as_type(self) -> type throws never

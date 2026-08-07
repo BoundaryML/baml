@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3545
 ---
 === TIR2 ===
 class user.ToolError {
@@ -73,9 +72,41 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> user.D
             "bad-args" : "bad-args"
   }
 }
+function user.RuntimeEnumClient$new(lenient: bool) -> ? throws never {
+  baml.llm.PrimitiveClient { name: "RuntimeEnumClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+}
+function user.RuntimeClassify<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> T throws never {
+  baml.llm.call_llm_function<T>(client, "RuntimeClassify", map { "input": input }) : T
+}
+function user.RuntimeClassify$render_prompt<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "RuntimeClassify", map { "input": input }) : baml.llm.PromptAst
+}
+function user.RuntimeClassify$build_request<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "RuntimeClassify", map { "input": input }) : baml.http.Request
+}
+function user.RuntimeClassify$build_request_stream<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "RuntimeClassify", map { "input": input }) : baml.http.Request
+}
+function user.runtime_enum_llm_companions_compile() -> string throws never {
+  { : never
+    let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]) : type
+    let prompt = RuntimeClassify$render_prompt<unreflect(category)>("sample").text() : string
+    let parsed = RuntimeClassify$parse<T>(`...`) : unknown
+    return prompt + reflect.enum.get_value(parsed) : string
+  }
+}
 class user.ToolError$stream {
   message: string | null
 }
 class user.Doc$stream {
   title: string | null
+}
+function user.RuntimeClassify$stream<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.Stream<T | null, T> throws never {
+  baml.llm.stream_llm_function(client, "RuntimeClassify", map { "input": input }) : baml.llm.Stream<T | null, T>
+}
+function user.RuntimeClassify$parse_stream<T>(sse: baml.http.SseStream, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.Stream<T | null, T> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<T | null, T>
+}
+function user.RuntimeClassify$parse<T>(json: string, client: baml.llm.Client = RuntimeEnumClient) -> T throws never {
+  baml.llm.parse<TFinal>(json) : T
 }

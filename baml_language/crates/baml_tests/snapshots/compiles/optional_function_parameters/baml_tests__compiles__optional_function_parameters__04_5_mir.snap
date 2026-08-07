@@ -319,6 +319,7 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
+    let _9: type
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -351,7 +352,8 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _9 = load_type(string);
+        _0 = call const fn baml.llm.build_request<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -370,6 +372,7 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
+    let _9: type
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -402,7 +405,8 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _9 = load_type(string);
+        _0 = call const fn baml.llm.build_request_stream<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -481,6 +485,7 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
+    let _9: type
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -513,7 +518,8 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _9 = load_type(string);
+        _0 = call const fn baml.llm.render_prompt<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {

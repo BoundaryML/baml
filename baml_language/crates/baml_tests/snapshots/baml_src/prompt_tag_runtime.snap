@@ -163,6 +163,7 @@ function prompt_tag_runtime.PtRenderPerson$build_request(client: baml.llm.Client
     make_closure .<tagged(PtRenderPerson$build_request, 0)>, 0
     call baml.llm.prompt
     store_var _5
+    load_type prompt_tag_runtime.Person
     load_var client
     load_const "PtRenderPerson"
     load_type string
@@ -192,6 +193,7 @@ function prompt_tag_runtime.PtRenderPerson$build_request_stream(client: baml.llm
     make_closure .<tagged(PtRenderPerson$build_request_stream, 0)>, 0
     call baml.llm.prompt
     store_var _5
+    load_type prompt_tag_runtime.Person
     load_var client
     load_const "PtRenderPerson"
     load_type string
@@ -267,6 +269,7 @@ function prompt_tag_runtime.PtRenderPerson$render_prompt(client: baml.llm.Client
     make_closure .<tagged(PtRenderPerson$render_prompt, 0)>, 0
     call baml.llm.prompt
     store_var _5
+    load_type prompt_tag_runtime.Person
     load_var client
     load_const "PtRenderPerson"
     load_type string

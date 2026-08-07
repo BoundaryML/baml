@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19904
 ---
 function $init() -> null {
     call $init_let_0
@@ -84,6 +83,7 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     store_var client
 
   L2:
+    load_type string
     load_var client
     load_const "AskDocs"
     load_var2 1 2
@@ -124,6 +124,7 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     store_var client
 
   L2:
+    load_type string
     load_var client
     load_const "AskDocs"
     load_var2 1 2
@@ -196,6 +197,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     store_var client
 
   L2:
+    load_type string
     load_var client
     load_const "AskDocs"
     load_var2 1 2

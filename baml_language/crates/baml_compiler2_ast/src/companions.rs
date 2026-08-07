@@ -159,13 +159,18 @@ fn make_llm_companion(
     // this target during CST lowering (the backtick CST isn't reachable here);
     // use it so the companion renders the prompt through its closure — matching
     // execution. Legacy Jinja parents fall back to the plain 3-arg builtin call.
+    let companion_type_args = parent
+        .return_type
+        .as_ref()
+        .map(|return_type| vec![return_type.clone()])
+        .unwrap_or_default();
     let (body, source_map) = llm_companion_body(parent, target).unwrap_or_else(|| {
         synthesize_llm_builtin_call(
             target,
             parent.name.as_str(),
             &param_names,
             client_arg_name,
-            Vec::new(),
+            companion_type_args,
             parent.span,
         )
     });

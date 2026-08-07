@@ -45,8 +45,8 @@ function prompt_template_for(function_name: string, prompt_closure: ((Context) -
   }
 }
 
-function render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> PromptAst {
-  let return_type = get_return_type(function_name);
+function render_prompt<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> PromptAst {
+  let return_type = type.of<T>();
   // Rendering is offline: it needs the client's provider/role metadata but no
   // credentials. Construct leniently so a missing `api_key` env var doesn't
   // panic — `<Fn>$render_prompt` must work without a key set. (`build_request`
@@ -58,8 +58,8 @@ function render_prompt(client: Client, function_name: string, args: map<string, 
   primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
 }
 
-function build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> root.http.Request {
-  let return_type = get_return_type(function_name);
+function build_request<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> root.http.Request {
+  let return_type = type.of<T>();
   let primitive_client = client.to_primitive_client();
   let template = prompt_template_for(function_name, prompt_closure);
   let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
@@ -67,8 +67,8 @@ function build_request(client: Client, function_name: string, args: map<string, 
   primitive_client.build_request(specialized_prompt, return_type)
 }
 
-function build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> root.http.Request {
-  let return_type = get_return_type(function_name);
+function build_request_stream<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> root.http.Request {
+  let return_type = type.of<T>();
   let primitive_client = client.to_primitive_client();
   let template = prompt_template_for(function_name, prompt_closure);
   let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
