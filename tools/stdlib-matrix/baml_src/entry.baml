@@ -128,3 +128,45 @@ function check_matrix(
 function main() -> MatrixResult {
     build_matrix()
 }
+
+/// What the tools answer, without a model.
+///
+/// Inspection only, and the point of it: a tool that answers badly is a session
+/// that wanders, and a session that wanders is paid for. This is how a lookup
+/// is reviewed while it is still free.
+class ToolReport {
+    doc_sections: string[],
+    skill_bytes: int,
+    answers: string[],
+}
+
+function dump_tools(
+    repo_root: string = ".",
+    type_system_file: string = "baml_language/TYPE_SYSTEM.md",
+    skill_cache: string = "tools/stdlib-matrix/data/baml_skill.md",
+    baml_bin: string = "baml",
+    tool: string = "",
+    argument: string = "",
+) -> ToolReport {
+    let box = build_toolbox(repo_root, type_system_file, baml_bin);
+    let answers: string[] = [];
+    if (tool.length() > 0) {
+        answers.push(run_tool(box, tool, argument));
+    } else {
+        // One of each, over questions the old pipeline got wrong: a name that
+        // suggests nothing (`child_process.spawn` → `baml.sys.exec`), a type
+        // whose members are the answer, and a concept with no symbol at all.
+        answers.push(run_tool(box, "search", "run a subprocess"));
+        answers.push(run_tool(box, "describe", "baml.sys.exec"));
+        answers.push(run_tool(box, "describe", "baml.time"));
+        answers.push(run_tool(box, "describe", "spaw"));
+        answers.push(run_tool(box, "examples", "baml.sys.exec"));
+        answers.push(run_tool(box, "docs", "Pattern Matching"));
+        answers.push(run_tool(box, "invented", "anything"));
+    }
+    ToolReport {
+        doc_sections: box.doc_headings,
+        skill_bytes: load_skill(skill_cache).length(),
+        answers: answers,
+    }
+}
