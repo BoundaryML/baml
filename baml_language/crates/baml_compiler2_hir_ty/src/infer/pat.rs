@@ -66,6 +66,16 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
         let resolved = self.table.resolve_completely(&scrut_ty);
+        // The match is exhaustiveness's STRUCTURE demand and cannot
+        // defer (rustc runs usefulness after inference; the one-pass
+        // walk commits here instead): a var still riding the scrutinee
+        // - `?T | Done` from a not-yet-grounded receiver chain -
+        // forces from its bounds before the arms lower.
+        let resolved = if resolved.has_infer() {
+            self.force_occurring_vars(&resolved)
+        } else {
+            resolved
+        };
         let scrut_resolved = self.matrix_scrut(&resolved);
         let scrut_binding = self.narrowable_binding(body, scrutinee);
         let branch_expectation = expected.adjust_for_branches(&mut self.table);

@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52493
+agreements: 52494
 one-sided (coverage): 264
-conflicts: 7948 across 1414 distinct pairs
+conflicts: 7947 across 1413 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -221,6 +221,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [12x] hir_ty=[int] tir=[int | 1 | 2 | 3 | 4]
     at ns_exceptions/exceptions.baml:7958..8081 `{\n    s3_...4\n    }\n}`
     at ns_exceptions/exceptions.baml:7964..8079 `s3_api_1(2...=> 4\n    }`
+[12x] hir_ty=[int | void] tir=[void]
+    at ns_defer/defer.baml:2737..2813 `defer_call...ht") }\n  }`
+    at ns_defer/defer.baml:6031..6110 `defer_expl...ht") }\n  }`
 [11x] hir_ty=[(self: baml.fs.File, data: string) -> int throws baml.errors.InvalidArgument | baml.errors.Io] tir=[(data: string) -> int throws baml.errors.Io | baml.errors.InvalidArgument]
     at ns_csv/csv.baml:50501..50509 `wf.write`
     at ns_fs/fs.baml:7526..7536 `file.write`
@@ -299,9 +302,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [9x] hir_ty=[(value: int) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_builtins/builtins.baml:1095..1106 `string.from`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:6503..6514 `string.from`
-[9x] hir_ty=[int | void] tir=[void]
-    at ns_defer/defer.baml:2737..2813 `defer_call...ht") }\n  }`
-    at ns_defer/defer.baml:6031..6110 `defer_expl...ht") }\n  }`
 [9x] hir_ty=[throws "boom"] tir=[throws string]
     at ns_defer/defer.baml:2491..2513 `defer_call_throws_boom`
     at ns_defer/defer.baml:2551..2574 `defer_call_throws_risky`
@@ -581,9 +581,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [5x] hir_ty=[throws "too big"] tir=[throws string]
     at ns_exceptions/exceptions.baml:18628..18638 `s6_risky_1`
     at ns_exceptions/exceptions.baml:18936..18946 `s6_risky_2`
-[4x] hir_ty=[!error] tir=[int]
-    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:22676..22681 `let y`
 [4x] hir_ty=["A"] tir=[string]
     at ns_errorcontext/errorcontext.baml:1786..1787 `e`
     at ns_errorcontext/errorcontext.baml:1800..1801 `_`
@@ -785,9 +782,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[throws 42 | "boom"] tir=[throws int | string]
     at ns_exceptions/exceptions.baml:3920..3930 `s2_fails_7`
     at ns_exceptions/exceptions.baml:4550..4560 `s2_fails_9`
-[3x] hir_ty=[!error] tir=[void]
-    at ns_iter_impl_generics_only/iter.baml:6582..6685 `match (p.p...sh(x),\n  }`
-    at ns_iter_impl_generics_only/iter.baml:6688..6791 `match (p.n...sh(x),\n  }`
+[3x] hir_ty=[!error] tir=[int]
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:22676..22681 `let y`
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:22720..22737 `{\n        y\n    }`
 [3x] hir_ty=["X" | "from_b"] tir=[string]
     at ns_defer/defer.baml:6966..6967 `e`
     at ns_defer/defer.baml:6975..6976 `_`

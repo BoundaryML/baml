@@ -4206,31 +4206,11 @@ impl<'db> InferenceContext<'db> {
         // projection is no impl subject) - the base must resolve before
         // the oracle can reduce. Force the occurring vars from their
         // accumulated bounds: the same demand-point commitment head
-        // vars get (rustc would have unified them already). Fixpoint,
-        // since one class's solution can ground another's bounds.
+        // vars get (rustc would have unified them already).
         // Class-headed var-carrying receivers never enter (no
         // projection) - they keep the probe road.
         if resolved.has_infer() && resolved.has_projection() {
-            loop {
-                let mut vars = Vec::new();
-                collect_infer_vars(&resolved, &mut vars);
-                vars.sort_by_key(|var| var.index());
-                vars.dedup();
-                let mut progressed = false;
-                for var in vars {
-                    let bounds = self.table.var_bounds(var);
-                    if self.try_solve_bounded_var(var, &bounds) {
-                        progressed = true;
-                    }
-                }
-                if !progressed {
-                    break;
-                }
-                resolved = self.table.resolve_completely(&resolved);
-                if !resolved.has_infer() {
-                    break;
-                }
-            }
+            resolved = self.force_occurring_vars(&resolved);
         }
         // rustc's `structurally_resolve_type` NORMALIZES as well as
         // resolving: a ground reducible projection is not structure -
@@ -4249,6 +4229,38 @@ impl<'db> InferenceContext<'db> {
         // demanded STRUCTURE, not the render.
         if matches!(resolved.kind(), TyKind::TypeAlias(..)) {
             return self.expand_alias_ty(&resolved);
+        }
+        resolved
+    }
+
+    /// Forces every inference var OCCURRING in `ty` from its
+    /// accumulated bounds, to fixpoint (one solution can ground
+    /// another's bounds) - the demand-point commitment shared by
+    /// projection bases and match scrutinees, where deferral is
+    /// impossible (rustc orders around this by running projection
+    /// selection and match usefulness after inference; a one-pass walk
+    /// commits at the demand instead).
+    fn force_occurring_vars(&mut self, ty: &Ty) -> Ty {
+        let mut resolved = self.table.resolve_completely(ty);
+        loop {
+            let mut vars = Vec::new();
+            collect_infer_vars(&resolved, &mut vars);
+            vars.sort_by_key(|var| var.index());
+            vars.dedup();
+            let mut progressed = false;
+            for var in vars {
+                let bounds = self.table.var_bounds(var);
+                if self.try_solve_bounded_var(var, &bounds) {
+                    progressed = true;
+                }
+            }
+            if !progressed {
+                break;
+            }
+            resolved = self.table.resolve_completely(&resolved);
+            if !resolved.has_infer() {
+                break;
+            }
         }
         resolved
     }
