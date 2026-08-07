@@ -6419,6 +6419,27 @@ function baml.reflect.array.Type.element_type(self: baml.reflect.array.Type) -> 
 function baml.reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
+function baml.reflect.class.Builder.build(self: baml.reflect.class.Builder) -> baml.reflect.class.Type {
+}
+
+function baml.reflect.class.Builder.field(self: baml.reflect.class.Builder, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType) -> baml.reflect.class.Builder {
+}
+
+function baml.reflect.class.Builder.type(self: baml.reflect.class.Builder) -> baml.reflect.class.PendingType {
+}
+
+function baml.reflect.class.PendingType.array(self: baml.reflect.class.PendingType) -> baml.reflect.class.PendingType {
+}
+
+function baml.reflect.class.PendingType.optional(self: baml.reflect.class.PendingType) -> baml.reflect.class.PendingType {
+}
+
+function baml.reflect.class.PendingType.resolved(self: baml.reflect.class.PendingType) -> type | null {
+}
+
+function baml.reflect.class.PendingType.union(self: baml.reflect.class.PendingType, others: (type | baml.reflect.class.PendingType)[]) -> baml.reflect.class.PendingType {
+}
+
 function baml.reflect.class.Type.baml.reflect.TypeView.as_type(self: baml.reflect.class.Type) -> type {
 }
 
@@ -6426,6 +6447,9 @@ function baml.reflect.class.Type.fields(self: baml.reflect.class.Type) -> baml.r
 }
 
 function baml.reflect.class.Type.meta(self: baml.reflect.class.Type) -> baml.reflect.Meta {
+}
+
+function baml.reflect.class.builder(name: string) -> baml.reflect.class.Builder {
 }
 
 function baml.reflect.class.get_field(value: unknown, name: string) -> #0 {

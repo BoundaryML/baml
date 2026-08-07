@@ -1383,12 +1383,27 @@ impl BexVm {
         };
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
-            let ptr = self.as_object_ptr(value, ObjectType::Type)?;
-            let Object::Type(type_value) = self.get_object(ptr) else {
-                unreachable!("as_object_ptr guarantees Type variant");
+            let direct = value.as_object_ptr().and_then(|ptr| {
+                let Object::Type(type_value) = self.get_object(ptr) else {
+                    return None;
+                };
+                Some((**type_value).clone())
+            });
+            let type_value = if let Some(type_value) = direct {
+                type_value
+            } else if let Some(result) =
+                crate::package_baml::runtime_class_builder::coerce_pending_type_arg(self, value)
+            {
+                result.map_err(VmError::Thrown)?
+            } else {
+                return Err(VmInternalError::TypeError {
+                    expected: Type::Object(ObjectType::Type),
+                    got: self.type_of(&value),
+                }
+                .into());
             };
             type_args.tys.push(type_value.ty.clone());
-            type_args.values.push(type_value.as_ref().clone());
+            type_args.values.push(type_value.clone());
             type_args.defs.merge_from(type_value.defs());
         }
         drop(
@@ -4267,6 +4282,30 @@ impl BexVm {
             end_offset: u32::from(entry.span.range.end()),
             line: u32::try_from(entry.line).unwrap_or(u32::MAX),
         })
+    }
+
+    /// Source range of the bytecode expression currently invoking a native.
+    /// Runtime reflection diagnostics use this to point at the offending
+    /// fluent call even though the validator itself runs in Rust.
+    pub(crate) fn current_source_span(&self) -> Option<(String, u32, u32)> {
+        let frame_idx = self
+            .frames
+            .iter()
+            .rposition(|frame| matches!(frame, Frame::Bytecode(_)))?;
+        let Frame::Bytecode(frame) = &self.frames[frame_idx] else {
+            return None;
+        };
+        let function = self.get_object(frame.function).as_callable().ok()?;
+        let entry = if let Some(compact) = &function.bytecode.compact {
+            compact.line_entry_for_pc(self.cur_pc)
+        } else {
+            function.bytecode.line_entry_for_pc(self.cur_pc)
+        }?;
+        Some((
+            function.source_file.clone(),
+            u32::from(entry.span.range.start()),
+            u32::from(entry.span.range.end()),
+        ))
     }
 
     fn event_source_location_for_line_entry(

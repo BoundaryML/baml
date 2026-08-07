@@ -178,7 +178,7 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
         let entry = BuiltinEntry {
             builtin: b,
             baml_method_name,
-            rust_method_name: camel_to_snake(segments[last_idx]),
+            rust_method_name: rust_method_name(segments[last_idx]),
         };
 
         let node = root.get_or_create_namespace(&ns_segments);
@@ -191,6 +191,18 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
     }
 
     root
+}
+
+/// Produce a legal identifier that is also safe to concatenate into generated
+/// glue names. Raw identifiers (`r#type`) are legal method names but cannot be
+/// embedded in `__glue_{name}`, so Rust keywords use a trailing underscore.
+fn rust_method_name(name: &str) -> String {
+    let name = camel_to_snake(name);
+    if syn::parse_str::<syn::Ident>(&name).is_ok() {
+        name
+    } else {
+        format!("{name}_")
+    }
 }
 
 // ============================================================================
@@ -2348,6 +2360,14 @@ mod tests {
         assert!(
             output.contains("fn trunc(float: f64) -> f64;"),
             "BamlClassFloat should have bare `trunc` method:\n{output}"
+        );
+        assert!(
+            output.contains("fn type_(vm: &mut BexVm"),
+            "Rust-keyword BAML methods should use a concatenation-safe identifier:\n{output}"
+        );
+        assert!(
+            output.contains("fn __glue_type_(vm: &mut BexVm"),
+            "keyword method glue should use the same escaped stem:\n{output}"
         );
     }
 

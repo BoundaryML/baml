@@ -1658,6 +1658,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
+            runtime_type: None,
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1700,6 +1701,7 @@ mod tests {
                 docstring: None,
                 other: Default::default(),
                 skip: false,
+                runtime_type: None,
             }],
             description: None,
             alias: None,

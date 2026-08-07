@@ -307,8 +307,11 @@ namespace baml.reflect:
 namespace baml.reflect.array:
   class Type { methods: [element_type, as_type] }
 namespace baml.reflect.class:
+  class Builder { methods: [field, type, build] }
   class Field { methods: [] }
+  class PendingType { methods: [array, optional, union, resolved] }
   class Type { methods: [fields, meta, as_type] }
+  function builder
   function get_field<T>
   function new
 namespace baml.reflect.enum:

@@ -113,6 +113,10 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
         )))
     }
 
+    fn builder(vm: &mut BexVm, name: &bex_str::BexStr) -> Value {
+        super::runtime_class_builder::alloc_builder(vm, name.as_str())
+    }
+
     fn get_field(
         vm: &mut BexVm,
         value: &Value,
@@ -412,15 +416,15 @@ fn alloc_runtime_composite(vm: &mut BexVm, ty: baml_type::RealizedTy, defs: DynT
     )
 }
 
-struct ReflectedTypeRow {
-    type_value: TypeValue,
-    alias: Option<String>,
-    description: Option<String>,
-    docstring: Option<String>,
-    other: IndexMap<String, String>,
+pub(super) struct ReflectedTypeRow {
+    pub(super) type_value: TypeValue,
+    pub(super) alias: Option<String>,
+    pub(super) description: Option<String>,
+    pub(super) docstring: Option<String>,
+    pub(super) other: IndexMap<String, String>,
 }
 
-fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTypeRow, String> {
+pub(super) fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTypeRow, String> {
     let Some(ptr) = value.as_object_ptr() else {
         return Err("class fields must be type values or reflect.WithMeta<type> rows".into());
     };
@@ -588,7 +592,7 @@ fn string_map(
         .collect()
 }
 
-fn is_baml_identifier(value: &str) -> bool {
+pub(super) fn is_baml_identifier(value: &str) -> bool {
     fn segment(value: &str, allow_hyphen: bool) -> bool {
         let mut chars = value.chars();
         matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
@@ -603,11 +607,27 @@ fn is_baml_identifier(value: &str) -> bool {
         && segments.all(|part| segment(part, true))
 }
 
-fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {
+pub(super) fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {
     Diagnostic::error(id, message).with_phase(DiagnosticPhase::Hir)
 }
 
-fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
+pub(super) fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
+    alloc_compilation_error_with_span(vm, diagnostics, None)
+}
+
+pub(super) fn alloc_compilation_error_at_current_call(
+    vm: &mut BexVm,
+    diagnostics: &[Diagnostic],
+) -> Value {
+    let span = vm.current_source_span();
+    alloc_compilation_error_with_span(vm, diagnostics, span.as_ref())
+}
+
+fn alloc_compilation_error_with_span(
+    vm: &mut BexVm,
+    diagnostics: &[Diagnostic],
+    span: Option<&(String, u32, u32)>,
+) -> Value {
     let message = diagnostics
         .first()
         .map_or("runtime schema validation failed", |diagnostic| {
@@ -618,9 +638,18 @@ fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value 
         .map(|diagnostic| {
             let code = Value::object(vm.alloc_string(diagnostic.code()));
             let message = Value::object(vm.alloc_string(diagnostic.message.as_str()));
+            let span = span.map_or(Value::NULL, |(file, start, end)| {
+                let file = Value::object(vm.alloc_string(file.as_str()));
+                copy::reflect::Span {
+                    file,
+                    start: i64::from(*start),
+                    end: i64::from(*end),
+                }
+                .to_value(vm)
+            });
             copy::reflect::Diagnostic {
                 code,
-                span: Value::NULL,
+                span,
                 message,
             }
             .to_value(vm)

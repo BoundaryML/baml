@@ -3011,12 +3011,34 @@ class baml.reflect.class.Field {
   type: type | null
   meta: baml.reflect.Meta
 }
+class baml.reflect.class.Builder {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: baml.reflect.class.Builder[]
+  _resolved: type | null
+}
+class baml.reflect.class.PendingType {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: type | null
+}
 class baml.reflect.class.Type {
 }
 class baml.reflect.class.Field$stream {
   name: string | null
   type: unknown | null
   meta: baml.reflect.Meta$stream | null
+}
+class baml.reflect.class.Builder$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: baml.reflect.class.Builder$stream[]
+  _resolved: unknown | null
+}
+class baml.reflect.class.PendingType$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: unknown | null
 }
 class baml.reflect.class.Type$stream {
 }

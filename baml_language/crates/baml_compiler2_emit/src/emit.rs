@@ -2254,6 +2254,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
+                let call_span = self.current_debug_span;
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
                     &self.analysis.classifications,
@@ -2280,6 +2281,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
                         }
                     };
+                    // Pulling nested argument producers may install their own
+                    // debug spans. Restore the terminator's enclosing call span
+                    // on the actual call opcode so native diagnostics identify
+                    // the offending call rather than its final nested operand.
+                    self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
@@ -2292,8 +2298,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     ));
                     if let Some(runtime_id) = runtime_id {
                         unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                        self.set_debug_span(call_span, false);
                         self.emit(Instruction::CallIndirectWithRuntimeId);
                     } else {
+                        self.set_debug_span(call_span, false);
                         self.emit(Instruction::CallIndirect);
                     }
                     self.emit_store_place(destination);
