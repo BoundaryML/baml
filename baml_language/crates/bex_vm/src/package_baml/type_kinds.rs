@@ -354,8 +354,8 @@ impl BamlNamespaceReflectMap for PackageBamlImpl {
         alloc_runtime_composite(
             vm,
             baml_type::RealizedTy::Map {
-                key: Box::new(key.ty.clone()),
-                value: Box::new(value.ty.clone()),
+                key: Box::new(key.ty),
+                value: Box::new(value.ty),
                 attr: baml_type::TyAttr::default(),
             },
             defs,
