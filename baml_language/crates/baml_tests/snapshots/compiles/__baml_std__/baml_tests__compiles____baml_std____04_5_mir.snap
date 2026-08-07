@@ -5176,6 +5176,8 @@ fn baml.json.stringify = builtin(vm)
 
 fn baml.json.stringify_pretty = builtin(vm)
 
+fn baml.json.encode = builtin(vm)
+
 fn baml.json.to_string = builtin(vm)
 
 fn baml.json.to_json = builtin(vm)
@@ -9072,6 +9074,10 @@ fn baml.reflect.array.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.array.Type.element_type = builtin(vm)
 
+fn baml.reflect.class.new = builtin(vm)
+
+fn baml.reflect.class.get_field = builtin(vm)
+
 fn baml.reflect.class.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.class.Type.fields = builtin(vm)
@@ -9102,7 +9108,11 @@ fn baml.reflect.interface.Type.implemented_by = builtin(vm)
 
 fn baml.reflect.interface.Type.implementors = builtin(vm)
 
+fn baml.reflect.literal.new = builtin(vm)
+
 fn baml.reflect.literal.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.map.new = builtin(vm)
 
 fn baml.reflect.map.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
@@ -9111,6 +9121,8 @@ fn baml.reflect.map.Type.key_type = builtin(vm)
 fn baml.reflect.map.Type.value_type = builtin(vm)
 
 fn baml.reflect.primitive.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.union.new = builtin(vm)
 
 fn baml.reflect.union.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
@@ -12399,6 +12411,12 @@ fn baml.String.from_utf8 = builtin(vm)
 fn baml.String.to_code_points = builtin(vm)
 
 fn baml.String.from_code_points = builtin(vm)
+
+fn baml.TypeValue.array = builtin(vm)
+
+fn baml.TypeValue.optional = builtin(vm)
+
+fn baml.TypeValue.to_baml = builtin(vm)
 
 fn baml.TypeValue.kind = builtin(vm)
 

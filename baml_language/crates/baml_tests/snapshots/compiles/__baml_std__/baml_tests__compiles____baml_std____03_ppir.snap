@@ -1169,6 +1169,7 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
 function baml.json.deserialize(s: string) -> T  [expr] {
   {  } from_json(parse(s))
 }
+function baml.json.encode(v: unknown) -> string  [builtin]
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json  [builtin]
 function baml.json.from(value: T) -> baml.json.json  [expr] {
   {  } root._to_json_shim(value)
@@ -1950,7 +1951,9 @@ class baml.reflect.class.Type$stream {
 }
 function baml.reflect.class.as_type(self: ?) -> type  [builtin]
 function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
+function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
 function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
+function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>) -> baml.reflect.class.Type  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
 class baml.reflect.enum.Type {
@@ -2026,6 +2029,7 @@ class baml.reflect.literal.Type {
 class baml.reflect.literal.Type$stream {
 }
 function baml.reflect.literal.as_type(self: ?) -> type  [builtin]
+function baml.reflect.literal.new(value: string | int | bool) -> baml.reflect.literal.Type  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_map/map.baml ---
 class baml.reflect.map.Type {
@@ -2034,6 +2038,7 @@ class baml.reflect.map.Type$stream {
 }
 function baml.reflect.map.as_type(self: ?) -> type  [builtin]
 function baml.reflect.map.key_type(self: ?) -> type  [builtin]
+function baml.reflect.map.new(key: type, value: type) -> baml.reflect.map.Type  [builtin]
 function baml.reflect.map.value_type(self: ?) -> type  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_primitive/primitive.baml ---
@@ -2050,6 +2055,7 @@ class baml.reflect.union.Type$stream {
 }
 function baml.reflect.union.as_type(self: ?) -> type  [builtin]
 function baml.reflect.union.member_types(self: ?) -> type[]  [builtin]
+function baml.reflect.union.new(types: type[]) -> baml.reflect.union.Type  [builtin]
 
 --- <builtin>/baml/ns_reflect/reflect.baml ---
 class baml.reflect.Arg {
@@ -2705,6 +2711,7 @@ class baml.TypeValue {
 class baml.TypeValue$stream {
 }
 function baml._to_string_impl(self: ?) -> string  [builtin]
+function baml.array(self: ?) -> baml.reflect.array.Type  [builtin]
 function baml.as_array(self: ?) -> baml.reflect.array.Type?  [builtin]
 function baml.as_class(self: ?) -> baml.reflect.class.Type?  [builtin]
 function baml.as_enum(self: ?) -> baml.reflect.enum.Type?  [builtin]
@@ -2719,6 +2726,8 @@ function baml.implementors(self: ?) -> type[]  [builtin]
 function baml.implements(self: ?, other: type) -> bool  [builtin]
 function baml.kind(self: ?) -> baml.reflect.TypeKind  [builtin]
 function baml.meta(self: ?, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> baml.reflect.WithMeta<type>  [builtin]
+function baml.optional(self: ?) -> baml.reflect.union.Type  [builtin]
+function baml.to_baml(self: ?) -> string  [builtin]
 function baml.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl()
 }
