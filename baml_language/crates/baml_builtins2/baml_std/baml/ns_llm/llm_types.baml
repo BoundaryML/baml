@@ -754,7 +754,24 @@ class PrimitiveClient {
     args: map<string, unknown>,
     return_type: type,
     prompt_closure: ((Context) -> PromptAst throws never)?,
-  ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
+  ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient | baml.reflect.errors.CompilationError {
+    // BEP-066 R-4: an empty enum is a valid definition, but there is no
+    // category the model can emit. Keep this check at the shared render
+    // boundary so preview, request building, and execution agree.
+    match (return_type.as_enum()) {
+      let enum_type: baml.reflect.enum.Type => {
+        if (enum_type.values().length() == 0) {
+          throw baml.reflect.errors.CompilationError {
+            diagnostics: [baml.reflect.Diagnostic {
+              code: "E0159",
+              span: null,
+              message: "empty enum `" + return_type.to_string() + "` cannot be rendered as an LLM output schema",
+            }],
+          };
+        }
+      },
+      null => {},
+    }
     let prompt = match (prompt_closure) {
       null => self.render_prompt(template, args, return_type),
       let closure: (Context) -> PromptAst throws never => closure(build_prompt_context(self, return_type)),

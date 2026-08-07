@@ -2434,6 +2434,67 @@ mod tests {
     }
 
     #[test]
+    fn test_gc_traces_runtime_enum_definition_owned_by_type_value() {
+        use baml_type::{Name, QualifiedTypeName, TyAttr};
+        use bex_vm_types::{
+            Enum, EnumVariant,
+            types::{DynTypeDefs, MintId, TypeValue},
+        };
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let type_name = QualifiedTypeName::runtime_local(Name::new("Category"), 41);
+        let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
+            name: type_name.clone(),
+            variants: vec![EnumVariant {
+                name: "RED".to_string(),
+                description: Some("warm".to_string()),
+                alias: Some("k7".to_string()),
+                docstring: None,
+                other: Default::default(),
+                skip: false,
+            }],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: Default::default(),
+            ty_attr: TyAttr::default(),
+        })));
+        let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(
+            RealizedTy::Enum(type_name.clone(), TyAttr::default()),
+            MintId::Runtime(41),
+            DynTypeDefs::with_enum(type_name.clone(), enum_ptr),
+        ));
+
+        // Root only the type. Its side-table edge must keep the authoritative
+        // enum alive and be fixed up as both objects move Gen0 → Gen1 → Gen2,
+        // then once more through a compacting major collection.
+        let (_, roots, _) =
+            unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
+        let (_, roots, _) =
+            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+        let (stats, roots, _) =
+            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+        assert_eq!(stats.live_count, 2, "only the type and enum should survive");
+        let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
+            panic!("root was not the runtime type value")
+        };
+        assert_eq!(type_value.mint(), MintId::Runtime(41));
+        let enum_ptr = *type_value
+            .defs()
+            .enums
+            .get(&type_name)
+            .expect("runtime definition side table was lost");
+        let Object::Enum(enm) = (unsafe { enum_ptr.get() }) else {
+            panic!("runtime definition did not land on an enum")
+        };
+        assert_eq!(enm.name, type_name);
+        assert_eq!(enm.variants[0].name, "RED");
+        assert_eq!(enm.variants[0].alias.as_deref(), Some("k7"));
+    }
+
+    #[test]
     fn test_gc_empty_containers_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));

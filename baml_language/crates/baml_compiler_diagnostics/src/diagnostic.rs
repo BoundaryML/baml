@@ -368,6 +368,12 @@ pub enum DiagnosticId {
     /// the interface explicitly takes a qualified projection
     /// (`(Base as Iterator).Element`). Rust's E0223 analog.
     InterfaceProjectionBase,
+
+    // Reflection render diagnostics (BEP-066, E0159+).
+    /// An enum definition reached an LLM schema boundary without any values.
+    /// Empty enums are legal declarations/constructions, but have no output
+    /// representation and therefore fail at render time (BEP-066 R-4).
+    EmptyEnumAtRender,
 }
 
 impl DiagnosticId {
@@ -584,6 +590,7 @@ impl DiagnosticId {
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
             DiagnosticId::InterfaceProjectionBase => "E0156",
             DiagnosticId::MountedPackageCallUnsupported => "E0158",
+            DiagnosticId::EmptyEnumAtRender => "E0159",
         }
     }
 }
