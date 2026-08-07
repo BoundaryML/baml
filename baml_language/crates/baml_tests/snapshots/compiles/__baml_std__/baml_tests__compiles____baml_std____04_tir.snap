@@ -2543,6 +2543,7 @@ class baml.llm.PrimitiveClient {
 }
 function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.RenderPrompt | baml.errors.LlmClient | baml.reflect.errors.CompilationError {
   { : baml.llm.PromptAst
+    return_type._validate_renderable() : void
     match (return_type.as_enum() : baml.reflect.enum.Type | null) : void
       enum_type: baml.reflect.enum.Type =>
         { : void
@@ -3074,7 +3075,13 @@ class baml.reflect.function.Type$stream {
 --- <builtin>/baml/ns_reflect/ns_interface/interface.baml ---
 class baml.reflect.interface.Type {
 }
+class baml.reflect.interface.Implementation {
+  _handle: $rust_type
+}
 class baml.reflect.interface.Type$stream {
+}
+class baml.reflect.interface.Implementation$stream {
+  _handle: $rust_type
 }
 
 --- <builtin>/baml/ns_reflect/ns_literal/literal.baml ---

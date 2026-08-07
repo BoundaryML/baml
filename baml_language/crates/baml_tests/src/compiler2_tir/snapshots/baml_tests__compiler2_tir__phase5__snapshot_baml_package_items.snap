@@ -21,7 +21,7 @@ namespace baml:
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [array, optional, to_baml, kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, meta, _to_string_impl, implements, implemented_by, implementors, to_string] }
+  class TypeValue { methods: [array, optional, to_baml, kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, _validate_renderable, meta, _to_string_impl, implements, implemented_by, implementors, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
@@ -324,7 +324,9 @@ namespace baml.reflect.function:
   class Parameter { methods: [] }
   class Type { methods: [params, return_type, as_type] }
 namespace baml.reflect.interface:
+  class Implementation { methods: [field] }
   class Type { methods: [implemented_by, implementors, as_type] }
+  function implementation<I>
 namespace baml.reflect.literal:
   class Type { methods: [as_type] }
   function new

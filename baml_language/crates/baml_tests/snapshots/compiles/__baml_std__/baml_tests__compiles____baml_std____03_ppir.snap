@@ -1556,7 +1556,7 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
 function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst throws never?) -> baml.llm.PromptAst  [expr] {
-  { match (return_type.as_enum()) { enum_type: baml.reflect.enum.Type => {  } if (enum_type.values().length() Eq 0) { throw baml.reflect.errors.CompilationError { diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: "empty enum `" Add return_type.to_string() Add "` cannot be rende..." }] } }, null => {  } }; let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
+  { return_type._validate_renderable(); match (return_type.as_enum()) { enum_type: baml.reflect.enum.Type => {  } if (enum_type.values().length() Eq 0) { throw baml.reflect.errors.CompilationError { diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: "empty enum `" Add return_type.to_string() Add "` cannot be rende..." }] } }, null => {  } }; let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
 function baml.llm.text(self: ?) -> string  [builtin]
@@ -1953,7 +1953,7 @@ function baml.reflect.class.as_type(self: ?) -> type  [builtin]
 function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
 function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
 function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
-function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>) -> baml.reflect.class.Type  [builtin]
+function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
 class baml.reflect.enum.Type {
@@ -2015,11 +2015,19 @@ function baml.reflect.function.params(self: ?) -> baml.reflect.function.Paramete
 function baml.reflect.function.return_type(self: ?) -> type  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_interface/interface.baml ---
+class baml.reflect.interface.Implementation {
+  _handle: $rust_type
+}
+class baml.reflect.interface.Implementation$stream {
+  _handle: $rust_type
+}
 class baml.reflect.interface.Type {
 }
 class baml.reflect.interface.Type$stream {
 }
 function baml.reflect.interface.as_type(self: ?) -> type  [builtin]
+function baml.reflect.interface.field(self: ?, interface_field: string, class_field: string? = null) -> baml.reflect.interface.Implementation  [builtin]
+function baml.reflect.interface.implementation() -> baml.reflect.interface.Implementation  [builtin]
 function baml.reflect.interface.implemented_by(self: ?, other: type) -> bool  [builtin]
 function baml.reflect.interface.implementors(self: ?) -> type[]  [builtin]
 
@@ -2711,6 +2719,7 @@ class baml.TypeValue {
 class baml.TypeValue$stream {
 }
 function baml._to_string_impl(self: ?) -> string  [builtin]
+function baml._validate_renderable(self: ?) -> void  [builtin]
 function baml.array(self: ?) -> baml.reflect.array.Type  [builtin]
 function baml.as_array(self: ?) -> baml.reflect.array.Type?  [builtin]
 function baml.as_class(self: ?) -> baml.reflect.class.Type?  [builtin]
