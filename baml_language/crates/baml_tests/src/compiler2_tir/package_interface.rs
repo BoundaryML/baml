@@ -4,9 +4,9 @@
 //! surfaces (params/bounds/`requires`/associated types/fields/methods), class
 //! field attributes and per-parameter bounds, function bounds and stable
 //! fully-qualified names, and the full namespace set — plus borsh round-trip
-//! and cross-database byte determinism. Nothing consumes these rows yet; the
-//! resolution rewires land in follow-up PRs, and `cargo test -p baml_tests`
-//! snapshots prove the derivation stays behavior-invisible.
+//! and cross-database byte determinism. The mounted-package integration suites
+//! additionally pin their source-less type, call, runtime, and artifact
+//! consumption; these focused tests keep the derivation contract readable.
 
 use baml_base::Name;
 use baml_compiler2_hir::package::PackageId;
@@ -1035,9 +1035,8 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
 /// Each test compiles a fixture "library" package (files under
 /// `<builtin>/app/…` so `file_package` assigns them the package name `app`),
 /// captures its interface blob, mounts it in a FRESH database as `app`, and
-/// runs `collect_diagnostics` over consumer code. Calls into mounted packages
-/// are NOT yet supported (next PR) and are rejected with a dedicated
-/// diagnostic.
+/// runs `collect_diagnostics` over consumer code. The call/runtime integration
+/// suites exercise the same blobs beyond this check-level module.
 pub(super) mod mounted {
     use baml_base::Name;
     use baml_compiler2_hir::package::PackageId;

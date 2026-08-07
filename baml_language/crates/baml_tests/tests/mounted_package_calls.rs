@@ -9,16 +9,17 @@
 //!
 //!   1. the CHECK artifact — `borsh(PackageInterface)`, the typed surface a
 //!      consumer checks against, and
-//!   2. the RUN artifact — the library's compiled `Program` (its files ride
-//!      the builtin emit group, so the image is `stdlib ++ app`, a
-//!      user-independent prefix exactly like the stdlib slice).
+//!   2. the RUN artifact — the library's independently emitted symbolic
+//!      `CompilationUnit` set (its files ride the builtin emit group, so the
+//!      linked image is `stdlib ++ app`, a user-independent prefix exactly
+//!      like the stdlib slice).
 //!
 //! Phase 2 — the CONSUMER database: a FRESH `ProjectDatabase` with NO `app`
 //! source anywhere. The blob is mounted via `set_mounted_packages` (checking
 //! resolves `app.…` through the interface rows and records loc-free
 //! `MemberResolution::External` callees), and bytecode is generated with
-//! `generate_project_bytecode_with_stdlib(consumer_db, base = library
-//! program)`: the splice seeds the emit tables from the base image, so the
+//! `generate_project_bytecode_with_mounted_units(consumer_db, library_units)`:
+//! the public seam links the units and seeds emit from that prefix, so the
 //! consumer's symbolic references (`app.add`, `app.Widget`, the interface
 //! method slots) LINK against the library's already-compiled definitions by
 //! fully-qualified name — the same name-keyed resolution slice 6's dynamic
@@ -27,13 +28,15 @@
 //! The resulting single `Program` runs on the ordinary engine harness.
 
 use baml_base::Name;
-use baml_compiler2_emit::{CompileOptions, OptLevel, generate_project_bytecode_with_stdlib};
+use baml_compiler2_emit::{
+    CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
+};
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_tir::package_interface::package_interface;
 use baml_project::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::run_compiled;
 use bex_engine::BexExternalValue;
-use bex_vm_types::Program;
+use bex_vm_types::{CompilationUnit, Program};
 use indexmap::IndexMap;
 
 // ── The library fixture ─────────────────────────────────────────────────────
@@ -137,9 +140,9 @@ fn compile_options() -> CompileOptions {
 
 /// Phase 1: compile the library under `<builtin>/app/` and capture both
 /// artifacts — the `borsh(PackageInterface)` blob (check surface) and the
-/// compiled `Program` (run surface; `stdlib ++ app`, a user-independent
-/// prefix image).
-fn compile_library() -> (Vec<u8>, Program) {
+/// symbolic `CompilationUnit` set (run surface; links to `stdlib ++ app`, a
+/// user-independent prefix image).
+fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new("/mounted-calls"));
     db.add_compiler2_virtual_file("<builtin>/app/lib.baml", LIB);
@@ -155,23 +158,21 @@ fn compile_library() -> (Vec<u8>, Program) {
     );
     let blob = borsh::to_vec(iface).expect("serialize app interface");
 
-    let program =
-        baml_compiler2_emit::generate_project_bytecode_with_opt(&db, &compile_options(), OPT)
-            .expect("library fixture compiles");
-    (blob, program)
+    let units = emit_units(&db, &compile_options(), OPT).expect("library fixture emits units");
+    (blob, units)
 }
 
 /// Phase 2: a fresh consumer database — blob mounted as `app`, NO `app`
 /// source — checked clean, then spliced against the library image.
 fn consumer_program(user_src: &str) -> Program {
-    let (blob, lib_program) = compile_library();
+    let (blob, lib_units) = compile_library();
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new("/mounted-calls"));
     db.set_mounted_packages([("app".to_string(), blob)].into());
     db.add_file("main.baml", user_src);
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_stdlib(&db, &compile_options(), OPT, &lib_program)
+    generate_project_bytecode_with_mounted_units(&db, &compile_options(), OPT, &lib_units)
         .expect("consumer compiles against the mounted blob")
 }
 
