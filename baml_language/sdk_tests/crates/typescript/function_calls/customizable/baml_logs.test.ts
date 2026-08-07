@@ -5,7 +5,7 @@
 // that executes only the env-gated child test below. Node-only: the Web and
 // Workers runtimes have neither subprocesses nor a process environment for
 // BAML_LOG to read.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, type TestContext } from "vitest";
 import { emit_logs } from "./baml_sdk/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
@@ -71,7 +71,7 @@ describe.runIf(isTestRuntime("node"))(
     it(
       "baml_log_env_var_streams_logs_to_stderr",
       { timeout: 180_000 },
-      (ctx) => {
+      (ctx: TestContext) => {
         if (isLogSinkChild) return ctx.skip();
         const { stderr, combined } = runEmitLogsChild("info", "ts-log-marker");
         expect(stderr).toContain("[INFO] info ts-log-marker");
@@ -84,14 +84,14 @@ describe.runIf(isTestRuntime("node"))(
     );
 
     // SDK_PARITY_LINT(skip): requires subprocess-level SDK harness support
-    it("baml_logs_stay_off_without_baml_log", { timeout: 180_000 }, (ctx) => {
+    it("baml_logs_stay_off_without_baml_log", { timeout: 180_000 }, (ctx: TestContext) => {
       if (isLogSinkChild) return ctx.skip();
       const { combined } = runEmitLogsChild(undefined, "ts-quiet-marker");
       expect(combined).not.toContain("info ts-quiet-marker");
     });
 
     // SDK_PARITY_LINT(skip): child-process entry point for the BAML_LOG stderr tests
-    it("baml_log_sink_child", (ctx) => {
+    it("baml_log_sink_child", (ctx: TestContext) => {
       if (!isLogSinkChild) return ctx.skip();
       const marker = process.env.BAML_MARKER ?? "ts-log-marker";
       expect(emit_logs(marker)).toBe(marker);
