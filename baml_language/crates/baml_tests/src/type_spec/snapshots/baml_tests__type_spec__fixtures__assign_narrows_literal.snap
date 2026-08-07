@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+267..278 'anl_checked': throws never
+299..332 '{\n   ...  x\n}': hir_ty=[3] tir=[int]
+305..310 'let x': int
+313..314 '1': 1
+319..320 'x': int
+323..324 '3': 3
+329..330 'x': hir_ty=[3] tir=[int]
+342..352 'anl_widens': throws never
+375..436 '{\n   ...  y\n}': int
+381..386 'let x': int
+389..390 '1': 1
+395..396 'x': int
+399..400 '3': 3
+405..410 'let y': int
+413..414 'x': hir_ty=[3] tir=[int]
+433..434 'y': int

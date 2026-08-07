@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52660
+agreements: 52653
 one-sided (coverage): 264
-conflicts: 7781 across 1367 distinct pairs
+conflicts: 7788 across 1366 distinct pairs
 hir_ty error-channel entries: 0
 tir diagnostics: 0
 panics: 0
@@ -225,6 +225,9 @@ panics: 0
 [11x] hir_ty=[0 | 1] tir=[1 | 0]
     at ns_comparable_sort/comparable_sort.baml:7625..7685 `if (self.p... else { 0 }`
     at ns_comparable_sort/comparable_sort.baml:12839..12877 `{\n    if ...se { 0 }\n}`
+[11x] hir_ty=[2] tir=[int]
+    at ns_assignments/assignments.baml:4658..4659 `2`
+    at ns_lexical_scoping/lexical_scoping.baml:2009..2058 `{\n    let...}\n    x\n}`
 [11x] hir_ty=[bool] tir=[true | false]
     at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:2738..2819 `{\n    mat...,\n    }\n}`
     at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:2744..2817 `match (f) ...lse,\n    }`
@@ -258,6 +261,9 @@ panics: 0
 [10x] hir_ty=[(x: int) -> int throws never] tir=[(x: int) -> int throws E]
     at ns_arrays/arrays.baml:6734..6794 `(x: int) -...   x\n    }`
     at ns_arrays/arrays.baml:8542..8563 `(x: int) -> int { x }`
+[10x] hir_ty=[5] tir=[int]
+    at ns_assignments/assignments.baml:1882..1883 `y`
+    at ns_assignments/assignments.baml:3736..3737 `5`
 [10x] hir_ty=[int] tir=[int | 1 | 2 | 3]
     at ns_exceptions/exceptions.baml:2991..3088 `{\n    s1_...3\n    }\n}`
     at ns_exceptions/exceptions.baml:2997..3086 `s1_fails_4...=> 3\n    }`
@@ -384,9 +390,6 @@ panics: 0
 [7x] hir_ty=[(self: float, other: float) -> int throws never] tir=[(other: float) -> int throws never]
     at ns_arrays/sort_comparable.baml:2102..2112 `hi.compare`
     at ns_arrays/sort_comparable.baml:2143..2153 `lo.compare`
-[7x] hir_ty=[5] tir=[int]
-    at ns_assignments/assignments.baml:3736..3737 `5`
-    at ns_assignments/assignments.baml:4306..4307 `5`
 [7x] hir_ty=[int] tir=[1 | int]
     at ns_arrays/arrays.baml:28239..28300 `[1, 2, 3, ...c * x }, 1)`
     at ns_optional_function_parameters/optional_function_parameters.baml:2863..2908 `{\n  if (v... value }\n}`
@@ -540,9 +543,6 @@ panics: 0
 [5x] hir_ty=[10] tir=[int]
     at ns_assignments/assignments.baml:4676..4678 `10`
     at ns_classes/classes.baml:6370..6372 `10`
-[5x] hir_ty=[2] tir=[int]
-    at ns_assignments/assignments.baml:4658..4659 `2`
-    at ns_operators/operators.baml:5242..5243 `2`
 [5x] hir_ty=[3] tir=[int]
     at ns_assignments/assignments.baml:4021..4022 `3`
     at ns_operators/operators.baml:5749..5750 `3`
@@ -1701,9 +1701,6 @@ panics: 0
 [2x] hir_ty=[int] tir=[10 | int]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:10037..10152 `{\n    mat...t\n    }\n}`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:10043..10150 `match (tea...irst\n    }`
-[2x] hir_ty=[int] tir=[3]
-    at ns_assignments/assignments.baml:2137..2157 `{\n    x = 3;\n    x\n}`
-    at ns_assignments/assignments.baml:2154..2155 `x`
 [2x] hir_ty=[int] tir=[70 | int]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:14773..14880 `{\n    mat...l\n    }\n}`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:14779..14878 `match (p) ...tual\n    }`

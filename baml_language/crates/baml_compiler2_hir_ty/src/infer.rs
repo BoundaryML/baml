@@ -1400,8 +1400,13 @@ impl<'db> InferenceContext<'db> {
             self.result.type_of_expr.insert(target, declared.clone());
         }
         if let Some(binding) = binding {
-            let resolved = self.table.resolve_completely(&assigned);
-            let narrowed = self.widen_fresh(&resolved);
+            // The overlay narrows to the assigned value's OWN type
+            // (B-618's rule; TS narrows assignments to the literal the
+            // same way): an assignment is a flow fact, not a binding
+            // site, so ruling 1's widening does not apply - the fresh
+            // literal survives into the overlay and still widens
+            // wherever it later reaches a real binding or join.
+            let narrowed = self.table.resolve_completely(&assigned);
             let fits = match &declared {
                 Some(declared) if !declared.has_error() => {
                     crate::infer::pat::provable_subtype(&narrowed, declared, &self.facts)
