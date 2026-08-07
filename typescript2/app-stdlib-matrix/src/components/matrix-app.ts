@@ -1,4 +1,5 @@
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
+import { rowScaleOf } from '../composition';
 import {
   GOTO_EVENT,
   type GotoDetail,
@@ -347,6 +348,10 @@ export class MatrixAppElement extends LitElement {
       (largest, [, members]) => Math.max(largest, countNodes(members)),
       0,
     );
+    // Rows are measured against the largest row, not against the largest group:
+    // a 35-member class inside a 1140-symbol module would otherwise be a sliver
+    // whatever its composition.
+    const rowScale = rowScaleOf(groups);
     return html`<div>
       ${groups.map(
         ([name, members]) => html`
@@ -358,6 +363,7 @@ export class MatrixAppElement extends LitElement {
             .links=${links}
             .matrix=${matrix}
             .scale=${scale}
+            .rowScale=${rowScale}
             .target=${this.target?.group === name ? this.target : null}
           ></matrix-group>
         `,

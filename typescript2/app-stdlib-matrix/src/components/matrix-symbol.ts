@@ -5,6 +5,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
+import { compositionBar } from '../composition';
 import {
   dispatchGoto,
   flash,
@@ -90,6 +91,7 @@ export class MatrixSymbolElement extends LitElement {
     matrix: { attribute: false },
     node: { attribute: false },
     open: { state: true, type: Boolean },
+    scale: { type: Number },
     side: {},
     target: { attribute: false },
   };
@@ -101,6 +103,9 @@ export class MatrixSymbolElement extends LitElement {
   declare target: GotoTarget | null;
   declare depth: number;
   declare open: boolean;
+  /** The largest member-holding row's size, which this row's bar is drawn as a
+   *  fraction of. Rows are scaled against rows, never against the groups. */
+  declare scale: number;
   /** The last request this row scrolled for, so a repeat request scrolls again
    *  but a re-render for any other reason does not. */
   #focused = -1;
@@ -111,6 +116,7 @@ export class MatrixSymbolElement extends LitElement {
     this.target = null;
     this.depth = 0;
     this.open = false;
+    this.scale = 0;
   }
 
   protected willUpdate(changed: PropertyValues) {
@@ -231,16 +237,25 @@ export class MatrixSymbolElement extends LitElement {
           aria-label=${swatchLabel}
           title=${swatchLabel}
         ></span>
-        <span class="min-w-0">
+        <span class="flex min-w-0 items-baseline gap-3">
+          <span class="min-w-0 flex-1">
+            ${
+              this.side === 'baml'
+                ? bamlSignature(this.symbol as BamlSymbol, this.matrix)
+                : tsSignature(this.symbol as TsSymbol, this.matrix)
+            }
+          </span>
           ${
-            this.side === 'baml'
-              ? bamlSignature(this.symbol as BamlSymbol, this.matrix)
-              : tsSignature(this.symbol as TsSymbol, this.matrix)
-          }${
+            // A row that holds members gets the same bar its group does, so a
+            // class and the module around it are read the same way.
             this.node.children.length > 0
-              ? html`<span class="ml-2 text-[0.7rem] text-zinc-500"
-                >${this.node.children.length} members</span
-              >`
+              ? compositionBar(
+                  this.node.children,
+                  this.links,
+                  this.side,
+                  this.scale,
+                  'row',
+                )
               : nothing
           }
         </span>
@@ -257,6 +272,7 @@ export class MatrixSymbolElement extends LitElement {
                   .node=${child}
                   .links=${this.links}
                   .matrix=${this.matrix}
+                  .scale=${this.scale}
                   .target=${this.targetFor(child)}
                   .depth=${this.depth + 1}
                 ></matrix-symbol>
