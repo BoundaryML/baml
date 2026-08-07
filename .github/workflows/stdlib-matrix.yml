@@ -67,9 +67,11 @@ jobs:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
 
-      - name: "Install mise"
-        uses: ./.github/actions/setup-mise
-
+      # No mise: nothing here comes from it. Rust arrives through rustup and
+      # baml_language/rust-toolchain.toml, node and pnpm through the setup-node
+      # actions below, and jq is on the image. Installing it with no
+      # `install_args` pulls every tool in mise.toml — including `cargo:bacon`,
+      # whose binstall failed and took the job with it.
       - name: "Install Rust toolchain"
         working-directory: baml_language
         run: rustup show
