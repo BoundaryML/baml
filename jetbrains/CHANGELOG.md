@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Removed Internal API usage by removing TextMateBundleProvider implementation
+- Syntax highlighting now relies entirely on LSP integration (no more TextMate bundles)
+- Users can manually add TextMate support via Settings → Editor → TextMate Bundles if desired
+
 ## [0.0.1-beta] - 2025-05-23
 
 ### Added

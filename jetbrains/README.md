@@ -1,7 +1,7 @@
 This is the source code for the BAML IntelliJ extension, which provides
 the following functionality:
 
-- syntax highlighting for BAML source code
+- syntax highlighting for BAML source code (via LSP)
 - language server functionality for BAML source code (xref navigation, jump-to-definition, etc)
 - the BAML playground, which allows a user to interact with their BAML source code and run tests
 
