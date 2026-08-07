@@ -17,6 +17,38 @@ The fixed-width digest is intentional: it has stable binary comparisons in
 SQLite, avoids UUID formatting ambiguity, and verifies blob integrity on read.
 `ValueId` is serialized as hex at API boundaries.
 
+## Editing table schemas
+
+Table definitions are intentionally code-owned rather than inferred from the
+SQLite database. This keeps the SQL-facing schema stable while allowing the
+physical tables to be owned by another system.
+
+When an upstream table changes:
+
+1. Update the `SqliteTableSpec::from_columns` definition passed to
+   `with_table`.
+2. Keep the logical name used by SQL stable when possible; change only the
+   physical name when the upstream column was renamed.
+3. Use `SqliteColumnSpec::new` for resident values and
+   `SqliteColumnSpec::hydrated_value` for physical value-ID columns.
+4. Set the Arrow `DataType` and nullability to match the logical contract.
+5. Keep a logical `project_id` column on every registered table. Its physical
+   name can be `tenant_key`, `workspace_id`, or another valid SQLite identifier.
+6. Update relationship definitions if a join key or logical table changed.
+7. Add or update an integration test using the real physical column names.
+
+For new schemas, prefer `SqliteTableSpec` over
+`FunctionCallsTableSpec`. `FunctionCallsTableSpec` is a compatibility helper
+for the original fixed `function_calls` logical schema; it is not the general
+schema-definition mechanism.
+
+The mapping is explicit: the logical column name is what appears in SQL, while
+the physical name is what SQLite reads. The engine does not inspect or migrate
+the upstream schema automatically.
+
+For the cloud handoff and the invariants the future ClickHouse/S3 service must
+preserve, see [CLOUD_CLICKHOUSE_S3.md](CLOUD_CLICKHOUSE_S3.md).
+
 ## Example
 
 ```rust,no_run
