@@ -1,12 +1,38 @@
 /// Companion class for the built-in `type` primitive.
 ///
 /// The BAML `type` primitive represents a runtime type value returned by
-/// `reflect.type_of<T>()`. This class provides methods on `type` values,
+/// `type.of<T>()`. This class provides methods on `type` values,
 /// mirroring how `class String` provides methods on `string`.
 ///
 /// Users never construct `Type` directly; they receive `type` values via
-/// `reflect.type_of<User>()` and call methods on them.
+/// `type.of<User>()` and call methods on them.
 class TypeValue {
+    /// Returns the precise kind view of this type value. The view preserves
+    /// the receiver's mint identity.
+    //baml:vm
+    function kind(self) -> baml.reflect.TypeKind throws never {
+        $rust_function
+    }
+
+    //baml:vm
+    function as_class(self) -> baml.reflect.class.Type? throws never { $rust_function }
+    //baml:vm
+    function as_enum(self) -> baml.reflect.enum.Type? throws never { $rust_function }
+    //baml:vm
+    function as_union(self) -> baml.reflect.union.Type? throws never { $rust_function }
+    //baml:vm
+    function as_literal(self) -> baml.reflect.literal.Type? throws never { $rust_function }
+    //baml:vm
+    function as_array(self) -> baml.reflect.array.Type? throws never { $rust_function }
+    //baml:vm
+    function as_map(self) -> baml.reflect.map.Type? throws never { $rust_function }
+    //baml:vm
+    function as_interface(self) -> baml.reflect.interface.Type? throws never { $rust_function }
+    //baml:vm
+    function as_primitive(self) -> baml.reflect.primitive.Type? throws never { $rust_function }
+    //baml:vm
+    function as_function(self) -> baml.reflect.function.Type? throws never { $rust_function }
+
     /// Returns the type name as a human-readable string.
     implements baml.ToString {
         function to_string(self) -> string throws never {

@@ -1,0 +1,12 @@
+// BEP-066 I-9: `reflect.type_of` was REMOVED (renamed to `type.of`), not
+// aliased. Both the bare shorthand spelling and the fully qualified one must
+// error with a diagnostic that names the replacement, not a bare
+// "unresolved name".
+
+function old_bare_spelling() -> type {
+    reflect.type_of<int>()
+}
+
+function old_qualified_spelling() -> type {
+    baml.reflect.type_of<string>()
+}

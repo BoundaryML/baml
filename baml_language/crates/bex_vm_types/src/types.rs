@@ -15,6 +15,7 @@ mod future;
 mod interface;
 mod object;
 mod package;
+mod type_value;
 mod value;
 
 use std::collections::HashMap;
@@ -32,6 +33,7 @@ pub use interface::*;
 pub use object::*;
 pub use package::*;
 pub use tokio_util::sync::CancellationToken;
+pub use type_value::*;
 pub use value::*;
 
 use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};

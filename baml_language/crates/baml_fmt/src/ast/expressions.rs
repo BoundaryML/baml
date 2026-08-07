@@ -509,7 +509,14 @@ pub struct PathExpr {
 fn is_path_segment_kind(kind: SyntaxKind) -> bool {
     matches!(
         kind,
-        SyntaxKind::WORD | SyntaxKind::KW_CLIENT | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_FUNCTION
     )
 }
 

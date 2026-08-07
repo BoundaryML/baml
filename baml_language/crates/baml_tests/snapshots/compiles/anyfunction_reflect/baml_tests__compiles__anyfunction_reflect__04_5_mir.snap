@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3575
 ---
 === MIR2 ===
 fn user.web_search(q: string) -> Doc[] {
@@ -79,7 +80,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     // Locals:
     let _0: string // _0 // return
     let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // f // param
-    let _2: reflect.Signature // sig
+    let _2: baml.reflect.Signature // sig
     let _3: string // parts
     let _4: string
     let _5: string
@@ -88,21 +89,21 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     let _8: (baml.TypeValue) -> string throws never
     let _9: string
     let _10: int
-    let _11: (reflect.Arg[]) -> int throws never
+    let _11: (baml.reflect.Arg[]) -> int throws never
     let _12: type
-    let _13: reflect.Arg[]
-    let _14: baml.iter.Iterator<Error = never, Item = reflect.Arg>
+    let _13: baml.reflect.Arg[]
+    let _14: baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
     let _15: unknown
     let _16: bool
-    let _17: reflect.Arg
-    let _18: reflect.Arg // arg
+    let _17: baml.reflect.Arg
+    let _18: baml.reflect.Arg // arg
     let _19: string
     let _20: string
     let _21: string
     let _22: string
     let _23: (baml.TypeValue) -> string throws never
     let _24: string[]
-    let _25: (map<string, reflect.Arg>) -> string[] throws never
+    let _25: (map<string, baml.reflect.Arg>) -> string[] throws never
     let _26: type
     let _27: type
     let _28: baml.iter.Iterator<Error = never, Item = string>
@@ -110,13 +111,13 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     let _30: bool
     let _31: string
     let _32: string // key
-    let _33: null | reflect.Arg // opt
-    let _34: (map<string, reflect.Arg>, string) -> null | reflect.Arg throws never
+    let _33: null | baml.reflect.Arg // opt
+    let _34: (map<string, baml.reflect.Arg>, string) -> null | baml.reflect.Arg throws never
     let _35: string
     let _36: type
     let _37: type
     let _38: bool
-    let _39: null | reflect.Arg
+    let _39: null | baml.reflect.Arg
     let _40: bool
     let _41: string
     let _42: string
@@ -125,7 +126,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     let _45: (baml.TypeValue) -> string throws never
 
     bb0: {
-        _2 = call const fn reflect.signature(copy _1) -> [bb1];
+        _2 = call const fn baml.reflect.signature(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -153,11 +154,11 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     bb5: {
         _3 = copy _4 + copy _9;
         _13 = copy _2.1;
-        _14 = virtual_call iter as baml.iter.Iterable<Error = never, Item = reflect.Arg>(copy _13) -> [bb6];
+        _14 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>(copy _13) -> [bb6];
     }
 
     bb6: {
-        _15 = virtual_call next as baml.iter.Iterator<Error = never, Item = reflect.Arg>(copy _14) -> [bb7];
+        _15 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>(copy _14) -> [bb7];
     }
 
     bb7: {
@@ -184,7 +185,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     bb10: {
         _25 = copy _2.2;
         _26 = load_type(string);
-        _27 = load_type(reflect.Arg);
+        _27 = load_type(baml.reflect.Arg);
         _24 = call const fn baml.Map.keys<copy _26, copy _27>(copy _25) -> [bb11];
     }
 
@@ -208,7 +209,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
         _34 = copy _2.2;
         _35 = copy _32;
         _36 = load_type(string);
-        _37 = load_type(reflect.Arg);
+        _37 = load_type(baml.reflect.Arg);
         _33 = call const fn baml.Map.get<copy _36, copy _37>(copy _34, copy _35) -> [bb15];
     }
 
@@ -297,7 +298,7 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
         _10 = copy _4;
         _11 = load_type(Doc[] | string);
         _12 = load_type(ToolError);
-        _0 = call const fn reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb13, unwind: bb8];
+        _0 = call const fn baml.reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb13, unwind: bb8];
     }
 
     bb7: {
@@ -311,7 +312,7 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
     }
 
     bb9: {
-        _14 = is_type(copy _9, reflect.InvalidArgumentError);
+        _14 = is_type(copy _9, baml.reflect.InvalidArgumentError);
         branch copy _14 -> [bb11, bb10];
     }
 

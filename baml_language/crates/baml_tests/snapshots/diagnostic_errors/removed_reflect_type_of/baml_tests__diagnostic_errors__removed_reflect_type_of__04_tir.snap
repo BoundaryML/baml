@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 44319
+---
+=== TIR2 ===
+function user.old_bare_spelling() -> type throws never {
+  { : unknown
+    reflect.type_of() : unknown
+  }
+  !! 284..299: `reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`
+}
+function user.old_qualified_spelling() -> type throws never {
+  { : unknown
+    baml.reflect.type_of() : unknown
+  }
+  !! 358..378: `reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`
+}

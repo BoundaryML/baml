@@ -1,5 +1,6 @@
 use baml_type::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
+use indexmap::IndexMap;
 
 use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value};
 
@@ -20,6 +21,8 @@ pub struct ClassField {
     pub field_template: baml_type::TyTemplate,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
     pub skip: bool,
 }
 
@@ -38,6 +41,10 @@ pub struct Class {
 
     /// Class-level serialization alias.
     pub alias: Option<String>,
+
+    /// Class-level source documentation and custom annotations.
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
 
     /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
     /// Assigned during codegen as `CLASS_BASE + class_index`.

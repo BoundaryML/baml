@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 47328
 ---
 === TIR2 ===
 class user.User {
@@ -7,22 +8,22 @@ class user.User {
 }
 function user.reflect_type_to_int() -> int throws never {
   { : never
-    let x: int = reflect.type_of() : type -> int
+    let x: int = type.of() : type -> int
     return x : int
   }
-  !! 504..527: type mismatch: expected int, got type
+  !! 496..511: type mismatch: expected int, got type
 }
 function user.unknown_type_in_reflect() -> type throws never {
   { : type
-    reflect.type_of() : type
+    type.of() : type
   }
-  !! 653..683: unresolved type: NonExistent
+  !! 629..651: unresolved type: NonExistent
 }
 function user.too_many_type_args() -> type throws never {
   { : type
-    reflect.type_of() : type
+    type.of() : type
   }
-  !! 889..919: function `type_of` expects 1 type argument(s), got 2
+  !! 857..879: function `of` expects 1 type argument(s), got 2
 }
 class user.User$stream {
   name: string | null

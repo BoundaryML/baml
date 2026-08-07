@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3545
 ---
 === TIR2 ===
 class user.ToolError {
@@ -38,7 +39,7 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
 }
 function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string throws never {
   { : never
-    let sig = reflect.signature(f) : reflect.Signature
+    let sig = reflect.signature(f) : baml.reflect.Signature
     let parts = sig.returns.to_string() + sig.errors.to_string() + sig.args.length().to_string() : string
     for arg in sig.args
       { : void
@@ -46,7 +47,7 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
       }
     for key in sig.opts.keys()
       { : void
-        let opt = sig.opts.get(key) : reflect.Arg | null
+        let opt = sig.opts.get(key) : baml.reflect.Arg | null
         if (opt != null : bool) : void
           { : void
             parts = parts + key + opt.type.to_string() : string

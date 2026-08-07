@@ -13,7 +13,7 @@
 // like the one below work because TIR persists inferred instantiations in
 // `CallPlan.type_args` (including phase-0 reverse inference from the
 // expected return type) and MIR materializes them into the callee frame,
-// where `__make_stream` reifies them via `reflect.type_of<TStream/TFinal>()`.
+// where `__make_stream` reifies them via `type.of<TStream/TFinal>()`.
 // There is no name-keyed registry fallback anymore — a propagation gap
 // would surface as "Non-parsable type: ..." from `StreamCache.new`.
 // Runtime coverage: `streaming_parsing::stream_string_final_value` and
@@ -57,7 +57,7 @@ function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
 // stream_llm_inferred_typeargs.baml:13:1 (comment) len=74 "// like the one below work because TIR persists inferred instantiations in"
 // stream_llm_inferred_typeargs.baml:14:1 (comment) len=69 "// `CallPlan.type_args` (including phase-0 reverse inference from the"
 // stream_llm_inferred_typeargs.baml:15:1 (comment) len=73 "// expected return type) and MIR materializes them into the callee frame,"
-// stream_llm_inferred_typeargs.baml:16:1 (comment) len=78 "// where `__make_stream` reifies them via `reflect.type_of<TStream/TFinal>()`."
+// stream_llm_inferred_typeargs.baml:16:1 (comment) len=70 "// where `__make_stream` reifies them via `type.of<TStream/TFinal>()`."
 // stream_llm_inferred_typeargs.baml:17:1 (comment) len=73 "// There is no name-keyed registry fallback anymore — a propagation gap"
 // stream_llm_inferred_typeargs.baml:18:1 (comment) len=68 "// would surface as \"Non-parsable type: ...\" from `StreamCache.new`."
 // stream_llm_inferred_typeargs.baml:19:1 (comment) len=71 "// Runtime coverage: `streaming_parsing::stream_string_final_value` and"

@@ -1,21 +1,3 @@
-/// Returns the runtime `type` value for the type argument `T`.
-///
-/// For concrete type arguments (no generic-parameter references), the `type`
-/// value is materialised at compile time via a single `LoadType` instruction —
-/// zero runtime overhead.
-///
-/// Usage:
-///   let t: type = reflect.type_of<User>()
-///   assert.equal(t.to_string(), "User")
-///   assert.equal(reflect.type_of<int[]>().to_string(), "int[]")
-///
-/// The returned `type` value supports:
-///   - `.to_string()` — returns the BAML type name (e.g. "User", "int[]", "map<string, User>")
-///   - `==` / `!=`   — structural equality (two `type_of<User>()` are equal)
-function type_of<T>() -> type {
-    $compiler_intrinsic
-}
-
 /// One parameter of a function signature (BEP-062).
 class Arg {
   /// The parameter's name. When the callable carries no name for a
@@ -27,6 +9,22 @@ class Arg {
   /// The parameter's type.
   type type
 }
+
+/// Metadata baked into reflected schema definitions.
+class Meta {
+  alias string?
+  description string?
+  docstring string?
+  other map<string, string>
+}
+
+/// Common identity-preserving surface shared by every reflection kind view.
+interface TypeView {
+  function as_type(self) -> type throws never
+}
+
+/// The closed set of reflection views for a runtime `type` value.
+type TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
 
 /// The runtime signature of a function value, reconstructed from the value
 /// itself (BEP-062). Positional (required) parameters appear in `args` in

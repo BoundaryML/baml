@@ -508,11 +508,13 @@ impl<'a> Parser<'a> {
 
     /// True when the current token can serve as a member name after `.`.
     ///
-    /// `interface`/`implements`/`extends` are keywords for declarations but
-    /// remain valid as member names — e.g. `dog_t.implements(animal_t)` on the
-    /// reflection `type` value.
+    /// Declaration keywords remain valid as member names — e.g.
+    /// `dog_t.implements(animal_t)` on the reflection `type` value.
     fn at_member_name(&self) -> bool {
         self.at(TokenKind::Word)
+            || self.at(TokenKind::Class)
+            || self.at(TokenKind::Enum)
+            || self.at(TokenKind::Function)
             || self.at(TokenKind::Implements)
             || self.at(TokenKind::Implement)
             || self.at(TokenKind::Extends)
@@ -3108,6 +3110,10 @@ impl<'a> Parser<'a> {
                 if self.at(TokenKind::Word)
                     || self.at(TokenKind::Spawn)
                     || self.at(TokenKind::Await)
+                    || self.at(TokenKind::Class)
+                    || self.at(TokenKind::Enum)
+                    || self.at(TokenKind::Interface)
+                    || self.at(TokenKind::Function)
                 {
                     self.bump(); // next segment
                 } else {
@@ -5290,7 +5296,18 @@ impl<'a> Parser<'a> {
             match self.tokens[idx].kind {
                 TokenKind::Dot => {
                     let next = self.skip_trivia_and_comments_from(idx + 1);
-                    if next < self.tokens.len() && self.tokens[next].kind == TokenKind::Word {
+                    if next < self.tokens.len()
+                        && matches!(
+                            self.tokens[next].kind,
+                            TokenKind::Word
+                                | TokenKind::Spawn
+                                | TokenKind::Await
+                                | TokenKind::Class
+                                | TokenKind::Enum
+                                | TokenKind::Interface
+                                | TokenKind::Function
+                        )
+                    {
                         idx = self.skip_trivia_and_comments_from(next + 1);
                     } else {
                         return false;
@@ -5365,7 +5382,11 @@ impl<'a> Parser<'a> {
                 // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
-                | TokenKind::Await => {}
+                | TokenKind::Await
+                | TokenKind::Class
+                | TokenKind::Enum
+                | TokenKind::Interface
+                | TokenKind::Function => {}
                 _ => return None,
             }
             i = self.skip_trivia_and_comments_from(i + 1);
@@ -5457,7 +5478,20 @@ impl<'a> Parser<'a> {
             return;
         }
         self.bump(); // first WORD
-        while self.at(TokenKind::Dot) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Word) {
+        while self.at(TokenKind::Dot)
+            && self.peek(1).is_some_and(|t| {
+                matches!(
+                    t.kind,
+                    TokenKind::Word
+                        | TokenKind::Spawn
+                        | TokenKind::Await
+                        | TokenKind::Class
+                        | TokenKind::Enum
+                        | TokenKind::Interface
+                        | TokenKind::Function
+                )
+            })
+        {
             self.bump(); // .
             self.bump(); // WORD
         }
@@ -6856,7 +6890,11 @@ impl<'a> Parser<'a> {
                 // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
-                | TokenKind::Await => {}
+                | TokenKind::Await
+                | TokenKind::Class
+                | TokenKind::Enum
+                | TokenKind::Interface
+                | TokenKind::Function => {}
                 // Anything else — operators, braces, EOF-ish tokens — can't
                 // appear in a type, so this `<` is a comparison.
                 _ => return false,
@@ -7331,7 +7369,14 @@ impl<'a> Parser<'a> {
         let segment = |k: TokenKind| {
             matches!(
                 k,
-                TokenKind::Word | TokenKind::Client | TokenKind::Spawn | TokenKind::Await
+                TokenKind::Word
+                    | TokenKind::Client
+                    | TokenKind::Spawn
+                    | TokenKind::Await
+                    | TokenKind::Class
+                    | TokenKind::Enum
+                    | TokenKind::Interface
+                    | TokenKind::Function
             )
         };
 
@@ -7376,7 +7421,21 @@ impl<'a> Parser<'a> {
                 while p.at(TokenKind::Dot) {
                     shorthand_candidate = false;
                     p.bump();
-                    if !p.expect(TokenKind::Word) {
+                    if p.current().is_some_and(|t| {
+                        matches!(
+                            t.kind,
+                            TokenKind::Word
+                                | TokenKind::Spawn
+                                | TokenKind::Await
+                                | TokenKind::Class
+                                | TokenKind::Enum
+                                | TokenKind::Interface
+                                | TokenKind::Function
+                        )
+                    }) {
+                        p.bump();
+                    } else {
+                        p.error_unexpected_token("map key segment after '.'".to_string());
                         return;
                     }
                 }
@@ -8427,6 +8486,47 @@ mod tests {
                 .unwrap_or(0),
             1,
             "the function after the shebang should still parse"
+        );
+    }
+
+    /// BEP-066 K-13 (M-9): `type` as an expression path head. `type` is a
+    /// contextual keyword, so in expression position `type.of<int>()` /
+    /// `type.of_value(x)` parse as ordinary member-call paths (a `Word` head);
+    /// no dedicated lookahead is needed because the type-alias form only
+    /// dispatches at the top level, where expressions cannot occur.
+    #[test]
+    fn type_as_expression_path_head_parses() {
+        let source = "function main() -> string {\n  let t = type.of<int>();\n  let u = type.of_value(1);\n  type.of<int[]>();\n  t.to_string()\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        // The heads lower as plain path segments: WORD("type") followed by DOT.
+        let type_head_paths = root
+            .descendants_with_tokens()
+            .filter(|elem| {
+                matches!(
+                    elem,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD
+                        && t.text() == "type"
+                )
+            })
+            .count();
+        assert_eq!(type_head_paths, 3, "all three `type.` heads parse as words");
+    }
+
+    /// The `type.of` expression form must not steal top-level `type X = ...`
+    /// alias declarations (their dispatch is unchanged).
+    #[test]
+    fn type_alias_declarations_unaffected_by_type_of() {
+        let source =
+            "type MyAlias = int | string\nfunction main() -> type {\n  type.of<MyAlias>()\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let has_alias = root
+            .descendants()
+            .any(|n| n.kind() == SyntaxKind::TYPE_ALIAS_DEF);
+        assert!(
+            has_alias,
+            "top-level `type X = ...` still parses as an alias"
         );
     }
 
@@ -12643,5 +12743,48 @@ function iterate(items: int[]) -> int {
                 .any(|node| node.kind() == SyntaxKind::BLOCK_EXPR),
             "the final brace must remain the loop body"
         );
+    }
+
+    #[test]
+    fn reflection_keyword_segments_parse_in_types_and_expressions() {
+        let source = r#"
+class KeywordKinds {
+    class_kind reflect.class.Type
+    enum_kind reflect.enum.Type
+    interface_kind reflect.interface.Type
+    function_kind reflect.function.Type
+}
+
+function class_kind_value() -> reflect.class.Type {
+    reflect.class.Type
+}
+
+function enum_kind_value() -> reflect.enum.Type {
+    reflect.enum.Type
+}
+
+function interface_kind_value() -> reflect.interface.Type {
+    reflect.interface.Type
+}
+
+function function_kind_value() -> reflect.function.Type {
+    reflect.function.Type
+}
+"#;
+        let (_, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn reflection_segment_keywords_remain_invalid_as_bare_expressions() {
+        for keyword in ["class", "enum", "interface", "function"] {
+            let source =
+                format!("function main() -> int {{\n    let value = {keyword};\n    1\n}}");
+            let (_, errors) = parse_source(&source);
+            assert!(
+                !errors.is_empty(),
+                "reserved keyword {keyword:?} unexpectedly parsed as a bare identifier"
+            );
+        }
     }
 }

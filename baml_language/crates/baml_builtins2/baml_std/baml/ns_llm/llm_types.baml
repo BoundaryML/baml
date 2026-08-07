@@ -318,14 +318,14 @@ class Client {
     match (self.client_type) {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client();
-        // On the stream path `reflect.type_of<TFinal>()` is `BuiltinUnknown`:
+        // On the stream path `type.of<TFinal>()` is `BuiltinUnknown`:
         // the `$stream` companion calls this without explicit type-args and
         // inferred type-args don't reach MIR (see `__make_stream`'s registry
         // fallback). Resolve the real return type from the registry by name and
         // use it for the whole attempt — the Jinja template may render
         // `{{ ctx.output_format }}`, the closure's `${ctx.output_format}` needs
         // it, and `build_request_stream` keys provider config off it. (The
-        // oneshot path instead uses `reflect.type_of<T>()`, which DOES reach
+        // oneshot path instead uses `type.of<T>()`, which DOES reach
         // MIR there.) Caveat: for a *generic* streaming function the registry
         // holds the unspecialized return type, so `${ctx.output_format}` renders
         // the generic schema — the oneshot path renders the specialized one.
@@ -374,7 +374,7 @@ class Client {
   function __make_stream<TStream, TFinal>(self, sse: root.http.SseStream) -> Stream<TStream, TFinal> {
     let primitive = self.to_primitive_client()
     let acc = primitive.new_stream_accumulator()
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>())
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of<TStream>(), type.of<TFinal>())
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
   }
 
@@ -433,7 +433,7 @@ class Client {
     match (self.client_type) {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client()
-        let return_type = reflect.type_of<T>()
+        let return_type = type.of<T>()
 
         // Render (new-mode closure or legacy Jinja) + specialize via the shared
         // `render_specialized_prompt`, the same path the static `build_request`

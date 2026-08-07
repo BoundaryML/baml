@@ -506,9 +506,9 @@ fn source_param_interface_dispatch_respects_shadowed_local_binding() {
     );
 }
 
-// ─── Phase 4: reflect.type_of concrete types ─────────────────────────────────
+// ─── Phase 4: type.of concrete types ─────────────────────────────────
 
-/// `reflect.type_of<User>()` should lower to `_N = load_type(Concrete(User))`.
+/// `type.of<User>()` should lower to `_N = load_type(Concrete(User))`.
 #[test]
 fn reflect_type_of_class() {
     let mut db = make_db();
@@ -517,14 +517,14 @@ fn reflect_type_of_class() {
         r#"
         class User { name string }
         function f() -> type {
-            reflect.type_of<User>()
+            type.of<User>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_class", render_mir(&db, file));
 }
 
-/// `reflect.type_of<int[]>()` — concrete array type.
+/// `type.of<int[]>()` — concrete array type.
 #[test]
 fn reflect_type_of_array() {
     let mut db = make_db();
@@ -532,16 +532,16 @@ fn reflect_type_of_array() {
         "test.baml",
         r#"
         function f() -> type {
-            reflect.type_of<int[]>()
+            type.of<int[]>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_array", render_mir(&db, file));
 }
 
-// ─── Phase 5: reflect.type_of with generic type params ───────────────────────
+// ─── Phase 5: type.of with generic type params ───────────────────────
 
-/// `reflect.type_of<T>()` inside a generic function should lower to
+/// `type.of<T>()` inside a generic function should lower to
 /// `_N = load_type(TypeArgRef(0))`.
 #[test]
 fn reflect_type_of_bare_typevar() {
@@ -550,14 +550,14 @@ fn reflect_type_of_bare_typevar() {
         "test.baml",
         r#"
         function f<T>() -> type {
-            reflect.type_of<T>()
+            type.of<T>()
         }
         "#,
     );
     mir_snapshot!("reflect_type_of_bare_typevar", render_mir(&db, file));
 }
 
-/// `reflect.type_of<T[]>()` — composite array wrapping a type-var.
+/// `type.of<T[]>()` — composite array wrapping a type-var.
 /// Should lower to `_N = load_type(Array(TypeArgRef(0)))`.
 #[test]
 fn reflect_type_of_array_of_typevar() {
@@ -566,7 +566,7 @@ fn reflect_type_of_array_of_typevar() {
         "test.baml",
         r#"
         function f<T>() -> type {
-            reflect.type_of<T[]>()
+            type.of<T[]>()
         }
         "#,
     );

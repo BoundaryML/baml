@@ -25,53 +25,53 @@ function round_trip_type(value: type) -> type {
 }
 
 function reflected_int() -> type {
-  reflect.type_of<int>()
+  type.of<int>()
 }
 
 function reflected_container() -> type {
-  reflect.type_of<map<string, int[]>>()
+  type.of<map<string, int[]>>()
 }
 
 function reflected_union() -> type {
-  reflect.type_of<int | string>()
+  type.of<int | string>()
 }
 
 function reflected_primitives() -> type[] {
   [
-    reflect.type_of<string>(),
-    reflect.type_of<int>(),
-    reflect.type_of<bigint>(),
-    reflect.type_of<float>(),
-    reflect.type_of<bool>(),
-    reflect.type_of<null>(),
-    reflect.type_of<uint8array>(),
-    reflect.type_of<type>(),
+    type.of<string>(),
+    type.of<int>(),
+    type.of<bigint>(),
+    type.of<float>(),
+    type.of<bool>(),
+    type.of<null>(),
+    type.of<uint8array>(),
+    type.of<type>(),
   ]
 }
 
 function reflected_literals() -> type[] {
   [
-    reflect.type_of<"literal">(),
-    reflect.type_of<42>(),
-    reflect.type_of<42n>(),
-    reflect.type_of<true>(),
+    type.of<"literal">(),
+    type.of<42>(),
+    type.of<42n>(),
+    type.of<true>(),
   ]
 }
 
 function get_reflected_class() -> type {
-  reflect.type_of<ReflectedClass>()
+  type.of<ReflectedClass>()
 }
 
 function get_reflected_enum() -> type {
-  reflect.type_of<ReflectedEnum>()
+  type.of<ReflectedEnum>()
 }
 
 function get_reflected_alias() -> type {
-  reflect.type_of<ReflectedAlias>()
+  type.of<ReflectedAlias>()
 }
 
 function reflected_generic_class() -> type {
-  reflect.type_of<user.generic_tests.GenericBox<int>>()
+  type.of<user.generic_tests.GenericBox<int>>()
 }
 
 function round_trip_optional_type(value: type?) -> type? {

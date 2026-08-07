@@ -18,7 +18,6 @@ pub mod kperf;
 pub mod package_baml;
 pub mod package_boundary;
 pub mod package_load;
-pub mod package_reflect;
 mod type_context;
 mod type_match;
 pub mod types;

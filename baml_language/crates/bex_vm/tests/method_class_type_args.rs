@@ -111,6 +111,8 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         fields: vec![],
         description: None,
         alias: None,
+        docstring: None,
+        other: indexmap::IndexMap::new(),
         type_tag: 100,
         ty_attr: TyAttr::default(),
         has_cleanup: false,
@@ -163,6 +165,8 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         fields: vec![],
         description: None,
         alias: None,
+        docstring: None,
+        other: indexmap::IndexMap::new(),
         type_tag: 101,
         ty_attr: TyAttr::default(),
         has_cleanup: false,
@@ -249,9 +253,9 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::int(),
                 "TypeArgRef(0) with class_type_args=[int] should yield int"
             );
@@ -299,9 +303,9 @@ fn method_frame_type_args_seeded_string() {
         panic!("expected Object")
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::string(),
                 "TypeArgRef(0) with class_type_args=[string] should yield string"
             );

@@ -56,7 +56,7 @@ fn streaming_llm_source(base_url: &str) -> String {
 /// `<TStream, TFinal>` — they are inferred from the let-binding annotation
 /// (TIR phase-0 reverse inference, persisted in `CallPlan.type_args`,
 /// materialized into the callee frame by MIR) and reified inside
-/// `__make_stream` via `reflect.type_of<TStream/TFinal>()`. There is no
+/// `__make_stream` via `type.of<TStream/TFinal>()`. There is no
 /// name-keyed registry fallback anymore; a propagation gap surfaces as a
 /// "Non-parsable type: ..." crash from `StreamCache.new`.
 #[tokio::test]
@@ -107,7 +107,7 @@ async fn stream_string_final_value() {
 ///      doesn't exist.
 /// The stream type now travels only through the PPIR-synthesized companion
 /// (signature + explicit type args) and is reified via
-/// `reflect.type_of<TStream/TFinal>()` in `__make_stream` — there is no
+/// `type.of<TStream/TFinal>()` in `__make_stream` — there is no
 /// baked `stream_return_type` metadata left to diverge. See
 /// thoughts/sam-projects/bridge-generics/streaming/00 + 01 and the
 /// live-OpenAI coverage in `sdk_tests/.../test_streaming_class_e2e.py`.
