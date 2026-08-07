@@ -111,7 +111,7 @@ fn concrete_base(ty: &RealizedTy) -> Cow<'_, RealizedTy> {
     }
 }
 
-impl<'vm> ImplResolver<'vm> {
+impl ImplResolver<'_> {
     /// Resolve `(Self, Iface<Args>)` to the single applicable `implements` rule, plus
     /// the impl's bound type args — its generics realized by matching `concrete_ty`
     /// against the rule's `for` pattern. That rule is the canonical handle: read the

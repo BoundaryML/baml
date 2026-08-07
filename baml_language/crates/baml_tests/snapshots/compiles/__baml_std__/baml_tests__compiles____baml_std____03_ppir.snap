@@ -1949,11 +1949,14 @@ class baml.reflect.class.Type {
 }
 class baml.reflect.class.Type$stream {
 }
+function baml.reflect.class._new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type  [builtin]
 function baml.reflect.class.as_type(self: ?) -> type  [builtin]
 function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
 function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
 function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
-function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type  [builtin]
+function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type  [expr] {
+  {  } _new(name, fields, implementations)
+}
 
 --- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
 class baml.reflect.enum.Type {

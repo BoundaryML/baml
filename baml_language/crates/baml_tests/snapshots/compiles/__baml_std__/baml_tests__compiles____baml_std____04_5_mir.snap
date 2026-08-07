@@ -9079,7 +9079,34 @@ fn baml.reflect.array.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.array.Type.element_type = builtin(vm)
 
-fn baml.reflect.class.new = builtin(vm)
+fn baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+    // Locals:
+    let _0: baml.reflect.class.Type // _0 // return
+    let _1: string // name // param
+    let _2: map<string, type | baml.reflect.WithMeta<type>> // fields // param
+    let _3: baml.reflect.interface.Implementation[] // implementations // param
+    let _4: bool
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = []: baml.reflect.interface.Implementation[];
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.reflect.class._new(copy _1, copy _2, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.reflect.class._new = builtin(vm)
 
 fn baml.reflect.class.get_field = builtin(vm)
 

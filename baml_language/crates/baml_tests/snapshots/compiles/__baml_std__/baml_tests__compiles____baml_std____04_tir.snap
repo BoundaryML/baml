@@ -3012,6 +3012,11 @@ class baml.reflect.class.Field {
   type: type | null
   meta: baml.reflect.Meta
 }
+function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type throws baml.reflect.errors.CompilationError {
+  { : baml.reflect.class.Type
+    _new(name, fields, implementations) : baml.reflect.class.Type
+  }
+}
 class baml.reflect.class.Type {
 }
 class baml.reflect.class.Field$stream {

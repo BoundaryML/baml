@@ -6393,10 +6393,26 @@ function baml.reflect.class.Type.fields(self: baml.reflect.class.Type) -> baml.r
 function baml.reflect.class.Type.meta(self: baml.reflect.class.Type) -> baml.reflect.Meta {
 }
 
+function baml.reflect.class._new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+}
+
 function baml.reflect.class.get_field(value: unknown, name: string) -> #0 {
 }
 
 function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+    load_var implementations
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type baml.reflect.interface.Implementation
+    alloc_array 0
+    store_var implementations
+
+  L0:
+    load_var2 1 2
+    load_var implementations
+    call baml.reflect.class._new
+    return
 }
 
 function baml.reflect.enum.Type.baml.reflect.TypeView.as_type(self: baml.reflect.enum.Type) -> type {

@@ -308,6 +308,7 @@ namespace baml.reflect.array:
 namespace baml.reflect.class:
   class Field { methods: [] }
   class Type { methods: [fields, meta, as_type] }
+  function _new
   function get_field<T>
   function new
 namespace baml.reflect.enum:

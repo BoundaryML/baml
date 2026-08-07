@@ -42,12 +42,12 @@ fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
         return Err("implementations must contain reflect.interface.Implementation values".into());
     }
     vm.as_rust_data::<InterfaceWitness>(&instance.load_field(0))
-        .map(Clone::clone)
+        .cloned()
         .map_err(|_| "invalid reflect.interface.Implementation handle".into())
 }
 
 impl BamlNamespaceReflectClass for PackageBamlImpl {
-    fn new(
+    fn _new(
         vm: &mut BexVm,
         name: &bex_str::BexStr,
         fields: &IndexMap<bex_str::BexStr, Value>,
@@ -105,7 +105,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             match witness_state(vm, *implementation) {
                 Ok(witness) => witnesses.push(witness),
                 Err(message) => {
-                    diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message))
+                    diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
                 }
             }
         }
@@ -204,10 +204,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
                 else {
                     diagnostics.push(compiler_diagnostic(
                         DiagnosticId::TypeMismatch,
-                        format!(
-                            "class field `{}` has an unresolved runtime type",
-                            class_field_name
-                        ),
+                        format!("class field `{class_field_name}` has an unresolved runtime type"),
                     ));
                     continue;
                 };
@@ -286,8 +283,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             baml_type::TyAttr::default(),
         );
         child_defs.classes.insert(type_name.clone(), class_ptr);
-        vm.dynamic_dispatch
-            .register_class(type_name.clone(), class_ptr);
+        vm.dynamic_dispatch.register_class(type_name, class_ptr);
         for (interface_ptr, _interface_name, args, assoc, field_links, _) in witnessed_defs {
             let Object::Interface(interface) = vm.get_object(interface_ptr) else {
                 unreachable!("witness interface validated before allocation")

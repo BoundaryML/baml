@@ -266,6 +266,10 @@ impl RootHaver for NativeFrame {
 }
 
 /// Call frame — either a bytecode frame or a native continuation frame.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "bytecode frames are the hot path and remain inline; native continuations are rare"
+)]
 pub enum Frame {
     Bytecode(BytecodeFrame),
     Native(NativeFrame),
@@ -1235,6 +1239,10 @@ impl BexVm {
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "VM construction explicitly wires the shared runtime registries and class tables"
+    )]
     pub fn new(
         heap: Arc<BexHeap>,
         globals: VmGlobals,
@@ -4597,6 +4605,10 @@ impl BexVm {
         })
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the call decoder passes independent bytecode operands and interpreter cursors"
+    )]
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -5103,8 +5115,7 @@ impl BexVm {
                 }
                 return Err(VmInternalError::TypeSubstitution {
                     message: format!(
-                        "generic call to `{}` omitted runtime type argument #{index}",
-                        callee_name
+                        "generic call to `{callee_name}` omitted runtime type argument #{index}"
                     ),
                 }
                 .into());
