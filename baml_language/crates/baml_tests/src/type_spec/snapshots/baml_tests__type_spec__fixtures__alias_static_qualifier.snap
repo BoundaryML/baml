@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+137..146 'from_json': throws baml.json.JsonDecodeError
+207..246 '{\n   ...     }': user.AqBox
+221..236 'AqBox { y: 99 }': user.AqBox
+232..234 '99': 99
+308..320 'aq_from_json': throws baml.json.JsonParseError | baml.json.JsonDecodeError
+390..489 '{\n   ...b.y\n}': int
+396..401 'let j': baml.json.json
+404..419 'baml.json.parse': (s: string) -> baml.json.json throws baml.json.JsonParseError
+404..425 'baml.j...("{}")': baml.json.json
+420..424 '"{}"': "{}"
+430..435 'let b': user.AqBox
+438..455 'AqOute...m_json': (j: baml.json.json) -> user.AqBox throws baml.json.JsonDecodeError
+438..458 'AqOute...son(j)': user.AqBox
+456..457 'j': baml.json.json
+484..487 'b.y': int
+530..534 'make': throws never
+569..603 '{\n   ...n    }': user.AqMake
+579..597 'AqMake...seed }': user.AqMake
+591..595 'seed': int
+637..646 'aq_static': throws never
+669..730 '{\n   ...m.n\n}': int
+675..680 'let m': user.AqMake
+683..695 'AqMaker.make': (seed: int) -> user.AqMake throws never
+683..698 'AqMaker.make(7)': user.AqMake
+696..697 '7': 7
+725..728 'm.n': int

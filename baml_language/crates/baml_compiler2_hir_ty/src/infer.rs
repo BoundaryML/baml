@@ -2390,7 +2390,8 @@ impl<'db> InferenceContext<'db> {
             // receiver). Class generics have no receiver to pin them, so
             // they instantiate fresh alongside the method's own.
             if segments.len() >= 2
-                && let Some(class) = self.static_class_for(&segments[..segments.len() - 1])
+                && let Some((class, pinned)) =
+                    self.static_class_for(&segments[..segments.len() - 1])
             {
                 let member = segments.last().expect("checked len");
                 let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
@@ -2404,9 +2405,10 @@ impl<'db> InferenceContext<'db> {
                 if let Some(method) = method {
                     let signature = function_signature(self.db, method);
                     let class_count = crate::lower::class_generic_frame(self.db, class).len();
-                    let mut instantiation: Vec<Ty> = (0..class_count)
-                        .map(|_| self.table.new_var_ty())
-                        .collect();
+                    let mut instantiation: Vec<Ty> = match pinned {
+                        Some(args) => args,
+                        None => (0..class_count).map(|_| self.table.new_var_ty()).collect(),
+                    };
                     let own_params = signature.generic_params[class_count..].to_vec();
                     instantiation.extend(self.instantiation_args(call, &own_params));
                     let fn_ty = function_value_ty(signature, &instantiation);
@@ -2757,7 +2759,8 @@ impl<'db> InferenceContext<'db> {
     /// resolved through the same static-class correspondence written
     /// `string.from(..)` calls use, its `T` pinned to the receiver.
     fn string_from_callee(&mut self, target: Ty) -> Option<Ty> {
-        let class = self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))?;
+        let (class, _) =
+            self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))?;
         let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
             .methods
             .iter()
@@ -2821,7 +2824,7 @@ impl<'db> InferenceContext<'db> {
         // `Array.filled`): the same resolution the call path uses, with
         // every generic fresh (only a call site can spell turbofish).
         if segments.len() >= 2
-            && let Some(class) = self.static_class_for(&segments[..segments.len() - 1])
+            && let Some((class, _)) = self.static_class_for(&segments[..segments.len() - 1])
             && let Some(member) = segments.last()
             && let Some(method) = baml_compiler2_ppir::item_data::class_data(self.db, class)
                 .methods
@@ -2914,29 +2917,43 @@ impl<'db> InferenceContext<'db> {
             self.register_call_bounds(method, &instantiation, call);
             return Some(function_value_ty(signature, &instantiation));
         }
-        let class = self.static_class_for(prefix)?;
-        let frame = crate::lower::class_generic_frame(self.db, class);
-        let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
-            .methods
-            .iter()
-            .copied()
-            .find(|&method| {
-                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
-            });
-        if let Some(method) = method {
-            let signature = function_signature(self.db, method);
-            let mut instantiation: Vec<Ty> =
-                (0..frame.len()).map(|_| self.table.new_var_ty()).collect();
-            let own_params = signature.generic_params[frame.len()..].to_vec();
-            instantiation.extend(self.instantiation_args(call, &own_params));
-            return Some(function_value_ty(signature, &instantiation));
+        let class = self.static_class_for(prefix);
+        if let Some((class, pinned)) = &class {
+            let class = *class;
+            let frame = crate::lower::class_generic_frame(self.db, class);
+            let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+                .methods
+                .iter()
+                .copied()
+                .find(|&method| {
+                    baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+                });
+            if let Some(method) = method {
+                let signature = function_signature(self.db, method);
+                let mut instantiation: Vec<Ty> = match pinned.clone() {
+                    Some(args) => args,
+                    None => (0..frame.len()).map(|_| self.table.new_var_ty()).collect(),
+                };
+                let own_params = signature.generic_params[frame.len()..].to_vec();
+                instantiation.extend(self.instantiation_args(call, &own_params));
+                return Some(function_value_ty(signature, &instantiation));
+            }
         }
         if member.as_str() == "from_json" {
-            let args = self.instantiation_args(call, &frame);
-            let target = crate::lower::class_ty(
-                crate::lower::class_qualified_name(self.db, class),
-                args,
-            );
+            // The desugar target is the WRITTEN qualifier, nominal -
+            // an alias stays an alias (the path spelling's
+            // `lower_type_path` semantics); only the turbofish class
+            // spelling needs the channel's hoisted args instead.
+            let written = self.lower.lower_type_path(prefix);
+            let target = if !written.has_error() {
+                written
+            } else if let Some((class, _)) = class {
+                let frame = crate::lower::class_generic_frame(self.db, class);
+                let args = self.instantiation_args(call, &frame);
+                crate::lower::class_ty(crate::lower::class_qualified_name(self.db, class), args)
+            } else {
+                return None;
+            };
             if let Some(fn_ty) = self.json_desugar_callee("to", target.clone()) {
                 self.result.type_of_expr.insert(base_expr, target);
                 return Some(fn_ty);
@@ -2952,41 +2969,61 @@ impl<'db> InferenceContext<'db> {
     /// rule the S11 receiver-class table applies to VALUES, applied to
     /// the written primitive name (`float`'s statics live on
     /// `class baml.Float`).
+    /// A `None` args component means the qualifier wrote no
+    /// instantiation (a bare class path - the call site fills fresh
+    /// vars); `Some` pins it (an alias expansion carries its target's
+    /// args).
     fn static_class_for(
         &self,
         prefix: &[baml_type::Name],
-    ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
+    ) -> Option<(baml_compiler2_hir::loc::ClassLoc<'db>, Option<Vec<Ty>>)> {
         use baml_compiler2_hir::contributions::Definition;
         if let Some(Definition::Class(class)) = self.lower.resolve_type_definition(prefix) {
-            return Some(class);
+            return Some((class, None));
         }
-        let [single] = prefix else {
+        // Anything else the qualifier can denote - a primitive or
+        // media KEYWORD (annotation-grammar tokens, not paths), or an
+        // ALIAS (chains included) - becomes the TYPE it names, and the
+        // S11 receiver-class correspondence maps type to class, the
+        // same single table instance receivers use. rust-analyzer
+        // expands aliases at lowering so every consumer sees the
+        // target; our lazy-alias design expands at the demand point,
+        // and this is the static demand point.
+        let ty = match prefix {
+            [single] => match single.as_str() {
+                "int" => Ty::intern(TyKind::Int { attr: baml_type::TyAttr::default() }),
+                "bigint" => Ty::intern(TyKind::Bigint { attr: baml_type::TyAttr::default() }),
+                "float" => Ty::intern(TyKind::Float { attr: baml_type::TyAttr::default() }),
+                "string" => Ty::intern(TyKind::String { attr: baml_type::TyAttr::default() }),
+                "bool" => Ty::intern(TyKind::Bool { attr: baml_type::TyAttr::default() }),
+                "uint8array" => {
+                    Ty::intern(TyKind::Uint8Array { attr: baml_type::TyAttr::default() })
+                }
+                "image" => Ty::intern(TyKind::Media(
+                    baml_type::MediaKind::Image,
+                    baml_type::TyAttr::default(),
+                )),
+                "audio" => Ty::intern(TyKind::Media(
+                    baml_type::MediaKind::Audio,
+                    baml_type::TyAttr::default(),
+                )),
+                "video" => Ty::intern(TyKind::Media(
+                    baml_type::MediaKind::Video,
+                    baml_type::TyAttr::default(),
+                )),
+                "pdf" => Ty::intern(TyKind::Media(
+                    baml_type::MediaKind::Pdf,
+                    baml_type::TyAttr::default(),
+                )),
+                _ => self.lower.lower_type_path(prefix),
+            },
+            _ => self.lower.lower_type_path(prefix),
+        };
+        if ty.has_error() {
             return None;
-        };
-        let (path, name): (&[&str], &str) = match single.as_str() {
-            "int" => (&[], "Int"),
-            "bigint" => (&[], "Bigint"),
-            "float" => (&[], "Float"),
-            "string" => (&[], "String"),
-            "bool" => (&[], "Bool"),
-            "uint8array" => (&[], "Uint8Array"),
-            // The media half of the correspondence, mirroring the
-            // `TyKind::Media` arm of the S11 receiver-class table.
-            "image" => (&["media"], "Image"),
-            "audio" => (&["media"], "Audio"),
-            "video" => (&["media"], "Video"),
-            "pdf" => (&["media"], "Pdf"),
-            _ => return None,
-        };
-        let qtn = baml_type::TypeName::new(
-            baml_type::Name::new("baml"),
-            path.iter().map(|segment| baml_type::Name::new(segment)).collect(),
-            baml_type::Name::new(name),
-        );
-        match self.facts.definition_of(&qtn) {
-            Some(Definition::Class(class)) => Some(class),
-            _ => None,
         }
+        crate::method_resolution::receiver_class(&self.facts, &ty, 8)
+            .map(|(class, args)| (class, Some(args)))
     }
 
     /// The method a TYPE-QUALIFIED interface path names
@@ -3296,14 +3333,15 @@ impl<'db> InferenceContext<'db> {
     /// class generics and fresh variables for the method's own - value
     /// position has no turbofish.
     fn field_access(&mut self, base_ty: &Ty, member: &baml_type::Name) -> Ty {
+        // `structurally_resolve` expands weak aliases, so `json`
+        // answers as its union and an alias-of-class answers as the
+        // class - every arm below sees the target.
         let resolved = self.structurally_resolve(base_ty);
         // TS's union-member rule (TIR follows): a member on a UNION
         // resolves on EVERY member type and the results JOIN; a member
         // type lacking it - null included: handle null first - fails
-        // the whole access. Aliases expand so `json` answers as its
-        // union.
-        let expanded = self.expand_alias_ty(&resolved);
-        if let TyKind::Union(members, _) = expanded.kind() {
+        // the whole access.
+        if let TyKind::Union(members, _) = resolved.kind() {
             let members = members.to_vec();
             let mut tys = Vec::new();
             for member_ty in &members {
@@ -4195,7 +4233,16 @@ impl<'db> InferenceContext<'db> {
         // stay (the oracle's plain conversion erases inference vars);
         // they relate lazily through the deferred residue instead.
         if resolved.has_projection() && !resolved.has_infer() {
-            return self.reduce_projections(&resolved, PROJECTION_FINALIZE_FUEL);
+            let reduced = self.reduce_projections(&resolved, PROJECTION_FINALIZE_FUEL);
+            return self.expand_alias_ty(&reduced);
+        }
+        // WEAK aliases normalize here too (rustc's `Alias::Weak` in
+        // `structurally_resolve_type`): a structure consumer never
+        // sees the nominal wrapper, so no consumer can forget to
+        // expand. Recorded types keep the written name - this is the
+        // demanded STRUCTURE, not the render.
+        if matches!(resolved.kind(), TyKind::TypeAlias(..)) {
+            return self.expand_alias_ty(&resolved);
         }
         resolved
     }

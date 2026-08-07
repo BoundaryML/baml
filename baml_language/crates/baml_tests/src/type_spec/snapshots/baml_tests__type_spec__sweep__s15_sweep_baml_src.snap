@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52470
+agreements: 52474
 one-sided (coverage): 264
-conflicts: 7971 across 1420 distinct pairs
+conflicts: 7967 across 1419 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -200,9 +200,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [13x] hir_ty=[throws never] tir=[throws __effect_param_0]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1191..1219 `tt_parts_b..._order_main`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1703..1735 `tt_capture..._local_main`
-[12x] hir_ty=[!error] tir=[int]
-    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
-    at ns_json_auto_derive/json_auto_derive.baml:24833..24949 `{\n    let...n    b.y\n}`
 [12x] hir_ty=["too big"] tir=[string]
     at ns_exceptions/exceptions.baml:18782..18783 `e`
     at ns_exceptions/exceptions.baml:18787..18788 `_`
@@ -242,6 +239,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [11x] hir_ty=[int] tir=[int | 99]
     at ns_arrays/sort_comparable.baml:4987..5108 `Comparable...> 99\n    }`
     at ns_exceptions/exceptions.baml:33897..33933 `s13_middle...{ _ => 99 }`
+[10x] hir_ty=[!error] tir=[int]
+    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
+    at ns_lambdas/lambdas.baml:6582..6588 `dec2()`
 [10x] hir_ty=["origin"] tir=[string]
     at ns_errorcontext/errorcontext.baml:8726..8727 `e`
     at ns_errorcontext/errorcontext.baml:8740..8741 `_`
@@ -1034,9 +1034,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[user.is_operator.WrapOpt | null] tir=[null | user.is_operator.WrapOpt]
     at ns_is_operator/is_operator.baml:9233..9248 `let w: WrapOpt?`
     at ns_is_operator/is_operator.baml:9240..9248 `WrapOpt?`
-[3x] hir_ty=[user.json_auto_derive.OuterFrom] tir=[user.json_auto_derive.BAliasFrom]
-    at ns_json_auto_derive/json_auto_derive.baml:24897..24913 `let b: OuterFrom`
-    at ns_json_auto_derive/json_auto_derive.baml:24904..24913 `OuterFrom`
 [3x] hir_ty=[user.match_types.Bird | user.match_types.Cat | user.match_types.Dog] tir=[user.match_types.Cat | user.match_types.Dog | user.match_types.Bird]
     at ns_match_types/match_types.baml:9323..9329 `animal`
     at ns_match_types/match_types.baml:9831..9837 `animal`
@@ -1937,6 +1934,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[user.iter_impl_generics_only.core.Done | user.iter_impl_generics_only.core.Iterator<R, E3>] tir=[user.iter_impl_generics_only.core.Iterator<R, E3> | user.iter_impl_generics_only.core.Done]
     at ns_iter_impl_generics_only/ns_core/core.baml:6930..6940 `self.inner`
     at ns_iter_impl_generics_only/ns_core/core.baml:7760..7770 `self.inner`
+[2x] hir_ty=[user.json_auto_derive.OuterFrom] tir=[user.json_auto_derive.BAliasFrom]
+    at ns_json_auto_derive/json_auto_derive.baml:24897..24913 `let b: OuterFrom`
+    at ns_json_auto_derive/json_auto_derive.baml:24904..24913 `OuterFrom`
 [2x] hir_ty=[user.json_auto_derive.OuterTo] tir=[user.json_auto_derive.BAliasTo]
     at ns_json_auto_derive/json_auto_derive.baml:24107..24121 `let b: OuterTo`
     at ns_json_auto_derive/json_auto_derive.baml:24114..24121 `OuterTo`
@@ -2265,8 +2265,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_json_auto_derive/json_auto_derive.baml:19939..19951 `C6.from_json`
 [1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.Holder throws baml.json.JsonDecodeError] tir=[unknown]
     at ns_json_auto_derive/json_auto_derive.baml:25371..25387 `Holder.from_json`
-[1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.OuterFrom throws baml.json.JsonDecodeError] tir=[(j: baml.json.json) -> user.json_auto_derive.BAliasFrom throws baml.json.JsonDecodeError]
-    at ns_json_auto_derive/json_auto_derive.baml:24916..24935 `OuterFrom.from_json`
 [1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.Tree throws baml.json.JsonDecodeError] tir=[unknown]
     at ns_json_auto_derive/json_auto_derive.baml:15941..15955 `Tree.from_json`
 [1x] hir_ty=[(j: baml.json.json) -> user.json_auto_derive.User throws baml.json.JsonDecodeError] tir=[unknown]

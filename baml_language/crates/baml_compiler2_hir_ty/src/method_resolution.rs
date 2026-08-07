@@ -59,7 +59,7 @@ pub fn lookup_method<'db>(
 /// arguments the receiver pins. This table IS the language's builtin-class
 /// correspondence (TIR: `resolve_builtin_member` call sites), one row per
 /// structural kind; literals defer to their base primitive's class.
-fn receiver_class<'db>(
+pub(crate) fn receiver_class<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     fuel: u32,
