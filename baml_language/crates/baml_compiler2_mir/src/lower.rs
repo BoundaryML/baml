@@ -847,14 +847,39 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
             Some(MethodOwner::FreeImpl(impl_loc)) => {
                 let block = impl_block_data(db, impl_loc);
                 if let ImplSubjectData::Free { for_target, .. } = &block.subject {
+                    let raw_owner = Name::new(format!(
+                        "{}$for${}",
+                        block.type_refs.display(block.interface_target),
+                        block.type_refs.display(*for_target)
+                    ));
+                    let owner = baml_compiler2_tir::interfaces::impl_data(db, impl_loc)
+                        .as_ref()
+                        .ok()
+                        .and_then(|data| {
+                            let qtn = data.interface_qtn(db)?;
+                            let interface = baml_type::Interface::new(
+                                qtn,
+                                data.interface_args.clone(),
+                                data.associated_types.clone(),
+                            );
+                            Some(
+                                baml_compiler2_tir::package_interface::impl_method_symbol_owner(
+                                    &interface,
+                                    &data.for_ty_pattern,
+                                    &pkg_info.package,
+                                    &pkg_info.namespace_path,
+                                ),
+                            )
+                        })
+                        .unwrap_or_else(|| raw_owner.clone());
+                    assert_eq!(
+                        owner, raw_owner,
+                        "structural impl symbol must preserve the source-era B-693 spelling"
+                    );
                     return ItemRef::Method {
                         package: pkg_info.package.clone(),
                         namespace: pkg_info.namespace_path,
-                        class: Name::new(format!(
-                            "{}$for${}",
-                            block.type_refs.display(block.interface_target),
-                            block.type_refs.display(*for_target)
-                        )),
+                        class: owner,
                         name,
                     };
                 }
@@ -950,19 +975,53 @@ fn resolution_to_item_ref(
             let data = baml_compiler2_tir::interfaces::impl_data(db, *impl_loc)
                 .as_ref()
                 .ok()?;
-            // A mounted-interface target has no loc; TIR never records an
-            // `InterfaceConcreteMethod` for one (mounted calls are reserved
-            // until the BEP-066 call-lowering PR), so this is unreachable —
-            // fail soft rather than panic if it ever regresses.
-            let iface_loc = data.interface_loc()?;
-            let pkg_info = file_package(db, iface_loc.file(db));
-            let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+            // The interface's qualified name is total over source-backed and
+            // MOUNTED targets (a user impl of a mounted interface has no
+            // interface loc, but its qtn names the same dispatch slot —
+            // BEP-066 slice 6a).
+            let iface_qtn = data.interface_qtn(db)?;
             let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
             Some(ItemRef::Method {
-                package: pkg_info.package,
-                namespace: pkg_info.namespace_path,
-                class: iface_data.name.clone(),
+                package: iface_qtn.package().clone(),
+                namespace: iface_qtn.namespace().clone(),
+                class: iface_qtn.name().clone(),
                 name: func_data.name.clone(),
+            })
+        }
+        // A mounted-package callee (BEP-066 slice 6a): the resolution already
+        // carries the exact names of the library's exported symbol.
+        MemberResolution::External(external) => {
+            use baml_compiler2_tir::inference::ExternalCallTarget;
+            Some(match &external.target {
+                ExternalCallTarget::Free {
+                    package,
+                    namespace,
+                    name,
+                } => ItemRef::Free {
+                    package: package.clone(),
+                    namespace: namespace.clone(),
+                    name: name.clone(),
+                },
+                ExternalCallTarget::Method {
+                    package,
+                    namespace,
+                    class,
+                    name,
+                } => ItemRef::Method {
+                    package: package.clone(),
+                    namespace: namespace.clone(),
+                    class: class.clone(),
+                    name: name.clone(),
+                },
+                // Interface-routed: the interface's method slot — the VM
+                // resolves the receiver's registered impl (the same routing as
+                // `InterfaceConcreteMethod` above).
+                ExternalCallTarget::Interface { iface, method } => ItemRef::Method {
+                    package: iface.package().clone(),
+                    namespace: iface.namespace().clone(),
+                    class: iface.name().clone(),
+                    name: method.clone(),
+                },
             })
         }
         MemberResolution::Field { .. }
@@ -984,7 +1043,11 @@ fn resolution_func_loc<'db>(
         | MemberResolution::BoundMethod { func_loc, .. }
         | MemberResolution::UnboundMethod { func_loc, .. }
         | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(*func_loc),
-        MemberResolution::InterfaceVirtualMethod { .. }
+        // A mounted callee has no loc-backed body in this database at all —
+        // and is never a builtin, so every builtin/sys-op probe correctly
+        // answers "no" through this `None` (BEP-066 slice 6a).
+        MemberResolution::External(_)
+        | MemberResolution::InterfaceVirtualMethod { .. }
         | MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
         | MemberResolution::InterfaceVirtualField { .. } => None,
@@ -1214,6 +1277,27 @@ fn class_type_tags_for_project(
         }
     }
 
+    // MOUNTED (source-less) packages have no files; their classes tag from the
+    // blob rows. Content-addressing is over the fq name alone, so these are
+    // byte-identical to the tags the library's own compile assigned (BEP-066
+    // slice 6a).
+    for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
+        let Some(mounted) = baml_compiler2_tir::package_interface::mounted_interface(db, &pkg_name)
+        else {
+            continue;
+        };
+        for types_in_ns in mounted.types.values() {
+            for exported in types_in_ns.values() {
+                if let baml_compiler2_tir::package_interface::ExportedType::Class { qtn, .. } =
+                    exported
+                {
+                    let type_tag = baml_type::typetag::class_type_tag(&qtn.render_dotted(false));
+                    tags.entry(qtn.clone()).or_insert(type_tag);
+                }
+            }
+        }
+    }
+
     ProjectClassTypeTags { tags }
 }
 
@@ -1243,8 +1327,21 @@ fn package_lowering_data<'db>(
         // Dependency packages first (e.g., "baml" builtins); current-package
         // items overwrite on collision.
         for &dep_id in package_dependencies(db, pkg_id) {
-            let dep_items = package_items(db, dep_id);
             let dep_name = dep_id.name(db);
+            // A MOUNTED (source-less) dependency has no items — its class
+            // fields / enum variants come from the interface blob's rows
+            // (BEP-066 slice 6a).
+            if let Some(mounted) =
+                baml_compiler2_tir::package_interface::mounted_interface(db, &dep_name)
+            {
+                LoweringContext::populate_from_mounted_package(
+                    mounted,
+                    &mut population,
+                    &resolved_aliases,
+                );
+                continue;
+            }
+            let dep_items = package_items(db, dep_id);
             LoweringContext::populate_from_package(
                 db,
                 dep_items,
@@ -1279,6 +1376,28 @@ fn package_lowering_data<'db>(
     let mut all_pkgs = vec![pkg_id];
     all_pkgs.extend(package_dependency_closure(db, pkg_id).iter().copied());
     for pkg in all_pkgs {
+        // A MOUNTED (source-less) dependency's interface methods come from its
+        // blob rows — without them the fast pre-filter would hide every
+        // mounted-impl dispatch (BEP-066 slice 6a).
+        if let Some(mounted) =
+            baml_compiler2_tir::package_interface::mounted_interface(db, &pkg.name(db))
+        {
+            for types_in_ns in mounted.types.values() {
+                for exported in types_in_ns.values() {
+                    if let baml_compiler2_tir::package_interface::ExportedType::Interface {
+                        required_methods,
+                        default_methods,
+                        ..
+                    } = exported
+                    {
+                        for m in required_methods.iter().chain(default_methods) {
+                            interface_method_names.insert(m.name.clone());
+                        }
+                    }
+                }
+            }
+            continue;
+        }
         let items = package_items(db, pkg);
         for ns in items.namespaces.values() {
             for def in ns.types.values() {
@@ -1873,6 +1992,42 @@ impl<'db> LoweringContext<'db> {
                         out.enum_variants.insert(enum_qtn, variants);
                     }
                     _ => {}
+                }
+            }
+        }
+    }
+
+    /// The MOUNTED-package twin of [`Self::populate_from_package`] (BEP-066
+    /// slice 6a): class field indices/types and enum variant indices from the
+    /// blob's exported rows. Field types are already-lowered `Ty`s, so
+    /// population is a pure conversion — no per-loc lowering.
+    fn populate_from_mounted_package(
+        mounted: &baml_compiler2_tir::package_interface::PackageInterface,
+        out: &mut PackagePopulation<'_>,
+        resolved_aliases: &ResolvedAliases,
+    ) {
+        use baml_compiler2_tir::package_interface::ExportedType;
+        for types_in_ns in mounted.types.values() {
+            for exported in types_in_ns.values() {
+                match exported {
+                    ExportedType::Class { qtn, fields, .. } => {
+                        let mut field_indices = IndexMap::new();
+                        let mut field_types = IndexMap::new();
+                        for (idx, (name, ty, _attrs)) in fields.iter().enumerate() {
+                            field_indices.insert(name.to_string(), idx);
+                            field_types.insert(name.to_string(), resolved_aliases.convert(ty));
+                        }
+                        out.class_fields.insert(qtn.clone(), field_indices);
+                        out.class_field_types.insert(qtn.clone(), field_types);
+                    }
+                    ExportedType::Enum { qtn, variants } => {
+                        let mut variant_indices = IndexMap::new();
+                        for (idx, variant) in variants.iter().enumerate() {
+                            variant_indices.insert(variant.to_string(), idx);
+                        }
+                        out.enum_variants.insert(qtn.clone(), variant_indices);
+                    }
+                    ExportedType::Interface { .. } | ExportedType::TypeAlias { .. } => {}
                 }
             }
         }
@@ -3171,6 +3326,22 @@ impl<'db> LoweringContext<'db> {
         let Some(baml_compiler2_hir::contributions::Definition::Interface(root_loc)) =
             pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
         else {
+            // A MOUNTED (source-less) interface answers from its exported row;
+            // its `requires` rows are the pre-flattened transitive closure, so
+            // one recursion level per entry covers inheritance (BEP-066 6a).
+            if let Some(baml_compiler2_tir::package_interface::ExportedType::Interface {
+                required_methods,
+                default_methods,
+                requires,
+                ..
+            }) = baml_compiler2_tir::package_interface::mounted_type_row(self.db, iface_qtn)
+            {
+                return required_methods.iter().any(|m| m.name == *method)
+                    || default_methods.iter().any(|m| m.name == *method)
+                    || requires
+                        .iter()
+                        .any(|req| self.mir_interface_declares_method(&req.name, method));
+            }
             return false;
         };
         baml_compiler2_tir::interfaces::interface_closure_locs(self.db, root_loc)
@@ -3203,6 +3374,10 @@ impl<'db> LoweringContext<'db> {
         matches!(
             pkg_items.lookup_type(tn.namespace(), tn.name()),
             Some(baml_compiler2_hir::contributions::Definition::Interface(_))
+        ) || matches!(
+            // A MOUNTED interface has no Definition — its row answers.
+            baml_compiler2_tir::package_interface::mounted_type_row(self.db, tn),
+            Some(baml_compiler2_tir::package_interface::ExportedType::Interface { .. })
         )
     }
 
@@ -3214,6 +3389,16 @@ impl<'db> LoweringContext<'db> {
         let Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) =
             pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name())
         else {
+            // A MOUNTED interface's direct members come from its exported row.
+            if let Some(baml_compiler2_tir::package_interface::ExportedType::Interface {
+                required_methods,
+                default_methods,
+                ..
+            }) = baml_compiler2_tir::package_interface::mounted_type_row(self.db, iface_tn)
+            {
+                return required_methods.iter().any(|m| m.name == *method)
+                    || default_methods.iter().any(|m| m.name == *method);
+            }
             return false;
         };
         let iface_data = interface_data(self.db, loc);
@@ -3254,9 +3439,21 @@ impl<'db> LoweringContext<'db> {
         let pkg_id =
             baml_compiler2_hir::package::PackageId::new(self.db, iface_tn.package().clone());
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
-        let baml_compiler2_hir::contributions::Definition::Interface(loc) =
-            pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name())?
-        else {
+        let Some(def) = pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name()) else {
+            // A MOUNTED interface's declared field order comes from its
+            // exported row (declaration order — the same index space its
+            // implementations were baked against at the library's own emit).
+            if let Some(baml_compiler2_tir::package_interface::ExportedType::Interface {
+                fields,
+                ..
+            }) = baml_compiler2_tir::package_interface::mounted_type_row(self.db, iface_tn)
+            {
+                let index = fields.iter().position(|(name, _, _)| name == field)?;
+                return Some(u32::try_from(index).expect("interface field count fits u32"));
+            }
+            return None;
+        };
+        let baml_compiler2_hir::contributions::Definition::Interface(loc) = def else {
             return None;
         };
         let index = interface_data(self.db, loc)
@@ -5612,16 +5809,61 @@ impl<'db> LoweringContext<'db> {
                     // must capture the receiver and bind its impl at runtime — the
                     // virtual-bound path below handles it; a bare function constant
                     // would name an interface-keyed global that (for a required
-                    // method) does not exist.
+                    // method) does not exist. An interface-routed MOUNTED callee
+                    // (BEP-066 slice 6a) rides the same rule.
                     Some(
                         MemberResolution::InterfaceVirtualMethod { .. }
                         | MemberResolution::InterfaceConcreteMethod { .. },
                     ) if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
+                    Some(MemberResolution::External(external))
+                        if matches!(
+                            external.target,
+                            baml_compiler2_tir::inference::ExternalCallTarget::Interface { .. }
+                        ) && self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
+                    // A mounted class's plain method referenced on a value
+                    // receiver: capture the receiver, exactly as `BoundMethod`.
+                    Some(MemberResolution::External(external))
+                        if external.takes_self
+                            && matches!(
+                                external.target,
+                                baml_compiler2_tir::inference::ExternalCallTarget::Method { .. }
+                            )
+                            && self.binding_id_for_path(expr_id, &segments[0]).is_some() =>
+                    {
+                        let resolution = member_resolutions.into_iter().last().unwrap();
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            let receiver_segments = &segments[..segments.len() - 1];
+                            let receiver_op = if receiver_segments.len() == 1 {
+                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                    || Operand::Constant(Constant::Null),
+                                    Operand::Copy,
+                                )
+                            } else {
+                                let recv_ty = self.expr_ty(expr_id);
+                                let recv_local = self.builder.temp(recv_ty);
+                                self.lower_multi_segment_path_as_field_chain(
+                                    expr_id,
+                                    receiver_segments,
+                                    Place::local(recv_local),
+                                );
+                                Operand::Copy(Place::local(recv_local))
+                            };
+                            self.builder.assign(
+                                dest,
+                                Rvalue::MakeBoundMethod {
+                                    item_ref: item,
+                                    receiver: receiver_op,
+                                },
+                            );
+                            return;
+                        }
+                    }
                     Some(
                         MemberResolution::UnboundMethod { .. }
                         | MemberResolution::Free { .. }
                         | MemberResolution::InterfaceVirtualMethod { .. }
-                        | MemberResolution::InterfaceConcreteMethod { .. },
+                        | MemberResolution::InterfaceConcreteMethod { .. }
+                        | MemberResolution::External(_),
                     ) => {
                         // Unbound method or free function reference — emit a plain function constant.
                         let resolution = member_resolutions.into_iter().last().unwrap();
@@ -5689,13 +5931,57 @@ impl<'db> LoweringContext<'db> {
                     // Value-rooted interface-method reference: see the
                     // `member_resolutions` match above — the virtual-bound path
                     // below captures the receiver and binds its impl at runtime.
+                    // Interface-routed mounted callees ride the same rule.
                     MemberResolution::InterfaceVirtualMethod { .. }
                     | MemberResolution::InterfaceConcreteMethod { .. }
                         if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
+                    MemberResolution::External(external)
+                        if matches!(
+                            external.target,
+                            baml_compiler2_tir::inference::ExternalCallTarget::Interface { .. }
+                        ) && self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
+                    // A mounted class's plain method referenced on a value
+                    // receiver: capture the receiver, exactly as `BoundMethod`.
+                    MemberResolution::External(external)
+                        if external.takes_self
+                            && matches!(
+                                external.target,
+                                baml_compiler2_tir::inference::ExternalCallTarget::Method { .. }
+                            )
+                            && self.binding_id_for_path(expr_id, &segments[0]).is_some() =>
+                    {
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            let receiver_segments = &segments[..segments.len() - 1];
+                            let receiver_op = if receiver_segments.len() == 1 {
+                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                    || Operand::Constant(Constant::Null),
+                                    Operand::Copy,
+                                )
+                            } else {
+                                let recv_ty = self.expr_ty(expr_id);
+                                let recv_local = self.builder.temp(recv_ty);
+                                self.lower_multi_segment_path_as_field_chain(
+                                    expr_id,
+                                    receiver_segments,
+                                    Place::local(recv_local),
+                                );
+                                Operand::Copy(Place::local(recv_local))
+                            };
+                            self.builder.assign(
+                                dest,
+                                Rvalue::MakeBoundMethod {
+                                    item_ref: item,
+                                    receiver: receiver_op,
+                                },
+                            );
+                            return;
+                        }
+                    }
                     MemberResolution::UnboundMethod { .. }
                     | MemberResolution::Free { .. }
                     | MemberResolution::InterfaceVirtualMethod { .. }
-                    | MemberResolution::InterfaceConcreteMethod { .. } => {
+                    | MemberResolution::InterfaceConcreteMethod { .. }
+                    | MemberResolution::External(_) => {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
@@ -7527,6 +7813,8 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
+        use baml_compiler2_tir::inference::{ExternalCallTarget, MemberResolution};
+
         let callee_expr = self.body.exprs[callee].clone();
         if let AstExpr::MemberAccess { base, member } = &callee_expr {
             let member_name = member.clone();
@@ -7569,6 +7857,23 @@ impl<'db> LoweringContext<'db> {
             ) {
                 return;
             }
+        }
+        // Mounted UFCS through an interface-provided class method
+        // (`app.Widget.describe(widget)`) has an explicit receiver as its
+        // first argument. The exported callee names the interface slot, so
+        // lower it as the same open-world VirtualCall used by `widget.describe()`
+        // rather than as a direct call to a nonexistent interface body.
+        if matches!(callee_expr, AstExpr::Path(_))
+            && let Some(MemberResolution::External(external)) =
+                self.tir_resolution(self.expr_metadata_key(callee)).cloned()
+            && let ExternalCallTarget::Interface { method, .. } = &external.target
+            && external.takes_self
+            && let Some(&receiver) = args.first()
+            && self.try_lower_interface_ufcs_dispatch(
+                expr_id, receiver, method, args, runtime_id, &dest,
+            )
+        {
+            return;
         }
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
         // block emits a static call to `I`'s default function, with the
@@ -7958,6 +8263,7 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::Free { .. }
                             | MemberResolution::InterfaceVirtualMethod { .. }
                             | MemberResolution::InterfaceConcreteMethod { .. }
+                            | MemberResolution::External(_)
                     )
                 })
             {
@@ -7993,6 +8299,9 @@ impl<'db> LoweringContext<'db> {
                             // A virtual interface-method call is always on a receiver, so it
                             // takes `self`; there is no static body to inspect.
                             MemberResolution::InterfaceVirtualMethod { .. } => true,
+                            // A mounted callee carries its receiver convention
+                            // on the resolution (BEP-066 slice 6a).
+                            MemberResolution::External(external) => external.takes_self,
                             _ => false,
                         })
                 };
@@ -8057,6 +8366,11 @@ impl<'db> LoweringContext<'db> {
                                 | MemberResolution::UnboundMethod { .. }
                                 | MemberResolution::InterfaceVirtualMethod { .. }
                                 | MemberResolution::InterfaceConcreteMethod { .. }
+                        ) || matches!(
+                            r,
+                            // A mounted method with a `self` receiver (a free
+                            // function stays on the plain-callee path below).
+                            MemberResolution::External(external) if external.takes_self
                         )
                     });
             // Also check flat resolutions (package-path method call, kept for compatibility).
@@ -8072,6 +8386,9 @@ impl<'db> LoweringContext<'db> {
                                 | MemberResolution::UnboundMethod { .. }
                                 | MemberResolution::InterfaceVirtualMethod { .. }
                                 | MemberResolution::InterfaceConcreteMethod { .. }
+                        ) || matches!(
+                            r,
+                            MemberResolution::External(external) if external.takes_self
                         )
                     });
 
@@ -8106,6 +8423,9 @@ impl<'db> LoweringContext<'db> {
                                 .is_some_and(|param| param.name.as_str() == "self")
                         }
                         MemberResolution::InterfaceVirtualMethod { .. } => true,
+                        // A mounted callee carries its receiver convention on
+                        // the resolution (BEP-066 slice 6a).
+                        MemberResolution::External(external) => external.takes_self,
                         _ => false,
                     }
                 });
@@ -9167,6 +9487,7 @@ impl LoweringContext<'_> {
                     | MemberResolution::UnboundMethod { .. }
                     | MemberResolution::InterfaceVirtualMethod { .. }
                     | MemberResolution::InterfaceConcreteMethod { .. }
+                    | MemberResolution::External(_)
             )
         };
         let key = self.expr_metadata_key(base);
@@ -9649,6 +9970,38 @@ impl<'db> LoweringContext<'db> {
                     // the receiver and bind its impl at runtime — the virtual-bound
                     // path below handles it.
                 }
+                // A mounted callee (BEP-066 slice 6a): a plain method on a
+                // value receiver binds like `BoundMethod`; an interface-routed
+                // one falls through to the virtual-bound path below (same rule
+                // as the interface arms above).
+                MemberResolution::External(external) => {
+                    use baml_compiler2_tir::inference::ExternalCallTarget;
+                    match &external.target {
+                        ExternalCallTarget::Method { .. } if external.takes_self => {
+                            if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                                let receiver_op = self.lower_to_operand(base);
+                                self.builder.assign(
+                                    dest,
+                                    Rvalue::MakeBoundMethod {
+                                        item_ref: item,
+                                        receiver: receiver_op,
+                                    },
+                                );
+                                return;
+                            }
+                        }
+                        ExternalCallTarget::Interface { .. } => {}
+                        ExternalCallTarget::Free { .. } | ExternalCallTarget::Method { .. } => {
+                            if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                                self.builder.assign(
+                                    dest,
+                                    Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                                );
+                                return;
+                            }
+                        }
+                    }
+                }
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
                 | MemberResolution::InterfaceVirtualField { .. } => {
@@ -10115,6 +10468,49 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
+    /// UFCS twin of `try_lower_interface_dispatch`. Its call plan is
+    /// self-inclusive, so lower the complete source argument list once, peel
+    /// the first operand off as the virtual receiver, and retain the rest as
+    /// method arguments. This preserves source evaluation order and avoids
+    /// asking `lower_call_arg_operands` to interpret a truncated call.
+    fn try_lower_interface_ufcs_dispatch(
+        &mut self,
+        expr_id: AstExprId,
+        receiver: AstExprId,
+        method: &Name,
+        args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
+        dest: &Place,
+    ) -> bool {
+        let dispatch_target = self
+            .interface_dispatch_target_for_expr_member(receiver, method)
+            .or_else(|| {
+                self.tir_expr_type(self.expr_metadata_key(receiver))
+                    .and_then(|ty| self.dispatch_target_for_concrete(ty, method))
+            });
+        let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
+            return false;
+        };
+        let mut arg_ops = self.lower_call_arg_operands(expr_id, args);
+        if arg_ops.is_empty() {
+            return false;
+        }
+        let receiver_op = arg_ops.remove(0);
+        let (decl_tn, decl_args, decl_assoc) =
+            self.interface_view_declaring_method(&(iface_tn, iface_type_args, iface_assoc), method);
+        self.emit_virtual_call_with_value_operands(
+            receiver_op,
+            &decl_tn,
+            &decl_args,
+            &decl_assoc,
+            method,
+            expr_id,
+            arg_ops,
+            runtime_id,
+            dest,
+        )
+    }
+
     /// Emit an open-world [`Terminator::VirtualCall`] dispatching `method` of
     /// interface `iface_tn` on `recv_local`. The receiver is passed as the first
     /// value argument; the VM reads its runtime concrete type as `Self` and
@@ -10143,6 +10539,34 @@ impl<'db> LoweringContext<'db> {
         // call's type args — inference may also surface the owner (interface) args,
         // which lead and are dropped here since the VM supplies them from the impl.
         let arg_ops = self.lower_call_arg_operands(expr_id, args);
+        self.emit_virtual_call_with_value_operands(
+            Operand::Copy(Place::Local(recv_local)),
+            iface_tn,
+            iface_type_args,
+            iface_assoc,
+            method,
+            expr_id,
+            arg_ops,
+            runtime_id,
+            dest,
+        )
+    }
+
+    /// Shared virtual-call frame assembly after the receiver and value
+    /// arguments have been lowered in source order.
+    #[expect(clippy::too_many_arguments)]
+    fn emit_virtual_call_with_value_operands(
+        &mut self,
+        receiver: Operand,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
+        method: &Name,
+        expr_id: AstExprId,
+        arg_ops: Vec<Operand>,
+        runtime_id: Option<AstExprId>,
+        dest: &Place,
+    ) -> bool {
         let method_arg_count = self
             .interface_method_generic_count(iface_tn, method)
             .unwrap_or(0);
@@ -10156,7 +10580,7 @@ impl<'db> LoweringContext<'db> {
         let ntypeargs = method_type_arg_ops.len();
         let mut all_args = Vec::with_capacity(ntypeargs + arg_ops.len() + 1);
         all_args.extend(method_type_arg_ops);
-        all_args.push(Operand::Copy(Place::Local(recv_local)));
+        all_args.push(receiver);
         all_args.extend(arg_ops);
         // Non-generic interfaces (`Equals`/`Compare`) carry empty args/assoc; a
         // parameterized interface bakes its arguments into the template. The
@@ -10493,9 +10917,30 @@ impl<'db> LoweringContext<'db> {
         let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
         let iface_ns: Vec<Name> = iface_tn.namespace().clone();
-        let Definition::Interface(iface_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
-        else {
+        let Some(def) = iface_pkg_items.lookup_type(&iface_ns, iface_tn.name()) else {
+            // A MOUNTED interface's method generics come from its exported
+            // row (declared params — the same count `function_data` reports
+            // for a source interface method).
+            if let Some(baml_compiler2_tir::package_interface::ExportedType::Interface {
+                required_methods,
+                default_methods,
+                ..
+            }) = baml_compiler2_tir::package_interface::mounted_type_row(self.db, iface_tn)
+            {
+                return required_methods
+                    .iter()
+                    .chain(default_methods)
+                    .find(|m| m.name == *method)
+                    .map(|m| {
+                        m.generic_params
+                            .iter()
+                            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
+                            .count()
+                    });
+            }
+            return None;
+        };
+        let Definition::Interface(iface_loc) = def else {
             return None;
         };
         let iface_data = interface_data(self.db, iface_loc);
@@ -10791,9 +11236,38 @@ impl<'db> LoweringContext<'db> {
         let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
         let iface_ns: Vec<Name> = iface_tn.namespace().clone();
-        let Definition::Interface(requested_root_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
-        else {
+        let Some(def) = iface_pkg_items.lookup_type(&iface_ns, iface_tn.name()) else {
+            // A MOUNTED interface: the exported `requires` rows are the
+            // pre-flattened transitive closure at identity args, so the view
+            // list is the root plus each row realized at the requested args
+            // (`Self`-rooted projections stay symbolic — they only narrow
+            // dispatch views, where the name is what matters).
+            let baml_compiler2_tir::package_interface::ExportedType::Interface {
+                generic_params,
+                requires,
+                ..
+            } = baml_compiler2_tir::package_interface::mounted_type_row(self.db, iface_tn)?
+            else {
+                return None;
+            };
+            let bindings: FxHashMap<ParamTy, Tir2Ty> = generic_params
+                .iter()
+                .cloned()
+                .zip(iface_type_args.iter().cloned())
+                .collect();
+            let mut views = vec![(
+                iface_tn.clone(),
+                iface_type_args.to_vec(),
+                iface_assoc.to_vec(),
+            )];
+            for required in requires {
+                let realized = required
+                    .map_tys(|ty| baml_compiler2_tir::generics::substitute_ty(ty, &bindings));
+                views.push((realized.name, realized.generics, realized.associated_types));
+            }
+            return Some(views);
+        };
+        let Definition::Interface(requested_root_loc) = def else {
             return None;
         };
         Some(

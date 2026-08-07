@@ -61,7 +61,7 @@ impl<'db> ImplData<'db> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImplData<'db> {
     /// The implemented interface's resolved head identity. Impls whose target
     /// doesn't resolve to an interface are dropped (`impl_data` → `None`).
@@ -84,6 +84,10 @@ pub struct ImplData<'db> {
     /// The impl body's own method overrides, as stable function ids. Inherited
     /// interface defaults are merged by downstream consumers, not here.
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+    /// The impl body's loc-free method overrides when this data was
+    /// materialized from a mounted package interface. Source-backed impls keep
+    /// this empty and use [`Self::methods`]; mounted impls do the inverse.
+    pub mounted_methods: Vec<crate::package_interface::ExportedImplMethod>,
     /// Interface associated-type bindings supplied by this impl body
     /// (`type Item = int`), resolved.
     pub associated_types: Vec<(Name, Ty)>,
@@ -835,6 +839,7 @@ pub fn impl_data<'db>(
         generic_params,
         diagnostics,
         methods,
+        mounted_methods: Vec::new(),
         associated_types,
         field_links,
         origin,
@@ -1190,6 +1195,7 @@ fn mounted_impl_data<'db>(
         generic_params,
         diagnostics,
         methods: block.methods.clone(),
+        mounted_methods: Vec::new(),
         associated_types,
         field_links: block
             .field_links
@@ -2326,10 +2332,10 @@ pub struct ResolvedImpl<'db> {
 /// over them. Loc-free by construction: the interface target resolves to a
 /// source loc when the implemented interface is itself source-backed in THIS
 /// database (a blob impl of a stdlib interface), else stays a `Mounted`
-/// qualified name; `methods` is empty (blob overrides have no locs — method
-/// dispatch through mounted impls lands with the call-lowering PR) and
-/// `diagnostics` is empty (blob impls are pre-checked at export; they are
-/// never re-validated here). Empty for non-mounted packages.
+/// qualified name. Blob overrides are retained in `mounted_methods` (their
+/// structural owner is the enclosing row); `diagnostics` is empty because
+/// mounted impls were checked before export and are never re-validated here.
+/// Empty for non-mounted packages.
 #[salsa::tracked(returns(ref))]
 pub fn mounted_impl_datas<'db>(
     db: &'db dyn crate::Db,
@@ -2362,6 +2368,7 @@ pub fn mounted_impl_datas<'db>(
                     .collect(),
                 diagnostics: Vec::new(),
                 methods: Vec::new(),
+                mounted_methods: row.methods.clone(),
                 associated_types: row.associated_types.clone(),
                 field_links: row.field_links.clone(),
                 origin: match &row.origin {
@@ -3051,10 +3058,18 @@ pub(crate) fn first_failing_impl_bound<'db>(
 /// An interface method resolved on a [`ResolvedImpl`] — the function backing it
 /// plus the type arguments to instantiate its generic frame. Produced by
 /// [`ResolvedImpl::get_method`].
+pub enum ResolvedMethodProvider<'db> {
+    /// A source-backed function body.
+    Source(baml_compiler2_hir::loc::FunctionLoc<'db>),
+    /// A loc-free mounted body and signature. Its symbol owner is the
+    /// enclosing `ExportedImpl`, never `sig.callable_fqn` alone.
+    Mounted(Box<crate::package_interface::ExportedFunction>),
+}
+
 pub struct ResolvedMethod<'db> {
     /// The function providing the implementation: the impl block's own override,
     /// or — when the impl does not override it — the interface's default method.
-    pub method: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    pub method: ResolvedMethodProvider<'db>,
     /// `true` when `method` is the interface's default body rather than an impl
     /// override. The two are referenced differently downstream: a free function
     /// vs. a method dispatched through the interface on its implementor.
@@ -3063,6 +3078,16 @@ pub struct ResolvedMethod<'db> {
     /// own generic params resolved through the impl bindings for an override, or
     /// the realized interface input args for an inherited default.
     pub frame_type_args: Vec<Ty>,
+}
+
+impl<'db> ResolvedMethod<'db> {
+    /// The backing function loc when the provider is source-backed.
+    pub fn method_loc(&self) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+        match self.method {
+            ResolvedMethodProvider::Source(loc) => Some(loc),
+            ResolvedMethodProvider::Mounted(_) => None,
+        }
+    }
 }
 
 impl<'db> ResolvedImpl<'db> {
@@ -3120,34 +3145,107 @@ impl<'db> ResolvedImpl<'db> {
                     })
                     .collect();
                 return Some(ResolvedMethod {
-                    method: func_loc,
+                    method: ResolvedMethodProvider::Source(func_loc),
                     from_interface_default: false,
                     frame_type_args,
                 });
             }
         }
 
-        // The interface's default — framed by the realized interface input args.
-        // A MOUNTED interface's default bodies have no locs; resolving a call
-        // to one lands with the mounted-call lowering PR, so the lookup
-        // reports "no such method" until then.
-        let iface_loc = data.interface_loc()?;
-        let iface_data = interface_data(db, iface_loc);
-        for &fn_loc in &iface_data.default_methods {
-            if function_data(db, fn_loc).name == *method {
+        // A mounted impl's own override — the same generic frame as the source
+        // arm, but with an exported signature instead of a FunctionLoc.
+        for exported in &data.mounted_methods {
+            if exported.name == *method {
                 let frame_type_args = data
-                    .interface_args
+                    .generic_params
                     .iter()
-                    .map(|arg| substitute_ty(arg, &self.bindings))
+                    .map(|(name, _)| {
+                        self.bindings
+                            .get(name)
+                            .cloned()
+                            .unwrap_or(Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            })
+                    })
                     .collect();
                 return Some(ResolvedMethod {
-                    method: fn_loc,
-                    from_interface_default: true,
+                    method: ResolvedMethodProvider::Mounted(Box::new(exported.sig.clone())),
+                    from_interface_default: false,
                     frame_type_args,
                 });
             }
         }
+
+        // The interface's default — framed by the realized interface input
+        // args, through either the source declaration or its mounted row.
+        match &data.interface {
+            ImplInterfaceTarget::Source(iface_loc) => {
+                let iface_data = interface_data(db, *iface_loc);
+                for &fn_loc in &iface_data.default_methods {
+                    if function_data(db, fn_loc).name == *method {
+                        let frame_type_args = data
+                            .interface_args
+                            .iter()
+                            .map(|arg| substitute_ty(arg, &self.bindings))
+                            .collect();
+                        return Some(ResolvedMethod {
+                            method: ResolvedMethodProvider::Source(fn_loc),
+                            from_interface_default: true,
+                            frame_type_args,
+                        });
+                    }
+                }
+            }
+            ImplInterfaceTarget::Mounted(qtn) => {
+                if let Some(crate::package_interface::ExportedType::Interface {
+                    default_methods,
+                    ..
+                }) = crate::package_interface::mounted_type_row(db, qtn)
+                    && let Some(exported) = default_methods.iter().find(|m| m.name == *method)
+                {
+                    let frame_type_args = data
+                        .interface_args
+                        .iter()
+                        .map(|arg| substitute_ty(arg, &self.bindings))
+                        .collect();
+                    return Some(ResolvedMethod {
+                        method: ResolvedMethodProvider::Mounted(Box::new(exported.clone())),
+                        from_interface_default: true,
+                        frame_type_args,
+                    });
+                }
+            }
+        }
         None
+    }
+
+    /// Whether this impl PROVIDES `method` — an override, an inherited
+    /// interface default, or (for a mounted blob row, whose overrides have no
+    /// locs) an exported method row. Kept as a named predicate for candidate
+    /// callers that do not need the provider payload.
+    pub fn provides_method(&self, db: &'db dyn crate::Db, method: &Name) -> bool {
+        use baml_compiler2_ppir::item_data::{function_data, interface_data};
+        if self.get_method(db, method).is_some() {
+            return true;
+        }
+        let Some(data) = self.data(db) else {
+            return false;
+        };
+        // The implemented interface's own default — through whichever
+        // declaration surface exists (source loc or mounted row).
+        match &data.interface {
+            ImplInterfaceTarget::Source(iface_loc) => interface_data(db, *iface_loc)
+                .default_methods
+                .iter()
+                .any(|&fn_loc| function_data(db, fn_loc).name == *method),
+            ImplInterfaceTarget::Mounted(qtn) => matches!(
+                crate::package_interface::mounted_type_row(db, qtn),
+                Some(crate::package_interface::ExportedType::Interface {
+                    default_methods,
+                    ..
+                }) if default_methods.iter().any(|m| m.name == *method)
+            ),
+        }
     }
 
     /// The interface this impl provides at its resolved instantiation: the declared interface

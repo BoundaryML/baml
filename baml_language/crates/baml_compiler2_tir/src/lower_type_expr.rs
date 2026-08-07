@@ -326,9 +326,11 @@ pub enum ResolvedTypeDefinition<'db> {
 /// Resolve a type name/path to its definition, with `ns_context` as the namespace
 /// prefix. Tries the namespace-qualified own-package lookup, then a cross-package lookup
 /// (`root.ns.Name` or `pkg.ns.Name` — a MOUNTED package resolves through its interface
-/// blob instead of raw items), then the `$stream` companion (whose base class/alias
-/// the caller re-qualifies under the `$stream` name; mounted packages export no
-/// `$stream` rows, so their companions stay unresolved — the ordinary E0002).
+/// blob instead of raw items), then the legacy `$stream` companion fallback
+/// (whose base class/alias the caller re-qualifies under the `$stream` name).
+/// Canonical PPIR `$stream` items are exported as ordinary rows, so mounted
+/// companions resolve in the first step; the fallback remains for source
+/// shapes that predate or bypass canonical expansion.
 /// `None` when unresolved.
 pub(crate) fn resolve_type_in<'db>(
     db: &'db dyn crate::Db,
