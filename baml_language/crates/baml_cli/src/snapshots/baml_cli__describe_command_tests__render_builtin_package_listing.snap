@@ -329,8 +329,8 @@ function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.ba
 function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:61
 function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:74
 class            baml.toml.TomlParseError         <builtin>/baml/ns_toml/toml.baml:83
-function         baml.type.of                     <builtin>/baml/ns_type/type.baml:18
-function         baml.type.of_value               <builtin>/baml/ns_type/type.baml:41
+function         baml.type.of                     <builtin>/baml/ns_type/type.baml:19
+function         baml.type.of_value               <builtin>/baml/ns_type/type.baml:42
 class            baml.ws.WsStream                 <builtin>/baml/ns_ws/ws.baml:4
 function         baml.ws.connect                  <builtin>/baml/ns_ws/ws.baml:24
 function         baml.ws._connect                 <builtin>/baml/ns_ws/ws.baml:32
