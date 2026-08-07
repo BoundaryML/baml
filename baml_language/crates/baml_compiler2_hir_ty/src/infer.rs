@@ -1858,12 +1858,43 @@ impl<'db> InferenceContext<'db> {
                 let rhs_ty = self.check_expr(body, rhs, &Ty::bool());
                 const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
             }
-            BinaryOp::Eq
-            | BinaryOp::Ne
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge => {
+            BinaryOp::Eq | BinaryOp::Ne => {
+                let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
+                let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                let lhs_ty = self.table.resolve_completely(&lhs_ty);
+                let rhs_ty = self.table.resolve_completely(&rhs_ty);
+                // Equality folds whenever compile time can DECIDE it
+                // (ruling 2026-08-07), in TIR's layering: the literal
+                // VALUE table first (same-base pairs, floats included),
+                // then the shared algebra's `constant_equality` - false
+                // for provably-DISJOINT operands (under the language's
+                // equality semantics: int/float overlap numerically,
+                // bigint does not; a non-nullable type never equals
+                // `null`), true for equal unoverridable singletons.
+                // Everything else is `bool`.
+                if let Some(folded) = const_fold_binary(op, &lhs_ty, &rhs_ty) {
+                    return folded;
+                }
+                if !lhs_ty.has_infer()
+                    && !rhs_ty.has_infer()
+                    && !lhs_ty.has_error()
+                    && !rhs_ty.has_error()
+                    && let Some(equal) = baml_type::normalize::TypeContext::constant_equality(
+                        &self.facts,
+                        &lhs_ty.to_plain(),
+                        &rhs_ty.to_plain(),
+                    )
+                {
+                    let value = if matches!(op, BinaryOp::Eq) { equal } else { !equal };
+                    return Ty::intern(TyKind::Literal(
+                        Literal::Bool(value),
+                        Freshness::Fresh,
+                        TyAttr::default(),
+                    ));
+                }
+                Ty::bool()
+            }
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
                 let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
                 let lhs_ty = self.table.resolve_completely(&lhs_ty);
@@ -2204,7 +2235,17 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         match op {
             baml_compiler2_ast::UnaryOp::Not => {
-                self.check_expr(body, operand, &Ty::bool());
+                let ty = self.check_expr(body, operand, &Ty::bool());
+                // `!` on a literal bool constant-FOLDS (TIR's
+                // `try_fold_unary`), freshness preserved.
+                let resolved = self.table.resolve_completely(&ty);
+                if let TyKind::Literal(Literal::Bool(value), freshness, _) = resolved.kind() {
+                    return Ty::intern(TyKind::Literal(
+                        Literal::Bool(!value),
+                        *freshness,
+                        TyAttr::default(),
+                    ));
+                }
                 Ty::bool()
             }
             baml_compiler2_ast::UnaryOp::Neg => {

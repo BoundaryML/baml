@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52644
+agreements: 52660
 one-sided (coverage): 264
-conflicts: 7797 across 1369 distinct pairs
+conflicts: 7781 across 1367 distinct pairs
 hir_ty error-channel entries: 0
 tir diagnostics: 0
 panics: 0
@@ -291,9 +291,6 @@ panics: 0
 [9x] hir_ty=[(value: int) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_builtins/builtins.baml:1095..1106 `string.from`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:6503..6514 `string.from`
-[9x] hir_ty=[bool] tir=[true]
-    at ns_bigints/bigints.baml:17690..17708 `(5 == 5n) == false`
-    at ns_floats/floats.baml:24507..24529 `(null == 2.0) == false`
 [9x] hir_ty=[throws "boom"] tir=[throws string]
     at ns_defer/defer.baml:2491..2513 `defer_call_throws_boom`
     at ns_defer/defer.baml:2551..2574 `defer_call_throws_risky`
@@ -390,9 +387,6 @@ panics: 0
 [7x] hir_ty=[5] tir=[int]
     at ns_assignments/assignments.baml:3736..3737 `5`
     at ns_assignments/assignments.baml:4306..4307 `5`
-[7x] hir_ty=[bool] tir=[false]
-    at ns_bigints/bigints.baml:17691..17698 `5 == 5n`
-    at ns_floats/floats.baml:24508..24519 `null == 2.0`
 [7x] hir_ty=[int] tir=[1 | int]
     at ns_arrays/arrays.baml:28239..28300 `[1, 2, 3, ...c * x }, 1)`
     at ns_optional_function_parameters/optional_function_parameters.baml:2863..2908 `{\n  if (v... value }\n}`

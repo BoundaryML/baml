@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+73..82 'dfe_mixed': throws never
+107..122 '{\n   ... 5n\n}': false
+113..114 '5': 5
+113..120 '5 == 5n': false
+118..120 '5n': 5n
+132..142 'dfe_widens': throws never
+166..210 '{\n   ...  r\n}': bool
+172..177 'let r': bool
+180..181 '5': 5
+180..187 '5 == 5n': false
+185..187 '5n': 5n
+207..208 'r': bool
+220..229 'dfe_outer': throws never
+253..279 '{\n   ...lse\n}': true
+259..277 '(5 == ... false': true
+260..261 '5': 5
+260..267 '5 == 5n': false
+265..267 '5n': 5n
+272..277 'false': false
+289..305 'dfe_nu...iteral': throws never
+330..349 '{\n   ...2.0\n}': false
+336..340 'null': null
+336..347 'null == 2.0': false
+344..347 '2.0': 2.0
+359..372 'dfe_null_null': throws never
+396..416 '{\n   ...ull\n}': true
+402..406 'null': null
+402..414 'null == null': true
+410..414 'null': null
+426..432 'dfe_ne': throws never
+456..471 '{\n   ... 5n\n}': true
+462..463 '5': 5
+462..469 '5 != 5n': true
+467..469 '5n': 5n
