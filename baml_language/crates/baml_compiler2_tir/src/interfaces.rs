@@ -676,6 +676,26 @@ pub(crate) fn existential_associated_default(
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
+    // A MOUNTED (source-less) interface's defaults live pre-lowered (symbolic
+    // `Self`) on its exported row — realization is pure substitution
+    // (BEP-066 slice 6a).
+    if let Some(crate::package_interface::ExportedType::Interface {
+        self_param,
+        generic_params,
+        associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, qtn)
+    {
+        let assoc = associated_types.iter().find(|a| &a.name == member)?;
+        let default = assoc.default.as_ref()?;
+        return Some(realize_associated_default(
+            default,
+            generic_params,
+            args,
+            self_param,
+            self_ty,
+        ));
+    }
     let items = res_ctx.items_for_package(db, qtn.package())?;
     let Definition::Interface(iface_loc) = items.lookup_type(qtn.namespace(), qtn.name())? else {
         return None;
@@ -1465,6 +1485,44 @@ pub fn interface_requires<'db>(
     mut equivalent: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     if sub.name == sup.name {
+        return false;
+    }
+    // A MOUNTED (source-less) `sub`: its exported `requires` rows are the
+    // pre-flattened transitive closure at identity args with symbolic `Self`
+    // — realize by substituting `sub`'s generic arguments and compare
+    // (BEP-066 slice 6a). Two conservative gaps vs. the source walk, both
+    // fail-closed (`false`, never a wrong `true`): a member pinned at the
+    // walk root stays a symbolic `Self.<member>` projection rather than
+    // collapsing to `sub`'s written witness, and unfilled defaults are left
+    // absent (the export's rigid-`Self` rule) — so a `sup` pinning such a
+    // member won't match.
+    if let Some(crate::package_interface::ExportedType::Interface {
+        generic_params,
+        requires,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &sub.name)
+    {
+        let bindings = generics::bind_type_vars(generic_params, &sub.generics);
+        for required in requires {
+            let realized = required.map_tys(|ty| generics::substitute_ty(ty, &bindings));
+            if realized.name == sup.name
+                && realized.generics.len() == sup.generics.len()
+                && realized
+                    .generics
+                    .iter()
+                    .zip(sup.generics.iter())
+                    .all(|(a, b)| equivalent(a, b))
+                && sup.associated_types.iter().all(|(sup_name, sup_ty)| {
+                    realized
+                        .associated_types
+                        .iter()
+                        .find(|(name, _)| name == sup_name)
+                        .is_some_and(|(_, ty)| equivalent(ty, sup_ty))
+                })
+            {
+                return true;
+            }
+        }
         return false;
     }
     let Some(pkg_items) = res_ctx.items_for_package(db, sub.name.package()) else {

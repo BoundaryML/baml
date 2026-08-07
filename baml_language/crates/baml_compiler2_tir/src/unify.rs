@@ -375,6 +375,22 @@ pub(crate) fn normalized_alias_map<'db>(
     let mut aliases =
         crate::inference::collect_type_aliases(db, baml_compiler2_ppir::package_items(db, pkg_id));
     for dep in baml_compiler2_hir::package::package_dependency_closure(db, pkg_id) {
+        // A mounted (source-less) dependency's aliases live pre-resolved on
+        // its interface blob (BEP-066 slice 6a); its raw items are empty.
+        if let Some(mounted) = crate::package_interface::mounted_interface(db, &dep.name(db)) {
+            for types_in_ns in mounted.types.values() {
+                for exported in types_in_ns.values() {
+                    if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } =
+                        exported
+                    {
+                        aliases
+                            .entry(qtn.clone())
+                            .or_insert_with(|| resolved.clone());
+                    }
+                }
+            }
+            continue;
+        }
         for (qtn, ty) in
             crate::inference::collect_type_aliases(db, baml_compiler2_ppir::package_items(db, *dep))
         {
@@ -392,6 +408,14 @@ pub(crate) fn normalized_alias_map<'db>(
 /// by `nf` to fold a complete variant union (`Cmp.Less | Cmp.Equal | Cmp.More`) back to
 /// its enum (`Cmp`).
 pub(crate) fn enum_variant_names(db: &dyn crate::Db, enum_qtn: &TypeName) -> Option<Vec<Name>> {
+    // A mounted (source-less) package's enums live on its interface blob
+    // (BEP-066 slice 6a); its raw items are empty by design.
+    if let Some(row) = crate::package_interface::mounted_type_row(db, enum_qtn) {
+        let crate::package_interface::ExportedType::Enum { variants, .. } = row else {
+            return None;
+        };
+        return Some(variants.clone());
+    }
     let package_id = PackageId::new(db, enum_qtn.package().clone());
     let items = baml_compiler2_hir::package::package_items(db, package_id);
     let Some(Definition::Enum(enum_loc)) = items.lookup_type(enum_qtn.namespace(), enum_qtn.name())

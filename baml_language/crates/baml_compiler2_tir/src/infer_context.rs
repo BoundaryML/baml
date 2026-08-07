@@ -110,6 +110,11 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// A CALL whose callee is exported by a MOUNTED dependency but has no
+    /// loc-free link contract. Ordinary bytecode functions and methods carry
+    /// symbolic identities; compiler/VM builtin bodies do not. `path` is the
+    /// dotted callee path for the message (`app.native_value`).
+    MountedPackageCallUnsupported { path: Name },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -820,6 +825,13 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
+            }
+            TirTypeError::MountedPackageCallUnsupported { path } => {
+                write!(
+                    f,
+                    "cannot call mounted callable `{path}`: this callable kind has no \
+                     loc-free bytecode link contract"
+                )
             }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {

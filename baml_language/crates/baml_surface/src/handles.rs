@@ -740,9 +740,11 @@ impl<'db> Impl<'db> {
             .collect()
     }
 
-    /// The implemented interface; `None` when the block is malformed.
+    /// The implemented interface; `None` when the block is malformed or the
+    /// target is a mounted (source-less) dependency's interface, which has no
+    /// source handle.
     pub fn interface(self, db: &'db dyn Db) -> Option<Interface<'db>> {
-        facts::impl_data(db, self.0).map(|data| data.interface.into())
+        facts::impl_data(db, self.0).and_then(|data| data.interface_loc().map(Into::into))
     }
 
     /// The interface's generic arguments as written on this block.
@@ -785,7 +787,17 @@ impl<'db> Impl<'db> {
             })
             .collect();
         let overridden: Vec<Name> = out.iter().map(|m| m.function.name(db)).collect();
-        for &default_loc in &item_data::interface_data(db, data.interface).default_methods {
+        // A mounted interface's default bodies have no locs; only the block's
+        // own overrides are listed for such a target.
+        let default_methods = data
+            .interface_loc()
+            .map(|iface_loc| {
+                item_data::interface_data(db, iface_loc)
+                    .default_methods
+                    .as_slice()
+            })
+            .unwrap_or(&[]);
+        for &default_loc in default_methods {
             let default: Function<'db> = default_loc.into();
             if !overridden.contains(&default.name(db)) {
                 out.push(ImplMethod {
@@ -1150,7 +1162,9 @@ impl<'db> Interface<'db> {
     pub fn implementors(self, db: &'db dyn Db) -> Vec<Impl<'db>> {
         project_impls(db)
             .into_iter()
-            .filter(|imp| facts::impl_data(db, imp.0).is_some_and(|data| data.interface == self.0))
+            .filter(|imp| {
+                facts::impl_data(db, imp.0).is_some_and(|data| data.interface_loc() == Some(self.0))
+            })
             .collect()
     }
 }

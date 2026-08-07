@@ -553,8 +553,14 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
         // `primary` side left the file holding the `secondary` impl looking clean.
         let (primary, secondary) = if violation.primary.file_id == file_id {
             (violation.primary, violation.secondary)
-        } else if violation.secondary.file_id == file_id {
-            (violation.secondary, violation.primary)
+        } else if violation
+            .secondary
+            .is_some_and(|span| span.file_id == file_id)
+        {
+            (
+                violation.secondary.expect("checked is_some above"),
+                Some(violation.primary),
+            )
         } else {
             continue;
         };
@@ -562,18 +568,27 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
         // can't be ruled out, and the resolver assumes ≤1 impl), but the message
         // distinguishes them so the user knows whether it's a proven conflict or a
         // type too complex to analyze.
-        let message: &str = if violation.indeterminate {
+        let message: String = if violation.indeterminate {
             "these interface implementations are too complex to prove disjoint; \
              simplify the types involved so coherence can be decided"
+                .to_string()
         } else {
-            "overlapping interface implementations for the same receiver/interface"
+            "overlapping interface implementations for the same receiver/interface".to_string()
         };
-        diagnostics.push(
-            Diagnostic::error(DiagnosticId::OverlappingImplements, message)
-                .with_primary_span(primary)
-                .with_secondary(secondary, "conflicting implementation is here")
-                .with_phase(DiagnosticPhase::Type),
-        );
+        // A span-less partner is a MOUNTED (source-less) dependency's blob
+        // impl (BEP-066 slice 6a): primary-only attribution, the partner
+        // rendered structurally in the message.
+        let message = match &violation.secondary_desc {
+            Some(desc) => format!("{message} (conflicts with the mounted dependency's `{desc}`)"),
+            None => message,
+        };
+        let mut diag = Diagnostic::error(DiagnosticId::OverlappingImplements, message)
+            .with_primary_span(primary)
+            .with_phase(DiagnosticPhase::Type);
+        if let Some(secondary) = secondary {
+            diag = diag.with_secondary(secondary, "conflicting implementation is here");
+        }
+        diagnostics.push(diag);
     }
 
     // ── 2 + 3. Per-impl structural + signature/conformance diagnostics ────────
@@ -1952,6 +1967,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnknownClassPropertyShorthand { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
             DiagnosticId::UnknownVariable
+        }
+        TirTypeError::MountedPackageCallUnsupported { .. } => {
+            DiagnosticId::MountedPackageCallUnsupported
         }
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
