@@ -180,6 +180,12 @@ journal. The runner holds nothing. When reviewing new features against this
 decision, a proposal that stores conversation state outside the journal
 should instead record events and derive the state.
 
+This decision does not settle how API-native replay data or optional remote
+continuation checkpoints are represented. It also does not make a durable
+remote conversation equivalent to a response-chain optimization. Those
+questions are open for redesign in
+`03_client_replay_and_continuations.md`.
+
 Rejected: provider-message arrays as the persisted state, as in
 Pydantic AI and the OpenAI SDK. Message arrays lose tool, usage, and child
 structure; they tie state to one provider's wire format; and they make

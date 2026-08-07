@@ -36,7 +36,8 @@ _plan/
     │   └── 03_observability.md
     └── 05_appendix/
         ├── 01_comparisons.md
-        └── 02_alternatives_considered.md
+        ├── 02_alternatives_considered.md
+        └── 03_client_replay_and_continuations.md
 ```
 
 ## Introduction
@@ -96,6 +97,7 @@ _plan/
 - Sending events
 
 ### 05_models.md
+- Design status
 - What a client is
 - The three duties
 - Same-provider fidelity
@@ -222,3 +224,26 @@ _plan/
 - Durability is tiered; tier 3 is out of scope
 - Streaming is not history
 - One journal per session, sessions form a tree
+
+### 03_client_replay_and_continuations.md
+- Status and scope
+- The problem
+- The state classes that must remain distinct
+- OpenAI state mechanisms
+- What pi currently does
+- Lessons from pi
+- Relationship to BEPv4
+- Candidate local data model
+- Candidate client boundary
+- Context policies and capabilities
+- Response-chain rendering algorithm
+- Tool-loop continuation
+- Branching, rewinds, and compaction
+- Client switching and replay domains
+- Durability and crash recovery
+- Privacy, retention, and billing
+- Scenarios the redesign must specify
+- Alternatives to reconsider
+- Open questions
+- Recommended redesign sequence
+- Source index

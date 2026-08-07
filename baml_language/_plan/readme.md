@@ -33,7 +33,7 @@ library at any point and lose nothing.
 | `${ctx.transcript}` in prompts | language |
 | `MyFunc@session(...)` with `$` configuration parameters | language |
 | `baml.session.*` (Journal, events, Session, Job, Policy, Toolbox) | stdlib |
-| Client interface: `render` / `invoke` / `ingest` | stdlib |
+| Client/model API boundary (`render` / `invoke` / `ingest` is provisional) | stdlib |
 | Session and job support in generated SDKs and `baml serve` | tooling |
 
 ## What this BEP does not change
@@ -62,7 +62,9 @@ library at any point and lose nothing.
 
 **Advanced** — `01_errors_and_retries`, `02_evals`, `03_observability`.
 
-**Appendix** — `01_comparisons` (Pydantic AI, OpenAI Agents SDK, Flue,
-LangGraph), `02_alternatives_considered` (each decision, the options weighed, and why).
+**Appendix** — `01_comparisons` (Pydantic AI, OpenAI Agents SDK, Flue, pi,
+LangGraph), `02_alternatives_considered` (each settled decision, the options
+weighed, and why), `03_client_replay_and_continuations` (an unresolved client
+redesign prompted by pi and OpenAI remote-state mechanisms).
 
 `outline.md` lists every header for reference.

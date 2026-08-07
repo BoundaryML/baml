@@ -152,7 +152,7 @@ compile-time check, the schema the model sees, and the validator.
 ### Providers
 
 ```typescript
-// pi — a provider declares metadata and reuses a wire API implementation
+// pi: a provider declares metadata and reuses a wire API implementation.
 setProvider(createProvider({
   id: "ollama",
   auth: { apiKey: { resolve: async () => ({ auth: {} }) } },
@@ -162,20 +162,55 @@ setProvider(createProvider({
 ```
 
 ```baml
-// BAML — same split: the wire format is the codec, the client is a
-// configured instance of it
+// BAML: provider names the wire format and options configure the client.
 client<llm> Local {
     provider: openai,
     options: { base_url: "http://localhost:11434/v1", model: "qwen3:32b" },
 }
 ```
 
-Both systems separate "which wire format" from "which configuration."
-pi's `api: openAICompletionsApi()` corresponds to BAML's `provider:`
-field; a genuinely new wire format implements the `Client` interface
-(`render` / `invoke` / `ingest`, `../02_guides/05_models.md`). The BAML
-client additionally owns transcript rendering from the journal, which
-pi does not need: pi stores provider-shaped messages directly.
+Pi separates a provider descriptor from its reusable API implementation. The
+descriptor owns provider identity, authentication, model metadata, and the API
+binding. The API implementation owns request conversion, transport, and stream
+ingestion. An OpenAI-compatible service can therefore reuse
+`openAICompletionsApi()` without implementing another agent loop.
+
+The current BAML plan combines more of this work behind `client<llm>` and the
+`Client` interface. Its `provider:` field selects a wire format, while options
+select the endpoint, model, credentials, and retry policy. The current runtime
+contract exposes `render`, `invoke`, and `ingest` as client methods. Whether the
+service-descriptor/API-adapter split and the three phases should be public is
+under reconsideration in `03_client_replay_and_continuations.md`.
+
+### Replay and remote continuation
+
+Pi's normal `openai-responses` adapter builds complete input from local context
+and sets `store: false`. It has no dedicated `previous_response_id` or OpenAI
+Conversations option. It retains response IDs, message and item IDs,
+function-call IDs, encrypted reasoning items, and text phase metadata inside
+its local assistant representation. The next request reconstructs OpenAI input
+items from that local data. See [the normal Responses request
+construction](https://github.com/earendil-works/pi/blob/6b461b75b39b5a19b378dc42fbfbd1655bc446a6/packages/ai/src/api/openai-responses.ts#L260-L335)
+and [message
+conversion](https://github.com/earendil-works/pi/blob/6b461b75b39b5a19b378dc42fbfbd1655bc446a6/packages/ai/src/api/openai-responses-shared.ts#L130-L290).
+
+Pi's `openai-codex-responses` adapter has a narrower optimization. A cached
+WebSocket connection stores the previous request, response items, and response
+ID. When the next complete input is an extension of that prefix and the other
+request fields match, the adapter replaces the prefix with
+`previous_response_id` and sends only the delta. It sends full context when the
+comparison or connection reuse fails. See [cached continuation
+selection](https://github.com/earendil-works/pi/blob/6b461b75b39b5a19b378dc42fbfbd1655bc446a6/packages/ai/src/api/openai-codex-responses.ts#L1387-L1438).
+
+Pi's `sessionId` is a prompt-cache, session-affinity, or connection-cache key
+depending on the adapter. It is not an OpenAI conversation ID. No OpenAI
+Conversations API integration is present at the reviewed commit.
+
+This comparison exposes three separate requirements for BAML. Canonical
+content provides portability. API-native replay data provides exact stateless
+same-API fidelity. An optional remote continuation checkpoint can reduce a
+later request to a delta. These values have different lifetimes and should not
+be represented by one undifferentiated raw response field.
 
 ### Steering
 
@@ -225,11 +260,13 @@ Hooks run effects at lifecycle points; a policy decides and the runner
 acts. The policy form is unit-testable with literal events and safe
 under replay; hook effects re-run unless the author guards them.
 
-Differences that matter: a pi session has no typed goal — `prompt()`
-produces text, and there is no `Done<Itinerary>`; history is stored as
-provider-shaped messages rather than events, so cross-provider resume
-and typed journal queries are not available; and there is no policy
-seam — the loop is fixed, with hooks at its edges.
+Differences that matter: a pi session has no typed goal. `prompt()` produces
+text, and there is no `Done<Itinerary>`. Pi stores canonical messages and
+API-specific replay metadata rather than BAML's typed event journal, so
+typed journal queries are not available. Pi performs cross-provider conversion
+from its canonical content, but it does not preserve BAML's tool, policy,
+child-session, and typed-outcome event structure. Pi also has no policy seam.
+Its loop is fixed, with hooks at its edges.
 
 Adopted from pi, with credit: the steer/follow-up distinction, session
 forking (`fork(entryId)` over the entry tree — the journal analog is a

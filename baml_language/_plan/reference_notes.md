@@ -7,6 +7,13 @@ verified end to end (`infisical run --env=test -- baml run -e 'demo()'`:
 the model calls both tools through `reflect.call_any` and returns a
 typed `Itinerary`).
 
+The OpenAI client in this reference is a behavior harness, not the accepted
+client boundary. It uses Chat Completions, a string-only assistant message,
+full-response `raw_json`, and an adapter-owned action parser. Research into pi
+and OpenAI Responses exposed replay and continuation requirements that this
+implementation does not model. See
+`pages/05_appendix/03_client_replay_and_continuations.md` before extending it.
+
 2026-08-03: alignment pass between the docs and the reference. The
 reference now implements the doc-specified behavior it previously
 diverged from: setters journal `ClientChanged`/`PolicyChanged` and
@@ -226,3 +233,11 @@ template literals strip common indentation.
    caller. `ClientChanged` differs: clients are declared, so the
    recorded ID is re-resolvable. 03_configuration now states this;
    the BEP should keep the asymmetry explicit.
+10. **The client replay and continuation boundary is unresolved.** The
+    reference's string `AssistantMessage`, full-response `raw_json`,
+    `ActionParser`, and public `render` / `invoke` / `ingest` phases should not
+    be treated as the target design. The redesign must separate canonical
+    content, narrow same-API replay data, disposable response-chain cursors,
+    and durable remote conversation bindings. The full problem, external
+    evidence, candidate interfaces, failure cases, and test matrix are in
+    `pages/05_appendix/03_client_replay_and_continuations.md`.
