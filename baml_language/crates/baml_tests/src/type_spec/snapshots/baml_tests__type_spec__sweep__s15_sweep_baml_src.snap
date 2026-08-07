@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52474
+agreements: 52479
 one-sided (coverage): 264
-conflicts: 7967 across 1419 distinct pairs
+conflicts: 7962 across 1419 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -239,9 +239,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [11x] hir_ty=[int] tir=[int | 99]
     at ns_arrays/sort_comparable.baml:4987..5108 `Comparable...> 99\n    }`
     at ns_exceptions/exceptions.baml:33897..33933 `s13_middle...{ _ => 99 }`
-[10x] hir_ty=[!error] tir=[int]
-    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
-    at ns_lambdas/lambdas.baml:6582..6588 `dec2()`
 [10x] hir_ty=["origin"] tir=[string]
     at ns_errorcontext/errorcontext.baml:8726..8727 `e`
     at ns_errorcontext/errorcontext.baml:8740..8741 `_`
@@ -407,6 +404,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [7x] hir_ty=[int] tir=[1 | int]
     at ns_arrays/arrays.baml:28239..28300 `[1, 2, 3, ...c * x }, 1)`
     at ns_optional_function_parameters/optional_function_parameters.baml:2863..2908 `{\n  if (v... value }\n}`
+[6x] hir_ty=[!error] tir=[int]
+    at ns_iter_impl_generics_only/iter.baml:6900..7013 `match (p.p...sh(x),\n  }`
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:12862..12870 `v[0] + x`
 [6x] hir_ty=["no" | "yes"] tir=["yes" | "no"]
     at ns_match_basics/match_basics.baml:3017..3105 `{\n    let..."\n    }\n}`
     at ns_match_basics/match_basics.baml:3041..3103 `match (b) ..."no"\n    }`
@@ -587,9 +587,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [5x] hir_ty=[throws "too big"] tir=[throws string]
     at ns_exceptions/exceptions.baml:18628..18638 `s6_risky_1`
     at ns_exceptions/exceptions.baml:18936..18946 `s6_risky_2`
-[4x] hir_ty=[!error] tir=[void]
-    at ns_iter_closure_elements/iter_closure_elements.baml:650..654 `cb()`
-    at ns_iter_impl_generics_only/iter.baml:6582..6685 `match (p.p...sh(x),\n  }`
 [4x] hir_ty=["A"] tir=[string]
     at ns_errorcontext/errorcontext.baml:1786..1787 `e`
     at ns_errorcontext/errorcontext.baml:1800..1801 `_`
@@ -797,6 +794,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[!error] tir=[int[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9262..9263 `_`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9265..9281 `[.., let v: int]`
+[3x] hir_ty=[!error] tir=[void]
+    at ns_iter_impl_generics_only/iter.baml:6582..6685 `match (p.p...sh(x),\n  }`
+    at ns_iter_impl_generics_only/iter.baml:6688..6791 `match (p.n...sh(x),\n  }`
 [3x] hir_ty=["X" | "from_b"] tir=[string]
     at ns_defer/defer.baml:6966..6967 `e`
     at ns_defer/defer.baml:6975..6976 `_`

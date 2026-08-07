@@ -2265,6 +2265,12 @@ impl<'db> InferenceContext<'db> {
         bound_receiver: bool,
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
+        // The call is a STRUCTURE demand on the callee (rustc's
+        // `check_call` structurally resolves before matching
+        // callability): `inc2` holding a still-unsolved `?T` bounded
+        // by a function type forces here, exactly as a method
+        // receiver would.
+        let callee_fn_ty = &self.structurally_resolve(callee_fn_ty);
         let TyKind::Function {
             params,
             ret,
