@@ -483,9 +483,13 @@ impl<'db> InferenceContext<'db> {
     /// unclaimed and therefore uncovered).
     fn type_pattern_outcome(&mut self, scrut: &Ty, pat_ty: &Ty) -> PatternOutcome {
         if pat_ty.has_error() {
+            // Fail-safe for coverage, but the error stays LOCAL: the
+            // written type is the matched type (`map<!error, int>`
+            // keeps its shape - the replace-with-error discipline,
+            // never poison-to-top).
             return PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),
-                matched_ty: Ty::error(),
+                matched_ty: pat_ty.clone(),
                 covers_type: false,
                 consumes_matched: false,
             };

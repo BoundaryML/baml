@@ -1120,10 +1120,17 @@ impl<'db> InferenceContext<'db> {
             self.infer_let_destructure(body, pattern, initializer);
             return self.finish_let_else(body, else_branch);
         }
-        let binding_ty = match &body.patterns[pattern] {
+        match &body.patterns[pattern] {
             Pattern::Bind { subpat, .. } => {
+                // The `let` rule decides check-vs-synthesize from the
+                // leading ascription alone; the pattern itself then
+                // lowers through the ONE recursive walk match arms use
+                // (r-a's `infer_top_pat` shape) - so chains
+                // (`let x: let y`) and structural subpatterns
+                // (`let xs: [..]: int[]`) record every binding.
+                let subpat = *subpat;
                 let annotation = subpat.and_then(|sub| self.pattern_ascription_ty(body, sub));
-                match annotation {
+                let settled = match annotation {
                     Some(annotation_ty) => {
                         if let Some(init) = initializer {
                             self.check_expr(body, init, &annotation_ty);
@@ -1137,18 +1144,18 @@ impl<'db> InferenceContext<'db> {
                         }
                         None => Ty::error(),
                     },
-                }
+                };
+                self.lower_pattern(body, pattern, &settled);
+                self.finish_let_else(body, else_branch);
             }
             // Destructures: the pattern walk records each binding's type
             // itself; the let-level entry keeps the initializer type for
             // the pattern node (refutability is S17's diagnostic).
             _ => {
                 self.infer_let_destructure(body, pattern, initializer);
-                return self.finish_let_else(body, else_branch);
+                self.finish_let_else(body, else_branch);
             }
-        };
-        self.finish_let_else(body, else_branch);
-        self.result.type_of_binding.insert(pattern, binding_ty);
+        }
     }
 
     /// Assignment typing. The value checks against the DECLARED binding

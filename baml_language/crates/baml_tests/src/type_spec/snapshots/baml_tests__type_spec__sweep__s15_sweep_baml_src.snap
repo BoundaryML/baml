@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52494
+agreements: 52498
 one-sided (coverage): 264
-conflicts: 7947 across 1413 distinct pairs
+conflicts: 7943 across 1411 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -782,9 +782,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[throws 42 | "boom"] tir=[throws int | string]
     at ns_exceptions/exceptions.baml:3920..3930 `s2_fails_7`
     at ns_exceptions/exceptions.baml:4550..4560 `s2_fails_9`
-[3x] hir_ty=[!error] tir=[int]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:22676..22681 `let y`
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:22720..22737 `{\n        y\n    }`
 [3x] hir_ty=["X" | "from_b"] tir=[string]
     at ns_defer/defer.baml:6966..6967 `e`
     at ns_defer/defer.baml:6975..6976 `_`
@@ -1946,8 +1943,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[void] tir=[never]
     at ns_errorcontext/errorcontext.baml:6433..6446 `{ throw "B" }`
     at ns_errorcontext/errorcontext.baml:6455..6468 `{ throw "C" }`
-[1x] hir_ty=[!error] tir=[int[]]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:25102..25113 `[..]: int[]`
 [1x] hir_ty=[!error[]] tir=[_[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:25422..25424 `[]`
 [1x] hir_ty=["."] tir=[string]
