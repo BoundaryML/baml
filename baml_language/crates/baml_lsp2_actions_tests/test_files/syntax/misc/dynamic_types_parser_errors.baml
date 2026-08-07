@@ -166,3 +166,20 @@ test IncompleteSyntax {
 //  11 │ │     }
 //  12 │ ╰─▶ }
 //     ╰────
+// E0002
+//
+//   × unresolved type: Resume
+//     ╭─[misc_dynamic_types_parser_errors.baml:1:1]
+//   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
+//   2 │ │     client "openai/gpt-4o-mini"
+//   3 │ │     prompt #"Hello"#
+//   4 │ │     type_builder {
+//   5 │ │       class Foo {
+//   6 │ │         foo string
+//   7 │ │       }
+//   8 │ │       dynamic class Bar {
+//   9 │ │         bar int
+//  10 │ │       }
+//  11 │ │     }
+//  12 │ ╰─▶ }
+//     ╰────
