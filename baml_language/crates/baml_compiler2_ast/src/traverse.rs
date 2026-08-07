@@ -19,7 +19,7 @@
 
 use std::collections::HashSet;
 
-use crate::ast::{Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag};
+use crate::ast::{Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag, TypeArg};
 
 /// A direct child of an expression or statement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -108,8 +108,16 @@ impl ExprBody {
                 out.push(BodyNode::Expr(*base));
                 out.push(BodyNode::Expr(*index));
             }
-            Expr::Call { callee, args, .. } => {
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
                 out.push(BodyNode::Expr(*callee));
+                out.extend(type_args.iter().filter_map(|arg| match arg {
+                    TypeArg::Static(_) => None,
+                    TypeArg::Unreflect(expr) => Some(BodyNode::Expr(*expr)),
+                }));
                 out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
             }
             Expr::OptionalCall { callee, args } => {

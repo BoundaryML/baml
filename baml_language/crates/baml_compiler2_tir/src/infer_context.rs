@@ -373,6 +373,9 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
+    /// Runtime-built type arguments cannot enter the generated streaming
+    /// specialization path until runtime `$stream` derivation exists.
+    RuntimeTypeArgumentOnStreamingCall { callee_name: Name },
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
@@ -1270,6 +1273,12 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "function `{callee_name}` expects {expected} type argument(s), got {got}"
+                )
+            }
+            TirTypeError::RuntimeTypeArgumentOnStreamingCall { callee_name } => {
+                write!(
+                    f,
+                    "runtime type arguments are not supported on streaming call `{callee_name}`"
                 )
             }
             TirTypeError::TypeIsNotGeneric { type_name, kind } => {

@@ -6834,6 +6834,39 @@ impl<'a> Parser<'a> {
             let Some(tok) = self.peek(i) else {
                 return false;
             };
+
+            // `unreflect(expr)` is contextual syntax occupying one complete
+            // generic-argument slot. Its operand is an arbitrary expression,
+            // so skip the balanced parens as an opaque region for the
+            // `<...>` vs comparison lookahead (operators inside it are not
+            // type-grammar tokens and must not make us choose comparison).
+            if tok.kind == TokenKind::Word
+                && tok.text == "unreflect"
+                && self
+                    .peek(i + 1)
+                    .is_some_and(|t| t.kind == TokenKind::LParen)
+            {
+                i += 2;
+                let mut paren_depth = 1_u32;
+                while let Some(inner) = self.peek(i) {
+                    match inner.kind {
+                        TokenKind::LParen => paren_depth += 1,
+                        TokenKind::RParen => {
+                            paren_depth -= 1;
+                            if paren_depth == 0 {
+                                i += 1;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    i += 1;
+                }
+                if paren_depth != 0 {
+                    return false;
+                }
+                continue;
+            }
             match tok.kind {
                 TokenKind::Less => depth += 1,
                 TokenKind::Greater => {
@@ -7086,14 +7119,14 @@ impl<'a> Parser<'a> {
 
             // Parse first type argument
             if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
-                p.parse_type();
+                p.parse_generic_arg();
 
                 // Parse remaining type arguments
                 while p.eat(TokenKind::Comma) {
                     if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
                         break; // Trailing comma
                     }
-                    p.parse_type();
+                    p.parse_generic_arg();
                 }
             }
 
@@ -7120,6 +7153,26 @@ impl<'a> Parser<'a> {
             }
             self.pending_greaters = 0;
             self.pending_greater_span = None;
+        }
+    }
+
+    /// Parse one call-site generic argument. `unreflect` remains an ordinary
+    /// identifier everywhere else; only the exact `unreflect(` shape in this
+    /// position activates the marker.
+    fn parse_generic_arg(&mut self) {
+        if self.at_contextual_kw("unreflect")
+            && self.peek(1).is_some_and(|t| t.kind == TokenKind::LParen)
+        {
+            self.with_node(SyntaxKind::UNREFLECT_ARG, |p| {
+                p.bump();
+                p.expect(TokenKind::LParen);
+                if !p.at(TokenKind::RParen) {
+                    p.parse_expr();
+                }
+                p.expect(TokenKind::RParen);
+            });
+        } else {
+            self.parse_type();
         }
     }
 

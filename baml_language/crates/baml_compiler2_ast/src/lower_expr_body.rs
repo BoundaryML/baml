@@ -17,7 +17,7 @@ use crate::{
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
         LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param, PatId,
         Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
-        TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
+        TypeAnnotId, TypeArg, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
 
@@ -350,7 +350,7 @@ pub(crate) fn synthesize_llm_call_with_prompt(
     let call = ctx.alloc_expr(
         Expr::Call {
             callee,
-            type_args,
+            type_args: type_args.into_iter().map(Into::into).collect(),
             args: vec![
                 CallArg::positional(client_arg),
                 CallArg::positional(fn_name_expr),
@@ -2447,9 +2447,9 @@ impl LoweringContext {
         //      method's frame correctly (e.g. `Box.from_json` sees
         //      `T = Secret`).
         let callee_generic_args = callee_node.as_ref().and_then(find_callee_generic_args);
-        let type_args: Vec<TypeExpr> = callee_generic_args
+        let type_args: Vec<TypeArg> = callee_generic_args
             .as_ref()
-            .map(|ga| Self::lower_generic_args_node(ga, &mut self.diags))
+            .map(|ga| self.lower_call_generic_args_node(ga))
             .unwrap_or_default();
         // Mark EVERY `GENERIC_ARGS` node in the callee subtree as consumed, so
         // lowering the callee/receiver below does not wrap any of them into an
@@ -2593,6 +2593,51 @@ impl LoweringContext {
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te, diags))
             .collect()
+    }
+
+    /// Lower a call's generic arguments. Unlike type constructors and
+    /// value-position generic application, calls may contain the contextual
+    /// whole-slot `unreflect(expr)` form.
+    fn lower_call_generic_args_node(&mut self, ga: &SyntaxNode) -> Vec<TypeArg> {
+        let mut args = Vec::new();
+        for node in ga.children() {
+            match node.kind() {
+                SyntaxKind::TYPE_EXPR => {
+                    if let Some(te) = baml_compiler_syntax::ast::TypeExpr::cast(node) {
+                        args.push(TypeArg::Static(
+                            crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags),
+                        ));
+                    }
+                }
+                SyntaxKind::UNREFLECT_ARG => {
+                    let operand = node
+                        .children()
+                        .next()
+                        .map(|expr| self.lower_expr(&expr))
+                        .or_else(|| {
+                            node.children_with_tokens()
+                                .filter_map(rowan::NodeOrToken::into_token)
+                                .find(|token| {
+                                    !token.kind().is_trivia()
+                                        && !matches!(
+                                            token.kind(),
+                                            SyntaxKind::WORD
+                                                | SyntaxKind::L_PAREN
+                                                | SyntaxKind::R_PAREN
+                                        )
+                                })
+                                .map(|token| {
+                                    let expr = lower_bare_token_expr(self, &token);
+                                    self.alloc_expr(expr, token.text_range())
+                                })
+                        })
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+                    args.push(TypeArg::Unreflect(operand));
+                }
+                _ => {}
+            }
+        }
+        args
     }
 
     /// If `node` has a direct, unconsumed `GENERIC_ARGS` child, wrap `base` in an

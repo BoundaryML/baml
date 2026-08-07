@@ -28,6 +28,11 @@ enum SwitchKind {
     TypeTag,
 }
 
+enum TypeOfIntrinsicArg {
+    Static(TyTemplate),
+    Runtime(AstExprId),
+}
+
 /// What happens in the otherwise block of a switch.
 #[derive(Clone, Copy)]
 enum SwitchOtherwise {
@@ -1060,8 +1065,8 @@ fn resolution_func_loc<'db>(
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
-    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
-    TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
+    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeArg as AstTypeArg,
+    TypeExpr as AstTypeExpr, TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -8494,8 +8499,16 @@ impl<'db> LoweringContext<'db> {
         // Check if callee is `type.of<T>()` — a value-producing intrinsic.
         // Unlike void intrinsics (log.*), this emits an assignment
         // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
-        if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
-            self.builder.assign(dest, Rvalue::LoadType(template));
+        if let Some(type_arg) = self.check_type_of_intrinsic(callee, expr_id) {
+            match type_arg {
+                TypeOfIntrinsicArg::Static(template) => {
+                    self.builder.assign(dest, Rvalue::LoadType(template));
+                }
+                TypeOfIntrinsicArg::Runtime(operand) => {
+                    let operand = self.lower_to_operand(operand);
+                    self.builder.assign(dest, Rvalue::Use(operand));
+                }
+            }
             self.builder.goto(target);
             self.builder.set_current_block(target);
             return;
@@ -9070,7 +9083,7 @@ impl LoweringContext<'_> {
         &self,
         callee: AstExprId,
         call_expr_id: AstExprId,
-    ) -> Option<TyTemplate> {
+    ) -> Option<TypeOfIntrinsicArg> {
         use baml_compiler2_ast::BuiltinKind;
 
         // ── 1. Check the callee resolves to `baml.type.of` ─────────────
@@ -9145,8 +9158,12 @@ impl LoweringContext<'_> {
         let generic_params = self.enclosing_generic_params();
 
         // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
-        let template = self.type_expr_to_template(&type_arg, &generic_params);
-        Some(template)
+        match type_arg {
+            AstTypeArg::Static(type_arg) => Some(TypeOfIntrinsicArg::Static(
+                self.type_expr_to_template(&type_arg, &generic_params),
+            )),
+            AstTypeArg::Unreflect(operand) => Some(TypeOfIntrinsicArg::Runtime(operand)),
+        }
     }
 
     fn type_expr_to_template(
@@ -9317,14 +9334,14 @@ impl LoweringContext<'_> {
         if max_count == Some(0) {
             return Vec::new();
         }
-        let ast_type_args: Vec<AstTypeExpr> =
+        let ast_type_args: Vec<AstTypeArg> =
             if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
                 type_args.clone()
             } else {
                 Vec::new()
             };
         if !ast_type_args.is_empty() {
-            let ast_type_args: Vec<AstTypeExpr> = match max_count {
+            let ast_type_args: Vec<AstTypeArg> = match max_count {
                 Some(max_count) => ast_type_args.into_iter().take(max_count).collect(),
                 None => ast_type_args,
             };
@@ -9387,7 +9404,7 @@ impl LoweringContext<'_> {
     /// `ast_type_args.len()`.  Returns an empty vec when there are no type args.
     fn lower_explicit_type_args(
         &mut self,
-        ast_type_args: &[AstTypeExpr],
+        ast_type_args: &[AstTypeArg],
         solved_type_args: &[Tir2Ty],
     ) -> Vec<Operand> {
         if ast_type_args.is_empty() {
@@ -9399,6 +9416,13 @@ impl LoweringContext<'_> {
 
         let mut operands = Vec::with_capacity(ast_type_args.len());
         for (idx, type_arg) in ast_type_args.iter().enumerate() {
+            if let AstTypeArg::Unreflect(operand) = type_arg {
+                operands.push(self.lower_to_operand(*operand));
+                continue;
+            }
+            let AstTypeArg::Static(type_arg) = type_arg else {
+                unreachable!()
+            };
             // A `_` wildcard (or a nested one, e.g. `Box<_>`) is a compile
             // error whose lowering cannot cross the runtime boundary. Where TIR
             // recorded a type for that position, swap it in; otherwise lower
