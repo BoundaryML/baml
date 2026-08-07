@@ -824,21 +824,40 @@ impl<'db> InferenceContext<'db> {
             Some(ascribed) if !ascribed.has_error() => self.narrow_to(scrut, ascribed),
             _ => scrut.clone(),
         };
-        // Union scrutinee: claim the unique list member - the same
-        // member attribution class patterns get (`[_, let v, ..]`
-        // against `Wrap | int[]` claims `int[]`), so per-member arms
-        // compose to full coverage. Several list members stay
-        // unclaimed (ambiguous), as before.
+        // Union scrutinee: claim the list member the pattern
+        // DISCRIMINATES - the class arm's agreeing-instantiation rule
+        // applied to the list constructor. A single list member claims
+        // by constructor kind alone; among several, the pattern's own
+        // demands (ascriptions, nested structural shapes) filter, and
+        // only a UNIQUE fit claims - B-633's provable-overlap
+        // conservatism: "cannot tell" keeps the member, several
+        // survivors stay unclaimed.
         let claimed_union = match effective.kind() {
             TyKind::Union(members, _) => {
-                let lists: Vec<&Ty> = members
-                    .iter()
-                    .filter(|member| matches!(member.kind(), TyKind::List(..)))
-                    .collect();
-                match lists.as_slice() {
-                    [member] => Some((effective.clone(), (*member).clone())),
-                    _ => None,
+                let members = members.to_vec();
+                let mut lists: Vec<Ty> = Vec::new();
+                for member in &members {
+                    if matches!(member.kind(), TyKind::List(..)) {
+                        lists.push(member.clone());
+                    }
                 }
+                let claimed = match lists.as_slice() {
+                    [member] => Some(member.clone()),
+                    [] => None,
+                    _ => {
+                        let mut fitting: Vec<Ty> = Vec::new();
+                        for member in &lists {
+                            if self.pattern_fits(body, pat, member) {
+                                fitting.push(member.clone());
+                            }
+                        }
+                        match fitting.as_slice() {
+                            [member] => Some(member.clone()),
+                            _ => None,
+                        }
+                    }
+                };
+                claimed.map(|member| (effective.clone(), member))
             }
             _ => None,
         };
@@ -892,6 +911,65 @@ impl<'db> InferenceContext<'db> {
             // whole union.
             covers_type: covers && ascribed.is_none() && claimed_union.is_none(),
             consumes_matched: covers,
+        }
+    }
+
+    /// Whether `pat` can fit a value of `ty`: false only on a PROVABLE
+    /// misfit (an ascription with no overlap either way, a structural
+    /// demand the type's kind cannot meet). The candidate-matching half
+    /// of the union claim - `match_pattern`'s boolean-matcher shape,
+    /// separate from the committing lowering - conservative in B-633's
+    /// direction: "cannot tell" answers true, and the caller claims
+    /// only on a unique fit.
+    fn pattern_fits(&mut self, body: &ExprBody, pat: PatId, ty: &Ty) -> bool {
+        let expanded = self.expand_alias_ty(ty);
+        match &body.patterns[pat] {
+            Pattern::Wildcard => true,
+            Pattern::Bind { subpat, .. } => {
+                let Some(sub) = *subpat else {
+                    return true;
+                };
+                if let Some(ascribed) = self.pattern_ascription_ty(body, sub) {
+                    return provable_subtype(&ascribed, &expanded, &self.facts)
+                        || provable_subtype(&expanded, &ascribed, &self.facts);
+                }
+                self.pattern_fits(body, sub, &expanded)
+            }
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ..
+            } => {
+                let TyKind::List(element, _) = expanded.kind() else {
+                    return false;
+                };
+                let element = element.clone();
+                let subs: Vec<PatId> = prefix.iter().chain(suffix.iter()).copied().collect();
+                let rest_pat = rest.as_ref().and_then(|rest| rest.pat);
+                subs.into_iter()
+                    .all(|sub| self.pattern_fits(body, sub, &element))
+                    && rest_pat
+                        .is_none_or(|rest| self.pattern_fits(body, rest, &Ty::list(element.clone())))
+            }
+            Pattern::Class { class, .. } => match expanded.kind() {
+                // A class head demands the same class; interfaces and
+                // rigid vars could still adopt or implement - true.
+                TyKind::Class(qtn, ..) => {
+                    class.last().is_none_or(|name| name == qtn.name())
+                }
+                TyKind::Interface(..) | TyKind::TypeVar(..) => true,
+                _ => false,
+            },
+            // Type patterns carry their own runtime test; the lowering
+            // settles their claim - no discrimination here.
+            Pattern::Type(_) => true,
+            Pattern::Or(alternatives) => {
+                let alternatives = alternatives.clone();
+                alternatives
+                    .into_iter()
+                    .any(|alternative| self.pattern_fits(body, alternative, &expanded))
+            }
         }
     }
 
