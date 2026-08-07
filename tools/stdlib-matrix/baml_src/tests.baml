@@ -73,17 +73,29 @@ function fixture_export_text() -> string {
 function fixture_ts_text() -> string {
     #"
         {
-          "format_version": 1,
+          "format_version": 2,
           "typescript_version": "5.8.3-test",
           "types_node_version": null,
-          "containers": [
+          "modules": [
             {
-              "name": "Foo",
-              "kind": "interface",
-              "members": [
-                {"name": "indexOf", "static": false, "signatures": ["indexOf(x: number): number"], "doc": "Finds x.", "since": "es5"},
-                {"name": "only", "static": false, "signatures": ["only(): void"], "doc": null, "since": "es5"},
-                {"name": "sortStuff", "static": false, "signatures": ["sortStuff(): void"], "doc": null, "since": "es2015"}
+              "name": "(globals)",
+              "kind": "globals",
+              "containers": [
+                {
+                  "name": "Foo",
+                  "kind": "class",
+                  "singleton": false,
+                  "doc": "A fixture container.",
+                  "since": "es5",
+                  "members": [
+                    {"name": "indexOf", "static": false, "signatures": ["indexOf(x: number): number"], "doc": "Finds x.", "since": "es5"},
+                    {"name": "only", "static": false, "signatures": ["only(): void"], "doc": null, "since": "es5"},
+                    {"name": "sortStuff", "static": false, "signatures": ["sortStuff(): void"], "doc": null, "since": "es2015"}
+                  ]
+                }
+              ],
+              "functions": [
+                {"name": "parseFixture", "signatures": ["parseFixture(x: string): number"], "doc": null, "since": "es5"}
               ]
             }
           ]
@@ -169,7 +181,6 @@ test "BAML symbols carry paths, origins, and split args from kwargs" {
 }
 
 test "a static that is not callable is a property, not a static method" {
-    let container = TsContainer { name: "Number", kind: "interface", members: [] };
     let constant = TsMember {
         name: "MAX_SAFE_INTEGER",
         static: true,
@@ -179,7 +190,7 @@ test "a static that is not callable is a property, not a static method" {
     };
     // On the constructor side, but a constant. Comparing it against BAML's
     // methods rather than its fields is the wrong question to ask.
-    assert.equal(ts_origin_of(container, constant), "property");
+    assert.equal(ts_member_origin(constant), "property");
     let factory = TsMember {
         name: "isInteger",
         static: true,
@@ -187,17 +198,36 @@ test "a static that is not callable is a property, not a static method" {
         doc: null,
         since: "es2015",
     };
-    assert.equal(ts_origin_of(container, factory), "static_method");
+    assert.equal(ts_member_origin(factory), "static_method");
 }
 
 test "TypeScript symbols separate callables from properties" {
     let symbols = extract_ts_symbols(baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()));
-    assert.equal(symbols.length(), 3);
-    if let index_of: TsSymbol = symbols.at(0) {
-        assert.equal(index_of.display, "Foo.indexOf");
-        assert.equal(index_of.origin, "method");
+    // The container, its three members, and the module's free function. A
+    // container is a symbol in its own right: it is what a session is opened
+    // over, and what a judgement about `Date` is recorded against.
+    assert.equal(symbols.length(), 5);
+    if let container: TsSymbol = symbols.at(0) {
+        assert.equal(container.display, "Foo");
+        assert.equal(container.origin, "container");
+        assert.equal(container.kind, "class");
+        assert.is_true(baml.deep_equals(container.symbol, ["(globals)", "Foo"]));
     } else {
         baml.sys.panic("no TS symbols");
+    }
+    if let index_of: TsSymbol = symbols.at(1) {
+        assert.equal(index_of.display, "Foo.prototype.indexOf");
+        assert.equal(index_of.origin, "method");
+        assert.is_true(baml.deep_equals(index_of.symbol, ["(globals)", "Foo", "indexOf"]));
+    } else {
+        baml.sys.panic("no member symbol");
+    }
+    if let free: TsSymbol = symbols.at(4) {
+        assert.equal(free.display, "parseFixture");
+        assert.equal(free.origin, "free");
+        assert.equal(free.kind, "function");
+    } else {
+        baml.sys.panic("no free function symbol");
     }
 }
 
@@ -208,7 +238,8 @@ test "the symbol matrix relates both sides without privileging either" {
         "sha-fixture",
     );
     assert.equal(matrix.counts.baml_symbols, 8);
-    assert.equal(matrix.counts.ts_symbols, 3);
+    // `Foo`, its three members, and `parseFixture`.
+    assert.equal(matrix.counts.ts_symbols, 5);
 
     // index_of ↔ indexOf is deterministic name agreement, and both endpoints
     // address real symbols by id.
@@ -463,7 +494,15 @@ test "the static and instance sides of a container are addressed apart" {
     // `Uint8Array.BYTES_PER_ELEMENT` is declared on both the constructor and
     // the instance. They are different members, and TypeScript reaches them
     // differently.
-    let instance = TsContainer { name: "Uint8Array", kind: "interface", members: [] };
+    let globals = TsModule { name: "(globals)", kind: "globals", containers: [], functions: [] };
+    let instance = TsContainer {
+        name: "Uint8Array",
+        kind: "class",
+        singleton: false,
+        doc: null,
+        since: "es5",
+        members: [],
+    };
     let member = TsMember {
         name: "BYTES_PER_ELEMENT",
         static: false,
@@ -471,11 +510,11 @@ test "the static and instance sides of a container are addressed apart" {
         doc: null,
         since: "es5",
     };
-    assert.equal(ts_id_of(instance, member, "property"), "Uint8Array.prototype.BYTES_PER_ELEMENT");
-    // The same name on the constructor side. `static` decides, not `origin`:
-    // the constructor holds constants as well as methods and both are reached
-    // on it, so deciding from `origin` put a constant behind `prototype` and
-    // gave the two sides one address.
+    assert.equal(ts_member_id(globals, instance, member), "Uint8Array.prototype.BYTES_PER_ELEMENT");
+    // The same name on the constructor side. `static` decides, not the member's
+    // kind: the constructor holds constants as well as methods and both are
+    // reached on it, so deciding from the kind put a constant behind
+    // `prototype` and gave the two sides one address.
     let constructor_side = TsMember {
         name: "BYTES_PER_ELEMENT",
         static: true,
@@ -483,10 +522,67 @@ test "the static and instance sides of a container are addressed apart" {
         doc: null,
         since: "es5",
     };
-    assert.equal(ts_id_of(instance, constructor_side, "property"), "Uint8Array.BYTES_PER_ELEMENT");
-    // A free function has no receiver to be reached through.
-    let globals = TsContainer { name: "(globals)", kind: "functions", members: [] };
-    assert.equal(ts_id_of(globals, member, "free"), "(globals).BYTES_PER_ELEMENT");
+    assert.equal(ts_member_id(globals, instance, constructor_side), "Uint8Array.BYTES_PER_ELEMENT");
+}
+
+test "node modules qualify their addresses and the globals do not" {
+    // `Server` is declared by `http`, `net`, and `tls`. Three symbols sharing
+    // one address is three wrong answers, so the module qualifies them; the
+    // globals and the web platform share one namespace and add nothing.
+    let net = TsModule { name: "node:net", kind: "node", containers: [], functions: [] };
+    let globals = TsModule { name: "(globals)", kind: "globals", containers: [], functions: [] };
+    let server = TsContainer {
+        name: "Server",
+        kind: "class",
+        singleton: false,
+        doc: null,
+        since: "node",
+        members: [],
+    };
+    let listen = TsMember {
+        name: "listen",
+        static: false,
+        signatures: ["listen(port: number): this"],
+        doc: null,
+        since: "node",
+    };
+    assert.equal(ts_container_id(net, server), "node:net.Server");
+    assert.equal(ts_member_id(net, server, listen), "node:net.Server.prototype.listen");
+    // The scheme is how you import the module, not how you call into it.
+    assert.equal(ts_display_of(ts_member_id(net, server, listen)), "net.Server.prototype.listen");
+
+    let date = TsContainer {
+        name: "Date",
+        kind: "class",
+        singleton: false,
+        doc: null,
+        since: "es5",
+        members: [],
+    };
+    assert.equal(ts_container_id(globals, date), "Date");
+    assert.equal(ts_display_of(ts_container_id(globals, date)), "Date");
+}
+
+test "a namespace object's members hang off the value, not a prototype" {
+    // `Math.floor`, not `Math.prototype.floor` — there is no prototype for
+    // anything to hang off, and an id that says otherwise is a wrong address.
+    let globals = TsModule { name: "(globals)", kind: "globals", containers: [], functions: [] };
+    let math = TsContainer {
+        name: "Math",
+        kind: "namespace",
+        singleton: true,
+        doc: null,
+        since: "es5",
+        members: [],
+    };
+    let floor = TsMember {
+        name: "floor",
+        static: false,
+        signatures: ["floor(x: number): number"],
+        doc: null,
+        since: "es5",
+    };
+    assert.equal(ts_member_id(globals, math, floor), "Math.floor");
 }
 
 // ── carrying a revision forward ─────────────────────────────────────────────

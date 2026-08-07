@@ -204,8 +204,21 @@ function baml_owner_key(symbol: BamlSymbol) -> string {
     }
 }
 
+/// The owner a TypeScript symbol shares with its BAML counterpart.
+///
+/// A member's owner is the container that holds it — `Foo` in
+/// `[(globals), Foo, indexOf]` — never the module, which groups but does not
+/// own. Something reached on the module itself (`os.hostname`, `parseInt`) has
+/// the module for an owner, and a container has none at all: it *is* one, and
+/// two containers agreeing on a name is a different question.
 function ts_owner_key(symbol: TsSymbol) -> string {
-    owner_key(symbol.symbol.at(0) ?? "")
+    if (symbol.origin == "container") {
+        ""
+    } else if (symbol.symbol.length() >= 3) {
+        owner_key(symbol.symbol.at(1) ?? "")
+    } else {
+        owner_key(symbol.symbol.at(0) ?? "")
+    }
 }
 
 /// A BAML symbol's own name. An impl method matches on its method name, not on
