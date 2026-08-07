@@ -4118,7 +4118,10 @@ mod union_container_selection_tests {
         else {
             panic!("JSON object must stay a map")
         };
-        assert!(runtime_ty_structurally_equal(&key_type, &RuntimeTy::string()));
+        assert!(runtime_ty_structurally_equal(
+            &key_type,
+            &RuntimeTy::string()
+        ));
         assert!(runtime_ty_structurally_equal(&value_type, &json));
         let BexExternalValue::Array { element_type, .. } = &entries["inner"] else {
             panic!("nested JSON list must stay a list")

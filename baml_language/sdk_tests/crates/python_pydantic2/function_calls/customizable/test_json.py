@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 
+# SDK_PARITY_LINT(skip): engine-side regression exercised via the Go and Python bridges
 def test_host_supplied_json_supports_typed_narrowing():
     from baml_sdk.baml import BamlError
     from baml_sdk.go_json_tests import json_kind, json_path_string, json_path_string_or
@@ -35,6 +36,7 @@ def test_host_supplied_json_supports_typed_narrowing():
         json_path_string(obj, ".absent")
 
 
+# SDK_PARITY_LINT(skip): engine-side regression exercised via the Go and Python bridges
 def test_json_returned_from_host_callback_supports_typed_narrowing():
     from baml_sdk.go_json_tests import json_callback_kind
 

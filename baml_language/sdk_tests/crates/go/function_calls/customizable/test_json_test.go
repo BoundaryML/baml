@@ -179,6 +179,7 @@ func Test_canonical_json_class_union_uses_declared_field_codecs(t *testing.T) {
 	}
 }
 
+// SDK_PARITY_LINT(skip): engine-side regression exercised via the Go and Python bridges
 func Test_host_supplied_json_supports_typed_narrowing(t *testing.T) {
 	// Host-supplied json objects must materialize with `json` container
 	// typing: a `match (j) { let m: map<string, json> => ... }` inside BAML
