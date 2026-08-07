@@ -155,6 +155,18 @@ pub use crate::{
 const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
 const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
 
+/// Definitions attached to runtime-minted type arguments for one sys-op call.
+///
+/// The definition metadata is copied into the sys-op context for prompt/SAP
+/// work. Handles keep the corresponding heap definitions rooted while an
+/// asynchronous sys-op has released the VM's heap permit, and form the landing
+/// side table used to allocate parsed values with the original enum identity.
+#[derive(Default)]
+struct RuntimeTypeOverlay {
+    enum_definitions: indexmap::IndexMap<baml_type::TypeName, sys_types::EnumDefinition>,
+    enum_handles: indexmap::IndexMap<String, bex_external_types::Handle>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnhandledSpawnError {
     pub report_id: usize,
@@ -2108,6 +2120,59 @@ impl BexEngine {
             }
         }
         defs
+    }
+
+    fn enum_definition(enm: &bex_vm_types::Enum) -> sys_types::EnumDefinition {
+        sys_types::EnumDefinition {
+            name: enm.name.display_name().to_string(),
+            description: enm.description.clone(),
+            alias: enm.alias.clone(),
+            variants: enm
+                .variants
+                .iter()
+                .filter(|variant| !variant.skip)
+                .map(|variant| sys_types::EnumVariantDefinition {
+                    name: variant.name.clone(),
+                    description: variant.description.clone(),
+                    alias: variant.alias.clone(),
+                })
+                .collect(),
+        }
+    }
+
+    /// Gather runtime definitions from the type descriptors passed directly
+    /// to a sys-op. Type arguments are lowered as ordinary `Object::Type`
+    /// arguments, so this is the last synchronous chokepoint before the permit
+    /// is released for async work.
+    fn runtime_type_overlay(
+        &self,
+        args: &[Value],
+        _permit: bex_heap::PermitProof<'_>,
+    ) -> RuntimeTypeOverlay {
+        let mut overlay = RuntimeTypeOverlay::default();
+        for value in args {
+            let Some(type_ptr) = value.as_object_ptr() else {
+                continue;
+            };
+            let Object::Type(type_value) = (unsafe { type_ptr.get() }) else {
+                continue;
+            };
+            for (name, enum_ptr) in &type_value.defs().enums {
+                let Object::Enum(enm) = (unsafe { enum_ptr.get() }) else {
+                    debug_assert!(false, "dynamic enum definition must point to Object::Enum");
+                    continue;
+                };
+                overlay
+                    .enum_definitions
+                    .entry(name.clone())
+                    .or_insert_with(|| Self::enum_definition(enm));
+                overlay
+                    .enum_handles
+                    .entry(name.to_string())
+                    .or_insert_with(|| self.heap.create_handle(*enum_ptr));
+            }
+        }
+        overlay
     }
 
     /// Get a reference to the shared heap.
@@ -5024,6 +5089,8 @@ impl BexEngine {
                         return Err(cancelled_unhandled_throw());
                     }
 
+                    let runtime_type_overlay = self.runtime_type_overlay(&args, thread.proof());
+
                     let bex_args: Vec<BexExternalValue> =
                         if operation == SysOp::BamlHostCallHostValue {
                             let params = host_call_params(args.first().copied())
@@ -5085,8 +5152,14 @@ impl BexEngine {
                             None
                         };
 
-                    let sys_op_result =
-                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
+                    let sys_op_result = self.execute_sys_op(
+                        operation,
+                        &bex_args,
+                        &runtime_type_overlay,
+                        call_id,
+                        cancel,
+                        thread.proof(),
+                    );
 
                     let outcome = match sys_op_result {
                         SysOpResult::Ready(r) => r,
@@ -5218,7 +5291,12 @@ impl BexEngine {
                                         host_ret_ty.as_ref(),
                                     )?
                                 } else {
-                                    self.convert_external_to_vm_value(&mut thread, external)?
+                                    self.convert_external_to_vm_value_with_dynamic_enums(
+                                        &mut thread,
+                                        external,
+                                        None,
+                                        &runtime_type_overlay.enum_handles,
+                                    )?
                                 };
                                 if let Some((call_id, mask)) = sysop_origin_capture {
                                     thread
@@ -5573,6 +5651,7 @@ impl BexEngine {
         self: &Arc<Self>,
         op: SysOp,
         args: &[BexExternalValue],
+        runtime_type_overlay: &RuntimeTypeOverlay,
         call_id: CallId,
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
@@ -5602,6 +5681,15 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        if !runtime_type_overlay.enum_definitions.is_empty() {
+            let mut enum_definitions = runtime_type_overlay.enum_definitions.clone();
+            for (name, definition) in self.sys_op_ctx.enum_definitions.iter() {
+                enum_definitions
+                    .entry(name.clone())
+                    .or_insert_with(|| definition.clone());
+            }
+            ctx.enum_definitions = Arc::new(enum_definitions);
+        }
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.
         ctx.runtime_io =
