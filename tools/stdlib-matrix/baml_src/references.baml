@@ -296,14 +296,25 @@ function attach_baml_references(symbols: BamlSymbol[]) -> null {
 
 // ── the TypeScript side ─────────────────────────────────────────────────────
 
-/// A container has no record of its own — it is a grouping — so its name
-/// resolves to the container, and members resolve by their dotted path.
+/// Containers are records of their own, so a type name in a signature points at
+/// one. Everything is registered under its id; a container additionally claims
+/// its bare name, but only when it is global.
+///
+/// That restriction is TypeScript's own rule rather than a tie-break. `node:url`
+/// exports a `URL` class and so does the web platform, but a signature that
+/// writes `URL` without importing it means the global one — so the bare name
+/// belongs to `(globals)` and `(web)`, and a module's container is reached by
+/// its qualified id.
 function ts_name_index(symbols: TsSymbol[]) -> NameIndex {
     let index = NameIndex { types: {}, all: {} };
     for (let symbol in symbols) {
         let _ = index_put(index.all, symbol.id, symbol.id);
-        if let container: string = symbol.symbol.at(0) {
-            let _ = index_put(index.types, container, container);
+        if (symbol.origin == "container") {
+            let _ = index_put(index.types, symbol.id, symbol.id);
+            let module = symbol.symbol.at(0) ?? "";
+            if (module == "(globals)" || module == "(web)") {
+                let _ = index_put(index.types, symbol.symbol.at(1) ?? "", symbol.id);
+            }
         }
     }
     index

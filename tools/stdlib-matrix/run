@@ -38,11 +38,9 @@ run: they are gitignored, derived from the compiler at HEAD and the
 lockfile-pinned typescript/@types/node packages. --skip-extract reuses
 existing data/ files instead.
 
---llm adds a second pass over everything the name heuristic left unmatched,
-asking a model which symbols are the same operation under different names.
-Requires ANTHROPIC_API_KEY in the environment.
-Model-found correspondences are recorded with basis "model" and carry the
-model's confidence, so they stay distinguishable from name agreement.
+--llm is unavailable: the alignment passes are being rebuilt TypeScript-first,
+around a model that searches the BAML surface with tools rather than being
+handed a lexically narrowed menu. The deterministic name pass still runs.
 
 --previous PATH carries judgements forward from an earlier report. A symbol
 keeps its previous answer when it and every type it names are unchanged, so a
@@ -234,14 +232,12 @@ if ((check_only == 1)); then
     target="check_matrix"
     target_args+=(--baseline_file "${baseline_file}")
 elif ((use_llm == 1)); then
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        echo "stdlib-matrix: --llm requires ANTHROPIC_API_KEY in the environment" >&2
-        exit 2
-    fi
-    target="build_matrix_aligned"
-    if [[ -n "${concurrency}" ]]; then
-        target_args+=(--concurrency "${concurrency}")
-    fi
+    # The alignment passes are being rebuilt TypeScript-first. Refusing outright
+    # rather than falling back to the name pass: a report that silently cost
+    # nothing and judged nothing reads exactly like one that ran.
+    echo "stdlib-matrix: --llm is unavailable while the alignment passes are rebuilt" \
+         "TypeScript-first. The name pass still runs without it." >&2
+    exit 2
 fi
 
 cd "${tool_repo}"
@@ -341,22 +337,8 @@ field() {
 }
 
 echo "Wrote ${resolved_json} (canonical), ${resolved_output}, and ${raw_result} (raw)"
-echo "BAML: $(field .report.counts.matched) of $(field .report.counts.baml_symbols) symbols have a" \
-     "TypeScript counterpart · $(field .report.counts.unmatched) judged to have none ·" \
+echo "TypeScript: $(field .report.counts.matched) of $(field .report.counts.ts_symbols) symbols have a" \
+     "BAML counterpart · $(field .report.counts.unmatched) judged to have none ·" \
      "$(field .report.counts.unjudged) unjudged"
-echo "TypeScript: $(field '(.report.counts.ts_symbols - .report.counts.ts_unclaimed)') of" \
-     "$(field .report.counts.ts_symbols) are claimed by a BAML symbol"
-
-if ((use_llm == 1)); then
-    echo "Passes: $(field .carried) carried · $(field .proposed) proposed · $(field .swept) swept ·" \
-         "$(field .upheld) upheld · $(field .refuted) refuted"
-    rejected_count="$(field '(.rejected | length)')"
-    if [[ "${rejected_count}" != "0" && "${rejected_count}" != "?" ]]; then
-        echo "${rejected_count} claims refused:" >&2
-        jq -r '.rejected[]? | "  refused: \(.)"' "${temporary_dir}/result.json" >&2 || true
-    fi
-    failures="$(field .failures)"
-    if [[ "${failures}" != "0" && "${failures}" != "?" ]]; then
-        echo "${failures} calls did not come back; see the report's failures list" >&2
-    fi
-fi
+echo "BAML: $(field '(.report.counts.baml_symbols - .report.counts.baml_unclaimed)') of" \
+     "$(field .report.counts.baml_symbols) symbols are named by a judgement"

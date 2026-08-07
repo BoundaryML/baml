@@ -1,9 +1,10 @@
 // Markdown view of the matrix — a readable companion to the canonical JSON.
 //
 // The JSON serves both languages' hierarchies from one relation; markdown has
-// no view toggle, so this renders the BAML-rooted view and lists the
-// TypeScript symbols nothing claimed at the end. A reader who wants the
-// TypeScript-rooted view has the web page.
+// no view toggle, so this renders the TypeScript-rooted view — the one the
+// matrix is keyed on and the one a reader arrives wanting — and lists the BAML
+// symbols no judgement named at the end. A reader who wants to browse the BAML
+// side has the web page.
 //
 // Keep the output deterministic: no timestamps, no environment.
 
@@ -63,9 +64,9 @@ function baml_group_of(symbol: BamlSymbol) -> string {
 /// The state column distinguishes the three things a reader needs apart: a
 /// counterpart, a considered absence, and a symbol nothing has looked at yet.
 function render_symbol_row(
-    symbol: BamlSymbol,
+    symbol: TsSymbol,
     judgements: Judgement[],
-    ts_by_id: map<string, TsSymbol>,
+    baml_by_id: map<string, BamlSymbol>,
 ) -> string {
     let counterparts: string[] = [];
     let state = "unjudged";
@@ -82,19 +83,21 @@ function render_symbol_row(
             } else {
                 ""
             };
-            let display = if let ts: TsSymbol = ts_by_id.get(judgement.ts ?? "") {
-                ts.display
-            } else {
-                judgement.ts ?? ""
-            };
-            counterparts.push(`${display}${note}`);
+            for (let id in judgement.baml) {
+                let display = if let counterpart: BamlSymbol = baml_by_id.get(id) {
+                    counterpart.display
+                } else {
+                    id
+                };
+                counterparts.push(`${display}${note}`);
+            }
         } else if (state == "unjudged") {
-            state = "BAML only";
+            state = "TypeScript only";
         }
     }
     [
         `| ${escape_cell(symbol.display)} `,
-        `| ${escape_cell(symbol.signature?.display ?? "")} `,
+        `| ${escape_cell(symbol.signature.lines().at(0) ?? "")} `,
         `| ${state} `,
         `| ${escape_cell(counterparts.join(", "))} |`,
     ]
@@ -103,36 +106,38 @@ function render_symbol_row(
 
 function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     let counts = matrix.counts;
-    let ts_matched = counts.ts_symbols - counts.ts_unclaimed;
+    let baml_matched = counts.baml_symbols - counts.baml_unclaimed;
 
     // Judgements indexed by the symbol they are about, mirroring the web view.
-    let by_baml: map<string, Judgement[]> = {};
-    let ts_claimed: map<string, bool> = {};
+    let by_ts: map<string, Judgement[]> = {};
+    let baml_claimed: map<string, bool> = {};
     for (let judgement in matrix.judgements) {
-        let bucket: Judgement[] = by_baml.get(judgement.baml) ?? [];
+        let bucket: Judgement[] = by_ts.get(judgement.ts) ?? [];
         bucket.push(judgement);
-        let _ = by_baml.set(judgement.baml, bucket);
+        let _ = by_ts.set(judgement.ts, bucket);
         if (judgement_pairs(judgement)) {
-            if let ts: string = judgement.ts {
-                let _ = ts_claimed.set(ts, true);
+            for (let id in judgement.baml) {
+                let _ = baml_claimed.set(id, true);
             }
         }
     }
-    let ts_by_id: map<string, TsSymbol> = {};
-    for (let symbol in matrix.ts) {
-        let _ = ts_by_id.set(symbol.id, symbol);
+    let baml_by_id: map<string, BamlSymbol> = {};
+    for (let symbol in matrix.baml) {
+        let _ = baml_by_id.set(symbol.id, symbol);
     }
 
-    let groups: map<string, BamlSymbol[]> = {};
+    // Grouped by module, the way the tree reads: `(globals)`, `(web)`, and one
+    // per node module.
+    let groups: map<string, TsSymbol[]> = {};
     let order: string[] = [];
-    for (let symbol in matrix.baml) {
-        let group = baml_group_of(symbol);
+    for (let symbol in matrix.ts) {
+        let group = symbol.symbol.at(0) ?? "(unknown)";
         if (!groups.has(group)) {
-            let empty: BamlSymbol[] = [];
+            let empty: TsSymbol[] = [];
             let _ = groups.set(group, empty);
             order.push(group);
         }
-        if let bucket: BamlSymbol[] = groups.get(group) {
+        if let bucket: TsSymbol[] = groups.get(group) {
             bucket.push(symbol);
         }
     }
@@ -152,40 +157,43 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     out.push("## Summary");
     out.push("");
     out.push(
-        `${counts.matched} of ${counts.baml_symbols} BAML symbols have a TypeScript counterpart · ${counts.unmatched} were judged to have none · ${counts.unjudged} are still unjudged.`,
+        `${counts.matched} of ${counts.ts_symbols} TypeScript symbols have a BAML counterpart · ${counts.unmatched} were judged to have none · ${counts.unjudged} are still unjudged.`,
     );
     out.push("");
     out.push(
-        `${ts_matched} of ${counts.ts_symbols} TypeScript symbols are claimed by a BAML symbol · ${counts.ts_unclaimed} are not.`,
+        `${baml_matched} of ${counts.baml_symbols} BAML symbols are named by a judgement · ${counts.baml_unclaimed} are not.`,
     );
     out.push("");
     out.push(
         "A counterpart rests either on deterministic name agreement or on a model's judgment, which carries its confidence in parentheses. `divergent` marks the same operation reached differently.",
     );
     out.push("");
-    out.push("## BAML surface");
+    out.push("## TypeScript surface");
     out.push("");
     for (let group in order) {
         out.push(`### ${group}`);
         out.push("");
-        out.push("| symbol | signature | state | TypeScript |");
+        out.push("| symbol | signature | state | BAML |");
         out.push("| --- | --- | --- | --- |");
-        let members: BamlSymbol[] = groups.get(group) ?? [];
+        let members: TsSymbol[] = groups.get(group) ?? [];
         for (let member in members) {
-            let judgements: Judgement[] = by_baml.get(member.id) ?? [];
-            out.push(render_symbol_row(member, judgements, ts_by_id));
+            let judgements: Judgement[] = by_ts.get(member.id) ?? [];
+            out.push(render_symbol_row(member, judgements, baml_by_id));
         }
         out.push("");
     }
 
-    out.push("## TypeScript symbols with no BAML counterpart");
+    // Not the same claim as the section above. Nothing asked whether these have
+    // a TypeScript counterpart, so this is what no judgement happened to name —
+    // silence, not a finding.
+    out.push("## BAML symbols no judgement names");
     out.push("");
-    out.push("| symbol | signature | since |");
-    out.push("| --- | --- | --- |");
-    for (let symbol in matrix.ts) {
-        if (!ts_claimed.has(symbol.id)) {
+    out.push("| symbol | signature |");
+    out.push("| --- | --- |");
+    for (let symbol in matrix.baml) {
+        if (!baml_claimed.has(symbol.id)) {
             out.push(
-                `| ${escape_cell(symbol.display)} | ${escape_cell(symbol.signature)} | ${symbol.since} |`,
+                `| ${escape_cell(symbol.display)} | ${escape_cell(symbol.signature?.display ?? "")} |`,
             );
         }
     }

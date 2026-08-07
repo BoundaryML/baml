@@ -49,12 +49,16 @@ class PriorReport {
 }
 
 /// What a previous revision knew: every symbol's declaration text, and what was
-/// concluded about each BAML symbol.
+/// concluded about each TypeScript symbol.
 class Revision {
     provenance: MatrixProvenance,
     /// Declaration text by id, both languages in one table — freshness asks the
     /// same question of both sides and ids do not collide across them.
     texts: map<string, string>,
+    /// Which BAML symbols existed. Kept apart from `texts` because judging
+    /// whether an *absence* still holds asks about the surface as a whole
+    /// rather than about any one symbol — see `judgement_carries`.
+    baml_ids: map<string, bool>,
     judgements: map<string, Judgement[]>,
 }
 
@@ -140,26 +144,33 @@ function load_revision(path: string) -> Revision {
             }
         },
     };
-    if (report.format_version != 1) {
+    if (report.format_version != 2) {
         throw baml.errors.InvalidArgument {
-            message: `${path} has report format_version ${report.format_version} (expected 1); regenerate it with tools/stdlib-matrix/run`,
+            message: `${path} has report format_version ${report.format_version} (expected 2); regenerate it with tools/stdlib-matrix/run`,
         };
     }
 
     let texts: map<string, string> = {};
+    let baml_ids: map<string, bool> = {};
     for (let symbol in report.baml) {
         let _ = texts.set(symbol.id, prior_symbol_text(symbol));
+        let _ = baml_ids.set(symbol.id, true);
     }
     for (let symbol in report.ts) {
         let _ = texts.set(symbol.id, ts_symbol_text(symbol));
     }
     let judgements: map<string, Judgement[]> = {};
     for (let judgement in report.judgements) {
-        let bucket: Judgement[] = judgements.get(judgement.baml) ?? [];
+        let bucket: Judgement[] = judgements.get(judgement.ts) ?? [];
         bucket.push(judgement);
-        let _ = judgements.set(judgement.baml, bucket);
+        let _ = judgements.set(judgement.ts, bucket);
     }
-    Revision { provenance: report.provenance, texts: texts, judgements: judgements }
+    Revision {
+        provenance: report.provenance,
+        texts: texts,
+        baml_ids: baml_ids,
+        judgements: judgements,
+    }
 }
 
 /// The revision a matrix would be, had it been written out and read back.
@@ -170,11 +181,20 @@ function load_revision(path: string) -> Revision {
 function revision_of(matrix: SymbolMatrix) -> Revision {
     let judgements: map<string, Judgement[]> = {};
     for (let judgement in matrix.judgements) {
-        let bucket: Judgement[] = judgements.get(judgement.baml) ?? [];
+        let bucket: Judgement[] = judgements.get(judgement.ts) ?? [];
         bucket.push(judgement);
-        let _ = judgements.set(judgement.baml, bucket);
+        let _ = judgements.set(judgement.ts, bucket);
     }
-    Revision { provenance: matrix.provenance, texts: current_texts(matrix), judgements: judgements }
+    let baml_ids: map<string, bool> = {};
+    for (let symbol in matrix.baml) {
+        let _ = baml_ids.set(symbol.id, true);
+    }
+    Revision {
+        provenance: matrix.provenance,
+        texts: current_texts(matrix),
+        baml_ids: baml_ids,
+        judgements: judgements,
+    }
 }
 
 /// Every current symbol's declaration text, in one table keyed the same way the
@@ -216,32 +236,62 @@ class CarryOutcome {
     matrix: SymbolMatrix,
     /// Judgements taken from the previous revision without asking again.
     carried: int,
-    /// BAML symbols whose judgement could not be carried and that a pass must
-    /// therefore look at.
+    /// TypeScript symbols whose judgement could not be carried and that a pass
+    /// must therefore look at.
     queued: int,
+}
+
+/// Whether the BAML surface has gained anything since a revision.
+///
+/// Only additions matter here; a symbol that went away cannot make a judgement
+/// that said "there is nothing" wrong.
+function baml_surface_grew(matrix: SymbolMatrix, before: Revision) -> bool {
+    let grew = false;
+    for (let symbol in matrix.baml) {
+        if (!before.baml_ids.has(symbol.id)) {
+            grew = true;
+        }
+    }
+    grew
 }
 
 /// Whether a judgement may be carried, given what has changed.
 ///
-/// A pairing survives when both its ends read as they did. A judged *absence*
-/// is a claim about the whole other surface rather than about one symbol, so it
-/// survives only while that surface is the one it was made against — a
-/// TypeScript release could have added the very thing it says does not exist.
+/// A pairing survives when every BAML symbol it names reads as it did. A judged
+/// *absence* is a claim about the whole BAML surface rather than about any one
+/// symbol — "nothing in BAML does this job" — so it survives only while that
+/// surface could not have gained the thing it says is missing.
+///
+/// `baml_grew` is that test, and it is deliberately a test for *additions*
+/// rather than for any change at all. Transposing the old rule literally would
+/// key an absence on the surface's content hash, which is correct and useless:
+/// we are the team writing this stdlib, so the hash moves on nearly every run
+/// and every absence would expire on every run, which is the whole cost this
+/// file exists to avoid. Only new surface can falsify "there is nothing"; a
+/// docstring reworded cannot.
+///
+/// The gap that leaves is a symbol redefined in place — same id, different job
+/// — which could falsify an absence without the id set moving. That is rare
+/// enough to be worth the incrementality, and `--review-all` is the answer when
+/// a release has done it.
 function judgement_carries(
     judgement: Judgement,
     now: map<string, string>,
     before: Revision,
-    provenance: MatrixProvenance,
+    baml_grew: bool,
 ) -> bool {
-    match (judgement.ts) {
-        let ts: string => {
-            before.texts.has(ts) && before.texts.get(ts) == now.get(ts)
-        },
-        null => {
-            provenance.typescript_version == before.provenance.typescript_version
-                && (provenance.types_node_version ?? provenance_absent())
-                    == (before.provenance.types_node_version ?? provenance_absent())
-        },
+    // The counterpart list, not the verdict, decides which question to ask:
+    // it is what says whether there is anything to re-check.
+    if (judgement.baml.length() == 0) {
+        !baml_grew
+    } else {
+        let carries = true;
+        for (let id in judgement.baml) {
+            if (!before.texts.has(id) || before.texts.get(id) != now.get(id)) {
+                carries = false;
+            }
+        }
+        carries
     }
 }
 
@@ -254,11 +304,12 @@ function judgement_carries(
 /// are left for the passes.
 function apply_revision(matrix: SymbolMatrix, before: Revision) -> CarryOutcome {
     let now = current_texts(matrix);
+    let grew = baml_surface_grew(matrix, before);
     let carried: Judgement[] = [];
     let carried_for: map<string, bool> = {};
     let queued = 0;
 
-    for (let symbol in matrix.baml) {
+    for (let symbol in matrix.ts) {
         let prior: Judgement[] = before.judgements.get(symbol.id) ?? [];
         if (prior.length() == 0 || !is_fresh(symbol.id, symbol.references, now, before)) {
             queued += 1;
@@ -266,7 +317,7 @@ function apply_revision(matrix: SymbolMatrix, before: Revision) -> CarryOutcome 
         }
         let all_carry = true;
         for (let judgement in prior) {
-            if (!judgement_carries(judgement, now, before, matrix.provenance)) {
+            if (!judgement_carries(judgement, now, before, grew)) {
                 all_carry = false;
             }
         }
@@ -282,7 +333,7 @@ function apply_revision(matrix: SymbolMatrix, before: Revision) -> CarryOutcome 
 
     let kept: Judgement[] = [];
     for (let judgement in matrix.judgements) {
-        if (!carried_for.has(judgement.baml)) {
+        if (!carried_for.has(judgement.ts)) {
             kept.push(judgement);
         }
     }

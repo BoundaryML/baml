@@ -76,9 +76,9 @@ function load_report(path: string) -> ReportHeader {
         }
         },
     };
-    if (report.format_version != 1) {
+    if (report.format_version != 2) {
         throw baml.errors.InvalidArgument {
-            message: `${path} has report format_version ${report.format_version} (expected 1); regenerate it with tools/stdlib-matrix/run`,
+            message: `${path} has report format_version ${report.format_version} (expected 2); regenerate it with tools/stdlib-matrix/run`,
         };
     }
     report
