@@ -972,6 +972,11 @@ pub struct TypeInferenceBuilder<'db> {
     /// params, in declared De Bruijn order. See
     /// `ScopeInference::call_type_instantiations`.
     pub call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    /// Generic parameters supplied by `unreflect(...)` at each call. Their
+    /// binding is the bound occurrence type for static checking (M-5), but the
+    /// actual concrete type is opaque until runtime, so compile-time bound
+    /// validation must defer precisely these slots to the VM gate (M-6).
+    runtime_checked_type_params: FxHashMap<ExprId, FxHashSet<crate::ty::ParamTy>>,
     /// Function adapters required by checked optional-parameter coercions.
     pub function_coercions: FxHashMap<ExprId, crate::inference::FunctionCoercion>,
     /// Metadata produced while checking parameter defaults. Kept separate from
@@ -1240,6 +1245,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
             call_type_instantiations: FxHashMap::default(),
+            runtime_checked_type_params: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
@@ -2536,7 +2542,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         call_expr_id: ExprId,
         body: &ExprBody,
     ) -> Option<FxHashMap<crate::ty::ParamTy, Ty>> {
-        let (declared_params, callee_name) = self.callee_declared_generic_params(callee_id)?;
+        let (declared_params, declared_bounds, callee_name) =
+            self.callee_declared_generics(callee_id)?;
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
@@ -2558,7 +2565,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let scope_bounds = self.scope_type_var_bounds();
         let self_ty = self.body_self_ty.clone();
         let suppress_diags = self.is_auto_derived_body;
-        for (param_name, type_arg) in declared_params.iter().zip(type_args.iter()) {
+        for ((param_name, param_bounds), type_arg) in declared_params
+            .iter()
+            .zip(declared_bounds.iter())
+            .zip(type_args.iter())
+        {
             let mut diags = Vec::new();
             let ty = match type_arg {
                 ast::TypeArg::Static(type_arg_expr) => crate::lower_type_expr::lower_type_expr(
@@ -2574,6 +2585,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &mut diags,
                 ),
                 ast::TypeArg::Unreflect(operand) => {
+                    self.runtime_checked_type_params
+                        .entry(call_expr_id)
+                        .or_default()
+                        .insert(param_name.clone());
                     self.check_expr(
                         *operand,
                         body,
@@ -2581,9 +2596,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                             attr: TyAttr::default(),
                         },
                     );
-                    Ty::BuiltinUnknown {
+                    // The runtime operand is deliberately opaque to static
+                    // checking.  A bound is nevertheless a sound occurrence
+                    // type: every runtime type admitted at the call boundary
+                    // has to implement it (the VM repeats that check before
+                    // entering the callee).  This preserves useful member
+                    // access on a result such as `T extends PersonAnchor`
+                    // without pretending to know the minted concrete class.
+                    param_bounds.first().cloned().unwrap_or(Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
-                    }
+                    })
                 }
             };
             // Auto-derived bodies (`to_json` / `from_json` synthesized by
@@ -4090,6 +4112,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Use the substituted param types (now concrete) for checking.
                     for (param, arg) in &param_arg_pairs {
                         let param_ty = &param.ty;
+                        let runtime_checked = self
+                            .runtime_checked_type_params
+                            .get(&expr_id)
+                            .is_some_and(|params| {
+                                crate::generics::contains_typevar_where(param_ty, &|name| {
+                                    params.contains(name)
+                                })
+                            });
+                        if runtime_checked {
+                            // The marker's concrete type is unavailable here.
+                            // Infer the value so its own errors still surface;
+                            // the VM checks it against the realized parameter
+                            // template before entering the callee (M-5/M-6).
+                            self.infer_expr(*arg, body);
+                            continue;
+                        }
                         let substituted = crate::generics::substitute_ty(param_ty, &bindings);
                         if !crate::generics::contains_typevar(&substituted) {
                             self.check_expr(*arg, body, &substituted);
@@ -4281,6 +4319,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for (param, arg) in &param_arg_pairs {
                     let param_ty = &param.ty;
                     if !crate::generics::contains_typevar(param_ty) {
+                        continue;
+                    }
+                    if self
+                        .runtime_checked_type_params
+                        .get(&expr_id)
+                        .is_some_and(|params| {
+                            crate::generics::contains_typevar_where(param_ty, &|name| {
+                                params.contains(name)
+                            })
+                        })
+                    {
                         continue;
                     }
 
@@ -14148,6 +14197,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         bindings: &FxHashMap<crate::ty::ParamTy, Ty>,
     ) {
         for (idx, param) in generic_params.iter().enumerate() {
+            if self
+                .runtime_checked_type_params
+                .get(&expr_id)
+                .is_some_and(|runtime_checked| runtime_checked.contains(param))
+            {
+                continue;
+            }
             let Some(actual) = bindings.get(param) else {
                 continue;
             };

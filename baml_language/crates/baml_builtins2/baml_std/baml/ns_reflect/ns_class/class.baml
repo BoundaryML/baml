@@ -9,6 +9,7 @@ class Field {
 function new(
   name: string,
   fields: map<string, type | baml.reflect.WithMeta<type>>,
+  implementations: baml.reflect.interface.Implementation[] = [],
 ) -> Type throws baml.reflect.errors.CompilationError {
   $rust_function
 }

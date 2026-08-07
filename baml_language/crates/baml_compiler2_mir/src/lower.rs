@@ -4520,6 +4520,7 @@ impl<'db> LoweringContext<'db> {
             // A lambda carries neither a docstring nor generic parameters.
             docstring: None,
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: sig_display_param_types,
             display_return_type: sig_display_return_type,
             param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),

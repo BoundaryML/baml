@@ -8,7 +8,7 @@
 //! data carried inline in the object, so GC copies and `baml.deep_copy`
 //! preserve identity by construction (I-1: a copy *is* the same type value).
 
-use baml_type::{QualifiedTypeName, RealizedTy, normalize::TypeContext};
+use baml_type::{Name, QualifiedTypeName, RealizedTy, normalize::TypeContext};
 use indexmap::IndexMap;
 
 use crate::HeapPtr;
@@ -23,6 +23,20 @@ use crate::HeapPtr;
 pub struct DynTypeDefs {
     pub classes: IndexMap<QualifiedTypeName, HeapPtr>,
     pub enums: IndexMap<QualifiedTypeName, HeapPtr>,
+    /// Structured interface witnesses are part of a runtime definition's
+    /// equivalence tuple (BEP-066 I-6).  They deliberately contain no heap
+    /// pointers: dispatchable rules live in the engine's dynamic side table.
+    pub witnesses: Vec<DynWitnessDef>,
+}
+
+/// Heap-independent witness contribution carried by a minted definition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynWitnessDef {
+    pub interface: QualifiedTypeName,
+    pub interface_args: Vec<RealizedTy>,
+    pub associated_types: Vec<(Name, RealizedTy)>,
+    /// Interface field name -> physical class field name, in interface order.
+    pub field_links: Vec<(Name, Name)>,
 }
 
 impl DynTypeDefs {
@@ -30,6 +44,7 @@ impl DynTypeDefs {
         Self {
             classes: IndexMap::from([(name, ptr)]),
             enums: IndexMap::new(),
+            witnesses: Vec::new(),
         }
     }
 
@@ -37,6 +52,7 @@ impl DynTypeDefs {
         Self {
             classes: IndexMap::new(),
             enums: IndexMap::from([(name, ptr)]),
+            witnesses: Vec::new(),
         }
     }
 
@@ -47,10 +63,15 @@ impl DynTypeDefs {
         for (name, ptr) in &other.enums {
             self.enums.entry(name.clone()).or_insert(*ptr);
         }
+        for witness in &other.witnesses {
+            if !self.witnesses.contains(witness) {
+                self.witnesses.push(witness.clone());
+            }
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.classes.is_empty() && self.enums.is_empty()
+        self.classes.is_empty() && self.enums.is_empty() && self.witnesses.is_empty()
     }
 }
 

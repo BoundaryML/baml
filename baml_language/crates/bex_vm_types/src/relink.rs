@@ -316,6 +316,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
             throws_type: baml_type::TyTemplate::Never {

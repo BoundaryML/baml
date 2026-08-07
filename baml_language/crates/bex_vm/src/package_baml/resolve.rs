@@ -48,12 +48,19 @@ impl<'vm> ImplResolver<'vm> {
     /// one O(1) lookup over a table that already spans every package — see that
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
-    fn rules_for(self, iface: &TypeName) -> impl Iterator<Item = &'vm RuntimeImplRule> {
-        let iface_ptr = self.vm.lookup_interface(iface);
-        iface_ptr
-            .into_iter()
-            .flat_map(move |ptr| self.vm.packages.impl_rules_of(ptr))
-            .filter_map(move |&rule_ptr| self.vm.get_object(rule_ptr).as_impl_rule())
+    fn rules_for(self, iface: &TypeName) -> Vec<RuntimeImplRule> {
+        let Some(iface_ptr) = self.vm.lookup_interface(iface) else {
+            return Vec::new();
+        };
+        let mut rules: Vec<RuntimeImplRule> = self
+            .vm
+            .packages
+            .impl_rules_of(iface_ptr)
+            .iter()
+            .filter_map(|&rule_ptr| self.vm.get_object(rule_ptr).as_impl_rule().cloned())
+            .collect();
+        rules.extend(self.vm.dynamic_dispatch.rules_of(iface_ptr));
+        rules
     }
 }
 
@@ -135,9 +142,9 @@ impl<'vm> ImplResolver<'vm> {
         concrete_ty: &RealizedTy,
         iface: &TypeName,
         iface_args: &[RealizedTy],
-    ) -> Option<(&'vm RuntimeImplRule, Vec<RealizedTy>)> {
+    ) -> Option<(RuntimeImplRule, Vec<RealizedTy>)> {
         for rule in self.rules_for(iface) {
-            let Some(type_args) = self.rule_applies(rule, concrete_ty, &mut Vec::new()) else {
+            let Some(type_args) = self.rule_applies(&rule, concrete_ty, &mut Vec::new()) else {
                 continue;
             };
             // Select on the interface's input args only (associated types are outputs).
@@ -228,11 +235,16 @@ impl<'vm> ImplResolver<'vm> {
         stack.push(goal);
         // `rules_for` borrows `self.vm` immutably while `stack` is borrowed
         // mutably inside the predicate, so the candidates are collected first.
-        let candidates: Vec<&RuntimeImplRule> = self.rules_for(iface).collect();
+        let candidates = self.rules_for(iface);
         let proven = candidates.into_iter().any(|rule| {
-            self.rule_applies(rule, concrete_ty, stack)
+            self.rule_applies(&rule, concrete_ty, stack)
                 .is_some_and(|bindings| {
-                    self.interface_request_matches(rule, &bindings, requested_args, requested_assoc)
+                    self.interface_request_matches(
+                        &rule,
+                        &bindings,
+                        requested_args,
+                        requested_assoc,
+                    )
                 })
         });
         stack.pop();
@@ -605,16 +617,16 @@ impl ImplResolver<'_> {
         let mut out: Vec<ImplementorEntry> = Vec::new();
         // `rules_for` borrows the VM for the iteration; the blanket arm below
         // re-enters it via `concrete_types`, so collect the candidates first.
-        let candidates: Vec<&RuntimeImplRule> = self.rules_for(iface).collect();
+        let candidates = self.rules_for(iface);
         for rule in candidates {
             match &rule.for_ty_pattern {
                 TyTemplate::TypeArgRef(_) => {
                     // Blanket impl: its bounds decide membership; every concrete
                     // type satisfying them is an implementor, at the interface
                     // instantiation the blanket pins (typevar dimensions erased).
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
+                    let (args, assoc) = self.pinned_interface_instantiation(&rule);
                     for ty in self.concrete_types() {
-                        if self.rule_applies(rule, &ty, &mut Vec::new()).is_some() {
+                        if self.rule_applies(&rule, &ty, &mut Vec::new()).is_some() {
                             push_unique(&mut out, (ty, args.clone(), assoc.clone()));
                         }
                     }
@@ -624,12 +636,12 @@ impl ImplResolver<'_> {
                 other if <&RealizedTy>::try_from(other).is_ok() => {
                     let realized = <&RealizedTy>::try_from(other)
                         .unwrap_or_else(|_| unreachable!("guarded by the `is_ok` above"));
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
+                    let (args, assoc) = self.pinned_interface_instantiation(&rule);
                     push_unique(&mut out, (realized.clone(), args, assoc));
                 }
                 // A generic class for-type (`Foo<T>`) is reported by its base.
                 TyTemplate::Class(name, _, _) => {
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
+                    let (args, assoc) = self.pinned_interface_instantiation(&rule);
                     let base = RealizedTy::Class(name.clone(), Vec::new(), TyAttr::default());
                     push_unique(&mut out, (base, args, assoc));
                 }

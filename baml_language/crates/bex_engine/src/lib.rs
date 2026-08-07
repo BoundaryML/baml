@@ -849,6 +849,11 @@ pub struct BexEngine {
     /// for interface dispatch, recursive aliases, and named-item lookup.
     packages: Arc<bex_vm::package_load::PackageIndex>,
 
+    /// Value-scoped runtime class/interface dispatch table.
+    dynamic_dispatch: Arc<bex_vm::package_load::DynDispatchTables>,
+    /// Weak-table forwarding/sweep participant registered for every GC.
+    _dynamic_dispatch_permit: bex_heap::InactiveHeapPermit<bex_vm::package_load::DynDispatchRoot>,
+
     /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
     /// from `packages` and shared with every spawned VM (each `BexVm` would
     /// otherwise re-resolve them from `packages` on construction).
@@ -1647,6 +1652,7 @@ impl BexEngine {
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
         let packages = Arc::new(package_index);
+        let dynamic_dispatch = Arc::new(bex_vm::package_load::DynDispatchTables::default());
         // Resolve the builtin error/panic class pointers once; shared with every
         // spawned VM rather than re-resolved per `BexVm::new`.
         let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
@@ -1716,6 +1722,7 @@ impl BexEngine {
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
                     Arc::clone(&packages),
+                    Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
                 );
@@ -1797,6 +1804,9 @@ impl BexEngine {
         // engine's own field point at the same `UnsafeCell<Box<[Value]>>`.
         let globals_permit =
             futures::executor::block_on(heap_permit_manager.new_permit(globals.clone()));
+        let dynamic_dispatch_permit = futures::executor::block_on(heap_permit_manager.new_permit(
+            bex_vm::package_load::DynDispatchRoot(Arc::clone(&dynamic_dispatch)),
+        ));
 
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
@@ -1852,6 +1862,8 @@ impl BexEngine {
             }),
             unhandled_spawn_delivery: tokio::sync::Mutex::new(()),
             packages,
+            dynamic_dispatch,
+            _dynamic_dispatch_permit: dynamic_dispatch_permit,
             error_class_ptrs,
             panic_class_ptrs,
             prof_enabled,
@@ -3029,6 +3041,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
+            Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
         );
@@ -4687,6 +4700,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
+            Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
         );

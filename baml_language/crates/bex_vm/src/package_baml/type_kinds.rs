@@ -1,30 +1,57 @@
 //! BEP-066 reflection kind views over the existing minted `Object::Type`.
 
+use std::sync::Arc;
+
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
-    Class, ClassField, DynTypeDefs, Enum, EnumVariant, MintId, Object, RuntimeTypeProvenance,
-    TypeValue, Value,
+    Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
+    MintId, Object, RuntimeImplRule, RuntimeTypeProvenance, TypeValue, Value,
 };
 use indexmap::IndexMap;
 
 use super::{
     BamlClassReflectArrayType, BamlClassReflectClassType, BamlClassReflectEnumType,
-    BamlClassReflectFunctionType, BamlClassReflectInterfaceType, BamlClassReflectLiteralType,
-    BamlClassReflectMapType, BamlClassReflectPrimitiveType, BamlClassReflectUnionType,
-    BamlClassTypeValue, BamlNamespaceReflectArray, BamlNamespaceReflectClass,
-    BamlNamespaceReflectEnum, BamlNamespaceReflectFunction, BamlNamespaceReflectInterface,
-    BamlNamespaceReflectLiteral, BamlNamespaceReflectMap, BamlNamespaceReflectPrimitive,
-    BamlNamespaceReflectUnion, PackageBamlImpl, copy,
+    BamlClassReflectFunctionType, BamlClassReflectInterfaceImplementation,
+    BamlClassReflectInterfaceType, BamlClassReflectLiteralType, BamlClassReflectMapType,
+    BamlClassReflectPrimitiveType, BamlClassReflectUnionType, BamlClassTypeValue,
+    BamlNamespaceReflectArray, BamlNamespaceReflectClass, BamlNamespaceReflectEnum,
+    BamlNamespaceReflectFunction, BamlNamespaceReflectInterface, BamlNamespaceReflectLiteral,
+    BamlNamespaceReflectMap, BamlNamespaceReflectPrimitive, BamlNamespaceReflectUnion,
+    PackageBamlImpl, copy,
 };
 use crate::BexVm;
 
 impl BamlNamespaceReflectArray for PackageBamlImpl {}
+
+#[derive(Clone, Debug)]
+struct InterfaceWitness {
+    interface_ptr: bex_vm_types::HeapPtr,
+    interface_ty: baml_type::RealizedTy,
+    field_links: IndexMap<baml_type::Name, baml_type::Name>,
+}
+
+fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
+    let instance = vm
+        .as_instance(&value)
+        .map_err(|_| "implementations must contain reflect.interface.Implementation values")?;
+    let Object::Class(class) = vm.get_object(instance.class) else {
+        unreachable!("Instance.class must point to Object::Class")
+    };
+    if class.name.to_string() != "baml.reflect.interface.Implementation" {
+        return Err("implementations must contain reflect.interface.Implementation values".into());
+    }
+    vm.as_rust_data::<InterfaceWitness>(&instance.load_field(0))
+        .map(Clone::clone)
+        .map_err(|_| "invalid reflect.interface.Implementation handle".into())
+}
+
 impl BamlNamespaceReflectClass for PackageBamlImpl {
     fn new(
         vm: &mut BexVm,
         name: &bex_str::BexStr,
         fields: &IndexMap<bex_str::BexStr, Value>,
+        implementations: &[Value],
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let class_name = name.as_str();
         let mut diagnostics = Vec::new();
@@ -72,6 +99,153 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
                 runtime_type: Some(row.type_value),
             });
         }
+
+        let mut witnesses = Vec::with_capacity(implementations.len());
+        for implementation in implementations {
+            match witness_state(vm, *implementation) {
+                Ok(witness) => witnesses.push(witness),
+                Err(message) => {
+                    diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message))
+                }
+            }
+        }
+
+        // All aggregate witness checks happen before minting or allocating the
+        // class/type value (C-12, Fail-Before-Type).
+        let mut unique_witnesses = std::collections::HashSet::new();
+        for witness in &witnesses {
+            if !unique_witnesses.insert(witness.interface_ty.clone()) {
+                diagnostics.push(compiler_diagnostic(
+                    DiagnosticId::OverlappingImplements,
+                    format!(
+                        "duplicate structural witness for `{}`",
+                        witness.interface_ty
+                    ),
+                ));
+            }
+        }
+        let mut witnessed_defs = Vec::with_capacity(witnesses.len());
+        for witness in &witnesses {
+            let Object::Interface(interface) = vm.get_object(witness.interface_ptr) else {
+                diagnostics.push(compiler_diagnostic(
+                    DiagnosticId::TypeMismatch,
+                    "witness interface is not loaded".into(),
+                ));
+                continue;
+            };
+            for required in &interface.requires {
+                let present = witnesses.iter().any(|candidate| {
+                    matches!(
+                        &candidate.interface_ty,
+                        baml_type::RealizedTy::Interface(name, _, _, _)
+                            if name == &required.name
+                    )
+                });
+                if !present {
+                    diagnostics.push(compiler_diagnostic(
+                        DiagnosticId::MissingRequiredInterface,
+                        format!(
+                            "interface witness for `{}` requires a witness for `{}`",
+                            interface.name.display_name(),
+                            required.name.display_name()
+                        ),
+                    ));
+                }
+            }
+            let mut physical_links = Vec::with_capacity(interface.fields.len());
+            let mut tuple_links = Vec::with_capacity(interface.fields.len());
+            for required in &interface.fields {
+                let Some(class_field_name) = witness.field_links.get(&required.name) else {
+                    diagnostics.push(compiler_diagnostic(
+                        DiagnosticId::TypeMismatch,
+                        format!(
+                            "interface witness for `{}` is missing required field `{}`",
+                            interface.name.display_name(),
+                            required.name
+                        ),
+                    ));
+                    continue;
+                };
+                let Some((slot, class_field)) = class_fields
+                    .iter()
+                    .enumerate()
+                    .find(|(_, field)| field.name == class_field_name.as_str())
+                else {
+                    diagnostics.push(compiler_diagnostic(
+                        DiagnosticId::TypeMismatch,
+                        format!(
+                            "interface field `{}.{}` links to missing class field `{}`",
+                            interface.name.display_name(),
+                            required.name,
+                            class_field_name
+                        ),
+                    ));
+                    continue;
+                };
+                let required_ty = match realize_witness_field_type(
+                    &required.ty,
+                    interface,
+                    &witness.interface_ty,
+                ) {
+                    Ok(ty) => ty,
+                    Err(message) => {
+                        diagnostics.push(compiler_diagnostic(
+                            DiagnosticId::TypeMismatch,
+                            format!(
+                                "interface field `{}.{}` {message}",
+                                interface.name.display_name(),
+                                required.name
+                            ),
+                        ));
+                        continue;
+                    }
+                };
+                let Ok(class_ty) = baml_type::RealizedTy::try_from(class_field.field_type.clone())
+                else {
+                    diagnostics.push(compiler_diagnostic(
+                        DiagnosticId::TypeMismatch,
+                        format!(
+                            "class field `{}` has an unresolved runtime type",
+                            class_field_name
+                        ),
+                    ));
+                    continue;
+                };
+                if class_ty != required_ty {
+                    diagnostics.push(compiler_diagnostic(
+                        DiagnosticId::TypeMismatch,
+                        format!(
+                            "interface field `{}.{}` requires `{required_ty}`, but class field `{}` has `{class_ty}`",
+                            interface.name.display_name(),
+                            required.name,
+                            class_field_name
+                        ),
+                    ));
+                    continue;
+                }
+                physical_links.push(u32::try_from(slot).expect("class field count fits u32"));
+                tuple_links.push((required.name.clone(), class_field_name.clone()));
+            }
+            let (interface_name, interface_args, interface_assoc) = match &witness.interface_ty {
+                baml_type::RealizedTy::Interface(name, args, assoc, _) => {
+                    (name.clone(), args.clone(), assoc.clone())
+                }
+                _ => unreachable!("implementation() only creates interface witnesses"),
+            };
+            witnessed_defs.push((
+                witness.interface_ptr,
+                interface_name.clone(),
+                interface_args.clone(),
+                interface_assoc.clone(),
+                physical_links,
+                DynWitnessDef {
+                    interface: interface_name,
+                    interface_args,
+                    associated_types: interface_assoc,
+                    field_links: tuple_links,
+                },
+            ));
+        }
         if !diagnostics.is_empty() {
             return Err(crate::errors::VmRustFnError::Thrown(
                 alloc_compilation_error(vm, &diagnostics),
@@ -86,6 +260,10 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             baml_type::Name::new(class_name),
             mint_number,
         );
+        child_defs.witnesses = witnessed_defs
+            .iter()
+            .map(|(_, _, _, _, _, tuple)| tuple.clone())
+            .collect();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
             name: type_name.clone(),
             fields: class_fields,
@@ -107,7 +285,56 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             Vec::new(),
             baml_type::TyAttr::default(),
         );
-        child_defs.classes.insert(type_name, class_ptr);
+        child_defs.classes.insert(type_name.clone(), class_ptr);
+        vm.dynamic_dispatch
+            .register_class(type_name.clone(), class_ptr);
+        for (interface_ptr, _interface_name, args, assoc, field_links, _) in witnessed_defs {
+            let Object::Interface(interface) = vm.get_object(interface_ptr) else {
+                unreachable!("witness interface validated before allocation")
+            };
+            let mut methods = IndexMap::new();
+            let for_ty_pattern = baml_type::TyTemplate::from(ty.clone());
+            let mut default_frame = vec![for_ty_pattern.clone()];
+            default_frame.extend(args.iter().cloned().map(baml_type::TyTemplate::from));
+            default_frame.extend(
+                assoc
+                    .iter()
+                    .map(|(_, ty)| baml_type::TyTemplate::from(ty.clone())),
+            );
+            for method in &interface.methods {
+                let Some(default_fqn) = &method.default_fqn else {
+                    continue;
+                };
+                let callee = vm.find_function_by_name(default_fqn).unwrap_or_else(|| {
+                    unreachable!("validated interface default `{default_fqn}` must be emitted")
+                });
+                methods.insert(
+                    method.name.clone(),
+                    MethodImpl {
+                        fqn: callee,
+                        frame: default_frame.clone(),
+                    },
+                );
+            }
+            vm.dynamic_dispatch.register_rule(
+                interface_ptr,
+                crate::package_load::DynRuleEntry {
+                    class: class_ptr,
+                    rule: RuntimeImplRule {
+                        interface_head: interface_ptr,
+                        for_ty_pattern,
+                        generic_param_bounds: Vec::new(),
+                        interface_args: args.into_iter().map(baml_type::TyTemplate::from).collect(),
+                        interface_assoc: assoc
+                            .into_iter()
+                            .map(|(name, ty)| (name, baml_type::TyTemplate::from(ty)))
+                            .collect(),
+                        methods,
+                        field_links: field_links.into_boxed_slice(),
+                    },
+                },
+            );
+        }
         Ok(Value::object(vm.tlab.alloc_type(
             TypeValue::from_parts_with_defs(ty, mint, child_defs),
         )))
@@ -322,7 +549,117 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
     }
 }
 impl BamlNamespaceReflectFunction for PackageBamlImpl {}
-impl BamlNamespaceReflectInterface for PackageBamlImpl {}
+impl BamlClassReflectInterfaceImplementation for PackageBamlImpl {
+    fn field(
+        vm: &mut BexVm,
+        implementation: &Value,
+        interface_field: &bex_str::BexStr,
+        class_field: Option<&bex_str::BexStr>,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let mut witness = witness_state(vm, *implementation).map_err(|message| {
+            crate::errors::VmRustFnError::Thrown(alloc_compilation_error(
+                vm,
+                &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
+            ))
+        })?;
+        let Object::Interface(interface) = vm.get_object(witness.interface_ptr) else {
+            unreachable!("implementation witness captures Object::Interface")
+        };
+        let field_name = baml_type::Name::new(interface_field.as_str());
+        if !interface
+            .fields
+            .iter()
+            .any(|field| field.name == field_name)
+        {
+            let interface_name = interface.name.display_name().to_string();
+            return Err(crate::errors::VmRustFnError::Thrown(
+                alloc_compilation_error(
+                    vm,
+                    &[compiler_diagnostic(
+                        DiagnosticId::NoSuchField,
+                        format!("interface `{interface_name}` has no field `{interface_field}`"),
+                    )],
+                ),
+            ));
+        }
+        if witness.field_links.contains_key(&field_name) {
+            let interface_name = interface.name.display_name().to_string();
+            return Err(crate::errors::VmRustFnError::Thrown(
+                alloc_compilation_error(
+                    vm,
+                    &[compiler_diagnostic(
+                        DiagnosticId::DuplicateField,
+                        format!(
+                            "interface witness for `{interface_name}` links field `{interface_field}` more than once"
+                        ),
+                    )],
+                ),
+            ));
+        }
+        let class_field = baml_type::Name::new(
+            class_field.map_or(interface_field.as_str(), bex_str::BexStr::as_str),
+        );
+        witness.field_links.insert(field_name, class_field);
+        Ok(copy::reflect::interface::Implementation {
+            _handle: Arc::new(witness),
+        }
+        .to_value(vm))
+    }
+}
+
+impl BamlNamespaceReflectInterface for PackageBamlImpl {
+    fn implementation(vm: &mut BexVm) -> Result<Value, crate::errors::VmRustFnError> {
+        let Some(interface_ty) = vm.current_call_type_args().first().cloned() else {
+            unreachable!("implementation<I> receives one runtime type argument")
+        };
+        let baml_type::RealizedTy::Interface(interface_name, _, _, _) = &interface_ty else {
+            return Err(crate::errors::VmRustFnError::Thrown(
+                alloc_compilation_error(
+                    vm,
+                    &[compiler_diagnostic(
+                        DiagnosticId::TypeMismatch,
+                        format!(
+                            "reflect.interface.implementation expects an interface type, got `{interface_ty}`"
+                        ),
+                    )],
+                ),
+            ));
+        };
+        let interface_ptr = vm.lookup_interface(interface_name).unwrap_or_else(|| {
+            unreachable!("statically checked interface `{interface_name}` must be loaded")
+        });
+        let Object::Interface(interface) = vm.get_object(interface_ptr) else {
+            unreachable!("lookup_interface returns Object::Interface")
+        };
+        if let Some(required) = interface
+            .methods
+            .iter()
+            .find(|method| method.default_fqn.is_none())
+        {
+            let interface_name = interface.name.display_name().to_string();
+            let required_name = required.name.to_string();
+            return Err(crate::errors::VmRustFnError::Thrown(
+                alloc_compilation_error(
+                    vm,
+                    &[compiler_diagnostic(
+                        DiagnosticId::TypeMismatch,
+                        format!(
+                            "interface `{interface_name}` cannot be witnessed structurally because required method `{required_name}` has no default body; use `reflect.Package.compile` with an `implements` block"
+                        ),
+                    )],
+                ),
+            ));
+        }
+        Ok(copy::reflect::interface::Implementation {
+            _handle: Arc::new(InterfaceWitness {
+                interface_ptr,
+                interface_ty,
+                field_links: IndexMap::new(),
+            }),
+        }
+        .to_value(vm))
+    }
+}
 impl BamlNamespaceReflectLiteral for PackageBamlImpl {
     fn new(vm: &mut BexVm, value: &Value) -> Value {
         let literal = if let Some(value) = value.as_int() {
@@ -392,6 +729,175 @@ impl BamlNamespaceReflectUnion for PackageBamlImpl {
 fn reflected_ty(vm: &BexVm, value: Value) -> baml_type::RealizedTy {
     super::type_class::type_value_ty(vm, value)
         .unwrap_or_else(|| unreachable!("kind method receiver must be Object::Type"))
+}
+
+/// Realize an interface field declaration against the exact interface
+/// instantiation captured by a witness. Interface metadata deliberately keeps
+/// generic parameters and `Self.Assoc` projections symbolic; construction is the
+/// point where C-10 requires those positions to become invariant concrete types.
+fn realize_witness_field_type(
+    ty: &baml_type::RuntimeTy,
+    interface: &InterfaceDef,
+    witnessed: &baml_type::RealizedTy,
+) -> Result<baml_type::RealizedTy, String> {
+    let baml_type::RealizedTy::Interface(name, args, assoc, _) = witnessed else {
+        unreachable!("implementation() only captures interface types")
+    };
+    if name != &interface.name {
+        return Err("was captured for a different interface".into());
+    }
+    let substituted = substitute_witness_field_type(ty, interface, args, assoc)?;
+    baml_type::RealizedTy::try_from(substituted)
+        .map_err(|_| "depends on an unsupported open type".into())
+}
+
+fn substitute_witness_field_type(
+    ty: &baml_type::RuntimeTy,
+    interface: &InterfaceDef,
+    args: &[baml_type::RealizedTy],
+    assoc: &[(baml_type::Name, baml_type::RealizedTy)],
+) -> Result<baml_type::RuntimeTy, String> {
+    use baml_type::RuntimeTy;
+
+    match ty {
+        RuntimeTy::TypeVar(param, _) => {
+            let Some((index, _)) = interface
+                .args
+                .iter()
+                .enumerate()
+                .find(|(_, (name, _))| name.as_str() == param.as_str())
+            else {
+                return Err(format!("references unbound type parameter `{param}`"));
+            };
+            args.get(index)
+                .cloned()
+                .map(RuntimeTy::from)
+                .ok_or_else(|| format!("is missing interface type argument `{param}`"))
+        }
+        RuntimeTy::AssociatedTypeProjection {
+            base,
+            interface: projection_interface,
+            member,
+            ..
+        } if matches!(&**base, RuntimeTy::TypeVar(param, _) if param.as_str() == "Self")
+            && projection_interface.name == interface.name =>
+        {
+            assoc
+                .iter()
+                .find(|(name, _)| name == member)
+                .map(|(_, ty)| RuntimeTy::from(ty.clone()))
+                .ok_or_else(|| format!("is missing associated binding `{member}`"))
+        }
+        RuntimeTy::List(inner, attr) => Ok(RuntimeTy::List(
+            Box::new(substitute_witness_field_type(
+                inner, interface, args, assoc,
+            )?),
+            attr.clone(),
+        )),
+        RuntimeTy::Map { key, value, attr } => Ok(RuntimeTy::Map {
+            key: Box::new(substitute_witness_field_type(key, interface, args, assoc)?),
+            value: Box::new(substitute_witness_field_type(
+                value, interface, args, assoc,
+            )?),
+            attr: attr.clone(),
+        }),
+        RuntimeTy::Union(members, attr) => Ok(RuntimeTy::Union(
+            members
+                .iter()
+                .map(|member| substitute_witness_field_type(member, interface, args, assoc))
+                .collect::<Result<Vec<_>, _>>()?,
+            attr.clone(),
+        )),
+        RuntimeTy::Class(name, type_args, attr) => Ok(RuntimeTy::Class(
+            name.clone(),
+            type_args
+                .iter()
+                .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
+                .collect::<Result<Vec<_>, _>>()?,
+            attr.clone(),
+        )),
+        RuntimeTy::Interface(name, type_args, bindings, attr) => Ok(RuntimeTy::Interface(
+            name.clone(),
+            type_args
+                .iter()
+                .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
+                .collect::<Result<Vec<_>, _>>()?,
+            bindings
+                .iter()
+                .map(|(name, ty)| {
+                    Ok((
+                        name.clone(),
+                        substitute_witness_field_type(ty, interface, args, assoc)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+            attr.clone(),
+        )),
+        RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ok(RuntimeTy::Function {
+            params: params
+                .iter()
+                .map(|param| {
+                    Ok(baml_type::RuntimeFunctionParamTy {
+                        name: param.name.clone(),
+                        ty: substitute_witness_field_type(&param.ty, interface, args, assoc)?,
+                        mode: param.mode,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+            ret: Box::new(substitute_witness_field_type(ret, interface, args, assoc)?),
+            throws: Box::new(substitute_witness_field_type(
+                throws, interface, args, assoc,
+            )?),
+            attr: attr.clone(),
+        }),
+        RuntimeTy::Future(value, error, attr) => Ok(RuntimeTy::Future(
+            Box::new(substitute_witness_field_type(
+                value, interface, args, assoc,
+            )?),
+            Box::new(substitute_witness_field_type(
+                error, interface, args, assoc,
+            )?),
+            attr.clone(),
+        )),
+        RuntimeTy::AssociatedTypeProjection {
+            base,
+            interface: projection_interface,
+            member,
+            attr,
+        } => Ok(RuntimeTy::AssociatedTypeProjection {
+            base: Box::new(substitute_witness_field_type(base, interface, args, assoc)?),
+            interface: Box::new(baml_type::RuntimeInterface::new(
+                projection_interface.name.clone(),
+                projection_interface
+                    .generics
+                    .iter()
+                    .map(|ty| substitute_witness_field_type(ty, interface, args, assoc))
+                    .collect::<Result<Vec<_>, _>>()?,
+                projection_interface
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| {
+                        Ok((
+                            name.clone(),
+                            substitute_witness_field_type(ty, interface, args, assoc)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?,
+            )),
+            member: member.clone(),
+            attr: attr.clone(),
+        }),
+        // If the full subtree contains no symbolic positions, preserve it
+        // exactly (including attributes) without rebuilding every realized leaf.
+        other => baml_type::RealizedTy::try_from(other.clone())
+            .map(RuntimeTy::from)
+            .map_err(|_| "depends on an unsupported open type".into()),
+    }
 }
 
 fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
@@ -591,11 +1097,11 @@ fn is_baml_identifier(value: &str) -> bool {
         && segments.all(|part| segment(part, true))
 }
 
-fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {
+pub(crate) fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {
     Diagnostic::error(id, message).with_phase(DiagnosticPhase::Hir)
 }
 
-fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
+pub(crate) fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
     let values = diagnostics
         .iter()
         .map(|diagnostic| {

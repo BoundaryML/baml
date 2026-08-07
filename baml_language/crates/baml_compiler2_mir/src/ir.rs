@@ -144,10 +144,26 @@ pub struct RuntimeSignature {
     pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
+    /// Runtime-checkable interface bounds, parallel to the callee frame's
+    /// De Bruijn generic parameter slots.  Kept separately from display text
+    /// so `unreflect(...)` calls can validate opaque runtime types before the
+    /// callee executes.
+    pub generic_param_bounds: Vec<Vec<RuntimeInterfaceBound>>,
     /// Display strings for the parameter types, parallel to `param_names`.
     pub display_param_types: Vec<String>,
     /// Display string for the return type.
     pub display_return_type: String,
+}
+
+/// Loc-free, templated form of one declared generic interface bound.
+///
+/// MIR owns this transport shape so the compiler layers do not depend on VM
+/// object types; emission converts it directly to `bex_vm_types::InterfaceBound`.
+#[derive(Debug, Clone)]
+pub struct RuntimeInterfaceBound {
+    pub interface: baml_type::TypeName,
+    pub args: Vec<baml_type::TyTemplate>,
+    pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
 }
 
 /// A function represented as a control flow graph.

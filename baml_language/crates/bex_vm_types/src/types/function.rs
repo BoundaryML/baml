@@ -3,6 +3,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{Bytecode, HeapPtr, SysOp, Value};
 
+use super::InterfaceBound;
+
 /// Function type.
 ///
 /// # Native Function Pointers
@@ -263,6 +265,12 @@ pub struct Function {
     /// spelling — `<T extends BoxLike>(box: T) -> T.Item` rather than
     /// `(box: #0) -> #0.Item`.
     pub display_type_params: Vec<String>,
+
+    /// Interface bounds for each De Bruijn type-argument slot.  Unlike
+    /// `display_type_params`, this is executable metadata: the VM substitutes
+    /// the actual call-frame types and rejects a failing bound before entering
+    /// the function body.
+    pub generic_param_bounds: Vec<Vec<InterfaceBound>>,
 
     /// Source/TIR-rendered parameter types in declaration order.
     pub display_param_types: Vec<String>,
