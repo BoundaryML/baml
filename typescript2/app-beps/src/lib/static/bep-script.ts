@@ -484,35 +484,45 @@ def cmd_diff(args: argparse.Namespace) -> int:
         else:
             print(f"README.md: {server_lines} → {local_lines} lines")
 
-    # Compare pages
+    # Compare pages (tracking each page's immediate parent to detect moves)
     server_pages = {}
     for f_path, content in server_files.items():
         if f_path.startswith("pages/") and f_path.endswith(".md"):
             # Slug is the basename; nested pages live at pages/<ancestors>/<slug>.md
-            slug = f_path.rsplit("/", 1)[-1][:-3]
-            server_pages[slug] = content
+            parts = f_path[:-3].split("/")[1:]
+            slug = parts[-1]
+            parent = parts[-2] if len(parts) > 1 else None
+            server_pages[slug] = (parent, content)
 
-    local_pages = {p["slug"]: p["content"] for p in local_bep["pages"]}
+    local_pages = {
+        p["slug"]: (p.get("parent_slug"), p["content"]) for p in local_bep["pages"]
+    }
 
     all_slugs = set(server_pages.keys()) | set(local_pages.keys())
     for slug in sorted(all_slugs):
-        server_content = server_pages.get(slug, "")
-        local_content = local_pages.get(slug, "")
+        server_parent, server_content = server_pages.get(slug, (None, ""))
+        local_parent, local_content = local_pages.get(slug, (None, ""))
 
         if slug not in server_pages:
             print(f"pages/{slug}.md: NEW ({len(local_content.splitlines())} lines)")
         elif slug not in local_pages:
             print(f"pages/{slug}.md: DELETED")
-        elif server_content != local_content:
-            print(f"pages/{slug}.md: MODIFIED")
-            if args.full:
-                diff = difflib.unified_diff(
-                    server_content.splitlines(keepends=True),
-                    local_content.splitlines(keepends=True),
-                    fromfile=f"server/pages/{slug}.md",
-                    tofile=f"local/pages/{slug}.md",
+        else:
+            if server_parent != local_parent:
+                print(
+                    f"pages/{slug}.md: MOVED "
+                    f"({server_parent or '(top level)'} -> {local_parent or '(top level)'})"
                 )
-                print("".join(diff))
+            if server_content != local_content:
+                print(f"pages/{slug}.md: MODIFIED")
+                if args.full:
+                    diff = difflib.unified_diff(
+                        server_content.splitlines(keepends=True),
+                        local_content.splitlines(keepends=True),
+                        fromfile=f"server/pages/{slug}.md",
+                        tofile=f"local/pages/{slug}.md",
+                    )
+                    print("".join(diff))
 
     return 0
 
