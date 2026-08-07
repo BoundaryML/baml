@@ -43,7 +43,26 @@ use baml_type::{Literal, RuntimeTy, TypeName};
 
 use crate::BexExternalValue;
 
+/// Canonical dotted path of the builtin JSON alias — test fixtures build the
+/// builtin `TypeName` from it; runtime identity checks go through
+/// [`is_canonical_json_alias`], never a rendered string.
+#[cfg(test)]
 const BAML_JSON_JSON: &str = "baml.json.json";
+
+/// Whether a type name is the canonical builtin `baml.json.json` alias.
+///
+/// Compares the fully qualified identity — package `baml`, namespace
+/// `json`, name `json` — never a rendered display string:
+/// `TypeName::display_name()` elides the implicit `user` package for local
+/// types, so a user alias declared at namespace path `baml.json` with name
+/// `json` would render identically and must NOT receive builtin JSON
+/// behavior.
+pub fn is_canonical_json_alias(name: &TypeName) -> bool {
+    name.package().as_str() == "baml"
+        && name.namespace().len() == 1
+        && name.namespace()[0].as_str() == "json"
+        && name.name().as_str() == "json"
+}
 
 /// A host callable returned a value whose runtime shape cannot inhabit the
 /// declared return type.
@@ -91,6 +110,20 @@ pub fn validate_host_return(
         && metadata.is_inbound_type_annotation
     {
         if inbound_annotation_satisfies_ty(&metadata.selected_option, expected) {
+            return Ok(());
+        }
+        // The canonical `baml.json.json` alias is nominal-opaque to the
+        // context-free subtype check above (`NoFacts` cannot expand it), so a
+        // bridge that annotates a container-valued json return — the C++
+        // codec annotates the selected variant alternative, e.g.
+        // `map<string, baml.json.json>` — would be rejected here. Admit the
+        // annotation structurally instead: the declared type must admit the
+        // json alias, the annotation must stay within the JSON algebra, and
+        // the payload (peeled by `value_satisfies_json`) must inhabit it.
+        if expected_admits_json_alias(expected, 0)
+            && runtime_ty_within_json_algebra(&metadata.selected_option, 0)
+            && value_satisfies_json(value)
+        {
             return Ok(());
         }
         return Err(HostReturnTypeError {
@@ -144,7 +177,7 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             _ => members.iter().any(|m| value_satisfies_ty(value, m)),
         },
 
-        RuntimeTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
+        RuntimeTy::TypeAlias(name, _) if is_canonical_json_alias(name) => {
             value_satisfies_json(value)
         }
 
@@ -259,6 +292,13 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
 /// Whether an external value is exactly in the recursive `baml.json.json`
 /// algebra. BAML extensions such as bigint, bytes, classes, enums, media,
 /// handles, and non-finite floats are intentionally rejected.
+///
+/// A sparse inbound `value_type` annotation (a transient
+/// `BexExternalValue::Union` with `is_inbound_type_annotation`, e.g. the
+/// Swift bridge annotates every json scalar leaf) is peeled — but only when
+/// the annotation itself stays within the JSON algebra, so a payload
+/// annotated as `bigint` or a class is still rejected. A genuine union
+/// carrier (a value produced from a declared union) is never JSON.
 pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
     fn recurse(value: &BexExternalValue, depth: usize) -> bool {
         if depth > 256 {
@@ -276,12 +316,64 @@ pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
             BexExternalValue::Map { entries, .. } => {
                 entries.values().all(|item| recurse(item, depth + 1))
             }
-            BexExternalValue::Union { .. } => false,
+            BexExternalValue::Union { value, metadata } => {
+                metadata.is_inbound_type_annotation
+                    && runtime_ty_within_json_algebra(&metadata.selected_option, 0)
+                    && recurse(value, depth + 1)
+            }
             _ => false,
         }
     }
 
     recurse(value, 0)
+}
+
+/// Whether a declared type admits the canonical `baml.json.json` alias: the
+/// alias itself, or a union with the alias among its members.
+fn expected_admits_json_alias(ty: &RuntimeTy, depth: usize) -> bool {
+    if depth > 64 {
+        return false;
+    }
+    match ty {
+        RuntimeTy::TypeAlias(name, _) => is_canonical_json_alias(name),
+        RuntimeTy::Union(members, _) => members
+            .iter()
+            .any(|member| expected_admits_json_alias(member, depth + 1)),
+        _ => false,
+    }
+}
+
+/// Whether a declared or annotated `RuntimeTy` lies entirely within the
+/// recursive `baml.json.json` algebra: the alias itself, the JSON scalar
+/// primitives, their literals, and string-keyed containers thereof.
+fn runtime_ty_within_json_algebra(ty: &RuntimeTy, depth: usize) -> bool {
+    if depth > 64 {
+        return false;
+    }
+    match ty {
+        RuntimeTy::Null { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Int { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::String { .. } => true,
+        RuntimeTy::TypeAlias(name, _) => is_canonical_json_alias(name),
+        RuntimeTy::Literal(literal, _, _) => matches!(
+            literal,
+            Literal::Bool(_) | Literal::Int(_) | Literal::String(_) | Literal::Float(_)
+        ),
+        RuntimeTy::List(inner, _) => runtime_ty_within_json_algebra(inner, depth + 1),
+        RuntimeTy::Map { key, value, .. } => {
+            matches!(key.as_ref(), RuntimeTy::String { .. })
+                && runtime_ty_within_json_algebra(value, depth + 1)
+        }
+        RuntimeTy::Union(members, _) => {
+            !members.is_empty()
+                && members
+                    .iter()
+                    .all(|member| runtime_ty_within_json_algebra(member, depth + 1))
+        }
+        _ => false,
+    }
 }
 
 /// Whether the value-tree class/enum name string matches the declared
@@ -360,6 +452,61 @@ mod tests {
             RuntimeTy::bigint(),
         );
         assert!(validate_host_return(&forged, &json_ty()).is_err());
+    }
+
+    #[test]
+    fn user_alias_shadowing_json_display_name_is_not_canonical() {
+        // `display_name()` elides the implicit `user` package, so a user alias
+        // declared at namespace path `baml.json` with name `json` renders
+        // identically to the builtin. Identity must be package-qualified.
+        let builtin = TypeName::from_dotted_path(BAML_JSON_JSON);
+        let shadow = TypeName::from_dotted_path("user.baml.json.json");
+        assert_eq!(
+            builtin.display_name().as_str(),
+            shadow.display_name().as_str()
+        );
+        assert!(is_canonical_json_alias(&builtin));
+        assert!(!is_canonical_json_alias(&shadow));
+
+        // The shadow alias must not inherit builtin JSON strictness: a bigint
+        // is rejected by the json algebra but passes the shadow alias through
+        // this layer's defensive accept-any tail (its body is validated
+        // engine-side, where alias definitions are available).
+        let shadow_ty = RuntimeTy::TypeAlias(shadow, TyAttr::default());
+        let bigint = BexExternalValue::Bigint(1.into());
+        assert!(validate_host_return(&bigint, &json_ty()).is_err());
+        assert!(validate_host_return(&bigint, &shadow_ty).is_ok());
+    }
+
+    #[test]
+    fn canonical_json_alias_accepts_algebra_scoped_inbound_annotations() {
+        // The C++ codec annotates a json return's selected variant alternative
+        // (`map<string, baml.json.json>`); Swift annotates scalar leaves. Both
+        // are sparse inbound annotations inside the JSON algebra and must
+        // validate against a declared json return — including nested in a
+        // container — while annotations outside the algebra stay rejected.
+        let mut entries = IndexMap::new();
+        entries.insert(
+            "type".to_string(),
+            BexExternalValue::typed(BexExternalValue::String("ok".into()), RuntimeTy::string()),
+        );
+        let annotated_map = BexExternalValue::typed(
+            BexExternalValue::Map {
+                key_type: RuntimeTy::string(),
+                value_type: RuntimeTy::unknown(),
+                entries,
+            },
+            RuntimeTy::Map {
+                key: Box::new(RuntimeTy::string()),
+                value: Box::new(json_ty()),
+                attr: TyAttr::default(),
+            },
+        );
+        assert!(validate_host_return(&annotated_map, &json_ty()).is_ok());
+
+        let annotated_bigint =
+            BexExternalValue::typed(BexExternalValue::Bigint(1.into()), RuntimeTy::bigint());
+        assert!(validate_host_return(&annotated_bigint, &json_ty()).is_err());
     }
 
     #[test]

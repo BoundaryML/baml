@@ -9,7 +9,8 @@ use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
-    runtime_ty_structurally_equal, selected_arm_equal, value_satisfies_json,
+    is_canonical_json_alias, runtime_ty_structurally_equal, selected_arm_equal,
+    value_satisfies_json,
 };
 use bex_vm::BexVm;
 
@@ -745,7 +746,7 @@ impl BexEngine {
         // covers the paths that convert without a coercion pass, notably
         // host-callable return values.
         if let Some(declared @ RuntimeTy::TypeAlias(name, _)) = expected_ty
-            && name.display_name().as_str() == "baml.json.json"
+            && is_canonical_json_alias(name)
             && matches!(
                 external,
                 BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
@@ -2203,7 +2204,7 @@ fn runtime_ty_resolves_to_exact_null<'a>(
     for _ in 0..=aliases.len() {
         match ty {
             RuntimeTy::Null { .. } => return true,
-            RuntimeTy::TypeAlias(name, _) if name.display_name().as_str() != "baml.json.json" => {
+            RuntimeTy::TypeAlias(name, _) if !is_canonical_json_alias(name) => {
                 let Some(expanded) = aliases.get(name) else {
                     return false;
                 };
@@ -2318,7 +2319,7 @@ fn value_matches_type_with_definitions(
     classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
 ) -> bool {
     if let RuntimeTy::TypeAlias(name, _) = ty
-        && name.display_name().as_str() != "baml.json.json"
+        && !is_canonical_json_alias(name)
         && let Some(expanded) = aliases.get(name)
     {
         return value_matches_type_with_definitions(value, expanded, aliases, classes);
@@ -2426,17 +2427,18 @@ fn value_matches_type_with_definitions(
                     && value_matches_type_with_definitions(value, member, aliases, classes)
             })
         }
-        (BexExternalValue::Union { .. }, RuntimeTy::TypeAlias(name, _))
-            if name.display_name().as_str() == "baml.json.json" =>
+        // `value_satisfies_json` peels sparse inbound leaf annotations (the
+        // Swift bridge annotates every json scalar leaf) but still rejects
+        // genuine union carriers and annotations outside the JSON algebra.
+        (union_value @ BexExternalValue::Union { .. }, RuntimeTy::TypeAlias(name, _))
+            if is_canonical_json_alias(name) =>
         {
-            false
+            value_satisfies_json(union_value)
         }
         (BexExternalValue::Union { value, .. }, ty) => {
             value_matches_type_with_definitions(value, ty, aliases, classes)
         }
-        (value, RuntimeTy::TypeAlias(name, _))
-            if name.display_name().as_str() == "baml.json.json" =>
-        {
+        (value, RuntimeTy::TypeAlias(name, _)) if is_canonical_json_alias(name) => {
             value_satisfies_json(value)
         }
         // Handle nested unions (including nullable `T | null`) in the type.
@@ -3461,7 +3463,7 @@ fn coerce_arg_to_declared_type_with_aliases(
     // recursive context; recursive references consume payload structure before
     // returning here again, so productive aliases terminate with the value.
     if let RuntimeTy::TypeAlias(name, _) = ty
-        && name.display_name().as_str() != "baml.json.json"
+        && !is_canonical_json_alias(name)
         && let Some(expanded) = aliases.get(name)
     {
         return coerce_arg_to_declared_type_with_aliases(
@@ -3630,7 +3632,7 @@ fn coerce_arg_to_declared_type_with_aliases(
         // materialize identically. Values outside the JSON algebra are left
         // unchanged for the standard validation paths to reject.
         (value, declared @ RuntimeTy::TypeAlias(name, _))
-            if name.display_name().as_str() == "baml.json.json"
+            if is_canonical_json_alias(name)
                 && matches!(
                     value,
                     BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
@@ -3786,9 +3788,10 @@ fn coerce_arg_to_declared_type_with_aliases(
 
 /// Rewrite every container annotation in a JSON value tree to the `json`
 /// alias itself: lists become `json[]`, maps become `map<string, json>`.
-/// Scalars carry no annotation and pass through. The caller has already
-/// proven the tree inhabits the JSON algebra (`value_satisfies_json`), so
-/// only `Array` and `Map` recursion arms are needed.
+/// Scalars carry no annotation and pass through; sparse inbound leaf
+/// annotations (transient `Union` carriers) are recursed through with their
+/// metadata intact. The caller has already proven the tree inhabits the JSON
+/// algebra (`value_satisfies_json`).
 fn annotate_json_container_types(value: BexExternalValue, json_ty: &RuntimeTy) -> BexExternalValue {
     match value {
         BexExternalValue::Array { items, .. } => BexExternalValue::Array {
@@ -3805,6 +3808,10 @@ fn annotate_json_container_types(value: BexExternalValue, json_ty: &RuntimeTy) -
                 .into_iter()
                 .map(|(key, entry)| (key, annotate_json_container_types(entry, json_ty)))
                 .collect(),
+        },
+        BexExternalValue::Union { value, metadata } => BexExternalValue::Union {
+            value: Box::new(annotate_json_container_types(*value, json_ty)),
+            metadata,
         },
         scalar => scalar,
     }
@@ -4086,6 +4093,57 @@ mod union_container_selection_tests {
             &metadata.selected_option,
             &json
         ));
+    }
+
+    #[test]
+    fn canonical_json_alias_accepts_leaf_annotated_inbound_trees() {
+        // The Swift bridge annotates every json scalar leaf with a sparse
+        // inbound `value_type` (a transient `Union` carrier). Such trees must
+        // satisfy `json` and re-annotate their containers exactly like
+        // untyped trees; annotations outside the JSON algebra must not.
+        let json = json_ty();
+        let mut entries = indexmap::IndexMap::new();
+        entries.insert(
+            "type".to_string(),
+            BexExternalValue::typed(BexExternalValue::String("ok".into()), RuntimeTy::string()),
+        );
+        let object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries,
+        };
+        assert!(value_matches_type(&object, &json));
+
+        let coerced = coerce_arg_to_declared_type(object, &json).unwrap();
+        let BexExternalValue::Map {
+            value_type,
+            entries,
+            ..
+        } = coerced
+        else {
+            panic!("annotated JSON object must stay a map")
+        };
+        assert!(runtime_ty_structurally_equal(&value_type, &json));
+        let BexExternalValue::Union { metadata, .. } = &entries["type"] else {
+            panic!("leaf annotation must be preserved")
+        };
+        assert!(metadata.is_inbound_type_annotation);
+
+        // A leaf annotated outside the JSON algebra keeps the tree non-JSON.
+        let mut bigint_entries = indexmap::IndexMap::new();
+        bigint_entries.insert(
+            "huge".to_string(),
+            BexExternalValue::typed(
+                BexExternalValue::Bigint(num_bigint::BigInt::from(1)),
+                RuntimeTy::bigint(),
+            ),
+        );
+        let bigint_object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: bigint_entries,
+        };
+        assert!(!value_matches_type(&bigint_object, &json));
     }
 
     #[test]
