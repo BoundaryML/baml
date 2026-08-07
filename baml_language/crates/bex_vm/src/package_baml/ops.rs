@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{Name, RealizedTy, TyAttr, TypeName, normalize::TypeContext};
+use baml_type::{Name, RealizedTy, TyAttr, TypeName};
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, ValueKind,
@@ -560,17 +560,10 @@ impl EqualsDriver {
             (Object::Collector(x), Object::Collector(y)) => step(Arc::ptr_eq(&x.0, &y.0)),
             (Object::Collector(_), _) => Cmp::NotEqual,
 
-            // Two `type` values are equal when they denote the same type. Compare
-            // through the *full* program context (`vm` as the `TypeContext`), not derived
-            // `==` nor the resolver's fact-opaque equivalence: this is user-facing type
-            // equality, so it must see nominal facts. Union member order is non-canonical
-            // (`type_of<int | string>` ≡ `type_of<string | int>`), and an
-            // interface-membership union absorbs (`type_of<Shape | Sq>` ≡ `type_of<Shape>`
-            // when `Sq` implements `Shape`). Using `vm` here is safe — this is a *client*
-            // of the resolver, not on its re-entrant path, so the membership lookup this
-            // may trigger bottoms out in the resolver's fact-opaque internals without
-            // looping.
-            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.as_ty(), y.as_ty())),
+            // BEP-066: all `type` equality paths compare the minted identity.
+            // Canonically equivalent static spellings received the same digest
+            // when materialized; runtime constructions receive unique counters.
+            (Object::Type(x), Object::Type(y)) => step(x.mint() == y.mint()),
             (Object::Type(_), _) => Cmp::NotEqual,
 
             // `Sentinel` (heap_debug builds only) is an internal freed/uninit

@@ -905,6 +905,8 @@ fn deep_copy_value_recursive(
                 Object::Future(_) => unreachable!("Future short-circuited above"),
                 Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
+                // A deep copy denotes the same type value: clone the complete
+                // `TypeValue`, including its mint (BEP-066 I-1/I-4).
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 // Closures, bound methods, and cells are shallow-copied: the captured
                 // state is shared by design (mutation semantics).
@@ -1007,7 +1009,9 @@ fn deep_equals_recursive(
                     a_var.enm == b_var.enm && a_var.index == b_var.index
                 }
 
-                (Object::Type(a_ty), Object::Type(b_ty)) => a_ty == b_ty,
+                // BEP-066: deep equality agrees with `==` by comparing the
+                // stable mint, never the type payload or moving heap pointer.
+                (Object::Type(a_ty), Object::Type(b_ty)) => a_ty.mint() == b_ty.mint(),
 
                 (Object::Enum(a_enum), Object::Enum(b_enum)) => {
                     a_enum.name == b_enum.name

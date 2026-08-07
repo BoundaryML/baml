@@ -49,6 +49,9 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_CLIENT
             | SyntaxKind::KW_SPAWN
             | SyntaxKind::KW_AWAIT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_FUNCTION
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_INTERFACE

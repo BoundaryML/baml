@@ -47,6 +47,7 @@ mod sys;
 mod time;
 mod toml;
 mod type_class;
+mod type_kinds;
 mod uint8array;
 mod yaml;
 

@@ -317,14 +317,15 @@ impl<'a> BexValue<'a> {
     ) -> Result<baml_type::RuntimeTy, AccessError> {
         fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::RuntimeTy, AccessError> {
             let obj = unsafe { ptr.get() };
-            let Object::Type(ty) = obj else {
+            let Object::Type(tv) = obj else {
                 return Err(AccessError::TypeMismatch {
                     expected: "type",
                     actual: obj.to_string(),
                 });
             };
             // `Object::Type` stores a realized type; widen it into `RuntimeTy`.
-            Ok((**ty).clone().into())
+            // The mint stays behind (BEP-066 H-4: identity never crosses).
+            Ok(tv.ty.clone().into())
         }
 
         match self {
@@ -609,8 +610,9 @@ fn convert_object(
             })
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-        Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-            (**ty).clone().into(),
+        // Only the described type crosses the boundary (BEP-066 H-4).
+        Object::Type(tv) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
+            tv.ty.clone().into(),
         ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),

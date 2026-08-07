@@ -243,9 +243,15 @@ impl Tlab {
     }
 
     /// Allocate a type descriptor object on the heap.
+    ///
+    /// Takes an assembled [`bex_vm_types::types::TypeValue`] — a type plus
+    /// its minted identity — so no allocation site can produce a mintless
+    /// type object. Static materialization inside the VM should go through
+    /// `BexVm::alloc_static_type`, which derives (and memoizes) the digest
+    /// with the VM as the fact context.
     #[inline]
-    pub fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.alloc(Object::Type(Box::new(ty)))
+    pub fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {
+        self.alloc(Object::Type(Box::new(tv)))
     }
 
     /// Allocate a future object on the heap.
@@ -390,8 +396,8 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_collector(collector)
     }
 
-    fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.tlab_mut().alloc_type(ty)
+    fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {
+        self.tlab_mut().alloc_type(tv)
     }
 
     fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
@@ -604,6 +610,8 @@ mod tests {
                     }),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
                 bex_vm_types::ClassField {
@@ -616,11 +624,15 @@ mod tests {
                     }),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
             ],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
@@ -658,23 +670,31 @@ mod tests {
                     name: "Red".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Green".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Blue".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
             ],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
         })));
 

@@ -86,8 +86,8 @@ use bex_vm_types::{
     StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     types::{
-        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
-        UnscheduledFuture,
+        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, MintId,
+        Type, TypeValue, UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -272,9 +272,9 @@ impl Frame {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
+    use std::{collections::HashMap, sync::Arc};
 
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
@@ -330,6 +330,7 @@ pub(crate) mod tests {
             id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
+            static_mint_cache: HashMap::new(),
             packages: Arc::new(crate::package_load::PackageIndex::default()),
         }
     }
@@ -752,6 +753,16 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_type_args: Vec<baml_type::RealizedTy>,
+
+    /// Memo for `MintId::Static` digests (BEP-066), keyed by the *spelled*
+    /// `RealizedTy`. `LoadType` runs on every generic call, and the digest is
+    /// a canonicalization walk (`baml_type::normalize::canonical_digest` with
+    /// this VM as the fact context) — this cache skips re-walking repeated
+    /// spellings. Pure memoization: the digest is a deterministic function of
+    /// the spelling under this VM's immutable program facts, so a per-VM cache
+    /// (spawned VMs start empty) can never produce a divergent mint. Distinct
+    /// spellings of equivalent types get separate entries with equal digests.
+    static_mint_cache: HashMap<baml_type::RealizedTy, u64>,
 }
 
 /// VM execution state.
@@ -1260,6 +1271,7 @@ impl BexVm {
             id_overrides: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
+            static_mint_cache: HashMap::new(),
             packages,
         }
     }
@@ -1277,6 +1289,28 @@ impl BexVm {
         &self.pending_call_type_args
     }
 
+    /// Materialize a statically described runtime `type` value.
+    ///
+    /// The mint is the deterministic digest of the type's canonical form with
+    /// this VM as the complete program-fact context. Digests are memoized by
+    /// spelling because `LoadType` can materialize the same template many times;
+    /// equivalent spellings may occupy separate cache entries, but derive the
+    /// same digest. All VM-side static type producers route through this method
+    /// so an `Object::Type` cannot be allocated without its identity.
+    pub fn alloc_static_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
+        let type_value = if let Some(&digest) = self.static_mint_cache.get(&ty) {
+            TypeValue::from_parts(ty, MintId::Static(digest))
+        } else {
+            let type_value = TypeValue::static_new(ty, self);
+            let MintId::Static(digest) = type_value.mint() else {
+                unreachable!("TypeValue::static_new always creates a static mint")
+            };
+            self.static_mint_cache.insert(type_value.ty.clone(), digest);
+            type_value
+        };
+        self.tlab.alloc_type(type_value)
+    }
+
     fn take_type_args(
         &mut self,
         start: usize,
@@ -1290,10 +1324,10 @@ impl BexVm {
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
             let ptr = self.as_object_ptr(value, ObjectType::Type)?;
-            let Object::Type(ty) = self.get_object(ptr) else {
+            let Object::Type(type_value) = self.get_object(ptr) else {
                 unreachable!("as_object_ptr guarantees Type variant");
             };
-            type_args.push(*ty.clone());
+            type_args.push(type_value.ty.clone());
         }
         drop(
             self.stack
@@ -1759,7 +1793,7 @@ impl BexVm {
         let value = self.stack.ensure_pop();
         let ptr = self.as_object_ptr(value, ObjectType::Type)?;
         match self.get_object(ptr) {
-            Object::Type(ty) => Ok(*ty.clone()),
+            Object::Type(type_value) => Ok(type_value.ty.clone()),
             other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Type.into(),
                 got: ObjectType::of(other).into(),
@@ -2055,11 +2089,11 @@ impl BexVm {
                     ObjectType::of(other)
                 ),
             },
-            // A `type` value (e.g. `type.of<T>()`) — its concrete type is
-            // the `type` primitive, the subject of `implement I for type`.
-            Object::Type(_) => ConcreteRealizedTy::Type {
-                attr: TyAttr::default(),
-            },
+            // A `type` value reports its precise sealed reflection-kind class.
+            // Each kind class is a subtype of the `type` carrier.
+            Object::Type(type_value) => {
+                baml_type::type_kind::classify_type(&type_value.ty).concrete_class_ty()
+            }
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
             Object::Array(arr) => {
@@ -2522,7 +2556,7 @@ impl BexVm {
         match callable_kind {
             FunctionKind::Native(_) => {
                 for ty in type_args {
-                    let ty_ptr = self.tlab.alloc(Object::Type(Box::new(ty)));
+                    let ty_ptr = self.alloc_static_type(ty);
                     self.stack.push(Value::object(ty_ptr));
                 }
                 self.stack.extend(args.iter().copied());
@@ -3418,7 +3452,7 @@ impl BexVm {
     ) -> Result<(baml_type::TypeName, Vec<baml_type::RealizedTy>), VmError> {
         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
         match self.get_object(iface_ptr) {
-            Object::Type(ty) => match ty.as_ref() {
+            Object::Type(type_value) => match &type_value.ty {
                 baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                     Ok((qtn.clone(), args.clone()))
                 }
@@ -4322,8 +4356,8 @@ impl BexVm {
     /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
     ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
     ///   args\[1\] = `args_pack`  (`Object::Array` of `[positional: Object::Array, optional: Object::Map]`)
-    ///   args\[2\] = `ret_ty`     (`Object::Type<RuntimeTy>`) — `type_arg_0` (`T`)
-    ///   args\[3\] = `throws_ty`  (`Object::Type<RuntimeTy>`) — `type_arg_1` (`E`)
+    ///   args\[2\] = `ret_ty`     (`Object::Type<TypeValue>`) — `type_arg_0` (`T`)
+    ///   args\[3\] = `throws_ty`  (`Object::Type<TypeValue>`) — `type_arg_1` (`E`)
     ///
     /// TODO: `throws_ty` is packed here but the engine doesn't yet read it
     /// — a future phase will validate the host's thrown value against `E`
@@ -4395,8 +4429,8 @@ impl BexVm {
             baml_type::RealizedTy::unknown(),
             vec![Value::object(positional_ptr), Value::object(optional_ptr)],
         );
-        let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
-        let throws_ty_ptr = self.tlab.alloc(Object::Type(Box::new(throws_ty)));
+        let ret_ty_ptr = self.alloc_static_type(ret_ty);
+        let throws_ty_ptr = self.alloc_static_type(throws_ty);
         // PR4b: host-closure calls ride the sys-op pair too. No Function
         // object backs them, so function_id 0 (unassigned).
         self.prof_enter_sysop(0, call_site, VmCaptureMask::disabled());
@@ -5346,8 +5380,10 @@ impl BexVm {
                     }
                 }),
                 (Object::Type(lt), Object::Type(rt)) => Value::bool(match op {
-                    CmpOp::Eq => lt == rt,
-                    CmpOp::NotEq => lt != rt,
+                    // BEP-066: compare the stable identity token. Static
+                    // canonicalization and runtime freshness happen at minting.
+                    CmpOp::Eq => lt.mint() == rt.mint(),
+                    CmpOp::NotEq => lt.mint() != rt.mint(),
                     _ => {
                         return Err(VmInternalError::CannotApplyCmpOp {
                             left: bex_vm_types::types::Type::Object(ObjectType::Type),
@@ -6345,7 +6381,7 @@ impl BexVm {
                             // `Converter<int>` + `Converter<float>`); non-generic
                             // interfaces carry none and resolve by name + `Self`.
                             // Associated types are outputs, not part of the key.
-                            Object::Type(ty) => match ty.as_ref() {
+                            Object::Type(type_value) => match &type_value.ty {
                                 baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                                     (qtn.clone(), args.clone())
                                 }
@@ -6983,7 +7019,7 @@ impl BexVm {
                         }
                     };
 
-                    let value = Value::object(self.alloc_type(ty));
+                    let value = Value::object(self.alloc_static_type(ty));
                     self.stack.push(value);
                 }
 
@@ -7027,7 +7063,7 @@ impl BexVm {
                     let (iface_qtn, iface_args) = {
                         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
                         match self.get_object(iface_ptr) {
-                            Object::Type(ty) => match ty.as_ref() {
+                            Object::Type(type_value) => match &type_value.ty {
                                 baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                                     (qtn.clone(), args.clone())
                                 }

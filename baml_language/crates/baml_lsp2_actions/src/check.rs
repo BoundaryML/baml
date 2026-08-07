@@ -1951,6 +1951,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::NoSuchField
         }
         TirTypeError::UnknownClassPropertyShorthand { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedName { .. }
         | TirTypeError::UnresolvedPropertyShorthand { .. }
         // The removed `reflect.type_of` spelling (BEP-066 I-9) is a

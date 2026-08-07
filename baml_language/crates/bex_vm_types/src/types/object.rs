@@ -121,8 +121,13 @@ pub enum Object {
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
-    /// A type descriptor value — wraps a `baml_type::RealizedTy`.
-    Type(Box<baml_type::RealizedTy>),
+    /// A type descriptor value — wraps a [`crate::types::TypeValue`]: the
+    /// described `baml_type::RealizedTy` plus the minted identity that
+    /// `==`/hash compare (BEP-066). The mint is inline plain data, so a GC
+    /// copy or `baml.deep_copy` preserves identity; the wire form
+    /// (`ObjectWire::Type`) carries only the type — identity never crosses a
+    /// boundary (H-4) and is re-derived on decode.
+    Type(Box<crate::types::TypeValue>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(crate::types::SentinelKind),
@@ -205,6 +210,12 @@ enum ObjectWire {
     // enum's size. Borsh treats `Box<T>` transparently, so the wire form is
     // unchanged.
     UnscheduledFuture(Box<UnscheduledFuture>),
+    /// Carries only the described type — never the mint (BEP-066 H-4:
+    /// identity does not cross a serialization boundary). Decode re-derives a
+    /// `Static` mint. No compiled `Program` bakes an `Object::Type` into its
+    /// object pool today (`ConstValue::Type` templates materialize through
+    /// the VM's `LoadType`), so this round trip is exercised only by
+    /// unit/link tooling.
     Type(Box<baml_type::RealizedTy>),
 }
 
@@ -238,7 +249,8 @@ impl BorshSerialize for Object {
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
-            Self::Type(v) => ObjectWire::Type(v.clone()),
+            // The mint stays behind (H-4) — only the described type crosses.
+            Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -305,7 +317,24 @@ impl BorshDeserialize for Object {
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
-            ObjectWire::Type(v) => Self::Type(v),
+            ObjectWire::Type(v) => {
+                // Re-derive the static mint (H-4: identity never rides the
+                // wire). Borsh decode has no fact source to consult, so the
+                // digest is fact-free here; that matches the VM's digest for
+                // every type whose canonical form needs no program fact
+                // (classes, enums, primitives, containers, plain unions).
+                // No compiled `Program` pools an `Object::Type` today — see
+                // the `ObjectWire::Type` doc — so a fact-dependent payload
+                // (recursive alias, absorbing union) cannot reach this path
+                // from real programs.
+                #[expect(
+                    deprecated,
+                    reason = "borsh decode is a boundary with no fact context to supply; \
+                              see the fact-free digest note above"
+                )]
+                let ctx = baml_type::normalize::NoFacts;
+                Self::Type(Box::new(crate::types::TypeValue::static_new(*v, &ctx)))
+            }
         })
     }
 }
@@ -349,7 +378,7 @@ impl std::fmt::Display for Object {
             ),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Collector(_) => write!(f, "<collector>"),
-            Object::Type(ty) => write!(f, "<type: {ty}>"),
+            Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             Object::Float(v) => write!(f, "{v}"),
@@ -461,5 +490,38 @@ impl std::fmt::Display for ObjectType {
             ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::Float => write!(f, "float"),
         }
+    }
+}
+
+#[cfg(test)]
+mod type_wire_tests {
+    use borsh::BorshDeserialize;
+
+    use super::*;
+    use crate::types::{MintId, TypeValue};
+
+    #[test]
+    fn type_wire_omits_identity_and_keeps_the_existing_payload_format() {
+        let ty = baml_type::RealizedTy::list(baml_type::RealizedTy::string());
+        let object = Object::Type(Box::new(TypeValue::from_parts(
+            ty.clone(),
+            MintId::Runtime(91),
+        )));
+
+        let encoded_object = borsh::to_vec(&object).expect("type object serializes");
+        let encoded_legacy_shape =
+            borsh::to_vec(&ObjectWire::Type(Box::new(ty.clone()))).expect("wire proxy serializes");
+        assert_eq!(
+            encoded_object, encoded_legacy_shape,
+            "adding a mint must not change the ObjectWire::Type bytes"
+        );
+
+        let decoded = Object::try_from_slice(&encoded_object).expect("type object deserializes");
+        let Object::Type(type_value) = decoded else {
+            panic!("decoded object should be a type")
+        };
+        assert_eq!(type_value.ty, ty);
+        assert!(matches!(type_value.mint(), MintId::Static(_)));
+        assert_ne!(type_value.mint(), MintId::Runtime(91));
     }
 }

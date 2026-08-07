@@ -1177,35 +1177,62 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
-///
-/// Returns `(description, alias, skip)`. Invalid attribute usage is diagnosed
-/// at HIR validation time; by this point, malformed attrs are simply skipped.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct SchemaAttrs {
+    description: Option<String>,
+    alias: Option<String>,
+    docstring: Option<String>,
+    other: indexmap::IndexMap<String, String>,
+    skip: bool,
+}
+
+/// Extract schema metadata from span-free HIR attributes and docstrings.
 fn extract_schema_attrs(
     attrs: &[baml_compiler2_hir::item_tree::Attribute],
-) -> (Option<String>, Option<String>, bool) {
-    let mut description = None;
-    let mut alias = None;
-    let mut skip = false;
+    docstring: Option<&str>,
+) -> SchemaAttrs {
+    let mut result = SchemaAttrs {
+        docstring: docstring.map(str::to_owned),
+        ..SchemaAttrs::default()
+    };
     for attr in attrs {
         match attr.name.as_str() {
             "description" | "alias" if attr.args.len() == 1 => {
                 let raw = attr.args[0].value.as_str();
                 let value = parse_string_attr_value(raw);
                 if attr.name.as_str() == "description" {
-                    description = value;
+                    result.description = value;
                 } else {
-                    alias = value;
+                    result.alias = value;
                 }
             }
             "description" | "alias" => {}
             "skip" => {
-                skip = true;
+                result.skip = true;
             }
-            _ => {}
+            _ => {
+                let value = match attr.args.as_slice() {
+                    [] => "true".to_string(),
+                    [arg] if arg.key.is_none() => {
+                        parse_string_attr_value(&arg.value).unwrap_or_else(|| arg.value.clone())
+                    }
+                    args => args
+                        .iter()
+                        .map(|arg| {
+                            let value = parse_string_attr_value(&arg.value)
+                                .unwrap_or_else(|| arg.value.clone());
+                            arg.key
+                                .as_ref()
+                                .map_or(value.clone(), |key| format!("{}={value}", key.as_str()))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                };
+                result.other.insert(attr.name.to_string(), value);
+            }
         }
     }
-    (description, alias, skip)
+    result
 }
 
 pub use bex_vm_types::Program as ProgramAlias;
@@ -1216,6 +1243,7 @@ type MergedFieldEntry = (
     String,
     baml_compiler2_hir::type_ref::TypeRefId,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
+    Option<String>,
     Vec<Name>,
     Vec<Name>,
 );
@@ -1238,6 +1266,7 @@ fn collect_class_fields_with_implements(
             name,
             field.type_ref,
             field.attributes.clone(),
+            field.docstring.clone(),
             class
                 .generic_params
                 .iter()
@@ -2967,7 +2996,8 @@ fn emit_file_group(
             // validator enforces/link-checks them before emit.
             let merged_fields =
                 collect_class_fields_with_implements(&pkg_info.namespace_path, class);
-            for (idx, (name, type_ref, attrs, _gen_params, ns)) in merged_fields.iter().enumerate()
+            for (idx, (name, type_ref, attrs, docstring, _gen_params, ns)) in
+                merged_fields.iter().enumerate()
             {
                 field_indices.insert(name.clone(), idx);
                 let (field_type, field_template) = {
@@ -3005,18 +3035,20 @@ fn emit_file_group(
                         (resolved_ty, template)
                     }
                 };
-                let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
+                let meta = extract_schema_attrs(attrs.as_slice(), docstring.as_deref());
                 fields.push(ClassField {
                     name: name.clone(),
                     field_type,
                     field_template,
-                    description: field_desc,
-                    alias: field_alias,
-                    skip: field_skip,
+                    description: meta.description,
+                    alias: meta.alias,
+                    docstring: meta.docstring,
+                    other: meta.other,
+                    skip: meta.skip,
                 });
             }
 
-            let (class_desc, class_alias, _class_skip) = extract_schema_attrs(&class.attributes);
+            let class_meta = extract_schema_attrs(&class.attributes, class.docstring.as_deref());
 
             let type_tag = bex_vm_types::type_tags::class_type_tag(&fq_name);
             if let Some(previous) = class_type_tags.insert(type_tag, fq_name.clone())
@@ -3076,8 +3108,10 @@ fn emit_file_group(
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: fq_to_type_name(&fq_name),
                 fields,
-                description: class_desc,
-                alias: class_alias,
+                description: class_meta.description,
+                alias: class_meta.alias,
+                docstring: class_meta.docstring,
+                other: class_meta.other,
                 type_tag,
                 ty_attr: TyAttr::default(),
                 has_cleanup,
@@ -3129,7 +3163,7 @@ fn emit_file_group(
             let rebuild_indices = || {
                 let merged = collect_class_fields_with_implements(&pkg_info.namespace_path, class);
                 let mut m = HashMap::new();
-                for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
+                for (idx, (name, _, _, _, _, _)) in merged.iter().enumerate() {
                     m.insert(name.clone(), idx);
                 }
                 m
@@ -3159,23 +3193,27 @@ fn emit_file_group(
             let mut variant_map = HashMap::new();
             let mut variants = Vec::new();
             for (idx, variant) in enm.variants.iter().enumerate() {
-                let (var_desc, var_alias, var_skip) = extract_schema_attrs(&variant.attributes);
+                let meta = extract_schema_attrs(&variant.attributes, variant.docstring.as_deref());
                 variant_map.insert(variant.name.to_string(), idx);
                 variants.push(EnumVariant {
                     name: variant.name.to_string(),
-                    description: var_desc,
-                    alias: var_alias,
-                    skip: var_skip,
+                    description: meta.description,
+                    alias: meta.alias,
+                    docstring: meta.docstring,
+                    other: meta.other,
+                    skip: meta.skip,
                 });
             }
 
-            let (enum_desc, enum_alias, _enum_skip) = extract_schema_attrs(&enm.attributes);
+            let enum_meta = extract_schema_attrs(&enm.attributes, enm.docstring.as_deref());
 
             let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
                 name: fq_to_type_name(&fq_name),
                 variants,
-                description: enum_desc,
-                alias: enum_alias,
+                description: enum_meta.description,
+                alias: enum_meta.alias,
+                docstring: enum_meta.docstring,
+                other: enum_meta.other,
                 ty_attr: TyAttr::default(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
@@ -5777,44 +5815,47 @@ mod tests {
             mk_attr("description", &[r#""A field""#]),
             mk_attr("alias", &[r#""myField""#]),
         ];
-        let (desc, alias, skip) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("A field".to_string()));
-        assert_eq!(alias, Some("myField".to_string()));
-        assert!(!skip);
+        let meta = extract_schema_attrs(&attrs, Some("docs"));
+        assert_eq!(meta.description, Some("A field".to_string()));
+        assert_eq!(meta.alias, Some("myField".to_string()));
+        assert_eq!(meta.docstring, Some("docs".to_string()));
+        assert!(!meta.skip);
     }
 
     #[test]
     fn extract_skip() {
         let attrs = vec![mk_attr("skip", &[])];
-        let (desc, alias, skip) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, None);
-        assert_eq!(alias, None);
-        assert!(skip);
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, None);
+        assert_eq!(meta.alias, None);
+        assert!(meta.skip);
     }
 
     #[test]
-    fn extract_unknown_attrs_ignored() {
+    fn extract_custom_attrs_into_other() {
         let attrs = vec![
             mk_attr("stream.done", &["true"]),
             mk_attr("internal.opaque", &[]),
             mk_attr("description", &[r#""kept""#]),
         ];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("kept".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("kept".to_string()));
+        assert_eq!(meta.other["stream.done"], "true");
+        assert_eq!(meta.other["internal.opaque"], "true");
     }
 
     #[test]
     fn extract_non_string_arg_ignored() {
         let attrs = vec![mk_attr("description", &["42"])];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, None);
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, None);
     }
 
     #[test]
     fn extract_wrong_arg_count_ignored() {
         let attrs = vec![mk_attr("description", &[])]; // 0 args
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, None);
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, None);
     }
 
     #[test]
@@ -5823,30 +5864,28 @@ mod tests {
             mk_attr("description", &[r#""first""#]),
             mk_attr("description", &[r#""second""#]),
         ];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("second".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("second".to_string()));
     }
 
     #[test]
     fn extract_raw_string_attr() {
         // Simulates @description(#"raw desc"#)
         let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("raw desc".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("raw desc".to_string()));
     }
 
     #[test]
     fn extract_regular_string_attr_decodes_escapes() {
         let attrs = vec![mk_attr("description", &[r#""a\nb\tc\\d\"e""#])];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("a\nb\tc\\d\"e".to_string()));
+        let meta = extract_schema_attrs(&attrs, None);
+        assert_eq!(meta.description, Some("a\nb\tc\\d\"e".to_string()));
     }
 
     #[test]
     fn extract_no_attrs() {
-        let (desc, alias, skip) = extract_schema_attrs(&[]);
-        assert_eq!(desc, None);
-        assert_eq!(alias, None);
-        assert!(!skip);
+        let meta = extract_schema_attrs(&[], None);
+        assert_eq!(meta, SchemaAttrs::default());
     }
 }

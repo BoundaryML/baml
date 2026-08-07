@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3105
 ---
 function baml.Array.at(self: baml.Array<#0>, index: int) -> #0 | null {
 }
@@ -918,6 +917,33 @@ function baml.ToString.to_string(self: baml.ToString) -> string {
 function baml.TypeValue._to_string_impl(self: baml.TypeValue) -> string {
 }
 
+function baml.TypeValue.as_array(self: baml.TypeValue) -> baml.reflect.array.Type | null {
+}
+
+function baml.TypeValue.as_class(self: baml.TypeValue) -> baml.reflect.class.Type | null {
+}
+
+function baml.TypeValue.as_enum(self: baml.TypeValue) -> baml.reflect.enum.Type | null {
+}
+
+function baml.TypeValue.as_function(self: baml.TypeValue) -> baml.reflect.function.Type | null {
+}
+
+function baml.TypeValue.as_interface(self: baml.TypeValue) -> baml.reflect.interface.Type | null {
+}
+
+function baml.TypeValue.as_literal(self: baml.TypeValue) -> baml.reflect.literal.Type | null {
+}
+
+function baml.TypeValue.as_map(self: baml.TypeValue) -> baml.reflect.map.Type | null {
+}
+
+function baml.TypeValue.as_primitive(self: baml.TypeValue) -> baml.reflect.primitive.Type | null {
+}
+
+function baml.TypeValue.as_union(self: baml.TypeValue) -> baml.reflect.union.Type | null {
+}
+
 function baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string {
     load_var self
     call baml.TypeValue._to_string_impl
@@ -931,6 +957,9 @@ function baml.TypeValue.implementors(self: baml.TypeValue) -> type[] {
 }
 
 function baml.TypeValue.implements(self: baml.TypeValue, other: type) -> bool {
+}
+
+function baml.TypeValue.kind(self: baml.TypeValue) -> baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type {
 }
 
 function baml.Uint8Array._to_string_impl(self: baml.Uint8Array) -> string {
@@ -6295,10 +6324,73 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
     return
 }
 
+function baml.reflect.array.Type.baml.reflect.TypeView.as_type(self: baml.reflect.array.Type) -> type {
+}
+
+function baml.reflect.array.Type.element_type(self: baml.reflect.array.Type) -> type {
+}
+
 function baml.reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
+function baml.reflect.class.Type.baml.reflect.TypeView.as_type(self: baml.reflect.class.Type) -> type {
+}
+
+function baml.reflect.class.Type.fields(self: baml.reflect.class.Type) -> baml.reflect.class.Field[] {
+}
+
+function baml.reflect.class.Type.meta(self: baml.reflect.class.Type) -> baml.reflect.Meta {
+}
+
+function baml.reflect.enum.Type.baml.reflect.TypeView.as_type(self: baml.reflect.enum.Type) -> type {
+}
+
+function baml.reflect.enum.Type.meta(self: baml.reflect.enum.Type) -> baml.reflect.Meta {
+}
+
+function baml.reflect.enum.Type.values(self: baml.reflect.enum.Type) -> baml.reflect.enum.Value[] {
+}
+
+function baml.reflect.function.Type.baml.reflect.TypeView.as_type(self: baml.reflect.function.Type) -> type {
+}
+
+function baml.reflect.function.Type.params(self: baml.reflect.function.Type) -> baml.reflect.function.Parameter[] {
+}
+
+function baml.reflect.function.Type.return_type(self: baml.reflect.function.Type) -> type {
+}
+
+function baml.reflect.interface.Type.baml.reflect.TypeView.as_type(self: baml.reflect.interface.Type) -> type {
+}
+
+function baml.reflect.interface.Type.implemented_by(self: baml.reflect.interface.Type, other: type) -> bool {
+}
+
+function baml.reflect.interface.Type.implementors(self: baml.reflect.interface.Type) -> type[] {
+}
+
+function baml.reflect.literal.Type.baml.reflect.TypeView.as_type(self: baml.reflect.literal.Type) -> type {
+}
+
+function baml.reflect.map.Type.baml.reflect.TypeView.as_type(self: baml.reflect.map.Type) -> type {
+}
+
+function baml.reflect.map.Type.key_type(self: baml.reflect.map.Type) -> type {
+}
+
+function baml.reflect.map.Type.value_type(self: baml.reflect.map.Type) -> type {
+}
+
+function baml.reflect.primitive.Type.baml.reflect.TypeView.as_type(self: baml.reflect.primitive.Type) -> type {
+}
+
 function baml.reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> baml.reflect.Signature {
+}
+
+function baml.reflect.union.Type.baml.reflect.TypeView.as_type(self: baml.reflect.union.Type) -> type {
+}
+
+function baml.reflect.union.Type.member_types(self: baml.reflect.union.Type) -> type[] {
 }
 
 function baml.sap.parse(text: string) -> #0 {
