@@ -173,16 +173,27 @@ pub fn resolve_path_at<'db>(
     let own_pkg_id = PackageId::new(db, pkg_info.package);
     let res_ctx = crate::package_interface::package_resolution_context(db, own_pkg_id);
 
+    // BEP-066 keyword shorthands: when the head is no accessible package but
+    // spells `reflect` or `type`, the path resolves inside `baml` with the
+    // head as a namespace segment (`reflect.signature` ≡ `baml.reflect.signature`,
+    // `type.of` ≡ `baml.type.of`). A real package of that name wins above.
+    let (pkg_name, ns_head): (Name, &[Name]) = if res_ctx.items_for_package(db, &pkg_name).is_some()
+    {
+        (pkg_name, &segments[1..])
+    } else if matches!(segments[0].as_str(), "reflect" | "type") {
+        (Name::new("baml"), segments)
+    } else {
+        return ResolvedName::Unknown;
+    };
     let Some(pkg_items) = res_ctx.items_for_package(db, &pkg_name) else {
         return ResolvedName::Unknown;
     };
 
-    let after_pkg = &segments[1..];
     // The path already includes namespace segments, so look up directly.
-    let item = after_pkg
+    let item = ns_head
         .last()
         .expect("multi-segment path has elements after pkg prefix");
-    let ns = &after_pkg[..after_pkg.len() - 1];
+    let ns = &ns_head[..ns_head.len() - 1];
     if let Some(def) = pkg_items.lookup_value(ns, item) {
         return ResolvedName::Builtin(def);
     }
@@ -212,17 +223,25 @@ pub fn resolve_namespace_prefix(
     let res_ctx = crate::package_interface::package_resolution_context(db, own_pkg_id);
 
     // Segment 0 is a package: `root` is the file's own package; anything else is
-    // a literal package name.
+    // a literal package name. The BEP-066 keyword shorthands `reflect` / `type`
+    // name namespaces of `baml` (a real package of that name wins).
     let pkg_name = if first.as_str() == "root" {
         res_ctx.own_package_name.clone()
     } else {
         first.clone()
     };
+    let (pkg_name, ns_prefix): (Name, &[Name]) =
+        if res_ctx.items_for_package(db, &pkg_name).is_some() {
+            (pkg_name, &segments[1..])
+        } else if matches!(first.as_str(), "reflect" | "type") {
+            (Name::new("baml"), segments)
+        } else {
+            return None;
+        };
     let pkg_items = res_ctx.items_for_package(db, &pkg_name)?;
 
     // The remaining segments must be a (possibly empty) prefix of a real
     // namespace path in that package. Empty = the package root itself.
-    let ns_prefix = &segments[1..];
     let is_namespace = ns_prefix.is_empty()
         || pkg_items
             .namespaces

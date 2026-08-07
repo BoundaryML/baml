@@ -371,7 +371,7 @@ mod tests {
 /// The *direct* dependencies of `package_id` (hardcoded for now).
 ///
 /// Note these lists are not uniformly flattened: `testing`/`assert` list `baml`
-/// but not `baml`'s own `log`/`reflect`. Callers that need every package whose
+/// but not `baml`'s own `log`. Callers that need every package whose
 /// items could be visible from `package_id` (interface coherence,
 /// `type_implements_with_deps`) must use [`package_dependency_closure`], not this
 /// direct list.
@@ -384,17 +384,13 @@ pub fn package_dependencies<'db>(
         // "log" has no deps — it only uses primitives, and "baml" depends on
         // it so the stdlib can emit log events.
         "log" => vec![],
-        // "reflect" has no deps — it only uses the `type` primitive.
-        "reflect" => vec![],
         // "boundary" has no deps — it only returns the current boundary id as
         // a primitive string.
         "boundary" => vec![],
-        // "baml" depends on "log" and "reflect" so stdlib code can call
-        // log.info/debug/etc. and reflect.type_of<T>() inside ns_llm.
-        "baml" => vec![
-            PackageId::new(db, Name::new("log")),
-            PackageId::new(db, Name::new("reflect")),
-        ],
+        // "baml" depends on "log" so stdlib code can call log.info/debug/etc.
+        // Reflection lives inside "baml" itself (`baml.reflect` / `baml.type`,
+        // BEP-066), so it is no dependency.
+        "baml" => vec![PackageId::new(db, Name::new("log"))],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
         // User packages depend on public builtin packages.
@@ -404,7 +400,6 @@ pub fn package_dependencies<'db>(
             PackageId::new(db, Name::new("testing")),
             PackageId::new(db, Name::new("assert")),
             PackageId::new(db, Name::new("log")),
-            PackageId::new(db, Name::new("reflect")),
         ],
     }
 }

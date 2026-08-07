@@ -157,12 +157,6 @@ pub enum DiagnosticId {
     TestFieldAttribute,
     UnknownFunctionInTest,
 
-    // Type builder diagnostics (E0040-E0043)
-    TypeBuilderInNonTestContext,
-    DuplicateTypeBuilderBlock,
-    IncompleteDynamicDefinition,
-    TypeBuilderSyntaxError,
-
     // Reserved prefix diagnostics
     ReservedStreamPrefix,
 
@@ -200,8 +194,9 @@ pub enum DiagnosticId {
     // VIR lowering errors (E0089)
     LoweringError,
 
-    // Removed feature errors (E0098)
-    InstanceofRemoved,
+    // Removed feature errors (E0098) — shared by all removed-syntax
+    // diagnostics (`instanceof`, legacy BEP-066 TypeBuilder syntax, ...).
+    RemovedFeature,
 
     // Namespace diagnostics (E0099)
     NamespaceShadow,
@@ -467,12 +462,6 @@ impl DiagnosticId {
             DiagnosticId::TestFieldAttribute => "E0036",
             DiagnosticId::UnknownFunctionInTest => "E0088",
 
-            // Type builder diagnostics
-            DiagnosticId::TypeBuilderInNonTestContext => "E0040",
-            DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
-            DiagnosticId::IncompleteDynamicDefinition => "E0042",
-            DiagnosticId::TypeBuilderSyntaxError => "E0043",
-
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",
             DiagnosticId::ClassCycle => "E0069",
@@ -511,7 +500,7 @@ impl DiagnosticId {
             DiagnosticId::LoweringError => "E0089",
 
             // Removed feature errors
-            DiagnosticId::InstanceofRemoved => "E0098",
+            DiagnosticId::RemovedFeature => "E0098",
 
             DiagnosticId::NamespaceShadow => "E0099",
 
@@ -870,7 +859,7 @@ mod tests {
             DiagnosticId::UnexpectedToken,
             DiagnosticId::DuplicateName,
             DiagnosticId::LoweringError,
-            DiagnosticId::InstanceofRemoved,
+            DiagnosticId::RemovedFeature,
             DiagnosticId::NamespaceShadow,
         ];
 

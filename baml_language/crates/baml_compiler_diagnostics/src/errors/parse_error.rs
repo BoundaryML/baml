@@ -17,4 +17,10 @@ pub enum ParseError {
         message: String,
         span: Span,
     },
+    /// Use of a removed language feature (E0098), e.g. legacy `type_builder`
+    /// blocks or `dynamic class`/`dynamic enum` definitions (BEP-066).
+    RemovedFeature {
+        message: String,
+        span: Span,
+    },
 }

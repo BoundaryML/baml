@@ -9016,6 +9016,52 @@ fn baml.random.ChaCha20.Rng.random = builtin(vm)
 
 fn baml.random.ChaCha20.Rng.random_int = builtin(vm)
 
+fn baml.reflect.array.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.array.Type.element_type = builtin(vm)
+
+fn baml.reflect.class.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.class.Type.fields = builtin(vm)
+
+fn baml.reflect.class.Type.meta = builtin(vm)
+
+fn baml.reflect.enum.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.enum.Type.values = builtin(vm)
+
+fn baml.reflect.enum.Type.meta = builtin(vm)
+
+fn baml.reflect.function.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.function.Type.params = builtin(vm)
+
+fn baml.reflect.function.Type.return_type = builtin(vm)
+
+fn baml.reflect.interface.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.interface.Type.implemented_by = builtin(vm)
+
+fn baml.reflect.interface.Type.implementors = builtin(vm)
+
+fn baml.reflect.literal.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.map.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.map.Type.key_type = builtin(vm)
+
+fn baml.reflect.map.Type.value_type = builtin(vm)
+
+fn baml.reflect.primitive.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.union.Type.baml.reflect.TypeView.as_type = builtin(vm)
+
+fn baml.reflect.union.Type.member_types = builtin(vm)
+
+fn baml.reflect.signature = builtin(vm)
+
+fn baml.reflect.call_any = builtin(vm)
+
 fn baml.sap.parse(text: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -12126,6 +12172,10 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
     }
 }
 
+fn baml.type.of = builtin(intrinsic)
+
+fn baml.type.of_value = builtin(vm)
+
 fn baml.ws.WsStream.send = builtin(io)
 
 fn baml.ws.WsStream.next = builtin(io)
@@ -12291,6 +12341,26 @@ fn baml.String.from_utf8 = builtin(vm)
 fn baml.String.to_code_points = builtin(vm)
 
 fn baml.String.from_code_points = builtin(vm)
+
+fn baml.TypeValue.kind = builtin(vm)
+
+fn baml.TypeValue.as_class = builtin(vm)
+
+fn baml.TypeValue.as_enum = builtin(vm)
+
+fn baml.TypeValue.as_union = builtin(vm)
+
+fn baml.TypeValue.as_literal = builtin(vm)
+
+fn baml.TypeValue.as_array = builtin(vm)
+
+fn baml.TypeValue.as_map = builtin(vm)
+
+fn baml.TypeValue.as_interface = builtin(vm)
+
+fn baml.TypeValue.as_primitive = builtin(vm)
+
+fn baml.TypeValue.as_function = builtin(vm)
 
 fn baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string {
     // Locals:

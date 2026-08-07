@@ -71,8 +71,6 @@ pub enum TokenKind {
     RetryPolicy,
     #[token("template_string")]
     TemplateString,
-    #[token("type_builder")]
-    TypeBuilder,
 
     // Control flow keywords
     #[token("if")]
@@ -115,8 +113,6 @@ pub enum TokenKind {
     Instanceof,
     #[token("is")]
     Is,
-    #[token("dynamic")]
-    Dynamic,
 
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
@@ -365,7 +361,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::TestSet => "testset",
             TokenKind::RetryPolicy => "retry_policy",
             TokenKind::TemplateString => "template_string",
-            TokenKind::TypeBuilder => "type_builder",
             TokenKind::If => "if",
             TokenKind::Else => "else",
             TokenKind::For => "for",
@@ -385,7 +380,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Defer => "defer",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Is => "is",
-            TokenKind::Dynamic => "dynamic",
 
             // Identifiers and literals
             TokenKind::Word => "identifier",

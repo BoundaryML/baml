@@ -978,7 +978,7 @@ fn truncate_preview(mut value: String, max_chars: usize) -> String {
 }
 
 /// Extract an owned `RuntimeTy` from a `SysOp::BamlHostCallHostValue` type-arg operand
-/// (an `Object::Type(Box<RuntimeTy>)`).
+/// (an `Object::Type(Box<TypeValue>)`).
 ///
 /// The VM packs the sys-op args as `[handle, args_array, ret_ty, throws_ty]`
 /// (see `bex_vm::vm`'s `CallIndirect`-`HostClosure` path): `ret_ty` is
@@ -1012,7 +1012,7 @@ fn host_call_type_arg(
     // pointer would dangle. The caller clones the `RuntimeTy` out before awaiting.
     match unsafe { ptr.get() } {
         // `Object::Type` stores a realized type; widen it to the boundary `RuntimeTy`.
-        Object::Type(ty) => Ok((**ty).clone().into()),
+        Object::Type(type_value) => Ok(type_value.ty.clone().into()),
         _ => Err(bad_slot()),
     }
 }
@@ -3698,7 +3698,7 @@ impl BexEngine {
     /// declaration order. Empty for a non-generic function. Sourced from the
     /// `Function`'s `display_type_params`, so it includes type params that
     /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
-    /// solely via `reflect.type_of<T>()`), which a signature-only scan misses.
+    /// solely via `type.of<T>()`), which a signature-only scan misses.
     fn function_generic_params(&self, name: &str) -> Vec<String> {
         let Some(resolved) = self.resolve_function_name(name) else {
             return vec![];
@@ -5782,5 +5782,59 @@ mod concurrent_tests {
         //     assert!(result.is_ok(), "concurrent call failed: {:?}", result);
         // }
         // ```
+    }
+}
+
+#[cfg(test)]
+mod mint_identity_tests {
+    use std::sync::Arc;
+
+    use baml_project::testing::compile_source;
+    use bex_vm_types::{Object, types::MintId};
+    use sys_native::SysOpsExt;
+    use tokio_util::sync::CancellationToken;
+
+    use super::BexEngine;
+
+    fn engine() -> Arc<BexEngine> {
+        let program = compile_source("function main() -> null { null }");
+        Arc::new(
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("engine construction should succeed"),
+        )
+    }
+
+    async fn mint_in_engine(engine: &Arc<BexEngine>, ty: baml_type::RealizedTy) -> MintId {
+        let mut thread = engine
+            .new_root_thread(CancellationToken::new(), false)
+            .await;
+        let ptr = thread.vm.alloc_static_type(ty);
+        let Object::Type(type_value) = thread.vm.get_object(ptr) else {
+            panic!("alloc_static_type must allocate Object::Type")
+        };
+        type_value.mint()
+    }
+
+    #[tokio::test]
+    async fn static_digest_is_canonical_and_deterministic_across_engines() {
+        let left = baml_type::RealizedTy::Union(
+            vec![
+                baml_type::RealizedTy::int(),
+                baml_type::RealizedTy::string(),
+            ],
+            baml_type::TyAttr::default(),
+        );
+        let right = baml_type::RealizedTy::Union(
+            vec![
+                baml_type::RealizedTy::string(),
+                baml_type::RealizedTy::int(),
+            ],
+            baml_type::TyAttr::default(),
+        );
+
+        let first = mint_in_engine(&engine(), left).await;
+        let second = mint_in_engine(&engine(), right).await;
+        assert_eq!(first, second);
+        assert!(matches!(first, MintId::Static(_)));
     }
 }

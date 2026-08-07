@@ -110,6 +110,10 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// The removed `reflect.type_of` spelling (BEP-066 I-9): the intrinsic was
+    /// renamed to `type.of`, and the old name errors with the replacement
+    /// spelled out rather than a bare "unresolved name".
+    RemovedReflectTypeOf,
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -126,6 +130,10 @@ pub enum TirTypeError {
         class_name: crate::ty::QualifiedTypeName,
         field_name: Name,
         suggestions: Vec<Name>,
+    },
+    /// Runtime reflection-kind classes are sealed VM views, not user data.
+    CannotConstructReflectionKind {
+        class_name: crate::ty::QualifiedTypeName,
     },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
@@ -821,6 +829,12 @@ impl fmt::Display for TirTypeError {
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
             }
+            TirTypeError::RemovedReflectTypeOf => {
+                write!(
+                    f,
+                    "`reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`"
+                )
+            }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {
                     write!(
@@ -881,6 +895,11 @@ impl fmt::Display for TirTypeError {
                     )
                 }
             }
+            TirTypeError::CannotConstructReflectionKind { class_name } => write!(
+                f,
+                "reflection kind `{}` cannot be constructed; obtain it from a type value",
+                class_name.render_user_facing()
+            ),
             TirTypeError::DeadCode {
                 unreachable_count, ..
             } => {

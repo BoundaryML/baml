@@ -395,8 +395,8 @@ async fn signature_object_literal_construction() {
             let manual = reflect.Signature {
                 args: [],
                 opts: {},
-                returns: reflect.type_of<int>(),
-                errors: reflect.type_of<never>(),
+                returns: type.of<int>(),
+                errors: type.of<never>(),
                 docstring: null,
             }
             return manual.returns.to_string() + "|" + manual.errors.to_string()

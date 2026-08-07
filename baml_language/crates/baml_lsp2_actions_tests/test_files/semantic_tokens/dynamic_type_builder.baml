@@ -71,7 +71,30 @@ test ReturnDynamicClassTest {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0098
+//
+//   × removed language feature
+//     ╭─[dynamic_type_builder.baml:29:3]
+//  29 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//    ╭─[dynamic_type_builder.baml:5:3]
+//  5 │   @@dynamic // This class is marked as @@dynamic.
+//    ·   ────┬────
+//    ·       ╰── removed attribute
+//    ╰────
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╭─[dynamic_type_builder.baml:17:3]
+//  17 │   @@dynamic
+//     ·   ────┬────
+//     ·       ╰── removed attribute
+//     ╰────
 //
 //- semantic_tokens
 // dynamic_type_builder.baml:1:1 (keyword) len=5 "class"
@@ -117,36 +140,13 @@ test ReturnDynamicClassTest {
 // dynamic_type_builder.baml:26:6 (struct) [declaration] len=22 "ReturnDynamicClassTest"
 // dynamic_type_builder.baml:27:3 (property) len=9 "functions"
 // dynamic_type_builder.baml:28:3 (comment) len=72 "// New type_builder block used to define types and inject dynamic props."
-// dynamic_type_builder.baml:29:3 (keyword) len=12 "type_builder"
 // dynamic_type_builder.baml:30:5 (comment) len=60 "// Defines a new type available only within this test block."
 // dynamic_type_builder.baml:31:5 (keyword) len=5 "class"
-// dynamic_type_builder.baml:31:11 (class) [declaration] len=10 "Experience"
-// dynamic_type_builder.baml:32:7 (property) [declaration] len=5 "title"
-// dynamic_type_builder.baml:32:13 (type) [defaultLibrary] len=6 "string"
-// dynamic_type_builder.baml:33:7 (property) [declaration] len=7 "company"
-// dynamic_type_builder.baml:33:15 (type) [defaultLibrary] len=6 "string"
-// dynamic_type_builder.baml:34:7 (property) [declaration] len=10 "start_date"
-// dynamic_type_builder.baml:34:18 (type) [defaultLibrary] len=6 "string"
-// dynamic_type_builder.baml:35:7 (property) [declaration] len=8 "end_date"
-// dynamic_type_builder.baml:35:16 (type) [defaultLibrary] len=6 "string"
 // dynamic_type_builder.baml:38:5 (keyword) len=4 "enum"
-// dynamic_type_builder.baml:38:10 (enum) [declaration] len=5 "Level"
-// dynamic_type_builder.baml:39:7 (enumMember) [declaration] len=6 "Junior"
-// dynamic_type_builder.baml:40:7 (enumMember) [declaration] len=3 "Mid"
-// dynamic_type_builder.baml:41:7 (enumMember) [declaration] len=6 "Senior"
 // dynamic_type_builder.baml:44:5 (comment) len=65 "// This `dynamic` block is used to inject new properties into the"
 // dynamic_type_builder.baml:45:5 (comment) len=40 "// `@@dynamic` part of the Resume class."
-// dynamic_type_builder.baml:46:5 (keyword) len=7 "dynamic"
 // dynamic_type_builder.baml:46:13 (keyword) len=5 "class"
-// dynamic_type_builder.baml:46:19 (class) [declaration] len=6 "Resume"
-// dynamic_type_builder.baml:47:7 (property) [declaration] len=10 "experience"
-// dynamic_type_builder.baml:47:18 (type) len=10 "Experience"
-// dynamic_type_builder.baml:48:7 (property) [declaration] len=5 "level"
-// dynamic_type_builder.baml:48:13 (type) len=5 "Level"
-// dynamic_type_builder.baml:51:5 (keyword) len=7 "dynamic"
 // dynamic_type_builder.baml:51:13 (keyword) len=4 "enum"
-// dynamic_type_builder.baml:51:18 (enum) [declaration] len=3 "Job"
-// dynamic_type_builder.baml:52:7 (enumMember) [declaration] len=14 "ProductManager"
 // dynamic_type_builder.baml:55:3 (property) len=4 "args"
 // dynamic_type_builder.baml:56:5 (property) len=9 "from_text"
 // dynamic_type_builder.baml:56:15 (string) len=1 "#"

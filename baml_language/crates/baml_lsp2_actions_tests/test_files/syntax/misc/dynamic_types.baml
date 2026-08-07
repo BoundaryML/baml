@@ -71,4 +71,27 @@ test ReturnDynamicClassTest {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0098
+//
+//   × removed language feature
+//     ╭─[misc_dynamic_types.baml:29:3]
+//  29 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//    ╭─[misc_dynamic_types.baml:5:3]
+//  5 │   @@dynamic // This class is marked as @@dynamic.
+//    ·   ────┬────
+//    ·       ╰── removed attribute
+//    ╰────
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╭─[misc_dynamic_types.baml:17:3]
+//  17 │   @@dynamic
+//     ·   ────┬────
+//     ·       ╰── removed attribute
+//     ╰────

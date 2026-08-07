@@ -2298,6 +2298,23 @@ class C {
     }
 
     #[test]
+    fn custom_schema_attr_is_hoisted_but_stream_attr_stays_on_type() {
+        let source = r#"
+class C {
+  f string @custom("read-back") @stream.done
+}
+"#;
+        let (items, diags) = parse_lower_validate(source);
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+        let class = first_class(items);
+        let field = &class.fields[0];
+        assert_eq!(field.attributes.len(), 1);
+        assert_eq!(field.attributes[0].name.as_str(), "custom");
+        assert_eq!(field.type_expr.attrs().len(), 1);
+        assert_eq!(field.type_expr.attrs()[0].name.as_str(), "stream.done");
+    }
+
+    #[test]
     fn union_trailing_field_attr_hoisted_to_field() {
         // A | B | C @alias("x") → @alias hoisted to FieldDef, Union has no attrs.
         let source = r#"

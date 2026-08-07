@@ -227,11 +227,67 @@ args {
 
 //----
 //- diagnostics
-// E0010
+// E0098
 //
-//   × invalid syntax
-//      ╭─[misc_dynamic_types_validation_errors.baml:105:7]
-//  105 │       C
-//      ·       ┬
-//      ·       ╰── field 'C' is missing a type annotation
+//   × removed language feature
+//     ╭─[misc_dynamic_types_validation_errors.baml:13:3]
+//  13 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × removed language feature
+//     ╭─[misc_dynamic_types_validation_errors.baml:27:3]
+//  27 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × removed language feature
+//     ╭─[misc_dynamic_types_validation_errors.baml:45:3]
+//  45 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × removed language feature
+//     ╭─[misc_dynamic_types_validation_errors.baml:66:3]
+//  66 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × removed language feature
+//     ╭─[misc_dynamic_types_validation_errors.baml:81:3]
+//  81 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × removed language feature
+//      ╭─[misc_dynamic_types_validation_errors.baml:103:3]
+//  103 │   type_builder {
+//      ·   ──────┬─────
+//      ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
 //      ╰────
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╭─[misc_dynamic_types_validation_errors.baml:40:3]
+//  40 │   @@dynamic
+//     ·   ────┬────
+//     ·       ╰── removed attribute
+//     ╰────
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╭─[misc_dynamic_types_validation_errors.baml:98:3]
+//  98 │   @@dynamic
+//     ·   ────┬────
+//     ·       ╰── removed attribute
+//     ╰────

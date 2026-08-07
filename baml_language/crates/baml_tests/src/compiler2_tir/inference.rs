@@ -1,14 +1,15 @@
 //! Core type inference snapshot tests.
 
 use baml_base::Name;
-use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
+use baml_compiler2_hir::{contributions::Definition, package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{
-    inference::infer_scope_types,
+    inference::{infer_scope_types, resolve_type_alias},
     package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
     ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
     type_context::GlobalTypeContext,
 };
+use salsa::Setter;
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
@@ -32,6 +33,15 @@ fn find_function_scope_id<'db>(
                     .is_some_and(|scope_name| scope_name.as_str() == name)
         })
         .unwrap_or_else(|| panic!("missing function scope {name}"))
+}
+
+fn add_compiler2_virtual_file(db: &mut baml_project::ProjectDatabase, path: &str, source: &str) {
+    let file = db.add_file(path, source);
+    let extra = baml_compiler2_hir::Db::compiler2_extra_files(db)
+        .expect("make_db installs compiler2 builtin files");
+    let mut files = extra.files(db).clone();
+    files.push(file);
+    extra.set_files(db).to(files);
 }
 
 #[test]
@@ -502,6 +512,133 @@ fn package_interface_exports_optional_param_mode() {
         Some("limit")
     );
     assert_eq!(exported.params[1].mode, FunctionParamMode::Optional);
+}
+
+#[test]
+fn reflect_type_shorthand_requires_baml_package_access() {
+    let mut db = make_db();
+    add_compiler2_virtual_file(
+        &mut db,
+        "<builtin>/boundary/reflect_probe.baml",
+        "type ForbiddenReflect = reflect.Signature\n",
+    );
+    db.add_file(
+        "allowed_reflect.baml",
+        "type AllowedReflect = reflect.Signature\n",
+    );
+
+    let boundary_items =
+        baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("boundary")));
+    let Some(Definition::TypeAlias(forbidden_loc)) =
+        boundary_items.lookup_type(&[], &Name::new("ForbiddenReflect"))
+    else {
+        panic!("boundary probe alias should exist");
+    };
+    let forbidden = resolve_type_alias(&db, forbidden_loc);
+    assert!(
+        !forbidden.diagnostics.is_empty(),
+        "boundary has no baml dependency, so reflect.Signature must be unresolved; got {:?}",
+        forbidden.ty
+    );
+
+    let user_items =
+        baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("user")));
+    let Some(Definition::TypeAlias(allowed_loc)) =
+        user_items.lookup_type(&[], &Name::new("AllowedReflect"))
+    else {
+        panic!("user probe alias should exist");
+    };
+    let allowed = resolve_type_alias(&db, allowed_loc);
+    assert!(
+        allowed.diagnostics.is_empty(),
+        "user packages depend on baml, so reflect.Signature should resolve: {:?}",
+        allowed.diagnostics
+    );
+    assert!(
+        matches!(&allowed.ty, Ty::Class(name, ..)
+            if name.package().as_str() == "baml"
+                && *name.namespace() == [Name::new("reflect")]
+                && name.name().as_str() == "Signature"),
+        "expected baml.reflect.Signature, got {:?}",
+        allowed.ty
+    );
+}
+
+#[test]
+fn keyword_shorthands_hide_non_exported_baml_members() {
+    let mut db = make_db();
+    add_compiler2_virtual_file(
+        &mut db,
+        "<builtin>/baml/ns_reflect/raw_only.baml",
+        "interface RawOnly {}\ntemplate_string raw_only() `raw`\n",
+    );
+
+    let user_pkg = PackageId::new(&db, Name::new("user"));
+    let res_ctx = package_resolution_context(&db, user_pkg);
+    let baml_name = Name::new("baml");
+    let reflect_ns = [Name::new("reflect")];
+    let raw_only_type = Name::new("RawOnly");
+    let raw_only_value = Name::new("raw_only");
+
+    let raw_baml_items = res_ctx
+        .items_for_package(&db, &baml_name)
+        .expect("user packages can access baml");
+    assert!(
+        raw_baml_items
+            .lookup_type(&reflect_ns, &raw_only_type)
+            .is_some(),
+        "the fixture must exist in the raw namespace map"
+    );
+    assert!(
+        raw_baml_items
+            .lookup_value(&reflect_ns, &raw_only_value)
+            .is_some(),
+        "the fixture must exist in the raw namespace map"
+    );
+
+    let exported_baml = res_ctx
+        .dep_interfaces
+        .iter()
+        .find(|(name, _)| name == &baml_name)
+        .map(|(_, interface)| interface)
+        .expect("user packages have baml's exported interface");
+    assert!(
+        exported_baml
+            .lookup_type(&reflect_ns, &raw_only_type)
+            .is_none(),
+        "interfaces are not part of this branch's exported type surface"
+    );
+    assert!(
+        exported_baml
+            .lookup_function(&reflect_ns, &raw_only_value)
+            .is_none(),
+        "template strings are not part of the exported value surface"
+    );
+
+    assert!(
+        res_ctx
+            .resolve_type(&db, &[Name::new("reflect"), raw_only_type], &[],)
+            .is_none(),
+        "the reflect shorthand must not expose a raw-only type"
+    );
+    assert!(
+        res_ctx
+            .resolve_value(&db, &[Name::new("reflect"), raw_only_value], &[],)
+            .is_none(),
+        "the reflect shorthand must not expose a raw-only value"
+    );
+    assert!(
+        res_ctx
+            .resolve_value(&db, &[Name::new("reflect"), Name::new("signature")], &[],)
+            .is_some(),
+        "an exported reflect function must remain visible"
+    );
+    assert!(
+        res_ctx
+            .resolve_value(&db, &[Name::new("type"), Name::new("of")], &[],)
+            .is_some(),
+        "an exported type-shorthand function must remain visible"
+    );
 }
 
 #[test]

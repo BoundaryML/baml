@@ -413,7 +413,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // The same `<STREAM_EXPANDED, ORIGINAL>` pair is also passed as
                 // explicit call-site type args in every companion body below, so
                 // the stdlib reifies the types from its frame
-                // (`reflect.type_of<TStream/TFinal>()`) instead of a name-keyed
+                // (`type.of<TStream/TFinal>()`) instead of a name-keyed
                 // registry lookup. Explicit args lower through
                 // `lower_type_expr_in_ns` with the companion's own namespace
                 // context — bare in-namespace names resolve correctly, with

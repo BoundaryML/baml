@@ -1442,7 +1442,7 @@ struct LoweringContext<'db> {
     // Generic params of the enclosing lambda(s), accumulated outermost-first.
     // Empty at top-level; `lower_lambda` extends it with the lambda's own
     // `generic_params` while lowering its body and restores it afterward.
-    // `enclosing_generic_params()` appends this so that `reflect.type_of<T>`
+    // `enclosing_generic_params()` appends this so that `type.of<T>`
     // (and other type-arg resolution) inside a generic lambda body resolves the
     // lambda's `T` to the correct `TypeArgRef` slot — `func_loc` only knows the
     // enclosing top-level function's (and class's) params, never a lambda's.
@@ -7875,7 +7875,7 @@ impl<'db> LoweringContext<'db> {
                 // type slot, same field-chain lowering.
                 else if let Some(members) = self
                     .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
-                    .and_then(Self::tir_union_members)
+                    .and_then(|ty| self.tir_union_members(ty))
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local = self.lower_path_receiver_to_local(
@@ -8167,7 +8167,7 @@ impl<'db> LoweringContext<'db> {
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
-        // Check if callee is `reflect.type_of<T>()` — a value-producing intrinsic.
+        // Check if callee is `type.of<T>()` — a value-producing intrinsic.
         // Unlike void intrinsics (log.*), this emits an assignment
         // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
         if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
@@ -8223,7 +8223,7 @@ impl<'db> LoweringContext<'db> {
         // or inferred by TIR, materialise each as a `type` value on the stack
         // before the regular value args.
         // The VM pops these `ntypeargs` Object::Type values into the new frame's
-        // `type_args` vec so that inner `reflect.type_of<T>()` calls can
+        // `type_args` vec so that inner `type.of<T>()` calls can
         // substitute them at runtime.
         // Check if callee resolves to a builtin IO function (sys-op). Sys-op
         // glue reads only its declared value args plus any synthetic trailing
@@ -8726,14 +8726,14 @@ impl<'db> LoweringContext<'db> {
     }
 }
 
-// ─── 3.6: reflect.type_of intrinsic ─────────────────────────────────────────
+// ─── 3.6: type.of intrinsic (BEP-066, formerly reflect.type_of) ─────────────
 
 impl LoweringContext<'_> {
-    /// Detect a `reflect.type_of<T>()` call and, if found, resolve the type
+    /// Detect a `type.of<T>()` call and, if found, resolve the type
     /// argument and return the corresponding `TyTemplate`.
     ///
     /// Returns `Some(template)` when:
-    /// - The callee is the `baml.reflect.type_of` `$compiler_intrinsic`.
+    /// - The callee is the `baml.type.of` `$compiler_intrinsic`.
     /// - The call carries exactly one type argument.
     /// - The type argument resolves to a concrete `RuntimeTy` (no `TypeVar` leaves).
     ///
@@ -8749,7 +8749,7 @@ impl LoweringContext<'_> {
     ) -> Option<TyTemplate> {
         use baml_compiler2_ast::BuiltinKind;
 
-        // ── 1. Check the callee resolves to `baml.reflect.type_of` ──────────
+        // ── 1. Check the callee resolves to `baml.type.of` ─────────────
         let func_loc = if let AstExpr::Path(segments) = &self.body.exprs[callee] {
             if segments.len() == 1 {
                 let span_start = self
@@ -8800,7 +8800,7 @@ impl LoweringContext<'_> {
             self.db,
             baml_compiler2_hir::contributions::Definition::Function(func_loc),
         );
-        if item_ref.to_string().as_str() != "reflect.type_of" {
+        if item_ref.to_string().as_str() != "baml.type.of" {
             return None;
         }
 
@@ -8813,7 +8813,7 @@ impl LoweringContext<'_> {
         let type_arg = type_args.into_iter().next()?;
 
         // Include the enclosing class + function generic params so that `T`
-        // in `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
+        // in `type.of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
         // than an unresolved-type error — both for free generic functions and
         // for methods on generic classes.  The order (class params first,
         // then function params) mirrors TIR's `enclosing_class_generic_params
@@ -9044,7 +9044,7 @@ impl LoweringContext<'_> {
         // out-of-range ref as a frame-layout error), so a generic callee's
         // frame is always seeded at full declared width; a `T` inferred to the
         // top type is an explicit `unknown` slot, which is how
-        // `reflect.type_of<T>()` under an unknown-typed call still reflects
+        // `type.of<T>()` under an unknown-typed call still reflects
         // the honest top type.
         self.emit_frame_type_arg_ops(&inferred_type_args)
     }
@@ -10336,7 +10336,7 @@ impl<'db> LoweringContext<'db> {
     ) -> bool {
         let Some(members) = self
             .tir_expr_type(self.expr_metadata_key(base))
-            .and_then(Self::tir_union_members)
+            .and_then(|ty| self.tir_union_members(ty))
         else {
             return false;
         };
@@ -10375,7 +10375,7 @@ impl<'db> LoweringContext<'db> {
     ) -> bool {
         let Some(members) = self
             .tir_expr_type(self.expr_metadata_key(base))
-            .and_then(Self::tir_union_members)
+            .and_then(|ty| self.tir_union_members(ty))
         else {
             return false;
         };
@@ -12605,9 +12605,14 @@ impl LoweringContext<'_> {
     /// layers — `(Dog | Named)?` after a null check still dispatches the
     /// field/method on the underlying union. Returns `None` when `ty` isn't a
     /// (optionally-wrapped) union.
-    fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
+    fn tir_union_members(&self, ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
         match ty {
             Tir2Ty::Union(members, _) => Some(members.clone()),
+            Tir2Ty::TypeAlias(qtn, _) if !self.resolved_aliases.recursive.contains(qtn) => self
+                .resolved_aliases
+                .aliases
+                .get(qtn)
+                .and_then(|target| self.tir_union_members(target)),
             _ => None,
         }
     }
@@ -12813,6 +12818,11 @@ impl LoweringContext<'_> {
             RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
             RuntimeTy::Future(..) => Some(baml_type::typetag::FUTURE),
             RuntimeTy::Type { .. } => Some(baml_type::typetag::TYPE),
+            // Reflection-kind classes describe the reconstructed type of an
+            // `Object::Type`; the physical value deliberately keeps the shared
+            // TYPE tag. They therefore require the structural matcher and may
+            // never enter class-tag switch dispatch.
+            RuntimeTy::Class(tn, _, _) if baml_type::type_kind::is_type_kind_class(tn) => None,
             RuntimeTy::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }

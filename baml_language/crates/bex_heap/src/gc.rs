@@ -1390,10 +1390,14 @@ mod tests {
                 name: "A".to_string(),
                 description: None,
                 alias: None,
+                docstring: None,
+                other: Default::default(),
                 skip: false,
             }],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
         }))];
         let debug = HeapDebuggerConfig {
@@ -1434,10 +1438,14 @@ mod tests {
                 }),
                 description: None,
                 alias: None,
+                docstring: None,
+                other: Default::default(),
                 skip: false,
             }],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
@@ -2079,6 +2087,8 @@ mod tests {
             fields: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 0,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
@@ -2122,6 +2132,8 @@ mod tests {
             variants: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: TyAttr::default(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
@@ -2347,6 +2359,8 @@ mod tests {
             fields: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 42,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
@@ -2373,6 +2387,8 @@ mod tests {
             variants: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: TyAttr::default(),
         })));
 
@@ -2387,15 +2403,19 @@ mod tests {
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RealizedTy::Int {
-            attr: baml_type::TyAttr::default(),
-        })));
+        let minted = bex_vm_types::types::TypeValue::from_parts(
+            baml_type::RealizedTy::int(),
+            bex_vm_types::types::MintId::Static(0xC0FFEE),
+        );
+        let ptr = tlab.alloc(Object::Type(Box::new(minted.clone())));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
-        let Object::Type(ty) = (unsafe { new_roots[0].get() }) else {
+        let Object::Type(tv) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(**ty, baml_type::RealizedTy::Int { .. }));
+        assert!(matches!(tv.ty, baml_type::RealizedTy::Int { .. }));
+        // The mint is inline data, so a GC copy preserves identity (I-4).
+        assert_eq!(**tv, minted);
     }
 
     #[test]
@@ -2794,6 +2814,8 @@ mod tests {
             fields: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 0,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
@@ -2811,6 +2833,8 @@ mod tests {
             variants: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: TyAttr::default(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {

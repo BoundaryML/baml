@@ -49,6 +49,9 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_CLIENT
             | SyntaxKind::KW_SPAWN
             | SyntaxKind::KW_AWAIT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_FUNCTION
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_INTERFACE
@@ -2633,7 +2636,7 @@ impl LoweringContext {
         // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
         //
         // When a PATH_EXPR is wrapped in another PATH_EXPR for generic-arg
-        // annotation (e.g. `reflect.type_of<User>` → outer PATH_EXPR wrapping
+        // annotation (e.g. `type.of<User>` → outer PATH_EXPR wrapping
         // inner PATH_EXPR + GENERIC_ARGS), the outer node has no direct token
         // children. In that case, delegate to the inner PATH_EXPR node.
         let mut segments: Vec<(Name, TextRange)> = Vec::new();

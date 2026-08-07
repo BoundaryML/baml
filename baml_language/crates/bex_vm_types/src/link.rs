@@ -853,6 +853,8 @@ mod tests {
             fields: Vec::new(),
             description: None,
             alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
             type_tag,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,

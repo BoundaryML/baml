@@ -63,7 +63,7 @@ use sys_native::SysOpsExt;
 // type-test against the substituted type at monomorphization. Both are
 // real compiler / VM changes; absent those, the host-call typechecking
 // must stay in Rust (as it is today) or use a different BAML construct
-// (e.g. an explicit `reflect.type_of<T>().matches(v)` builtin if added).
+// (e.g. an explicit `type.of<T>().matches(v)` builtin if added).
 // ============================================================================
 
 #[ignore = "documents a compiler gap: generic-typed patterns don't substitute T at runtime"]

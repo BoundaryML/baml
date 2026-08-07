@@ -138,11 +138,22 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_ops/comparison.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
+    // `baml.reflect` (BEP-066 I-9: `reflect` is a keyword shorthand for it).
+    builtin!("baml", "ns_reflect/reflect.baml"),
+    builtin!("baml", "ns_reflect/ns_class/class.baml"),
+    builtin!("baml", "ns_reflect/ns_enum/enum.baml"),
+    builtin!("baml", "ns_reflect/ns_union/union.baml"),
+    builtin!("baml", "ns_reflect/ns_literal/literal.baml"),
+    builtin!("baml", "ns_reflect/ns_array/array.baml"),
+    builtin!("baml", "ns_reflect/ns_map/map.baml"),
+    builtin!("baml", "ns_reflect/ns_interface/interface.baml"),
+    builtin!("baml", "ns_reflect/ns_primitive/primitive.baml"),
+    builtin!("baml", "ns_reflect/ns_function/function.baml"),
+    // `baml.type` (BEP-066 K-13: `type.of` / `type.of_value` resolve here).
+    builtin!("baml", "ns_type/type.baml"),
     // --- boundary package ---
     builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),
-    // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
-    builtin!("reflect", "reflect.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),

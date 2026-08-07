@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3718
 ---
 function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
@@ -8,12 +9,6 @@ function boundary.id() -> boundary.LocalId {
 }
 
 function boundary.id.current() -> string {
-}
-
-function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }
 
 function user.bare_and_pinned() -> int {
@@ -41,7 +36,7 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
 
 function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
     load_var f
-    call reflect.signature
+    call baml.reflect.signature
     store_var sig
     load_var sig
     load_field .returns
@@ -66,14 +61,14 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     store_var parts
     load_var sig
     load_field .args
-    load_type baml.iter.Iterable<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
 
   L0:
     load_var _14
-    load_type baml.iter.Iterator<Error = never, Item = reflect.Arg>
+    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
@@ -100,7 +95,7 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
 
   L2:
     load_type string
-    load_type reflect.Arg
+    load_type baml.reflect.Arg
     load_var sig
     load_field .opts
     call baml.Map.keys
@@ -124,7 +119,7 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     load_var _29
     store_var key
     load_type string
-    load_type reflect.Arg
+    load_type baml.reflect.Arg
     load_var sig
     load_field .opts
     load_var key
@@ -181,7 +176,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
     load_type Doc[] | string
     load_type ToolError
     load_var2 4 2
-    call reflect.call_any
+    call baml.reflect.call_any
     jump L9
     load_var e
     is_type ToolError
@@ -190,7 +185,7 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] 
 
   L4:
     load_var e
-    is_type reflect.InvalidArgumentError
+    is_type baml.reflect.InvalidArgumentError
     pop_jump_if_false L5
     jump L6
 

@@ -21,7 +21,7 @@ namespace baml:
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_string] }
+  class TypeValue { methods: [kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, _to_string_impl, implements, implemented_by, implementors, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
@@ -290,6 +290,36 @@ namespace baml.random:
   type Rng
   class SystemRandom { methods: [get, random, random_int] }
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
+namespace baml.reflect:
+  class Arg { methods: [] }
+  class InvalidArgumentError { methods: [] }
+  class Meta { methods: [] }
+  class Signature { methods: [] }
+  type TypeKind
+  type TypeView
+  function call_any<R, E>
+  function signature
+namespace baml.reflect.array:
+  class Type { methods: [element_type, as_type] }
+namespace baml.reflect.class:
+  class Field { methods: [] }
+  class Type { methods: [fields, meta, as_type] }
+namespace baml.reflect.enum:
+  class Type { methods: [values, meta, as_type] }
+  class Value { methods: [] }
+namespace baml.reflect.function:
+  class Parameter { methods: [] }
+  class Type { methods: [params, return_type, as_type] }
+namespace baml.reflect.interface:
+  class Type { methods: [implemented_by, implementors, as_type] }
+namespace baml.reflect.literal:
+  class Type { methods: [as_type] }
+namespace baml.reflect.map:
+  class Type { methods: [key_type, value_type, as_type] }
+namespace baml.reflect.primitive:
+  class Type { methods: [as_type] }
+namespace baml.reflect.union:
+  class Type { methods: [member_types, as_type] }
 namespace baml.sap:
   function parse<T>
   function parse_type
@@ -336,6 +366,9 @@ namespace baml.toml:
   function item_from_json
   function item_to_json
   function table_from_json
+namespace baml.type:
+  function of<T>
+  function of_value
 namespace baml.ws:
   class WsStream { methods: [send, next, close] }
   function _connect

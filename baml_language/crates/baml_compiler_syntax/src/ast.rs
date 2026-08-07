@@ -6,7 +6,8 @@ use crate::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 
 /// Extract a dotted name from a token sequence (e.g., `baml.http.Request` → `"baml.http.Request"`).
 ///
-/// Finds the first WORD token, then consumes alternating DOT + WORD pairs.
+/// Finds the first WORD token, then consumes alternating DOT + identifier
+/// segments. Declaration keywords are identifiers only after a dot.
 fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Option<String> {
     let mut parts = Vec::new();
     let mut iter = tokens.filter(|t| !t.kind().is_trivia());
@@ -21,9 +22,8 @@ fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Opt
     };
     parts.push(first.text().to_string());
 
-    // Consume alternating DOT + WORD. `spawn`/`await` are reserved keywords
-    // but valid as namespace segments after a `.` (e.g. `baml.spawn.SpawnParams`
-    // in a type annotation), mirroring the parser's segment set.
+    // Consume alternating DOT + identifier segments, mirroring the parser's
+    // qualified-name carve-out.
     while let Some(t) = iter.next() {
         if t.kind() != SyntaxKind::DOT {
             break;
@@ -31,7 +31,13 @@ fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Opt
         let Some(word) = iter.next() else { break };
         if !matches!(
             word.kind(),
-            SyntaxKind::WORD | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+            SyntaxKind::WORD
+                | SyntaxKind::KW_SPAWN
+                | SyntaxKind::KW_AWAIT
+                | SyntaxKind::KW_CLASS
+                | SyntaxKind::KW_ENUM
+                | SyntaxKind::KW_INTERFACE
+                | SyntaxKind::KW_FUNCTION
         ) {
             break;
         }
@@ -168,8 +174,6 @@ ast_node!(PromptText, PROMPT_TEXT);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
-ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
-ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
 
@@ -253,7 +257,19 @@ impl UnionMemberParts {
         let name: Vec<_> = self
             .tokens
             .iter()
-            .take_while(|t| matches!(t.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
+            .take_while(|t| {
+                matches!(
+                    t.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::DOT
+                        | SyntaxKind::KW_SPAWN
+                        | SyntaxKind::KW_AWAIT
+                        | SyntaxKind::KW_CLASS
+                        | SyntaxKind::KW_ENUM
+                        | SyntaxKind::KW_INTERFACE
+                        | SyntaxKind::KW_FUNCTION
+                )
+            })
             .collect();
         if let (Some(first), Some(last)) = (name.first(), name.last()) {
             return Some(rowan::TextRange::new(
@@ -2371,32 +2387,22 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name (e.g., "stream" from @@stream.done).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
     }
 
     /// Get the full attribute name including dot-separated modifiers.
-    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    /// For @@stream.done returns "stream.done".
     pub fn full_name(&self) -> Option<String> {
         let segments: Vec<String> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
             .map(|token| token.text().to_string())
             .collect();
 

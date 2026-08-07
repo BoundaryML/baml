@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22938
 ---
 === TIR2 ===
 class user.Person {
@@ -7,12 +8,12 @@ class user.Person {
 }
 function user.reflect_type<T>() -> type throws never {
   { : type
-    reflect.type_of() : type
+    type.of() : type
   }
 }
 function user.reflect_array<T>() -> type throws never {
   { : type
-    reflect.type_of() : type
+    type.of() : type
   }
 }
 function user.reflect_person() -> type throws never {

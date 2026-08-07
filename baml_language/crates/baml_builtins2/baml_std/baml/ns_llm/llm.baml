@@ -91,7 +91,7 @@ function build_request_stream(client: Client, function_name: string, args: map<s
 /// error name matches the operation and the documented
 /// `catch (baml.errors.ParseError)` pattern is reachable (no E0063).
 function parse<TStream, TFinal>(json: string) -> TFinal throws root.errors.ParseError {
-  let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
+  let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of<TStream>(), type.of<TFinal>());
   __sap_parse_final<TStream, TFinal>(json, cache) catch (_) {
     root.errors.LlmClient { message } => throw root.errors.ParseError { message: message },
   }
@@ -101,7 +101,7 @@ function parse<TStream, TFinal>(json: string) -> TFinal throws root.errors.Parse
 /// cache. Keeping the inference here avoids requiring an explicit static-method
 /// owner at each call site.
 function __new_stream_cache<TStream, TFinal>() -> StreamCache<TStream, TFinal> throws never {
-  let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
+  let cache: StreamCache<TStream, TFinal> = StreamCache.new(type.of<TStream>(), type.of<TFinal>());
   cache
 }
 

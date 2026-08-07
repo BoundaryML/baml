@@ -16,6 +16,7 @@ use std::borrow::Cow;
 
 use baml_type::{
     Literal, MediaKind, Name, RealizedTy, TyAttr, TyTemplate, TypeName, normalize::TypeContext,
+    type_kind::is_type_kind_class,
 };
 use bex_vm_types::{
     errors::VmInternalError,
@@ -338,6 +339,15 @@ impl<'vm> ImplResolver<'vm> {
         concrete: &RealizedTy,
         bindings: &mut [Option<RealizedTy>],
     ) -> bool {
+        // Reflection kind classes are the sealed runtime refinements of `type`.
+        // Keep `implement I for type` rules applicable when the dynamic receiver
+        // is one of those refinements (notably TypeValue's tostring override).
+        if matches!(pattern, TyTemplate::Type { .. })
+            && matches!(concrete, RealizedTy::Class(name, _, _) if is_type_kind_class(name))
+        {
+            return true;
+        }
+
         // A fully-realized pattern carries no frame refs or holes: compare it to the
         // concrete type semantically (union-order-insensitive, matching the type
         // checker) through the canonical fact-opaque `StructuralEquivCtx`. The

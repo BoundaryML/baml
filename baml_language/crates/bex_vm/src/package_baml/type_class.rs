@@ -1,9 +1,67 @@
 use bex_vm_types::types::{Object, Value};
 
-use super::{BamlClassTypeValue, PackageBamlImpl, resolve};
-use crate::BexVm;
+use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, resolve};
+use crate::{BexVm, errors::VmRustFnError};
+
+impl BamlNamespaceType for PackageBamlImpl {
+    /// BEP-066 K-13: `type.of_value(v)` — the runtime `type` value describing
+    /// `v`'s concrete type, reconstructed by `BexVm::value_concrete_ty`.
+    ///
+    /// K-12 holds by construction: `value_concrete_ty` reports value types
+    /// (`int` for `5`), never literal types. A value with no reconstructable
+    /// BAML type — a compile-time definition object (package, class, enum,
+    /// interface, impl rule) or an opaque native handle — yields the `unknown`
+    /// type value, the same fail-open convention `reflect.signature` /
+    /// `reflect.call_any` use for unreconstructable argument types.
+    fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
+        let ty = vm
+            .value_concrete_ty(*v)
+            .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
+        Ok(Value::object(vm.alloc_static_type(ty)))
+    }
+}
 
 impl BamlClassTypeValue for PackageBamlImpl {
+    fn kind(_vm: &BexVm, self_value: &Value) -> Value {
+        *self_value
+    }
+
+    fn as_class(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Class)
+    }
+
+    fn as_enum(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Enum)
+    }
+
+    fn as_union(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Union)
+    }
+
+    fn as_literal(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Literal)
+    }
+
+    fn as_array(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Array)
+    }
+
+    fn as_map(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Map)
+    }
+
+    fn as_interface(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Interface)
+    }
+
+    fn as_primitive(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Primitive)
+    }
+
+    fn as_function(vm: &BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Function)
+    }
+
     /// Returns the `RealizedTy`'s display name.  Includes namespaces and (for
     /// non-`user` packages) the package prefix, so two distinct types never
     /// collide on this string — package names are unique within a workspace,
@@ -17,7 +75,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
             return bex_str::BexStr::from("<type: ?>");
         };
         match vm.get_object(ptr) {
-            Object::Type(ty) => bex_str::BexStr::from(ty.to_string()),
+            Object::Type(type_value) => bex_str::BexStr::from(type_value.ty.to_string()),
             _ => bex_str::BexStr::from("<type: ?>"),
         }
     }
@@ -93,18 +151,23 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .collect();
         entries
             .into_iter()
-            .map(|(ty, _, _)| Value::object(vm.tlab.alloc(Object::Type(Box::new(ty)))))
+            .map(|(ty, _, _)| Value::object(vm.alloc_static_type(ty)))
             .collect()
     }
 }
 
 /// The concrete `RealizedTy` wrapped by a `type` value (class, enum, interface,
 /// primitive, container, …), or `None` if `value` isn't a `type`.
-fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RealizedTy> {
+pub(super) fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RealizedTy> {
     match vm.get_object(value.as_object_ptr()?) {
-        Object::Type(ty) => Some(ty.as_ref().clone()),
+        Object::Type(type_value) => Some(type_value.ty.clone()),
         _ => None,
     }
+}
+
+fn as_kind(vm: &BexVm, value: Value, expected: baml_type::type_kind::TypeKind) -> Option<Value> {
+    let ty = type_value_ty(vm, value)?;
+    (baml_type::type_kind::classify_type(&ty) == expected).then_some(value)
 }
 
 /// A realized interface instantiation as reflected off a value: the type's
@@ -120,10 +183,10 @@ type RealizedTypeInstantiation = (
 /// interface instantiations.
 fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<RealizedTypeInstantiation> {
     let ptr = value.as_object_ptr()?;
-    let Object::Type(ty) = vm.get_object(ptr) else {
+    let Object::Type(type_value) = vm.get_object(ptr) else {
         return None;
     };
-    match ty.as_ref() {
+    match &type_value.ty {
         baml_type::RealizedTy::Class(name, args, _) => {
             Some((name.clone(), args.clone(), Vec::new()))
         }
@@ -136,7 +199,7 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<RealizedTypeInstan
 }
 
 /// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type, so reflection on a
-/// primitive type value (`reflect.type_of<int>()`) has a name to key by, the way
+/// primitive type value (`type.of<int>()`) has a name to key by, the way
 /// non-primitive types carry their own `TypeName`. Impl *matching* for primitives is
 /// structural — the registry bakes their for-types as `Concrete(RuntimeTy::Int { .. })`
 /// etc. (`baml_compiler2_mir`'s `tir2_to_template`), matched by `resolve::match_template`

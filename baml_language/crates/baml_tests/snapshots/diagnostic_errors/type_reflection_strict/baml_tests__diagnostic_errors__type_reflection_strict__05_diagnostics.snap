@@ -1,30 +1,31 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 47396
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
   × mismatched types
     ╭─[reflect_intrinsic_errors.baml:12:18]
- 12 │     let x: int = reflect.type_of<User>();
-    ·                  ───────────┬───────────
-    ·                             ╰── expected `int`, found `type`
+ 12 │     let x: int = type.of<User>();
+    ·                  ───────┬───────
+    ·                         ╰── expected `int`, found `type`
     ╰────
 
   [type] E0002
 
   × unresolved type: NonExistent
     ╭─[reflect_intrinsic_errors.baml:18:5]
- 18 │     reflect.type_of<NonExistent>()
-    ·     ──────────────────────────────
+ 18 │     type.of<NonExistent>()
+    ·     ──────────────────────
     ╰────
 
   [type] E0005
 
-  × function `type_of` expects 1 type argument(s), got 2
+  × function `of` expects 1 type argument(s), got 2
     ╭─[reflect_intrinsic_errors.baml:25:5]
- 25 │     reflect.type_of<int, string>()
-    ·     ──────────────────────────────
+ 25 │     type.of<int, string>()
+    ·     ──────────────────────
     ╰────
 
   [type] E0001

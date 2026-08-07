@@ -221,7 +221,14 @@ enum DottedAttrEnum {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╭─[enum_decls.baml:62:5]
+//  62 │     @@dynamic
+//     ·     ────┬────
+//     ·         ╰── removed attribute
+//     ╰────
 //
 //- semantic_tokens
 // enum_decls.baml:1:1 (comment) len=56 "// Testing all the formatter cases for enum declarations"

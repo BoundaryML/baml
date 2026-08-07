@@ -54,4 +54,27 @@ test AttemptToMakeClassInfinitelyRecursive {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0098
+//
+//   × removed language feature
+//     ╭─[misc_dynamic_types_external_cycle_errors.baml:14:3]
+//  14 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × removed language feature
+//     ╭─[misc_dynamic_types_external_cycle_errors.baml:36:3]
+//  36 │   type_builder {
+//     ·   ──────┬─────
+//     ·         ╰── `type_builder` blocks were removed; runtime type construction is `baml.reflect` (BEP-066)
+//     ╰────
+// E0098
+//
+//   × `@@dynamic` was removed; runtime type construction is `baml.reflect` (BEP-066)
+//    ╭─[misc_dynamic_types_external_cycle_errors.baml:9:3]
+//  9 │   @@dynamic
+//    ·   ────┬────
+//    ·       ╰── removed attribute
+//    ╰────
