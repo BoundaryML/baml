@@ -45,6 +45,12 @@ class TypeValue {
     //baml:vm
     function as_function(self) -> baml.reflect.function.Type? throws never { $rust_function }
 
+    /// Internal shared-render-boundary guard for BEP-066 R-1.
+    //baml:mut_vm
+    function _validate_renderable(self) -> void throws baml.reflect.errors.CompilationError {
+        $rust_function
+    }
+
     /// Pair this type value with schema metadata without changing its mint.
     //baml:mut_vm
     function meta(

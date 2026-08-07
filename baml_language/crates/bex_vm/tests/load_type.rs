@@ -65,6 +65,7 @@ fn inject_function(
         param_types: vec![],
         param_has_default: vec![],
         display_type_params: vec![],
+        generic_param_bounds: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
         throws_type: baml_type::TyTemplate::Never {

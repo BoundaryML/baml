@@ -917,6 +917,9 @@ function baml.ToString.to_string(self: baml.ToString) -> string {
 function baml.TypeValue._to_string_impl(self: baml.TypeValue) -> string {
 }
 
+function baml.TypeValue._validate_renderable(self: baml.TypeValue) -> void {
+}
+
 function baml.TypeValue.array(self: baml.TypeValue) -> baml.reflect.array.Type {
 }
 
@@ -5118,16 +5121,19 @@ function baml.llm.PrimitiveClient.render_prompt(self: baml.llm.PrimitiveClient, 
 
 function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst {
     load_var return_type
+    call baml.TypeValue._validate_renderable
+    pop 1
+    load_var return_type
     call baml.TypeValue.as_enum
-    store_var _7
-    load_var _7
+    store_var _8
+    load_var _8
     narrow_bind baml.reflect.enum.Type, slot=6
     pop_jump_if_false L0
-    load_var _7
+    load_var _8
     call baml.reflect.enum.Type.values
     container_len
-    store_var _10
-    load_var _10
+    store_var _11
+    load_var _11
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
@@ -5162,19 +5168,19 @@ function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.Primi
   L4:
     load_var return_type
     call baml.TypeValue.baml.ToString.to_string
-    store_var _15
+    store_var _16
     load_var return_type
     call baml.TypeValue.baml.ToString.to_string
-    store_var _20
+    store_var _21
     load_const "empty enum `"
-    load_var _15
+    load_var _16
     bin_op +
     load_const "` cannot be rendered as an LLM output schema"
     bin_op +
     load_const "E0159"
     load_const null
     load_const "empty enum `"
-    load_var _20
+    load_var _21
     bin_op +
     load_const "` cannot be rendered as an LLM output schema"
     bin_op +
@@ -6449,13 +6455,29 @@ function baml.reflect.class.Type.fields(self: baml.reflect.class.Type) -> baml.r
 function baml.reflect.class.Type.meta(self: baml.reflect.class.Type) -> baml.reflect.Meta {
 }
 
+function baml.reflect.class._new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+}
+
 function baml.reflect.class.builder(name: string) -> baml.reflect.class.Builder {
 }
 
 function baml.reflect.class.get_field(value: unknown, name: string) -> #0 {
 }
 
-function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>) -> baml.reflect.class.Type {
+function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+    load_var implementations
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type baml.reflect.interface.Implementation
+    alloc_array 0
+    store_var implementations
+
+  L0:
+    load_var2 1 2
+    load_var implementations
+    call baml.reflect.class._new
+    return
 }
 
 function baml.reflect.enum.Type.baml.reflect.TypeView.as_type(self: baml.reflect.enum.Type) -> type {
@@ -6485,6 +6507,9 @@ function baml.reflect.function.Type.params(self: baml.reflect.function.Type) -> 
 function baml.reflect.function.Type.return_type(self: baml.reflect.function.Type) -> type {
 }
 
+function baml.reflect.interface.Implementation.field(self: baml.reflect.interface.Implementation, interface_field: string, class_field: string | null) -> baml.reflect.interface.Implementation {
+}
+
 function baml.reflect.interface.Type.baml.reflect.TypeView.as_type(self: baml.reflect.interface.Type) -> type {
 }
 
@@ -6492,6 +6517,9 @@ function baml.reflect.interface.Type.implemented_by(self: baml.reflect.interface
 }
 
 function baml.reflect.interface.Type.implementors(self: baml.reflect.interface.Type) -> type[] {
+}
+
+function baml.reflect.interface.implementation() -> baml.reflect.interface.Implementation {
 }
 
 function baml.reflect.literal.Type.baml.reflect.TypeView.as_type(self: baml.reflect.literal.Type) -> type {

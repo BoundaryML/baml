@@ -141,6 +141,34 @@ pub struct ClassInitPlan {
     pub fields: Vec<usize>,
 }
 
+/// High bit of a call instruction's `ntypeargs` operand. The remaining bits
+/// retain the actual count; setting this bit asks the VM to run the M-5/M-6
+/// marker checks before entering the callee.
+pub const RUNTIME_TYPE_CHECK_FLAG: u16 = 1 << 15;
+
+/// Packs the call-site type-argument count and the marker-runtime-check flag.
+pub fn encode_call_type_args(count: usize, runtime_type_check: bool) -> u16 {
+    let count = u16::try_from(count).expect("ntypeargs fits in u16");
+    assert!(
+        count < RUNTIME_TYPE_CHECK_FLAG,
+        "call type-argument count must leave the runtime-check flag bit free"
+    );
+    count
+        | if runtime_type_check {
+            RUNTIME_TYPE_CHECK_FLAG
+        } else {
+            0
+        }
+}
+
+/// Unpacks a call-site type-argument count and marker-runtime-check flag.
+pub fn decode_call_type_args(encoded: u16) -> (usize, bool) {
+    (
+        usize::from(encoded & !RUNTIME_TYPE_CHECK_FLAG),
+        encoded & RUNTIME_TYPE_CHECK_FLAG != 0,
+    )
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that

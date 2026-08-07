@@ -16,6 +16,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use baml_compiler_diagnostics::DiagnosticId;
 use baml_type::Name;
 use smallvec::SmallVec;
 
@@ -108,6 +109,7 @@ struct CallOptions<'a> {
     type_args: &'a [baml_type::RealizedTy],
     type_defs: &'a DynTypeDefs,
     type_values: &'a [TypeValue],
+    runtime_type_check: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -295,9 +297,10 @@ impl RootHaver for NativeFrame {
 }
 
 /// Call frame — either a bytecode frame or a native continuation frame.
-// Bytecode frames are deliberately stored inline: they are the hot path, and
-// boxing them would add an allocation and indirection to every BAML call.
-#[allow(clippy::large_enum_variant)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "bytecode frames are the hot path and remain inline; native continuations are rare"
+)]
 pub enum Frame {
     Bytecode(BytecodeFrame),
     Native(NativeFrame),
@@ -376,6 +379,7 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             static_mint_cache: HashMap::new(),
             packages: Arc::new(crate::package_load::PackageIndex::default()),
+            dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
         }
     }
 
@@ -404,6 +408,7 @@ pub(crate) mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "int".to_string(),
             throws_type: baml_type::TyTemplate::Never {
@@ -696,6 +701,10 @@ pub struct BexVm {
     /// derived from them. Shared (`Arc`) across spawned VMs so workers resolve
     /// types, interfaces, and impls against the same index without rebuilding it.
     pub packages: Arc<crate::package_load::PackageIndex>,
+
+    /// Runtime-created classes and interface implementations, shared by every
+    /// VM spawned from the engine.
+    pub dynamic_dispatch: Arc<crate::package_load::DynDispatchTables>,
 
     /// Pre-resolved heap pointers for `baml.errors.*` classes, indexed by
     /// `ErrorClass` discriminant. Shared (`Arc`) across spawned VMs — resolved
@@ -1267,12 +1276,17 @@ impl BexVm {
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "VM construction explicitly wires the shared runtime registries and class tables"
+    )]
     pub fn new(
         heap: Arc<BexHeap>,
         globals: VmGlobals,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
         packages: Arc<crate::package_load::PackageIndex>,
+        dynamic_dispatch: Arc<crate::package_load::DynDispatchTables>,
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
     ) -> Self {
@@ -1323,6 +1337,7 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             static_mint_cache: HashMap::new(),
             packages,
+            dynamic_dispatch,
         }
     }
 
@@ -1761,6 +1776,9 @@ impl BexVm {
     /// Look up a class or enum object by its qualified type name. Classes and
     /// enums share one type namespace, so a name resolves to at most one object.
     pub fn lookup_type(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
+        if let Some(ptr) = self.dynamic_dispatch.class_ptr(qtn) {
+            return Some(ptr);
+        }
         let package = self.package_for_type(qtn)?;
         let local = bex_vm_types::types::LocalName {
             namespace: qtn.namespace().clone(),
@@ -2502,6 +2520,7 @@ impl BexVm {
             park_requested,
             Arc::from(Vec::<String>::new()),
             Arc::new(package_index),
+            Arc::new(crate::package_load::DynDispatchTables::default()),
             error_class_ptrs,
             panic_class_ptrs,
         ))
@@ -2776,6 +2795,7 @@ impl BexVm {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type,
             throws_type,
@@ -2856,6 +2876,7 @@ impl BexVm {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type,
             throws_type,
@@ -4732,12 +4753,17 @@ impl BexVm {
         })
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the call decoder passes independent bytecode operands and interpreter cursors"
+    )]
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
         locals_offset: StackIndex,
         arg_count: usize,
         runtime_id: Option<Value>,
+        runtime_type_check: bool,
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
@@ -4886,6 +4912,35 @@ impl BexVm {
         let callee_function_id = callee.function_id;
         let callee_capture = callee.capture;
         let callee_param_names = callee.param_names.clone();
+        let callee_param_types = callee.param_types.clone();
+        let callee_generic_param_bounds = callee.generic_param_bounds.clone();
+
+        // `unreflect(...)` deliberately hides its concrete type from TIR, so
+        // declared generic bounds must be enforced at the first boundary that
+        // sees the realized type.  Do this before arity handling, profiling,
+        // argument draining, or frame creation: a failure is a catchable
+        // CompilationError and the callee cannot observe any side effect.
+        let needs_bound_check = runtime_type_check
+            && callee_generic_param_bounds
+                .iter()
+                .any(|bounds| !bounds.is_empty());
+        let needs_argument_check = runtime_type_check
+            && callee_param_types
+                .iter()
+                .any(|param| !param.is_fully_concrete());
+        let effective_type_args = if needs_bound_check || needs_argument_check {
+            let mut type_args = if !bound_method_class_type_args.is_empty() {
+                bound_method_class_type_args.to_vec()
+            } else if !gf_type_args.is_empty() {
+                gf_type_args.to_vec()
+            } else {
+                closure_type_args.to_vec()
+            };
+            type_args.extend_from_slice(&self.pending_call_type_args);
+            type_args
+        } else {
+            Vec::new()
+        };
 
         if arg_count != callee_arity {
             return Err(VmInternalError::InvalidArgumentCount {
@@ -4893,6 +4948,20 @@ impl BexVm {
                 got: arg_count,
             }
             .into());
+        }
+        if needs_bound_check {
+            self.validate_runtime_generic_bounds(
+                &callee_name,
+                &callee_generic_param_bounds,
+                &effective_type_args,
+            )?;
+        }
+        if needs_argument_check {
+            self.validate_runtime_call_arguments(
+                &callee_param_types,
+                &effective_type_args,
+                locals_offset,
+            )?;
         }
         let capture_mask =
             VmCaptureMask::from_props(callee_capture, self.value_capture_auto_enabled);
@@ -5033,6 +5102,7 @@ impl BexVm {
                                 type_args: &callback_type_args,
                                 type_defs: &DynTypeDefs::default(),
                                 type_values: &[],
+                                runtime_type_check: false,
                             },
                             frame_idx,
                             function,
@@ -5180,6 +5250,117 @@ impl BexVm {
         Ok(None)
     }
 
+    /// Validate a callee's executable generic-bound metadata against the
+    /// realized type arguments that will seed its frame.
+    fn validate_runtime_generic_bounds(
+        &mut self,
+        callee_name: &str,
+        generic_param_bounds: &[Vec<bex_vm_types::types::InterfaceBound>],
+        type_args: &[baml_type::RealizedTy],
+    ) -> Result<(), VmError> {
+        for (index, bounds) in generic_param_bounds.iter().enumerate() {
+            let Some(actual) = type_args.get(index) else {
+                if bounds.is_empty() {
+                    continue;
+                }
+                return Err(VmInternalError::TypeSubstitution {
+                    message: format!(
+                        "generic call to `{callee_name}` omitted runtime type argument #{index}"
+                    ),
+                }
+                .into());
+            };
+            for bound in bounds {
+                let requested_args = bound
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        arg.substitute(type_args, self).map_err(|error| {
+                            VmInternalError::TypeSubstitution {
+                                message: error.to_string(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let requested_assoc = bound
+                    .assoc
+                    .iter()
+                    .map(|(name, ty)| {
+                        ty.substitute(type_args, self)
+                            .map(|ty| (name.clone(), ty))
+                            .map_err(|error| VmInternalError::TypeSubstitution {
+                                message: error.to_string(),
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if crate::package_baml::ImplResolver::new(self).type_implements(
+                    actual,
+                    &bound.interface,
+                    &requested_args,
+                    &requested_assoc,
+                ) {
+                    continue;
+                }
+
+                let expected = baml_type::RealizedTy::Interface(
+                    bound.interface.clone(),
+                    requested_args,
+                    requested_assoc,
+                    baml_type::TyAttr::default(),
+                );
+                let diagnostic = crate::package_baml::type_kinds::compiler_diagnostic(
+                    DiagnosticId::TypeMismatch,
+                    format!("type mismatch: expected {expected}, got {actual}"),
+                );
+                let error =
+                    crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
+                return Err(VmError::Thrown(error));
+            }
+        }
+        Ok(())
+    }
+
+    /// Revalidate value arguments whose declared type depends on a runtime
+    /// type argument.  Static explicit type arguments already passed this
+    /// check in TIR; marker arguments reach it with their concrete type for
+    /// the first time here (M-5), before the callee body can run.
+    fn validate_runtime_call_arguments(
+        &mut self,
+        param_types: &[baml_type::TyTemplate],
+        type_args: &[baml_type::RealizedTy],
+        locals_offset: StackIndex,
+    ) -> Result<(), VmError> {
+        for (index, param) in param_types.iter().enumerate() {
+            if param.is_fully_concrete() {
+                continue;
+            }
+            let value = self.stack[StackIndex::from_raw(locals_offset.raw() + index)];
+            if value.is_omitted() {
+                continue;
+            }
+            let matches = crate::type_match::value_matches_template(self, value, param, type_args)?;
+            if matches {
+                continue;
+            }
+            let expected = param.substitute(type_args, self).map_err(|error| {
+                VmInternalError::TypeSubstitution {
+                    message: error.to_string(),
+                }
+            })?;
+            let got = self
+                .value_concrete_ty(value)
+                .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
+            let diagnostic = crate::package_baml::type_kinds::compiler_diagnostic(
+                DiagnosticId::TypeMismatch,
+                format!("type mismatch: expected {expected}, got {got}"),
+            );
+            let error =
+                crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
+            return Err(VmError::Thrown(error));
+        }
+        Ok(())
+    }
+
     /// Convert a [`VmRustFnError`] into the corresponding [`VmError`].
     fn native_error_to_vm_error(&mut self, err: VmRustFnError) -> VmError {
         match err {
@@ -5211,6 +5392,7 @@ impl BexVm {
             locals_offset,
             arg_count,
             options.runtime_id,
+            options.runtime_type_check,
             frame_idx,
             function,
         );
@@ -5816,6 +5998,7 @@ impl BexVm {
                                 type_args: &callback_type_args,
                                 type_defs: &DynTypeDefs::default(),
                                 type_values: &[],
+                                runtime_type_check: false,
                             },
                             &mut frame_idx,
                             &mut function,
@@ -6532,7 +6715,8 @@ impl BexVm {
                 // ── Call ──────────────────────────────────────────────────────
                 OpCode::Call | OpCode::CallWithRuntimeId => {
                     let raw = read_u32_unchecked(code, pc);
-                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let (ntypeargs, runtime_type_check) =
+                        bex_vm_types::bytecode::decode_call_type_args(read_u16_unchecked(code, pc));
                     let runtime_id = if matches!(op, OpCode::CallWithRuntimeId) {
                         Some(self.stack.ensure_pop())
                     } else {
@@ -6566,6 +6750,7 @@ impl BexVm {
                             type_args: &type_args.tys,
                             type_defs: &type_args.defs,
                             type_values: &type_args.values,
+                            runtime_type_check,
                         },
                         frame_idx,
                         function,
@@ -6580,7 +6765,8 @@ impl BexVm {
                 // `[arg_0 (receiver), …, arg_{nargs-1}, iface_type, method_name]`.
                 OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
                     let nargs = read_u16_unchecked(code, pc) as usize;
-                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let (ntypeargs, runtime_type_check) =
+                        bex_vm_types::bytecode::decode_call_type_args(read_u16_unchecked(code, pc));
                     let runtime_id = if matches!(op, OpCode::VirtualCallWithRuntimeId) {
                         Some(self.stack.ensure_pop())
                     } else {
@@ -6679,6 +6865,7 @@ impl BexVm {
                             type_args: &type_args,
                             type_defs: &method_type_args.defs,
                             type_values: &[],
+                            runtime_type_check,
                         },
                         frame_idx,
                         function,
@@ -6781,6 +6968,7 @@ impl BexVm {
                             locals_offset,
                             full_arity,
                             runtime_id,
+                            false,
                             frame_idx,
                             function,
                         )? {
@@ -6800,6 +6988,7 @@ impl BexVm {
                             locals_offset,
                             arg_count,
                             runtime_id,
+                            false,
                             frame_idx,
                             function,
                         )? {

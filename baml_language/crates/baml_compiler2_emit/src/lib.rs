@@ -199,7 +199,8 @@ fn build_interface_def(
                         bounds: &TypeVarBoundsMap,
                         params: &[FunctionParamData],
                         return_type: Option<TypeRefId>,
-                        throws: Option<TypeRefId>|
+                        throws: Option<TypeRefId>,
+                        default_fqn: Option<String>|
      -> InterfaceMethodDef {
         // An untyped parameter is a syntax-level error, so it cannot reach emit; the
         // top type keeps the positional layout intact if one ever did.
@@ -230,6 +231,7 @@ fn build_interface_def(
             kwargs,
             returns: return_type.map_or_else(void, |id| lower_rt(store, id, scope, bounds)),
             errors: throws.map_or_else(void, |id| lower_rt(store, id, scope, bounds)),
+            default_fqn,
         }
     };
 
@@ -287,6 +289,7 @@ fn build_interface_def(
                 &m.params,
                 m.return_type,
                 m.throws,
+                None,
             )
         })
         .collect();
@@ -309,6 +312,7 @@ fn build_interface_def(
             &f.params,
             f.return_type,
             f.throws,
+            Some(def_to_item_ref(db, Definition::Function(loc)).to_string()),
         )
     }));
 
@@ -3693,6 +3697,7 @@ fn emit_file_group(
                 }], // type not needed for chainer dispatch
                 param_has_default: vec![false],
                 display_type_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
                 throws_type: baml_type::TyTemplate::Never {
@@ -3824,6 +3829,20 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
     f.docstring.clone_from(&sig.docstring);
     f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
+    f.generic_param_bounds = sig
+        .generic_param_bounds
+        .iter()
+        .map(|bounds| {
+            bounds
+                .iter()
+                .map(|bound| bex_vm_types::types::InterfaceBound {
+                    interface: bound.interface.clone(),
+                    args: bound.args.clone(),
+                    assoc: bound.assoc.clone(),
+                })
+                .collect()
+        })
+        .collect();
     f.display_param_types.clone_from(&sig.display_param_types);
     f.display_return_type.clone_from(&sig.display_return_type);
 }
@@ -4305,6 +4324,32 @@ fn compute_function_metadata<'db>(
         (null_template(), "null".to_string())
     };
 
+    let runtime_generic_param_bounds = frame_params
+        .iter()
+        .map(|param| {
+            generic_param_bounds
+                .get(param.name())
+                .into_iter()
+                .flatten()
+                .filter_map(|bound| {
+                    let Ty::Interface(interface, args, assoc, _) = bound else {
+                        // Declaration validation already rejects non-interface
+                        // bounds. Keep malformed recovery metadata inert.
+                        return None;
+                    };
+                    Some(baml_compiler2_mir::RuntimeInterfaceBound {
+                        interface: interface.clone(),
+                        args: args.iter().map(&to_template).collect(),
+                        assoc: assoc
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), to_template(ty)))
+                            .collect(),
+                    })
+                })
+                .collect()
+        })
+        .collect();
+
     baml_compiler2_mir::RuntimeSignature {
         param_names,
         param_types,
@@ -4316,6 +4361,7 @@ fn compute_function_metadata<'db>(
         docstring: func.docstring.clone(),
         name: Some(func.name.to_string()),
         display_type_params,
+        generic_param_bounds: runtime_generic_param_bounds,
         display_param_types,
         display_return_type,
     }
@@ -5265,6 +5311,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
         throws_type: baml_type::TyTemplate::Never {
@@ -5577,6 +5624,7 @@ fn compile_init_function<'db>(
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
                     display_type_params: Vec::new(),
+                    generic_param_bounds: Vec::new(),
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
                     throws_type: baml_type::TyTemplate::Never {
@@ -5655,6 +5703,7 @@ fn compile_init_function<'db>(
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
         throws_type: baml_type::TyTemplate::Never {

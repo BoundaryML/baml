@@ -454,6 +454,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                     _ => None,
                 })
                 .collect(),
+            witnesses: Vec::new(),
         };
         for class_ptr in classes.values() {
             let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
