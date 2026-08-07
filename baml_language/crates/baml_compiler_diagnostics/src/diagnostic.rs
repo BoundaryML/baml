@@ -355,6 +355,12 @@ pub enum DiagnosticId {
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
 
+    // Mounted packages (BEP-066 slice 6a, E0158)
+    /// A call whose callee resolves into a MOUNTED (source-less) dependency
+    /// package. References type from the mounted interface; calls need a
+    /// loc-backed resolution for lowering, which lands in a later slice-6a PR.
+    MountedPackageCallUnsupported,
+
     // Projection bases (E0156)
     /// The dotted projection shorthand (`Base.Member`) was written with the
     /// interface itself as the base (`Iterator.Element`). A projection's base
@@ -577,6 +583,7 @@ impl DiagnosticId {
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
             DiagnosticId::InterfaceProjectionBase => "E0156",
+            DiagnosticId::MountedPackageCallUnsupported => "E0158",
         }
     }
 }

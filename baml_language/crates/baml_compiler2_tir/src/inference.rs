@@ -223,6 +223,21 @@ pub(crate) fn interface_associated_type_names_for_qtn(
     db: &dyn crate::Db,
     qtn: &crate::ty::QualifiedTypeName,
 ) -> FxHashSet<Name> {
+    // A MOUNTED (source-less) interface answers from its exported row; its
+    // `requires` rows are the pre-flattened transitive closure, so one level
+    // of name collection per entry covers inheritance (BEP-066 slice 6a).
+    if let Some(crate::package_interface::ExportedType::Interface {
+        associated_types,
+        requires,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, qtn)
+    {
+        let mut names: FxHashSet<Name> = associated_types.iter().map(|a| a.name.clone()).collect();
+        for required in requires {
+            names.extend(interface_associated_type_names_for_qtn(db, &required.name));
+        }
+        return names;
+    }
     let pkg_id = PackageId::new(db, qtn.package().clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let Some(Definition::Interface(iface_loc)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
@@ -809,6 +824,96 @@ pub enum MemberResolution<'db> {
         /// position: the closure flattening dedups by name and numbers differently.
         field_index: u32,
         field: Name,
+    },
+    /// A callee that resolved into a MOUNTED (source-less) dependency package
+    /// (BEP-066 slice 6a). Loc-free by construction: the identity is carried as
+    /// plain names — exactly the material MIR's `ItemRef` is built from — and the
+    /// call-site facts TIR/MIR consult (receiver convention, generic params and
+    /// bounds) are copied OUT of the exported signature at resolution time. All
+    /// data is owned (never a borrow into another query's storage — the
+    /// incremental-invalidation rule `PackageResolutionContext` documents);
+    /// `Arc`-wrapped because resolutions are cloned freely during MIR lowering.
+    External(Arc<ExternalCallable>),
+}
+
+/// The loc-free facts of a mounted-package callee — see
+/// [`MemberResolution::External`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalCallable {
+    /// Which linked symbol the call (or value reference) lowers to.
+    pub target: ExternalCallTarget,
+    /// Whether the callee's first declared parameter is the `self` receiver
+    /// (drives MIR's receiver-prepending on method-shaped call sites).
+    pub takes_self: bool,
+    /// The receiver-owner's generic params when they are supplied at the CALL
+    /// site (the static/UFCS form on a generic mounted class); empty for
+    /// bound-receiver accesses (the receiver's own class args seed the frame),
+    /// free functions, and interface targets. Mirrors the source path's
+    /// `treat_as_static_method` distinction in `callee_declared_generics`.
+    pub owner_generic_params: Vec<crate::ty::ParamTy>,
+    /// The callee's exported generic params: user-declared params first, then
+    /// any synthetic effect params. Only user-declared params are call-site
+    /// suppliable ([`Self::user_generic_params`]), and `RuntimeGenericLayout`
+    /// erases effects from every runtime frame.
+    pub generic_params: Vec<crate::ty::ParamTy>,
+    /// Per-param interface-bound conjunctions, parallel to
+    /// [`generic_params`](Self::generic_params) (when synthetic effect params
+    /// are present they are unbounded, so their entries are empty).
+    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
+}
+
+impl ExternalCallable {
+    /// The user-declared (call-site suppliable) prefix of
+    /// [`generic_params`](Self::generic_params) with its bounds — synthetic
+    /// effect params are always inferred, never written.
+    pub fn user_generic_params(
+        &self,
+    ) -> impl Iterator<Item = (&crate::ty::ParamTy, &Vec<baml_type::Interface>)> {
+        self.generic_params
+            .iter()
+            .zip(self.generic_param_bounds.iter())
+            .filter(|(param, _)| !baml_type::is_synthetic_effect_param(param.name()))
+    }
+
+    /// The callee's short name, for diagnostics.
+    pub fn display_name(&self) -> Name {
+        match &self.target {
+            ExternalCallTarget::Free { name, .. } | ExternalCallTarget::Method { name, .. } => {
+                name.clone()
+            }
+            ExternalCallTarget::Interface { method, .. } => method.clone(),
+        }
+    }
+}
+
+/// The linked-symbol identity of a mounted-package callee. Names only — the
+/// same fields MIR's `ItemRef::Free`/`ItemRef::Method` carry, so lowering is a
+/// pure repackaging (and matches the symbol the library's own emit exported).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalCallTarget {
+    /// A free function: `pkg.ns….name`.
+    Free {
+        package: Name,
+        namespace: Vec<Name>,
+        name: Name,
+    },
+    /// A plain (non-`implements`) class method: `pkg.ns….Class.name` — the
+    /// exact symbol the library's `def_to_item_ref` exported for it.
+    Method {
+        package: Name,
+        namespace: Vec<Name>,
+        class: Name,
+        name: Name,
+    },
+    /// A method reached through an interface (an `implements`-block method on
+    /// a concrete mounted receiver, or any interface-dispatched member whose
+    /// declaring interface is mounted): the emitted callee is the interface's
+    /// method slot (`ifacepkg.ns….Iface.method`) and the VM resolves the
+    /// receiver's registered impl — the same routing MIR uses for
+    /// [`MemberResolution::InterfaceConcreteMethod`].
+    Interface {
+        iface: crate::ty::QualifiedTypeName,
+        method: Name,
     },
 }
 
@@ -2716,6 +2821,14 @@ pub fn collect_type_aliases<'db>(
 /// lookup, but resolved on demand and reaching every dependency (not only the aliases a
 /// package happens to re-export).
 pub fn alias_def(db: &dyn crate::Db, qtn: &crate::ty::QualifiedTypeName) -> Option<Ty> {
+    // A mounted (source-less) package's aliases live pre-resolved on its
+    // interface blob (BEP-066 slice 6a).
+    if let Some(row) = crate::package_interface::mounted_type_row(db, qtn) {
+        let crate::package_interface::ExportedType::TypeAlias { resolved, .. } = row else {
+            return None;
+        };
+        return Some(resolved.clone());
+    }
     let pkg_id = PackageId::new(db, qtn.package().clone());
     let items = baml_compiler2_ppir::package_items(db, pkg_id);
     match items.lookup_type(qtn.namespace(), qtn.name())? {
@@ -2737,6 +2850,14 @@ pub fn enum_variants<'db>(
     res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
     enum_name: &crate::ty::QualifiedTypeName,
 ) -> Option<Vec<Name>> {
+    // A mounted (source-less) package's enums live on its interface blob
+    // (BEP-066 slice 6a); its raw items are empty by design.
+    if let Some(row) = crate::package_interface::mounted_type_row(db, enum_name) {
+        let crate::package_interface::ExportedType::Enum { variants, .. } = row else {
+            return None;
+        };
+        return Some(variants.clone());
+    }
     let items = res_ctx.items_for_package(db, enum_name.package())?;
     let Some(Definition::Enum(enum_loc)) =
         items.lookup_type(enum_name.namespace(), enum_name.name())

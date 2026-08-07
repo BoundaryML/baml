@@ -565,7 +565,7 @@ fn reflect_type_shorthand_requires_baml_package_access() {
 }
 
 #[test]
-fn keyword_shorthands_hide_non_exported_baml_members() {
+fn keyword_shorthands_follow_exported_baml_surface() {
     let mut db = make_db();
     add_compiler2_virtual_file(
         &mut db,
@@ -605,8 +605,8 @@ fn keyword_shorthands_hide_non_exported_baml_members() {
     assert!(
         exported_baml
             .lookup_type(&reflect_ns, &raw_only_type)
-            .is_none(),
-        "interfaces are not part of this branch's exported type surface"
+            .is_some(),
+        "interfaces are part of the enriched exported type surface"
     );
     assert!(
         exported_baml
@@ -618,8 +618,8 @@ fn keyword_shorthands_hide_non_exported_baml_members() {
     assert!(
         res_ctx
             .resolve_type(&db, &[Name::new("reflect"), raw_only_type], &[],)
-            .is_none(),
-        "the reflect shorthand must not expose a raw-only type"
+            .is_some(),
+        "the reflect shorthand must expose an exported interface"
     );
     assert!(
         res_ctx

@@ -11919,6 +11919,37 @@ fn union_fuzz_f16_unqualified_ambiguous_union_field_is_e0131() {
     );
 }
 
+#[test]
+fn conjunction_ambiguous_source_fields_keep_field_diagnostic() {
+    assert_compile_error_contains(
+        r#"
+        interface Left { value: string }
+        interface Right { value: int }
+        function read<T extends Left & Right>(value: T) -> string {
+            return value.value
+        }
+        "#,
+        "field `value` on class",
+    );
+}
+
+#[test]
+fn conjunction_ambiguous_source_fields_diagnostic_names_ambiguity() {
+    // The assertion above pins the field; this pins the ambiguity wording so a
+    // different `value`-mentioning diagnostic (unknown field, bound failure)
+    // cannot satisfy the suite (PR #4332 review).
+    assert_compile_error_contains(
+        r#"
+        interface Left { value: string }
+        interface Right { value: int }
+        function read<T extends Left & Right>(value: T) -> string {
+            return value.value
+        }
+        "#,
+        "is ambiguous because it is declared by multiple interfaces",
+    );
+}
+
 /// F17 [bad-diagnostic]: a failed `.as<Cargo<int>>` projection drops the `<int>`
 /// type argument from the message (`does not implement interface Cargo`), which
 /// is misleading because the type DOES implement `Cargo`, just at `<string>`.

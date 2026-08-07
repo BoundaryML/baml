@@ -393,7 +393,7 @@ impl<'db> ImplIndex<'db> {
             .iter()
             .filter(|(imp, _)| {
                 crate::facts::impl_data(db, imp.loc())
-                    .is_some_and(|data| data.interface == iface.loc())
+                    .is_some_and(|data| data.interface_loc() == Some(iface.loc()))
             })
             .map(|(_, export)| export.id.clone())
             .collect();
@@ -543,7 +543,9 @@ fn export_impl(
     seen_bases: &mut std::collections::HashMap<String, u32>,
 ) -> Option<ImplExport> {
     let data = crate::facts::impl_data(db, imp.loc())?;
-    let iface: crate::Interface<'_> = data.interface.into();
+    // Impls of a MOUNTED (source-less) interface are not exported through the
+    // tooling surface yet — the interface has no handle to link against.
+    let iface: crate::Interface<'_> = data.interface_loc()?.into();
     let iface_qtn = iface.qualified_name(db);
     let pkg = baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package;
 

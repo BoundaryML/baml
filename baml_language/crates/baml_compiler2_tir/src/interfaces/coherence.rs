@@ -12,7 +12,7 @@ use baml_compiler2_hir::package::PackageId;
 use baml_type::{ParamTy, Ty, TypeName};
 
 use crate::{
-    interfaces::{ImplData, impl_data, impl_data_source_map, interface_loc_qtn, package_impl_locs},
+    interfaces::{ImplData, impl_data, impl_data_source_map, package_impl_locs},
     type_context::GlobalTypeContext,
     unify::{
         EnumVariants, Overlap, TypeBindings, chase_var, contains_bound_typevar, enum_variant_names,
@@ -34,13 +34,21 @@ fn overlap_violation(overlap: Overlap) -> Option<bool> {
 /// A coherence violation: two implementations of the same interface that overlap,
 /// or that could not be proven disjoint. With no specialization, either is a hard
 /// error; `indeterminate` lets the caller word the diagnostic correctly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoherenceViolation {
     /// The offending impl. Always owned by the package being checked, so the
     /// diagnostic lands on a file the user can edit.
     pub primary: Span,
-    /// The impl it overlaps with. May live in a dependency package.
-    pub secondary: Span,
+    /// The impl it overlaps with. May live in a dependency package; `None`
+    /// when the partner is a MOUNTED (source-less) dependency's blob row
+    /// (BEP-066 slice 6a), which has no span anywhere — the diagnostic is
+    /// attributed primary-only, with the partner rendered structurally in
+    /// [`secondary_desc`](Self::secondary_desc).
+    pub secondary: Option<Span>,
+    /// A structural rendering of a span-less partner (`implement I for T` of
+    /// a mounted dependency); `None` whenever [`secondary`](Self::secondary)
+    /// carries a real span.
+    pub secondary_desc: Option<String>,
     /// `true` when overlap could be neither proven nor disproven (conservatively
     /// rejected) rather than a definite overlap.
     pub indeterminate: bool,
@@ -72,11 +80,15 @@ pub fn package_coherence_diagnostics<'db>(
     // on the start offset alone makes two impls at the same offset in *different* files
     // tie and fall back to a nondeterministic order.
     own.sort_by_key(|p| {
-        (
-            p.span.file_id.as_u32(),
-            u32::from(p.span.range.start()),
-            u32::from(p.span.range.end()),
-        )
+        // Span-less (mounted) rows sort last; they never carry a primary
+        // diagnostic anyway (the own package being checked has source).
+        p.span.map_or((u32::MAX, u32::MAX, u32::MAX), |span| {
+            (
+                span.file_id.as_u32(),
+                u32::from(span.range.start()),
+                u32::from(span.range.end()),
+            )
+        })
     });
     let deps = baml_compiler2_hir::package::package_dependency_closure(db, pkg_id);
 
@@ -96,26 +108,39 @@ pub fn package_coherence_diagnostics<'db>(
 
     let mut violations = Vec::new();
     for (i, own_impl) in own.iter().enumerate() {
+        // A span-less own row cannot carry a diagnostic (only mounted rows
+        // are span-less, and a mounted package is never the one being
+        // checked — it has no files).
+        let Some(own_span) = own_impl.span else {
+            continue;
+        };
         // own × own — each unordered pair once; the later impl carries the error.
         for other in &own[i + 1..] {
+            let Some(other_span) = other.span else {
+                continue;
+            };
             if let Some(indeterminate) = overlap_violation(impls_conflict(
                 db, pkg_id, own_impl, other, res_ctx, &aliases,
             )) {
                 violations.push(CoherenceViolation {
-                    primary: other.span,
-                    secondary: own_impl.span,
+                    primary: other_span,
+                    secondary: Some(own_span),
+                    secondary_desc: None,
                     indeterminate,
                 });
             }
         }
-        // own × dependency — the owning package's impl carries the error.
+        // own × dependency — the owning package's impl carries the error. A
+        // mounted dependency's row has no span: primary-only attribution,
+        // the partner rendered structurally (BEP-066 slice 6a).
         for dep in &dep_impls {
             if let Some(indeterminate) =
                 overlap_violation(impls_conflict(db, pkg_id, own_impl, dep, res_ctx, &aliases))
             {
                 violations.push(CoherenceViolation {
-                    primary: own_impl.span,
+                    primary: own_span,
                     secondary: dep.span,
+                    secondary_desc: dep.span.is_none().then(|| dep.render_structural()),
                     indeterminate,
                 });
             }
@@ -132,20 +157,35 @@ fn package_impls_with_spans<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<PreparedImpl<'db>> {
-    package_impl_locs(db, pkg_id)
+    let mut out: Vec<PreparedImpl<'db>> = package_impl_locs(db, pkg_id)
         .iter()
         .filter_map(|&loc| {
             let data = impl_data(db, loc).as_ref().ok()?;
             let span = impl_data_source_map(db, loc).impl_span;
             Some(PreparedImpl {
                 data,
-                span,
-                interface: interface_loc_qtn(db, data.interface),
+                span: Some(span),
+                interface: data.interface_qtn(db),
                 bounds: data.generic_params.iter().cloned().collect(),
                 valid_subject: OnceCell::new(),
             })
         })
-        .collect()
+        .collect();
+    // A MOUNTED package's blob rows participate span-less (BEP-066 slice 6a):
+    // a user impl overlapping a dependency's exported impl is a real E0132,
+    // attributed primary-only at the user's impl.
+    out.extend(
+        crate::interfaces::mounted_impl_datas(db, pkg_id)
+            .iter()
+            .map(|data| PreparedImpl {
+                data,
+                span: None,
+                interface: data.interface_qtn(db),
+                bounds: data.generic_params.iter().cloned().collect(),
+                valid_subject: OnceCell::new(),
+            }),
+    );
+    out
 }
 
 /// An impl prepared for the pairwise overlap loops: the pair-invariant facts —
@@ -154,7 +194,8 @@ fn package_impls_with_spans<'db>(
 /// impl participates in.
 struct PreparedImpl<'db> {
     data: &'db ImplData<'db>,
-    span: Span,
+    /// The impl's source span; `None` for a mounted (source-less) blob row.
+    span: Option<Span>,
     /// The implemented interface, or `None` when it did not resolve (such an
     /// impl conflicts with nothing).
     interface: Option<TypeName>,
@@ -170,6 +211,20 @@ struct PreparedImpl<'db> {
 }
 
 impl<'db> PreparedImpl<'db> {
+    /// A structural rendering of a span-less impl for diagnostics:
+    /// `implement I for T` in user-facing type syntax.
+    fn render_structural(&self) -> String {
+        let iface = self
+            .interface
+            .as_ref()
+            .map(|qtn| qtn.render_dotted(false))
+            .unwrap_or_else(|| "<unresolved>".to_string());
+        format!(
+            "implement {iface} for {}",
+            self.data.for_ty_pattern.render_user_facing()
+        )
+    }
+
     /// Whether this impl's for-target is a valid implementor, judged on its
     /// normalized spelling.
     ///

@@ -460,6 +460,9 @@ fn resolve_field_access_at(
                 range: *source_map.field_name_spans.get(*field_index as usize)?,
             })
         }
+        // A mounted (source-less) dependency's callee has no source anywhere in
+        // this workspace — nothing to navigate to (BEP-066 slice 6a).
+        MemberResolution::External(_) => None,
     }
 }
 

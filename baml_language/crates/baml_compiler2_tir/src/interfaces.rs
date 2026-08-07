@@ -557,42 +557,88 @@ pub fn resolve_interface_required_methods<'db>(
         .required_methods
         .iter()
         .map(|sig| {
-            let mut diagnostics = Vec::new();
             let spec = InterfaceMethodSpec::from_required(iface, sig);
-
-            // The method's own generics join the interface's for lowering;
-            // its bounds resolve in the *interface* scope (a method-level
-            // bound may reference the interface's parameters).
-            let method_generics =
-                crate::generic_env::append_params(&scope.generics, &spec.generic_param_names());
-            let own_params = &method_generics[scope.generics.len()..];
-            let mut bounds = scope.bounds.clone();
-            let mut generic_params = Vec::new();
-            for (param, data) in own_params.iter().zip(spec.generic_bounds()) {
-                let ifaces = lower_generic_param_interface_bounds(
-                    db,
-                    spec.bound_store(),
-                    &data.bounds,
-                    scope.pkg_items,
-                    &scope.ns,
-                    &method_generics,
-                    &mut diagnostics,
-                );
-                bounds.insert(param.clone(), ifaces.clone());
-                generic_params.push((param.clone(), ifaces));
-            }
-
-            let function_ty =
-                spec.to_function_ty(&scope.ctx_with(&method_generics, &bounds), &mut diagnostics);
-
-            ResolvedInterfaceMethod {
-                name: sig.name.clone(),
-                function_ty,
-                generic_params,
-                diagnostics,
-            }
+            resolve_interface_method_spec(db, &scope, &spec, sig.name.clone())
         })
         .collect()
+}
+
+/// Resolve every *default* method signature of an interface at its declaration
+/// site, in declaration order (parallel to `InterfaceData::default_methods`).
+///
+/// The default-method twin of [`resolve_interface_required_methods`], sharing
+/// [`resolve_interface_method_spec`]: the signature is lowered against the
+/// interface's own scope, so `Self` stays the symbolic rigid `Self` type
+/// variable and `Self.Assoc` mentions stay symbolic projections. This differs
+/// from [`crate::callable::function_signature_ty`], which lowers a default
+/// method *without* a `Self` binding (its `Self` mentions become `Ty::Error`) —
+/// use this when the symbolic declaration-site surface is needed (the
+/// `package_interface` export does).
+#[salsa::tracked(returns(ref))]
+pub fn resolve_interface_default_methods<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Vec<ResolvedInterfaceMethod> {
+    use crate::builder::interface_resolution::InterfaceMethodSpec;
+
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let scope = InterfaceDeclScope::new(db, iface_loc);
+
+    iface
+        .default_methods
+        .iter()
+        .map(|&func_loc| {
+            let spec = InterfaceMethodSpec::from_default(db, func_loc);
+            let name = baml_compiler2_ppir::item_data::function_data(db, func_loc)
+                .name
+                .clone();
+            resolve_interface_method_spec(db, &scope, &spec, name)
+        })
+        .collect()
+}
+
+/// Shared spine of [`resolve_interface_required_methods`] and
+/// [`resolve_interface_default_methods`]: lower one normalized method spec in
+/// the interface's declaration scope.
+fn resolve_interface_method_spec<'db>(
+    db: &'db dyn crate::Db,
+    scope: &InterfaceDeclScope<'db>,
+    spec: &crate::builder::interface_resolution::InterfaceMethodSpec<'db>,
+    name: Name,
+) -> ResolvedInterfaceMethod {
+    let mut diagnostics = Vec::new();
+
+    // The method's own generics join the interface's for lowering;
+    // its bounds resolve in the *interface* scope (a method-level
+    // bound may reference the interface's parameters).
+    let method_generics =
+        crate::generic_env::append_params(&scope.generics, &spec.generic_param_names());
+    let own_params = &method_generics[scope.generics.len()..];
+    let mut bounds = scope.bounds.clone();
+    let mut generic_params = Vec::new();
+    for (param, data) in own_params.iter().zip(spec.generic_bounds()) {
+        let ifaces = lower_generic_param_interface_bounds(
+            db,
+            spec.bound_store(),
+            &data.bounds,
+            scope.pkg_items,
+            &scope.ns,
+            &method_generics,
+            &mut diagnostics,
+        );
+        bounds.insert(param.clone(), ifaces.clone());
+        generic_params.push((param.clone(), ifaces));
+    }
+
+    let function_ty =
+        spec.to_function_ty(&scope.ctx_with(&method_generics, &bounds), &mut diagnostics);
+
+    ResolvedInterfaceMethod {
+        name,
+        function_ty,
+        generic_params,
+        diagnostics,
+    }
 }
 
 /// Realize an interface associated type's default (from [`interface_associated_type_default`])
@@ -630,6 +676,26 @@ pub(crate) fn existential_associated_default(
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
+    // A MOUNTED (source-less) interface's defaults live pre-lowered (symbolic
+    // `Self`) on its exported row — realization is pure substitution
+    // (BEP-066 slice 6a).
+    if let Some(crate::package_interface::ExportedType::Interface {
+        self_param,
+        generic_params,
+        associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, qtn)
+    {
+        let assoc = associated_types.iter().find(|a| &a.name == member)?;
+        let default = assoc.default.as_ref()?;
+        return Some(realize_associated_default(
+            default,
+            generic_params,
+            args,
+            self_param,
+            self_ty,
+        ));
+    }
     let items = res_ctx.items_for_package(db, qtn.package())?;
     let Definition::Interface(iface_loc) = items.lookup_type(qtn.namespace(), qtn.name())? else {
         return None;
@@ -1236,7 +1302,8 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         child_ancestors.insert(loc);
 
         let iface_env = crate::generic_env::interface_generic_env(db, loc);
-        let (_, iface_params) = iface_env.interface_param_parts();
+        let (self_param, iface_params) = iface_env.interface_param_parts();
+        let self_param = self_param.clone();
         let mut bindings = generics::bind_type_vars(iface_params, &args);
         for (name, ty) in &associated_bindings {
             let param = iface_env
@@ -1268,10 +1335,27 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
             let parent_args = match &iface.type_refs[parent].kind {
                 baml_compiler2_hir::type_ref::TypeRefKind::Path { generic_args, .. } => {
                     let mut diags = Vec::new();
+                    // `Self` in a requirement's generic *argument* refers to the
+                    // requiring interface's implementor, exactly as in an
+                    // associated-type binding value (`Item = Self.Item`): lower it
+                    // through a scope that resolves `Self` as the requiring
+                    // interface's rigid `Self` bounded by its realized constraint
+                    // (`self_bound`), so a member pinned there collapses to its
+                    // witness and an unpinned one stays a symbolic projection.
+                    // (Previously this scope carried no `Self` at all, silently
+                    // lowering `requires P<Self>` / `requires P<Self.X>` arguments
+                    // to `Ty::Error`.)
+                    let mut generic_params: Vec<ParamTy> = bindings.keys().cloned().collect();
+                    if !generic_params.contains(&self_param) {
+                        generic_params.push(self_param.clone());
+                    }
+                    let mut arg_bounds = iface_bounds.clone();
+                    if let Some(self_bound) = &self_bound {
+                        arg_bounds.insert(self_param.clone(), vec![self_bound.clone()]);
+                    }
                     generic_args
                         .iter()
                         .map(|&arg| {
-                            let generic_params: Vec<_> = bindings.keys().cloned().collect();
                             crate::generics::substitute_ty(
                                 &crate::lower_type_expr::lower_type_ref(
                                     &iface.type_refs,
@@ -1281,8 +1365,11 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                                         package_items: parent_pkg_items,
                                         ns_context: &pkg_info.namespace_path,
                                         generic_params: &generic_params,
-                                        bounds: iface_bounds,
-                                        self_ty: None,
+                                        bounds: &arg_bounds,
+                                        self_ty: Some(Ty::TypeVar(
+                                            self_param.clone(),
+                                            TyAttr::default(),
+                                        )),
                                     },
                                     &mut diags,
                                 ),
@@ -1331,6 +1418,49 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
     out
 }
 
+/// The transitive `requires` closure of `iface_loc`, realized at the
+/// interface's *own declaration scope* and excluding the interface itself:
+/// generic arguments are the interface's declared parameters as rigid
+/// `TypeVar`s and `Self` stays symbolic (a projection `Self.X` written at a
+/// `requires` site survives as a symbolic `AssociatedTypeProjection` over the
+/// rigid `Self`). Each entry is the same `(loc, args, assoc)` triple
+/// [`interface_closure_locs_with_args_and_assoc`] walks — one edge-lowering,
+/// two consumers — repackaged loc-free as a [`baml_type::Interface`]
+/// constraint.
+///
+/// Associated-type defaults are NOT filled (`fill_associated_defaults =
+/// false`): the closure is anchored on a *rigid* `Self` whose eventual
+/// implementor may override a default, so an unpinned associated type is left
+/// absent rather than collapsed to the interface's default — the same rule the
+/// interface's own default bodies resolve under. A consumer realizing the
+/// closure at a concrete receiver substitutes its arguments/`Self` and can fill
+/// remaining defaults from the exported associated-type rows.
+///
+/// This is the derivation behind `ExportedType::Interface::requires`
+/// (`package_interface`), pre-flattened so a source-less consumer can read the
+/// closure without resolving `requires` edges through locs.
+pub(crate) fn interface_requires_closure_symbolic<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Vec<baml_type::Interface> {
+    let env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let (_, declared_params) = env.interface_param_parts();
+    let identity_args: Vec<Ty> = declared_params
+        .iter()
+        .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+        .collect();
+    interface_closure_locs_with_args_and_assoc(db, iface_loc, &identity_args, &[], false)
+        .into_iter()
+        // The walk yields the root first (and, cycle-guarded, never again);
+        // `requires` is the proper closure.
+        .filter(|(loc, _, _)| *loc != iface_loc)
+        .filter_map(|(loc, args, assoc)| {
+            let qtn = interface_loc_qtn(db, loc)?;
+            Some(baml_type::Interface::new(qtn, args, assoc))
+        })
+        .collect()
+}
+
 /// Does interface constraint `sub` transitively (and *properly*) require `sup`?
 ///
 /// Walks `sub`'s `requires` closure instantiated at `sub`'s generic arguments and
@@ -1355,6 +1485,44 @@ pub fn interface_requires<'db>(
     mut equivalent: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     if sub.name == sup.name {
+        return false;
+    }
+    // A MOUNTED (source-less) `sub`: its exported `requires` rows are the
+    // pre-flattened transitive closure at identity args with symbolic `Self`
+    // — realize by substituting `sub`'s generic arguments and compare
+    // (BEP-066 slice 6a). Two conservative gaps vs. the source walk, both
+    // fail-closed (`false`, never a wrong `true`): a member pinned at the
+    // walk root stays a symbolic `Self.<member>` projection rather than
+    // collapsing to `sub`'s written witness, and unfilled defaults are left
+    // absent (the export's rigid-`Self` rule) — so a `sup` pinning such a
+    // member won't match.
+    if let Some(crate::package_interface::ExportedType::Interface {
+        generic_params,
+        requires,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &sub.name)
+    {
+        let bindings = generics::bind_type_vars(generic_params, &sub.generics);
+        for required in requires {
+            let realized = required.map_tys(|ty| generics::substitute_ty(ty, &bindings));
+            if realized.name == sup.name
+                && realized.generics.len() == sup.generics.len()
+                && realized
+                    .generics
+                    .iter()
+                    .zip(sup.generics.iter())
+                    .all(|(a, b)| equivalent(a, b))
+                && sup.associated_types.iter().all(|(sup_name, sup_ty)| {
+                    realized
+                        .associated_types
+                        .iter()
+                        .find(|(name, _)| name == sup_name)
+                        .is_some_and(|(_, ty)| equivalent(ty, sup_ty))
+                })
+            {
+                return true;
+            }
+        }
         return false;
     }
     let Some(pkg_items) = res_ctx.items_for_package(db, sub.name.package()) else {

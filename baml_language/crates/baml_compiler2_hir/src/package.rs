@@ -368,6 +368,53 @@ mod tests {
     }
 }
 
+/// Package names a mounted blob may NOT claim (BEP-066 slice 6a): the
+/// hardcoded stdlib arms of [`package_dependencies`] plus the names
+/// `file_package` can assign to real files (`user`, `env`) and the `root`
+/// self-reference keyword. A mounted entry under any of these is ignored
+/// entirely — it never becomes a dependency and `package_interface` never
+/// serves its blob — so a mount can never shadow the stdlib or the user's own
+/// package. Kept in lockstep with the hardcoded arms below (same maintenance
+/// story as those arms themselves).
+const RESERVED_PACKAGE_NAMES: &[&str] = &[
+    "baml", "boundary", "testing", "assert", "log", "user", "root", "env",
+];
+
+/// Whether `name` is reserved against mounting — see `RESERVED_PACKAGE_NAMES`.
+pub fn is_reserved_package_name(name: &str) -> bool {
+    RESERVED_PACKAGE_NAMES.contains(&name)
+}
+
+/// The names of every mounted source-less dependency package (BEP-066 slice
+/// 6a): the keys of the [`baml_workspace::MountedPackages`] input, minus any
+/// reserved name ([`is_reserved_package_name`] — a blob may not shadow the
+/// stdlib, `user`, `root`, or `env`). Deterministically ordered (`BTreeMap`
+/// keys). Empty for databases that mount nothing.
+///
+/// Reading the input inside a tracked query records a dependency on the mount
+/// map, so mounting/unmounting invalidates dependents for free.
+pub fn mounted_package_names(db: &dyn crate::Db) -> Vec<Name> {
+    let Some(mounted) = db.mounted_packages() else {
+        return Vec::new();
+    };
+    mounted
+        .by_package(db)
+        .keys()
+        .filter(|name| !is_reserved_package_name(name))
+        .map(|name| Name::new(name.as_str()))
+        .collect()
+}
+
+/// Whether `name` is a mounted source-less dependency package (a
+/// non-reserved key of the `MountedPackages` input).
+pub fn is_mounted_package(db: &dyn crate::Db, name: &Name) -> bool {
+    if is_reserved_package_name(name.as_str()) {
+        return false;
+    }
+    db.mounted_packages()
+        .is_some_and(|mounted| mounted.by_package(db).contains_key(name.as_str()))
+}
+
 /// The *direct* dependencies of `package_id` (hardcoded for now).
 ///
 /// Note these lists are not uniformly flattened: `testing`/`assert` list `baml`
@@ -393,14 +440,48 @@ pub fn package_dependencies<'db>(
         "baml" => vec![PackageId::new(db, Name::new("log"))],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
-        // User packages depend on public builtin packages.
-        _ => vec![
-            PackageId::new(db, Name::new("baml")),
-            PackageId::new(db, Name::new("boundary")),
-            PackageId::new(db, Name::new("testing")),
-            PackageId::new(db, Name::new("assert")),
-            PackageId::new(db, Name::new("log")),
-        ],
+        // User packages depend on public builtin packages — plus every mounted
+        // source-less package (BEP-066 slice 6a) and every auxiliary source
+        // package installed through `compiler2_extra_files`. The latter makes
+        // the source side of the source-vs-blob contract real: a package such
+        // as `<builtin>/app/…` is the same direct dependency whether its source
+        // or its mounted interface is present. A mounted/auxiliary package
+        // itself keeps the stdlib list only, avoiding dependency cycles.
+        name => {
+            let mut deps = vec![
+                PackageId::new(db, Name::new("baml")),
+                PackageId::new(db, Name::new("boundary")),
+                PackageId::new(db, Name::new("testing")),
+                PackageId::new(db, Name::new("assert")),
+                PackageId::new(db, Name::new("log")),
+            ];
+            let mounted = mounted_package_names(db);
+            if !mounted.iter().any(|m| m.as_str() == name) {
+                deps.extend(
+                    mounted
+                        .into_iter()
+                        .map(|mounted_name| PackageId::new(db, mounted_name)),
+                );
+            }
+            if name == "user" {
+                let source_packages: std::collections::BTreeSet<Name> =
+                    crate::compiler2_all_files(db)
+                        .into_iter()
+                        .map(|file| crate::file_package::file_package(db, file).package)
+                        .filter(|package| {
+                            package.as_str() != name
+                                && !is_reserved_package_name(package.as_str())
+                                && !is_mounted_package(db, package)
+                        })
+                        .collect();
+                deps.extend(
+                    source_packages
+                        .into_iter()
+                        .map(|package| PackageId::new(db, package)),
+                );
+            }
+            deps
+        }
     }
 }
 

@@ -114,6 +114,11 @@ pub enum TirTypeError {
     /// renamed to `type.of`, and the old name errors with the replacement
     /// spelled out rather than a bare "unresolved name".
     RemovedReflectTypeOf,
+    /// A CALL whose callee is exported by a MOUNTED dependency but has no
+    /// loc-free link contract. Ordinary bytecode functions and methods carry
+    /// symbolic identities; compiler/VM builtin bodies do not. `path` is the
+    /// dotted callee path for the message (`app.native_value`).
+    MountedPackageCallUnsupported { path: Name },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -833,6 +838,13 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "`reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`"
+                )
+            }
+            TirTypeError::MountedPackageCallUnsupported { path } => {
+                write!(
+                    f,
+                    "cannot call mounted callable `{path}`: this callable kind has no \
+                     loc-free bytecode link contract"
                 )
             }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
