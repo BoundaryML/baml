@@ -29,6 +29,9 @@ Examples:
   Describe a keyword:
     baml describe match
 
+  Search for something by what it does:
+    baml describe --search 'run a subprocess'
+
 Arguments:
   [NAME]
           Symbol, namespace, package, or keyword. Omit to list project symbols
@@ -50,6 +53,19 @@ Output options:
 
       --json
           Output results as JSON
+
+      --search
+          Search names *and* docstrings for NAME, instead of resolving it.
+
+          `describe` answers "what is this called"; `--search` answers "what does this", which is
+          the question you have when you know the job and not the name. `baml describe subprocess`
+          finds nothing — nothing is called that — while `baml describe --search subprocess` finds
+          `baml.sys.exec`. Matching is on whole words, best first.
+
+      --limit <N>
+          Most results to return from `--search`
+
+          [default: 30]
 
       --export
           Export a whole package's surface as one versioned JSON document (NAME must be a package:
