@@ -1,9 +1,51 @@
+use bex_heap::TlabHolder;
 use bex_vm_types::types::{Object, Value};
+use indexmap::IndexMap;
 
-use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, resolve};
+use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolve};
 use crate::{BexVm, errors::VmRustFnError};
 
 impl BamlNamespaceType for PackageBamlImpl {
+    fn meta(
+        vm: &mut BexVm,
+        self_value: &Value,
+        alias: Option<&bex_str::BexStr>,
+        description: Option<&bex_str::BexStr>,
+        docstring: Option<&bex_str::BexStr>,
+        other: &IndexMap<bex_str::BexStr, Value>,
+    ) -> Value {
+        fn opt_string(vm: &mut BexVm, value: Option<&bex_str::BexStr>) -> Value {
+            value.map_or(Value::NULL, |s| Value::object(vm.alloc_string(s.clone())))
+        }
+
+        let entries = other
+            .iter()
+            .map(|(key, value)| {
+                let value = vm
+                    .as_string(value)
+                    .expect("map<string, string> value checked by native glue")
+                    .clone();
+                (key.clone(), Value::object(vm.alloc_string(value)))
+            })
+            .collect();
+        let other = Value::object(vm.alloc_map(
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::string(),
+            entries,
+        ));
+        let alias = opt_string(vm, alias);
+        let description = opt_string(vm, description);
+        let docstring = opt_string(vm, docstring);
+        copy::reflect::WithMeta {
+            ty: *self_value,
+            alias,
+            description,
+            docstring,
+            other,
+        }
+        .to_value(vm)
+    }
+
     /// BEP-066 K-13: `type.of_value(v)` — the runtime `type` value describing
     /// `v`'s concrete type, reconstructed by `BexVm::value_concrete_ty`.
     ///

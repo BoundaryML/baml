@@ -149,6 +149,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_reflect/ns_interface/interface.baml"),
     builtin!("baml", "ns_reflect/ns_primitive/primitive.baml"),
     builtin!("baml", "ns_reflect/ns_function/function.baml"),
+    builtin!("baml", "ns_reflect/ns_errors/errors.baml"),
     // `baml.type` (BEP-066 K-13: `type.of` / `type.of_value` resolve here).
     builtin!("baml", "ns_type/type.baml"),
     // --- boundary package ---

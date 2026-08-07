@@ -97,6 +97,26 @@ impl QualifiedTypeName {
         Self::new(Name::new(RESERVED_USER_PACKAGE), Vec::new(), name)
     }
 
+    /// A runtime-minted local type. The hidden namespace makes the canonical
+    /// name unique per mint while user-facing rendering remains the requested
+    /// source name. `$dyn` is not a legal user namespace segment, so this
+    /// convention cannot collide with a static declaration.
+    pub fn runtime_local(name: Name, mint: u64) -> Self {
+        Self::new(
+            Name::new(RESERVED_USER_PACKAGE),
+            vec![Name::new("$dyn"), Name::new(mint.to_string())],
+            name,
+        )
+    }
+
+    pub fn is_runtime_minted(&self) -> bool {
+        self.is_local()
+            && self
+                .namespace
+                .first()
+                .is_some_and(|segment| segment.as_str() == "$dyn")
+    }
+
     pub fn package(&self) -> &Name {
         self.pkg.as_name()
     }
@@ -159,6 +179,9 @@ impl QualifiedTypeName {
     /// reserved `user` package is elided for local types, dependency packages
     /// are kept.
     pub fn display_name(&self) -> Name {
+        if self.is_runtime_minted() {
+            return self.name.clone();
+        }
         if self.is_local() {
             let parts: Vec<String> = self
                 .namespace
@@ -198,6 +221,9 @@ impl QualifiedTypeName {
     /// "no `user.` in names" rule. The canonical form (`user_facing = false`)
     /// keeps the package for dumps/identity.
     pub fn render_dotted(&self, user_facing: bool) -> String {
+        if user_facing && self.is_runtime_minted() {
+            return self.name.to_string();
+        }
         let namespace = self
             .namespace
             .iter()

@@ -86,8 +86,8 @@ use bex_vm_types::{
     StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     types::{
-        BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, MintId,
-        Type, TypeValue, UnscheduledFuture,
+        BoundMethod, Closure, ConstValue, DynTypeDefs, Function, FunctionOrigin, FunctionType,
+        Instance, MintId, Type, TypeValue, UnscheduledFuture,
     },
 };
 use indexmap::IndexMap;
@@ -106,6 +106,7 @@ pub const MAX_FRAMES: usize = 256;
 struct CallOptions<'a> {
     runtime_id: Option<Value>,
     type_args: &'a [baml_type::RealizedTy],
+    type_defs: &'a DynTypeDefs,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -205,6 +206,10 @@ pub struct BytecodeFrame {
     /// (`GenericFunction`/`BoundMethod`/`Closure`/`Instance`), so a `LoadType`
     /// substitutes them into a fully realized type.
     pub type_args: Vec<baml_type::RealizedTy>,
+    /// Dynamic definitions reachable from the frame's runtime type arguments.
+    /// This side lane preserves the existing realized-type substitution ABI
+    /// while allowing reified `type.of<T>()` values to carry their overlay.
+    pub type_defs: DynTypeDefs,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -227,9 +232,13 @@ pub struct BytecodeFrame {
 impl RootHaver for BytecodeFrame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.function);
+        roots.extend(self.type_defs.enums.values().copied());
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+        for ptr in self.type_defs.enums.values_mut() {
+            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
+        }
     }
 }
 
@@ -1298,10 +1307,20 @@ impl BexVm {
     /// same digest. All VM-side static type producers route through this method
     /// so an `Object::Type` cannot be allocated without its identity.
     pub fn alloc_static_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
+        self.alloc_static_type_with_defs(ty, DynTypeDefs::default())
+    }
+
+    pub fn alloc_static_type_with_defs(
+        &mut self,
+        ty: baml_type::RealizedTy,
+        defs: DynTypeDefs,
+    ) -> HeapPtr {
         let type_value = if let Some(&digest) = self.static_mint_cache.get(&ty) {
-            TypeValue::from_parts(ty, MintId::Static(digest))
+            TypeValue::from_parts_with_defs(ty, MintId::Static(digest), defs)
         } else {
-            let type_value = TypeValue::static_new(ty, self);
+            let static_value = TypeValue::static_new(ty, self);
+            let mint = static_value.mint();
+            let type_value = TypeValue::from_parts_with_defs(static_value.ty, mint, defs);
             let MintId::Static(digest) = type_value.mint() else {
                 unreachable!("TypeValue::static_new always creates a static mint")
             };
@@ -1311,16 +1330,17 @@ impl BexVm {
         self.tlab.alloc_type(type_value)
     }
 
-    fn take_type_args(
+    fn take_type_args_with_defs(
         &mut self,
         start: usize,
         count: usize,
-    ) -> Result<Vec<baml_type::RealizedTy>, VmError> {
+    ) -> Result<(Vec<baml_type::RealizedTy>, DynTypeDefs), VmError> {
         let end = start
             .checked_add(count)
             .filter(|end| *end <= self.stack.len())
             .ok_or(VmInternalError::NotEnoughItemsOnStack(count))?;
         let mut type_args = Vec::with_capacity(count);
+        let mut defs = DynTypeDefs::default();
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
             let ptr = self.as_object_ptr(value, ObjectType::Type)?;
@@ -1328,12 +1348,22 @@ impl BexVm {
                 unreachable!("as_object_ptr guarantees Type variant");
             };
             type_args.push(type_value.ty.clone());
+            defs.merge_from(type_value.defs());
         }
         drop(
             self.stack
                 .drain(StackIndex::from_raw(start)..StackIndex::from_raw(end)),
         );
-        Ok(type_args)
+        Ok((type_args, defs))
+    }
+
+    fn take_type_args(
+        &mut self,
+        start: usize,
+        count: usize,
+    ) -> Result<Vec<baml_type::RealizedTy>, VmError> {
+        self.take_type_args_with_defs(start, count)
+            .map(|(types, _)| types)
     }
 
     fn take_type_args_below_values(
@@ -1350,6 +1380,22 @@ impl BexVm {
             .checked_sub(input_count)
             .ok_or(VmInternalError::NotEnoughItemsOnStack(input_count))?;
         self.take_type_args(start, type_arg_count)
+    }
+
+    fn take_type_args_with_defs_below_values(
+        &mut self,
+        type_arg_count: usize,
+        value_count: usize,
+    ) -> Result<(Vec<baml_type::RealizedTy>, DynTypeDefs), VmError> {
+        let input_count = type_arg_count
+            .checked_add(value_count)
+            .expect("VM operand count fits in usize");
+        let start = self
+            .stack
+            .len()
+            .checked_sub(input_count)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(input_count))?;
+        self.take_type_args_with_defs(start, type_arg_count)
     }
 
     fn pop_type_args(&mut self, count: usize) -> Result<Vec<baml_type::RealizedTy>, VmError> {
@@ -2474,6 +2520,7 @@ impl BexVm {
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
                     type_args: effective_type_args,
+                    type_defs: DynTypeDefs::default(),
                     faulting_pc: 0,
                     call_id,
                     parent_call_id,
@@ -2624,6 +2671,7 @@ impl BexVm {
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
             type_args: Vec::new(),
+            type_defs: DynTypeDefs::default(),
             faulting_pc: 0,
             call_id,
             parent_call_id,
@@ -2698,6 +2746,7 @@ impl BexVm {
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
             type_args: Vec::new(),
+            type_defs: DynTypeDefs::default(),
             faulting_pc: 0,
             call_id,
             parent_call_id,
@@ -4831,6 +4880,7 @@ impl BexVm {
                             CallOptions {
                                 runtime_id: None,
                                 type_args: &callback_type_args,
+                                type_defs: &DynTypeDefs::default(),
                             },
                             frame_idx,
                             function,
@@ -4903,6 +4953,7 @@ impl BexVm {
                     instruction_ptr: 0,
                     locals_offset,
                     type_args: initial_type_args.into_vec(),
+                    type_defs: DynTypeDefs::default(),
                     faulting_pc: 0,
                     call_id,
                     parent_call_id,
@@ -5012,6 +5063,7 @@ impl BexVm {
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(*frame_idx)
         {
             frame.type_args.extend_from_slice(options.type_args);
+            frame.type_defs.merge_from(options.type_defs);
         }
         result
     }
@@ -5599,6 +5651,7 @@ impl BexVm {
                             CallOptions {
                                 runtime_id: None,
                                 type_args: &callback_type_args,
+                                type_defs: &DynTypeDefs::default(),
                             },
                             &mut frame_idx,
                             &mut function,
@@ -6326,7 +6379,8 @@ impl BexVm {
                     let callee_value = self.globals.get(self.proof(), callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
-                    let type_args = self.take_type_args_below_values(ntypeargs, arg_count)?;
+                    let (type_args, type_defs) =
+                        self.take_type_args_with_defs_below_values(ntypeargs, arg_count)?;
 
                     let args_offset = self
                         .stack
@@ -6348,6 +6402,7 @@ impl BexVm {
                         CallOptions {
                             runtime_id,
                             type_args: &type_args,
+                            type_defs: &type_defs,
                         },
                         frame_idx,
                         function,
@@ -6396,7 +6451,8 @@ impl BexVm {
                         }
                     };
 
-                    let method_type_args = self.take_type_args_below_values(ntypeargs, nargs)?;
+                    let (method_type_args, type_defs) =
+                        self.take_type_args_with_defs_below_values(ntypeargs, nargs)?;
 
                     let args_offset = self
                         .stack
@@ -6459,6 +6515,7 @@ impl BexVm {
                         CallOptions {
                             runtime_id,
                             type_args: &type_args,
+                            type_defs: &type_defs,
                         },
                         frame_idx,
                         function,
@@ -6995,7 +7052,7 @@ impl BexVm {
                         }
                     };
 
-                    let ty: baml_type::RealizedTy = {
+                    let (ty, defs): (baml_type::RealizedTy, DynTypeDefs) = {
                         // A fully-realized template narrows to `RealizedTy` in a
                         // single validation walk — no substitution environment
                         // needed. Otherwise resolve its frame refs (and reduce any
@@ -7003,23 +7060,26 @@ impl BexVm {
                         // result must be realized or it is an internal error, never
                         // a `unknown` erasure.
                         if let Ok(realized) = <&baml_type::RealizedTy>::try_from(&template) {
-                            realized.clone()
+                            (realized.clone(), DynTypeDefs::default())
                         } else {
-                            let frame_type_args =
+                            let (frame_type_args, frame_type_defs) =
                                 if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                    bf.type_args.clone()
+                                    (bf.type_args.clone(), bf.type_defs.clone())
                                 } else {
-                                    vec![]
+                                    (vec![], DynTypeDefs::default())
                                 };
-                            template.substitute(&frame_type_args, self).map_err(|e| {
-                                VmInternalError::TypeSubstitution {
-                                    message: e.to_string(),
-                                }
-                            })?
+                            (
+                                template.substitute(&frame_type_args, self).map_err(|e| {
+                                    VmInternalError::TypeSubstitution {
+                                        message: e.to_string(),
+                                    }
+                                })?,
+                                frame_type_defs,
+                            )
                         }
                     };
 
-                    let value = Value::object(self.alloc_static_type(ty));
+                    let value = Value::object(self.alloc_static_type_with_defs(ty, defs));
                     self.stack.push(value);
                 }
 

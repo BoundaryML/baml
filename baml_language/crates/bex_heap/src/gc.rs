@@ -663,6 +663,9 @@ impl BexHeap {
                 }
                 worklist.push(future.closure);
             }
+            Object::Type(type_value) => {
+                worklist.extend(type_value.defs().enums.values().copied());
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -683,8 +686,7 @@ impl BexHeap {
             | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
+            | Object::Float(_) => {}
         }
     }
 
@@ -814,6 +816,11 @@ impl BexHeap {
                     future.closure = new_ptr;
                 }
             }
+            Object::Type(type_value) => {
+                for ptr in type_value.defs_mut().enums.values_mut() {
+                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                }
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -832,8 +839,7 @@ impl BexHeap {
             | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
+            | Object::Float(_) => {}
         }
     }
 
@@ -1084,6 +1090,16 @@ impl BexHeap {
                     worklist.push(future.closure);
                 }
             }
+            Object::Type(type_value) => {
+                worklist.extend(
+                    type_value
+                        .defs()
+                        .enums
+                        .values()
+                        .copied()
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+            }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -1101,8 +1117,7 @@ impl BexHeap {
             | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
+            | Object::Float(_) => {}
         }
     }
 
