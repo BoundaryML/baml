@@ -724,21 +724,126 @@ fn bigint_to_hex(value: &str) -> String {
         .unwrap_or_else(|_| value.to_string())
 }
 
-/// Render the trace wire value in the same user-facing shape used by live log
-/// consumers: scalar values are unwrapped, while structured values retain a
-/// complete debug representation.
+/// Render a captured trace value for a human-facing log consumer.
+///
+/// The trace artifact itself remains an encoded [`BamlOutboundValue`]. This
+/// renderer is only used at the display boundary (for example, `baml test
+/// --logs`) and mirrors BAML's default structural `to_string()` shape:
+/// top-level strings are bare, nested strings are quoted, and containers and
+/// class instances recurse without exposing protobuf or Rust wrapper types.
 pub(crate) fn render_encoded_trace_value(body: &[u8]) -> Result<String, String> {
     let value = BamlOutboundValue::decode(body)
         .map_err(|err| format!("failed to decode captured BAML log body: {err}"))?;
-    Ok(match value.value.as_ref() {
+    Ok(render_trace_value(&value, false))
+}
+
+fn render_trace_value(value: &BamlOutboundValue, nested: bool) -> String {
+    match value.value.as_ref() {
         None | Some(BamlValueVariant::NullValue(_)) => "null".to_string(),
-        Some(BamlValueVariant::StringValue(value)) => value.clone(),
+        Some(BamlValueVariant::StringValue(value)) => {
+            if nested {
+                format!("{value:?}")
+            } else {
+                value.clone()
+            }
+        }
         Some(BamlValueVariant::IntValue(value)) => value.to_string(),
-        Some(BamlValueVariant::FloatValue(value)) => value.to_string(),
+        Some(BamlValueVariant::FloatValue(value)) => bex_vm_types::format_float(*value),
         Some(BamlValueVariant::BoolValue(value)) => value.to_string(),
-        Some(BamlValueVariant::BigintValue(value)) => value.clone(),
-        Some(_) => format!("{value:?}"),
-    })
+        Some(BamlValueVariant::BigintValue(value)) => {
+            // Bigints use base-16 on the bridge wire, while BAML's string
+            // representation is decimal.
+            BigInt::parse_bytes(value.as_bytes(), 16)
+                .map_or_else(|| value.clone(), |value| value.to_string())
+        }
+        Some(BamlValueVariant::ListValue(list)) => {
+            let items = list
+                .items
+                .iter()
+                .map(|item| render_trace_value(item, true))
+                .collect::<Vec<_>>();
+            format!("[{}]", items.join(", "))
+        }
+        Some(BamlValueVariant::MapValue(map)) => {
+            let entries = map
+                .entries
+                .iter()
+                .map(|entry| {
+                    let value = entry.value.as_ref().map_or_else(
+                        || "null".to_string(),
+                        |value| render_trace_value(value, true),
+                    );
+                    format!("{:?}: {value}", entry.key)
+                })
+                .collect::<Vec<_>>();
+            format!("{{{}}}", entries.join(", "))
+        }
+        Some(BamlValueVariant::ClassValue(class)) => {
+            let class_name = class.name.rsplit('.').next().unwrap_or(class.name.as_str());
+            if class.fields.is_empty() {
+                return class_name.to_string();
+            }
+            let fields = class
+                .fields
+                .iter()
+                .map(|field| {
+                    let value = field.value.as_ref().map_or_else(
+                        || "null".to_string(),
+                        |value| render_trace_value(value, true),
+                    );
+                    format!("{}: {value}", field.key)
+                })
+                .collect::<Vec<_>>();
+            format!("{class_name} {{ {} }}", fields.join(", "))
+        }
+        Some(BamlValueVariant::EnumValue(value)) => value.value.clone(),
+        Some(BamlValueVariant::Uint8arrayValue(bytes)) => {
+            let bytes = bytes.iter().map(u8::to_string).collect::<Vec<_>>();
+            format!("[{}]", bytes.join(", "))
+        }
+        Some(BamlValueVariant::MediaValue(media)) => render_media_value(media),
+    }
+}
+
+fn render_media_value(media: &BamlValueMedia) -> String {
+    let kind = MediaTypeEnum::try_from(media.media).map_or("media", |kind| match kind {
+        MediaTypeEnum::Image => "image",
+        MediaTypeEnum::Audio => "audio",
+        MediaTypeEnum::Pdf => "pdf",
+        MediaTypeEnum::Video => "video",
+        MediaTypeEnum::Unspecified | MediaTypeEnum::Other => "media",
+    });
+    let mime = media
+        .mime_type
+        .as_ref()
+        .map(|mime| format!(", mime_type={mime:?}"))
+        .unwrap_or_default();
+    match media.value.as_ref() {
+        Some(BamlValueMediaValue::Url(value)) => {
+            format!("{kind}::url({value:?}{mime})")
+        }
+        Some(BamlValueMediaValue::File(value)) => {
+            format!("{kind}::file({value:?}{mime})")
+        }
+        Some(BamlValueMediaValue::Base64(value)) => {
+            let preview = if value.len() <= 10 {
+                value.clone()
+            } else {
+                format!(
+                    "{}...{}",
+                    &value[..5],
+                    &value[value.len().saturating_sub(5)..]
+                )
+            };
+            format!(
+                "{kind}::base64({preview:?}, len={}{}{})",
+                value.len(),
+                if mime.is_empty() { "" } else { ", " },
+                mime.trim_start_matches(", ")
+            )
+        }
+        None => format!("{kind}::missing"),
+    }
 }
 
 #[cfg(test)]
@@ -773,6 +878,40 @@ mod tests {
             panic!("root should encode as a map");
         };
         assert_eq!(map.entries.len(), 2);
+    }
+
+    #[test]
+    fn captured_values_render_in_baml_structural_string_shape() {
+        let snapshot = TraceSnapshot::for_test(
+            TraceValueRef::for_test(7),
+            vec![
+                TraceValue::String("ada".to_string()),
+                TraceValue::Int(1),
+                TraceValue::Float(2.0),
+                TraceValue::Array(vec![TraceValueRef::for_test(1), TraceValueRef::for_test(2)]),
+                TraceValue::Instance {
+                    type_name: "user.Person".to_string(),
+                    type_args: Vec::new(),
+                    fields: vec![
+                        ("name".to_string(), TraceValueRef::for_test(0)),
+                        ("scores".to_string(), TraceValueRef::for_test(3)),
+                    ],
+                },
+                TraceValue::Bool(true),
+                TraceValue::Bigint("42".to_string()),
+                TraceValue::Map(vec![
+                    ("event".to_string(), TraceValueRef::for_test(4)),
+                    ("ok".to_string(), TraceValueRef::for_test(5)),
+                    ("big".to_string(), TraceValueRef::for_test(6)),
+                ]),
+            ],
+        );
+
+        let bytes = super::encode_trace_snapshot_body(&snapshot).unwrap();
+        assert_eq!(
+            super::render_encoded_trace_value(&bytes).unwrap(),
+            r#"{"event": Person { name: "ada", scores: [1, 2.0] }, "ok": true, "big": 42}"#
+        );
     }
 
     #[test]

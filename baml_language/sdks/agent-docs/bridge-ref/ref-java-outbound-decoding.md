@@ -1,5 +1,5 @@
 ---
-date: 2026-07-20
+date: 2026-07-23
 repository: baml4
 source_paths:
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/internal/ProtoReader.java
@@ -267,7 +267,7 @@ descriptor when one is present, and otherwise delegates straight to
 | `map_value.entries[]` (12) | `java.util.LinkedHashMap<String,Object>` with recursively decoded values (`:354`, `decodeMap` `:409-438`) |
 | `class_value` (7) | Generated value-class instance, runtime media wrapper, or field `Map` fallback (`:358`, `decodeClass` `:789-820`) |
 | `enum_value` (8) | Generated enum constant, or raw variant `String` fallback (`:359`, `decodeEnum` `:852-867`) |
-| `union_variant_value` (13) | Generated union wrapper record, generic `Union{k}.Arm{i}`, or bare decoded inner value (`:355`, `decodeUnionVariant` `:452-483`) |
+| `union_variant_value` (13) | Generated union wrapper record (arm chosen by canonical `selected_option_index`, else structurally), generic `Union{k}.Arm{i}`, or bare decoded inner value (`:355`, `decodeUnionVariant` `:605-660`) |
 | `handle_value` (16) | Media wrapper or bare `BamlHandle`, by `handle_type` (`:360`, `decodeHandle` `:878-899`) |
 | `media_value` (17) / `prompt_ast_value` (18) / `ty_value` (21) | On the `ok` path (`lenient=false`): throws `UnsupportedOperationException`. On the `error`/`panic` path (`lenient=true`): degrades to `null` (`:361-369`). |
 
@@ -518,12 +518,12 @@ variant `String`** (`:865-866`).
 > parallel `javaConstants` / `wireNames` arrays (`TypeRegistry.java:116-127`;
 > pinned by `decode_enum_value_maps_wire_variant_to_constant`).
 
-### Union-variant decoding — type-directed, `value_option_name` never trusted
+### Union-variant decoding — canonical `selected_option_index`, then structural; `value_option_name` never trusted
 
-`decodeUnionVariant` (`ProtoReader.java:452-483`) reads `self_type` (field 4)
-and `value` (field 6). It **deliberately ignores `value_option_name` (field 5)**;
-the Javadoc states it plainly: *"its `value_option_name` is unreliable, so the
-arm is resolved structurally."* The resolution is:
+`decodeUnionVariant` (`ProtoReader.java:605-660`) reads `self_type` (field 4),
+`value` (field 6), and — since `ceae8ea6c` (#4087) — the canonical
+`selected_option_index` (field 8). It **deliberately ignores `value_option_name`
+(field 5)**, which is display-only. The resolution is:
 
 1. inner null (absent `value`, or a `null_value` arm) → `null` (pinned by
    `decode_union_null_inner_is_null`).
@@ -531,24 +531,49 @@ arm is resolved structurally."* The resolution is:
    option, dropping `null` / unrepresentable arms. A **resolved union** yields
    the arm set (keyed structurally, a sorted+distinct `List<BamlType>`); a
    recursive-alias **node** yields its FQN (`selfTypeArms` / `selfTypeFqn`).
-3. `record = TypeRegistry.constructUnionForArms(arms, valueBytes, inner)` (or
-   `constructUnionForFqn(fqn, …)`) — the arm is picked **structurally** from the
-   inner value's own shape (`armMatchesValue`, not the wire position); a
-   registered union whose arm matches yields the generated nominal wrapper
-   record.
-4. **fallback (load-bearing):** the bare decoded inner value, when the arm set /
-   FQN is unregistered or no arm matches.
+3. **canonical index when present.** If `selected_option_index` is set, the
+   selected arm's raw type is resolved by position against `self_type`
+   (`selfTypeOptionAt:1498`, which preserves `null` holes), decoded under that
+   exact type, and reified via `TypeRegistry.constructUnionForArmsSelected` (or
+   `constructUnionForFqnAtIndex` for a named alias) — the host-selected arm,
+   independent of payload shape (`ProtoReader.java:632-653`). This is what lets an
+   empty `int[]`-vs-`string[]` arm round-trip back onto the arm the engine
+   selected rather than the first structural match.
+4. **structural fallback.** When `selected_option_index` is **absent**, the arm is
+   picked structurally from the inner value's own shape
+   (`TypeRegistry.constructUnionForArms(arms, valueBytes, inner)` /
+   `constructUnionForFqn`, `armMatchesValue`, not the wire position).
+5. **bare fallback (load-bearing):** the bare decoded inner value, when the arm
+   set / FQN is unregistered or no arm matches.
+
+The descriptor-driven path (`decodeUnionWithDesc:1201`) applies the same rule, but
+resolves the arm **by type, not by raw wire index**: `extractUnionSelectedType:1465`
+reads `selected_option_index` off the wire and resolves it to the selected *type*
+against `self_type` (`selfTypeOptionAt`), then the decoder locates that type in the
+descriptor's arms by value — `int selectedArm = arms.indexOf(selectedType)`
+(`:1219`) — before `wrapArm`. That match is **unambiguous** because canonical union
+members are structurally distinct: `baml_type::normalize`'s `canonicalize_union`
+sort+dedups members (`normalize.rs:1601`, `flat.sort(); flat.dedup();`), so a union
+can never carry two value-equal arms (e.g. `string | string` collapses to
+`string`). Resolving by value (rather than trusting the raw index into the
+descriptor) is what makes this robust to any order difference between the wire
+`self_type` and the descriptor's declaration-order arms. Only when
+`selected_option_index` is **absent** does it fall back to structural
+`armMatchesValue` in declaration order.
 
 > ⚠ **Deviation from Python — precise contrast on union metadata.** The Python
 > doc says the `union_variant_value` arm returns the "recursively decoded inner
 > value; union metadata is discarded" — Python **erases the union wrapper
-> entirely and returns the bare selected value**, and never reads
-> `value_option_name`. Java **also never trusts `value_option_name`** (field 5),
-> but rather than discarding the metadata it uses `self_type` (field 4)
-> *structurally* — tokenized and matched against the inner value's own shape — to
-> **reconstruct a typed wrapper**: a registered nominal record via
-> `constructUnionForArms` / `constructUnionForFqn`, or (on the descriptor path) a
-> generic `Union{k}.Arm{i}`.
+> entirely and returns the bare selected value**, reading neither
+> `value_option_name` nor `selected_option_index` (a duck-typed host needs no
+> wrapper). Java **never trusts `value_option_name`** (field 5) either, but rather
+> than discarding the metadata it **reconstructs a typed wrapper**: it honors the
+> canonical `selected_option_index` (field 8) when present — resolving the arm by
+> position against `self_type` — and otherwise matches `self_type` (field 4)
+> *structurally* against the inner value's own shape, yielding a registered
+> nominal record via `constructUnionForArmsSelected` / `constructUnionForArms`
+> (or `constructUnionForFqn{AtIndex}`), or (on the descriptor path) a generic
+> `Union{k}.Arm{i}`.
 > So the two bridges agree on distrusting `value_option_name`, but diverge on the
 > result: Python returns the bare inner; Java preserves the union as a generated
 > Java type when it can, and only *falls back* to the bare inner (Python's
@@ -559,14 +584,15 @@ arm is resolved structurally."* The resolution is:
 > `…_literal_arms_fall_back_to_bare_inner` (a literal-over-one-base union is
 > erased in codegen, never registered → bare inner).
 
-On the **descriptor** path, `decodeUnionWithDesc` is even more explicit that the
-wire arm order is untrusted: it unwraps any `union_variant_value`, then matches
-the (unwrapped) wire value against the **declared arms in order** structurally
-(`armMatchesValue`), wrapping the first match in `baml_bridge.Union{k}.Arm{i}`
-(`wrapArm` reflectively constructs the record). No arm match throws `BamlError`
-(pinned by `decode_desc_union_no_arm_match_throws`). The comment is decisive: *"the wire
-carries no trustworthy arm order."* Pinned by `decode_desc_union_bare_int_arm0`,
-`…_bare_string_arm1`, `…_variant_wrapped_int_arm0`, `…_class_arm_via_fqn`.
+On the **descriptor** path, `decodeUnionWithDesc` (`ProtoReader.java:1201`) reads
+the wire union's `selected_option_index` first (`extractUnionSelectedType:1465`)
+and, when present, wraps that exact arm; only when the index is **absent** does it
+fall back to matching the (unwrapped) wire value against the **declared arms in
+order** structurally (`armMatchesValue`), wrapping the first match in
+`baml_bridge.Union{k}.Arm{i}` (`wrapArm` reflectively constructs the record). No
+arm match throws `BamlError` (pinned by `decode_desc_union_no_arm_match_throws`).
+Pinned by `decode_desc_union_bare_int_arm0`, `…_bare_string_arm1`,
+`…_variant_wrapped_int_arm0`, `…_class_arm_via_fqn`.
 
 ## Classes, Enums, Generics, And Typemap
 

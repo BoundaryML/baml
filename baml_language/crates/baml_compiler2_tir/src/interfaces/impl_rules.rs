@@ -190,7 +190,7 @@ pub enum ImplDataError {
 /// into `diags`. `store` is the arena the bound ids index (the declaring item's
 /// `type_refs`); `generic_param_names` are the in-scope type-var names so a
 /// bound naming a sibling param doesn't read as an unresolved type.
-fn lower_generic_param_interface_bounds(
+pub(crate) fn lower_generic_param_interface_bounds(
     db: &dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     bounds: &[baml_compiler2_hir::type_ref::TypeRefId],

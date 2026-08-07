@@ -1,0 +1,11 @@
+# Everything this tool produces is generated, and none of it is tracked.
+#
+# data/   — extractor/exporter inputs, rebuilt by `run` from the
+#           lockfile-pinned typescript/@types/node packages (ts_surface.json)
+#           and the compiler at HEAD (baml_surface.json).
+# report/ — the matrix itself. The canonical JSON report is a CI artifact
+#           published per run, not a checked-in file; `run --check` compares
+#           against a baseline passed with --baseline rather than one found in
+#           the repo. Locally these are just scratch outputs.
+data/
+report/

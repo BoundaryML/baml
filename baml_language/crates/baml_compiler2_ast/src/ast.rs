@@ -1787,6 +1787,7 @@ pub struct ImplementsForDef {
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
     pub span: TextRange,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1847,6 +1848,7 @@ pub struct TypeAliasDef {
     pub type_expr: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

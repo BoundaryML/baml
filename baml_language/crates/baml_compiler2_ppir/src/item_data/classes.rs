@@ -47,6 +47,8 @@ pub struct ImplementsData {
 pub struct ClassSourceMap {
     /// Full source span of the declaration.
     pub span: TextRange,
+    /// Span of the class's name token.
+    pub name_span: TextRange,
     /// Spans for every node in [`ClassData::type_refs`].
     pub type_refs: TypeRefSourceMap,
     /// Name span per field, parallel to [`ClassData::fields`].
@@ -173,6 +175,11 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
         },
         ClassSourceMap {
             span: data.span,
+            name_span: item_source_map
+                .class_name_spans
+                .get(&class.id(db))
+                .copied()
+                .unwrap_or_else(|| unreachable!("name span recorded at allocation")),
             type_refs: spans,
             field_name_spans: item_source_map
                 .class_field_spans

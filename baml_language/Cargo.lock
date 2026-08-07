@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "baml_release",
@@ -737,6 +737,7 @@ dependencies = [
  "baml_lsp_server",
  "baml_project",
  "baml_release",
+ "baml_surface",
  "baml_tests",
  "baml_type",
  "baml_version",
@@ -1120,6 +1121,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_lsp2_actions",
+ "baml_surface",
  "baml_type",
  "baml_workspace",
  "bex_vm_types",
@@ -1147,6 +1149,25 @@ dependencies = [
  "thiserror 2.0.18",
  "toml 0.8.23",
  "zip",
+]
+
+[[package]]
+name = "baml_surface"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_ppir",
+ "baml_compiler2_tir",
+ "baml_project",
+ "baml_type",
+ "insta",
+ "salsa",
+ "serde",
+ "serde_json",
+ "text-size",
 ]
 
 [[package]]
