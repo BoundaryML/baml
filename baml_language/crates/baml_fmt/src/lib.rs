@@ -1567,4 +1567,34 @@ mod member_chain_layout_tests {
         let expected = "function f() -> int {\n    let x = builder.configure(a_pretty_long_argument_name, another_pretty_long_argument_name)\n        .result.field.value;\n    x\n}\n";
         assert_formats_to(source, expected);
     }
+
+    /// A long chain ending in an optional call (`?.(…)`) uses the tail-broken
+    /// layout: the path stays glued, `?.` stays attached to the opening paren,
+    /// and only the arguments wrap.
+    #[test]
+    fn test_optional_call_tail_breaks_args_only() {
+        let source = "function f() -> int {\n    let result = root.ai.handlers.maybe_factory?.(the_first_long_argument_name, the_second_long_argument_name, the_third_long_argument_name);\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.handlers.maybe_factory?.(\n        the_first_long_argument_name,\n        the_second_long_argument_name,\n        the_third_long_argument_name,\n    );\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A chain whose final member is a long index `[…]` uses the tail-broken
+    /// layout too: the path stays glued and the index expression wraps inside
+    /// the brackets.
+    #[test]
+    fn test_final_long_index_breaks_inside_brackets() {
+        let source = "function f() -> int {\n    let x = the_data_table.rows_by_category[compute_the_category_key(the_first_component_value, the_second_component_value)];\n    x\n}\n";
+        let expected = "function f() -> int {\n    let x = the_data_table.rows_by_category[\n        compute_the_category_key(the_first_component_value, the_second_component_value)\n    ];\n    x\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An optional call applied directly to the receiver (`base?.(x).field`)
+    /// cannot break away from it: it stays glued to the receiver's line while
+    /// later call groups break normally.
+    #[test]
+    fn test_leading_optional_call_stays_glued_to_receiver() {
+        let source = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload.decode_as_structured(schema_registry_value).validate_against(validation_rules_value);\n    out\n}\n";
+        let expected = "function f() -> int {\n    let out = fetch_handler?.(the_request_value).response.payload\n        .decode_as_structured(schema_registry_value)\n        .validate_against(validation_rules_value);\n    out\n}\n";
+        assert_formats_to(source, expected);
+    }
 }

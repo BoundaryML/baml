@@ -5669,13 +5669,15 @@ impl PrintChain<'_> {
     /// Applies when the whole prefix up to the final call fits the line.
     /// Should be passed a sub-printer to avoid printing partial output in
     /// the event that the layout does not apply.
-    fn try_print_tail_call_broken(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_tail_call_broken(
+        &self,
+        shape: &Shape,
+        printer: &mut Printer,
+    ) -> Option<PrintInfo> {
         let (last, prefix) = self.chain_members.split_last()?;
         let question_dot = match last {
             PrintChainItem::Call(_) | PrintChainItem::Index(_) => None,
-            PrintChainItem::OptionalCall(qd, _) | PrintChainItem::OptionalIndex(qd, _) => {
-                Some(*qd)
-            }
+            PrintChainItem::OptionalCall(qd, _) | PrintChainItem::OptionalIndex(qd, _) => Some(*qd),
             PrintChainItem::FieldAccess(..)
             | PrintChainItem::OptionalFieldAccess(..)
             | PrintChainItem::GenericArgs(..) => return None,
@@ -5687,6 +5689,10 @@ impl PrintChain<'_> {
         if printer.output.len() > shape.width {
             return None;
         }
+        // `shape.width` is the remaining line budget measured from the
+        // chain's start column (`width + indent + first_line_offset ==
+        // line_width`), and this sub-printer's output also starts at that
+        // column, so the args' budget is what the prefix left over.
         let args_shape = Shape {
             width: shape.width.saturating_sub(printer.output.len()),
             indent: shape.indent,
@@ -5701,6 +5707,14 @@ impl PrintChain<'_> {
             }
             _ => unreachable!("checked above"),
         };
+        // The final call/index may still overflow the prefix line: its
+        // multi-line layout keeps the opening bracket (plus any squished
+        // trivia) on that line without re-checking the budget. Reject the
+        // layout in that case so the chain breaks at call boundaries instead.
+        let first_line_len = printer.output.find('\n').unwrap_or(printer.output.len());
+        if first_line_len > shape.width {
+            return None;
+        }
         Some(info)
     }
 }
