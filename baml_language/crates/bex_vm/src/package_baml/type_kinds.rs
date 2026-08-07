@@ -2,7 +2,10 @@
 
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{DynTypeDefs, Enum, EnumVariant, MintId, Object, TypeValue, Value};
+use bex_vm_types::types::{
+    Class, ClassField, DynTypeDefs, Enum, EnumVariant, MintId, Object, RuntimeTypeProvenance,
+    TypeValue, Value,
+};
 use indexmap::IndexMap;
 
 use super::{
@@ -17,7 +20,175 @@ use super::{
 use crate::BexVm;
 
 impl BamlNamespaceReflectArray for PackageBamlImpl {}
-impl BamlNamespaceReflectClass for PackageBamlImpl {}
+impl BamlNamespaceReflectClass for PackageBamlImpl {
+    fn new(
+        vm: &mut BexVm,
+        name: &bex_str::BexStr,
+        fields: &IndexMap<bex_str::BexStr, Value>,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let class_name = name.as_str();
+        let mut diagnostics = Vec::new();
+        if !is_baml_identifier(class_name) {
+            diagnostics.push(compiler_diagnostic(
+                DiagnosticId::InvalidSyntax,
+                format!("invalid class name `{class_name}`"),
+            ));
+        }
+
+        let mut class_fields = Vec::with_capacity(fields.len());
+        let mut child_defs = DynTypeDefs::default();
+        let mut seen_serialized_keys = std::collections::HashSet::new();
+        for (field_name, value) in fields {
+            if !is_baml_identifier(field_name.as_str()) {
+                diagnostics.push(compiler_diagnostic(
+                    DiagnosticId::InvalidSyntax,
+                    format!("invalid field name `{class_name}.{field_name}`"),
+                ));
+            }
+            let row = match reflected_type_row(vm, *value) {
+                Ok(row) => row,
+                Err(message) => {
+                    diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
+                    continue;
+                }
+            };
+            let serialized_key = row.alias.as_deref().unwrap_or(field_name.as_str());
+            if !seen_serialized_keys.insert(serialized_key.to_string()) {
+                diagnostics.push(compiler_diagnostic(
+                    DiagnosticId::DuplicateFieldAlias,
+                    format!("duplicate serialized key `{serialized_key}` in class `{class_name}`"),
+                ));
+            }
+            child_defs.merge_from(row.type_value.defs());
+            class_fields.push(ClassField {
+                name: field_name.to_string(),
+                field_type: row.type_value.ty.clone().into(),
+                field_template: baml_type::TyTemplate::from(row.type_value.ty.clone()),
+                description: row.description,
+                alias: row.alias,
+                docstring: row.docstring,
+                other: row.other,
+                skip: false,
+                runtime_type: Some(row.type_value),
+            });
+        }
+        if !diagnostics.is_empty() {
+            return Err(crate::errors::VmRustFnError::Thrown(
+                alloc_compilation_error(vm, &diagnostics),
+            ));
+        }
+
+        let mint = vm.tlab.heap().mint_runtime_id();
+        let MintId::Runtime(mint_number) = mint else {
+            unreachable!("BexHeap::mint_runtime_id always returns a runtime mint")
+        };
+        let type_name = baml_type::QualifiedTypeName::runtime_local(
+            baml_type::Name::new(class_name),
+            mint_number,
+        );
+        let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
+            name: type_name.clone(),
+            fields: class_fields,
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            type_tag: baml_type::typetag::class_type_tag(&type_name.to_string()),
+            ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            runtime_type: Some(RuntimeTypeProvenance {
+                mint,
+                defs: child_defs.clone(),
+            }),
+        })));
+        let ty = baml_type::RealizedTy::Class(
+            type_name.clone(),
+            Vec::new(),
+            baml_type::TyAttr::default(),
+        );
+        child_defs.classes.insert(type_name, class_ptr);
+        Ok(Value::object(vm.tlab.alloc_type(
+            TypeValue::from_parts_with_defs(ty, mint, child_defs),
+        )))
+    }
+
+    fn get_field(
+        vm: &mut BexVm,
+        value: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let fail = |vm: &mut BexVm, message: String| {
+            crate::errors::VmRustFnError::Thrown(alloc_compilation_error(
+                vm,
+                &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
+            ))
+        };
+        let Some(instance_ptr) = value.as_object_ptr() else {
+            return Err(fail(
+                vm,
+                format!(
+                    "reflect.class.get_field expected a class instance, got {}",
+                    vm.type_of(value)
+                ),
+            ));
+        };
+        let (field_value, class_name) = {
+            let Object::Instance(instance) = vm.get_object(instance_ptr) else {
+                return Err(fail(
+                    vm,
+                    format!(
+                        "reflect.class.get_field expected a class instance, got {}",
+                        vm.type_of(value)
+                    ),
+                ));
+            };
+            let Object::Class(class) = vm.get_object(instance.class) else {
+                unreachable!("Instance.class must point to Object::Class")
+            };
+            let Some(index) = class
+                .fields
+                .iter()
+                .position(|field| field.name == name.as_str())
+            else {
+                return Err(fail(
+                    vm,
+                    format!(
+                        "class `{}` has no field `{name}`",
+                        class.name.display_name()
+                    ),
+                ));
+            };
+            (
+                instance.load_field(index),
+                class.name.display_name().to_string(),
+            )
+        };
+        let expected = vm
+            .current_call_type_args()
+            .first()
+            .cloned()
+            .unwrap_or_else(baml_type::RealizedTy::unknown);
+        let matches = crate::type_match::value_matches_template(
+            vm,
+            field_value,
+            &baml_type::TyTemplate::from(expected.clone()),
+            &[],
+        )
+        .map_err(crate::errors::VmRustFnError::InternalError)?;
+        if !matches {
+            let got = vm.value_concrete_ty(field_value).map_or_else(
+                || "unknown".to_string(),
+                |ty| baml_type::RealizedTy::from(ty).to_string(),
+            );
+            return Err(fail(
+                vm,
+                format!("field `{class_name}.{name}` has type `{got}`, expected `{expected}`"),
+            ));
+        }
+        Ok(field_value)
+    }
+}
 impl BamlNamespaceReflectEnum for PackageBamlImpl {
     fn value(
         vm: &mut BexVm,
@@ -115,6 +286,10 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
             docstring: None,
             other: IndexMap::new(),
             ty_attr: baml_type::TyAttr::default(),
+            runtime_type: Some(RuntimeTypeProvenance {
+                mint,
+                defs: DynTypeDefs::default(),
+            }),
         })));
         let ty = baml_type::RealizedTy::Enum(type_name.clone(), baml_type::TyAttr::default());
         let defs = DynTypeDefs::with_enum(type_name, enum_ptr);
@@ -148,38 +323,190 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
 }
 impl BamlNamespaceReflectFunction for PackageBamlImpl {}
 impl BamlNamespaceReflectInterface for PackageBamlImpl {}
-impl BamlNamespaceReflectLiteral for PackageBamlImpl {}
-impl BamlNamespaceReflectMap for PackageBamlImpl {}
+impl BamlNamespaceReflectLiteral for PackageBamlImpl {
+    fn new(vm: &mut BexVm, value: &Value) -> Value {
+        let literal = if let Some(value) = value.as_int() {
+            baml_type::Literal::Int(value)
+        } else if let Some(value) = value.as_bool() {
+            baml_type::Literal::Bool(value)
+        } else if let Ok(value) = vm.as_string(value) {
+            baml_type::Literal::String(value.to_string())
+        } else {
+            unreachable!("literal.new argument checked by native glue")
+        };
+        alloc_runtime_composite(
+            vm,
+            baml_type::RealizedTy::Literal(
+                literal,
+                baml_type::Freshness::Regular,
+                baml_type::TyAttr::default(),
+            ),
+            DynTypeDefs::default(),
+        )
+    }
+}
+impl BamlNamespaceReflectMap for PackageBamlImpl {
+    fn new(vm: &mut BexVm, key: &Value, value: &Value) -> Value {
+        let key = reflected_type_value(vm, *key);
+        let value = reflected_type_value(vm, *value);
+        let mut defs = key.defs().clone();
+        defs.merge_from(value.defs());
+        alloc_runtime_composite(
+            vm,
+            baml_type::RealizedTy::Map {
+                key: Box::new(key.ty),
+                value: Box::new(value.ty),
+                attr: baml_type::TyAttr::default(),
+            },
+            defs,
+        )
+    }
+}
 impl BamlNamespaceReflectPrimitive for PackageBamlImpl {}
-impl BamlNamespaceReflectUnion for PackageBamlImpl {}
+impl BamlNamespaceReflectUnion for PackageBamlImpl {
+    fn new(vm: &mut BexVm, types: &[Value]) -> Result<Value, crate::errors::VmRustFnError> {
+        if types.is_empty() {
+            let diagnostic = compiler_diagnostic(
+                DiagnosticId::RuntimeEmptyUnion,
+                "a runtime union must contain at least one member".to_string(),
+            );
+            return Err(crate::errors::VmRustFnError::Thrown(
+                alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+        let mut members = Vec::with_capacity(types.len());
+        let mut defs = DynTypeDefs::default();
+        for value in types {
+            let type_value = reflected_type_value(vm, *value);
+            members.push(type_value.ty.clone());
+            defs.merge_from(type_value.defs());
+        }
+        Ok(alloc_runtime_composite(
+            vm,
+            baml_type::RealizedTy::Union(members, baml_type::TyAttr::default()),
+            defs,
+        ))
+    }
+}
 
 fn reflected_ty(vm: &BexVm, value: Value) -> baml_type::RealizedTy {
     super::type_class::type_value_ty(vm, value)
         .unwrap_or_else(|| unreachable!("kind method receiver must be Object::Type"))
 }
 
-fn reflected_class(vm: &BexVm, value: Value) -> (bex_vm_types::Class, Vec<baml_type::RealizedTy>) {
-    let type_value = value
+fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
+    let ptr = value
         .as_object_ptr()
-        .and_then(|ptr| match vm.get_object(ptr) {
-            Object::Type(value) => Some(&**value),
-            _ => None,
-        })
+        .unwrap_or_else(|| unreachable!("type argument must be Object::Type"));
+    let Object::Type(type_value) = vm.get_object(ptr) else {
+        unreachable!("type argument must be Object::Type")
+    };
+    (**type_value).clone()
+}
+
+fn alloc_runtime_composite(vm: &mut BexVm, ty: baml_type::RealizedTy, defs: DynTypeDefs) -> Value {
+    let mint = vm.tlab.heap().mint_runtime_id();
+    Value::object(
+        vm.tlab
+            .alloc_type(TypeValue::from_parts_with_defs(ty, mint, defs)),
+    )
+}
+
+struct ReflectedTypeRow {
+    type_value: TypeValue,
+    alias: Option<String>,
+    description: Option<String>,
+    docstring: Option<String>,
+    other: IndexMap<String, String>,
+}
+
+fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTypeRow, String> {
+    let Some(ptr) = value.as_object_ptr() else {
+        return Err("class fields must be type values or reflect.WithMeta<type> rows".into());
+    };
+    match vm.get_object(ptr) {
+        Object::Type(type_value) => Ok(ReflectedTypeRow {
+            type_value: (**type_value).clone(),
+            alias: None,
+            description: None,
+            docstring: None,
+            other: IndexMap::new(),
+        }),
+        Object::Instance(instance) => {
+            let Object::Class(class) = vm.get_object(instance.class) else {
+                unreachable!("Instance.class must point to Object::Class")
+            };
+            if class.name.to_string() != "baml.reflect.WithMeta" {
+                return Err(
+                    "class fields must be type values or reflect.WithMeta<type> rows".into(),
+                );
+            }
+            let type_value = reflected_type_value(vm, instance.load_field(0));
+            let optional_string = |index| {
+                let value = instance.load_field(index);
+                if value.is_null() {
+                    Ok(None)
+                } else {
+                    vm.as_string(&value)
+                        .map(|value| Some(value.to_string()))
+                        .map_err(|_| {
+                            "reflect.WithMeta string field has an invalid value".to_string()
+                        })
+                }
+            };
+            let other = vm
+                .as_map(&instance.load_field(4))
+                .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())?
+                .to_index_map()
+                .iter()
+                .map(|(key, value)| {
+                    vm.as_string(value)
+                        .map(|value| (key.to_string(), value.to_string()))
+                        .map_err(|_| {
+                            "reflect.WithMeta.other must be map<string, string>".to_string()
+                        })
+                })
+                .collect::<Result<IndexMap<_, _>, _>>()?;
+            Ok(ReflectedTypeRow {
+                type_value,
+                alias: optional_string(1)?,
+                description: optional_string(2)?,
+                docstring: optional_string(3)?,
+                other,
+            })
+        }
+        _ => Err("class fields must be type values or reflect.WithMeta<type> rows".into()),
+    }
+}
+
+fn reflected_class(vm: &BexVm, value: Value) -> (bex_vm_types::Class, Vec<baml_type::RealizedTy>) {
+    let ptr = value
+        .as_object_ptr()
         .unwrap_or_else(|| unreachable!("class.Type receiver must be Object::Type"));
+    let Object::Type(type_value) = vm.get_object(ptr) else {
+        unreachable!("class.Type receiver must be Object::Type")
+    };
     let baml_type::RealizedTy::Class(name, args, _) = &type_value.ty else {
         unreachable!("class.Type receiver must wrap a class type")
     };
-    let ptr =
-        if type_value.owner.as_ptr().is_null() {
-            vm.lookup_type(name)
-        } else {
-            let Object::Package(package) = vm.get_object(type_value.owner) else {
-                unreachable!("runtime type owner must be a Package")
-            };
-            package.classes.values().find(|ptr| {
-            matches!(vm.get_object(**ptr), Object::Class(class) if class.name == *name)
-        }).copied()
-        }
+    let ptr = type_value
+        .defs()
+        .classes
+        .get(name)
+        .copied()
+        .or_else(|| {
+            if type_value.owner.as_ptr().is_null() {
+                None
+            } else {
+                let Object::Package(package) = vm.get_object(type_value.owner) else {
+                    unreachable!("runtime type owner must be a Package")
+                };
+                package.classes.values().find(|ptr| {
+                    matches!(vm.get_object(**ptr), Object::Class(class) if class.name == *name)
+                }).copied()
+            }
+        })
+        .or_else(|| vm.lookup_type(name))
         .unwrap_or_else(|| unreachable!("reflected class {name} must be loaded"));
     let Object::Class(class) = vm.get_object(ptr) else {
         unreachable!("reflected class name resolved to a non-class")
@@ -410,13 +737,17 @@ impl BamlClassReflectClassType for PackageBamlImpl {
             .iter()
             .map(|field| {
                 let name = Value::object(vm.alloc_string(field.name.as_str()));
-                let ty = field
-                    .field_template
-                    .substitute(&args, vm)
-                    .unwrap_or_else(|err| {
-                        unreachable!("emitted class field template must realize: {err}")
-                    });
-                let r#type = Value::object(vm.alloc_static_type(ty));
+                let r#type = if let Some(type_value) = &field.runtime_type {
+                    Value::object(vm.tlab.alloc_type(type_value.clone()))
+                } else {
+                    let ty = field
+                        .field_template
+                        .substitute(&args, vm)
+                        .unwrap_or_else(|err| {
+                            unreachable!("emitted class field template must realize: {err}")
+                        });
+                    Value::object(vm.alloc_static_type(ty))
+                };
                 let meta = alloc_meta(
                     vm,
                     field.alias.as_deref(),

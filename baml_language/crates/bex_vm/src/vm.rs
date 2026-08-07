@@ -295,6 +295,9 @@ impl RootHaver for NativeFrame {
 }
 
 /// Call frame — either a bytecode frame or a native continuation frame.
+// Bytecode frames are deliberately stored inline: they are the hot path, and
+// boxing them would add an allocation and indirection to every BAML call.
+#[allow(clippy::large_enum_variant)]
 pub enum Frame {
     Bytecode(BytecodeFrame),
     Native(NativeFrame),
@@ -7026,6 +7029,39 @@ impl BexVm {
                     let value = self.stack.ensure_pop();
                     let tag = value_type_tag(value);
                     self.stack.push(Value::int(tag));
+                }
+
+                OpCode::RuntimeIsType => {
+                    let expected_value = self.stack.ensure_pop();
+                    let value = self.stack.ensure_pop();
+                    let expected_mint =
+                        expected_value
+                            .as_object_ptr()
+                            .and_then(|ptr| match self.get_object(ptr) {
+                                Object::Type(type_value) => Some(type_value.mint()),
+                                _ => None,
+                            });
+                    let nominal_ptr =
+                        value
+                            .as_object_ptr()
+                            .and_then(|ptr| match self.get_object(ptr) {
+                                Object::Instance(instance) => Some((instance.class, true)),
+                                Object::Variant(variant) => Some((variant.enm, false)),
+                                _ => None,
+                            });
+                    let actual_mint =
+                        nominal_ptr.and_then(|(ptr, is_class)| match self.get_object(ptr) {
+                            Object::Class(class) if is_class => {
+                                class.runtime_type.as_ref().map(|runtime| runtime.mint)
+                            }
+                            Object::Enum(enm) if !is_class => {
+                                enm.runtime_type.as_ref().map(|runtime| runtime.mint)
+                            }
+                            _ => None,
+                        });
+                    self.stack.push(Value::bool(
+                        expected_mint.is_some() && expected_mint == actual_mint,
+                    ));
                 }
 
                 // ── IsType ────────────────────────────────────────────────────

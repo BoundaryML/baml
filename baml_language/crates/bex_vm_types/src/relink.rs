@@ -136,6 +136,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::AwaitAny
             | I::CallIndirect
             | I::CallIndirectWithRuntimeId
+            | I::RuntimeIsType
             | I::Throw
             | I::Rethrow
             | I::Return

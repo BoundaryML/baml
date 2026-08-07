@@ -273,6 +273,7 @@ pub enum DiagnosticId {
     /// `return`/`break`/`continue` inside a `defer` body that would escape the
     /// defer (BEP-042). Only `throw` may leave a defer.
     DeferControlFlowEscape,
+
     /// An out-of-body `implement<P..> I<args..> for T` violates the orphan rule
     /// (BEP-044, Rust's RFC 2451 "covered" rule): the interface is foreign and no
     /// type local to this package appears in `[T, args..]` before any uncovered
@@ -374,6 +375,10 @@ pub enum DiagnosticId {
     /// Empty enums are legal declarations/constructions, but have no output
     /// representation and therefore fail at render time (BEP-066 R-4).
     EmptyEnumAtRender,
+
+    /// A runtime reflection union constructor received no members. Static
+    /// source cannot spell this defect, so BEP-066 reserves a surface code.
+    RuntimeEmptyUnion,
 }
 
 impl DiagnosticId {
@@ -568,6 +573,7 @@ impl DiagnosticId {
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
+            DiagnosticId::RuntimeEmptyUnion => "E0160",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 

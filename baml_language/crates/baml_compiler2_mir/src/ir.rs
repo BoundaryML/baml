@@ -798,6 +798,14 @@ pub enum Rvalue {
     /// other coarse tag checks.
     IsTypeTag { operand: Operand, tag: i64 },
 
+    /// Runtime-mint identity filter used by `is unreflect(t)` patterns.
+    /// `type_value` evaluates to an `Object::Type`; the VM reconstructs the
+    /// nominal mint of `operand` and compares the two identity tokens.
+    RuntimeIsType {
+        operand: Operand,
+        type_value: Operand,
+    },
+
     /// Allocate a closure object from a child lambda function.
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.

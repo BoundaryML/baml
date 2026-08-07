@@ -5131,6 +5131,22 @@ impl<'a> Parser<'a> {
             return;
         }
 
+        if self.at_contextual_kw("unreflect")
+            && self
+                .peek(1)
+                .is_some_and(|token| token.kind == TokenKind::LParen)
+        {
+            self.with_node(SyntaxKind::UNREFLECT_PATTERN, |p| {
+                p.bump();
+                p.expect(TokenKind::LParen);
+                if !p.at(TokenKind::RParen) {
+                    p.parse_expr();
+                }
+                p.expect(TokenKind::RParen);
+            });
+            return;
+        }
+
         if self.at(TokenKind::LBracket) {
             // Arrays use `[` / `]` so the closing bracket terminates the
             // atom cleanly — sub-patterns inside should regain normal

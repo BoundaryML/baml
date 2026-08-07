@@ -747,6 +747,9 @@ impl<'a> AstGraphBuilder<'a> {
                 None => format!("let {name}"),
             },
             ast::Pattern::Type(ty) => ty.to_string(),
+            ast::Pattern::Unreflect(expr) => {
+                format!("unreflect({})", self.body.display_expr(*expr))
+            }
             ast::Pattern::Class {
                 class,
                 generic_args,

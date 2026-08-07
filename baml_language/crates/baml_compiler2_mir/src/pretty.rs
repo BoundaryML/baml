@@ -557,6 +557,16 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ", {})", type_tag_name(*tag))
         }
+        Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            write!(f, "runtime_is_type(")?;
+            write_operand(f, operand)?;
+            write!(f, ", ")?;
+            write_operand(f, type_value)?;
+            write!(f, ")")
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,

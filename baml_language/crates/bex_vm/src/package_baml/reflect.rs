@@ -17,7 +17,10 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact,
     link::link_dynamic,
-    types::{LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage, TypeValue, Value},
+    types::{
+        DynTypeDefs, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
+        RuntimeTypeProvenance, TypeValue, Value,
+    },
 };
 use indexmap::IndexMap;
 
@@ -415,11 +418,15 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 continue;
             };
             let ty = RealizedTy::Class(class.name.clone(), Vec::new(), TyAttr::default());
-            let type_ptr = vm.alloc_type(TypeValue::runtime(
-                ty,
-                vm.heap.mint_runtime_id(),
-                package_ptr,
-            ));
+            let mint = vm.heap.mint_runtime_id();
+            let type_ptr = vm.alloc_type(TypeValue::runtime(ty, mint, package_ptr));
+            let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
+                unreachable!("runtime package class pointer changed kind")
+            };
+            class.runtime_type = Some(RuntimeTypeProvenance {
+                mint,
+                defs: DynTypeDefs::default(),
+            });
             let local = name
                 .namespace
                 .iter()
@@ -428,6 +435,33 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 .collect::<Vec<_>>()
                 .join(".");
             class_types.insert(local, type_ptr);
+        }
+
+        let source_defs = DynTypeDefs {
+            classes: classes
+                .values()
+                .filter_map(|ptr| match vm.get_object(*ptr) {
+                    Object::Class(class) if !class.name.name().as_str().ends_with("$stream") => {
+                        Some((class.name.clone(), *ptr))
+                    }
+                    _ => None,
+                })
+                .collect(),
+            enums: enums
+                .values()
+                .filter_map(|ptr| match vm.get_object(*ptr) {
+                    Object::Enum(enm) => Some((enm.name.clone(), *ptr)),
+                    _ => None,
+                })
+                .collect(),
+        };
+        for class_ptr in classes.values() {
+            let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
+                continue;
+            };
+            if let Some(runtime_type) = &mut class.runtime_type {
+                runtime_type.defs = source_defs.clone();
+            }
         }
 
         let Object::Package(package) = vm.get_object_mut(package_ptr) else {

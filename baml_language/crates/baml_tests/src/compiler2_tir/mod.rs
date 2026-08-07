@@ -125,6 +125,7 @@ pub(crate) mod support {
                 }
             }
             Pattern::Type(ty) => ty.to_string(),
+            Pattern::Unreflect(expr) => format!("unreflect({})", expr_desc(*expr, body)),
             Pattern::Or(pats) => pats
                 .iter()
                 .map(|p| pat_desc(*p, body))
@@ -1637,6 +1638,10 @@ pub(crate) mod support {
                     .collect::<Vec<_>>()
                     .join(" | "),
                 Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
+                Pattern::Unreflect(expr) => format!(
+                    "unreflect({})",
+                    expr_desc_hir(*expr, body, prefix, local_type_names)
+                ),
                 Pattern::Class {
                     class,
                     generic_args,

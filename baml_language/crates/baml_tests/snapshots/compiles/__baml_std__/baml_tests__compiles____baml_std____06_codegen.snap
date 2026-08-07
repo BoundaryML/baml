@@ -917,6 +917,9 @@ function baml.ToString.to_string(self: baml.ToString) -> string {
 function baml.TypeValue._to_string_impl(self: baml.TypeValue) -> string {
 }
 
+function baml.TypeValue.array(self: baml.TypeValue) -> baml.reflect.array.Type {
+}
+
 function baml.TypeValue.as_array(self: baml.TypeValue) -> baml.reflect.array.Type | null {
 }
 
@@ -963,6 +966,12 @@ function baml.TypeValue.kind(self: baml.TypeValue) -> baml.reflect.class.Type | 
 }
 
 function baml.TypeValue.meta(self: baml.TypeValue, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.WithMeta<type> {
+}
+
+function baml.TypeValue.optional(self: baml.TypeValue) -> baml.reflect.union.Type {
+}
+
+function baml.TypeValue.to_baml(self: baml.TypeValue) -> string {
 }
 
 function baml.Uint8Array._to_string_impl(self: baml.Uint8Array) -> string {
@@ -6419,6 +6428,12 @@ function baml.reflect.class.Type.fields(self: baml.reflect.class.Type) -> baml.r
 function baml.reflect.class.Type.meta(self: baml.reflect.class.Type) -> baml.reflect.Meta {
 }
 
+function baml.reflect.class.get_field(value: unknown, name: string) -> #0 {
+}
+
+function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>) -> baml.reflect.class.Type {
+}
+
 function baml.reflect.enum.Type.baml.reflect.TypeView.as_type(self: baml.reflect.enum.Type) -> type {
 }
 
@@ -6458,6 +6473,9 @@ function baml.reflect.interface.Type.implementors(self: baml.reflect.interface.T
 function baml.reflect.literal.Type.baml.reflect.TypeView.as_type(self: baml.reflect.literal.Type) -> type {
 }
 
+function baml.reflect.literal.new(value: string | int | bool) -> baml.reflect.literal.Type {
+}
+
 function baml.reflect.map.Type.baml.reflect.TypeView.as_type(self: baml.reflect.map.Type) -> type {
 }
 
@@ -6465,6 +6483,9 @@ function baml.reflect.map.Type.key_type(self: baml.reflect.map.Type) -> type {
 }
 
 function baml.reflect.map.Type.value_type(self: baml.reflect.map.Type) -> type {
+}
+
+function baml.reflect.map.new(key: type, value: type) -> baml.reflect.map.Type {
 }
 
 function baml.reflect.primitive.Type.baml.reflect.TypeView.as_type(self: baml.reflect.primitive.Type) -> type {
@@ -6477,6 +6498,9 @@ function baml.reflect.union.Type.baml.reflect.TypeView.as_type(self: baml.reflec
 }
 
 function baml.reflect.union.Type.member_types(self: baml.reflect.union.Type) -> type[] {
+}
+
+function baml.reflect.union.new(types: type[]) -> baml.reflect.union.Type {
 }
 
 function baml.sap.parse(text: string) -> #0 {

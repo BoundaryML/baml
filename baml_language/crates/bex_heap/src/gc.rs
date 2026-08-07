@@ -707,7 +707,20 @@ impl BexHeap {
                 if !value.owner.as_ptr().is_null() {
                     worklist.push(value.owner);
                 }
+                worklist.extend(value.defs().classes.values().copied());
                 worklist.extend(value.defs().enums.values().copied());
+            }
+            Object::Class(class) => {
+                if let Some(runtime) = &class.runtime_type {
+                    worklist.extend(runtime.defs.classes.values().copied());
+                    worklist.extend(runtime.defs.enums.values().copied());
+                }
+                for field in &class.fields {
+                    if let Some(type_value) = &field.runtime_type {
+                        worklist.extend(type_value.defs().classes.values().copied());
+                        worklist.extend(type_value.defs().enums.values().copied());
+                    }
+                }
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
@@ -720,7 +733,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
@@ -936,8 +948,32 @@ impl BexHeap {
                 if let Some(&new_ptr) = forwarding.get(&value.owner) {
                     value.owner = new_ptr;
                 }
+                for ptr in value.defs_mut().classes.values_mut() {
+                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                }
                 for ptr in value.defs_mut().enums.values_mut() {
                     *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                }
+            }
+            Object::Class(class) => {
+                if let Some(runtime) = &mut class.runtime_type {
+                    for ptr in runtime.defs.classes.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
+                    for ptr in runtime.defs.enums.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
+                }
+                for field in &mut class.fields {
+                    let Some(type_value) = &mut field.runtime_type else {
+                        continue;
+                    };
+                    for ptr in type_value.defs_mut().classes.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
+                    for ptr in type_value.defs_mut().enums.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
                 }
             }
             // Primitives have no references
@@ -949,7 +985,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
@@ -1280,11 +1315,38 @@ impl BexHeap {
                 worklist.extend(
                     value
                         .defs()
-                        .enums
+                        .classes
                         .values()
+                        .chain(value.defs().enums.values())
                         .copied()
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
+            }
+            Object::Class(class) => {
+                if let Some(runtime) = &class.runtime_type {
+                    worklist.extend(
+                        runtime
+                            .defs
+                            .classes
+                            .values()
+                            .chain(runtime.defs.enums.values())
+                            .copied()
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                }
+                for field in &class.fields {
+                    if let Some(type_value) = &field.runtime_type {
+                        worklist.extend(
+                            type_value
+                                .defs()
+                                .classes
+                                .values()
+                                .chain(type_value.defs().enums.values())
+                                .copied()
+                                .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        );
+                    }
+                }
             }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
@@ -1294,7 +1356,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
@@ -1648,6 +1709,7 @@ mod tests {
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
+            runtime_type: None,
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -2291,6 +2353,7 @@ mod tests {
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
+            runtime_type: None,
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2333,6 +2396,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
+            runtime_type: None,
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
 
@@ -2563,6 +2627,7 @@ mod tests {
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
+            runtime_type: None,
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2588,6 +2653,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
+            runtime_type: None,
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2642,6 +2708,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
+            runtime_type: None,
         })));
         let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(
             RealizedTy::Enum(type_name.clone(), TyAttr::default()),
@@ -2675,6 +2742,83 @@ mod tests {
         assert_eq!(enm.name, type_name);
         assert_eq!(enm.variants[0].name, "RED");
         assert_eq!(enm.variants[0].alias.as_deref(), Some("k7"));
+    }
+
+    #[test]
+    fn test_gc_traces_runtime_class_definition_owned_only_by_type_value() {
+        use baml_type::{Name, QualifiedTypeName, TyAttr};
+        use bex_vm_types::{
+            Class, ClassField,
+            types::{DynTypeDefs, MintId, RuntimeTypeProvenance, TypeValue},
+        };
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let type_name = QualifiedTypeName::runtime_local(Name::new("VisitNote"), 42);
+        let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+            name: type_name.clone(),
+            fields: vec![ClassField {
+                name: "height_cm".to_string(),
+                field_type: baml_type::RuntimeTy::Int {
+                    attr: TyAttr::default(),
+                },
+                field_template: baml_type::TyTemplate::from(RealizedTy::int()),
+                description: Some("height in centimeters".to_string()),
+                alias: None,
+                docstring: None,
+                other: Default::default(),
+                skip: false,
+                runtime_type: None,
+            }],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: Default::default(),
+            type_tag: 142,
+            ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            runtime_type: Some(RuntimeTypeProvenance {
+                mint: MintId::Runtime(42),
+                defs: DynTypeDefs::default(),
+            }),
+        })));
+        let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(
+            RealizedTy::Class(type_name.clone(), vec![], TyAttr::default()),
+            MintId::Runtime(42),
+            DynTypeDefs::with_class(type_name.clone(), class_ptr),
+        ));
+
+        // No instance and no independently-rooted class exist: the sole edge
+        // keeping the authoritative definition alive is Object::Type.defs.
+        let (_, roots, _) =
+            unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
+        let (_, roots, _) =
+            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+        let (stats, roots, _) =
+            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+        assert_eq!(
+            stats.live_count, 2,
+            "only the type and class should survive"
+        );
+        let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
+            panic!("root was not the runtime type value")
+        };
+        let class_ptr = *type_value
+            .defs()
+            .classes
+            .get(&type_name)
+            .expect("runtime class definition side table was lost");
+        let Object::Class(class) = (unsafe { class_ptr.get() }) else {
+            panic!("runtime definition did not land on a class")
+        };
+        assert_eq!(class.name, type_name);
+        assert_eq!(class.fields[0].name, "height_cm");
+        assert_eq!(
+            class.fields[0].description.as_deref(),
+            Some("height in centimeters")
+        );
     }
 
     #[test]
@@ -3079,6 +3223,7 @@ mod tests {
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
+            runtime_type: None,
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
@@ -3095,6 +3240,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
+            runtime_type: None,
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
             enm: enum_ptr,

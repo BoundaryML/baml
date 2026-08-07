@@ -333,6 +333,8 @@ pub enum SyntaxKind {
     /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
     /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
     TYPE_PATTERN,
+    /// Contextual runtime identity pattern: `unreflect(expr)`.
+    UNREFLECT_PATTERN,
     /// `'(' PATTERN ')'` — explicit grouping.
     PAREN_PATTERN,
     /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from

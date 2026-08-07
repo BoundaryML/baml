@@ -1,5 +1,5 @@
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{Object, Value};
+use bex_vm_types::types::{Object, TypeValue, Value};
 use indexmap::IndexMap;
 
 use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolve};
@@ -16,6 +16,48 @@ impl BamlNamespaceType for PackageBamlImpl {
     /// type value, the same fail-open convention `reflect.signature` /
     /// `reflect.call_any` use for unreconstructable argument types.
     fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
+        if let Some(ptr) = v.as_object_ptr() {
+            let nominal = match vm.get_object(ptr) {
+                Object::Instance(instance) => Some((instance.class, true)),
+                Object::Variant(variant) => Some((variant.enm, false)),
+                _ => None,
+            };
+            if let Some((definition_ptr, is_class)) = nominal {
+                let reconstructed = match vm.get_object(definition_ptr) {
+                    Object::Class(class) if is_class => {
+                        class.runtime_type.as_ref().map(|runtime| {
+                            let mut defs = runtime.defs.clone();
+                            defs.classes.insert(class.name.clone(), definition_ptr);
+                            TypeValue::from_parts_with_defs(
+                                baml_type::RealizedTy::Class(
+                                    class.name.clone(),
+                                    Vec::new(),
+                                    baml_type::TyAttr::default(),
+                                ),
+                                runtime.mint,
+                                defs,
+                            )
+                        })
+                    }
+                    Object::Enum(enm) if !is_class => enm.runtime_type.as_ref().map(|runtime| {
+                        let mut defs = runtime.defs.clone();
+                        defs.enums.insert(enm.name.clone(), definition_ptr);
+                        TypeValue::from_parts_with_defs(
+                            baml_type::RealizedTy::Enum(
+                                enm.name.clone(),
+                                baml_type::TyAttr::default(),
+                            ),
+                            runtime.mint,
+                            defs,
+                        )
+                    }),
+                    _ => None,
+                };
+                if let Some(type_value) = reconstructed {
+                    return Ok(Value::object(vm.tlab.alloc_type(type_value)));
+                }
+            }
+        }
         let ty = vm
             .value_concrete_ty(*v)
             .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
@@ -24,6 +66,39 @@ impl BamlNamespaceType for PackageBamlImpl {
 }
 
 impl BamlClassTypeValue for PackageBamlImpl {
+    fn array(vm: &mut BexVm, self_value: &Value) -> Value {
+        let type_value = cloned_type_value(vm, *self_value);
+        alloc_runtime_type(
+            vm,
+            baml_type::RealizedTy::List(
+                Box::new(type_value.ty.clone()),
+                baml_type::TyAttr::default(),
+            ),
+            type_value.defs().clone(),
+        )
+    }
+
+    fn optional(vm: &mut BexVm, self_value: &Value) -> Value {
+        let type_value = cloned_type_value(vm, *self_value);
+        let mut members = match &type_value.ty {
+            baml_type::RealizedTy::Union(members, _) => members.clone(),
+            other => vec![other.clone()],
+        };
+        if !members.iter().any(baml_type::RealizedTy::is_null) {
+            members.push(baml_type::RealizedTy::null());
+        }
+        alloc_runtime_type(
+            vm,
+            baml_type::RealizedTy::Union(members, baml_type::TyAttr::default()),
+            type_value.defs().clone(),
+        )
+    }
+
+    fn to_baml(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
+        let type_value = cloned_type_value(vm, *self_value);
+        bex_str::BexStr::from(render_type_value_source(vm, &type_value))
+    }
+
     fn meta(
         vm: &mut BexVm,
         self_value: &Value,
@@ -197,6 +272,197 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .map(|(ty, _, _)| Value::object(vm.alloc_static_type(ty)))
             .collect()
     }
+}
+
+fn cloned_type_value(vm: &BexVm, value: Value) -> TypeValue {
+    let ptr = value
+        .as_object_ptr()
+        .unwrap_or_else(|| unreachable!("type method receiver must be Object::Type"));
+    let Object::Type(type_value) = vm.get_object(ptr) else {
+        unreachable!("type method receiver must be Object::Type")
+    };
+    (**type_value).clone()
+}
+
+fn alloc_runtime_type(
+    vm: &mut BexVm,
+    ty: baml_type::RealizedTy,
+    defs: bex_vm_types::types::DynTypeDefs,
+) -> Value {
+    let mint = vm.tlab.heap().mint_runtime_id();
+    Value::object(
+        vm.tlab
+            .alloc_type(TypeValue::from_parts_with_defs(ty, mint, defs)),
+    )
+}
+
+fn quoted(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| unreachable!("serializing a Rust string"))
+}
+
+fn render_meta_suffix(alias: Option<&str>, description: Option<&str>) -> String {
+    let mut out = String::new();
+    if let Some(alias) = alias {
+        out.push_str(" @alias(");
+        out.push_str(&quoted(alias));
+        out.push(')');
+    }
+    if let Some(description) = description {
+        out.push_str(" @description(");
+        out.push_str(&quoted(description));
+        out.push(')');
+    }
+    out
+}
+
+fn render_ty_source(ty: &baml_type::RealizedTy) -> String {
+    match ty {
+        baml_type::RealizedTy::Union(members, _) => {
+            let mut non_null: Vec<_> = members.iter().filter(|member| !member.is_null()).collect();
+            let has_null = non_null.len() != members.len();
+            if has_null && non_null.len() == 1 {
+                let member = non_null
+                    .pop()
+                    .unwrap_or_else(|| unreachable!("length checked"));
+                let rendered = render_ty_source(member);
+                if matches!(member, baml_type::RealizedTy::Function { .. }) {
+                    format!("({rendered})?")
+                } else {
+                    format!("{rendered}?")
+                }
+            } else {
+                let mut rendered: Vec<String> =
+                    non_null.into_iter().map(render_ty_source).collect();
+                if has_null {
+                    rendered.push("null".to_string());
+                }
+                rendered.join(" | ")
+            }
+        }
+        baml_type::RealizedTy::List(element, _) => {
+            let rendered = render_ty_source(element);
+            if matches!(element.as_ref(), baml_type::RealizedTy::Union(..)) {
+                format!("({rendered})[]")
+            } else {
+                format!("{rendered}[]")
+            }
+        }
+        baml_type::RealizedTy::Map { key, value, .. } => {
+            format!(
+                "map<{}, {}>",
+                render_ty_source(key),
+                render_ty_source(value)
+            )
+        }
+        baml_type::RealizedTy::Class(name, args, _) if args.is_empty() => {
+            name.display_name().to_string()
+        }
+        baml_type::RealizedTy::Enum(name, _) => name.display_name().to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
+    let mut enum_ptrs: Vec<_> = type_value.defs().enums.values().copied().collect();
+    let mut class_ptrs: Vec<_> = type_value.defs().classes.values().copied().collect();
+    if !type_value.owner.as_ptr().is_null() {
+        let Object::Package(package) = vm.get_object(type_value.owner) else {
+            unreachable!("runtime type owner must be a Package")
+        };
+        for ptr in package.enums.values().copied() {
+            if !enum_ptrs.contains(&ptr) {
+                enum_ptrs.push(ptr);
+            }
+        }
+        for ptr in package.classes.values().copied().filter(|ptr| {
+            !matches!(
+                vm.get_object(*ptr),
+                Object::Class(class) if class.name.name().as_str().ends_with("$stream")
+            )
+        }) {
+            if !class_ptrs.contains(&ptr) {
+                class_ptrs.push(ptr);
+            }
+        }
+    }
+
+    let mut declarations = Vec::new();
+    for ptr in &enum_ptrs {
+        let Object::Enum(enm) = vm.get_object(*ptr) else {
+            continue;
+        };
+        let mut source = format!("enum {} {{", enm.name.display_name());
+        for variant in &enm.variants {
+            source.push_str("\n  ");
+            source.push_str(&variant.name);
+            source.push_str(&render_meta_suffix(
+                variant.alias.as_deref(),
+                variant.description.as_deref(),
+            ));
+        }
+        if let Some(alias) = enm.alias.as_deref() {
+            source.push_str("\n  @@alias(");
+            source.push_str(&quoted(alias));
+            source.push(')');
+        }
+        if let Some(description) = enm.description.as_deref() {
+            source.push_str("\n  @@description(");
+            source.push_str(&quoted(description));
+            source.push(')');
+        }
+        source.push_str("\n}");
+        declarations.push(source);
+    }
+    for ptr in &class_ptrs {
+        let Object::Class(class) = vm.get_object(*ptr) else {
+            continue;
+        };
+        let mut source = format!("class {} {{", class.name.display_name());
+        for field in &class.fields {
+            source.push_str("\n  ");
+            source.push_str(&field.name);
+            source.push(' ');
+            if let Some(field_type) = &field.runtime_type {
+                source.push_str(&render_ty_source(&field_type.ty));
+            } else if let Ok(field_type) = baml_type::RealizedTy::try_from(&field.field_type) {
+                source.push_str(&render_ty_source(&field_type));
+            } else {
+                source.push_str(&field.field_type.to_string());
+            }
+            source.push_str(&render_meta_suffix(
+                field.alias.as_deref(),
+                field.description.as_deref(),
+            ));
+        }
+        if let Some(alias) = class.alias.as_deref() {
+            source.push_str("\n  @@alias(");
+            source.push_str(&quoted(alias));
+            source.push(')');
+        }
+        if let Some(description) = class.description.as_deref() {
+            source.push_str("\n  @@description(");
+            source.push_str(&quoted(description));
+            source.push(')');
+        }
+        source.push_str("\n}");
+        declarations.push(source);
+    }
+    let root_is_declared = match &type_value.ty {
+        baml_type::RealizedTy::Class(name, _, _) => class_ptrs
+            .iter()
+            .any(|ptr| matches!(vm.get_object(*ptr), Object::Class(class) if class.name == *name)),
+        baml_type::RealizedTy::Enum(name, _) => enum_ptrs
+            .iter()
+            .any(|ptr| matches!(vm.get_object(*ptr), Object::Enum(enm) if enm.name == *name)),
+        _ => false,
+    };
+    if !root_is_declared {
+        declarations.push(format!(
+            "type RuntimeType = {}",
+            render_ty_source(&type_value.ty)
+        ));
+    }
+    declarations.join("\n\n")
 }
 
 /// The concrete `RealizedTy` wrapped by a `type` value (class, enum, interface,

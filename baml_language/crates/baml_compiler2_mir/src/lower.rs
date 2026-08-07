@@ -12934,6 +12934,7 @@ impl LoweringContext<'_> {
             } => self.pattern_test_can_reject_covered_values(*sp),
             // Irrefutable patterns emit no test.
             AstPattern::Wildcard | AstPattern::Bind { subpat: None, .. } => false,
+            AstPattern::Unreflect(_) => true,
             AstPattern::Type(_) | AstPattern::Class { .. } | AstPattern::Array { .. } => {
                 let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) else {
                     return false;
@@ -13334,7 +13335,10 @@ impl LoweringContext<'_> {
         match &self.body.patterns[pat_id] {
             AstPattern::Class { .. } | AstPattern::Array { .. } => true,
             AstPattern::Or(parts) => parts.iter().any(|p| self.pattern_contains_structural(*p)),
-            AstPattern::Wildcard | AstPattern::Bind { .. } | AstPattern::Type(_) => false,
+            AstPattern::Wildcard
+            | AstPattern::Bind { .. }
+            | AstPattern::Type(_)
+            | AstPattern::Unreflect(_) => false,
         }
     }
 
@@ -13801,6 +13805,19 @@ impl LoweringContext<'_> {
                     self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
             },
+            AstPattern::Unreflect(type_expr) => {
+                let type_value = self.lower_to_operand(*type_expr);
+                let test = Rvalue::RuntimeIsType {
+                    operand: Operand::Copy(Place::Local(scrutinee)),
+                    type_value,
+                };
+                let test_local = self.builder.temp(RuntimeTy::Bool {
+                    attr: TyAttr::default(),
+                });
+                self.builder.assign(Place::local(test_local), test);
+                self.builder
+                    .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            }
             AstPattern::Or(sub_pats) => {
                 if sub_pats.is_empty() {
                     self.builder.goto(failure);
@@ -13970,7 +13987,10 @@ impl LoweringContext<'_> {
             AstPattern::Or(parts) => parts
                 .iter()
                 .any(|part| self.is_irrefutable_catch_all(*part)),
-            AstPattern::Type(_) | AstPattern::Class { .. } | AstPattern::Array { .. } => false,
+            AstPattern::Type(_)
+            | AstPattern::Class { .. }
+            | AstPattern::Array { .. }
+            | AstPattern::Unreflect(_) => false,
         }
     }
 
@@ -14112,7 +14132,7 @@ impl LoweringContext<'_> {
                     self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell);
                 }
             }
-            AstPattern::Wildcard | AstPattern::Type(_) => {}
+            AstPattern::Wildcard | AstPattern::Type(_) | AstPattern::Unreflect(_) => {}
         }
     }
 
@@ -14152,7 +14172,7 @@ impl LoweringContext<'_> {
                     self.collect_pattern_bindings(part, out);
                 }
             }
-            AstPattern::Wildcard | AstPattern::Type(_) => {}
+            AstPattern::Wildcard | AstPattern::Type(_) | AstPattern::Unreflect(_) => {}
         }
     }
 
@@ -14272,7 +14292,7 @@ impl LoweringContext<'_> {
                     self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat);
                 }
             }
-            AstPattern::Wildcard | AstPattern::Type(_) => {}
+            AstPattern::Wildcard | AstPattern::Type(_) | AstPattern::Unreflect(_) => {}
         }
     }
 }

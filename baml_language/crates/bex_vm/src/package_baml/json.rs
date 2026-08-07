@@ -432,6 +432,22 @@ impl BamlNamespaceJson for PackageBamlImpl {
         bex_str::BexStr::from(s)
     }
 
+    fn encode(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+        let mut counter = 0;
+        let mut path = String::new();
+        let json = render_to_serde(vm, *v, &[], &[], &mut counter, &mut path)?;
+        serde_json::to_string(&json)
+            .map(bex_str::BexStr::from)
+            .map_err(|error| {
+                raise_serialize(
+                    vm,
+                    format!("serde_json::to_string failed: {error}"),
+                    &path,
+                    "serde_json",
+                )
+            })
+    }
+
     fn to_string(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
         let ty = vm
             .current_call_type_args()
@@ -443,16 +459,6 @@ impl BamlNamespaceJson for PackageBamlImpl {
                 })
             })?;
         json_to_string_typed(vm, *v, &ty).map(bex_str::BexStr::from)
-    }
-
-    fn encode(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
-        let ty = vm.value_concrete_ty(*v).ok_or_else(|| {
-            VmRustFnError::InternalError(VmInternalError::TypeError {
-                expected: bex_vm_types::types::Type::Object(bex_vm_types::ObjectType::Any),
-                got: vm.type_of(v),
-            })
-        })?;
-        json_to_string_typed(vm, *v, &RealizedTy::from(ty)).map(bex_str::BexStr::from)
     }
 
     fn from_string(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {

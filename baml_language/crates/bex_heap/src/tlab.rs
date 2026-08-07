@@ -613,6 +613,7 @@ mod tests {
                     docstring: None,
                     other: Default::default(),
                     skip: false,
+                    runtime_type: None,
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
@@ -627,6 +628,7 @@ mod tests {
                     docstring: None,
                     other: Default::default(),
                     skip: false,
+                    runtime_type: None,
                 },
             ],
             description: None,
@@ -637,6 +639,7 @@ mod tests {
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
+            runtime_type: None,
         })));
 
         // Allocate an instance of that class
@@ -696,6 +699,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
+            runtime_type: None,
         })));
 
         // Allocate a variant (Color::Green = index 1)

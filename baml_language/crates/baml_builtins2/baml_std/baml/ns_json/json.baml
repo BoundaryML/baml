@@ -49,9 +49,10 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
   $rust_function
 }
 
-/// Encode a value using its concrete runtime type. This is the dynamic-shape
-/// endpoint used when `T` is statically `unknown` (for example a value parsed
-/// from `unreflect(...)`).
+/// Encode a value using its concrete runtime shape. Unlike `to_string<T>`,
+/// this discovers runtime-created classes through the instance's authoritative
+/// class pointer, so it also works when `T` is statically `unknown` (for
+/// example a value parsed from `unreflect(...)`).
 //baml:mut_vm
 function encode<T>(v: T) -> string throws JsonSerializationError {
   $rust_function

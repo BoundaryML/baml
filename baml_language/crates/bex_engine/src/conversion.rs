@@ -728,6 +728,7 @@ impl BexEngine {
             external,
             None,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             None,
         )
     }
@@ -737,6 +738,7 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         overlay: &crate::RuntimeSchemaOverlay,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
         dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
     ) -> Result<Value, EngineError> {
         let mut named = indexmap::IndexMap::new();
@@ -765,6 +767,7 @@ impl BexEngine {
             holder,
             external,
             None,
+            dynamic_classes,
             dynamic_enums,
             Some(&named),
         )
@@ -787,25 +790,27 @@ impl BexEngine {
             external,
             expected_ty,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             None,
         )
     }
 
-    /// Materialize an external value using a call-local runtime enum side
-    /// table in addition to the engine's frozen static definition table.
-    /// Recursive calls retain the side table so runtime enums can land inside
-    /// containers and classes as well as at the top level.
-    pub(crate) fn convert_external_to_vm_value_with_dynamic_enums(
+    /// Materialize an external value using call-local runtime class and enum
+    /// side tables in addition to the engine's frozen static definition table.
+    /// Recursive calls retain both tables for nested containers and classes.
+    pub(crate) fn convert_external_to_vm_value_with_dynamic_types(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
         dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
     ) -> Result<Value, EngineError> {
         self.convert_external_to_vm_value_with_ty_and_runtime(
             holder,
             external,
             expected_ty,
+            dynamic_classes,
             dynamic_enums,
             None,
         )
@@ -816,6 +821,7 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
         dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
         runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
     ) -> Result<Value, EngineError> {
@@ -898,6 +904,7 @@ impl BexEngine {
                             holder,
                             v,
                             declared_element_ty,
+                            dynamic_classes,
                             dynamic_enums,
                             runtime_named_objects,
                         )
@@ -935,6 +942,7 @@ impl BexEngine {
                             holder,
                             v,
                             declared_value_ty,
+                            dynamic_classes,
                             dynamic_enums,
                             runtime_named_objects,
                         )
@@ -967,18 +975,29 @@ impl BexEngine {
                         type_args.clone_from(expected_args);
                     }
                 }
-                let class_ptr = self
-                    .resolved_class_names
-                    .get(&class_name)
-                    .or_else(|| resolve_named_object(&self.resolved_class_names, &class_name))
-                    .or_else(|| runtime_named_objects.and_then(|objects| objects.get(&class_name)))
-                    .or_else(|| {
-                        runtime_named_objects
-                            .and_then(|objects| resolve_named_object(objects, &class_name))
-                    })
-                    .ok_or_else(|| EngineError::TypeMismatch {
-                        message: format!("Unknown class `{class_name}` in external Instance value"),
-                    })?;
+                let class_ptr = if let Some(handle) = dynamic_classes.get(&class_name) {
+                    self.resolve_handle(holder.proof(), handle).ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Runtime class `{class_name}` expired before its value landed"
+                            ),
+                        }
+                    })?
+                } else {
+                    *runtime_named_objects
+                        .and_then(|objects| objects.get(&class_name))
+                        .or_else(|| {
+                            runtime_named_objects
+                                .and_then(|objects| resolve_named_object(objects, &class_name))
+                        })
+                        .or_else(|| self.resolved_class_names.get(&class_name))
+                        .or_else(|| resolve_named_object(&self.resolved_class_names, &class_name))
+                        .ok_or_else(|| EngineError::TypeMismatch {
+                            message: format!(
+                                "Unknown class `{class_name}` in external Instance value"
+                            ),
+                        })?
+                };
 
                 // SAFETY: class_ptr points to a compile-time Class object
                 let class_fields = match unsafe { class_ptr.get() } {
@@ -1014,6 +1033,7 @@ impl BexEngine {
                         holder,
                         field_value,
                         Some(&field_ty),
+                        dynamic_classes,
                         dynamic_enums,
                         runtime_named_objects,
                     )?);
@@ -1026,7 +1046,7 @@ impl BexEngine {
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_instance_with_type_args(*class_ptr, realized_type_args, values),
+                        .alloc_instance_with_type_args(class_ptr, realized_type_args, values),
                 )
             }
             BexExternalValue::Variant {
@@ -1042,17 +1062,14 @@ impl BexEngine {
                         }
                     })?
                 } else {
-                    *self
-                        .resolved_enum_names
-                        .get(&enum_name)
-                        .or_else(|| resolve_named_object(&self.resolved_enum_names, &enum_name))
-                        .or_else(|| {
-                            runtime_named_objects.and_then(|objects| objects.get(&enum_name))
-                        })
+                    *runtime_named_objects
+                        .and_then(|objects| objects.get(&enum_name))
                         .or_else(|| {
                             runtime_named_objects
                                 .and_then(|objects| resolve_named_object(objects, &enum_name))
                         })
+                        .or_else(|| self.resolved_enum_names.get(&enum_name))
+                        .or_else(|| resolve_named_object(&self.resolved_enum_names, &enum_name))
                         .ok_or_else(|| EngineError::TypeMismatch {
                             message: format!(
                                 "Unknown enum `{enum_name}` in external Variant value"
@@ -1090,6 +1107,7 @@ impl BexEngine {
                     holder,
                     value,
                     Some(&selected_type),
+                    dynamic_classes,
                     dynamic_enums,
                     runtime_named_objects,
                 );
@@ -4209,6 +4227,7 @@ mod union_container_selection_tests {
             docstring: None,
             other: indexmap::IndexMap::new(),
             ty_attr: TyAttr::default(),
+            runtime_type: None,
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
         let broad = RuntimeTy::Enum(mood, TyAttr::default());

@@ -118,6 +118,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
+        runtime_type: None,
     })));
 
     // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
@@ -172,6 +173,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
+        runtime_type: None,
     })));
 
     let fn_name = "user.test_mono_alloc";
