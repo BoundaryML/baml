@@ -3,7 +3,10 @@ use baml_type::{RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{HeapPtr, ObjectIndex, types::interface::InterfaceBound};
+use crate::{
+    AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, Value,
+    types::interface::InterfaceBound,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, BorshSerialize, BorshDeserialize)]
 pub struct LocalName {
@@ -26,6 +29,41 @@ pub struct Package {
     /// key references an `Object::Interface` and each value is an `Object::ImplRule`
     pub impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
     pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// Present only for a package produced by `reflect.Package.compile`.
+    #[borsh(skip)]
+    pub runtime: Option<Box<RuntimePackage>>,
+}
+
+/// Runtime-only package image grafted into the moving heap.
+#[derive(Clone, Debug)]
+pub struct RuntimePackage {
+    /// Linked local object table. Imported entries point into static or other
+    /// runtime packages; owned entries point back into this package's graph.
+    pub objects: Box<[HeapPtr]>,
+    /// Package-local global slots, mutable only while `$init` is running.
+    pub globals: Box<[AtomicValueSlot]>,
+    /// Named functions defined by this package.
+    pub functions: IndexMap<String, HeapPtr>,
+    /// Fully-qualified function/let name to this image's local global slot.
+    pub global_names: IndexMap<String, usize>,
+    /// Created-once reflected class type values, keyed by source-visible FQN.
+    pub class_types: IndexMap<String, HeapPtr>,
+    /// Source-less check artifact used when this package is mounted later.
+    pub interface_blob: Vec<u8>,
+    /// Compiler warnings retained on a successful package.
+    pub diagnostics: Vec<RuntimeCompileDiagnostic>,
+    /// Runtime package objects imported by this image.
+    pub dependencies: Box<[HeapPtr]>,
+    /// The candidate `$init`, if one exists.
+    pub init: Option<HeapPtr>,
+    /// False while `$init` may write package globals; true after commit.
+    pub initialized: bool,
+}
+
+impl RuntimePackage {
+    pub fn load_global(&self, index: usize) -> Option<Value> {
+        self.globals.get(index).map(AtomicValueSlot::load)
+    }
 }
 
 /// The serialized, global-index-keyed twin of [`Package`]. The `Program` must be

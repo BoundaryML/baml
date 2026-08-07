@@ -460,6 +460,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 body_meta: function.body_meta,
                 capture: function.capture,
                 function_id: 0, // synthetic; not in the profiling function table
+                runtime_package: function.runtime_package,
             }))
         }
         other => other,

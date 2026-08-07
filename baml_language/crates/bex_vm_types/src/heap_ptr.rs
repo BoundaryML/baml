@@ -178,6 +178,12 @@ impl PartialEq for HeapPtr {
 
 impl Eq for HeapPtr {}
 
+impl Default for HeapPtr {
+    fn default() -> Self {
+        Self::null()
+    }
+}
+
 impl PartialOrd for HeapPtr {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))

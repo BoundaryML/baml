@@ -58,6 +58,55 @@ class InvalidArgumentError {
   got type
 }
 
+/// A byte range in a source file submitted to `Package.compile`.
+class Span {
+  file string
+  start int
+  end int
+}
+
+/// One compiler diagnostic retained by a runtime package or compilation error.
+class Diagnostic {
+  code string
+  message string
+  span Span?
+}
+
+/// An isolated runtime-compiled package.
+class Package {
+  _inner unknown
+
+  function compile(files: map<string, string>, packages: map<string, Package> = {}) -> Package throws baml.reflect.errors.CompilationError {
+    let artifact = Package._compile(files, packages)
+    Package._finish(artifact, packages)
+  }
+
+  function _compile(files: map<string, string>, packages: map<string, Package>) -> Package throws baml.reflect.errors.CompilationError {
+    $rust_io_function
+  }
+
+  //baml:mut_vm
+  //baml:may_yield
+  function _finish(artifact: Package, packages: map<string, Package>) -> Package throws unknown {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function get_class(self, name: string) -> baml.reflect.class.Type? throws never {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function classes(self) -> map<string, baml.reflect.class.Type> throws never {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function diagnostics(self) -> Diagnostic[] throws never {
+    $rust_function
+  }
+}
+
 /// Returns the runtime signature of `f`.
 ///
 /// Usage:

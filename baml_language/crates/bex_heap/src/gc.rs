@@ -663,6 +663,38 @@ impl BexHeap {
                 }
                 worklist.push(future.closure);
             }
+            Object::Package(package) => {
+                worklist.extend(package.classes.values().copied());
+                worklist.extend(package.enums.values().copied());
+                worklist.extend(package.interfaces.values().copied());
+                if let Some(runtime) = &package.runtime {
+                    worklist.extend(runtime.objects.iter().copied());
+                    worklist.extend(runtime.class_types.values().copied());
+                    worklist.extend(runtime.dependencies.iter().copied());
+                    worklist.extend(runtime.init);
+                    worklist.extend(
+                        runtime
+                            .globals
+                            .iter()
+                            .filter_map(|slot| slot.load().as_object_ptr()),
+                    );
+                }
+            }
+            Object::Function(function) => {
+                if !function.runtime_package.as_ptr().is_null() {
+                    worklist.push(function.runtime_package);
+                }
+            }
+            Object::GenericFunction(function) => {
+                if !function.runtime_package.as_ptr().is_null() {
+                    worklist.push(function.runtime_package);
+                }
+            }
+            Object::Type(value) => {
+                if !value.owner.as_ptr().is_null() {
+                    worklist.push(value.owner);
+                }
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -677,14 +709,10 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
-            | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
+            | Object::Float(_) => {}
         }
     }
 
@@ -814,6 +842,60 @@ impl BexHeap {
                     future.closure = new_ptr;
                 }
             }
+            Object::Package(package) => {
+                for ptr in package
+                    .classes
+                    .values_mut()
+                    .chain(package.enums.values_mut())
+                    .chain(package.interfaces.values_mut())
+                {
+                    if let Some(&new_ptr) = forwarding.get(ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+                if let Some(runtime) = &mut package.runtime {
+                    for ptr in runtime.objects.iter_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    for ptr in runtime.class_types.values_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    for ptr in runtime.dependencies.iter_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    if let Some(ptr) = &mut runtime.init
+                        && let Some(&new_ptr) = forwarding.get(ptr)
+                    {
+                        *ptr = new_ptr;
+                    }
+                    for slot in &runtime.globals {
+                        let mut value = slot.load();
+                        self.fixup_value(&mut value, forwarding);
+                        slot.store(value);
+                    }
+                }
+            }
+            Object::Function(function) => {
+                if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
+                    function.runtime_package = new_ptr;
+                }
+            }
+            Object::GenericFunction(function) => {
+                if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
+                    function.runtime_package = new_ptr;
+                }
+            }
+            Object::Type(value) => {
+                if let Some(&new_ptr) = forwarding.get(&value.owner) {
+                    value.owner = new_ptr;
+                }
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -826,14 +908,10 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
-            | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
+            | Object::Float(_) => {}
         }
     }
 
@@ -1084,6 +1162,57 @@ impl BexHeap {
                     worklist.push(future.closure);
                 }
             }
+            Object::Package(package) => {
+                let refs = package
+                    .classes
+                    .values()
+                    .chain(package.enums.values())
+                    .chain(package.interfaces.values())
+                    .copied();
+                worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
+                if let Some(runtime) = &package.runtime {
+                    worklist.extend(
+                        runtime
+                            .objects
+                            .iter()
+                            .chain(runtime.class_types.values())
+                            .chain(runtime.dependencies.iter())
+                            .copied()
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                    if let Some(ptr) = runtime.init
+                        && self.generation_of(ptr).is_young()
+                    {
+                        worklist.push(ptr);
+                    }
+                    worklist.extend(
+                        runtime
+                            .globals
+                            .iter()
+                            .filter_map(|slot| slot.load().as_object_ptr())
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                }
+            }
+            Object::Function(function) => {
+                if !function.runtime_package.as_ptr().is_null()
+                    && self.generation_of(function.runtime_package).is_young()
+                {
+                    worklist.push(function.runtime_package);
+                }
+            }
+            Object::GenericFunction(function) => {
+                if !function.runtime_package.as_ptr().is_null()
+                    && self.generation_of(function.runtime_package).is_young()
+                {
+                    worklist.push(function.runtime_package);
+                }
+            }
+            Object::Type(value) => {
+                if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young() {
+                    worklist.push(value.owner);
+                }
+            }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -1095,14 +1224,10 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
-            | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
+            | Object::Float(_) => {}
         }
     }
 

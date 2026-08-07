@@ -369,6 +369,7 @@ pub(crate) mod tests {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
+            runtime_package: HeapPtr::null(),
         }))
     }
 
@@ -899,6 +900,8 @@ pub struct BytecodeProgram {
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
+    /// Maps top-level let names to their global indices.
+    pub let_global_indices: HashMap<String, usize>,
     /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
     pub template_strings_macros: String,
     /// Client build metadata, passed through to `SysOpContext`.
@@ -951,6 +954,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         globals: program.globals,
         resolved_function_names,
         function_global_indices: program.function_global_indices,
+        let_global_indices: program.let_global_indices,
         template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
@@ -1759,12 +1763,86 @@ impl BexVm {
         roots
     }
 
-    /// Convert an `ObjectIndex` to `HeapPtr` (for compile-time objects).
-    ///
-    /// Used during the transition from index-based to pointer-based access.
+    fn current_runtime_package(&self) -> HeapPtr {
+        self.frames
+            .iter()
+            .rev()
+            .find_map(|frame| match frame {
+                Frame::Bytecode(frame) => match self.get_object(frame.function) {
+                    Object::Function(function) => Some(function.runtime_package),
+                    _ => None,
+                },
+                Frame::Native(_) => None,
+            })
+            .unwrap_or_else(HeapPtr::null)
+    }
+
+    fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
+        if package.as_ptr().is_null() {
+            return self.globals.get(self.proof(), index);
+        }
+        let Object::Package(package) = self.get_object(package) else {
+            unreachable!("runtime owner does not point to Object::Package")
+        };
+        package
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.load_global(index.raw()))
+            .expect("runtime global index was validated by dynamic link")
+    }
+
+    fn load_current_global(&self, index: GlobalIndex) -> Value {
+        self.load_global_in(self.current_runtime_package(), index)
+    }
+
+    fn store_current_global(
+        &mut self,
+        index: GlobalIndex,
+        value: Value,
+    ) -> Result<(), VmInternalError> {
+        let package_ptr = self.current_runtime_package();
+        if package_ptr.as_ptr().is_null() {
+            return self
+                .globals
+                .set(index, value, VmInternalError::StoreGlobalAfterInit);
+        }
+        let Object::Package(package) = self.get_object(package_ptr) else {
+            unreachable!("runtime owner does not point to Object::Package")
+        };
+        let runtime = package
+            .runtime
+            .as_ref()
+            .expect("runtime function owner has a runtime image");
+        if runtime.initialized {
+            return Err(VmInternalError::StoreGlobalAfterInit);
+        }
+        let slot = runtime
+            .globals
+            .get(index.raw())
+            .ok_or(VmInternalError::StoreGlobalAfterInit)?;
+        slot.store(value);
+        self.heap.write_barrier(package_ptr, value);
+        Ok(())
+    }
+
+    /// Convert an image-local `ObjectIndex` to a heap pointer. Runtime
+    /// functions address their owning package table; static functions address
+    /// the immutable compile-time image.
     #[inline]
     pub fn idx_to_ptr(&self, idx: ObjectIndex) -> HeapPtr {
-        self.heap.compile_time_ptr(idx.into_raw())
+        let package_ptr = self.current_runtime_package();
+        if package_ptr.as_ptr().is_null() {
+            return self.heap.compile_time_ptr(idx.into_raw());
+        }
+        let Object::Package(package) = self.get_object(package_ptr) else {
+            unreachable!("runtime owner does not point to Object::Package")
+        };
+        package
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.objects.get(idx.raw()))
+            .copied()
+            .expect("runtime object index was validated by dynamic link")
     }
 
     /// Helper method to get `HeapPtr` from a Value, with type checking.
@@ -1973,7 +2051,7 @@ impl BexVm {
                 }
             }
             Object::GenericFunction(gf) => {
-                let inner = self.globals.get(self.proof(), gf.function);
+                let inner = self.load_global_in(gf.runtime_package, gf.function);
                 match inner.as_object_ptr().map(|p| self.get_object(p)) {
                     Some(Object::Function(f)) => {
                         function_callable_signature(self, f, &gf.type_args, false).ok()
@@ -2127,7 +2205,7 @@ impl BexVm {
                 // Resolve the underlying function through the global table, as
                 // at call time; its `type_args` are the frame the signature
                 // templates materialize against.
-                let inner = self.globals.get(self.proof(), gf.function);
+                let inner = self.load_global_in(gf.runtime_package, gf.function);
                 match inner.as_object_ptr().map(|p| self.get_object(p)) {
                     Some(Object::Function(f)) => {
                         function_object_ty(self, f, &gf.type_args, false).ok()?
@@ -2451,7 +2529,7 @@ impl BexVm {
             }
             Object::GenericFunction(gf) => {
                 effective_type_args = gf.type_args.to_vec();
-                let inner = self.globals.get(self.proof(), gf.function);
+                let inner = self.load_global_in(gf.runtime_package, gf.function);
                 dispatch_ptr = self
                     .as_object_ptr(inner, FunctionType::Callable.into())
                     .expect("generic function global resolves to a function");
@@ -2507,7 +2585,7 @@ impl BexVm {
                 _ => None,
             },
             Object::GenericFunction(gf) => {
-                let inner = self.globals.get(self.proof(), gf.function);
+                let inner = self.load_global_in(gf.runtime_package, gf.function);
                 match inner.as_object_ptr().map(|p| unsafe { p.get() }) {
                     Some(Object::Function(f)) => Some(&f.display_type_params),
                     _ => None,
@@ -2613,6 +2691,7 @@ impl BexVm {
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0, // synthetic; not in the profiling function table
+            runtime_package: HeapPtr::null(),
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
 
@@ -2690,6 +2769,7 @@ impl BexVm {
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0,
+            runtime_package: HeapPtr::null(),
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
         let (call_id, parent_call_id) = self.prof_enter_call(0, None);
@@ -3161,7 +3241,7 @@ impl BexVm {
             }
             Object::GenericFunction(gf) => {
                 // Resolve the inner function via its global slot.
-                let inner_value = self.globals.get(self.proof(), gf.function);
+                let inner_value = self.load_global_in(gf.runtime_package, gf.function);
                 let func_ptr = self.as_object_ptr(inner_value, FunctionType::Callable.into())?;
                 // SAFETY: function globals hold compile-time Function objects.
                 let func_obj = unsafe { func_ptr.get() };
@@ -3960,7 +4040,7 @@ impl BexVm {
                 // Keep the GenericFunction ptr as callee identity (so
                 // execute_call_from_locals_offset can extract type_args); resolve
                 // the inner function via its global slot for arity.
-                let inner_value = self.globals.get(self.proof(), gf.function);
+                let inner_value = self.load_global_in(gf.runtime_package, gf.function);
                 let func_ptr = self.as_object_ptr(inner_value, expected_type.into())?;
                 let func_obj = unsafe { func_ptr.get() };
                 match func_obj {
@@ -4653,7 +4733,7 @@ impl BexVm {
                 // MakeBoundMethod opcode (the pooled GenericFunction stores a
                 // GlobalIndex, not a HeapPtr).
                 let gidx = gf.function;
-                let callee_value = self.globals.get(self.proof(), gidx);
+                let callee_value = self.load_global_in(gf.runtime_package, gidx);
                 let func_ptr = self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                 // SAFETY: the function global slot holds a compile-time Function
                 // object whose lifetime spans the whole program.
@@ -5173,7 +5253,7 @@ impl BexVm {
             }
             Object::GenericFunction(gf) => {
                 // Resolve the inner function via its global slot.
-                let inner_value = self.globals.get(self.proof(), gf.function);
+                let inner_value = self.load_global_in(gf.runtime_package, gf.function);
                 let func_ptr = self.as_object_ptr(inner_value, FunctionType::Callable.into())?;
                 // SAFETY: function globals hold compile-time Function objects.
                 let func_obj: &'static Object = unsafe { func_ptr.get() };
@@ -5929,7 +6009,7 @@ impl BexVm {
                 OpCode::LoadGlobal => {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let value = self.globals.get(self.proof(), global_idx);
+                    let value = self.load_current_global(global_idx);
                     self.stack.push(value);
                 }
 
@@ -5939,8 +6019,7 @@ impl BexVm {
                     let value = self.stack.ensure_pop();
                     // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
                     // and a write here is a VM internal error.
-                    self.globals
-                        .set(global_idx, value, VmInternalError::StoreGlobalAfterInit)?;
+                    self.store_current_global(global_idx, value)?;
                 }
 
                 // ── LoadField / StoreField / InitField ────────────────────────
@@ -6243,7 +6322,7 @@ impl BexVm {
                         None
                     };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.globals.get(self.proof(), callee);
+                    let callee_value = self.load_current_global(callee);
                     // `as_object_ptr` only unwraps the value to a heap pointer
                     // (the `FunctionType` argument is error-message metadata, not
                     // an assertion). `dispatch_sysop_yield`'s own kind check is
@@ -6323,7 +6402,7 @@ impl BexVm {
                         None
                     };
                     let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let callee_value = self.globals.get(self.proof(), callee_global);
+                    let callee_value = self.load_current_global(callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
                     let type_args = self.take_type_args_below_values(ntypeargs, arg_count)?;
@@ -7028,7 +7107,7 @@ impl BexVm {
                     let raw = { read_u32_unchecked(code, pc) };
                     let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let receiver = self.stack.ensure_pop();
-                    let callee_value = self.globals.get(self.proof(), global_idx);
+                    let callee_value = self.load_current_global(global_idx);
                     let function_ptr =
                         self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                     // Curry the receiver's class type args (→ `Self`) into the
@@ -7126,6 +7205,7 @@ impl BexVm {
                     let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
                         function,
                         type_args: type_args.into_boxed_slice(),
+                        runtime_package: HeapPtr::null(),
                     });
                     let ptr = self.tlab.alloc(gf);
                     self.stack.push(Value::object(ptr));

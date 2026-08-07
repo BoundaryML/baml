@@ -3695,6 +3695,7 @@ fn emit_file_group(
                 body_meta: None,
                 capture: FunctionCaptureProps::disabled(),
                 function_id: 0, // assigned at engine init (interim provider)
+                runtime_package: bex_vm_types::HeapPtr::null(),
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -5266,6 +5267,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)
+        runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
 
@@ -5577,6 +5579,7 @@ fn compile_init_function<'db>(
                     body_meta: None,
                     capture: FunctionCaptureProps::disabled(),
                     function_id: 0, // assigned at engine init (interim provider)
+                    runtime_package: bex_vm_types::HeapPtr::null(),
                 }
             }
         };
@@ -5654,6 +5657,7 @@ fn compile_init_function<'db>(
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)
+        runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
 

@@ -14,11 +14,16 @@
 
 use baml_type::{RealizedTy, Ty, TyAttr, normalize};
 use bex_heap::TlabHolder;
-use bex_vm_types::types::Value;
+use bex_vm_types::{
+    AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact,
+    link::link_dynamic,
+    types::{LocalName, Package, RuntimePackage, TypeValue, Value},
+};
 use indexmap::IndexMap;
 
 use super::{
-    BamlNamespaceReflect, NativeCallResult, PackageBamlImpl, PassThroughContinuation, copy,
+    BamlClassReflectPackage, BamlNamespaceReflect, Continuation, NativeCallResult, PackageBamlImpl,
+    PassThroughContinuation, copy,
 };
 use crate::{
     BexVm,
@@ -41,6 +46,419 @@ impl BamlNamespaceReflect for PackageBamlImpl {
         args: &IndexMap<bex_str::BexStr, Value>,
     ) -> NativeCallResult {
         call_any_impl(vm, *f, args)
+    }
+}
+
+fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
+    let Some(wrapper_ptr) = value.as_object_ptr() else {
+        return Err(VmBamlError::InvalidArgument {
+            message: "reflect.Package receiver is not an instance".to_string(),
+        }
+        .into());
+    };
+    let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
+        return Err(VmBamlError::InvalidArgument {
+            message: "reflect.Package receiver is not an instance".to_string(),
+        }
+        .into());
+    };
+    let Some(ptr) = wrapper.load_field(0).as_object_ptr() else {
+        return Err(VmBamlError::InvalidArgument {
+            message: "reflect.Package is not initialized".to_string(),
+        }
+        .into());
+    };
+    if !matches!(vm.get_object(ptr), Object::Package(_)) {
+        return Err(VmBamlError::InvalidArgument {
+            message: "reflect.Package has an invalid runtime payload".to_string(),
+        }
+        .into());
+    }
+    Ok(ptr)
+}
+
+fn local_name(path: &str) -> Option<LocalName> {
+    let mut parts = path
+        .split('.')
+        .map(baml_type::Name::new)
+        .collect::<Vec<_>>();
+    let name = parts.pop()?;
+    Some(LocalName {
+        namespace: parts,
+        name,
+    })
+}
+
+fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPtr> {
+    let Object::Package(package) = vm.get_object(package) else {
+        return None;
+    };
+    let local_name = local_name(local)?;
+    package
+        .classes
+        .get(&local_name)
+        .or_else(|| package.enums.get(&local_name))
+        .or_else(|| package.interfaces.get(&local_name))
+        .copied()
+        .or_else(|| {
+            package.runtime.as_ref().and_then(|runtime| {
+                runtime
+                    .functions
+                    .get(&format!("user.{local}"))
+                    .or_else(|| runtime.functions.get(local))
+                    .copied()
+            })
+        })
+}
+
+fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDiagnostic) -> Value {
+    let span = diagnostic.span.as_ref().map_or(Value::NULL, |span| {
+        let file = Value::object(vm.alloc_string(span.file.as_str()));
+        copy::reflect::Span {
+            file,
+            start: span.start as i64,
+            end: span.end as i64,
+        }
+        .to_value(vm)
+    });
+    let code = Value::object(vm.alloc_string(diagnostic.code.as_str()));
+    let message = Value::object(vm.alloc_string(diagnostic.message.as_str()));
+    copy::reflect::Diagnostic {
+        code,
+        message,
+        span,
+    }
+    .to_value(vm)
+}
+
+struct FinishPackage {
+    wrapper: HeapPtr,
+    package: HeapPtr,
+}
+
+impl Continuation for FinishPackage {
+    fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
+        let Object::Package(package) = vm.get_object_mut(self.package) else {
+            unreachable!("finish continuation retained a Package")
+        };
+        package
+            .runtime
+            .as_mut()
+            .expect("runtime package has an image")
+            .initialized = true;
+        NativeCallResult::Done(Value::object(self.wrapper))
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        vec![self.wrapper, self.package]
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
+        if let Some(&ptr) = forwarding.get(&self.wrapper) {
+            self.wrapper = ptr;
+        }
+        if let Some(&ptr) = forwarding.get(&self.package) {
+            self.package = ptr;
+        }
+    }
+}
+
+impl BamlClassReflectPackage for PackageBamlImpl {
+    #[allow(clippy::too_many_lines)]
+    fn _finish(
+        vm: &mut BexVm,
+        artifact: &Value,
+        packages: &IndexMap<bex_str::BexStr, Value>,
+    ) -> NativeCallResult {
+        let artifact_inner =
+            match artifact
+                .as_object_ptr()
+                .and_then(|ptr| match vm.get_object(ptr) {
+                    Object::Instance(instance) => Some(instance.load_field(0)),
+                    _ => None,
+                }) {
+                Some(value) => value,
+                None => {
+                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: "reflect.Package._finish received an invalid artifact".to_string(),
+                    })
+                    .into();
+                }
+            };
+        let artifact = match vm.as_rust_data::<RuntimeCompileArtifact>(&artifact_inner) {
+            Ok(artifact) => artifact.clone(),
+            Err(error) => return error.into(),
+        };
+        let plan = match link_dynamic(&artifact.units) {
+            Ok(plan) => plan,
+            Err(error) => {
+                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                    message: format!("runtime link failed: {error}"),
+                })
+                .into();
+            }
+        };
+
+        let mut dependencies = IndexMap::<String, HeapPtr>::new();
+        for (alias, value) in packages {
+            match package_ptr(vm, *value) {
+                Ok(ptr) => {
+                    dependencies.insert(alias.to_string(), ptr);
+                }
+                Err(error) => return error.into(),
+            }
+        }
+
+        let program_package = plan
+            .program
+            .packages
+            .get(&baml_type::Name::new("user"))
+            .cloned()
+            .unwrap_or_default();
+        let package = Package {
+            classes: IndexMap::new(),
+            enums: IndexMap::new(),
+            interfaces: IndexMap::new(),
+            impl_rules: IndexMap::new(),
+            recursive_type_aliases: program_package.recursive_type_aliases.clone(),
+            runtime: Some(Box::new(RuntimePackage {
+                objects: Box::new([]),
+                globals: Box::new([]),
+                functions: IndexMap::new(),
+                global_names: IndexMap::new(),
+                class_types: IndexMap::new(),
+                interface_blob: artifact.interface_blob,
+                diagnostics: artifact.diagnostics,
+                dependencies: dependencies.values().copied().collect(),
+                init: None,
+                initialized: false,
+            })),
+        };
+        let package_ptr = vm.alloc(Object::Package(Box::new(package)));
+
+        let external_objects: std::collections::HashMap<usize, _> = plan
+            .external_objects
+            .iter()
+            .map(|(index, symbol)| (index.raw(), symbol))
+            .collect();
+        let mut objects = Vec::with_capacity(plan.program.objects.len());
+        for (index, object) in plan.program.objects.iter().enumerate() {
+            let external = external_objects.get(&index).and_then(|symbol| {
+                if matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn) {
+                    return None;
+                }
+                vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
+                    let (alias, local) = symbol.fq_name.split_once('.')?;
+                    dependency_object(vm, *dependencies.get(alias)?, local)
+                })
+            });
+            if let Some(ptr) = external {
+                objects.push(ptr);
+                continue;
+            }
+            let mut object = object.clone();
+            match &mut object {
+                Object::Function(function) => {
+                    function.runtime_package = package_ptr;
+                    function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+                }
+                Object::GenericFunction(function) => {
+                    function.runtime_package = package_ptr;
+                }
+                _ => {}
+            }
+            objects.push(vm.alloc(object));
+        }
+
+        let external_globals: std::collections::HashMap<usize, _> = plan
+            .external_globals
+            .iter()
+            .map(|(index, symbol)| (index.raw(), symbol))
+            .collect();
+        let mut globals = Vec::with_capacity(plan.program.globals.len());
+        for (index, value) in plan.program.globals.iter().enumerate() {
+            let external = external_globals.get(&index).and_then(|symbol| {
+                vm.packages
+                    .global_by_name(&symbol.fq_name)
+                    .map(|index| vm.globals.get(vm.proof(), index))
+                    .or_else(|| {
+                        let (alias, local) = symbol.fq_name.split_once('.')?;
+                        let Object::Package(package) = vm.get_object(*dependencies.get(alias)?)
+                        else {
+                            return None;
+                        };
+                        let runtime = package.runtime.as_ref()?;
+                        let index = runtime
+                            .global_names
+                            .get(&format!("user.{local}"))
+                            .or_else(|| runtime.global_names.get(local))?;
+                        runtime.load_global(*index)
+                    })
+            });
+            let value = if let Some(value) = external {
+                value
+            } else {
+                match value {
+                    bex_vm_types::ConstValue::Float(value) => Value::object(vm.alloc_float(*value)),
+                    other => other.to_value(|index| objects[index.raw()]),
+                }
+            };
+            globals.push(AtomicValueSlot::new(value));
+        }
+
+        let classes = program_package
+            .classes
+            .iter()
+            .map(|(name, index)| (name.clone(), objects[index.raw()]))
+            .collect::<IndexMap<_, _>>();
+        let enums = program_package
+            .enums
+            .iter()
+            .map(|(name, index)| (name.clone(), objects[index.raw()]))
+            .collect::<IndexMap<_, _>>();
+        let interfaces = program_package
+            .interfaces
+            .iter()
+            .map(|(name, index)| (name.clone(), objects[index.raw()]))
+            .collect::<IndexMap<_, _>>();
+        let functions = plan
+            .program
+            .function_indices
+            .iter()
+            .filter(|(name, _)| name.starts_with("user."))
+            .map(|(name, index)| (name.clone(), objects[*index]))
+            .collect::<IndexMap<_, _>>();
+        let global_names = plan
+            .program
+            .function_global_indices
+            .iter()
+            .chain(&plan.program.let_global_indices)
+            .filter(|(name, _)| name.starts_with("user."))
+            .map(|(name, index)| (name.clone(), *index))
+            .collect::<IndexMap<_, _>>();
+        let init = plan
+            .program
+            .package_init_order
+            .iter()
+            .find(|name| name.starts_with("user."))
+            .and_then(|name| plan.program.function_indices.get(name))
+            .map(|index| objects[*index]);
+
+        let mut class_types = IndexMap::new();
+        for (name, class_ptr) in &classes {
+            let Object::Class(class) = vm.get_object(*class_ptr) else {
+                continue;
+            };
+            let ty = RealizedTy::Class(class.name.clone(), Vec::new(), TyAttr::default());
+            let type_ptr = vm.alloc_type(TypeValue::runtime(
+                ty,
+                vm.heap.mint_runtime_id(),
+                package_ptr,
+            ));
+            let local = name
+                .namespace
+                .iter()
+                .map(baml_type::Name::as_str)
+                .chain(std::iter::once(name.name.as_str()))
+                .collect::<Vec<_>>()
+                .join(".");
+            class_types.insert(local, type_ptr);
+        }
+
+        let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+            unreachable!("package was just allocated")
+        };
+        package.classes = classes;
+        package.enums = enums;
+        package.interfaces = interfaces;
+        let runtime = package.runtime.as_mut().expect("runtime package image");
+        runtime.objects = objects.into_boxed_slice();
+        runtime.globals = globals.into_boxed_slice();
+        runtime.functions = functions;
+        runtime.global_names = global_names;
+        runtime.class_types = class_types;
+        runtime.init = init;
+
+        let wrapper = copy::reflect::Package {
+            _inner: Value::object(package_ptr),
+        }
+        .to_value(vm);
+        let wrapper_ptr = wrapper
+            .as_object_ptr()
+            .expect("Package copy helper allocates an instance");
+        if let Some(init) = init {
+            NativeCallResult::YieldToCall {
+                callee: init,
+                args: Vec::new(),
+                type_args: Vec::new(),
+                continuation: Box::new(FinishPackage {
+                    wrapper: wrapper_ptr,
+                    package: package_ptr,
+                }),
+            }
+        } else {
+            let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+                unreachable!()
+            };
+            package.runtime.as_mut().expect("runtime image").initialized = true;
+            NativeCallResult::Done(wrapper)
+        }
+    }
+
+    fn get_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+        let ptr = package_ptr(vm, *package).ok()?;
+        let Object::Package(package) = vm.get_object(ptr) else {
+            return None;
+        };
+        let runtime = package.runtime.as_ref()?;
+        let name = name.to_string();
+        runtime
+            .class_types
+            .get(&name)
+            .or_else(|| {
+                runtime
+                    .class_types
+                    .get(name.strip_prefix("root.").unwrap_or(&name))
+            })
+            .copied()
+            .map(Value::object)
+    }
+
+    fn classes(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+        let Ok(ptr) = package_ptr(vm, *package) else {
+            return IndexMap::new();
+        };
+        let Object::Package(package) = vm.get_object(ptr) else {
+            return IndexMap::new();
+        };
+        package
+            .runtime
+            .as_ref()
+            .map_or_else(IndexMap::new, |runtime| {
+                runtime
+                    .class_types
+                    .iter()
+                    .map(|(name, ptr)| (name.as_str().into(), Value::object(*ptr)))
+                    .collect()
+            })
+    }
+
+    fn diagnostics(vm: &mut BexVm, package: &Value) -> Vec<Value> {
+        let Ok(ptr) = package_ptr(vm, *package) else {
+            return Vec::new();
+        };
+        let diagnostics = match vm.get_object(ptr) {
+            Object::Package(package) => package
+                .runtime
+                .as_ref()
+                .map(|runtime| runtime.diagnostics.clone())
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic_value(vm, diagnostic))
+            .collect()
     }
 }
 

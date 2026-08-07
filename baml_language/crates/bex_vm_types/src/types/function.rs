@@ -300,6 +300,11 @@ pub struct Function {
     /// format unchanged.
     #[borsh(skip)]
     pub function_id: u32,
+
+    /// Owning runtime package for dynamically grafted functions. Static
+    /// functions use null and address operands through the engine image.
+    #[borsh(skip)]
+    pub runtime_package: HeapPtr,
 }
 
 impl std::fmt::Display for Function {
@@ -377,6 +382,9 @@ pub struct GenericFunction {
     pub function: crate::GlobalIndex,
     /// Concrete type arguments to seed into `frame.type_args` when called.
     pub type_args: Box<[baml_type::RealizedTy]>,
+    /// Owning runtime package for resolving `function` in its local globals.
+    #[borsh(skip)]
+    pub runtime_package: HeapPtr,
 }
 
 /// A host-language callable bound to a BAML function type.

@@ -783,7 +783,15 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
                     if has_generic_throw {
                         quote! { SysOp::#variant => &[] }
                     } else {
-                        let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                        let cats: Vec<_> = cats
+                            .iter()
+                            .map(|t| {
+                                format_ident!(
+                                    "{}",
+                                    t.rsplit('.').next().expect("throw type has a name")
+                                )
+                            })
+                            .collect();
                         if cats.is_empty() {
                             quote! { SysOp::#variant => &[] }
                         } else {

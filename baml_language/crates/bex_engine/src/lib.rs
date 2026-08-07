@@ -106,10 +106,11 @@ use bex_vm::{
     VmEventSourceLocation, VmExecState,
 };
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
+    FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
+use indexmap::IndexMap;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, CaptureDefaults, FunctionCallContext,
@@ -120,6 +121,16 @@ pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
+
+/// Compiler implementation injected by an assembly crate above the runtime.
+/// Every call receives only owned data and returns an owned, compiler-neutral
+/// artifact, so no compiler database can leak into the engine or heap.
+pub trait RuntimeCompiler: Send + Sync + 'static {
+    fn compile(
+        &self,
+        request: bex_vm_types::RuntimeCompileRequest,
+    ) -> Result<bex_vm_types::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>;
+}
 
 /// Sets the VM park request flag for the lifetime of a pending GC park request.
 ///
@@ -801,6 +812,7 @@ pub struct BexEngine {
     resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
     sys_ops: std::sync::Arc<sys_ops::SysOps>,
+    runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     /// Context passed to `sys_ops` that need engine-level information.
     sys_op_ctx: sys_types::EngineSysOpContext,
     /// Compiled test cases from the BAML program.
@@ -1537,6 +1549,39 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        Self::new_with_deferred_profiling_and_runtime_compiler(
+            bytecode_program,
+            sys_ops,
+            argv,
+            None,
+        )
+    }
+
+    /// Construct an engine with runtime compilation enabled by an injected
+    /// compiler implementation.
+    pub fn new_with_runtime_compiler(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+        runtime_compiler: Arc<dyn RuntimeCompiler>,
+    ) -> Result<Self, EngineError> {
+        let engine = Self::new_with_deferred_profiling_and_runtime_compiler(
+            bytecode_program,
+            sys_ops,
+            argv,
+            Some(runtime_compiler),
+        )?;
+        engine.activate_profiling();
+        Ok(engine)
+    }
+
+    /// Deferred-profiling variant used by conditional project installation.
+    pub fn new_with_deferred_profiling_and_runtime_compiler(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+        runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+    ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
@@ -1626,10 +1671,32 @@ impl BexEngine {
         // Create the unified heap with compile-time objects, additionally
         // allocating the per-package `Object::Package` / `Object::ImplRule`
         // objects and the `vm.packages` index.
-        let (heap, package_index) = bex_vm::package_load::build_heap_with_packages(
+        let (heap, mut package_index) = bex_vm::package_load::build_heap_with_packages(
             compile_time_objects,
             &bytecode.packages,
         );
+        let image_objects = bytecode
+            .resolved_function_names
+            .iter()
+            .map(|(name, (idx, _))| (name.clone(), heap.compile_time_ptr(idx.into_raw())))
+            .chain(
+                class_indices
+                    .iter()
+                    .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
+            )
+            .chain(
+                enum_indices
+                    .iter()
+                    .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
+            )
+            .collect();
+        let image_globals = bytecode
+            .function_global_indices
+            .iter()
+            .chain(&bytecode.let_global_indices)
+            .map(|(name, idx)| (name.clone(), GlobalIndex::from_raw(*idx)))
+            .collect();
+        package_index.install_image_symbols(image_objects, image_globals);
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
         let packages = Arc::new(package_index);
@@ -1818,6 +1885,7 @@ impl BexEngine {
             resolved_class_names,
             resolved_enum_names,
             sys_ops,
+            runtime_compiler,
             sys_op_ctx,
             test_cases,
             argv,
@@ -5024,6 +5092,12 @@ impl BexEngine {
                         return Err(cancelled_unhandled_throw());
                     }
 
+                    let runtime_compile_request = if operation == SysOp::BamlReflectPackageCompile {
+                        Some(self.runtime_compile_request(&thread.vm, &args)?)
+                    } else {
+                        None
+                    };
+
                     let bex_args: Vec<BexExternalValue> =
                         if operation == SysOp::BamlHostCallHostValue {
                             let params = host_call_params(args.first().copied())
@@ -5085,8 +5159,11 @@ impl BexEngine {
                             None
                         };
 
-                    let sys_op_result =
-                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
+                    let sys_op_result = if let Some(request) = runtime_compile_request {
+                        self.execute_runtime_compile(request)
+                    } else {
+                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof())
+                    };
 
                     let outcome = match sys_op_result {
                         SysOpResult::Ready(r) => r,
@@ -5629,6 +5706,168 @@ impl BexEngine {
                 SysOpResult::Async(boxed)
             }
         }
+    }
+
+    fn runtime_compile_request(
+        &self,
+        vm: &BexVm,
+        args: &[Value],
+    ) -> Result<bex_vm_types::RuntimeCompileRequest, EngineError> {
+        fn map_entries(
+            vm: &BexVm,
+            value: Value,
+        ) -> Result<IndexMap<bex_str::BexStr, Value>, EngineError> {
+            let Some(ptr) = value.as_object_ptr() else {
+                return Err(EngineError::TypeMismatch {
+                    message: "Package.compile expected a map".to_string(),
+                });
+            };
+            let Object::Map(map) = vm.get_object(ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: "Package.compile expected a map".to_string(),
+                });
+            };
+            Ok(map.to_index_map())
+        }
+
+        let files_value = args
+            .first()
+            .copied()
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: "Package.compile is missing files".to_string(),
+            })?;
+        let packages_value = args
+            .get(1)
+            .copied()
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: "Package.compile is missing packages".to_string(),
+            })?;
+        let mut files = IndexMap::new();
+        for (path, value) in map_entries(vm, files_value)? {
+            let Some(ptr) = value.as_object_ptr() else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile file `{path}` must be a string"),
+                });
+            };
+            let Object::String(source) = vm.get_object(ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile file `{path}` must be a string"),
+                });
+            };
+            files.insert(path.to_string(), source.to_string());
+        }
+
+        let mut packages = IndexMap::new();
+        for (alias, value) in map_entries(vm, packages_value)? {
+            let Some(wrapper_ptr) = value.as_object_ptr() else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile dependency `{alias}` must be a Package"),
+                });
+            };
+            let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile dependency `{alias}` must be a Package"),
+                });
+            };
+            let inner = wrapper.load_field(0);
+            let Some(package_ptr) = inner.as_object_ptr() else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile dependency `{alias}` is not initialized"),
+                });
+            };
+            let Object::Package(package) = vm.get_object(package_ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("Package.compile dependency `{alias}` is not initialized"),
+                });
+            };
+            let interface = package
+                .runtime
+                .as_ref()
+                .map(|runtime| runtime.interface_blob.clone())
+                .ok_or_else(|| EngineError::TypeMismatch {
+                    message: format!(
+                        "Package.compile dependency `{alias}` is not a runtime package"
+                    ),
+                })?;
+            packages.insert(alias.to_string(), interface);
+        }
+        Ok(bex_vm_types::RuntimeCompileRequest { files, packages })
+    }
+
+    fn execute_runtime_compile(&self, request: bex_vm_types::RuntimeCompileRequest) -> SysOpResult {
+        fn string(value: impl Into<String>) -> BexExternalValue {
+            BexExternalValue::String(value.into().into())
+        }
+        fn diagnostic(value: bex_vm_types::RuntimeCompileDiagnostic) -> BexExternalValue {
+            let span =
+                value
+                    .span
+                    .map_or(BexExternalValue::Null, |span| BexExternalValue::Instance {
+                        class_name: "baml.reflect.Span".to_string(),
+                        type_args: Vec::new(),
+                        fields: indexmap::indexmap! {
+                            "file".to_string() => string(span.file),
+                            "start".to_string() => BexExternalValue::Int(span.start as i64),
+                            "end".to_string() => BexExternalValue::Int(span.end as i64),
+                        },
+                    });
+            BexExternalValue::Instance {
+                class_name: "baml.reflect.Diagnostic".to_string(),
+                type_args: Vec::new(),
+                fields: indexmap::indexmap! {
+                    "code".to_string() => string(value.code),
+                    "message".to_string() => string(value.message),
+                    "span".to_string() => span,
+                },
+            }
+        }
+
+        let compiler = self.runtime_compiler.clone();
+        SysOpResult::Async(Box::pin(async move {
+            let Some(compiler) = compiler else {
+                return Err(OpError::new(
+                    SysOp::BamlReflectPackageCompile,
+                    bex_vm_types::errors::VmBamlError::Unsupported {
+                        message: "runtime compiler was not installed by the host".to_string(),
+                    },
+                ));
+            };
+            match compiler.compile(request) {
+                Ok(artifact) => Ok(BexExternalValue::Instance {
+                    class_name: "baml.reflect.Package".to_string(),
+                    type_args: Vec::new(),
+                    fields: indexmap::indexmap! {
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(artifact)),
+                    },
+                }),
+                Err(diagnostics) => {
+                    let message = diagnostics
+                        .iter()
+                        .find(|diagnostic| {
+                            diagnostic.severity == bex_vm_types::RuntimeDiagnosticSeverity::Error
+                        })
+                        .map_or_else(
+                            || "runtime compilation failed".to_string(),
+                            |diagnostic| diagnostic.message.clone(),
+                        );
+                    let items = diagnostics.into_iter().map(diagnostic).collect();
+                    Err(OpError::host_thrown_value(
+                        SysOp::BamlReflectPackageCompile,
+                        BexExternalValue::Instance {
+                            class_name: "baml.reflect.errors.CompilationError".to_string(),
+                            type_args: Vec::new(),
+                            fields: indexmap::indexmap! {
+                                "message".to_string() => string(message),
+                                "diagnostics".to_string() => BexExternalValue::Array {
+                                    element_type: baml_type::RuntimeTy::unknown(),
+                                    items,
+                                },
+                            },
+                        },
+                    ))
+                }
+            }
+        }))
     }
 }
 

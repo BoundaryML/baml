@@ -324,6 +324,7 @@ mod tests {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
+            runtime_package: HeapPtr::null(),
         }
     }
 

@@ -1074,6 +1074,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0, // assigned at engine init (interim provider)
+            runtime_package: bex_vm_types::HeapPtr::null(),
         }
     }
 
@@ -1946,6 +1947,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             None => self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
                 function: gidx,
                 type_args: type_args.to_vec().into_boxed_slice(),
+                runtime_package: bex_vm_types::HeapPtr::null(),
             })),
         };
         let const_idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));

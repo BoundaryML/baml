@@ -10,6 +10,8 @@
 
 use baml_type::{RealizedTy, normalize::TypeContext};
 
+use crate::HeapPtr;
+
 /// A minted identity token for a runtime `type` value.
 ///
 /// The enum discriminant participates in derived equality, so a `Static` and
@@ -45,6 +47,9 @@ pub struct TypeValue {
     /// The type this value denotes.
     pub ty: RealizedTy,
     mint: MintId,
+    /// Runtime package whose definitions give this type meaning. Static type
+    /// values use a null pointer. This is a GC edge, not serialized identity.
+    pub owner: HeapPtr,
 }
 
 impl TypeValue {
@@ -61,6 +66,7 @@ impl TypeValue {
         Self {
             ty,
             mint: MintId::Static(digest),
+            owner: HeapPtr::null(),
         }
     }
 
@@ -72,7 +78,18 @@ impl TypeValue {
     /// caller owns the invariant that `mint` was produced for `ty` — a
     /// mismatched pair breaks type-value equality program-wide.
     pub fn from_parts(ty: RealizedTy, mint: MintId) -> Self {
-        Self { ty, mint }
+        Self {
+            ty,
+            mint,
+            owner: HeapPtr::null(),
+        }
+    }
+
+    /// Assemble a package-owned type value with a fresh runtime mint.
+    pub fn runtime(ty: RealizedTy, mint: MintId, owner: HeapPtr) -> Self {
+        debug_assert!(matches!(mint, MintId::Runtime(_)));
+        debug_assert!(!owner.as_ptr().is_null());
+        Self { ty, mint, owner }
     }
 
     /// This value's identity token.
