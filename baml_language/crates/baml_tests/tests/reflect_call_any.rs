@@ -491,10 +491,26 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 #[tokio::test]
 async fn runtime_enum_identity_and_metadata_are_preserved() {
     let output = baml_test!(
-        r#"
-        function main() -> string throws baml.reflect.errors.CompilationError {
+        r##"
+        client<llm> TestClient {
+            provider openai
+            options {
+                model "gpt-4o-mini"
+                api_key "test-key"
+                base_url "http://localhost:1234"
+            }
+        }
+
+        function Classify<T>(input: string) -> T {
+            client TestClient
+            prompt #"Choose a category for {{ input }}.\n{{ ctx.output_format }}"#
+        }
+
+        function main() -> string {
             let left = reflect.enum.new("Category", ["RED", "BLUE"])
             let right = reflect.enum.new("Category", ["RED", "BLUE"])
+            let left_prompt = Classify$render_prompt<unreflect(left)>("sample").text()
+            let right_prompt = Classify$render_prompt<unreflect(right)>("sample").text()
             let tagged = left.meta(
                 alias = "category_code",
                 description = "A generated category",
@@ -503,19 +519,20 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
             )
             let owner = tagged.other.get("owner")
             return (left != right).to_string()
+                + "|" + (left_prompt == right_prompt).to_string()
                 + "|" + (tagged.ty == left).to_string()
                 + "|" + (tagged.alias ?? "null")
                 + "|" + (tagged.description ?? "null")
                 + "|" + (tagged.docstring ?? "null")
                 + "|" + (owner ?? "null")
         }
-        "#
+        "##
     );
 
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "true|true|category_code|A generated category|runtime docs|tests".into()
+            "true|true|true|category_code|A generated category|runtime docs|tests".into()
         ))
     );
 }
