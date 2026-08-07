@@ -1940,7 +1940,8 @@ pub struct RetryPolicyDef {
     pub name_span: TextRange,
 }
 
-/// A top-level let binding — compiler-generated, not user syntax.
+/// A top-level let binding. Source `let` declarations and compiler-generated
+/// client/retry-policy bindings share the same `$init` pipeline.
 /// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LetDef {

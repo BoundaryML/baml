@@ -2341,8 +2341,10 @@ impl<'db> SemanticIndexBuilder<'db> {
                             && segments.len() == 1
                             && allowed_generic_params.iter().any(|name| name == &segments[0])
                 ) => {}
-            // `throws never` is the explicit "infallible" marker — always valid.
-            ast::TypeExprKind::Never { .. } => {}
+            // `throws never` and `throws unknown` are the two explicit effect
+            // bounds and are both valid for host-bound functions. The latter
+            // is needed by continuations that execute user bytecode.
+            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::BuiltinUnknown { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }

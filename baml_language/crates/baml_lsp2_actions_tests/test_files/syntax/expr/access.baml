@@ -43,4 +43,38 @@ let array_access_4 = [1,2, 3][foo.name];
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0007
+//
+//   × type `Foo` has no member `names`
+//     ╭─[expr_access.baml:11:19]
+//  11 │ let misspelling = foo.names;
+//     ·                   ─────────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[expr_access.baml:1:7]
+//        1 │ class Foo {
+//          ·       ───
+//          ╰────
+// E0007
+//
+//   × type `string` has no member `field`
+//     ╭─[expr_access.baml:12:16]
+//  12 │ let nonsense = foo.name.field;
+//     ·                ──────────────
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[expr_access.baml:15:31]
+//  15 │ let array_access_2 = [1,2, 3]["hi"];
+//     ·                               ──┬─
+//     ·                                 ╰── expected `int`, found `string`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[expr_access.baml:17:31]
+//  17 │ let array_access_4 = [1,2, 3][foo.name];
+//     ·                               ────┬───
+//     ·                                   ╰── expected `int`, found `string`
+//     ╰────

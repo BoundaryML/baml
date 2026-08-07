@@ -1588,7 +1588,7 @@ impl<'db> PackageResolutionContext<'db> {
         // expression form, K-13) as `baml.type`. Strictly after every user
         // lookup above, so any user-defined name shadows the shorthand.
         if path.len() >= 2
-            && matches!(path[0].as_str(), "reflect" | "type")
+            && matches!(path[0].as_str(), "reflect" | "type" | "json")
             && self.can_access_baml_package()
         {
             let namespace = &path[..path.len() - 1];

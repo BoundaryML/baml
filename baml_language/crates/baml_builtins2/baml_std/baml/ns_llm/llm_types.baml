@@ -762,6 +762,7 @@ class PrimitiveClient {
       let enum_type: baml.reflect.enum.Type => {
         if (enum_type.values().length() == 0) {
           throw baml.reflect.errors.CompilationError {
+            message: "empty enum `" + return_type.to_string() + "` cannot be rendered as an LLM output schema",
             diagnostics: [baml.reflect.Diagnostic {
               code: "E0159",
               span: null,

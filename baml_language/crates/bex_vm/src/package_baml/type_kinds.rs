@@ -159,16 +159,32 @@ fn reflected_ty(vm: &BexVm, value: Value) -> baml_type::RealizedTy {
 }
 
 fn reflected_class(vm: &BexVm, value: Value) -> (bex_vm_types::Class, Vec<baml_type::RealizedTy>) {
-    let baml_type::RealizedTy::Class(name, args, _) = reflected_ty(vm, value) else {
+    let type_value = value
+        .as_object_ptr()
+        .and_then(|ptr| match vm.get_object(ptr) {
+            Object::Type(value) => Some(&**value),
+            _ => None,
+        })
+        .unwrap_or_else(|| unreachable!("class.Type receiver must be Object::Type"));
+    let baml_type::RealizedTy::Class(name, args, _) = &type_value.ty else {
         unreachable!("class.Type receiver must wrap a class type")
     };
-    let ptr = vm
-        .lookup_type(&name)
+    let ptr =
+        if type_value.owner.as_ptr().is_null() {
+            vm.lookup_type(name)
+        } else {
+            let Object::Package(package) = vm.get_object(type_value.owner) else {
+                unreachable!("runtime type owner must be a Package")
+            };
+            package.classes.values().find(|ptr| {
+            matches!(vm.get_object(**ptr), Object::Class(class) if class.name == *name)
+        }).copied()
+        }
         .unwrap_or_else(|| unreachable!("reflected class {name} must be loaded"));
     let Object::Class(class) = vm.get_object(ptr) else {
         unreachable!("reflected class name resolved to a non-class")
     };
-    ((**class).clone(), args)
+    ((**class).clone(), args.clone())
 }
 
 fn reflected_enum(vm: &BexVm, value: Value) -> bex_vm_types::Enum {
@@ -265,6 +281,11 @@ fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {
 }
 
 fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
+    let message = diagnostics
+        .first()
+        .map_or("runtime schema validation failed", |diagnostic| {
+            diagnostic.message.as_str()
+        });
     let values = diagnostics
         .iter()
         .map(|diagnostic| {
@@ -284,8 +305,9 @@ fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value 
         baml_type::TyAttr::default(),
     );
     let diagnostics = Value::object(vm.alloc_array(diagnostic_ty, values));
+    let message = Value::object(vm.alloc_string(message));
     let class = vm.resolve_class("baml.reflect.errors.CompilationError");
-    Value::object(vm.alloc_instance(class, vec![diagnostics]))
+    Value::object(vm.alloc_instance(class, vec![message, diagnostics]))
 }
 
 fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {

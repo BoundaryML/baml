@@ -17,4 +17,11 @@ let x = Foo { bar: Bar { name: 10 }};
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0001
+//
+//   × mismatched types
+//    ╭─[expr_constructors_nested.baml:9:32]
+//  9 │ let x = Foo { bar: Bar { name: 10 }};
+//    ·                                ─┬
+//    ·                                 ╰── expected `string`, found `10`
+//    ╰────

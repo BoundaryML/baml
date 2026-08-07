@@ -14,12 +14,12 @@
 //! reserve a placeholder slot per impl rule and per package, build the heap
 //! unsealed, fill each slot with its resolved pointers, then seal.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use baml_type::Name;
 use bex_heap::BexHeap;
 use bex_vm_types::{
-    HeapPtr, Object, ObjectIndex,
+    GlobalIndex, HeapPtr, Object, ObjectIndex,
     types::{LocalName, MethodImpl, Package, ProgramImplRule, ProgramPackage, RuntimeImplRule},
 };
 use indexmap::IndexMap;
@@ -110,9 +110,32 @@ pub struct PackageIndex {
     /// Canonical `Object::Interface` pointer → every `Object::ImplRule` of that
     /// interface in the program, in package-load order.
     impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
+    /// Static image object symbols used by the runtime linker.
+    objects_by_name: HashMap<String, HeapPtr>,
+    /// Static image global symbols used by the runtime linker.
+    globals_by_name: HashMap<String, GlobalIndex>,
 }
 
 impl PackageIndex {
+    pub fn install_image_symbols(
+        &mut self,
+        objects_by_name: HashMap<String, HeapPtr>,
+        globals_by_name: HashMap<String, GlobalIndex>,
+    ) {
+        self.objects_by_name = objects_by_name;
+        self.globals_by_name = globals_by_name;
+    }
+
+    pub fn object_by_name(&self, name: &str) -> Option<HeapPtr> {
+        self.objects_by_name
+            .get(name)
+            .copied()
+            .or_else(|| lookup_type_by_fqn(self, name))
+    }
+
+    pub fn global_by_name(&self, name: &str) -> Option<GlobalIndex> {
+        self.globals_by_name.get(name).copied()
+    }
     /// The `Object::Package` pointer for `name`, if the package is loaded.
     pub fn package_ptr(&self, name: &Name) -> Option<HeapPtr> {
         self.by_name.get(name).copied()
@@ -222,6 +245,7 @@ fn fill_package_slots(
             interfaces: resolve_members(heap, &pkg.interfaces),
             impl_rules,
             recursive_type_aliases: pkg.recursive_type_aliases.clone(),
+            runtime: None,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
         index

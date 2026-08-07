@@ -159,6 +159,13 @@ pub fn lower_file_with_path_and_test_owner(
                     items.push(let_item);
                 }
             }
+            baml_compiler_syntax::SyntaxKind::LET_STMT => {
+                if let Some(let_item) =
+                    lower_expr_body::lower_top_level_let(&child, &mut diags, &mut env_var_refs)
+                {
+                    items.push(Item::Let(let_item));
+                }
+            }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
                 if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
                     items.push(Item::ImplementsFor(imp));

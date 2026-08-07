@@ -445,6 +445,16 @@ impl BamlNamespaceJson for PackageBamlImpl {
         json_to_string_typed(vm, *v, &ty).map(bex_str::BexStr::from)
     }
 
+    fn encode(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+        let ty = vm.value_concrete_ty(*v).ok_or_else(|| {
+            VmRustFnError::InternalError(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Object(bex_vm_types::ObjectType::Any),
+                got: vm.type_of(v),
+            })
+        })?;
+        json_to_string_typed(vm, *v, &RealizedTy::from(ty)).map(bex_str::BexStr::from)
+    }
+
     fn from_string(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
         let ty = vm
             .current_call_type_args()

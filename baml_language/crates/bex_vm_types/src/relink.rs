@@ -255,6 +255,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
 mod tests {
     use super::*;
     use crate::{
+        HeapPtr,
         bytecode::{Bytecode, ClassInitPlan},
         types::{FunctionCaptureProps, FunctionKind, FunctionOrigin},
     };
@@ -324,6 +325,7 @@ mod tests {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
+            runtime_package: HeapPtr::null(),
         }
     }
 

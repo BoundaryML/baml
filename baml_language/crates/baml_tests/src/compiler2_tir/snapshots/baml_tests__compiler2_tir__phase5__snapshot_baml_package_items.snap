@@ -184,6 +184,7 @@ namespace baml.json:
   function _path_field
   function _path_index
   function deserialize<T>
+  function encode<T>
   function field
   function from<T>
   function from_json<T>
@@ -295,6 +296,7 @@ namespace baml.reflect:
   class Diagnostic { methods: [] }
   class InvalidArgumentError { methods: [] }
   class Meta { methods: [] }
+  class Package { methods: [compile, _compile, _finish, get_class, classes, diagnostics] }
   class Signature { methods: [] }
   class Span { methods: [] }
   type TypeKind

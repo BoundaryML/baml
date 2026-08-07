@@ -248,6 +248,7 @@ pub(crate) mod support {
                 callee,
                 type_args,
                 args,
+                ..
             } => {
                 let callee_str = expr_desc(*callee, body);
                 let ty_args_str = if type_args.is_empty() {

@@ -2548,7 +2548,7 @@ function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.Primi
         { : void
           if (enum_type.values().length() == 0 : bool) : void
             { : never
-              throw baml.reflect.errors.CompilationError { diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: "empty enum `" + return_type.to_string() + "` cannot be rende..." }] } : baml.reflect.errors.CompilationError
+              throw baml.reflect.errors.CompilationError { message: "empty enum `" + return_type.to_string() + "` cannot be rende...", diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: "empty enum `" + return_type.to_string() + "` cannot be rende..." }] } : baml.reflect.errors.CompilationError
             }
         }
       null =>
@@ -3037,6 +3037,7 @@ class baml.reflect.enum.Type$stream {
 
 --- <builtin>/baml/ns_reflect/ns_errors/errors.baml ---
 class baml.reflect.errors.CompilationError {
+  message: string
   diagnostics: baml.reflect.Diagnostic[]
 }
 class baml.reflect.errors.EvaluationError {
@@ -3046,6 +3047,7 @@ class baml.reflect.errors.SessionBusy {
   message: string
 }
 class baml.reflect.errors.CompilationError$stream {
+  message: string | null
   diagnostics: baml.reflect.Diagnostic$stream[]
 }
 class baml.reflect.errors.EvaluationError$stream {
@@ -3143,6 +3145,15 @@ class baml.reflect.InvalidArgumentError {
   expected: type
   got: type
 }
+class baml.reflect.Package {
+  _inner: unknown
+}
+function baml.reflect.Package.compile(files: map<string, string>, packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Package throws unknown {
+  { : baml.reflect.Package
+    let artifact = Package._compile(files, packages) : baml.reflect.Package
+    Package._finish(artifact, packages) : baml.reflect.Package
+  }
+}
 class baml.reflect.Arg$stream {
   name: string | null
   type: unknown
@@ -3183,6 +3194,9 @@ class baml.reflect.InvalidArgumentError$stream {
   argument: string | null
   expected: unknown
   got: unknown
+}
+class baml.reflect.Package$stream {
+  _inner: unknown
 }
 
 --- <builtin>/baml/ns_sap/sap.baml ---

@@ -877,10 +877,11 @@ impl BexProject {
         &self,
         compiled: CompiledCandidate,
     ) -> Result<EngineCandidate, RuntimeError> {
-        let engine = BexEngine::new_with_deferred_profiling(
+        let engine = BexEngine::new_with_deferred_profiling_and_runtime_compiler(
             compiled.program,
             self.sys_ops.clone(),
             Vec::new(),
+            Some(crate::runtime_compiler()),
         )
         .map_err(RuntimeError::Engine)?;
         engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {

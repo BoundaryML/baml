@@ -46,6 +46,7 @@ class Person {
 // constructor_spread.baml:8:9 (class) len=7 "MyClass"
 // constructor_spread.baml:8:19 (property) len=1 "a"
 // constructor_spread.baml:8:22 (number) len=1 "1"
+// constructor_spread.baml:8:28 (variable) len=1 "x"
 // constructor_spread.baml:11:1 (keyword) len=3 "let"
 // constructor_spread.baml:11:5 (variable) [declaration] len=14 "default_person"
 // constructor_spread.baml:11:20 (operator) len=1 "="

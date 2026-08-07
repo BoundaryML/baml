@@ -1169,6 +1169,7 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
 function baml.json.deserialize(s: string) -> T  [expr] {
   {  } from_json(parse(s))
 }
+function baml.json.encode(v: T) -> string  [builtin]
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json  [builtin]
 function baml.json.from(value: T) -> baml.json.json  [expr] {
   {  } root._to_json_shim(value)
@@ -1555,7 +1556,7 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
 function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst throws never?) -> baml.llm.PromptAst  [expr] {
-  { match (return_type.as_enum()) { enum_type: baml.reflect.enum.Type => {  } if (enum_type.values().length() Eq 0) { throw baml.reflect.errors.CompilationError { diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: "empty enum `" Add return_type.to_string() Add "` cannot be rende..." }] } }, null => {  } }; let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
+  { match (return_type.as_enum()) { enum_type: baml.reflect.enum.Type => {  } if (enum_type.values().length() Eq 0) { throw baml.reflect.errors.CompilationError { message: "empty enum `" Add return_type.to_string() Add "` cannot be rende...", diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: "empty enum `" Add return_type.to_string() Add "` cannot be rende..." }] } }, null => {  } }; let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
 function baml.llm.text(self: ?) -> string  [builtin]
@@ -1974,9 +1975,11 @@ function baml.reflect.enum.values(self: ?) -> baml.reflect.enum.Value[]  [builti
 
 --- <builtin>/baml/ns_reflect/ns_errors/errors.baml ---
 class baml.reflect.errors.CompilationError {
+  message: string
   diagnostics: baml.reflect.Diagnostic[]
 }
 class baml.reflect.errors.CompilationError$stream {
+  message: string | null
   diagnostics: baml.reflect.Diagnostic$stream[]
 }
 class baml.reflect.errors.EvaluationError {
@@ -2092,6 +2095,12 @@ class baml.reflect.Meta$stream {
   docstring: string | null
   other: map<string, string>
 }
+class baml.reflect.Package {
+  _inner: unknown
+}
+class baml.reflect.Package$stream {
+  _inner: unknown
+}
 class baml.reflect.Signature {
   name: string?
   args: baml.reflect.Arg[]
@@ -2134,7 +2143,15 @@ class baml.reflect.WithMeta$stream {
 }
 type baml.reflect.TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
 type baml.reflect.TypeKind$stream = baml.reflect.class.Type$stream | baml.reflect.enum.Type$stream | baml.reflect.union.Type$stream | baml.reflect.literal.Type$stream | baml.reflect.array.Type$stream | baml.reflect.map.Type$stream | baml.reflect.interface.Type$stream | baml.reflect.primitive.Type$stream | baml.reflect.function.Type$stream
+function baml.reflect._compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package  [builtin]
+function baml.reflect._finish(artifact: baml.reflect.Package, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package  [builtin]
 function baml.reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
+function baml.reflect.classes(self: ?) -> map<string, baml.reflect.class.Type>  [builtin]
+function baml.reflect.compile(files: map<string, string>, packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Package  [expr] {
+  { let artifact = Package._compile(files, packages) } Package._finish(artifact, packages)
+}
+function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
+function baml.reflect.get_class(self: ?, name: string) -> baml.reflect.class.Type?  [builtin]
 function baml.reflect.signature(f: baml.AnyFunction) -> baml.reflect.Signature  [builtin]
 
 --- <builtin>/baml/ns_sap/sap.baml ---

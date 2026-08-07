@@ -1366,6 +1366,25 @@ fn convert_io_primitive_client(
 /// LLM ops use the blanket `impl<T> IoClassLlmPrimitiveClient/IoNamespaceLlm for T`.
 struct DefaultIoOps;
 
+impl io::IoClassReflectPackage for DefaultIoOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _files: indexmap::IndexMap<String, String>,
+        _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        // BexEngine intercepts this operation and delegates to its injected
+        // RuntimeCompiler before the provider table is consulted.
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceReflect for DefaultIoOps {}
+
 impl io::IoClassFsFile for DefaultIoOps {
     fn text(
         &self,

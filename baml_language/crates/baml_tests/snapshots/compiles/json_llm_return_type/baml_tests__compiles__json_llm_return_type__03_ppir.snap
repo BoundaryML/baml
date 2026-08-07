@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 14424
 ---
 === PPIR ===
 function user.ExtractAny(client: baml.llm.Client = TestClient) -> baml.json.json  [llm] {

@@ -1,5 +1,6 @@
 /// A reflection construction failed compiler-equivalent validation.
 class CompilationError {
+  message string
   diagnostics baml.reflect.Diagnostic[]
 }
 

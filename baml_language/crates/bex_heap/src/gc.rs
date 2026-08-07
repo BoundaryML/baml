@@ -663,8 +663,51 @@ impl BexHeap {
                 }
                 worklist.push(future.closure);
             }
-            Object::Type(type_value) => {
-                worklist.extend(type_value.defs().enums.values().copied());
+            Object::Package(package) => {
+                worklist.extend(package.classes.values().copied());
+                worklist.extend(package.enums.values().copied());
+                worklist.extend(package.interfaces.values().copied());
+                for (interface, rules) in &package.impl_rules {
+                    worklist.push(*interface);
+                    worklist.extend(rules.iter().copied());
+                }
+                if let Some(runtime) = &package.runtime {
+                    worklist.extend(runtime.objects.iter().copied());
+                    worklist.extend(runtime.functions.values().copied());
+                    worklist.extend(runtime.class_types.values().copied());
+                    worklist.extend(runtime.dependencies.iter().copied());
+                    worklist.extend(runtime.dependency_names.values().copied());
+                    worklist.extend(runtime.init);
+                    worklist.extend(
+                        runtime
+                            .globals
+                            .iter()
+                            .filter_map(|slot| slot.load().as_object_ptr()),
+                    );
+                }
+            }
+            Object::Function(function) => {
+                if !function.runtime_package.as_ptr().is_null() {
+                    worklist.push(function.runtime_package);
+                    worklist.extend(
+                        function
+                            .bytecode
+                            .resolved_constants
+                            .iter()
+                            .filter_map(Value::as_object_ptr),
+                    );
+                }
+            }
+            Object::GenericFunction(function) => {
+                if !function.runtime_package.as_ptr().is_null() {
+                    worklist.push(function.runtime_package);
+                }
+            }
+            Object::Type(value) => {
+                if !value.owner.as_ptr().is_null() {
+                    worklist.push(value.owner);
+                }
+                worklist.extend(value.defs().enums.values().copied());
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
@@ -680,10 +723,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
-            | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
@@ -816,8 +856,87 @@ impl BexHeap {
                     future.closure = new_ptr;
                 }
             }
-            Object::Type(type_value) => {
-                for ptr in type_value.defs_mut().enums.values_mut() {
+            Object::Package(package) => {
+                for ptr in package
+                    .classes
+                    .values_mut()
+                    .chain(package.enums.values_mut())
+                    .chain(package.interfaces.values_mut())
+                {
+                    if let Some(&new_ptr) = forwarding.get(ptr) {
+                        *ptr = new_ptr;
+                    }
+                }
+                let old_rules = std::mem::take(&mut package.impl_rules);
+                package.impl_rules = old_rules
+                    .into_iter()
+                    .map(|(interface, rules)| {
+                        let interface = forwarding.get(&interface).copied().unwrap_or(interface);
+                        let rules = rules
+                            .into_iter()
+                            .map(|rule| forwarding.get(&rule).copied().unwrap_or(rule))
+                            .collect();
+                        (interface, rules)
+                    })
+                    .collect();
+                if let Some(runtime) = &mut package.runtime {
+                    for ptr in runtime.objects.iter_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    for ptr in runtime.class_types.values_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    for ptr in runtime.functions.values_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    for ptr in runtime.dependencies.iter_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    for ptr in runtime.dependency_names.values_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    if let Some(ptr) = &mut runtime.init
+                        && let Some(&new_ptr) = forwarding.get(ptr)
+                    {
+                        *ptr = new_ptr;
+                    }
+                    for slot in &runtime.globals {
+                        let mut value = slot.load();
+                        self.fixup_value(&mut value, forwarding);
+                        slot.store(value);
+                    }
+                }
+            }
+            Object::Function(function) => {
+                if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
+                    function.runtime_package = new_ptr;
+                }
+                if !function.runtime_package.as_ptr().is_null() {
+                    for value in &mut function.bytecode.resolved_constants {
+                        self.fixup_value(value, forwarding);
+                    }
+                }
+            }
+            Object::GenericFunction(function) => {
+                if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
+                    function.runtime_package = new_ptr;
+                }
+            }
+            Object::Type(value) => {
+                if let Some(&new_ptr) = forwarding.get(&value.owner) {
+                    value.owner = new_ptr;
+                }
+                for ptr in value.defs_mut().enums.values_mut() {
                     *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
                 }
             }
@@ -833,10 +952,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
-            | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
@@ -1090,9 +1206,79 @@ impl BexHeap {
                     worklist.push(future.closure);
                 }
             }
-            Object::Type(type_value) => {
+            Object::Package(package) => {
+                let refs = package
+                    .classes
+                    .values()
+                    .chain(package.enums.values())
+                    .chain(package.interfaces.values())
+                    .copied();
+                worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
                 worklist.extend(
-                    type_value
+                    package
+                        .impl_rules
+                        .iter()
+                        .flat_map(|(interface, rules)| {
+                            std::iter::once(*interface).chain(rules.iter().copied())
+                        })
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+                if let Some(runtime) = &package.runtime {
+                    worklist.extend(
+                        runtime
+                            .objects
+                            .iter()
+                            .chain(runtime.functions.values())
+                            .chain(runtime.class_types.values())
+                            .chain(runtime.dependencies.iter())
+                            .chain(runtime.dependency_names.values())
+                            .copied()
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                    if let Some(ptr) = runtime.init
+                        && self.generation_of(ptr).is_young()
+                    {
+                        worklist.push(ptr);
+                    }
+                    worklist.extend(
+                        runtime
+                            .globals
+                            .iter()
+                            .filter_map(|slot| slot.load().as_object_ptr())
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                }
+            }
+            Object::Function(function) => {
+                if !function.runtime_package.as_ptr().is_null()
+                    && self.generation_of(function.runtime_package).is_young()
+                {
+                    worklist.push(function.runtime_package);
+                }
+                if !function.runtime_package.as_ptr().is_null() {
+                    worklist.extend(
+                        function
+                            .bytecode
+                            .resolved_constants
+                            .iter()
+                            .filter_map(Value::as_object_ptr)
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                }
+            }
+            Object::GenericFunction(function) => {
+                if !function.runtime_package.as_ptr().is_null()
+                    && self.generation_of(function.runtime_package).is_young()
+                {
+                    worklist.push(function.runtime_package);
+                }
+            }
+            Object::Type(value) => {
+                if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young() {
+                    worklist.push(value.owner);
+                }
+                worklist.extend(
+                    value
                         .defs()
                         .enums
                         .values()
@@ -1111,10 +1297,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
-            | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}

@@ -26,6 +26,14 @@ function Ok() -> int {
 //- diagnostics
 // E0001
 //
+//   × invalid pattern type ascription: top-level lets do not support patterns or `else`
+//    ╭─[expr_let_annotations.baml:1:1]
+//  1 │ let G: int | float = 10.0;
+//    · ─────────────┬────────────
+//    ·              ╰── type ascription not allowed here
+//    ╰────
+// E0001
+//
 //   × mismatched types
 //    ╭─[expr_let_annotations.baml:5:17]
 //  5 │   let y : int = 10.0;

@@ -74,6 +74,7 @@ fn inject_function(
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0,
+        runtime_package: bex_vm_types::HeapPtr::null(),
     };
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));

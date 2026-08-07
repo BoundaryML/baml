@@ -50,10 +50,29 @@ impl<'vm> ImplResolver<'vm> {
     /// unknown interface (not loaded) has no impls anywhere.
     fn rules_for(self, iface: &TypeName) -> impl Iterator<Item = &'vm RuntimeImplRule> {
         let iface_ptr = self.vm.lookup_interface(iface);
-        iface_ptr
+        let mut pointers = Vec::new();
+        if let Some(ptr) = iface_ptr {
+            pointers.extend(self.vm.packages.impl_rules_of(ptr));
+            let mut packages = vec![self.vm.current_runtime_package()];
+            let mut seen = std::collections::HashSet::new();
+            while let Some(package_ptr) = packages.pop() {
+                if package_ptr.is_null() || !seen.insert(package_ptr) {
+                    continue;
+                }
+                let Some(package) = self.vm.get_object(package_ptr).as_package() else {
+                    continue;
+                };
+                if let Some(rules) = package.impl_rules.get(&ptr) {
+                    pointers.extend(rules);
+                }
+                if let Some(runtime) = &package.runtime {
+                    packages.extend(runtime.dependencies.iter().copied());
+                }
+            }
+        }
+        pointers
             .into_iter()
-            .flat_map(move |ptr| self.vm.packages.impl_rules_of(ptr))
-            .filter_map(move |&rule_ptr| self.vm.get_object(rule_ptr).as_impl_rule())
+            .filter_map(move |rule_ptr| self.vm.get_object(rule_ptr).as_impl_rule())
     }
 }
 

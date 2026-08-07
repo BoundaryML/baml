@@ -77,6 +77,9 @@ pub struct TypeValue {
     pub ty: RealizedTy,
     mint: MintId,
     defs: DynTypeDefs,
+    /// Runtime package whose definitions give this type meaning. Static type
+    /// values use a null pointer. This is a GC edge, not serialized identity.
+    pub owner: HeapPtr,
 }
 
 impl TypeValue {
@@ -94,6 +97,7 @@ impl TypeValue {
             ty,
             mint: MintId::Static(digest),
             defs: DynTypeDefs::default(),
+            owner: HeapPtr::null(),
         }
     }
 
@@ -109,11 +113,29 @@ impl TypeValue {
             ty,
             mint,
             defs: DynTypeDefs::default(),
+            owner: HeapPtr::null(),
         }
     }
 
     pub fn from_parts_with_defs(ty: RealizedTy, mint: MintId, defs: DynTypeDefs) -> Self {
-        Self { ty, mint, defs }
+        Self {
+            ty,
+            mint,
+            defs,
+            owner: HeapPtr::null(),
+        }
+    }
+
+    /// Assemble a package-owned type value with a fresh runtime mint.
+    pub fn runtime(ty: RealizedTy, mint: MintId, owner: HeapPtr) -> Self {
+        debug_assert!(matches!(mint, MintId::Runtime(_)));
+        debug_assert!(!owner.as_ptr().is_null());
+        Self {
+            ty,
+            mint,
+            defs: DynTypeDefs::default(),
+            owner,
+        }
     }
 
     /// This value's identity token.

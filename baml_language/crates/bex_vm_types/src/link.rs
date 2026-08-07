@@ -26,16 +26,300 @@
 //! partitioned into groups by their [`CompilationUnit::source_file`]: builtin
 //! files carry a `<builtin>/…` path.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 
 use crate::{
-    ConstValue, GlobalIndex, Object, ObjectIndex, Program,
+    ConstValue, GlobalIndex, HeapPtr, Object, ObjectIndex, Program,
     relink::{IndexOperand, visit_object_operands},
     types::{ProgramImplRule, ProgramMethodImpl},
-    unit::{CompilationUnit, LocalRef, ProgramPackageFrag, Symbol, SymbolKind},
+    unit::{CompilationUnit, ExportTable, LocalRef, ProgramPackageFrag, Symbol, SymbolKind},
 };
+
+/// A program linked for grafting into a live VM, plus the symbolic entries in
+/// its synthetic external prefix. The runtime replaces those prefix slots with
+/// pointers/values from the live image and allocates every other slot anew.
+#[derive(Clone, Debug)]
+pub struct DynamicLinkPlan {
+    pub program: Program,
+    pub external_objects: Vec<(ObjectIndex, Symbol)>,
+    pub external_globals: Vec<(GlobalIndex, Symbol)>,
+}
+
+fn import_key(symbol: &Symbol) -> String {
+    match &symbol.generic {
+        Some(key) => format!("generic:{}:{:?}", key.base_fn, key.type_args),
+        None => format!("{:?}:{}", symbol.kind, symbol.fq_name),
+    }
+}
+
+/// Link runtime-emitted units while leaving references to the already-live
+/// image as a symbolic prefix plan.
+///
+/// The ordinary [`link`] function remains the only operand relocator. This
+/// function supplies a synthetic builtin unit that exports inert placeholders
+/// for otherwise-unresolved imports, invokes `link`, then reports which linked
+/// prefix indices the VM must graft from its live static/dependency images.
+pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkError> {
+    let object_exports: HashSet<&str> = units
+        .iter()
+        .flat_map(|unit| unit.exports.objects.iter().map(|(name, _)| name.as_str()))
+        .collect();
+    let global_exports: HashSet<&str> = units
+        .iter()
+        .flat_map(|unit| unit.exports.globals.iter().map(|(name, _)| name.as_str()))
+        .collect();
+
+    let mut object_imports = Vec::<Symbol>::new();
+    let mut seen_objects = HashSet::<String>::new();
+    let mut global_imports = Vec::<Symbol>::new();
+    let mut seen_globals = HashSet::<String>::new();
+
+    let mut consider_object = |symbol: &Symbol| {
+        let is_local = !matches!(symbol.kind, SymbolKind::GenericFn)
+            && object_exports.contains(symbol.fq_name.as_str());
+        let key = import_key(symbol);
+        if !is_local && seen_objects.insert(key) {
+            object_imports.push(symbol.clone());
+        }
+    };
+    let mut consider_global = |symbol: &Symbol| {
+        if !global_exports.contains(symbol.fq_name.as_str())
+            && seen_globals.insert(import_key(symbol))
+        {
+            global_imports.push(symbol.clone());
+        }
+    };
+
+    for unit in units {
+        for symbol in &unit.object_imports {
+            consider_object(symbol);
+        }
+        for symbol in &unit.global_imports {
+            consider_global(symbol);
+        }
+        if let Some(tail) = &unit.init_tail {
+            for symbol in &tail.object_imports {
+                consider_object(symbol);
+            }
+            for symbol in &tail.global_imports {
+                consider_global(symbol);
+            }
+        }
+    }
+
+    // A function object prefix also needs the function's global slot, and a
+    // generic value needs the base function global used by GenericFunction.
+    let mut required_functions = Vec::<String>::new();
+    let mut seen_functions = HashSet::<String>::new();
+    for symbol in object_imports.iter().chain(&global_imports) {
+        let base = match (&symbol.kind, &symbol.generic) {
+            (SymbolKind::Function, _) => Some(symbol.fq_name.as_str()),
+            (SymbolKind::GenericFn, Some(key)) => Some(key.base_fn.as_str()),
+            _ => None,
+        };
+        if let Some(base) = base
+            && !global_exports.contains(base)
+            && seen_functions.insert(base.to_string())
+        {
+            required_functions.push(base.to_string());
+        }
+    }
+
+    let mut classes = Vec::new();
+    let mut enums = Vec::new();
+    let mut interfaces = Vec::new();
+    let mut code = Vec::new();
+    let mut exports = ExportTable::default();
+    let placeholder = || Object::String("<runtime-import>".into());
+
+    for symbol in &object_imports {
+        match symbol.kind {
+            SymbolKind::Class => {
+                let idx = u32::try_from(classes.len()).expect("runtime class imports fit u32");
+                classes.push(placeholder());
+                exports
+                    .objects
+                    .push((symbol.fq_name.clone(), LocalRef::Class(idx)));
+            }
+            SymbolKind::Enum => {
+                let idx = u32::try_from(enums.len()).expect("runtime enum imports fit u32");
+                enums.push(placeholder());
+                exports
+                    .objects
+                    .push((symbol.fq_name.clone(), LocalRef::Enum(idx)));
+            }
+            SymbolKind::Interface => {
+                let idx =
+                    u32::try_from(interfaces.len()).expect("runtime interface imports fit u32");
+                interfaces.push(placeholder());
+                exports
+                    .objects
+                    .push((symbol.fq_name.clone(), LocalRef::Interface(idx)));
+            }
+            SymbolKind::Function | SymbolKind::Let | SymbolKind::GenericFn => {}
+        }
+    }
+
+    let mut function_code = HashMap::<String, u32>::new();
+    for name in &required_functions {
+        let idx = u32::try_from(code.len()).expect("runtime function imports fit u32");
+        code.push(placeholder());
+        function_code.insert(name.clone(), idx);
+        exports.objects.push((name.clone(), LocalRef::Code(idx)));
+    }
+
+    let mut let_names = Vec::<String>::new();
+    for symbol in &global_imports {
+        if matches!(symbol.kind, SymbolKind::Let) && !let_names.contains(&symbol.fq_name) {
+            let_names.push(symbol.fq_name.clone());
+        }
+    }
+    for (slot, name) in required_functions.iter().chain(&let_names).enumerate() {
+        exports.globals.push((
+            name.clone(),
+            u32::try_from(slot).expect("runtime global imports fit u32"),
+        ));
+    }
+
+    // Candidate-owned generic bases are imports of the synthetic unit; live
+    // bases are local function globals in its prefix.
+    let mut stub_global_imports = Vec::<Symbol>::new();
+    let mut generic_code = Vec::<(Symbol, u32)>::new();
+    for symbol in &object_imports {
+        let SymbolKind::GenericFn = symbol.kind else {
+            continue;
+        };
+        let key = symbol.generic.as_ref().ok_or_else(|| {
+            LinkError::InvalidUnit(format!("generic import `{}` has no key", symbol.fq_name))
+        })?;
+        let function = if let Some(pos) = required_functions
+            .iter()
+            .position(|name| name == &key.base_fn)
+        {
+            GlobalIndex::from_raw(pos)
+        } else {
+            let import_pos = stub_global_imports.len();
+            stub_global_imports.push(Symbol {
+                kind: SymbolKind::Function,
+                fq_name: key.base_fn.clone(),
+                generic: None,
+            });
+            GlobalIndex::from_raw(exports.globals.len() + import_pos)
+        };
+        let idx = u32::try_from(code.len()).expect("runtime generic imports fit u32");
+        code.push(Object::GenericFunction(crate::GenericFunction {
+            function,
+            type_args: key.type_args.clone().into_boxed_slice(),
+            runtime_package: HeapPtr::null(),
+        }));
+        generic_code.push((symbol.clone(), idx));
+    }
+
+    let stub = CompilationUnit {
+        source_file: "<builtin>/$runtime_imports.baml".to_string(),
+        package: Name::new("$runtime_imports"),
+        classes,
+        enums,
+        interfaces,
+        code,
+        object_imports: Vec::new(),
+        global_imports: stub_global_imports,
+        exports,
+        package_fragment: ProgramPackageFrag::default(),
+        template_macros: Vec::new(),
+        test_cases: Vec::new(),
+        callable_throws_fragment: Vec::new(),
+        init_tail: None,
+    };
+
+    let class_count = stub.classes.len();
+    let enum_count = stub.enums.len();
+    let interface_count = stub.interfaces.len();
+    let code_base = class_count + enum_count + interface_count;
+    let mut external_objects = Vec::new();
+    let mut class_idx = 0usize;
+    let mut enum_idx = 0usize;
+    let mut interface_idx = 0usize;
+    for symbol in &object_imports {
+        let idx = match symbol.kind {
+            SymbolKind::Class => {
+                let idx = class_idx;
+                class_idx += 1;
+                idx
+            }
+            SymbolKind::Enum => {
+                let idx = class_count + enum_idx;
+                enum_idx += 1;
+                idx
+            }
+            SymbolKind::Interface => {
+                let idx = class_count + enum_count + interface_idx;
+                interface_idx += 1;
+                idx
+            }
+            SymbolKind::Function => code_base + function_code[&symbol.fq_name] as usize,
+            SymbolKind::GenericFn => {
+                let (_, local) = generic_code
+                    .iter()
+                    .find(|(candidate, _)| import_key(candidate) == import_key(symbol))
+                    .expect("generic prefix entry was just constructed");
+                code_base + *local as usize
+            }
+            SymbolKind::Let => continue,
+        };
+        external_objects.push((ObjectIndex::from_raw(idx), symbol.clone()));
+    }
+    for name in &required_functions {
+        let idx = ObjectIndex::from_raw(code_base + function_code[name] as usize);
+        if !external_objects
+            .iter()
+            .any(|(candidate, _)| *candidate == idx)
+        {
+            external_objects.push((
+                idx,
+                Symbol {
+                    kind: SymbolKind::Function,
+                    fq_name: name.clone(),
+                    generic: None,
+                },
+            ));
+        }
+    }
+    // Function prefix slots precede let prefix slots by the ordinary linker contract.
+    let mut external_globals = Vec::new();
+    for (idx, name) in required_functions.iter().enumerate() {
+        external_globals.push((
+            GlobalIndex::from_raw(idx),
+            Symbol {
+                kind: SymbolKind::Function,
+                fq_name: name.clone(),
+                generic: None,
+            },
+        ));
+    }
+    for (idx, name) in let_names.iter().enumerate() {
+        external_globals.push((
+            GlobalIndex::from_raw(required_functions.len() + idx),
+            Symbol {
+                kind: SymbolKind::Let,
+                fq_name: name.clone(),
+                generic: None,
+            },
+        ));
+    }
+
+    let mut all_units = Vec::with_capacity(units.len() + 1);
+    all_units.push(stub);
+    all_units.extend_from_slice(units);
+    let program = link(&all_units)?;
+    Ok(DynamicLinkPlan {
+        program,
+        external_objects,
+        external_globals,
+    })
+}
 
 /// An error raised while linking symbolic units into a [`Program`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -844,6 +1128,7 @@ mod tests {
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
+            runtime_package: HeapPtr::null(),
         }))
     }
 

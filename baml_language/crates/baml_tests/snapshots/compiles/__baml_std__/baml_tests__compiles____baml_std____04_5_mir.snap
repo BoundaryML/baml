@@ -5178,6 +5178,8 @@ fn baml.json.stringify_pretty = builtin(vm)
 
 fn baml.json.to_string = builtin(vm)
 
+fn baml.json.encode = builtin(vm)
+
 fn baml.json.to_json = builtin(vm)
 
 fn baml.json.from(value: T) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
@@ -8053,17 +8055,20 @@ fn baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveCl
     let _10: int
     let _11: baml.reflect.enum.Value[]
     let _12: baml.reflect.errors.CompilationError
-    let _13: baml.reflect.Diagnostic[]
-    let _14: baml.reflect.Diagnostic
+    let _13: string
+    let _14: string
     let _15: string
-    let _16: string
-    let _17: string
-    let _18: baml.llm.PromptAst // prompt
-    let _19: bool
-    let _20: (baml.llm.Context) -> baml.llm.PromptAst throws never // closure
-    let _21: (baml.llm.Context) -> baml.llm.PromptAst throws never
-    let _22: baml.llm.Context
-    let _23: baml.llm.PromptAst
+    let _16: baml.reflect.Diagnostic[]
+    let _17: baml.reflect.Diagnostic
+    let _18: string
+    let _19: string
+    let _20: string
+    let _21: baml.llm.PromptAst // prompt
+    let _22: bool
+    let _23: (baml.llm.Context) -> baml.llm.PromptAst throws never // closure
+    let _24: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _25: baml.llm.Context
+    let _26: baml.llm.PromptAst
 
     bb0: {
         _6 = call const fn baml.TypeValue.as_enum(copy _4) -> [bb1];
@@ -8090,27 +8095,27 @@ fn baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveCl
     }
 
     bb5: {
-        _19 = copy _5 == const null;
-        branch copy _19 -> [bb8, bb6];
+        _22 = copy _5 == const null;
+        branch copy _22 -> [bb8, bb6];
     }
 
     bb6: {
-        _20 = copy _5;
-        _21 = copy _20;
-        _22 = call const fn baml.llm.build_prompt_context(copy _1, copy _4) -> [bb7];
+        _23 = copy _5;
+        _24 = copy _23;
+        _25 = call const fn baml.llm.build_prompt_context(copy _1, copy _4) -> [bb7];
     }
 
     bb7: {
-        _18 = call copy _21(copy _22) -> [bb9];
+        _21 = call copy _24(copy _25) -> [bb9];
     }
 
     bb8: {
-        _18 = sys_op const fn baml.llm.PrimitiveClient.render_prompt(copy _1, copy _2, copy _3, copy _4) -> bb9;
+        _21 = sys_op const fn baml.llm.PrimitiveClient.render_prompt(copy _1, copy _2, copy _3, copy _4) -> bb9;
     }
 
     bb9: {
-        _23 = copy _18;
-        _0 = sys_op const fn baml.llm.PrimitiveClient.specialize_prompt(copy _1, copy _23) -> bb10;
+        _26 = copy _21;
+        _0 = sys_op const fn baml.llm.PrimitiveClient.specialize_prompt(copy _1, copy _26) -> bb10;
     }
 
     bb10: {
@@ -8118,15 +8123,21 @@ fn baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveCl
     }
 
     bb11: {
-        _17 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb12];
+        _15 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb12];
     }
 
     bb12: {
-        _16 = const "empty enum `" + copy _17;
-        _15 = copy _16 + const "` cannot be rendered as an LLM output schema";
-        _14 = baml.reflect.Diagnostic { const "E0159", const null, copy _15 };
-        _13 = [copy _14]: baml.reflect.Diagnostic[];
-        _12 = baml.reflect.errors.CompilationError { copy _13 };
+        _14 = const "empty enum `" + copy _15;
+        _13 = copy _14 + const "` cannot be rendered as an LLM output schema";
+        _20 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb13];
+    }
+
+    bb13: {
+        _19 = const "empty enum `" + copy _20;
+        _18 = copy _19 + const "` cannot be rendered as an LLM output schema";
+        _17 = baml.reflect.Diagnostic { const "E0159", const null, copy _18 };
+        _16 = [copy _17]: baml.reflect.Diagnostic[];
+        _12 = baml.reflect.errors.CompilationError { copy _13, copy _16 };
         throw copy _12;
     }
 }
@@ -9115,6 +9126,49 @@ fn baml.reflect.primitive.Type.baml.reflect.TypeView.as_type = builtin(vm)
 fn baml.reflect.union.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.union.Type.member_types = builtin(vm)
+
+fn baml.reflect.Package.compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
+    // Locals:
+    let _0: baml.reflect.Package // _0 // return
+    let _1: map<string, string> // files // param
+    let _2: map<string, baml.reflect.Package> // packages // param
+    let _3: bool
+    let _4: baml.reflect.Package // artifact
+    let _5: baml.reflect.Package
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = {  }: map<string, baml.reflect.Package>;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = sys_op const fn baml.reflect.Package._compile(copy _1, copy _2) -> bb3;
+    }
+
+    bb3: {
+        _5 = copy _4;
+        _0 = call const fn baml.reflect.Package._finish(copy _5, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.reflect.Package._compile = builtin(io)
+
+fn baml.reflect.Package._finish = builtin(vm)
+
+fn baml.reflect.Package.get_class = builtin(vm)
+
+fn baml.reflect.Package.classes = builtin(vm)
+
+fn baml.reflect.Package.diagnostics = builtin(vm)
 
 fn baml.reflect.signature = builtin(vm)
 

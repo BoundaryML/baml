@@ -73,20 +73,6 @@ test TestMakePoem() {
 //- diagnostics
 // E0003
 //
-//   × unresolved name: `poem`
-//     ╭─[expr_expr_full.baml:41:16]
-//  41 │   CombinePoems(poem, another)
-//     ·                ────
-//     ╰────
-// E0003
-//
-//   × unresolved name: `another`
-//     ╭─[expr_expr_full.baml:41:22]
-//  41 │   CombinePoems(poem, another)
-//     ·                      ───────
-//     ╰────
-// E0003
-//
 //   × unresolved name: `TestPipeline`
 //     ╭─[expr_expr_full.baml:44:6]
 //  44 │ test TestPipeline() {

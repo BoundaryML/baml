@@ -15,8 +15,8 @@ use crate::{
     ast::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
-        LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param, PatId,
-        Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
+        LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
+        PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
         TypeAnnotId, TypeArg, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
@@ -120,6 +120,57 @@ pub(crate) fn lower(
     diags.extend(ctx_diags);
     env_var_refs.extend(ctx_env_refs);
     (body, source_map)
+}
+
+/// Lower a source-level root `let name = expression` into the same `LetDef`
+/// representation used by synthesized clients and retry policies. The parser
+/// deliberately reuses `LET_STMT` at file and block scope; file lowering must
+/// therefore extract the binding rather than silently dropping the CST node.
+pub(crate) fn lower_top_level_let(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> Option<LetDef> {
+    let mut ctx = LoweringContext::new();
+    let stmt = ctx.lower_let_stmt(node);
+    let Stmt::Let {
+        pattern,
+        initializer,
+        else_branch,
+        ..
+    } = ctx.stmts[stmt].clone()
+    else {
+        unreachable!("lower_let_stmt always allocates Stmt::Let")
+    };
+    let Pattern::Bind { name, subpat } = ctx.patterns[pattern].clone() else {
+        diags.push(LoweringDiagnostic::InvalidPatternAscription {
+            reason: "top-level lets require a single named binding",
+            span: node.span_range(),
+        });
+        return None;
+    };
+    if subpat.is_some() || else_branch.is_some() {
+        diags.push(LoweringDiagnostic::InvalidPatternAscription {
+            reason: "top-level lets do not support patterns or `else`",
+            span: node.span_range(),
+        });
+        return None;
+    }
+    let name_span = node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .find(|token| token.text() == name.as_str())
+        .map_or_else(|| node.span_range(), |token| token.text_range());
+    let (body, source_map, mut ctx_diags, mut ctx_env_refs) = ctx.finish(initializer);
+    diags.append(&mut ctx_diags);
+    env_var_refs.append(&mut ctx_env_refs);
+    Some(LetDef {
+        name,
+        initializer: Some((body, source_map)),
+        origin: LetOrigin::Source,
+        span: node.span_range(),
+        name_span,
+    })
 }
 
 pub(crate) fn lower_default_expr_nodes(

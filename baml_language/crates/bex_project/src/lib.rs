@@ -34,7 +34,10 @@ mod bex;
 mod bex_lsp;
 mod fs;
 mod project;
+mod runtime_compile;
 mod seed;
+
+pub use runtime_compile::{ProjectRuntimeCompiler, runtime_compiler};
 
 pub struct BexArgs {
     /// Required values keyed by their type-level names and kept in declared order.
@@ -124,7 +127,12 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
         borsh::from_slice(bytecode).map_err(|e| RuntimeError::Compilation {
             message: format!("Failed to deserialize BAML bytecode: {e}"),
         })?;
-    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), Vec::new())?;
+    let engine = bex_engine::BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops),
+        Vec::new(),
+        runtime_compiler(),
+    )?;
     Ok(Arc::new(engine))
 }
 

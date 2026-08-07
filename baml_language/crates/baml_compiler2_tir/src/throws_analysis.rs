@@ -327,8 +327,17 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, *value, body, out);
             }
         }
-        Expr::Call { callee, args, .. } => {
+        Expr::Call {
+            callee,
+            type_args,
+            args,
+        } => {
             collect_from_expr(context, *callee, body, out);
+            for type_arg in type_args {
+                if let baml_compiler2_ast::ast::TypeArg::Unreflect(operand) = type_arg {
+                    collect_from_expr(context, *operand, body, out);
+                }
+            }
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);

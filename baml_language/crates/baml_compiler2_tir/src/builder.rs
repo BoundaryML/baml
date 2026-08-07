@@ -3334,7 +3334,40 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
-            Expr::Call { callee, args, .. } | Expr::OptionalCall { callee, args } => {
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
+                Self::collect_default_expr_forward_references(
+                    *callee,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                for type_arg in type_args {
+                    if let ast::TypeArg::Unreflect(operand) = type_arg {
+                        Self::collect_default_expr_forward_references(
+                            *operand,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                    }
+                }
+                for arg in args {
+                    Self::collect_default_expr_forward_references(
+                        arg.expr,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+            }
+            Expr::OptionalCall { callee, args } => {
                 Self::collect_default_expr_forward_references(
                     *callee,
                     body,
@@ -7339,6 +7372,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_args,
                 args,
             } => {
+                for type_arg in type_args {
+                    if let ast::TypeArg::Unreflect(operand) = type_arg {
+                        self.check_expr(
+                            *operand,
+                            body,
+                            &Ty::Type {
+                                attr: TyAttr::default(),
+                            },
+                        );
+                    }
+                }
                 let ty = self.check_call_expr(expr_id, body, expected, *callee, type_args, args);
                 self.report_reserved_mounted_call(*callee, expr_id);
                 ty
@@ -9702,8 +9746,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_expr(*value, body, out);
                 }
             }
-            Expr::Call { callee, args, .. } => {
+            Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
                 self.collect_throw_facts_from_expr(*callee, body, out);
+                for type_arg in type_args {
+                    if let ast::TypeArg::Unreflect(operand) = type_arg {
+                        self.collect_throw_facts_from_expr(*operand, body, out);
+                    }
+                }
                 let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
                 for arg in args {
                     self.collect_throw_facts_from_expr(arg.expr, body, out);
@@ -10299,7 +10352,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 //      kicks in on a full resolution miss. Delegate entirely —
                 //      the aliased lookup owns the diagnostics for its misses
                 //      (including the I-9 removed-`reflect.type_of` message).
-                if matches!(segments[0].as_str(), "reflect" | "type") {
+                if matches!(segments[0].as_str(), "reflect" | "type" | "json") {
                     let mut aliased: Vec<Name> = Vec::with_capacity(segments.len() + 1);
                     aliased.push(Name::new("baml"));
                     aliased.extend_from_slice(segments);
