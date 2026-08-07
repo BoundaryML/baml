@@ -1475,3 +1475,96 @@ mod return_comment_tests {
         assert_formats_to(source, expected);
     }
 }
+
+#[cfg(test)]
+mod member_chain_layout_tests {
+    //! Regression tests for member-chain layout. `baml fmt` used to explode
+    //! dotted namespace paths one segment per line (`root\n.ai\n.Agent<T>\n…`)
+    //! whenever the full expression overflowed the line width. The rule is now
+    //! the standard prettier/rustfmt member-chain rule: plain accesses
+    //! (namespace segments, field accesses, generic type segments) are atomic
+    //! with their receiver, and the chain breaks only at method-call
+    //! boundaries — and only when the line overflows.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The headline case: the namespace path and both calls stay glued on the
+    /// receiver line; only the final call's arguments wrap.
+    #[test]
+    fn test_namespace_chain_stays_glued_only_args_wrap() {
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(plan_trip_spec(\"plan a weekend trip to yosemite with plenty of hiking\", root.anthropic.AnthropicClient.new()));\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An already-exploded chain (the old formatter's output) collapses back
+    /// to the glued layout.
+    #[test]
+    fn test_exploded_chain_collapses() {
+        let source = "function f() -> int {\n    let result = root\n        .ai\n        .Agent<Itinerary>\n        .new()\n        .run(\n            plan_trip_spec(\n                \"plan a weekend trip to yosemite with plenty of hiking\",\n                root.anthropic.AnthropicClient.new(),\n            ),\n        );\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A single call at the end of a namespace path keeps the whole path and
+    /// the call glued; the long array argument wraps inside the parens.
+    #[test]
+    fn test_namespace_call_with_long_array_arg() {
+        let source = "function f() -> int {\n    let c = root.ai.ScriptedClient.new([\"the first canned response text\", \"the second canned response text\", \"the third canned response text\"]);\n    c\n}\n";
+        let expected = "function f() -> int {\n    let c = root.ai.ScriptedClient.new(\n        [\n            \"the first canned response text\",\n            \"the second canned response text\",\n            \"the third canned response text\",\n        ],\n    );\n    c\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A chain too long to keep every call on the receiver line breaks at
+    /// method-call boundaries. The namespace path never breaks, and the first
+    /// call (`.new()`) stays attached to the path because it fits.
+    #[test]
+    fn test_long_chain_breaks_at_calls_only() {
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().with_client(root.anthropic.AnthropicClient.new()).with_options(the_default_options).run(the_spec_value);\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new()\n        .with_client(root.anthropic.AnthropicClient.new())\n        .with_options(the_default_options)\n        .run(the_spec_value);\n    result\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A dotted path of plain accesses never breaks internally, even past the
+    /// line width.
+    #[test]
+    fn test_plain_access_path_is_atomic() {
+        let source = "function f() -> int {\n    let value = root.some_namespace.another_namespace.deeply.nested.module.SomeVeryLongTypeName.CONSTANT_VALUE;\n    value\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// Enum-member paths in match arms (patterns and arm values) stay on one
+    /// line.
+    #[test]
+    fn test_enum_member_paths_in_match_arms() {
+        let source = "function f(r: StopReason) -> int {\n    match (r) {\n        StopReason.Complete => 1,\n        StopReason.MaxTokens => 2,\n        _ => root.some.namespaced.StopReason.Complete.value(),\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// A short chain that fits stays on one line.
+    #[test]
+    fn test_short_chain_stays_single_line() {
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(spec);\n    result\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// Plain accesses trailing a broken call group stay glued to each other
+    /// on the group's line.
+    #[test]
+    fn test_trailing_plain_accesses_stay_glued() {
+        let source = "function f() -> int {\n    let x = builder.configure(a_pretty_long_argument_name, another_pretty_long_argument_name).result.field.value;\n    x\n}\n";
+        let expected = "function f() -> int {\n    let x = builder.configure(a_pretty_long_argument_name, another_pretty_long_argument_name)\n        .result.field.value;\n    x\n}\n";
+        assert_formats_to(source, expected);
+    }
+}
