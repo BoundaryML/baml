@@ -69,15 +69,16 @@ function render_symbol_row(
     baml_by_id: map<string, BamlSymbol>,
 ) -> string {
     let counterparts: string[] = [];
-    let state = "unjudged";
+    let verdict = verdict_of(judgements);
+    let state = match (verdict) {
+        "match" => "both",
+        "divergent" => "divergent",
+        "unnecessary" => "unnecessary",
+        "none" => "TypeScript only",
+        _ => "unjudged",
+    };
     for (let judgement in judgements) {
-        if (judgement_pairs(judgement)) {
-            state
-                = if (judgement.verdict == "divergent") {
-                    "divergent"
-                } else {
-                    "both"
-                };
+        if (judgement.baml.length() > 0) {
             let note = if (judgement.basis == "model") {
                 ` (${judgement.confidence ?? "?"})`
             } else {
@@ -91,8 +92,6 @@ function render_symbol_row(
                 };
                 counterparts.push(`${display}${note}`);
             }
-        } else if (state == "unjudged") {
-            state = "TypeScript only";
         }
     }
     [
@@ -157,7 +156,7 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     out.push("## Summary");
     out.push("");
     out.push(
-        `${counts.matched} of ${counts.ts_symbols} TypeScript symbols have a BAML counterpart · ${counts.unmatched} were judged to have none · ${counts.unjudged} are still unjudged.`,
+        `${counts.matched} of ${counts.ts_symbols} TypeScript symbols have a BAML counterpart · ${counts.unnecessary} are unnecessary in BAML · ${counts.unmatched} were judged to have none · ${counts.unjudged} are still unjudged.`,
     );
     out.push("");
     out.push(
@@ -165,7 +164,7 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
     );
     out.push("");
     out.push(
-        "A counterpart rests either on deterministic name agreement or on a model's judgment, which carries its confidence in parentheses. `divergent` marks the same operation reached differently.",
+        "A counterpart rests either on deterministic name agreement or on a model's judgment, which carries its confidence in parentheses. `divergent` marks the same operation reached differently, and `unnecessary` marks one BAML does not need — the language answers it, so the question does not arise.",
     );
     out.push("");
     out.push("## TypeScript surface");

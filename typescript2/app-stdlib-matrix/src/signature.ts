@@ -380,13 +380,21 @@ export function tsSignature(
   symbol: TsSymbol,
   matrix: SymbolMatrix,
 ): TemplateResult {
-  // Split on the path, never on the display's last dot: a computed name like
-  // `[Symbol.species]` contains dots of its own, and splitting on text would
-  // cut it into `ArrayBuffer.[Symbol.` and `species]`.
+  // The name comes from the path, never from splitting the display on its last
+  // dot: a computed name like `[Symbol.species]` contains dots of its own, and
+  // splitting on text would cut it into `ArrayBuffer.[Symbol.` and `species]`.
   const steps = symbol.symbol;
   const name = steps.at(-1) ?? symbol.display;
-  const owner = steps.slice(0, -1).join('.');
-  const container = owner.length > 0 ? `${owner}.` : '';
+  // The owner comes off the display by length rather than from the path, for
+  // two reasons. The path's first step is the module, which groups but is not
+  // part of how a symbol is written — `(web).DOMException.` is not an address.
+  // And the path has no `prototype` step, so the static and instance sides of a
+  // container render identically from it: `DOMException.ABORT_ERR` exists on
+  // both, and the two rows were indistinguishable. The display already carries
+  // TypeScript's own spelling of both facts.
+  const container = symbol.display.endsWith(name)
+    ? symbol.display.slice(0, symbol.display.length - name.length)
+    : '';
   const { modifiers, rest } = tsParts(symbol);
   // No scope walk on this side: a TypeScript signature is printed text, so its
   // parameter names sit in the same string as its types, and resolving them

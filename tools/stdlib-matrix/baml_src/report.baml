@@ -54,9 +54,21 @@ class CodeExample {
 /// as a cache; ids are content-derived and survive.
 ///
 /// `verdict` is what is true:
-///   - `match`      — the same operation, reached the same way
-///   - `divergent`  — the same operation, reached differently; `divergence` says how
-///   - `none`       — nothing in BAML does this symbol's job
+///   - `match`        — the same operation, reached the same way
+///   - `divergent`    — the same operation, reached differently; `divergence` says how
+///   - `unnecessary`  — BAML makes the question not arise
+///   - `none`         — nothing in BAML does this symbol's job
+///
+/// `unnecessary` is a distinct finding from `none`, and the more useful one. A
+/// reader who cannot find `Array.isArray` needs to be told not that BAML lacks
+/// it but that BAML does not need it: types are checked by pattern matching, so
+/// the question only comes up for a value in a union, and then `foo is int[]`
+/// answers it. That is a different thing to say than "there is nothing here",
+/// and rendering the two the same way loses the whole explanation.
+///
+/// Such a judgement may still name BAML symbols, and usually carries an
+/// `example`: the answer is often syntax rather than a symbol, and `baml` can
+/// only hold symbols.
 ///
 /// `basis` is why it is believed:
 ///   - `name`           — deterministic agreement of name and owner
@@ -102,6 +114,9 @@ class MatrixCounts {
     judgements: int,
     /// TypeScript symbols with a BAML counterpart, exact or divergent.
     matched: int,
+    /// TypeScript symbols BAML makes unnecessary. Counted apart from both
+    /// `matched` and `unmatched`: it is neither a correspondence nor a gap.
+    unnecessary: int,
     /// TypeScript symbols judged to have none — considered, and found wanting.
     unmatched: int,
     /// TypeScript symbols nothing has judged yet.
@@ -128,31 +143,72 @@ function judgement_pairs(judgement: Judgement) -> bool {
     judgement.verdict == "match" || judgement.verdict == "divergent"
 }
 
+/// The strongest thing said about a symbol, when more than one judgement speaks
+/// for it.
+///
+/// Divergence outranks an exact match because it is the finding a reader is
+/// scanning for, and `unnecessary` outranks an absence because it explains one.
+/// An unrecognized verdict — and the absence of any — ranks below every real
+/// one, so a symbol nothing has judged never displaces a symbol something has.
+/// The view applies the same order, so the square and the tally cannot disagree.
+function judgement_rank(verdict: string) -> int {
+    match (verdict) {
+        "divergent" => 4,
+        "match" => 3,
+        "unnecessary" => 2,
+        "none" => 1,
+        _ => 0,
+    }
+}
+
+/// What a symbol's judgements amount to, or `""` when there are none.
+function verdict_of(judgements: Judgement[]) -> string {
+    let strongest = "";
+    for (let judgement in judgements) {
+        if (judgement_rank(judgement.verdict) > judgement_rank(strongest)) {
+            strongest = judgement.verdict;
+        }
+    }
+    strongest
+}
+
 /// Recomputes the tallies from the relation rather than by adjusting the old
 /// numbers, so a pass that forgets to increment cannot leave the report lying.
 function recount(matrix: SymbolMatrix) -> MatrixCounts {
-    let paired: map<string, bool> = {};
-    let judged: map<string, bool> = {};
+    let verdicts: map<string, string> = {};
     let baml_claimed: map<string, bool> = {};
     for (let judgement in matrix.judgements) {
-        let _ = judged.set(judgement.ts, true);
-        if (judgement_pairs(judgement)) {
-            let _ = paired.set(judgement.ts, true);
-            for (let id in judgement.baml) {
-                let _ = baml_claimed.set(id, true);
-            }
+        let strongest = verdicts.get(judgement.ts) ?? "";
+        if (judgement_rank(judgement.verdict) > judgement_rank(strongest)) {
+            let _ = verdicts.set(judgement.ts, judgement.verdict);
+        }
+        // Named is named, whatever the verdict: a symbol offered as the way to
+        // do something BAML makes unnecessary has still been pointed at.
+        for (let id in judgement.baml) {
+            let _ = baml_claimed.set(id, true);
         }
     }
     let matched = 0;
+    let unnecessary = 0;
     let unmatched = 0;
     let unjudged = 0;
     for (let symbol in matrix.ts) {
-        if (paired.has(symbol.id)) {
-            matched += 1;
-        } else if (judged.has(symbol.id)) {
-            unmatched += 1;
-        } else {
-            unjudged += 1;
+        match (verdicts.get(symbol.id) ?? "") {
+            "match" => {
+                matched += 1;
+            },
+            "divergent" => {
+                matched += 1;
+            },
+            "unnecessary" => {
+                unnecessary += 1;
+            },
+            "none" => {
+                unmatched += 1;
+            },
+            _ => {
+                unjudged += 1;
+            },
         }
     }
     let baml_unclaimed = 0;
@@ -166,6 +222,7 @@ function recount(matrix: SymbolMatrix) -> MatrixCounts {
         ts_symbols: matrix.ts.length(),
         judgements: matrix.judgements.length(),
         matched: matched,
+        unnecessary: unnecessary,
         unmatched: unmatched,
         unjudged: unjudged,
         baml_unclaimed: baml_unclaimed,
@@ -347,6 +404,7 @@ function build_symbol_matrix(
             ts_symbols: 0,
             judgements: 0,
             matched: 0,
+            unnecessary: 0,
             unmatched: 0,
             unjudged: 0,
             baml_unclaimed: 0,

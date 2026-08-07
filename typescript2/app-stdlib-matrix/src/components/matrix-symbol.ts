@@ -12,35 +12,27 @@ import {
   SymbolIndex,
 } from '../navigation';
 import { bamlSignature, tsSignature } from '../signature';
-import type {
-  BamlSymbol,
-  Judgement,
-  Links,
-  Side,
-  SymbolMatrix,
-  TreeNode,
-  TsSymbol,
+import {
+  type BamlSymbol,
+  type Judgement,
+  type Links,
+  type Side,
+  type SymbolMatrix,
+  type SymbolState,
+  stateOf,
+  type TreeNode,
+  type TsSymbol,
 } from '../types';
 
 // One symbol row, seen from whichever side the reader is viewing.
 //
-// The swatch answers "does this exist in the other language": striped when it
-// has a counterpart, otherwise the viewing language's own colour.
+// The swatch answers "what does the other language do about this" — see
+// `swatchFor`.
 //
 // A row is only handed a `target` when it is on the path to one — its parent
 // passes it down to the one child that leads there — so holding it at all means
 // "open, and if the path ends here, this is the destination".
 
-/**
- * What the square says, before anything is opened.
- *
- * Four states, because the run distinguishes four. Striped is present in both
- * and reached the same way; split is present in both and reached differently;
- * solid is examined and found to have no counterpart; hollow is nothing has
- * looked yet. Hollow reads as empty and so as unknown, solid as a settled
- * finding — which is the distinction a reader most needs and the one the view
- * could not previously make at all.
- */
 /** A heading over one part of an opened row. */
 const SECTION = (label: string) => html`<h4
   class="mt-3 mb-1 text-[0.68rem] font-semibold tracking-wider text-zinc-500 uppercase"
@@ -55,14 +47,42 @@ const BASIS: Record<string, string> = {
   'no-candidates': 'nothing comparable exists to consider',
 };
 
-const SWATCH = {
-  baml: ['swatch-baml', 'no TypeScript counterpart'],
-  both: ['swatch-both', 'present in both'],
-  divergent: ['swatch-divergent', 'present in both, reached differently'],
-  ts: ['swatch-ts', 'no BAML counterpart'],
-  unjudgedBaml: ['swatch-unjudged-baml', 'not yet judged'],
-  unjudgedTs: ['swatch-unjudged-ts', 'not yet judged'],
-} as const;
+/**
+ * The square, chosen by what was concluded and by where the reader stands.
+ *
+ * A solid square is one language, and it is always the *other* one when the
+ * symbol exists in both: from the TypeScript view, purple says "this is in BAML
+ * too" and yellow says "this is TypeScript's alone". The viewing side's own
+ * colour therefore always means "only here", which is the reading a scan wants.
+ *
+ * Stripes are both languages interleaved: the same operation, reached
+ * differently. Red belongs to neither surface — it says BAML answers the
+ * question in the language, so the API does not arise.
+ */
+function swatchFor(state: SymbolState, side: Side): readonly [string, string] {
+  const own = side === 'ts' ? 'swatch-ts' : 'swatch-baml';
+  const other = side === 'ts' ? 'swatch-baml' : 'swatch-ts';
+  switch (state) {
+    case 'match':
+      return [other, 'present in both'];
+    case 'divergent':
+      return ['swatch-striped', 'present in both, reached differently'];
+    case 'unnecessary':
+      return ['swatch-unnecessary', 'unnecessary in BAML'];
+    case 'none':
+      return [own, 'no BAML counterpart'];
+    default:
+      // An absence names no BAML symbol, so it never indexes from that end: a
+      // BAML symbol is either named by a judgement or not, and "not" is silence
+      // rather than a finding. Only the TypeScript side can tell "examined,
+      // nothing does this" from "nothing has looked yet", so only it gets the
+      // hollow square; on the BAML side the same state is solid, and means no
+      // judgement happens to name this symbol.
+      return side === 'ts'
+        ? ['swatch-unjudged-ts', 'not yet judged']
+        : [own, 'no judgement names it'];
+  }
+}
 
 export class MatrixSymbolElement extends LitElement {
   static properties = {
@@ -153,19 +173,10 @@ export class MatrixSymbolElement extends LitElement {
   }
 
   private get swatch(): readonly [string, string] {
-    const counterparts = this.counterparts;
-    if (counterparts.length > 0) {
-      // Any divergence colours the square: a reader scanning for the places the
-      // two libraries disagree should not have to open a row to find them.
-      return counterparts.some((judgement) => judgement.verdict === 'divergent')
-        ? SWATCH.divergent
-        : SWATCH.both;
-    }
-    // An absence is only recorded against the BAML symbol — it carries
-    // `ts: null` and never indexes from the TypeScript end — so that side has
-    // no unjudged state to show. After a sweep, unclaimed is the finding.
-    if (this.side === 'ts') return SWATCH.ts;
-    return this.own.length > 0 ? SWATCH.baml : SWATCH.unjudgedBaml;
+    return swatchFor(
+      stateOf(this.links, this.side, this.node.index),
+      this.side,
+    );
   }
 
   private signatureOf(symbol: BamlSymbol | TsSymbol, side: Side): string {
@@ -264,6 +275,11 @@ export class MatrixSymbolElement extends LitElement {
     return this.own.filter((judgement) => judgement.verdict === 'none');
   }
 
+  /** The judgements recording that BAML makes the question not arise. */
+  private get unnecessary(): Judgement[] {
+    return this.own.filter((judgement) => judgement.verdict === 'unnecessary');
+  }
+
   // What the run concluded, and why. A pairing without its reasoning is a bare
   // assertion, and an absence without one is indistinguishable from silence —
   // the reasoning is the thing this report is for.
@@ -284,12 +300,64 @@ export class MatrixSymbolElement extends LitElement {
           this.counterparts.length > 0
             ? html`
               ${SECTION(other)}
-              ${this.counterparts.map((link) => this.counterpart(link))}
+              ${this.counterparts.flatMap((link) =>
+                this.facing(link).map((id) => this.counterpart(link, id)),
+              )}
             `
             : nothing
         }
+        ${this.unnecessary.map((judgement) => this.unneeded(judgement))}
         ${this.absences.map((judgement) => this.absence(judgement, other))}
       </div>
+    `;
+  }
+
+  /**
+   * A symbol BAML does not need, and why.
+   *
+   * The reasoning is the whole content here — more so than for an absence,
+   * because the reader's next question is always "then how do I do it". Often
+   * the answer is not a symbol at all but a piece of syntax, which is what the
+   * example is for: `Array.isArray` has no counterpart to link to, and
+   * `foo is int[]` is the answer.
+   */
+  private unneeded(judgement: Judgement): TemplateResult {
+    return html`
+      ${SECTION('unnecessary in BAML')}
+      <p class="my-1 text-sm text-zinc-600 dark:text-zinc-400">
+        ${judgement.reason ?? 'no reason recorded'}
+      </p>
+      ${this.example(judgement)}
+      ${this.provenance(judgement)}
+    `;
+  }
+
+  /**
+   * The same job written in each language, side by side.
+   *
+   * Shown wherever a judgement carries one, not only for the unnecessary ones:
+   * a divergence is exactly the case where prose is weakest and two lines of
+   * code are clearest.
+   */
+  private example(judgement: Judgement): TemplateResult | typeof nothing {
+    const example = judgement.example;
+    if (!example) return nothing;
+    const pane = (label: string, code: string) => html`<div class="min-w-0">
+      <div class="mb-0.5 text-[0.62rem] tracking-wider text-zinc-500 uppercase">${label}</div>
+      <pre
+        class="overflow-x-auto rounded bg-zinc-100 px-2 py-1.5 font-mono
+               text-[0.75rem] whitespace-pre dark:bg-zinc-900"
+      ><code>${code}</code></pre>
+    </div>`;
+    return html`
+      <div class="my-1.5 grid gap-2 sm:grid-cols-2">
+        ${pane('TypeScript', example.typescript)} ${pane('BAML', example.baml)}
+      </div>
+      ${
+        example.note
+          ? html`<p class="my-1 text-xs text-zinc-500">${example.note}</p>`
+          : nothing
+      }
     `;
   }
 
@@ -338,10 +406,24 @@ export class MatrixSymbolElement extends LitElement {
     return html`<p class="my-1 text-[0.68rem] text-zinc-500">${parts.join(' · ')}</p>`;
   }
 
-  private counterpart(link: Judgement): TemplateResult | typeof nothing {
+  /**
+   * The ids on the far side of a judgement, from wherever the reader is.
+   *
+   * Plural in one direction and singular in the other, because the relation is:
+   * a judgement answers for one TypeScript symbol and may name several BAML
+   * ones — `child_process.spawn` is `baml.sys.exec` together with the
+   * `ShellOutput` it returns.
+   */
+  private facing(link: Judgement): string[] {
+    return this.side === 'baml' ? [link.ts] : link.baml;
+  }
+
+  private counterpart(
+    link: Judgement,
+    wanted: string,
+  ): TemplateResult | typeof nothing {
     const otherSide: Side = this.side === 'baml' ? 'ts' : 'baml';
     // A judgement names its ends by id; the views address rows by index.
-    const wanted = this.side === 'baml' ? link.ts : link.baml;
     const symbols: Array<BamlSymbol | TsSymbol> =
       otherSide === 'ts' ? this.matrix.ts : this.matrix.baml;
     const index = symbols.findIndex((candidate) => candidate.id === wanted);
@@ -370,7 +452,7 @@ export class MatrixSymbolElement extends LitElement {
             ? html`<p class="my-1 text-xs text-zinc-500">${link.reason}</p>`
             : nothing
         }
-        ${this.provenance(link)}
+        ${this.example(link)} ${this.provenance(link)}
       </div>
     `;
   }

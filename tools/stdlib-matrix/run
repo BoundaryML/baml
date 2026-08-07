@@ -338,7 +338,8 @@ field() {
 
 echo "Wrote ${resolved_json} (canonical), ${resolved_output}, and ${raw_result} (raw)"
 echo "TypeScript: $(field .report.counts.matched) of $(field .report.counts.ts_symbols) symbols have a" \
-     "BAML counterpart · $(field .report.counts.unmatched) judged to have none ·" \
+     "BAML counterpart · $(field .report.counts.unnecessary) unnecessary in BAML ·" \
+     "$(field .report.counts.unmatched) judged to have none ·" \
      "$(field .report.counts.unjudged) unjudged"
 echo "BAML: $(field '(.report.counts.baml_symbols - .report.counts.baml_unclaimed)') of" \
      "$(field .report.counts.baml_symbols) symbols are named by a judgement"

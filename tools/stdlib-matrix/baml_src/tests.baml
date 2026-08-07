@@ -822,6 +822,66 @@ test "a symbol the previous revision never saw is queued, not carried" {
     assert.is_true(queued_before < matrix.ts.length());
 }
 
+test "an unnecessary symbol is neither matched nor missing" {
+    // `Array.isArray` is the case this verdict exists for: BAML does not lack
+    // it, BAML does not need it. Counting it as either would make the report
+    // say something false.
+    let matrix = fixture_matrix("sha-u", "5.8.3-test");
+    let before = matrix.counts.matched;
+    let none: string[] = [];
+    let no_counterpart: string[] = [];
+    if let symbol: TsSymbol = matrix.ts.at(0) {
+        matrix
+            .judgements
+            .push(
+                Judgement {
+                    ts: symbol.id,
+                    baml: no_counterpart,
+                    verdict: "unnecessary",
+                    basis: "model",
+                    confidence: "high",
+                    reason: "pattern matching answers this",
+                    divergence: null,
+                    rejected: none,
+                    verified: true,
+                    example: CodeExample {
+                        typescript: "Array.isArray(foo)",
+                        baml: "foo is int[]",
+                        note: null,
+                    },
+                },
+            );
+    }
+    matrix.counts = recount(matrix);
+    assert.equal(matrix.counts.unnecessary, 1);
+    // The symbol it was recorded against already had a name match, which
+    // outranks it, so the matched tally is untouched and nothing was double
+    // counted.
+    assert.equal(matrix.counts.matched, before);
+    assert
+        .equal(
+            matrix.counts.matched
+                + matrix.counts.unnecessary
+                + matrix.counts.unmatched
+                + matrix.counts.unjudged,
+            matrix.counts.ts_symbols,
+        );
+}
+
+test "the strongest verdict about a symbol is the one that counts" {
+    // Several judgements can speak for one symbol. Divergence is the finding a
+    // reader scans for, so it outranks an exact match; `unnecessary` explains an
+    // absence, so it outranks one.
+    assert.is_true(judgement_rank("divergent") > judgement_rank("match"));
+    assert.is_true(judgement_rank("match") > judgement_rank("unnecessary"));
+    assert.is_true(judgement_rank("unnecessary") > judgement_rank("none"));
+    // Nothing said at all ranks below everything said, so a symbol nothing has
+    // judged never displaces one something has.
+    assert.is_true(judgement_rank("none") > judgement_rank(""));
+    let empty: Judgement[] = [];
+    assert.equal(verdict_of(empty), "");
+}
+
 test "the concurrency cap falls back when nothing was asked for" {
     assert.equal(effective_limit(0), call_limit());
     assert.equal(effective_limit(-1), call_limit());

@@ -64,8 +64,17 @@ export interface TsSymbol {
   /** This symbol's address, as TypeScript writes it: the instance side is
    *  reached through `prototype`, the static side on the constructor. */
   id: string;
+  /** `[module, container]`, `[module, function]`, or
+   *  `[module, container, member]` — three levels, the way a reader reaches it.
+   *  The module groups and is not part of how the symbol is written. */
   symbol: string[];
   display: string;
+  /** What it is, as declared: `class`, `interface`, `namespace`, `function`,
+   *  `method`, `static method`, `property`. */
+  kind: string;
+  /** How it is reached, and how the view nests it: `container` for a type,
+   *  `free` for something reached on the module, and `method` /
+   *  `static_method` / `property` for a container's members. */
   origin: string;
   signature: string;
   doc: string | null;
@@ -75,24 +84,38 @@ export interface TsSymbol {
   references: string[];
 }
 
+/** Two snippets showing the same job done in each language. */
+export interface CodeExample {
+  typescript: string;
+  baml: string;
+  note: string | null;
+}
+
 /**
- * What was concluded about one BAML symbol, and on what grounds.
+ * What was concluded about one TypeScript symbol, and on what grounds.
  *
- * Both sides are ids, not array indices: indices shift whenever the stdlib
+ * Keyed on the TypeScript side, because that is the side a reader arrives from:
+ * they know how to do something in TypeScript and want to know how it is done
+ * in BAML. `baml` is a list — "how you would do this" is not always one symbol,
+ * and zero entries means nothing does the job.
+ *
+ * Every side is an id, not an array index: indices shift whenever either stdlib
  * does. `verdict` is what is true — `match`, `divergent` (the same operation
- * reached differently), or `none` (nothing on the other side does its job) —
- * and `basis` is why it is believed.
+ * reached differently), `unnecessary` (BAML answers the question in the
+ * language, so the API does not arise), or `none` (nothing in BAML does its
+ * job) — and `basis` is why it is believed.
  */
 export interface Judgement {
-  baml: string;
-  ts: string | null;
-  verdict: 'match' | 'divergent' | 'none';
+  ts: string;
+  baml: string[];
+  verdict: 'match' | 'divergent' | 'unnecessary' | 'none';
   basis: string;
   confidence: string | null;
   reason: string | null;
   divergence: string | null;
   rejected: string[];
   verified: boolean;
+  example: CodeExample | null;
 }
 
 /** A call that did not come back, recorded rather than swallowed. */
@@ -113,13 +136,19 @@ export interface MatrixCounts {
   baml_symbols: number;
   ts_symbols: number;
   judgements: number;
-  /** BAML symbols with a counterpart, exact or divergent. */
+  /** TypeScript symbols with a BAML counterpart, exact or divergent. */
   matched: number;
-  /** BAML symbols judged to have none. */
+  /** TypeScript symbols BAML makes unnecessary. Neither a correspondence nor a
+   *  gap, so counted apart from both. */
+  unnecessary: number;
+  /** TypeScript symbols judged to have none. */
   unmatched: number;
-  /** BAML symbols nothing has judged yet. */
+  /** TypeScript symbols nothing has judged yet. */
   unjudged: number;
-  ts_unclaimed: number;
+  /** BAML symbols no judgement names. Not the same claim as `unmatched`:
+   *  nothing asked whether these have a counterpart, so it counts silence
+   *  rather than a finding, and the two must not be added up. */
+  baml_unclaimed: number;
 }
 
 export interface SymbolMatrix {
@@ -150,17 +179,74 @@ export class Links {
     const bamlIndex = indexById(matrix.baml);
     const tsIndex = indexById(matrix.ts);
     for (const judgement of matrix.judgements ?? []) {
-      const from = bamlIndex.get(judgement.baml);
-      if (from !== undefined) push(this.fromBaml, from, judgement);
-      // An absence has no other end to index from.
-      const to = judgement.ts === null ? undefined : tsIndex.get(judgement.ts);
-      if (to !== undefined) push(this.fromTs, to, judgement);
+      const from = tsIndex.get(judgement.ts);
+      if (from !== undefined) push(this.fromTs, from, judgement);
+      // A judgement may name several BAML symbols, or — when it records an
+      // absence — none, in which case there is no other end to index from.
+      for (const id of judgement.baml) {
+        const to = bamlIndex.get(id);
+        if (to !== undefined) push(this.fromBaml, to, judgement);
+      }
     }
   }
 
   for(side: Side, index: number): Judgement[] {
     return (side === 'baml' ? this.fromBaml : this.fromTs).get(index) ?? [];
   }
+}
+
+/**
+ * What the run concluded about one symbol, reduced to the states the view
+ * distinguishes.
+ *
+ * The two sides do not mean the same thing by `unjudged`, and the legend says
+ * so. On the TypeScript side it is "nothing has looked at this yet", against a
+ * `none` that means "something looked and found nothing" — a finding. A BAML
+ * symbol only ever indexes from judgements that *name* it, so it never reaches
+ * `none`: `unjudged` there means no judgement happened to name it, which is
+ * silence rather than a conclusion.
+ *
+ * Divergence wins over an exact match when a symbol has both. A reader scanning
+ * for the places the two libraries disagree should not have to open a row to
+ * find them.
+ */
+export type SymbolState =
+  | 'match'
+  | 'divergent'
+  | 'unnecessary'
+  | 'none'
+  | 'unjudged';
+
+/**
+ * The strongest thing said about a symbol, when more than one judgement speaks
+ * for it. The same order `judgement_rank` applies in report.baml, so the square
+ * and the report's own tally cannot disagree.
+ */
+const RANK: Record<string, number> = {
+  divergent: 4,
+  match: 3,
+  none: 1,
+  unnecessary: 2,
+};
+
+export function stateOf(links: Links, side: Side, index: number): SymbolState {
+  let strongest: SymbolState = 'unjudged';
+  let rank = 0;
+  for (const judgement of links.for(side, index)) {
+    const candidate = RANK[judgement.verdict] ?? 0;
+    if (candidate > rank) {
+      rank = candidate;
+      strongest = judgement.verdict;
+    }
+  }
+  return strongest;
+}
+
+/** A tree's size, counting every descendant — what a group's bar is drawn to. */
+export function countNodes(nodes: TreeNode[]): number {
+  let total = 0;
+  for (const node of nodes) total += 1 + countNodes(node.children);
+  return total;
 }
 
 function indexById(symbols: Array<{ id: string }>): Map<string, number> {
@@ -193,6 +279,18 @@ const MEMBER_ORIGINS = new Set([
 /** Declared on a type, rather than directly in a namespace. */
 function isMember(symbol: BamlSymbol): boolean {
   return MEMBER_ORIGINS.has(symbol.origin);
+}
+
+/**
+ * The container a TypeScript path names, as a map key.
+ *
+ * Module-qualified, because `Server` is declared by `http`, `net`, and `tls`:
+ * a bare name would hang all three sets of members off whichever container came
+ * first. The separator is a unit separator rather than a dot, since both halves
+ * can contain dots of their own.
+ */
+function containerKey(path: string[]): string {
+  return `${path[0] ?? ''}\u001f${path[1] ?? ''}`;
 }
 
 function pathNames(symbol: BamlSymbol): string[] {
@@ -232,13 +330,16 @@ function implBaseKey(base: string): string {
 /**
  * Groups one side into its own language's hierarchy.
  *
- * BAML has three levels and all of them nest: a namespace holds types and free
- * functions, a type holds its members, and an impl's methods hang off the type
- * the impl is written for. Deciding a symbol's group in isolation cannot do
- * that last part — an impl's path names its receiver, not a namespace — so
- * grouping runs once over the whole set with the type index in hand.
+ * Both languages have three levels and both nest. In BAML a namespace holds
+ * types and free functions, a type holds its members, and an impl's methods
+ * hang off the type the impl is written for. In TypeScript a module — the
+ * globals, the web platform, or one node module — holds containers and free
+ * functions, and a container holds its members.
  *
- * TypeScript containers have one level, so their members stay flat.
+ * Deciding a symbol's group in isolation cannot do the nesting: an impl's path
+ * names its receiver rather than a namespace, and a TypeScript member names its
+ * container without saying which record that is. So grouping runs once over the
+ * whole set, with the containers indexed first.
  */
 export function buildGroups(
   side: Side,
@@ -250,13 +351,33 @@ export function buildGroups(
     symbol,
   }));
 
+  const grouped = new Map<string, TreeNode[]>();
+  const add = (key: string, node: TreeNode) => {
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(node);
+    else grouped.set(key, [node]);
+  };
+
   if (side === 'ts') {
-    const grouped = new Map<string, TreeNode[]>();
+    // Containers are the attachment point for their members. Keyed by module
+    // as well as name: `Server` is declared by `http`, `net`, and `tls`, and a
+    // bare name would hang all three sets of members off whichever came first.
+    const containers = new Map<string, TreeNode>();
     for (const node of nodes) {
-      const key = (node.symbol as TsSymbol).symbol[0] ?? '(unknown)';
-      const bucket = grouped.get(key);
-      if (bucket) bucket.push(node);
-      else grouped.set(key, [node]);
+      const symbol = node.symbol as TsSymbol;
+      if (symbol.origin === 'container') {
+        containers.set(containerKey(symbol.symbol), node);
+      }
+    }
+    for (const node of nodes) {
+      const symbol = node.symbol as TsSymbol;
+      const module = symbol.symbol[0] ?? '(unknown)';
+      const parent =
+        symbol.symbol.length >= 3
+          ? containers.get(containerKey(symbol.symbol))
+          : undefined;
+      if (parent) parent.children.push(node);
+      else add(module, node);
     }
     return sorted(grouped);
   }
@@ -281,13 +402,6 @@ export function buildGroups(
     return isMember(symbol)
       ? byPath.get(pathNames(symbol).slice(0, -1).join('.'))
       : undefined;
-  };
-
-  const grouped = new Map<string, TreeNode[]>();
-  const add = (key: string, node: TreeNode) => {
-    const bucket = grouped.get(key);
-    if (bucket) bucket.push(node);
-    else grouped.set(key, [node]);
   };
 
   for (const node of nodes) {

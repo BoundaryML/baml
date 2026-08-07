@@ -148,8 +148,11 @@ function ts_signature_of(signatures: string[]) -> string {
 /// A container's own signature: its declaration head, synthesized. The lib
 /// prints no single line for `interface Date { … }` that is worth keeping, and
 /// a reader scanning the tree wants to know what kind of thing it is.
-function ts_container_signature(container: TsContainer, members: int) -> string {
-    `${container.kind} ${container.name} — ${members} members`
+///
+/// No member count: the container's members nest under it, so the view can say
+/// how many without being told.
+function ts_container_signature(container: TsContainer) -> string {
+    `${container.kind} ${container.name}`
 }
 
 function extract_ts_symbols(doc: TsSurfaceDoc) -> TsSymbol[] {
@@ -165,7 +168,7 @@ function extract_ts_symbols(doc: TsSurfaceDoc) -> TsSymbol[] {
                         display: ts_display_of(container_id),
                         kind: container.kind,
                         origin: "container",
-                        signature: ts_container_signature(container, container.members.length()),
+                        signature: ts_container_signature(container),
                         doc: container.doc,
                         since: container.since,
                         references: [],
