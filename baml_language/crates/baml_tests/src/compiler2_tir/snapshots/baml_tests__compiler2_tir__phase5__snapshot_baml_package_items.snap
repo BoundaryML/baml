@@ -184,6 +184,7 @@ namespace baml.json:
   function _path_field
   function _path_index
   function deserialize<T>
+  function encode<T>
   function field
   function from<T>
   function from_json<T>
@@ -239,6 +240,7 @@ namespace baml.llm:
   function prompt_template_for
   function render_output_format
   function render_prompt
+  function render_prompt_typed<T>
   function stream_llm_function<TStream, TFinal>
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
@@ -292,9 +294,12 @@ namespace baml.random:
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
 namespace baml.reflect:
   class Arg { methods: [] }
+  class Diagnostic { methods: [] }
   class InvalidArgumentError { methods: [] }
   class Meta { methods: [] }
+  class Package { methods: [compile, _compile, _finish, get_class, classes, diagnostics] }
   class Signature { methods: [] }
+  class Span { methods: [] }
   type TypeKind
   type TypeView
   function call_any<R, E>
@@ -307,6 +312,8 @@ namespace baml.reflect.class:
 namespace baml.reflect.enum:
   class Type { methods: [values, meta, as_type] }
   class Value { methods: [] }
+namespace baml.reflect.errors:
+  class CompilationError { methods: [] }
 namespace baml.reflect.function:
   class Parameter { methods: [] }
   class Type { methods: [params, return_type, as_type] }

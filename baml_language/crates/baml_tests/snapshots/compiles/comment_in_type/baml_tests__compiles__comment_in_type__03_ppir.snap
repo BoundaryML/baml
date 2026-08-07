@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 10276
 ---
 === PPIR ===
 function user.CommentAfterArrow(client: baml.llm.Client = TestClient) -> string  [llm] {
@@ -19,7 +18,7 @@ function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: b
   client.__make_stream(sse)
 }
 function user.CommentAfterArrow$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "CommentAfterArrow", map {  })
+  baml.llm.render_prompt_typed(client, "CommentAfterArrow", map {  })
 }
 function user.CommentAfterArrow$stream(client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "CommentAfterArrow", map {  })
@@ -40,7 +39,7 @@ function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client
   client.__make_stream(sse)
 }
 function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "FunctionWithComments", map { "a": a, "b": b })
+  baml.llm.render_prompt_typed(client, "FunctionWithComments", map { "a": a, "b": b })
 }
 function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "FunctionWithComments", map { "a": a, "b": b })

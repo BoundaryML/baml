@@ -154,6 +154,7 @@ function google_llm_env.GoogleEnvEnterprisePrompt$render_prompt(input: string, c
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
     load_var input
@@ -162,7 +163,7 @@ function google_llm_env.GoogleEnvEnterprisePrompt$render_prompt(input: string, c
     load_type unknown
     alloc_map 1
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 

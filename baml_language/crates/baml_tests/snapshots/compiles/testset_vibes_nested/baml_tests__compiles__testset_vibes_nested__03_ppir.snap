@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 33904
 ---
 === PPIR ===
 class user.Sentiment {
@@ -32,7 +31,7 @@ function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: b
   client.__make_stream(sse)
 }
 function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text })
+  baml.llm.render_prompt_typed(client, "ClassifySentiment", map { "text": text })
 }
 function user.ClassifySentiment$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>  [expr] {
   baml.llm.stream_llm_function(client, "ClassifySentiment", map { "text": text })
@@ -53,7 +52,7 @@ function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: 
   client.__make_stream(sse)
 }
 function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text })
+  baml.llm.render_prompt_typed(client, "ClassifySentiment2", map { "text": text })
 }
 function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "ClassifySentiment2", map { "text": text })
@@ -80,7 +79,7 @@ function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.
   client.__make_stream(sse)
 }
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic })
+  baml.llm.render_prompt_typed(client, "GenerateTests", map { "count": count, "topic": topic })
 }
 function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<string[], string[]>  [expr] {
   baml.llm.stream_llm_function(client, "GenerateTests", map { "count": count, "topic": topic })

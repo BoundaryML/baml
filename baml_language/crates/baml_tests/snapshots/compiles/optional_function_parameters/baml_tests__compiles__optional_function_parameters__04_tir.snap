@@ -59,7 +59,7 @@ function user.AskDocs(query: string, max_results: int = 10, filter: string = Def
   baml.llm.call_llm_function<T>(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : string
 }
 function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.PromptAst
 }
 function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request

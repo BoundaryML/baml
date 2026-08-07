@@ -183,6 +183,7 @@ fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> b
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -196,7 +197,8 @@ fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> b
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type(Invoice);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _5>(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {

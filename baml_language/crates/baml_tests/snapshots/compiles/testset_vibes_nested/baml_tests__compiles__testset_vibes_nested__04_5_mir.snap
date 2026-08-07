@@ -490,6 +490,7 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -503,7 +504,8 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type(Sentiment);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _5>(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -700,6 +702,7 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.
     let _3: baml.llm.Client // client // param
     let _4: bool
     let _5: map<string, unknown>
+    let _6: type
 
     bb0: {
         _4 = copy _3 == const <omitted>;
@@ -713,7 +716,8 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.
 
     bb2: {
         _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
+        _6 = load_type(string[]);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _6>(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -953,6 +957,7 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) 
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -966,7 +971,8 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) 
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _5>(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {

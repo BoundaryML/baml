@@ -9,7 +9,7 @@ function user.ExtractAny(client: baml.llm.Client = TestClient) -> baml.json.json
   baml.llm.call_llm_function<T>(client, "ExtractAny", map {  }) : baml.json.json
 }
 function user.ExtractAny$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ExtractAny", map {  }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "ExtractAny", map {  }) : baml.llm.PromptAst
 }
 function user.ExtractAny$build_request(client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request(client, "ExtractAny", map {  }) : baml.http.Request

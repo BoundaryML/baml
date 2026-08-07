@@ -3708,6 +3708,9 @@ function baml.json.deserialize(s: string) -> #0 {
     return
 }
 
+function baml.json.encode(v: #0) -> string {
+}
+
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json {
 }
 
@@ -5635,6 +5638,30 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     return
 }
 
+function baml.llm.render_prompt_typed(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst {
+    load_var prompt_closure
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var prompt_closure
+
+  L0:
+    load_var client
+    load_const true
+    call baml.llm.Client.to_primitive_client
+    store_var primitive_client
+    load_var2 2 4
+    call baml.llm.prompt_template_for
+    store_var template
+    load_var2 5 6
+    load_var args
+    load_type #0
+    load_var prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
+    return
+}
+
 function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<#0, #1> {
     load_var prompt_closure
     load_const <omitted>
@@ -6322,6 +6349,39 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
     load_var seed
     call baml.random.Xoshiro256PlusPlus._new
     return
+}
+
+function baml.reflect.Package._compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
+}
+
+function baml.reflect.Package._finish(artifact: baml.reflect.Package, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
+}
+
+function baml.reflect.Package.classes(self: baml.reflect.Package) -> map<string, baml.reflect.class.Type> {
+}
+
+function baml.reflect.Package.compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type baml.reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var2 1 2
+    sys_op baml.reflect.Package._compile
+    load_var packages
+    call baml.reflect.Package._finish
+    return
+}
+
+function baml.reflect.Package.diagnostics(self: baml.reflect.Package) -> baml.reflect.Diagnostic[] {
+}
+
+function baml.reflect.Package.get_class(self: baml.reflect.Package, name: string) -> baml.reflect.class.Type | null {
 }
 
 function baml.reflect.array.Type.baml.reflect.TypeView.as_type(self: baml.reflect.array.Type) -> type {

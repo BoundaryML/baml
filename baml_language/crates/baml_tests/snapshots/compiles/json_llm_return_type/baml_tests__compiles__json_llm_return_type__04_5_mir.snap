@@ -174,6 +174,7 @@ fn user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst 
     let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: map<string, unknown>
+    let _4: type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -187,7 +188,8 @@ fn user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst 
 
     bb2: {
         _3 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
+        _4 = load_type(baml.json.json);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _4>(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {

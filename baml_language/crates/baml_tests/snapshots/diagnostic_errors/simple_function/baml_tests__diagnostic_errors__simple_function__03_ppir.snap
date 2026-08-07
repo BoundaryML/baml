@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 55199
 ---
 === PPIR ===
 class user.User {
@@ -27,7 +26,7 @@ function user.HelloWorld$parse_stream(sse: baml.http.SseStream, client: baml.llm
   client.__make_stream(sse)
 }
 function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "HelloWorld", map { "name": name })
+  baml.llm.render_prompt_typed(client, "HelloWorld", map { "name": name })
 }
 function user.HelloWorld$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "HelloWorld", map { "name": name })

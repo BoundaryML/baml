@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 44178
 ---
 === PPIR ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int  [expr] {
@@ -509,7 +508,7 @@ function user.TestTarget$parse_stream(sse: baml.http.SseStream, client: baml.llm
   client.__make_stream(sse)
 }
 function user.TestTarget$render_prompt(client: baml.llm.Client = BasicClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "TestTarget", map {  })
+  baml.llm.render_prompt_typed(client, "TestTarget", map {  })
 }
 function user.TestTarget$stream(client: baml.llm.Client = BasicClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "TestTarget", map {  })
@@ -603,7 +602,7 @@ function user.LlmBasic$parse_stream(sse: baml.http.SseStream, client: baml.llm.C
   client.__make_stream(sse)
 }
 function user.LlmBasic$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LlmBasic", map { "name": name })
+  baml.llm.render_prompt_typed(client, "LlmBasic", map { "name": name })
 }
 function user.LlmBasic$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name })
@@ -624,7 +623,7 @@ function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream, client: baml.l
   client.__make_stream(sse)
 }
 function user.LlmMultiLine$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LlmMultiLine", map { "text": text })
+  baml.llm.render_prompt_typed(client, "LlmMultiLine", map { "text": text })
 }
 function user.LlmMultiLine$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text })
@@ -645,7 +644,7 @@ function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream, client: ba
   client.__make_stream(sse)
 }
 function user.LlmReversedOrder$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LlmReversedOrder", map { "text": text })
+  baml.llm.render_prompt_typed(client, "LlmReversedOrder", map { "text": text })
 }
 function user.LlmReversedOrder$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text })
@@ -666,7 +665,7 @@ function user.LlmStringClient$parse_stream(sse: baml.http.SseStream, client: bam
   client.__make_stream(sse)
 }
 function user.LlmStringClient$render_prompt(text: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LlmStringClient", map { "text": text })
+  baml.llm.render_prompt_typed(client, "LlmStringClient", map { "text": text })
 }
 function user.LlmStringClient$stream(text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text })
@@ -687,7 +686,7 @@ function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream, client
   client.__make_stream(sse)
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
+  baml.llm.render_prompt_typed(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
 }
 function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })

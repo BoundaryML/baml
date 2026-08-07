@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29739
 ---
 === PPIR ===
 function user.TestClient$new(lenient: bool) -> ?  [expr] {
@@ -22,7 +21,7 @@ function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.C
   client.__make_stream(sse)
 }
 function user.TestFunc$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "TestFunc", map { "input": input })
+  baml.llm.render_prompt_typed(client, "TestFunc", map { "input": input })
 }
 function user.TestFunc$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "TestFunc", map { "input": input })

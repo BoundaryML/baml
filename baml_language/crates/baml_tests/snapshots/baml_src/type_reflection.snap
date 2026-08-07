@@ -175,13 +175,14 @@ function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    load_type type_reflection.Bar
     load_var client
     load_const "GetBar"
     load_type string
     load_type unknown
     alloc_map 0
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 
@@ -305,13 +306,14 @@ function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    load_type type_reflection.Foo
     load_var client
     load_const "GetFoo"
     load_type string
     load_type unknown
     alloc_map 0
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 

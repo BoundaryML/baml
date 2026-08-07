@@ -9,7 +9,7 @@ function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client = 
   baml.llm.call_llm_function<T>(client, "FunctionWithComments", map { "a": a, "b": b }) : string
 }
 function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.llm.PromptAst
 }
 function user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.http.Request
@@ -21,7 +21,7 @@ function user.CommentAfterArrow(client: baml.llm.Client = TestClient) -> string 
   baml.llm.call_llm_function<T>(client, "CommentAfterArrow", map {  }) : string
 }
 function user.CommentAfterArrow$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "CommentAfterArrow", map {  }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "CommentAfterArrow", map {  }) : baml.llm.PromptAst
 }
 function user.CommentAfterArrow$build_request(client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request(client, "CommentAfterArrow", map {  }) : baml.http.Request

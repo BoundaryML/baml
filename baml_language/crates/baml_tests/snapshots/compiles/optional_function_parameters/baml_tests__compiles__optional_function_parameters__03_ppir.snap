@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24305
 ---
 === PPIR ===
 class user.SearchService {
@@ -29,7 +28,7 @@ function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Cl
   client.__make_stream(sse)
 }
 function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+  baml.llm.render_prompt_typed(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
 function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
   baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })

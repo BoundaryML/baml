@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24338
 ---
 function $init() -> null {
     call $init_let_0
@@ -152,6 +151,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "TestFunc"
     load_var input
@@ -160,7 +160,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     load_type unknown
     alloc_map 1
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 

@@ -119,13 +119,14 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt(client:
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsAliasPayload
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
     load_type unknown
     alloc_map 0
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 
@@ -249,13 +250,14 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt(client: b
     store_var client
 
   L0:
+    load_type parse_companions.ParseCompanionsOptPayload
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
     load_type unknown
     alloc_map 0
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 

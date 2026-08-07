@@ -178,6 +178,7 @@ fn user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> baml.l
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -191,7 +192,8 @@ fn user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> baml.l
 
     bb2: {
         _4 = { const "input": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "TestFunc", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _5>(copy _2, const "TestFunc", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {

@@ -14,7 +14,7 @@ function user.ExtractInvoice(text: string, client: baml.llm.Client = GPT4o) -> u
   baml.llm.call_llm_function<T>(client, "ExtractInvoice", map { "text": text }) : user.Invoice
 }
 function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ExtractInvoice", map { "text": text }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "ExtractInvoice", map { "text": text }) : baml.llm.PromptAst
 }
 function user.ExtractInvoice$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
   baml.llm.build_request(client, "ExtractInvoice", map { "text": text }) : baml.http.Request

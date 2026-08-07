@@ -187,6 +187,7 @@ fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> 
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -200,7 +201,8 @@ fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type(image);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _5>(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -393,6 +395,7 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) 
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -406,7 +409,8 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type(image[]);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _5>(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -599,6 +603,7 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.l
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -612,7 +617,8 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.l
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type((image | string)[]);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {

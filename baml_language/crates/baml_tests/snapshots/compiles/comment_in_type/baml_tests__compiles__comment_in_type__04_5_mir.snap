@@ -182,6 +182,7 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.C
     let _3: baml.llm.Client // client // param
     let _4: bool
     let _5: map<string, unknown>
+    let _6: type
 
     bb0: {
         _4 = copy _3 == const <omitted>;
@@ -195,7 +196,8 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.C
 
     bb2: {
         _5 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
+        _6 = load_type(string);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _6>(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -385,6 +387,7 @@ fn user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.llm.Pro
     let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: map<string, unknown>
+    let _4: type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -398,7 +401,8 @@ fn user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.llm.Pro
 
     bb2: {
         _3 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
+        _4 = load_type(string);
+        _0 = call const fn baml.llm.render_prompt_typed<copy _4>(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {

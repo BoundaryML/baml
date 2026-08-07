@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 8514
 ---
 function $init() -> null {
     call $init_let_0
@@ -117,13 +116,14 @@ function user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "CommentAfterArrow"
     load_type string
     load_type unknown
     alloc_map 0
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 
@@ -256,6 +256,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "FunctionWithComments"
     load_var2 1 2
@@ -265,7 +266,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     load_type unknown
     alloc_map 2
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 

@@ -12,7 +12,7 @@ function user.GetBoxedInt(client: baml.llm.Client = Dummy) -> user.Box<int> thro
   baml.llm.call_llm_function<T>(client, "GetBoxedInt", map {  }) : user.Box<int>
 }
 function user.GetBoxedInt$render_prompt(client: baml.llm.Client = Dummy) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "GetBoxedInt", map {  }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "GetBoxedInt", map {  }) : baml.llm.PromptAst
 }
 function user.GetBoxedInt$build_request(client: baml.llm.Client = Dummy) -> baml.http.Request throws never {
   baml.llm.build_request(client, "GetBoxedInt", map {  }) : baml.http.Request

@@ -14,7 +14,7 @@ function user.ClassifySentiment(text: string, client: baml.llm.Client = GPT4o) -
   baml.llm.call_llm_function<T>(client, "ClassifySentiment", map { "text": text }) : user.Sentiment
 }
 function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "ClassifySentiment", map { "text": text }) : baml.llm.PromptAst
 }
 function user.ClassifySentiment$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
   baml.llm.build_request(client, "ClassifySentiment", map { "text": text }) : baml.http.Request
@@ -26,7 +26,7 @@ function user.GenerateTests(count: int, topic: string, client: baml.llm.Client =
   baml.llm.call_llm_function<T>(client, "GenerateTests", map { "count": count, "topic": topic }) : string[]
 }
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.PromptAst
 }
 function user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
   baml.llm.build_request(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.http.Request
@@ -52,7 +52,7 @@ function user.ClassifySentiment2(text: string, client: baml.llm.Client = GPT4o) 
   baml.llm.call_llm_function<T>(client, "ClassifySentiment2", map { "text": text }) : string
 }
 function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "ClassifySentiment2", map { "text": text }) : baml.llm.PromptAst
 }
 function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
   baml.llm.build_request(client, "ClassifySentiment2", map { "text": text }) : baml.http.Request

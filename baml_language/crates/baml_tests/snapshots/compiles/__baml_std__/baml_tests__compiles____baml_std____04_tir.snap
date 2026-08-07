@@ -1961,6 +1961,14 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
   }
 }
+function baml.llm.render_prompt_typed<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
+  { : baml.llm.PromptAst
+    let return_type = type.of() : type
+    let primitive_client = client.to_primitive_client(lenient = true) : baml.llm.PrimitiveClient
+    let template = prompt_template_for(function_name, prompt_closure) : string
+    primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
+  }
+}
 function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
     let return_type = get_return_type(function_name) : type
@@ -3024,6 +3032,16 @@ class baml.reflect.enum.Value$stream {
 class baml.reflect.enum.Type$stream {
 }
 
+--- <builtin>/baml/ns_reflect/ns_errors/errors.baml ---
+class baml.reflect.errors.CompilationError {
+  message: string
+  diagnostics: baml.reflect.Diagnostic[]
+}
+class baml.reflect.errors.CompilationError$stream {
+  message: string | null
+  diagnostics: baml.reflect.Diagnostic$stream[]
+}
+
 --- <builtin>/baml/ns_reflect/ns_function/function.baml ---
 class baml.reflect.function.Parameter {
   name: string | null
@@ -3095,6 +3113,25 @@ class baml.reflect.InvalidArgumentError {
   expected: type
   got: type
 }
+class baml.reflect.Span {
+  file: string
+  start: int
+  end: int
+}
+class baml.reflect.Diagnostic {
+  code: string
+  message: string
+  span: baml.reflect.Span | null
+}
+class baml.reflect.Package {
+  _inner: unknown
+}
+function baml.reflect.Package.compile(files: map<string, string>, packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Package throws unknown {
+  { : baml.reflect.Package
+    let artifact = Package._compile(files, packages) : baml.reflect.Package
+    Package._finish(artifact, packages) : baml.reflect.Package
+  }
+}
 class baml.reflect.Arg$stream {
   name: string | null
   type: unknown
@@ -3118,6 +3155,19 @@ class baml.reflect.InvalidArgumentError$stream {
   argument: string | null
   expected: unknown
   got: unknown
+}
+class baml.reflect.Span$stream {
+  file: string | null
+  start: int | null
+  end: int | null
+}
+class baml.reflect.Diagnostic$stream {
+  code: string | null
+  message: string | null
+  span: baml.reflect.Span$stream | null
+}
+class baml.reflect.Package$stream {
+  _inner: unknown
 }
 
 --- <builtin>/baml/ns_sap/sap.baml ---

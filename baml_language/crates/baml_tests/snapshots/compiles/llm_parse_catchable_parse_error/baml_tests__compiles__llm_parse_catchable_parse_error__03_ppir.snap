@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19715
 ---
 === PPIR ===
 class user.Invoice {
@@ -28,7 +27,7 @@ function user.ExtractInvoice$parse_stream(sse: baml.http.SseStream, client: baml
   client.__make_stream(sse)
 }
 function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "ExtractInvoice", map { "text": text })
+  baml.llm.render_prompt_typed(client, "ExtractInvoice", map { "text": text })
 }
 function user.ExtractInvoice$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice>  [expr] {
   baml.llm.stream_llm_function(client, "ExtractInvoice", map { "text": text })

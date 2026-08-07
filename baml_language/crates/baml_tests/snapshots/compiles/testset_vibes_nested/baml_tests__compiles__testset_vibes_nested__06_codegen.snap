@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 27723
 ---
 function $init() -> null {
     call $init_let_0
@@ -143,6 +142,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     store_var client
 
   L0:
+    load_type Sentiment
     load_var client
     load_const "ClassifySentiment"
     load_var text
@@ -151,7 +151,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     load_type unknown
     alloc_map 1
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 
@@ -283,6 +283,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "ClassifySentiment2"
     load_var text
@@ -291,7 +292,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     load_type unknown
     alloc_map 1
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 
@@ -488,6 +489,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     store_var client
 
   L0:
+    load_type string[]
     load_var client
     load_const "GenerateTests"
     load_var2 1 2
@@ -497,7 +499,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     load_type unknown
     alloc_map 2
     load_const <omitted>
-    call baml.llm.render_prompt
+    call baml.llm.render_prompt_typed
     return
 }
 

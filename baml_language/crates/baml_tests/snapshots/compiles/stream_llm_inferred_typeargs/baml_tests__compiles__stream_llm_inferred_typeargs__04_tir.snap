@@ -9,7 +9,7 @@ function user.TestFunc(input: string, client: baml.llm.Client = TestClient) -> s
   baml.llm.call_llm_function<T>(client, "TestFunc", map { "input": input }) : string
 }
 function user.TestFunc$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "TestFunc", map { "input": input }) : baml.llm.PromptAst
+  baml.llm.render_prompt_typed(client, "TestFunc", map { "input": input }) : baml.llm.PromptAst
 }
 function user.TestFunc$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request(client, "TestFunc", map { "input": input }) : baml.http.Request
