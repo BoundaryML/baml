@@ -1,5 +1,6 @@
 /// A sentinel class returned by `baml.iter.Iterator.next` when there are no more elements to yield.
-class Done {}
+class Done {
+}
 
 /// Implemented by types that can be iterated over.
 interface Iterable {
@@ -196,379 +197,427 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
   }
 }
 
-function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(src: Iterator<Item = I, Error = E>) -> Iterator<Item = R, Error = E | E3> throws never {
-  Flatten<I, R, E, E3> { source: src, inner: Done {} }
+function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(
+    src: Iterator<Item = I, Error = E>,
+) -> Iterator<Item = R, Error = E | E3> throws never {
+    Flatten<I, R, E, E3> { source: src, inner: Done {  } }
 }
 
 /// The iterator implementation for an array.
 class ArrayIterator<T> {
-  arr: T[]
-  idx: int
+    arr: T[],
+    idx: int,
 
-  function new(arr: T[]) -> ArrayIterator<T> throws never {
-    ArrayIterator<T> { arr: arr, idx: 0 }
-  }
-
-  implements Iterable {
-    type Item = T
-    type Error = never
-
-    function iter(self) -> Iterator<Item = T, Error = never> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = T
-    type Error = never
-
-    function next(self) -> T | Done throws never {
-      // Bounds-check by index, not by matching the element against null: when
-      // T is itself nullable, a stored null element must be yielded, not
-      // treated as the end of iteration.
-      if (self.idx >= self.arr.length()) {
-        return Done {};
-      }
-      // Index access yields the element at type `T` directly — in-bounds by
-      // the check above. No `at()`-plus-match: gating every element on a
-      // runtime `let value: T` test would cost a type test per element for a
-      // read the bounds check has already proven safe.
-      let item = self.arr[self.idx];
-      self.idx += 1;
-      return item;
+    function new(arr: T[]) -> ArrayIterator<T> throws never {
+        ArrayIterator<T> { arr: arr, idx: 0 }
     }
-  }
+
+    implements Iterable {
+        type Item = T
+        type Error = never
+
+        function iter(self) -> Iterator<Item = T, Error = never> throws never {
+            self
+        }
+    }
+
+    implements Iterator {
+        type Item = T
+        type Error = never
+
+        function next(self) -> T | Done throws never {
+            // Bounds-check by index, not by matching the element against null: when
+            // T is itself nullable, a stored null element must be yielded, not
+            // treated as the end of iteration.
+            if (self.idx >= self.arr.length()) {
+                return Done {  };
+            }
+            // Index access yields the element at type `T` directly — in-bounds by
+            // the check above. No `at()`-plus-match: gating every element on a
+            // runtime `let value: T` test would cost a type test per element for a
+            // read the bounds check has already proven safe.
+            let item = self.arr[self.idx];
+            self.idx += 1;
+            return item;
+        }
+    }
 }
 
 class Range {
-  i: int
-  max: int
-  step: int
+    i: int,
+    max: int,
+    step: int,
 
-  function new(min: int, max: int, step: int = 1) -> Range throws never {
-    Range { i: min, max: max, step: step }
-  }
-
-  implements Iterable {
-    type Item = int
-    type Error = never
-
-    function iter(self) -> Iterator<Item = int, Error = never> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = int
-    type Error = never
-
-    function next(self) -> int | Done throws never {
-      if (self.i < self.max) {
-        let cur = self.i;
-        self.i += self.step;
-        cur
-      } else {
-        Done {}
-      }
+    function new(min: int, max: int, step: int = 1) -> Range throws never {
+        Range { i: min, max: max, step: step }
     }
-  }
+
+    implements Iterable {
+        type Item = int
+        type Error = never
+
+        function iter(self) -> Iterator<Item = int, Error = never> throws never {
+            self
+        }
+    }
+
+    implements Iterator {
+        type Item = int
+        type Error = never
+
+        function next(self) -> int | Done throws never {
+            if (self.i < self.max) {
+                let cur = self.i;
+                self.i += self.step;
+                cur
+            } else {
+                Done {  }
+            }
+        }
+    }
 }
 
 /// An iterator that returns the same value a specified number of times.
 class Repeat<T> {
-  value: T
-  count: int
+    value: T,
+    count: int,
 
-  /// Creates a new repeating iterator.
-  /// If `count` is negative (or not specified), it will repeat forever.
-  function new(value: T, count: int = -1) -> Repeat<T> throws never {
-    Repeat<T> { value: value, count: count }
-  }
-
-  implements Iterable {
-    type Item = T
-    type Error = never
-
-    function iter(self) -> Iterator<Item = T, Error = never> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = T
-    type Error = never
-
-    function next(self) -> T | Done throws never {
-      if (self.count < 0) {
-        self.value
-      } else if (self.count > 0) {
-        self.count -= 1;
-        self.value
-      } else {
-        Done {}
-      }
+    /// Creates a new repeating iterator.
+    /// If `count` is negative (or not specified), it will repeat forever.
+    function new(value: T, count: int = -1) -> Repeat<T> throws never {
+        Repeat<T> { value: value, count: count }
     }
-  }
+
+    implements Iterable {
+        type Item = T
+        type Error = never
+
+        function iter(self) -> Iterator<Item = T, Error = never> throws never {
+            self
+        }
+    }
+
+    implements Iterator {
+        type Item = T
+        type Error = never
+
+        function next(self) -> T | Done throws never {
+            if (self.count < 0) {
+                self.value
+            } else if (self.count > 0) {
+                self.count -= 1;
+                self.value
+            } else {
+                Done {  }
+            }
+        }
+    }
 }
 
 class Map<T, R, E, E2> {
-  source: Iterator<Item = T, Error = E>
-  func: (T) -> R throws E2
+    source: Iterator<Item = T, Error = E>,
+    func: (T) -> R throws E2,
 
-  implements Iterable {
-    type Item = R
-    type Error = E | E2
+    implements Iterable {
+        type Item = R
+        type Error = E | E2
 
-    function iter(self) -> Iterator<Item = R, Error = E | E2> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = R
-    type Error = E | E2
-
-    function next(self) -> R | Done throws E | E2 {
-      match (self.source.next()) {
-        Done => Done {},
-        let x: T => self.func(x),
-      }
+        function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
+            self
+        }
     }
-  }
+
+    implements Iterator {
+        type Item = R
+        type Error = E | E2
+
+        function next(self) -> R | Done throws E | E2 {
+            match (self.source.next()) {
+                Done => Done {  },
+                let x: T => self.func(x),
+            }
+        }
+    }
 }
 
 class Filter<T, E, E2> {
-  source: Iterator<Item = T, Error = E>
-  predicate: (T) -> bool throws E2
+    source: Iterator<Item = T, Error = E>,
+    predicate: (T) -> bool throws E2,
 
-  implements Iterable {
-    type Item = T
-    type Error = E | E2
+    implements Iterable {
+        type Item = T
+        type Error = E | E2
 
-    function iter(self) -> Iterator<Item = T, Error = E | E2> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = T
-    type Error = E | E2
-
-    function next(self) -> T | Done throws E | E2 {
-      while (true) {
-        match (self.source.next()) {
-          Done => { return Done {}; },
-          let x: T => {
-            if (self.predicate(x)) {
-              return x;
-            }
-          },
+        function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
+            self
         }
-      }
-      Done {}
     }
-  }
+
+    implements Iterator {
+        type Item = T
+        type Error = E | E2
+
+        function next(self) -> T | Done throws E | E2 {
+            while (true) {
+                match (self.source.next()) {
+                    Done => {
+                        return Done {  };
+                    },
+                    let x: T => {
+                        if (self.predicate(x)) {
+                            return x;
+                        }
+                    },
+                }
+            }
+            Done {  }
+        }
+    }
 }
 
 class FilterMap<T, R, E, E2> {
-  source: Iterator<Item = T, Error = E>
-  func: (T) -> R? throws E2
+    source: Iterator<Item = T, Error = E>,
+    func: (T) -> R? throws E2,
 
-  implements Iterable {
-    type Item = R
-    type Error = E | E2
+    implements Iterable {
+        type Item = R
+        type Error = E | E2
 
-    function iter(self) -> Iterator<Item = R, Error = E | E2> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = R
-    type Error = E | E2
-
-    function next(self) -> R | Done throws E | E2 {
-      while (true) {
-        match (self.source.next()) {
-          Done => { return Done {}; },
-          let x: T => {
-            match (self.func(x)) {
-              null => {},
-              let y: R => { return y; },
-            }
-          },
+        function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
+            self
         }
-      }
-      Done {}
     }
-  }
+
+    implements Iterator {
+        type Item = R
+        type Error = E | E2
+
+        function next(self) -> R | Done throws E | E2 {
+            while (true) {
+                match (self.source.next()) {
+                    Done => {
+                        return Done {  };
+                    },
+                    let x: T => {
+                        match (self.func(x)) {
+                            null => {},
+                            let y: R => {
+                                return y;
+                            },
+                        }
+                    },
+                }
+            }
+            Done {  }
+        }
+    }
 }
 
 class FlatMap<T, R, E, E2, E3> {
-  source: Iterator<Item = T, Error = E>
-  func: (T) -> Iterable<Item = R, Error = E3> throws E2
-  inner: Iterator<Item = R, Error = E3> | Done
+    source: Iterator<Item = T, Error = E>,
+    func: (T) -> Iterable<Item = R, Error = E3> throws E2,
+    inner: Iterator<Item = R, Error = E3> | Done,
 
-  implements Iterable {
-    type Item = R
-    type Error = E | E2 | E3
+    implements Iterable {
+        type Item = R
+        type Error = E | E2 | E3
 
-    function iter(self) -> Iterator<Item = R, Error = E | E2 | E3> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = R
-    type Error = E | E2 | E3
-
-    function next(self) -> R | Done throws E | E2 | E3 {
-      while (true) {
-        match (self.inner) {
-          let cur: Iterator<Item = R, Error = E3> => {
-            match (cur.next()) {
-              Done => { self.inner = Done {}; },
-              let y: R => { return y; },
-            }
-          },
-          Done => {
-            match (self.source.next()) {
-              Done => { return Done {}; },
-              let x: T => {
-                let it = self.func(x).iter();
-                self.inner = it;
-              },
-            }
-          },
+        function iter(self) -> Iterator<Item = R, Error = E | E2 | E3> throws never {
+            self
         }
-      }
-      Done {}
     }
-  }
+
+    implements Iterator {
+        type Item = R
+        type Error = E | E2 | E3
+
+        function next(self) -> R | Done throws E | E2 | E3 {
+            while (true) {
+                match (self.inner) {
+                    let cur: Iterator<Item = R, Error = E3> => {
+                        match (cur.next()) {
+                            Done => {
+                                self.inner = Done {  };
+                            },
+                            let y: R => {
+                                return y;
+                            },
+                        }
+                    },
+                    Done => {
+                        match (self.source.next()) {
+                            Done => {
+                                return Done {  };
+                            },
+                            let x: T => {
+                                let it = self.func(x).iter();
+                                self.inner = it;
+                            },
+                        }
+                    },
+                }
+            }
+            Done {  }
+        }
+    }
 }
 
 class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
-  source: Iterator<Item = I, Error = E>
-  inner: Iterator<Item = R, Error = E3> | Done
+    source: Iterator<Item = I, Error = E>,
+    inner: Iterator<Item = R, Error = E3> | Done,
 
-  implements Iterable {
-    type Item = R
-    type Error = E | E3
+    implements Iterable {
+        type Item = R
+        type Error = E | E3
 
-    function iter(self) -> Iterator<Item = R, Error = E | E3> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = R
-    type Error = E | E3
-
-    function next(self) -> R | Done throws E | E3 {
-      while (true) {
-        match (self.inner) {
-          let cur: Iterator<Item = R, Error = E3> => {
-            match (cur.next()) {
-              Done => { self.inner = Done {}; },
-              let y: R => { return y; },
-            }
-          },
-          Done => {
-            match (self.source.next()) {
-              Done => { return Done {}; },
-              let x: I => {
-                let it = x.iter();
-                self.inner = it;
-              },
-            }
-          },
+        function iter(self) -> Iterator<Item = R, Error = E | E3> throws never {
+            self
         }
-      }
-      Done {}
     }
-  }
+
+    implements Iterator {
+        type Item = R
+        type Error = E | E3
+
+        function next(self) -> R | Done throws E | E3 {
+            while (true) {
+                match (self.inner) {
+                    let cur: Iterator<Item = R, Error = E3> => {
+                        match (cur.next()) {
+                            Done => {
+                                self.inner = Done {  };
+                            },
+                            let y: R => {
+                                return y;
+                            },
+                        }
+                    },
+                    Done => {
+                        match (self.source.next()) {
+                            Done => {
+                                return Done {  };
+                            },
+                            let x: I => {
+                                let it = x.iter();
+                                self.inner = it;
+                            },
+                        }
+                    },
+                }
+            }
+            Done {  }
+        }
+    }
 }
 
 class Peekable<T, E> {
-  source: Iterator<Item = T, Error = E>
-  buffer: T | Done
-  has_buffer: bool
+    source: Iterator<Item = T, Error = E>,
+    buffer: T | Done,
+    has_buffer: bool,
 
-  function peek(self) -> T | Done throws E {
-    if (self.has_buffer) {
-      return self.buffer;
+    function peek(self) -> T | Done throws E {
+        if (self.has_buffer) {
+            return self.buffer;
+        }
+        let v = self.source.next();
+        self.buffer = v;
+        self.has_buffer = true;
+        v
     }
-    let v = self.source.next();
-    self.buffer = v;
-    self.has_buffer = true;
-    v
-  }
 
-  implements Iterable {
-    type Item = T
-    type Error = E
+    implements Iterable {
+        type Item = T
+        type Error = E
 
-    function iter(self) -> Iterator<Item = T, Error = E> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = T
-    type Error = E
-
-    function next(self) -> T | Done throws E {
-      if (self.has_buffer) {
-        let v = self.buffer;
-        self.buffer = Done {};
-        self.has_buffer = false;
-        return v;
-      }
-      self.source.next()
+        function iter(self) -> Iterator<Item = T, Error = E> throws never {
+            self
+        }
     }
-  }
+
+    implements Iterator {
+        type Item = T
+        type Error = E
+
+        function next(self) -> T | Done throws E {
+            if (self.has_buffer) {
+                let v = self.buffer;
+                self.buffer = Done {  };
+                self.has_buffer = false;
+                return v;
+            }
+            self.source.next()
+        }
+    }
 }
 
 class StepBy<T, E> {
-  source: Iterator<Item = T, Error = E>
-  n: int
-  first: bool
+    source: Iterator<Item = T, Error = E>,
+    n: int,
+    first: bool,
 
-  implements Iterable {
-    type Item = T
-    type Error = E
+    implements Iterable {
+        type Item = T
+        type Error = E
 
-    function iter(self) -> Iterator<Item = T, Error = E> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = T
-    type Error = E
-
-    function next(self) -> T | Done throws E {
-      if (self.first) {
-        self.first = false;
-        return self.source.next();
-      }
-      for (let i = 0; i < self.n - 1; i += 1) {
-        match (self.source.next()) {
-          Done => { return Done {}; },
-          let x: T => {},
+        function iter(self) -> Iterator<Item = T, Error = E> throws never {
+            self
         }
-      }
-      self.source.next()
     }
-  }
+
+    implements Iterator {
+        type Item = T
+        type Error = E
+
+        function next(self) -> T | Done throws E {
+            if (self.first) {
+                self.first = false;
+                return self.source.next();
+            }
+            for (let i = 0; i < self.n - 1; i += 1) {
+                match (self.source.next()) {
+                    Done => {
+                        return Done {  };
+                    },
+                    let x: T => {},
+                }
+            }
+            self.source.next()
+        }
+    }
 }
 
 class Chain<T, E, E2> {
-  first: Iterator<Item = T, Error = E>
-  other: Iterator<Item = T, Error = E2>
-  first_done: bool
+    first: Iterator<Item = T, Error = E>,
+    other: Iterator<Item = T, Error = E2>,
+    first_done: bool,
 
-  implements Iterable {
-    type Item = T
-    type Error = E | E2
+    implements Iterable {
+        type Item = T
+        type Error = E | E2
 
-    function iter(self) -> Iterator<Item = T, Error = E | E2> throws never { self }
-  }
-
-  implements Iterator {
-    type Item = T
-    type Error = E | E2
-
-    function next(self) -> T | Done throws E | E2 {
-      if (!self.first_done) {
-        match (self.first.next()) {
-          Done => { self.first_done = true; },
-          let x: T => { return x; },
+        function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
+            self
         }
-      }
-      self.other.next()
     }
-  }
+
+    implements Iterator {
+        type Item = T
+        type Error = E | E2
+
+        function next(self) -> T | Done throws E | E2 {
+            if (!self.first_done) {
+                match (self.first.next()) {
+                    Done => {
+                        self.first_done = true;
+                    },
+                    let x: T => {
+                        return x;
+                    },
+                }
+            }
+            self.other.next()
+        }
+    }
 }
 
 implements<T> Iterable for T[] {

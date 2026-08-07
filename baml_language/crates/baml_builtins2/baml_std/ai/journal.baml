@@ -18,9 +18,7 @@ class Journal {
     // A journal for one run of a spec, with RunStarted appended.
     function new<Out>(spec: FunctionSpec<Out>) -> Journal {
         Journal {
-            log: [
-                root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() },
-            ],
+            log: [root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() }],
         }
     }
 

@@ -114,10 +114,7 @@ function openai_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
 }
 
 // ai.ModelTurnInput -> one Responses API request.
-function openai_render(
-    c: root.OpenAiClient,
-    input: ai.ModelTurnInput,
-) -> baml.http.Request {
+function openai_render(c: root.OpenAiClient, input: ai.ModelTurnInput) -> baml.http.Request {
     _openai_request(c, input, false)
 }
 
@@ -163,10 +160,7 @@ function _openai_request(
     baml.http.Request {
         method: "POST",
         url: `${c.resolved_base_url() ?? "https://api.openai.com/v1"}/responses`,
-        headers: {
-            "authorization": `Bearer ${c.resolved_api_key()}`,
-            "content-type": "application/json",
-        },
+        headers: { "authorization": `Bearer ${c.resolved_api_key()}`, "content-type": "application/json" },
         body: baml.json.stringify(baml.json.to_json(body)),
     }
 }
@@ -287,7 +281,7 @@ function _openai_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
                     } else {
                         null
                     };
-                    out.push(ai.stream.TurnDone {});
+                    out.push(ai.stream.TurnDone {  });
                     null
                 } else {
                     null

@@ -405,7 +405,9 @@ function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null throws
             catch (f.read_bytes(65536) : uint8array) : uint8array
               catch (e)
                 root.errors.InvalidArgument { message: message } =>
-                  throw _error(CsvErrorKind.Closed, "underlying file h..." + message) : never
+                  { : never
+                    throw _error(CsvErrorKind.Closed, "underlying file h..." + message) : baml.csv.CsvError
+                  }
                 root.errors.Io =>
                   { : never
                     self._mark_exhausted() : null
@@ -555,7 +557,9 @@ function baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null
               catch (f.write(out) : int) : int
                 catch (_)
                   root.errors.InvalidArgument { message: message } =>
-                    throw root.errors.Io { message: "underlying file h..." + message } : never
+                    { : never
+                      throw root.errors.Io { message: "underlying file h..." + message } : baml.errors.Io
+                    }
             }
           null : null
         }
@@ -589,7 +593,9 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     catch ({ 3 stmts + tail } : string[][]) : string[][]
       catch (_)
         root.errors.Io { message: message } =>
-          root.sys.panic("unreachable: in-m..." + message) : never
+          { : never
+            root.sys.panic("unreachable: in-m..." + message) : never
+          }
   }
 }
 function baml.csv.decode<T>(source: string | uint8array, options: baml.csv.ReaderOptions | null = null) -> T[] throws baml.csv.CsvError {
@@ -597,7 +603,9 @@ function baml.csv.decode<T>(source: string | uint8array, options: baml.csv.Reade
     catch ({ 0 stmts + tail } : T[]) : T[]
       catch (_)
         root.errors.Io { message: message } =>
-          root.sys.panic("unreachable: in-m..." + message) : never
+          { : never
+            root.sys.panic("unreachable: in-m..." + message) : never
+          }
   }
 }
 function baml.csv.decode_optional<T>(source: string | uint8array, options: baml.csv.ReaderOptions | null = null) -> T | null throws baml.csv.CsvError {
@@ -661,7 +669,9 @@ function baml.csv.stringify<T>(rows: T[], options: baml.csv.WriterOptions | null
     catch ({ 2 stmts + tail } : string) : string
       catch (_)
         root.errors.Io { message: message } =>
-          root.sys.panic("unreachable: buff..." + message) : never
+          { : never
+            root.sys.panic("unreachable: buff..." + message) : never
+          }
   }
 }
 function baml.csv.stringify_records(records: baml.csv.CsvValue[][], options: baml.csv.WriterOptions | null = null) -> string throws baml.csv.CsvError {
@@ -669,7 +679,9 @@ function baml.csv.stringify_records(records: baml.csv.CsvValue[][], options: bam
     catch ({ 2 stmts + tail } : string) : string
       catch (_)
         root.errors.Io { message: message } =>
-          root.sys.panic("unreachable: buff..." + message) : never
+          { : never
+            root.sys.panic("unreachable: buff..." + message) : never
+          }
   }
 }
 function baml.csv.to_markdown<T>(rows: T[], max_rows: int = 100) -> string throws never {
@@ -1759,7 +1771,9 @@ function baml.json._path_field(current: baml.json.json, key: string, selector: s
           m.get(key) : baml.json.json | null
         }
       _ =>
-        throw JsonPathError { message: "field access '." + key + "' on a non-object", selector: selector } : never
+        { : never
+          throw JsonPathError { message: "field access '." + key + "' on a non-object", selector: selector } : baml.json.JsonPathError
+        }
   }
 }
 function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json throws baml.json.JsonPathError {
@@ -1774,7 +1788,9 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
           arr.at(idx) : baml.json.json | null
         }
       _ =>
-        throw JsonPathError { message: "index [" + idx.to_string() + "] on a non-array", selector: selector } : never
+        { : never
+          throw JsonPathError { message: "index [" + idx.to_string() + "] on a non-array", selector: selector } : baml.json.JsonPathError
+        }
   }
 }
 function baml.json.path<T>(j: baml.json.json, selector: string) -> T throws baml.json.JsonPathError {
@@ -1871,7 +1887,9 @@ function baml.json.path<T>(j: baml.json.json, selector: string) -> T throws baml
     catch (to<T>(current) : T) : T
       catch (_)
         JsonDecodeError =>
-          throw JsonPathError { message: "leaf does not coe...", selector: selector } : never
+          { : never
+            throw JsonPathError { message: "leaf does not coe...", selector: selector } : baml.json.JsonPathError
+          }
   }
 }
 function baml.json.path_or<T>(j: baml.json.json, selector: string, default: T) -> T throws never {
@@ -2671,19 +2689,27 @@ function baml.time.Instant.to_string(self: baml.time.Instant) -> string throws n
     catch (self._to_string_impl() : string) : string
       catch (_)
         root.errors.InvalidArgument { message: message } =>
-          root.sys.panic("Instant.to_string: " + message) : never
+          { : never
+            root.sys.panic("Instant.to_string: " + message) : never
+          }
   }
 }
 function baml.time.Instant.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.Instant
     match (j : baml.json.json) : baml.time.Instant
       string =>
-        catch (Instant.parse(j) : baml.time.Instant) : baml.time.Instant
-          catch (_)
-            root.errors.ParseError { message: message } =>
-              throw baml.json.JsonDecodeError { message: message, path: "" } : never
+        { : baml.time.Instant
+          catch (Instant.parse(j) : baml.time.Instant) : baml.time.Instant
+            catch (_)
+              root.errors.ParseError { message: message } =>
+                { : never
+                  throw baml.json.JsonDecodeError { message: message, path: "" } : baml.json.JsonDecodeError
+                }
+        }
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } : never
+        { : never
+          throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } : baml.json.JsonDecodeError
+        }
   }
 }
 function baml.time.Instant.to_json(self: baml.time.Instant) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -2691,7 +2717,9 @@ function baml.time.Instant.to_json(self: baml.time.Instant) -> baml.json.json th
     catch (self._to_string_impl() : string) : string
       catch (_)
         root.errors.InvalidArgument { message: message } =>
-          throw baml.json.JsonSerializationError { message: message, path: "" } : never
+          { : never
+            throw baml.json.JsonSerializationError { message: message, path: "" } : baml.json.JsonSerializationError
+          }
   }
 }
 class baml.time.Instant$stream {
@@ -2712,19 +2740,27 @@ function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string thro
     catch (self._to_string_impl() : string) : string
       catch (_)
         root.errors.InvalidArgument { message: message } =>
-          root.sys.panic("PlainDate.to_stri..." + message) : never
+          { : never
+            root.sys.panic("PlainDate.to_stri..." + message) : never
+          }
   }
 }
 function baml.time.PlainDate.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.PlainDate
     match (j : baml.json.json) : baml.time.PlainDate
       string =>
-        catch (PlainDate.parse(j) : baml.time.PlainDate) : baml.time.PlainDate
-          catch (_)
-            root.errors.ParseError { message: message } =>
-              throw baml.json.JsonDecodeError { message: message, path: "" } : never
+        { : baml.time.PlainDate
+          catch (PlainDate.parse(j) : baml.time.PlainDate) : baml.time.PlainDate
+            catch (_)
+              root.errors.ParseError { message: message } =>
+                { : never
+                  throw baml.json.JsonDecodeError { message: message, path: "" } : baml.json.JsonDecodeError
+                }
+        }
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
+        { : never
+          throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : baml.json.JsonDecodeError
+        }
   }
 }
 function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -2732,7 +2768,9 @@ function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> baml.json.jso
     catch (self._to_string_impl() : string) : string
       catch (_)
         root.errors.InvalidArgument { message: message } =>
-          throw baml.json.JsonSerializationError { message: message, path: "" } : never
+          { : never
+            throw baml.json.JsonSerializationError { message: message, path: "" } : baml.json.JsonSerializationError
+          }
   }
 }
 class baml.time.PlainDate$stream {
@@ -2752,35 +2790,45 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
   { : baml.time.ZonedDateTime
     match (timezone : baml.time.TimeZoneOffset | string) : baml.time.ZonedDateTime
       TimeZoneOffset =>
-        ZonedDateTime { _nanoseconds: self._nanoseconds - timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null } : baml.time.ZonedDateTime
+        { : baml.time.ZonedDateTime
+          ZonedDateTime { _nanoseconds: self._nanoseconds - timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null } : baml.time.ZonedDateTime
+        }
       string =>
-        if (disambiguation == "reject" : bool) : baml.time.ZonedDateTime
-          { : baml.time.ZonedDateTime
-            match (_tz_to_instant(timezone, self._nanoseconds, "earlier") : bigint | null) : baml.time.ZonedDateTime
-              null =>
-                throw UnknownTimezoneError { timezone: timezone } : never
-              earlier =>
-                match (_tz_to_instant(timezone, self._nanoseconds, "later") : bigint | null) : baml.time.ZonedDateTime
-                  null =>
-                    throw UnknownTimezoneError { timezone: timezone } : never
-                  later =>
-                    if (earlier == later : bool) : baml.time.ZonedDateTime
-                      { : baml.time.ZonedDateTime
-                        ZonedDateTime { _nanoseconds: earlier ?? 0n, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
-                      }
-                    else
-                      { : never
-                        throw AmbiguousTimeError { message: "wall-clock time i..." + timezone } : baml.time.AmbiguousTimeError
-                      }
-          }
-        else
-          { : baml.time.ZonedDateTime
-            match (_tz_to_instant(timezone, self._nanoseconds, disambiguation) : bigint | null) : baml.time.ZonedDateTime
-              null =>
-                throw UnknownTimezoneError { timezone: timezone } : never
-              resolved =>
-                ZonedDateTime { _nanoseconds: resolved ?? 0n, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
-          }
+        { : baml.time.ZonedDateTime
+          if (disambiguation == "reject" : bool) : baml.time.ZonedDateTime
+            { : baml.time.ZonedDateTime
+              match (_tz_to_instant(timezone, self._nanoseconds, "earlier") : bigint | null) : baml.time.ZonedDateTime
+                null =>
+                  throw UnknownTimezoneError { timezone: timezone } : never
+                earlier =>
+                  { : baml.time.ZonedDateTime
+                    match (_tz_to_instant(timezone, self._nanoseconds, "later") : bigint | null) : baml.time.ZonedDateTime
+                      null =>
+                        throw UnknownTimezoneError { timezone: timezone } : never
+                      later =>
+                        { : baml.time.ZonedDateTime
+                          if (earlier == later : bool) : baml.time.ZonedDateTime
+                            { : baml.time.ZonedDateTime
+                              ZonedDateTime { _nanoseconds: earlier ?? 0n, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
+                            }
+                          else
+                            { : never
+                              throw AmbiguousTimeError { message: "wall-clock time i..." + timezone } : baml.time.AmbiguousTimeError
+                            }
+                        }
+                  }
+            }
+          else
+            { : baml.time.ZonedDateTime
+              match (_tz_to_instant(timezone, self._nanoseconds, disambiguation) : bigint | null) : baml.time.ZonedDateTime
+                null =>
+                  throw UnknownTimezoneError { timezone: timezone } : never
+                resolved =>
+                  { : baml.time.ZonedDateTime
+                    ZonedDateTime { _nanoseconds: resolved ?? 0n, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
+                  }
+            }
+        }
   }
 }
 function baml.time.PlainDateTime.max(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime throws never {
@@ -2812,19 +2860,27 @@ function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> str
     catch (self._to_string_impl() : string) : string
       catch (_)
         root.errors.InvalidArgument { message: message } =>
-          root.sys.panic("PlainDateTime.to_..." + message) : never
+          { : never
+            root.sys.panic("PlainDateTime.to_..." + message) : never
+          }
   }
 }
 function baml.time.PlainDateTime.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.PlainDateTime
     match (j : baml.json.json) : baml.time.PlainDateTime
       string =>
-        catch (PlainDateTime.parse(j) : baml.time.PlainDateTime) : baml.time.PlainDateTime
-          catch (_)
-            root.errors.ParseError { message: message } =>
-              throw baml.json.JsonDecodeError { message: message, path: "" } : never
+        { : baml.time.PlainDateTime
+          catch (PlainDateTime.parse(j) : baml.time.PlainDateTime) : baml.time.PlainDateTime
+            catch (_)
+              root.errors.ParseError { message: message } =>
+                { : never
+                  throw baml.json.JsonDecodeError { message: message, path: "" } : baml.json.JsonDecodeError
+                }
+        }
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } : never
+        { : never
+          throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } : baml.json.JsonDecodeError
+        }
   }
 }
 function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -2832,7 +2888,9 @@ function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> baml.
     catch (self._to_string_impl() : string) : string
       catch (_)
         root.errors.InvalidArgument { message: message } =>
-          throw baml.json.JsonSerializationError { message: message, path: "" } : never
+          { : never
+            throw baml.json.JsonSerializationError { message: message, path: "" } : baml.json.JsonSerializationError
+          }
   }
 }
 class baml.time.PlainDateTime$stream {
@@ -2882,12 +2940,18 @@ function baml.time.PlainTime.from_json(j: baml.json.json) -> !error throws baml.
   { : baml.time.PlainTime
     match (j : baml.json.json) : baml.time.PlainTime
       string =>
-        catch (PlainTime.parse(j) : baml.time.PlainTime) : baml.time.PlainTime
-          catch (_)
-            root.errors.ParseError { message: message } =>
-              throw baml.json.JsonDecodeError { message: message, path: "" } : never
+        { : baml.time.PlainTime
+          catch (PlainTime.parse(j) : baml.time.PlainTime) : baml.time.PlainTime
+            catch (_)
+              root.errors.ParseError { message: message } =>
+                { : never
+                  throw baml.json.JsonDecodeError { message: message, path: "" } : baml.json.JsonDecodeError
+                }
+        }
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
+        { : never
+          throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : baml.json.JsonDecodeError
+        }
   }
 }
 function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -2989,9 +3053,13 @@ function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezo
   { : baml.time.ZonedDateTime
     match (timezone : baml.time.TimeZoneOffset | string) : baml.time.ZonedDateTime
       TimeZoneOffset =>
-        ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null } : baml.time.ZonedDateTime
+        { : baml.time.ZonedDateTime
+          ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null } : baml.time.ZonedDateTime
+        }
       string =>
-        ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
+        { : baml.time.ZonedDateTime
+          ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } : baml.time.ZonedDateTime
+        }
   }
 }
 function baml.time.ZonedDateTime.to_instant(self: baml.time.ZonedDateTime) -> baml.time.Instant throws never {
@@ -3105,19 +3173,27 @@ function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> str
     catch (self._to_string_impl() : string) : string
       catch (_)
         _ =>
-          root.sys.panic("ZonedDateTime.to_...") : never
+          { : never
+            root.sys.panic("ZonedDateTime.to_...") : never
+          }
   }
 }
 function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.ZonedDateTime
     match (j : baml.json.json) : baml.time.ZonedDateTime
       string =>
-        catch (ZonedDateTime.parse(j) : baml.time.ZonedDateTime) : baml.time.ZonedDateTime
-          catch (_)
-            root.errors.ParseError { message: message } =>
-              throw baml.json.JsonDecodeError { message: message, path: "" } : never
+        { : baml.time.ZonedDateTime
+          catch (ZonedDateTime.parse(j) : baml.time.ZonedDateTime) : baml.time.ZonedDateTime
+            catch (_)
+              root.errors.ParseError { message: message } =>
+                { : never
+                  throw baml.json.JsonDecodeError { message: message, path: "" } : baml.json.JsonDecodeError
+                }
+        }
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } : never
+        { : never
+          throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } : baml.json.JsonDecodeError
+        }
   }
 }
 function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -3125,11 +3201,17 @@ function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> baml.
     catch (self._to_string_impl() : string) : string
       catch (_)
         root.errors.InvalidArgument { message: message } =>
-          throw baml.json.JsonSerializationError { message: message, path: "" } : never
+          { : never
+            throw baml.json.JsonSerializationError { message: message, path: "" } : baml.json.JsonSerializationError
+          }
         UnknownTimezoneError { timezone: timezone } =>
-          throw baml.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" } : never
+          { : never
+            throw baml.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" } : baml.json.JsonSerializationError
+          }
         root.errors.Io { message: message } =>
-          throw baml.json.JsonSerializationError { message: message, path: "" } : never
+          { : never
+            throw baml.json.JsonSerializationError { message: message, path: "" } : baml.json.JsonSerializationError
+          }
   }
 }
 class baml.time.ZonedDateTime$stream {

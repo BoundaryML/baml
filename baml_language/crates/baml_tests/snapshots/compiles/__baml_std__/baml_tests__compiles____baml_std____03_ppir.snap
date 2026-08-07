@@ -389,7 +389,7 @@ function baml.csv._cell_by_index(rec: baml.csv.CsvRecord, index: int) -> T?  [bu
 function baml.csv._cell_by_name(rec: baml.csv.CsvRecord, column: string) -> T?  [builtin]
 function baml.csv._decode_record(rec: baml.csv.CsvRecord) -> T  [builtin]
 function baml.csv._emit(self: ?, out: string) -> null  [expr] {
-  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out) catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: "underlying file h..." Add message } } } } null }
+  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out) catch (_) { root.errors.InvalidArgument { message: message } => { throw root.errors.Io { message: "underlying file h..." Add message } } } } } null }
 }
 function baml.csv._encode_header(self: ?, names: string[]) -> string  [builtin]
 function baml.csv._encode_record(self: ?, record: baml.csv.CsvValue[]) -> string  [builtin]
@@ -406,7 +406,7 @@ function baml.csv._mark_exhausted(self: ?) -> null  [builtin]
 function baml.csv._poll(self: ?) -> baml.csv.CsvRecord | baml.csv.CsvSkip | baml.csv.CsvNeedData | root.iter.Done  [builtin]
 function baml.csv._poll_headers(self: ?) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData  [builtin]
 function baml.csv._read_chunk(self: ?) -> null  [expr] {
-  {  } match (self._file) { null => { self._feed_eof() } null, f: root.fs.File => { let chunk = f.read_bytes(65536) catch (e) { root.errors.InvalidArgument { message: message } => throw _error(CsvErrorKind.Closed, "underlying file h..." Add message), root.errors.Io => { self._mark_exhausted(); throw e } }; if (chunk.length() Eq 0) { self._feed_eof() } else { self._feed(chunk) } } null }
+  {  } match (self._file) { null => { self._feed_eof() } null, f: root.fs.File => { let chunk = f.read_bytes(65536) catch (e) { root.errors.InvalidArgument { message: message } => { throw _error(CsvErrorKind.Closed, "underlying file h..." Add message) }, root.errors.Io => { self._mark_exhausted(); throw e } }; if (chunk.length() Eq 0) { self._feed_eof() } else { self._feed(chunk) } } null }
 }
 function baml.csv._reader(source: string | uint8array | root.fs.File, options: baml.csv.ReaderOptions?, owns_file: bool) -> baml.csv.CsvReader  [builtin]
 function baml.csv._to_markdown(rows: T[], max_rows: int) -> string  [builtin]
@@ -430,7 +430,7 @@ function baml.csv.decode(self: ?) -> T  [expr] {
   {  } _decode_record(self)
 }
 function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T[]  [expr] {
-  {  } {  } reader(source, options = options).rows().collect() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: in-m..." Add message) }
+  {  } {  } reader(source, options = options).rows().collect() catch (_) { root.errors.Io { message: message } => {  } root.sys.panic("unreachable: in-m..." Add message) }
 }
 function baml.csv.decode_one(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T  [expr] {
   { let all = decode(source, options = options); if (all.length() Eq 0) { throw _error(CsvErrorKind.NotFound, "expected exactly ...") }; if (all.length() Gt 1) { throw _error(CsvErrorKind.TooManyRows, "expected exactly ..." Add root.json.stringify(all.length())) } } match (all.at(0)) { null => root.sys.panic("unreachable: deco..."), v: T => v }
@@ -468,7 +468,7 @@ function baml.csv.open(path: string, options: baml.csv.ReaderOptions? = null) ->
   { let f = baml.fs.open(path, "r") catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: message } } } _reader(f, options, true)
 }
 function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> string[][]  [expr] {
-  {  } { let r = reader(source, options = options); let out: string[][] = []; while true {  } match (r.next()) { root.iter.Done => { break }, rec: baml.csv.CsvRecord => { out.push(rec.fields()) } } } out catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: in-m..." Add message) }
+  {  } { let r = reader(source, options = options); let out: string[][] = []; while true {  } match (r.next()) { root.iter.Done => { break }, rec: baml.csv.CsvRecord => { out.push(rec.fields()) } } } out catch (_) { root.errors.Io { message: message } => {  } root.sys.panic("unreachable: in-m..." Add message) }
 }
 function baml.csv.position(self: ?) -> baml.csv.CsvPosition  [builtin]
 function baml.csv.position(self: ?) -> baml.csv.CsvPosition  [builtin]
@@ -485,10 +485,10 @@ function baml.csv.rows(self: ?) -> root.iter.Iterator<Item = T, Error = baml.csv
 function baml.csv.skipped(self: ?) -> baml.csv.CsvError[]  [builtin]
 function baml.csv.skipped_count(self: ?) -> int  [builtin]
 function baml.csv.stringify(rows: T[], options: baml.csv.WriterOptions? = null) -> string  [expr] {
-  {  } { let w = buffer(options = options); w.write_rows(rows) } w.text() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: buff..." Add message) }
+  {  } { let w = buffer(options = options); w.write_rows(rows) } w.text() catch (_) { root.errors.Io { message: message } => {  } root.sys.panic("unreachable: buff..." Add message) }
 }
 function baml.csv.stringify_records(records: baml.csv.CsvValue[][], options: baml.csv.WriterOptions? = null) -> string  [expr] {
-  {  } { let w = buffer(options = options); for rec in records { w.write_record(rec) } } w.text() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: buff..." Add message) }
+  {  } { let w = buffer(options = options); for rec in records { w.write_record(rec) } } w.text() catch (_) { root.errors.Io { message: message } => {  } root.sys.panic("unreachable: buff..." Add message) }
 }
 function baml.csv.text(self: ?) -> string  [builtin]
 function baml.csv.to_map(self: ?) -> map<string, string>  [builtin]
@@ -1162,10 +1162,10 @@ class baml.json.JsonSerializationError$stream {
 type baml.json.json = null | bool | int | float | string | baml.json.json[] | map<string, baml.json.json>
 type baml.json.json$stream = null | bool | int | float | string | baml.json.json$stream[] | map<string, baml.json.json$stream>
 function baml.json._path_field(current: baml.json.json, key: string, selector: string) -> baml.json.json  [expr] {
-  {  } match (current) { m: map<string, baml.json.json> => { if (Not m.has(key)) { throw baml.json.JsonPathError { message: "missing field '" Add key Add "'", selector: selector } } } m.get(key), _ => throw baml.json.JsonPathError { message: "field access '." Add key Add "' on a non-object", selector: selector } }
+  {  } match (current) { m: map<string, baml.json.json> => { if (Not m.has(key)) { throw baml.json.JsonPathError { message: "missing field '" Add key Add "'", selector: selector } } } m.get(key), _ => { throw baml.json.JsonPathError { message: "field access '." Add key Add "' on a non-object", selector: selector } } }
 }
 function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json  [expr] {
-  {  } match (current) { arr: baml.json.json[] => { if (idx Lt 0 Or idx Ge arr.length()) { throw baml.json.JsonPathError { message: "index [" Add idx.to_string() Add "] out of bounds (..." Add arr.length().to_string() Add ")", selector: selector } } } arr.at(idx), _ => throw baml.json.JsonPathError { message: "index [" Add idx.to_string() Add "] on a non-array", selector: selector } }
+  {  } match (current) { arr: baml.json.json[] => { if (idx Lt 0 Or idx Ge arr.length()) { throw baml.json.JsonPathError { message: "index [" Add idx.to_string() Add "] out of bounds (..." Add arr.length().to_string() Add ")", selector: selector } } } arr.at(idx), _ => { throw baml.json.JsonPathError { message: "index [" Add idx.to_string() Add "] on a non-array", selector: selector } } }
 }
 function baml.json.deserialize(s: string) -> T  [expr] {
   {  } from_json(parse(s))
@@ -1178,7 +1178,7 @@ function baml.json.from_json(j: baml.json.json) -> T  [builtin]
 function baml.json.from_string(s: string) -> T  [builtin]
 function baml.json.parse(s: string) -> baml.json.json  [builtin]
 function baml.json.path(j: baml.json.json, selector: string) -> T  [expr] {
-  { if (Not selector.starts_with(".") Or selector.starts_with("[")) { throw baml.json.JsonPathError { message: "selector must sta..." Add selector Add "'", selector: selector } }; let current: baml.json.json = j; let i = 0; while i Lt selector.length() { let marker = selector.substring(i, i Add 1); if (marker Eq ".") { i Add= 1; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "." And selector.substring(i, i Add 1) Ne "[" { i Add= 1 }; if (i Gt start) { current = _path_field(current, selector.substring(start, i), selector) }; continue }; if (marker Ne "[") { throw baml.json.JsonPathError { message: "expected '.' or '..." Add i.to_string(), selector: selector } }; i Add= 1; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let first = selector.substring(i, i Add 1); if (first Eq "\"" Or first Eq "'") { let quote = first; i Add= 1; let key = ""; let closed = false; while i Lt selector.length() { let ch = selector.substring(i, i Add 1); if (ch Eq "\\") { if (i Add 1 Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated esca...", selector: selector } }; key = key Add selector.substring(i Add 1, i Add 2); i Add= 2; continue }; if (ch Eq quote) { closed = true; i Add= 1; break }; key = key Add ch; i Add= 1 }; if (Not closed Or i Ge selector.length() Or selector.substring(i, i Add 1) Ne "]") { throw baml.json.JsonPathError { message: "unterminated quot...", selector: selector } }; i Add= 1; current = _path_field(current, key, selector); continue }; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "]" { i Add= 1 }; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let token = selector.substring(start, i); i Add= 1; let idx = int.parse(token) catch (_) { root.errors.ParseError => { throw baml.json.JsonPathError { message: "bad bracket token '[" Add token Add "]'", selector: selector } } }; current = _path_index(current, idx, selector) } } to(current) catch (_) { baml.json.JsonDecodeError => throw baml.json.JsonPathError { message: "leaf does not coe...", selector: selector } }
+  { if (Not selector.starts_with(".") Or selector.starts_with("[")) { throw baml.json.JsonPathError { message: "selector must sta..." Add selector Add "'", selector: selector } }; let current: baml.json.json = j; let i = 0; while i Lt selector.length() { let marker = selector.substring(i, i Add 1); if (marker Eq ".") { i Add= 1; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "." And selector.substring(i, i Add 1) Ne "[" { i Add= 1 }; if (i Gt start) { current = _path_field(current, selector.substring(start, i), selector) }; continue }; if (marker Ne "[") { throw baml.json.JsonPathError { message: "expected '.' or '..." Add i.to_string(), selector: selector } }; i Add= 1; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let first = selector.substring(i, i Add 1); if (first Eq "\"" Or first Eq "'") { let quote = first; i Add= 1; let key = ""; let closed = false; while i Lt selector.length() { let ch = selector.substring(i, i Add 1); if (ch Eq "\\") { if (i Add 1 Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated esca...", selector: selector } }; key = key Add selector.substring(i Add 1, i Add 2); i Add= 2; continue }; if (ch Eq quote) { closed = true; i Add= 1; break }; key = key Add ch; i Add= 1 }; if (Not closed Or i Ge selector.length() Or selector.substring(i, i Add 1) Ne "]") { throw baml.json.JsonPathError { message: "unterminated quot...", selector: selector } }; i Add= 1; current = _path_field(current, key, selector); continue }; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "]" { i Add= 1 }; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let token = selector.substring(start, i); i Add= 1; let idx = int.parse(token) catch (_) { root.errors.ParseError => { throw baml.json.JsonPathError { message: "bad bracket token '[" Add token Add "]'", selector: selector } } }; current = _path_index(current, idx, selector) } } to(current) catch (_) { baml.json.JsonDecodeError => { throw baml.json.JsonPathError { message: "leaf does not coe...", selector: selector } } }
 }
 function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T  [expr] {
   {  } path(j, selector) catch (_) { baml.json.JsonPathError => default }
@@ -1922,7 +1922,7 @@ function baml.time.epoch() -> baml.time.Instant  [expr] {
   {  } baml.time.Instant { _nanoseconds: 0n }
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => Instant.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } }
+  {  } match (j) { string => {  } Instant.parse(j) catch (_) { root.errors.ParseError { message: message } => { throw baml.json.JsonDecodeError { message: message, path: "" } } }, _ => { throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } } }
 }
 function baml.time.from_timestamp_microseconds(us: bigint) -> baml.time.Instant  [expr] {
   {  } baml.time.Instant { _nanoseconds: us Mul 1000 }
@@ -1945,10 +1945,10 @@ function baml.time.min(self: ?, other: baml.time.Instant) -> baml.time.Instant  
 function baml.time.now() -> baml.time.Instant  [builtin]
 function baml.time.parse(s: string) -> baml.time.Instant  [builtin]
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw baml.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => root.sys.panic("Instant.to_string: " Add message) }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => {  } root.sys.panic("Instant.to_string: " Add message) }
 }
 function baml.time.to_timestamp_microseconds(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 1000
@@ -1975,18 +1975,18 @@ function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time.day(self: ?) -> int  [builtin]
 function baml.time.from_components(year: int, month: int, day: int) -> baml.time.PlainDate  [builtin]
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => PlainDate.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } }
+  {  } match (j) { string => {  } PlainDate.parse(j) catch (_) { root.errors.ParseError { message: message } => { throw baml.json.JsonDecodeError { message: message, path: "" } } }, _ => { throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } } }
 }
 function baml.time.month(self: ?) -> int  [builtin]
 function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw baml.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
 }
 function baml.time.to_plain_datetime(self: ?, time: PlainTime? = null) -> PlainDateTime  [expr] {
   {  } self._to_plain_datetime(time)
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => root.sys.panic("PlainDate.to_stri..." Add message) }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => {  } root.sys.panic("PlainDate.to_stri..." Add message) }
 }
 function baml.time.year(self: ?) -> int  [builtin]
 
@@ -2004,7 +2004,7 @@ function baml.time.from_components(year: int, month: int, day: int, hour: int = 
   {  } PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => PlainDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } }
+  {  } match (j) { string => {  } PlainDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => { throw baml.json.JsonDecodeError { message: message, path: "" } } }, _ => { throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } } }
 }
 function baml.time.hour(self: ?) -> int  [builtin]
 function baml.time.max(self: ?, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime  [expr] {
@@ -2019,15 +2019,15 @@ function baml.time.month(self: ?) -> int  [builtin]
 function baml.time.parse(s: string) -> baml.time.PlainDateTime  [builtin]
 function baml.time.second(self: ?) -> int  [builtin]
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw baml.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
 }
 function baml.time.to_plain_date(self: ?) -> PlainDate  [builtin]
 function baml.time.to_plain_time(self: ?) -> PlainTime  [builtin]
 function baml.time.to_string(self: ?) -> string  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => root.sys.panic("PlainDateTime.to_..." Add message) }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => {  } root.sys.panic("PlainDateTime.to_..." Add message) }
 }
 function baml.time.to_zoned(self: ?, timezone: TimeZoneOffset | string, disambiguation: Disambiguation = "compatible") -> ZonedDateTime  [expr] {
-  {  } match (timezone) { TimeZoneOffset => ZonedDateTime { _nanoseconds: self._nanoseconds Sub timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => if (disambiguation Eq "reject") {  } match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) { null => throw UnknownTimezoneError { timezone: timezone }, earlier => match (_tz_to_instant(timezone, self._nanoseconds, "later")) { null => throw UnknownTimezoneError { timezone: timezone }, later => if (earlier Eq later) {  } ZonedDateTime { _nanoseconds: earlier NullCoalesce 0n, _offset_ns: null, _iana: timezone } else { throw AmbiguousTimeError { message: "wall-clock time i..." Add timezone } } } } else {  } match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) { null => throw UnknownTimezoneError { timezone: timezone }, resolved => ZonedDateTime { _nanoseconds: resolved NullCoalesce 0n, _offset_ns: null, _iana: timezone } } }
+  {  } match (timezone) { TimeZoneOffset => {  } ZonedDateTime { _nanoseconds: self._nanoseconds Sub timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => {  } if (disambiguation Eq "reject") {  } match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) { null => throw UnknownTimezoneError { timezone: timezone }, earlier => {  } match (_tz_to_instant(timezone, self._nanoseconds, "later")) { null => throw UnknownTimezoneError { timezone: timezone }, later => {  } if (earlier Eq later) {  } ZonedDateTime { _nanoseconds: earlier NullCoalesce 0n, _offset_ns: null, _iana: timezone } else { throw AmbiguousTimeError { message: "wall-clock time i..." Add timezone } } } } else {  } match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) { null => throw UnknownTimezoneError { timezone: timezone }, resolved => {  } ZonedDateTime { _nanoseconds: resolved NullCoalesce 0n, _offset_ns: null, _iana: timezone } } }
 }
 function baml.time.year(self: ?) -> int  [builtin]
 
@@ -2044,7 +2044,7 @@ function baml.time.from_components(hour: int, minute: int = 0, second: int = 0, 
   {  } PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond)
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => PlainTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } }
+  {  } match (j) { string => {  } PlainTime.parse(j) catch (_) { root.errors.ParseError { message: message } => { throw baml.json.JsonDecodeError { message: message, path: "" } } }, _ => { throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } } }
 }
 function baml.time.hour(self: ?) -> int  [expr] {
   {  } self._nanoseconds Div 3600000000000
@@ -2138,10 +2138,10 @@ function baml.time.from_components(timezone: TimeZoneOffset | string, year: int,
   {  } PlainDateTime.from_components(year, month, day, hour = hour, minute = minute, second = second, millisecond = millisecond, microsecond = microsecond, nanosecond = nanosecond).to_zoned(timezone, disambiguation = disambiguation)
 }
 function baml.time.from_instant(instant: Instant, timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
-  {  } match (timezone) { TimeZoneOffset => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } }
+  {  } match (timezone) { TimeZoneOffset => {  } baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => {  } baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } }
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => ZonedDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } }
+  {  } match (j) { string => {  } ZonedDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => { throw baml.json.JsonDecodeError { message: message, path: "" } } }, _ => { throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } } }
 }
 function baml.time.hour(self: ?) -> int  [expr] {
   {  } self.to_plain().hour()
@@ -2181,13 +2181,13 @@ function baml.time.to_instant(self: ?) -> Instant  [expr] {
   {  } Instant { _nanoseconds: self._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw baml.json.JsonSerializationError { message: message, path: "" }, UnknownTimezoneError { timezone: timezone } => throw baml.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" }, root.errors.Io { message: message } => throw baml.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } }, UnknownTimezoneError { timezone: timezone } => { throw baml.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" } }, root.errors.Io { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
 }
 function baml.time.to_plain(self: ?) -> PlainDateTime  [expr] {
   {  } PlainDateTime { _nanoseconds: self._nanoseconds Add self.timezone_offset()._nanoseconds }
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
-  {  } self._to_string_impl() catch (_) { _ => root.sys.panic("ZonedDateTime.to_...") }
+  {  } self._to_string_impl() catch (_) { _ => {  } root.sys.panic("ZonedDateTime.to_...") }
 }
 function baml.time.with_timezone(self: ?, timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
   {  } ZonedDateTime.from_instant(self.to_instant(), timezone)
