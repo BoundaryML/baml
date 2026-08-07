@@ -1104,6 +1104,7 @@ function Extract(client: string, text: string) -> string {
                 callee,
                 args: Vec::new(),
                 type_args: Vec::new(),
+                dynamic_type_args: Vec::new(),
             },
         );
         let empty_list = alloc_default(
