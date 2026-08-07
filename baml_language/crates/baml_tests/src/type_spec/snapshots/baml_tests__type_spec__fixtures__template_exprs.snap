@@ -8,9 +8,9 @@ expression: outcome.dump
 473..497 '`Hello... + 2}`': string
 481..487 '{name}': string
 482..486 'name': string
-489..496 '{1 + 2}': hir_ty=[int] tir=[3]
+489..496 '{1 + 2}': 3
 490..491 '1': 1
-490..495 '1 + 2': hir_ty=[int] tir=[3]
+490..495 '1 + 2': 3
 494..495 '2': 2
 520..521 's': string
 534..540 'tagged': throws never

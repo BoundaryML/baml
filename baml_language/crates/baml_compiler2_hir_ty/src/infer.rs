@@ -111,6 +111,172 @@ fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
     )))
 }
 
+/// Fold a binary operator over two literal TYPES into the literal
+/// result - literal types are closed under the builtin operators
+/// (RULING 2026-08-07; TIR's `try_fold_binary` lifted to the interned
+/// layer; a deliberate divergence from TS, which never folds).
+/// Freshness merges - fresh operands make a fresh result, so bindings
+/// still widen (`let x = 1n + 2n` is `bigint`; only checked positions
+/// see `3n`). `None` skips the fold: non-literal operands, mixed
+/// bases, and any result the VM could not materialize (i63 overflow,
+/// the bigint allocation cap, division by zero, non-finite floats) -
+/// the unfolded dispatch result stands and the runtime raises the
+/// same catchable error the through-a-variable path gets.
+fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Option<Ty> {
+    use baml_compiler2_ast::BinaryOp;
+    let (TyKind::Literal(a, a_fresh, _), TyKind::Literal(b, b_fresh, _)) =
+        (lhs.kind(), rhs.kind())
+    else {
+        return None;
+    };
+    let freshness = match (a_fresh, b_fresh) {
+        (Freshness::Regular, Freshness::Regular) => Freshness::Regular,
+        _ => Freshness::Fresh,
+    };
+    let lit = |value: Literal| Ty::intern(TyKind::Literal(value, freshness, TyAttr::default()));
+    let boolean = |value: bool| Some(lit(Literal::Bool(value)));
+    // BAML ints are i63 (the VM tags the low bit); an out-of-range
+    // fold defers to the runtime overflow, like `negate_literal`.
+    const INT_MIN: i64 = -(1 << 62);
+    const INT_MAX: i64 = (1 << 62) - 1;
+    let int = |value: i64| {
+        (INT_MIN..=INT_MAX)
+            .contains(&value)
+            .then(|| lit(Literal::Int(value)))
+    };
+    match (a, b) {
+        (Literal::Int(a), Literal::Int(b)) => {
+            let (a, b) = (*a, *b);
+            match op {
+                BinaryOp::Add => int(a.checked_add(b)?),
+                BinaryOp::Sub => int(a.checked_sub(b)?),
+                BinaryOp::Mul => int(a.checked_mul(b)?),
+                BinaryOp::Div => int(a.checked_div(b)?),
+                BinaryOp::Mod => int(a.checked_rem(b)?),
+                BinaryOp::BitAnd => Some(lit(Literal::Int(a & b))),
+                BinaryOp::BitOr => Some(lit(Literal::Int(a | b))),
+                BinaryOp::BitXor => Some(lit(Literal::Int(a ^ b))),
+                // Shifts range-check the RESULT too (`1 << 62` escapes
+                // i63); bad counts defer to the runtime throw.
+                BinaryOp::Shl => int(a.checked_shl(u32::try_from(b).ok()?)?),
+                BinaryOp::Shr => int(a.checked_shr(u32::try_from(b).ok()?)?),
+                BinaryOp::Eq => boolean(a == b),
+                BinaryOp::Ne => boolean(a != b),
+                BinaryOp::Lt => boolean(a < b),
+                BinaryOp::Le => boolean(a <= b),
+                BinaryOp::Gt => boolean(a > b),
+                BinaryOp::Ge => boolean(a >= b),
+                _ => None,
+            }
+        }
+        (Literal::Bigint(a), Literal::Bigint(b)) => {
+            use num_bigint::{BigInt, Sign};
+            let capped = |value: BigInt| {
+                (value.bits() <= baml_type::MAX_BIGINT_BITS)
+                    .then(|| lit(Literal::Bigint(value)))
+            };
+            match op {
+                BinaryOp::Add => capped(a + b),
+                BinaryOp::Sub => capped(a - b),
+                BinaryOp::Mul => {
+                    // Pre-flight matching `Instruction::MulBigint`.
+                    if a.bits().saturating_add(b.bits()) > baml_type::MAX_BIGINT_BITS {
+                        return None;
+                    }
+                    capped(a * b)
+                }
+                BinaryOp::Div if b.sign() != Sign::NoSign => capped(a / b),
+                BinaryOp::Mod if b.sign() != Sign::NoSign => capped(a % b),
+                BinaryOp::BitAnd => capped(a & b),
+                BinaryOp::BitOr => capped(a | b),
+                BinaryOp::BitXor => capped(a ^ b),
+                // Shl growth is bounded by the allocation cap; a count
+                // past `usize` (or past the cap) defers to the runtime
+                // AllocFailure. Shr cannot grow: huge counts saturate
+                // to `0n` / `-1n`, mirroring `Instruction::ShrBigint`.
+                BinaryOp::Shl if b.sign() != Sign::Minus => {
+                    let shift = usize::try_from(b).ok()?;
+                    if a.bits().saturating_add(u64::try_from(shift).ok()?)
+                        > baml_type::MAX_BIGINT_BITS
+                    {
+                        return None;
+                    }
+                    capped(a << shift)
+                }
+                BinaryOp::Shr if b.sign() != Sign::Minus => match usize::try_from(b) {
+                    Ok(shift) => capped(a >> shift),
+                    Err(_) => capped(if a.sign() == Sign::Minus {
+                        BigInt::from(-1)
+                    } else {
+                        BigInt::ZERO
+                    }),
+                },
+                BinaryOp::Eq => boolean(a == b),
+                BinaryOp::Ne => boolean(a != b),
+                BinaryOp::Lt => boolean(a < b),
+                BinaryOp::Le => boolean(a <= b),
+                BinaryOp::Gt => boolean(a > b),
+                BinaryOp::Ge => boolean(a >= b),
+                _ => None,
+            }
+        }
+        (Literal::Float(a_text), Literal::Float(b_text)) => {
+            let a: f64 = a_text.parse().ok()?;
+            let b: f64 = b_text.parse().ok()?;
+            let float = |value: f64| Some(lit(Literal::Float(format_float(value)?)));
+            match op {
+                BinaryOp::Add => float(a + b),
+                BinaryOp::Sub => float(a - b),
+                BinaryOp::Mul => float(a * b),
+                BinaryOp::Div if b != 0.0 => float(a / b),
+                BinaryOp::Mod if b != 0.0 => float(a % b),
+                #[allow(clippy::float_cmp)] // Intentional: literal float equality.
+                BinaryOp::Eq => boolean(a == b),
+                #[allow(clippy::float_cmp)] // Intentional: literal float inequality.
+                BinaryOp::Ne => boolean(a != b),
+                BinaryOp::Lt => boolean(a < b),
+                BinaryOp::Le => boolean(a <= b),
+                BinaryOp::Gt => boolean(a > b),
+                BinaryOp::Ge => boolean(a >= b),
+                _ => None,
+            }
+        }
+        (Literal::Bool(a), Literal::Bool(b)) => match op {
+            BinaryOp::And => boolean(*a && *b),
+            BinaryOp::Or => boolean(*a || *b),
+            BinaryOp::Eq => boolean(a == b),
+            BinaryOp::Ne => boolean(a != b),
+            _ => None,
+        },
+        (Literal::String(a), Literal::String(b)) => match op {
+            BinaryOp::Add => Some(lit(Literal::String(format!("{a}{b}")))),
+            BinaryOp::Eq => boolean(a == b),
+            BinaryOp::Ne => boolean(a != b),
+            BinaryOp::Lt => boolean(a < b),
+            BinaryOp::Le => boolean(a <= b),
+            BinaryOp::Gt => boolean(a > b),
+            BinaryOp::Ge => boolean(a >= b),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A folded float formatted so it always reads back as a float (a
+/// trailing `.0` when the value prints integral); non-finite results
+/// refuse the fold.
+fn format_float(value: f64) -> Option<String> {
+    if !value.is_finite() {
+        return None;
+    }
+    let text = format!("{value}");
+    if text.contains('.') {
+        Some(text)
+    } else {
+        Some(format!("{value}.0"))
+    }
+}
+
 /// Reduction budget for the finalize-time projection pass: bounds a
 /// reduction CHAIN (`(A as I).X` -> `(B as J).Y` -> ...), the same
 /// discipline as the canonical walk's fuel. Any real chain is far
@@ -1688,9 +1854,9 @@ impl<'db> InferenceContext<'db> {
         use baml_compiler2_ast::BinaryOp;
         match op {
             BinaryOp::And | BinaryOp::Or => {
-                self.check_expr(body, lhs, &Ty::bool());
-                self.check_expr(body, rhs, &Ty::bool());
-                Ty::bool()
+                let lhs_ty = self.check_expr(body, lhs, &Ty::bool());
+                let rhs_ty = self.check_expr(body, rhs, &Ty::bool());
+                const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
             }
             BinaryOp::Eq
             | BinaryOp::Ne
@@ -1698,9 +1864,11 @@ impl<'db> InferenceContext<'db> {
             | BinaryOp::Le
             | BinaryOp::Gt
             | BinaryOp::Ge => {
-                self.infer_expr(body, lhs, &Expectation::None);
-                self.infer_expr(body, rhs, &Expectation::None);
-                Ty::bool()
+                let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
+                let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                let lhs_ty = self.table.resolve_completely(&lhs_ty);
+                let rhs_ty = self.table.resolve_completely(&rhs_ty);
+                const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
             }
             BinaryOp::NullCoalesce => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
@@ -1717,6 +1885,11 @@ impl<'db> InferenceContext<'db> {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
                 let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                let lhs_ty = self.table.resolve_completely(&lhs_ty);
+                let rhs_ty = self.table.resolve_completely(&rhs_ty);
+                if let Some(folded) = const_fold_binary(op, &lhs_ty, &rhs_ty) {
+                    return folded;
+                }
                 let interface = match op {
                     BinaryOp::Add => "Add",
                     BinaryOp::Sub => "Subtract",
@@ -1737,6 +1910,11 @@ impl<'db> InferenceContext<'db> {
             | BinaryOp::Shr => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
                 let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                let lhs_ty = self.table.resolve_completely(&lhs_ty);
+                let rhs_ty = self.table.resolve_completely(&rhs_ty);
+                if let Some(folded) = const_fold_binary(op, &lhs_ty, &rhs_ty) {
+                    return folded;
+                }
                 let interface = match op {
                     BinaryOp::BitAnd => "BitAnd",
                     BinaryOp::BitOr => "BitOr",
