@@ -146,11 +146,16 @@ def read_local_bep(folder: Path) -> dict:
 
     pages_dir = folder / "pages"
     if pages_dir.exists() and pages_dir.is_dir():
-        for page_file in sorted(pages_dir.glob("*.md")):
-            result["pages"].append({
+        for page_file in sorted(pages_dir.rglob("*.md")):
+            rel = page_file.relative_to(pages_dir)
+            page = {
                 "slug": page_file.stem,
                 "content": page_file.read_text(encoding="utf-8"),
-            })
+            }
+            # Nested pages: the immediate folder name is the parent page's slug
+            if len(rel.parts) > 1:
+                page["parent_slug"] = rel.parts[-2]
+            result["pages"].append(page)
 
     return result
 
@@ -483,7 +488,8 @@ def cmd_diff(args: argparse.Namespace) -> int:
     server_pages = {}
     for f_path, content in server_files.items():
         if f_path.startswith("pages/") and f_path.endswith(".md"):
-            slug = f_path[6:-3]  # Remove "pages/" and ".md"
+            # Slug is the basename; nested pages live at pages/<ancestors>/<slug>.md
+            slug = f_path.rsplit("/", 1)[-1][:-3]
             server_pages[slug] = content
 
     local_pages = {p["slug"]: p["content"] for p in local_bep["pages"]}
@@ -538,11 +544,14 @@ def cmd_push(args: argparse.Namespace) -> int:
         # Extract title from first heading or use slug
         title_match = re.search(r"^#\\s+(.+)$", page["content"], re.MULTILINE)
         title = title_match.group(1).strip() if title_match else page["slug"].title()
-        pages.append({
+        page_payload = {
             "slug": page["slug"],
             "title": title,
             "content": page["content"],
-        })
+        }
+        if page.get("parent_slug"):
+            page_payload["parentSlug"] = page["parent_slug"]
+        pages.append(page_payload)
 
     # Show diff first
     print("Changes to push:")
