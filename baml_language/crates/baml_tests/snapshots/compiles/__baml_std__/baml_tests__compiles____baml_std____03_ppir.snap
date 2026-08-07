@@ -1935,6 +1935,18 @@ function baml.reflect.array.as_type(self: ?) -> type  [builtin]
 function baml.reflect.array.element_type(self: ?) -> type  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_class/class.baml ---
+class baml.reflect.class.Builder {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: baml.reflect.class.Builder[]
+  _resolved: type?
+}
+class baml.reflect.class.Builder$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _neighbors: baml.reflect.class.Builder$stream[]
+  _resolved: unknown | null
+}
 class baml.reflect.class.Field {
   name: string
   type: type?
@@ -1945,15 +1957,33 @@ class baml.reflect.class.Field$stream {
   type: unknown | null
   meta: baml.reflect.Meta$stream | null
 }
+class baml.reflect.class.PendingType {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: type?
+}
+class baml.reflect.class.PendingType$stream {
+  _handle: $rust_type
+  _roots: unknown[]
+  _resolved: unknown | null
+}
 class baml.reflect.class.Type {
 }
 class baml.reflect.class.Type$stream {
 }
+function baml.reflect.class.array(self: ?) -> baml.reflect.class.PendingType  [builtin]
 function baml.reflect.class.as_type(self: ?) -> type  [builtin]
+function baml.reflect.class.build(self: ?) -> baml.reflect.class.Type  [builtin]
+function baml.reflect.class.builder(name: string) -> baml.reflect.class.Builder  [builtin]
+function baml.reflect.class.field(self: ?, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType) -> baml.reflect.class.Builder  [builtin]
 function baml.reflect.class.fields(self: ?) -> baml.reflect.class.Field[]  [builtin]
 function baml.reflect.class.get_field(value: unknown, name: string) -> T  [builtin]
 function baml.reflect.class.meta(self: ?) -> baml.reflect.Meta  [builtin]
 function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>) -> baml.reflect.class.Type  [builtin]
+function baml.reflect.class.optional(self: ?) -> baml.reflect.class.PendingType  [builtin]
+function baml.reflect.class.resolved(self: ?) -> type?  [builtin]
+function baml.reflect.class.type(self: ?) -> baml.reflect.class.PendingType  [builtin]
+function baml.reflect.class.union(self: ?, others: type | baml.reflect.class.PendingType[]) -> baml.reflect.class.PendingType  [builtin]
 
 --- <builtin>/baml/ns_reflect/ns_enum/enum.baml ---
 class baml.reflect.enum.Type {

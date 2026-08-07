@@ -9076,6 +9076,22 @@ fn baml.reflect.array.Type.element_type = builtin(vm)
 
 fn baml.reflect.class.new = builtin(vm)
 
+fn baml.reflect.class.builder = builtin(vm)
+
+fn baml.reflect.class.Builder.field = builtin(vm)
+
+fn baml.reflect.class.Builder.type = builtin(vm)
+
+fn baml.reflect.class.Builder.build = builtin(vm)
+
+fn baml.reflect.class.PendingType.array = builtin(vm)
+
+fn baml.reflect.class.PendingType.optional = builtin(vm)
+
+fn baml.reflect.class.PendingType.union = builtin(vm)
+
+fn baml.reflect.class.PendingType.resolved = builtin(vm)
+
 fn baml.reflect.class.get_field = builtin(vm)
 
 fn baml.reflect.class.Type.baml.reflect.TypeView.as_type = builtin(vm)
