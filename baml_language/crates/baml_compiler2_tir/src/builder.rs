@@ -2958,6 +2958,98 @@ impl<'db> TypeInferenceBuilder<'db> {
             });
     }
 
+    /// Infer the schema type for an uncontracted call to one of the generic
+    /// LLM preview/request helpers from the named LLM function's declaration.
+    ///
+    /// The helpers' value parameters do not mention `T`, and their result is a
+    /// `PromptAst`/`Request`, so ordinary bidirectional inference has no source
+    /// for it. Compiler-generated companions pass `T` explicitly (including a
+    /// runtime `unreflect(...)` argument for generic LLM functions). The legacy
+    /// public form `baml.llm.build_request(C, "F", ...)`, however, must remain
+    /// usable for a plain, non-generic `F`: its declared return type is the one
+    /// unambiguous static schema available at the call site.
+    fn implicit_llm_companion_type_arg_seed(
+        &self,
+        callee: ExprId,
+        args: &[ast::CallArg],
+        body: &ExprBody,
+        callee_generic_params: &[crate::ty::ParamTy],
+    ) -> Vec<(crate::ty::ParamTy, Ty)> {
+        let [callee_type_param] = callee_generic_params else {
+            return Vec::new();
+        };
+        let Some(MemberResolution::Free { func_loc }) = self.callee_member_resolution(callee)
+        else {
+            return Vec::new();
+        };
+        let db = self.context.db();
+        let callee_package = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+        let callee_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        let is_llm_schema_helper = callee_package.package.as_str() == "baml"
+            && callee_package.namespace_path.len() == 1
+            && callee_package.namespace_path[0].as_str() == "llm"
+            && matches!(
+                callee_data.name.as_str(),
+                "render_prompt" | "build_request" | "build_request_stream"
+            );
+        if !is_llm_schema_helper {
+            return Vec::new();
+        }
+
+        let function_name_arg = args
+            .iter()
+            .find(|arg| {
+                arg.label
+                    .as_ref()
+                    .is_some_and(|label| label.as_str() == "function_name")
+            })
+            .or_else(|| args.get(1));
+        let Some(function_name_arg) = function_name_arg else {
+            return Vec::new();
+        };
+        let Expr::Literal(baml_base::Literal::String(function_name)) =
+            &body.exprs[function_name_arg.expr]
+        else {
+            return Vec::new();
+        };
+
+        let mut path: Vec<Name> = function_name.split('.').map(Name::new).collect();
+        let Some(function_name) = path.pop() else {
+            return Vec::new();
+        };
+        let namespace = if path.is_empty() {
+            self.ns_context.as_slice()
+        } else {
+            if path
+                .first()
+                .is_some_and(|segment| segment.as_str() == "root")
+            {
+                path.remove(0);
+            }
+            path.as_slice()
+        };
+        let Some(Definition::Function(target)) =
+            self.package_items.lookup_value(namespace, &function_name)
+        else {
+            return Vec::new();
+        };
+        if baml_compiler2_ppir::item_data::function_llm_meta(db, target).is_none()
+            || !crate::generic_env::function_generic_env(db, target)
+                .source_params()
+                .is_empty()
+        {
+            return Vec::new();
+        }
+
+        let return_type = crate::callable::function_signature_ty(db, target)
+            .return_type
+            .clone();
+        if matches!(return_type, Ty::Unknown { .. } | Ty::Error { .. }) {
+            return Vec::new();
+        }
+        vec![(callee_type_param.clone(), return_type)]
+    }
+
     pub fn check_function_parameter_defaults(
         &mut self,
         params: &[baml_compiler2_ppir::item_data::FunctionParamData],
@@ -6840,6 +6932,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_value_call,
         );
+        let mut runtime_type_arg_binding_seed = self
+            .owner_type_arg_binding_seed
+            .get(&callee)
+            .cloned()
+            .unwrap_or_default();
+        if type_args.is_empty() {
+            runtime_type_arg_binding_seed.extend(self.implicit_llm_companion_type_arg_seed(
+                callee,
+                args,
+                body,
+                &callee_generic_params,
+            ));
+        }
 
         let checked = self.check_call_inner(CallCheckRequest {
             context: CallContext {
@@ -6856,11 +6961,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             explicit_type_args,
             callee_expr: Some(callee),
             runtime_generic_layout,
-            runtime_type_arg_binding_seed: self
-                .owner_type_arg_binding_seed
-                .get(&callee)
-                .cloned()
-                .unwrap_or_default(),
+            runtime_type_arg_binding_seed,
             rigid_self_var: self.self_pinned_rigid_var.get(&callee).cloned(),
         });
 
