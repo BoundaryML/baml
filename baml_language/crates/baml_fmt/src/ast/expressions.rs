@@ -4313,9 +4313,9 @@ pub enum ObjectFieldKey {
 impl FromCST for ObjectFieldKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
-                Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?))
-            }
+            // `client` (KW_CLIENT) is a keyword but a valid field name, e.g.
+            // `Agent { client: ... }` — mirror `parse_object_field`.
+            kind if t::is_word_like(kind) => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
             SyntaxKind::STRING_LITERAL => {
                 Ok(ObjectFieldKey::String(t::QuotedString::from_cst(elem)?))
             }
