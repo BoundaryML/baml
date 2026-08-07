@@ -7,6 +7,18 @@
 /// Users never construct `Type` directly; they receive `type` values via
 /// `type.of<User>()` and call methods on them.
 class TypeValue {
+    /// Construct an array type whose element is this type.
+    //baml:mut_vm
+    function array(self) -> baml.reflect.array.Type throws never { $rust_function }
+
+    /// Construct the canonical union of this type and null.
+    //baml:mut_vm
+    function optional(self) -> baml.reflect.union.Type throws never { $rust_function }
+
+    /// Render deterministic canonical BAML source for this definition.
+    //baml:vm
+    function to_baml(self) -> string throws never { $rust_function }
+
     /// Returns the precise kind view of this type value. The view preserves
     /// the receiver's mint identity.
     //baml:vm

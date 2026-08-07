@@ -66,6 +66,7 @@ pub(crate) trait PullSink {
     /// proved the `baml_type::typetag` constant `tag` a sound substitute for
     /// the structural check, so the test is the tag comparison itself.
     fn is_type_tag(&mut self, tag: i64) -> Result<(), Self::Error>;
+    fn runtime_is_type(&mut self) -> Result<(), Self::Error>;
     /// Materialize an `Object::Type` from a `TyTemplate` constant.
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
@@ -434,6 +435,14 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::IsTypeTag { operand, tag } => {
             walk_operand_pull(sink, operand)?;
             sink.is_type_tag(*tag)
+        }
+        Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            walk_operand_pull(sink, operand)?;
+            walk_operand_pull(sink, type_value)?;
+            sink.runtime_is_type()
         }
         Rvalue::MakeClosure {
             lambda_idx,

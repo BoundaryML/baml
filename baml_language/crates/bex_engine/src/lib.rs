@@ -160,9 +160,11 @@ const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
 /// The definition metadata is copied into the sys-op context for prompt/SAP
 /// work. Handles keep the corresponding heap definitions rooted while an
 /// asynchronous sys-op has released the VM's heap permit, and form the landing
-/// side table used to allocate parsed values with the original enum identity.
+/// side table used to allocate parsed values with their original nominal identity.
 #[derive(Default)]
 struct RuntimeTypeOverlay {
+    class_definitions: indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    class_handles: indexmap::IndexMap<String, bex_external_types::Handle>,
     enum_definitions: indexmap::IndexMap<baml_type::TypeName, sys_types::EnumDefinition>,
     enum_handles: indexmap::IndexMap<String, bex_external_types::Handle>,
 }
@@ -2140,6 +2142,26 @@ impl BexEngine {
         }
     }
 
+    fn class_definition(class: &bex_vm_types::Class) -> sys_types::ClassDefinition {
+        sys_types::ClassDefinition {
+            name: class.name.display_name().to_string(),
+            description: class.description.clone(),
+            alias: class.alias.clone(),
+            fields: class
+                .fields
+                .iter()
+                .filter(|field| !field.skip)
+                .map(|field| sys_types::ClassFieldDefinition {
+                    name: field.name.clone(),
+                    field_type: field.field_type.clone(),
+                    description: field.description.clone(),
+                    alias: field.alias.clone(),
+                    skip: field.skip,
+                })
+                .collect(),
+        }
+    }
+
     /// Gather runtime definitions from the type descriptors passed directly
     /// to a sys-op. Type arguments are lowered as ordinary `Object::Type`
     /// arguments, so this is the last synchronous chokepoint before the permit
@@ -2157,6 +2179,23 @@ impl BexEngine {
             let Object::Type(type_value) = (unsafe { type_ptr.get() }) else {
                 continue;
             };
+            for (name, class_ptr) in &type_value.defs().classes {
+                let Object::Class(class) = (unsafe { class_ptr.get() }) else {
+                    debug_assert!(
+                        false,
+                        "dynamic class definition must point to Object::Class"
+                    );
+                    continue;
+                };
+                overlay
+                    .class_definitions
+                    .entry(name.clone())
+                    .or_insert_with(|| Self::class_definition(class));
+                overlay
+                    .class_handles
+                    .entry(name.to_string())
+                    .or_insert_with(|| self.heap.create_handle(*class_ptr));
+            }
             for (name, enum_ptr) in &type_value.defs().enums {
                 let Object::Enum(enm) = (unsafe { enum_ptr.get() }) else {
                     debug_assert!(false, "dynamic enum definition must point to Object::Enum");
@@ -5291,10 +5330,11 @@ impl BexEngine {
                                         host_ret_ty.as_ref(),
                                     )?
                                 } else {
-                                    self.convert_external_to_vm_value_with_dynamic_enums(
+                                    self.convert_external_to_vm_value_with_dynamic_types(
                                         &mut thread,
                                         external,
                                         None,
+                                        &runtime_type_overlay.class_handles,
                                         &runtime_type_overlay.enum_handles,
                                     )?
                                 };
@@ -5681,6 +5721,15 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        if !runtime_type_overlay.class_definitions.is_empty() {
+            let mut class_definitions = runtime_type_overlay.class_definitions.clone();
+            for (name, definition) in self.sys_op_ctx.class_definitions.iter() {
+                class_definitions
+                    .entry(name.clone())
+                    .or_insert_with(|| definition.clone());
+            }
+            ctx.class_definitions = Arc::new(class_definitions);
+        }
         if !runtime_type_overlay.enum_definitions.is_empty() {
             let mut enum_definitions = runtime_type_overlay.enum_definitions.clone();
             for (name, definition) in self.sys_op_ctx.enum_definitions.iter() {

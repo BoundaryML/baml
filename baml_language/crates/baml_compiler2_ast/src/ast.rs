@@ -1226,6 +1226,9 @@ pub enum Pattern {
     /// is irrefutable against scrutinee `int` but refutable against `int|str`.
     /// Cannot carry a `: T` ascription.
     Type(TypeExpr),
+    /// `unreflect(expr)` — identity-filter against a runtime minted type.
+    /// This pattern narrows no static shape; its operand is checked as `type`.
+    Unreflect(ExprId),
 
     // ── Combinators (combine other patterns) ─────────────────────────────
     /// `p1 | p2 | ...` — alternation. Length always `>= 2`. Every alternative
@@ -1289,7 +1292,7 @@ impl Pattern {
         out: &mut Vec<&'a Name>,
     ) {
         match self {
-            Pattern::Wildcard | Pattern::Type(_) => {}
+            Pattern::Wildcard | Pattern::Type(_) | Pattern::Unreflect(_) => {}
             Pattern::Bind { name, subpat } => {
                 out.push(name);
                 if let Some(sp) = subpat {

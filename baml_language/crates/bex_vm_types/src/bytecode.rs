@@ -860,6 +860,13 @@ pub enum Instruction {
     /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
+
+    /// Compare a value's runtime nominal mint with an `Object::Type` mint.
+    /// Stack: `[value, type_value] -> [bool]`.
+    ///
+    /// Appended to preserve the serialized discriminants of existing
+    /// instructions.
+    RuntimeIsType,
 }
 
 /// Compact bytecode opcodes.
@@ -1043,6 +1050,9 @@ pub enum OpCode {
     // u32 interface-field index; receiver and interface type come off the stack.
     VirtualLoadField,
     VirtualStoreField,
+
+    // Runtime nominal identity test, appended to preserve discriminants.
+    RuntimeIsType,
 }
 
 impl OpCode {
@@ -1062,6 +1072,7 @@ impl OpCode {
             | Self::CallIndirectWithRuntimeId
             | Self::Discriminant
             | Self::TypeTag
+            | Self::RuntimeIsType
             | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
@@ -1207,6 +1218,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
+            x if x == Self::RuntimeIsType as u8 => Ok(Self::RuntimeIsType),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
@@ -1344,6 +1356,7 @@ impl std::fmt::Display for OpCode {
             Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
+            Self::RuntimeIsType => "RUNTIME_IS_TYPE",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1660,6 +1673,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::RuntimeIsType => f.write_str("RUNTIME_IS_TYPE"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
                 write!(f, "NARROW_BIND {ty} {destination}")
@@ -2105,6 +2119,7 @@ impl Bytecode {
                 | Instruction::CallIndirectWithRuntimeId
                 | Instruction::Discriminant
                 | Instruction::TypeTag
+                | Instruction::RuntimeIsType
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
@@ -2467,6 +2482,7 @@ impl Bytecode {
             Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
+            Instruction::RuntimeIsType => OpCode::RuntimeIsType,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,

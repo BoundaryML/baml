@@ -4,6 +4,21 @@ class Field {
   meta baml.reflect.Meta
 }
 
+/// Construct a closed runtime class. Map iteration order is definition order.
+//baml:mut_vm
+function new(
+  name: string,
+  fields: map<string, type | baml.reflect.WithMeta<type>>,
+) -> Type throws baml.reflect.errors.CompilationError {
+  $rust_function
+}
+
+/// Assert-read a named field from a runtime-shaped class instance.
+//baml:mut_vm
+function get_field<T>(value: unknown, name: string) -> T throws baml.reflect.errors.CompilationError {
+  $rust_function
+}
+
 /// A class-kind view of a `type` value. Users never construct this class.
 class Type {
   implements baml.reflect.TypeView {

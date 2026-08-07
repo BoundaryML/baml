@@ -35,6 +35,17 @@ function stringify_pretty(j json) -> string throws never {
   $rust_function
 }
 
+/// Encode a value using its concrete runtime shape.
+///
+/// Unlike `to_string<T>`, this entry point deliberately accepts `unknown` and
+/// discovers runtime-created classes through the instance's authoritative
+/// class pointer. This is the whole-value escape hatch for values returned
+/// from `unreflect(...)` calls.
+//baml:mut_vm
+function encode(v: unknown) -> string throws JsonSerializationError {
+  $rust_function
+}
+
 /// Serialize any BAML value `v` of type `T` to its canonical JSON string.
 ///
 /// The type argument `T` is delivered to the native handler at runtime via

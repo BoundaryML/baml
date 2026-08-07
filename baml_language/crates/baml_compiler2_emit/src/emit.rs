@@ -811,6 +811,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
                 self.place_reads_spawn_captured_local(place, seen)
             }
+            Rvalue::RuntimeIsType {
+                operand,
+                type_value,
+            } => {
+                self.operand_reads_spawn_captured_local(operand, seen)
+                    || self.operand_reads_spawn_captured_local(type_value, seen)
+            }
             Rvalue::IsType { operand, .. }
             | Rvalue::IsTypeTag { operand, .. }
             | Rvalue::MakeBoundMethod {
@@ -3525,6 +3532,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
             other => format!("type tag {other}"),
         };
         self.set_operand(inst, OperandMeta::Const(meta));
+        Ok(())
+    }
+
+    fn runtime_is_type(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::RuntimeIsType);
         Ok(())
     }
 

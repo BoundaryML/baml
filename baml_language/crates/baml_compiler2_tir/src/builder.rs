@@ -9145,7 +9145,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn pattern_expected_ty(&mut self, pat_id: PatId, body: &ExprBody) -> Option<PatternExpectedTy> {
         let ty = match &body.patterns[pat_id].clone() {
             // No constraint contributed.
-            ast::Pattern::Wildcard => return None,
+            ast::Pattern::Wildcard | ast::Pattern::Unreflect(_) => return None,
             // `let x` → no constraint; `let x: <subpat>` → defer.
             ast::Pattern::Bind { subpat, .. } => {
                 return subpat.and_then(|sp| self.pattern_expected_ty(sp, body));
@@ -9252,7 +9252,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             ast::Pattern::Or(parts) => parts
                 .iter()
                 .any(|part| Self::pattern_contains_structural_syntax(*part, body)),
-            ast::Pattern::Wildcard | ast::Pattern::Bind { .. } | ast::Pattern::Type(_) => false,
+            ast::Pattern::Wildcard
+            | ast::Pattern::Bind { .. }
+            | ast::Pattern::Type(_)
+            | ast::Pattern::Unreflect(_) => false,
         }
     }
 
@@ -15943,7 +15946,9 @@ impl TypeInferenceBuilder<'_> {
         // …` / `for x in …` so the savings are material.
         if matches!(
             body.patterns[pat_id],
-            ast::Pattern::Wildcard | ast::Pattern::Bind { subpat: None, .. }
+            ast::Pattern::Wildcard
+                | ast::Pattern::Bind { subpat: None, .. }
+                | ast::Pattern::Unreflect(_)
         ) {
             return;
         }
@@ -16651,7 +16656,7 @@ impl TypeInferenceBuilder<'_> {
             return cached.clone();
         }
         let result = match &body.patterns[pat_id].clone() {
-            ast::Pattern::Wildcard => unconstrained.clone(),
+            ast::Pattern::Wildcard | ast::Pattern::Unreflect(_) => unconstrained.clone(),
             // `let x` → unconstrained; `let x: <pattern>` → recurse.
             ast::Pattern::Bind { subpat, .. } => match subpat {
                 Some(sp) => self.pattern_natural_type(*sp, body, unconstrained),
@@ -16741,6 +16746,29 @@ impl TypeInferenceBuilder<'_> {
                 self.lower_bind_pat(pat_id, name.clone(), *subpat, scrut_ty, body, at_expr)
             }
             ast::Pattern::Type(t) => self.lower_type_pat(t, pat_id, scrut_ty, at_expr),
+            ast::Pattern::Unreflect(operand) => {
+                let expected = Ty::Type {
+                    attr: TyAttr::default(),
+                };
+                self.check_expr(*operand, body, &expected);
+                crate::pattern_lowering::PatternResult {
+                    // A runtime identity filter may overlap any nominal value,
+                    // but cannot prove coverage of a static alphabet. Give
+                    // each source pattern its own synthetic rigid singleton:
+                    // the usefulness matrix treats rigid singletons as
+                    // possible-but-not-covering, while distinct pattern ids
+                    // prevent two independent runtime predicates from being
+                    // mistaken for duplicate (and therefore unreachable)
+                    // static constructors.
+                    dpat: crate::exhaustiveness::DPat::single(
+                        Ty::type_var(&format!("$unreflect${pat_id:?}")),
+                        scrut_ty.clone(),
+                    ),
+                    required_ty: None,
+                    matched_ty: scrut_ty.clone(),
+                    bindings: Vec::new(),
+                }
+            }
             ast::Pattern::Class {
                 class,
                 generic_args,
@@ -17568,6 +17596,7 @@ impl TypeInferenceBuilder<'_> {
         match &body.patterns[pat] {
             ast::Pattern::Wildcard => true,
             ast::Pattern::Type(_) => in_chain,
+            ast::Pattern::Unreflect(_) => false,
             ast::Pattern::Bind { subpat, .. } => match subpat {
                 None => true,
                 Some(sp) => Self::rest_subpattern_is_binding_shaped(body, *sp, true),

@@ -859,6 +859,7 @@ mod tests {
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
+            runtime_type: None,
         }))
     }
 

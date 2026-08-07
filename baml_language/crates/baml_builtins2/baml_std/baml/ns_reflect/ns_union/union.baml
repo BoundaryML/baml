@@ -1,3 +1,8 @@
+//baml:mut_vm
+function new(types: type[]) -> Type throws baml.reflect.errors.CompilationError {
+  $rust_function
+}
+
 /// A union-kind view of a `type` value. Users never construct this class.
 class Type {
   implements baml.reflect.TypeView {

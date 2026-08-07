@@ -602,12 +602,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
             }
-            ast::Expr::Is { scrutinee, .. } => {
+            ast::Expr::Is { scrutinee, pattern } => {
                 // `<expr> is <pattern>` is a one-shot pattern test that yields
                 // `bool`. Pattern bindings do NOT escape into the surrounding
-                // scope (use `match` / `let` if you need that). Type
-                // references inside the pattern are resolved later by TIR.
+                // scope (use `match` / `let` if you need that). Runtime
+                // `unreflect(expr)` operands are ordinary expressions in the
+                // enclosing scope and therefore need the normal HIR path walk.
                 self.walk_expr(*scrutinee, body, source_map, true);
+                self.walk_pattern_expressions(*pattern, body, source_map);
             }
             ast::Expr::Catch { base, clauses } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -831,6 +833,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
         visible_from: TextSize,
     ) {
+        // Evaluate expression-bearing pattern atoms (currently
+        // `unreflect(expr)`) in the scope surrounding the bindings. This runs
+        // before any names from this pattern are installed, so a pattern
+        // cannot accidentally refer to a binding it is in the act of
+        // declaring.
+        self.walk_pattern_expressions(pat_id, body, source_map);
+
         // Walk the pattern structurally. `collect_pattern_names` returns the
         // set of names introduced and emits diagnostics for duplicate names
         // and Or-alternative mismatches as it goes.
@@ -858,6 +867,51 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    fn walk_pattern_expressions(
+        &mut self,
+        pat_id: ast::PatId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        match &body.patterns[pat_id] {
+            ast::Pattern::Unreflect(operand) => {
+                self.walk_expr(*operand, body, source_map, true);
+            }
+            ast::Pattern::Bind { subpat, .. } => {
+                if let Some(subpat) = subpat {
+                    self.walk_pattern_expressions(*subpat, body, source_map);
+                }
+            }
+            ast::Pattern::Class { fields, .. } => {
+                for field in fields {
+                    self.walk_pattern_expressions(field.pat, body, source_map);
+                }
+            }
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ..
+            } => {
+                for pattern in prefix {
+                    self.walk_pattern_expressions(*pattern, body, source_map);
+                }
+                if let Some(pattern) = rest.as_ref().and_then(|rest| rest.pat) {
+                    self.walk_pattern_expressions(pattern, body, source_map);
+                }
+                for pattern in suffix {
+                    self.walk_pattern_expressions(*pattern, body, source_map);
+                }
+            }
+            ast::Pattern::Or(patterns) => {
+                for pattern in patterns {
+                    self.walk_pattern_expressions(*pattern, body, source_map);
+                }
+            }
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => {}
+        }
+    }
+
     /// Recursively walk a pattern and return the set of names it introduces
     /// into scope, paired with the source range of each binding's first
     /// occurrence. Emits diagnostics in two situations:
@@ -877,7 +931,9 @@ impl<'db> SemanticIndexBuilder<'db> {
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) -> PatternNames {
         match &patterns[pat_id] {
-            ast::Pattern::Wildcard | ast::Pattern::Type(_) => PatternNames::default(),
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) | ast::Pattern::Unreflect(_) => {
+                PatternNames::default()
+            }
             ast::Pattern::Bind { name, subpat } => {
                 let mut result = PatternNames::default();
                 result

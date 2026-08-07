@@ -387,6 +387,13 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
                 scan_operand(operand, set);
             }
+            crate::Rvalue::RuntimeIsType {
+                operand,
+                type_value,
+            } => {
+                scan_operand(operand, set);
+                scan_operand(type_value, set);
+            }
             crate::Rvalue::MakeClosure { captures, .. } => {
                 for cap in captures {
                     scan_operand(cap, set);
@@ -682,6 +689,13 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::Len(p) => count_in_place(p, uses),
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             count_in_operand(operand, uses);
+        }
+        crate::Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            count_in_operand(operand, uses);
+            count_in_operand(type_value, uses);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
@@ -1044,6 +1058,13 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             apply_subst_to_operand(operand, subst);
         }
+        crate::Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            apply_subst_to_operand(operand, subst);
+            apply_subst_to_operand(type_value, subst);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 apply_subst_to_operand(cap, subst);
@@ -1340,6 +1361,13 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             remap_operand(operand, map);
         }
+        crate::Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            remap_operand(operand, map);
+            remap_operand(type_value, map);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 remap_operand(cap, map);
@@ -1611,6 +1639,13 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::IsType { operand, .. }
                         | crate::Rvalue::IsTypeTag { operand, .. } => {
                             check_operand(operand, &blk);
+                        }
+                        crate::Rvalue::RuntimeIsType {
+                            operand,
+                            type_value,
+                        } => {
+                            check_operand(operand, &blk);
+                            check_operand(type_value, &blk);
                         }
                         crate::Rvalue::MakeClosure { captures, .. } => {
                             for cap in captures {

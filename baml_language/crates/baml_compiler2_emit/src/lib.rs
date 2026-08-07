@@ -3218,6 +3218,7 @@ fn emit_file_group(
                     docstring: meta.docstring,
                     other: meta.other,
                     skip: meta.skip,
+                    runtime_type: None,
                 });
             }
 
@@ -3289,6 +3290,7 @@ fn emit_file_group(
                 ty_attr: TyAttr::default(),
                 has_cleanup,
                 generic_param_count: class.generic_params.len(),
+                runtime_type: None,
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
@@ -3388,6 +3390,7 @@ fn emit_file_group(
                 docstring: enum_meta.docstring,
                 other: enum_meta.other,
                 ty_attr: TyAttr::default(),
+                runtime_type: None,
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
             program_packages

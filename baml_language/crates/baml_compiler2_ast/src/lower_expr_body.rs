@@ -1827,6 +1827,7 @@ impl LoweringContext {
             SyntaxKind::DESTRUCTURE_PATTERN => self.lower_destructure_pattern(node),
             SyntaxKind::ARRAY_PATTERN => self.lower_array_pattern(node),
             SyntaxKind::TYPE_PATTERN => self.lower_type_pattern(node),
+            SyntaxKind::UNREFLECT_PATTERN => self.lower_unreflect_pattern(node),
             SyntaxKind::PAREN_PATTERN => {
                 match node.children().find(|n| n.kind() == SyntaxKind::PATTERN) {
                     Some(inner) => self.lower_pattern(&inner),
@@ -1948,7 +1949,7 @@ impl LoweringContext {
                     );
                 }
             }
-            Pattern::Wildcard => {}
+            Pattern::Wildcard | Pattern::Unreflect(_) => {}
             Pattern::Bind { subpat, .. } => {
                 if let Some(sp) = subpat {
                     self.check_pattern_void_in_annotation(sp, context);
@@ -1970,6 +1971,25 @@ impl LoweringContext {
         };
         let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr, &mut self.diags);
         self.alloc_pattern(Pattern::Type(ty), node.span_range())
+    }
+
+    fn lower_unreflect_pattern(&mut self, node: &SyntaxNode) -> PatId {
+        let operand = node
+            .children()
+            .next()
+            .map(|expr| self.lower_expr(&expr))
+            .or_else(|| {
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| {
+                        !token.kind().is_trivia()
+                            && !matches!(token.kind(), SyntaxKind::L_PAREN | SyntaxKind::R_PAREN)
+                            && token.text() != "unreflect"
+                    })
+                    .and_then(|token| self.try_lower_bare_token(&token))
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        self.alloc_pattern(Pattern::Unreflect(operand), node.span_range())
     }
 
     /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).

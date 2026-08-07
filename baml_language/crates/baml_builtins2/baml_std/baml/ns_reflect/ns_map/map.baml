@@ -1,3 +1,8 @@
+//baml:mut_vm
+function new(key: type, value: type) -> Type throws never {
+  $rust_function
+}
+
 /// A map-kind view of a `type` value. Users never construct this class.
 class Type {
   implements baml.reflect.TypeView {

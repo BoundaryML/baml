@@ -16,28 +16,41 @@ use crate::HeapPtr;
 /// Runtime schema definitions carried by a minted `type` value.
 ///
 /// The map is a per-value overlay, never a process/global registry. Heap
-/// pointers keep the ordinary `Object::Enum` definitions authoritative for
-/// reflection and parsed variants; the owning `Object::Type` traces them.
+/// pointers keep the ordinary `Object::Class` and `Object::Enum` definitions
+/// authoritative for reflection and parsed values; the owning `Object::Type`
+/// traces them.
 #[derive(Debug, Clone, Default)]
 pub struct DynTypeDefs {
+    pub classes: IndexMap<QualifiedTypeName, HeapPtr>,
     pub enums: IndexMap<QualifiedTypeName, HeapPtr>,
 }
 
 impl DynTypeDefs {
+    pub fn with_class(name: QualifiedTypeName, ptr: HeapPtr) -> Self {
+        Self {
+            classes: IndexMap::from([(name, ptr)]),
+            enums: IndexMap::new(),
+        }
+    }
+
     pub fn with_enum(name: QualifiedTypeName, ptr: HeapPtr) -> Self {
         Self {
+            classes: IndexMap::new(),
             enums: IndexMap::from([(name, ptr)]),
         }
     }
 
     pub fn merge_from(&mut self, other: &Self) {
+        for (name, ptr) in &other.classes {
+            self.classes.entry(name.clone()).or_insert(*ptr);
+        }
         for (name, ptr) in &other.enums {
             self.enums.entry(name.clone()).or_insert(*ptr);
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.enums.is_empty()
+        self.classes.is_empty() && self.enums.is_empty()
     }
 }
 
@@ -62,6 +75,17 @@ pub enum MintId {
     /// constructors land in slice 2 — but the variant is part of the
     /// equality/hash contract now so the semantics cannot drift.
     Runtime(u64),
+}
+
+/// Provenance retained by a runtime-created nominal definition.
+///
+/// The definition itself cannot include its own pointer, so `defs` contains
+/// only dependencies. `type.of_value` adds the instance/variant's definition
+/// pointer back when reconstructing the original minted type value.
+#[derive(Debug, Clone)]
+pub struct RuntimeTypeProvenance {
+    pub mint: MintId,
+    pub defs: DynTypeDefs,
 }
 
 /// What an `Object::Type` wraps: the described type and its identity.
