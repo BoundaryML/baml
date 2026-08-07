@@ -8661,6 +8661,14 @@ impl<'db> LoweringContext<'db> {
             arg_operands.clone()
         };
 
+        // Lowering nested argument expressions temporarily installs their
+        // spans. The call terminator itself must always carry the enclosing
+        // call expression so runtime-native diagnostics point at `.field(...)`
+        // rather than at the final nested argument (for example `type.of<int>()`).
+        if let Some(span) = self.span_for_expr(expr_id) {
+            self.builder.current_source_span = Some(span);
+        }
+
         // BEP-034 `baml.future.__await_any(futures)` lowers to a dedicated
         // `Terminator::AwaitAny` suspend point (like `await`), not a call.
         if self.check_await_any(callee) {

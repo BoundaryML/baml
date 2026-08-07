@@ -2574,13 +2574,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &mut diags,
                 ),
                 ast::TypeArg::Unreflect(operand) => {
-                    self.check_expr(
-                        *operand,
-                        body,
-                        &Ty::Type {
-                            attr: TyAttr::default(),
-                        },
-                    );
+                    let operand_ty = self.infer_expr(*operand, body);
+                    let pending_type = matches!(&operand_ty, Ty::Class(name, _, _)
+                        if name.package().as_str() == "baml"
+                            && name.namespace().iter().map(Name::as_str).eq(["reflect", "class"])
+                            && name.name().as_str() == "PendingType");
+                    if !pending_type
+                        && !matches!(
+                            operand_ty,
+                            Ty::Type { .. }
+                                | Ty::Unknown { .. }
+                                | Ty::BuiltinUnknown { .. }
+                                | Ty::Error { .. }
+                        )
+                    {
+                        self.context.report(
+                            TirTypeError::TypeMismatch {
+                                expected: Ty::Type {
+                                    attr: TyAttr::default(),
+                                },
+                                got: operand_ty,
+                            },
+                            *operand,
+                            Vec::new(),
+                        );
+                    }
                     Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
                     }
