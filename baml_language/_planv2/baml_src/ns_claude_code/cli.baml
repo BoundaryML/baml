@@ -9,6 +9,10 @@ class ClaudeCodeClient {
     timeout_ms: int,
     permission_mode: string,
     harness_tools: string[], // Claude Code's OWN tools; BAML tools use the envelope
+    // MCP servers attached to the harness, name -> config (the value shape of
+    // an .mcp.json "mcpServers" entry). The map is read fresh on every
+    // invoke, so an entry added between turns attaches on the next turn.
+    mcp_servers: map<string, json>,
 
     function new(
         model: string = "haiku",
@@ -17,7 +21,9 @@ class ClaudeCodeClient {
         timeout_ms: int = 240000,
         permission_mode: string = "default",
         harness_tools: string[] = [],
+        mcp_servers: map<string, json>? = null,
     ) -> ClaudeCodeClient {
+        let servers: map<string, json> = {};
         ClaudeCodeClient {
             executable: executable,
             model: model,
@@ -25,6 +31,7 @@ class ClaudeCodeClient {
             timeout_ms: timeout_ms,
             permission_mode: permission_mode,
             harness_tools: harness_tools,
+            mcp_servers: mcp_servers ?? servers,
         }
     }
 

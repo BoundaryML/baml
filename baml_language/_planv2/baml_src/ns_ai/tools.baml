@@ -11,7 +11,11 @@ class Tool {
     name: string,
     description: string,
     input_schema: map<string, unknown>, // JSON Schema for the arguments object
-    handler: baml.AnyFunction,
+    handler: baml.AnyFunction?, // signature-derived dispatch; null for raw tools
+    // Dynamic-source dispatch: the handler receives the validated-by-schema
+    // argument map as one value. Set by raw_tool() when the schema does not
+    // derive from a BAML signature (MCP servers, OpenAPI specs).
+    raw_handler: ((map<string, unknown>) -> string throws unknown)?,
     on_error: ToolErrorMode?, // null: inherit the run's tool_errors mode
 
     // The total boundary around one call: validate, dispatch through
@@ -19,12 +23,19 @@ class Tool {
     // run's. The reflection boundary widens exactly representable integral
     // arguments into float parameters (see reflect.call_any).
     function call(self, args: map<string, unknown>) -> string {
-        let value = reflect.call_any(self.handler, args) catch (e) {
-            let bad: reflect.InvalidArgumentError => {
-                throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
-            },
-        };
-        baml.json.stringify(baml.json.to_json(value))
+        if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler {
+            return rh(args);
+        }
+        if let h: baml.AnyFunction = self.handler {
+            let value = reflect.call_any(h, args) catch (e) {
+                let bad: reflect.InvalidArgumentError => {
+                    throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
+                },
+            };
+            baml.json.stringify(baml.json.to_json(value))
+        } else {
+            throw baml.errors.InvalidArgument { message: `tool ${self.name} has no handler` }
+        }
     }
 }
 
@@ -46,10 +57,35 @@ function tool(
             description: description ?? sig.docstring ?? "",
             input_schema: root.ai.internal._schema_for_signature(handler),
             handler: handler,
+            raw_handler: null,
             on_error: on_error,
         }
     } else {
         throw baml.errors.InvalidArgument { message: "anonymous tool needs a name" }
+    }
+}
+
+// The constructor for tools whose schema does not derive from a BAML
+// signature: the caller supplies the JSON Schema and a handler over the raw
+// argument map. This is how dynamic tool sources (MCP servers) become
+// ordinary tools.
+function raw_tool(
+    name: string,
+    description: string,
+    input_schema: map<string, unknown>,
+    handler: (map<string, unknown>) -> string throws unknown,
+    on_error: ToolErrorMode? = null,
+) -> Tool {
+    if (name == "__baml_return_output") {
+        throw baml.errors.InvalidArgument { message: "the tool name __baml_return_output is reserved" }
+    }
+    Tool {
+        name: name,
+        description: description,
+        input_schema: input_schema,
+        handler: null,
+        raw_handler: handler,
+        on_error: on_error,
     }
 }
 
@@ -82,5 +118,4 @@ class Toolbox {
         self.entries.length() == 0
     }
 }
-
 

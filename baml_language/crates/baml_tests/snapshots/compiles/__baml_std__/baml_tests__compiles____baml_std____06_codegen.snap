@@ -6395,6 +6395,60 @@ function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spa
     return
 }
 
+function baml.sys.Process.close(self: baml.sys.Process) -> null {
+}
+
+function baml.sys.Process.close_stdin(self: baml.sys.Process) -> null {
+}
+
+function baml.sys.Process.kill(self: baml.sys.Process) -> null {
+}
+
+function baml.sys.Process.wait(self: baml.sys.Process) -> baml.sys.ProcessExit {
+}
+
+function baml.sys.Process.write_stdin(self: baml.sys.Process, data: string) -> null {
+}
+
+function baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
+    load_var self
+    load_field .exit_code
+    load_const 0
+    cmp_int_op ==
+    return
+}
+
+function baml.sys.ProcessLineStream._next(self: baml.sys.ProcessLineStream) -> string | null {
+}
+
+function baml.sys.ProcessLineStream.close(self: baml.sys.ProcessLineStream) -> null {
+}
+
+function baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Item = string, Error = baml.errors.Io | baml.errors.Timeout> {
+    load_var self
+    return
+}
+
+function baml.sys.ProcessLineStream.root.iter.Iterator.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done {
+    load_var self
+    sys_op baml.sys.ProcessLineStream._next
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    alloc_instance baml.iter.Done
+    jump L2
+
+  L1:
+    load_var _3
+
+  L2:
+    return
+}
+
 function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
     load_var self
     load_field .exit_code
@@ -6425,6 +6479,9 @@ function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null
 }
 
 function baml.sys.sleep(delay: baml.time.Duration) -> null {
+}
+
+function baml.sys.start_process(program: string, args: string[] | null, options: baml.sys.ProcessOptions | null) -> baml.sys.Process {
 }
 
 function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {

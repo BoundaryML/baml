@@ -242,14 +242,13 @@ function google_parse(resp: GmResponse, seq: int) -> root.ai.ModelTurn {
                             if let a: map<string, unknown> = fc.args {
                                 args = a;
                             }
-                            content
-                                .push(
-                                    root.ai.ToolUse {
-                                        id: `call_${seq}_${call_index}`,
-                                        name: fc.name,
-                                        args: args,
-                                    },
-                                );
+                            content.push(
+                                root.ai.ToolUse {
+                                    id: `call_${seq}_${call_index}`,
+                                    name: fc.name,
+                                    args: args,
+                                },
+                            );
                             call_index += 1;
                             has_call = true;
                             null

@@ -3058,6 +3058,7 @@ class baml.sys.ProcessOptions {
   env: map<string, string> | null
   timeout_ms: int | null
   stdin: string | null
+  keep_stdin_open: bool | null
 }
 class baml.sys.ShellOutput {
   stdout: uint8array
@@ -3069,16 +3070,58 @@ function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool throws neve
     self.exit_code == 0 : bool
   }
 }
+class baml.sys.ProcessExit {
+  exit_code: int
+  signal: string | null
+}
+function baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool throws never {
+  { : bool
+    self.exit_code == 0 : bool
+  }
+}
+class baml.sys.ProcessLineStream {
+  _handle: $rust_type
+}
+function baml.sys.ProcessLineStream.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Item = string, Error = baml.errors.Io | baml.errors.Timeout> throws never {
+  { : baml.sys.ProcessLineStream
+    self : baml.sys.ProcessLineStream
+  }
+}
+function baml.sys.ProcessLineStream.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done throws baml.errors.Io | baml.errors.Timeout {
+  { : string | baml.iter.Done
+    match (self._next() : string | null) : string | baml.iter.Done
+      line: string =>
+        line : string
+      null =>
+        root.iter.Done {  } : baml.iter.Done
+  }
+}
+class baml.sys.Process {
+  stdout: baml.sys.ProcessLineStream
+  _handle: $rust_type
+}
 class baml.sys.ProcessOptions$stream {
   cwd: string | null
   env: map<string, string> | null
   timeout_ms: int | null
   stdin: string | null
+  keep_stdin_open: bool | null
 }
 class baml.sys.ShellOutput$stream {
   stdout: uint8array
   stderr: uint8array
   exit_code: int | null
+}
+class baml.sys.ProcessExit$stream {
+  exit_code: int | null
+  signal: string | null
+}
+class baml.sys.ProcessLineStream$stream {
+  _handle: $rust_type
+}
+class baml.sys.Process$stream {
+  stdout: baml.sys.ProcessLineStream$stream | null
+  _handle: $rust_type
 }
 
 --- <builtin>/baml/ns_time/duration.baml ---

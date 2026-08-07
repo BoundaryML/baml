@@ -379,6 +379,7 @@ BEP:
 | `baml.sap.parse<T>(text: string) -> T` | the runner's final parse; custom runners |
 | `baml.json.parse` / `stringify` / `from_json<T>` / `from_string<T>` | clients, everywhere JSON crosses a boundary |
 | `baml.http.Request` / `Response` / `send` / `fetch_sse` | `wire.send_as`; clients that bypass it; streaming later |
+| `baml.sys.exec` / `start_process` | process-transport clients; the Claude Code client streams its event transcript live |
 | `reflect.type_of<T>` / `signature` / `call_any` | tool schema derivation; tool execution |
 | `baml.env.get` / `get_or_panic` | credential resolution in registry factories |
 

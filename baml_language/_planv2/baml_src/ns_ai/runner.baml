@@ -16,9 +16,6 @@ class RunResult<Out> {
     usage: Usage,
 }
 
-
-
-
 // The default runner. `$` parameters at a call site set these fields.
 class Agent<Out> {
     max_steps: int,
@@ -36,7 +33,12 @@ class Agent<Out> {
             max_steps: max_steps,
             client: client,
             tool_errors: tool_errors,
-            on_event: on_event ?? ((e: Event) -> { null }),
+            on_event: on_event
+                ?? (
+                    (e: Event) -> {
+                        null
+                    }
+                ),
         }
     }
 
@@ -72,7 +74,12 @@ class Agent<Out> {
             },
             null => {
                 j.append_all(
-                    [ToolFailed { id: call.id, message: `tool is not in the active toolbox: ${call.name}` }],
+                    [
+                        ToolFailed {
+                            id: call.id,
+                            message: `tool is not in the active toolbox: ${call.name}`,
+                        },
+                    ],
                 );
                 null
             },
@@ -81,7 +88,9 @@ class Agent<Out> {
 
     function _parses(self, candidate: string) -> bool {
         let _ = baml.sap.parse<Out>(candidate) catch_all (e) {
-            _ => return false,
+            _ => {
+                return false;
+            },
         };
         true
     }
@@ -100,15 +109,14 @@ class Agent<Out> {
         total: Usage,
         attempts_left: int,
     ) -> ModelTurn {
-        let turn = c
-            .invoke(
-                ModelTurnInput {
-                    prompt: spec.prompt(),
-                    journal: j,
-                    toolbox: spec.tools(),
-                    output_type: spec.output_type(),
-                },
-            );
+        let turn = c.invoke(
+            ModelTurnInput {
+                prompt: spec.prompt(),
+                journal: j,
+                toolbox: spec.tools(),
+                output_type: spec.output_type(),
+            },
+        );
         if let u: Usage = turn.usage {
             total.input_tokens += u.input_tokens;
             total.output_tokens += u.output_tokens;
@@ -146,12 +154,11 @@ class Agent<Out> {
             };
             turn
         } else if (attempts_left > 1) {
-            batch
-                .push(
-                    UserMessage {
-                        content: "The reply did not match the required schema. Answer again with only the corrected value.",
-                    },
-                );
+            batch.push(
+                UserMessage {
+                    content: "The reply did not match the required schema. Answer again with only the corrected value.",
+                },
+            );
             j.append_all(batch);
             self._attempt_turn(c, spec, j, total, attempts_left - 1)
         } else {
@@ -182,7 +189,14 @@ class Agent<Out> {
             let j = Journal.new(spec);
             let seen = self._emit_from(j, 0);
             let steps = 0;
-            let total = Usage { input_tokens: 0, output_tokens: 0, cached_input_tokens: null, reasoning_tokens: null };
+            let total = Usage {
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_input_tokens: null,
+                reasoning_tokens: null,
+            };
+            // the futility breaker: identical repeated failures stop the run
+            let fail_counts: map<string, int> = {};
             while (steps < self.max_steps) {
                 // repair re-asks happen inside the step: 1 turn + up to 1 re-asks
                 let turn = self._attempt_turn(selected, spec, j, total, 2);
@@ -190,18 +204,53 @@ class Agent<Out> {
                 seen = self._emit_from(j, seen);
                 let calls = turn.tool_uses();
                 if (calls.length() > 0) {
+                    let before = j.entries().length();
                     // execute concurrently; each call appends its correlated result
                     let futures = calls.map((call) -> {
                         spawn { self._run_one_tool(spec.tools(), call, j) }
                     });
                     let _ = await baml.future.all(futures);
                     seen = self._emit_from(j, seen);
+                    // Reporting a failure lets the model adapt; repeating the
+                    // IDENTICAL failing call is futile, and each step can be
+                    // expensive. Three identical failures end the run.
+                    let entries = j.entries();
+                    let i = before;
+                    while (i < entries.length()) {
+                        if let f: ToolFailed = entries.at(i) {
+                            let failed_call = calls.find((one: ToolUse) -> {
+                                one.id == f.id
+                            });
+                            if let known: ToolUse = failed_call {
+                                let key = `${known.name}|${f.message}`;
+                                let n = (fail_counts.get(key) ?? 0) + 1;
+                                let _ = fail_counts.set(key, n);
+                                if (n >= 3) {
+                                    throw root.ai.errors.ToolFailedError {
+                                        id: known.id,
+                                        name: known.name,
+                                        message: `the same tool call failed ${n} times; stopping the run: ${f.message}`,
+                                        cause: null,
+                                    }
+                                }
+                            }
+                        }
+                        i = i + 1;
+                    }
                 } else {
                     let candidate = turn.terminal_text() ?? "";
                     let value = baml.sap.parse<Out>(candidate) catch_all (e) {
-                        _ => throw root.ai.errors.ParseFailed { provider: selected.id(), raw_output: candidate },
+                        _ => {
+                            throw root.ai.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                        },
                     };
-                    j.append_all([FinalProduced { value_json: baml.json.stringify(baml.json.to_json(value)) }]);
+                    j.append_all(
+                        [
+                            FinalProduced {
+                                value_json: baml.json.stringify(baml.json.to_json(value)),
+                            },
+                        ],
+                    );
                     seen = self._emit_from(j, seen);
                     return RunResult { value: value, journal: j, usage: total };
                 }

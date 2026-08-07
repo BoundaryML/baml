@@ -37,14 +37,22 @@ baml_src/
 
 ## Running
 
+Use `../target/debug/baml-cli`, not the brew `baml`: the int-to-float
+widening in `reflect.call_any` and `baml.sys.start_process` exist only
+on this branch, and the released toolchain loops fatally on float tool
+arguments without the widening.
+
 ```bash
 cd _planv2
 ../target/debug/baml-cli check
-../target/debug/baml-cli test          # 9 offline tests, no network
+../target/debug/baml-cli test -x "live::"    # offline tests, no network
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_openai()'
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_anthropic()'
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_google()'
 ../target/debug/baml-cli run -e 'live_claude_code()'   # uses the CLI's own login
+
+# the observable demo: every journal event as a log line
+../target/debug/baml-cli test --logs INFO -i "live::claude code tool loop"
 ```
 
 All three live smokes complete a real tool loop (>= 1 `ToolCompleted`) and
@@ -73,8 +81,8 @@ return a typed `Itinerary`.
 ## Deviations from the BEP pages (to sync back)
 
 1. `client` is a keyword: `spec.client()` cannot exist; the impl exposes the
-   `default_client` field. The `Agent.client` FIELD works (checker +
-   runtime) but crashes `baml fmt` (formatter bug, filed).
+   `default_client` field. The `Agent.client` FIELD works everywhere,
+   including `baml fmt` (the formatter crash is fixed on canary).
 2. `Tool.on_error` is `ToolErrorMode?` where null inherits the run's
    `tool_errors`; this is what makes "per-tool wins" coherent.
 3. `ToolUse.args` is `map<string, unknown>` and `ToolCompleted.output` /
@@ -120,11 +128,16 @@ return a typed `Itinerary`.
 14. The failure taxonomy is its own namespace: `ai.errors` (ns_ai/ns_errors/),
     mirroring `baml.errors` — `root.ai.errors.Failure`, `classify_http`, and
     the classified classes.
-15. `ClaudeCodeClient` is a harness client over `baml.sys.exec` — no HTTP.
+15. `ClaudeCodeClient` is a harness client over `baml.sys.start_process`
+    (ported from the old repo; streams the CLI's full stream-json event
+    transcript live as log lines) — no HTTP.
     The output contract is native (`--json-schema`, `render_text("")`), BAML
-    tools ride the `outcome` envelope, and the protocol line "no tool
-    results yet means outcome MUST be calls" is required in practice: haiku
-    otherwise answers directly and invents data. `session_id` + `--resume`
+    tools ride the `outcome` envelope, and two protocol lines are required
+    in practice: "no tool results yet means outcome MUST be calls" (haiku
+    otherwise answers directly and invents data) and "catalog tools are NOT
+    installed; request via outcome.calls only" (the inner agent otherwise
+    attempts native tool_use calls and burns an internal error round before
+    finding the envelope). `session_id` + `--resume`
     is the phase 3 continuation candidate. The runner still drives the
     loop — the harness's inner episode is an inside-the-turn capability —
     but `max_steps` counts envelope rounds, and with `harness_tools`

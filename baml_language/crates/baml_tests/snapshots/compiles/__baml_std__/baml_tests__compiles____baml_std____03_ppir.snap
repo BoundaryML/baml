@@ -1992,17 +1992,41 @@ class baml.stream.StreamNoYield$stream {
 }
 
 --- <builtin>/baml/ns_sys/sys.baml ---
+class baml.sys.Process {
+  stdout: baml.sys.ProcessLineStream
+  _handle: $rust_type
+}
+class baml.sys.Process$stream {
+  stdout: baml.sys.ProcessLineStream$stream | null
+  _handle: $rust_type
+}
+class baml.sys.ProcessExit {
+  exit_code: int
+  signal: string?
+}
+class baml.sys.ProcessExit$stream {
+  exit_code: int | null
+  signal: string | null
+}
+class baml.sys.ProcessLineStream {
+  _handle: $rust_type
+}
+class baml.sys.ProcessLineStream$stream {
+  _handle: $rust_type
+}
 class baml.sys.ProcessOptions {
   cwd: string?
   env: map<string, string>?
   timeout_ms: int?
   stdin: string?
+  keep_stdin_open: bool?
 }
 class baml.sys.ProcessOptions$stream {
   cwd: string | null
   env: map<string, string> | null
   timeout_ms: int | null
   stdin: string | null
+  keep_stdin_open: bool | null
 }
 class baml.sys.ShellOutput {
   stdout: uint8array
@@ -2014,17 +2038,34 @@ class baml.sys.ShellOutput$stream {
   stderr: uint8array
   exit_code: int | null
 }
+function baml.sys._next(self: ?) -> string?  [builtin]
 function baml.sys.argv() -> string[]  [builtin]
+function baml.sys.close(self: ?) -> null  [builtin]
+function baml.sys.close(self: ?) -> null  [builtin]
+function baml.sys.close_stdin(self: ?) -> null  [builtin]
 function baml.sys.collect_garbage() -> null  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.exit(code: int) -> never  [builtin]
+function baml.sys.iter(self: ?) -> root.iter.Iterator<Item = string, Error = root.errors.Io | root.errors.Timeout>  [expr] {
+  {  } self
+}
+function baml.sys.kill(self: ?) -> null  [builtin]
+function baml.sys.next(self: ?) -> string | root.iter.Done  [expr] {
+  {  } match (self._next()) { line: string => line, null => root.iter.Done {  } }
+}
 function baml.sys.now_ms() -> int  [builtin]
+function baml.sys.ok(self: ?) -> bool  [expr] {
+  {  } self.exit_code Eq 0
+}
 function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }
 function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(delay: root.time.Duration) -> null  [builtin]
+function baml.sys.start_process(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.Process  [builtin]
+function baml.sys.wait(self: ?) -> baml.sys.ProcessExit  [builtin]
+function baml.sys.write_stdin(self: ?, data: string) -> null  [builtin]
 
 --- <builtin>/baml/ns_time/duration.baml ---
 class baml.time.Duration {

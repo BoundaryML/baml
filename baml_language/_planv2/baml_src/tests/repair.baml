@@ -2,33 +2,32 @@
 // parse triggers a committed re-ask; the journal records every attempt.
 
 test "the runner re-asks within the step and records every attempt" {
-    let scripted = ScriptedClient
-        .new(
-            [
-                // attempt 1: the model chats instead of answering
-                root.ai.ModelTurn {
-                    content: [root.ai.Text { text: "Could you tell me your budget first?" }],
-                    stop_reason: root.ai.StopReason.Complete,
-                    usage: root.ai.Usage {
-                        input_tokens: 7,
-                        output_tokens: 3,
-                        cached_input_tokens: null,
-                        reasoning_tokens: null,
-                    },
+    let scripted = ScriptedClient.new(
+        [
+            // attempt 1: the model chats instead of answering
+            root.ai.ModelTurn {
+                content: [root.ai.Text { text: "Could you tell me your budget first?" }],
+                stop_reason: root.ai.StopReason.Complete,
+                usage: root.ai.Usage {
+                    input_tokens: 7,
+                    output_tokens: 3,
+                    cached_input_tokens: null,
+                    reasoning_tokens: null,
                 },
-                // attempt 2 (ephemeral re-ask): a valid final answer
-                root.ai.ModelTurn {
-                    content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
-                    stop_reason: root.ai.StopReason.Complete,
-                    usage: root.ai.Usage {
-                        input_tokens: 9,
-                        output_tokens: 4,
-                        cached_input_tokens: null,
-                        reasoning_tokens: null,
-                    },
+            },
+            // attempt 2 (ephemeral re-ask): a valid final answer
+            root.ai.ModelTurn {
+                content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
+                stop_reason: root.ai.StopReason.Complete,
+                usage: root.ai.Usage {
+                    input_tokens: 9,
+                    output_tokens: 4,
+                    cached_input_tokens: null,
+                    reasoning_tokens: null,
                 },
-            ],
-        );
+            },
+        ],
+    );
     let spec = plan_trip_spec("anywhere", scripted);
     let result = root.ai.Agent<Itinerary>.new().run(spec);
     assert.equal(result.value.total_cost_usd, 5.0);
@@ -59,24 +58,25 @@ test "the runner re-asks within the step and records every attempt" {
     });
     assert.is_true(feedback);
     // a repair attempt is not a step: the run still fits max_steps = 1
-    let one_step = root.ai.Agent<Itinerary>.new(max_steps = 1).run(plan_trip_spec("anywhere", scripted_two_repair()));
+    let one_step = root.ai.Agent<Itinerary>.new(max_steps = 1).run(
+        plan_trip_spec("anywhere", scripted_two_repair()),
+    );
     assert.equal(one_step.value.total_cost_usd, 5.0)
 }
 
 function scripted_two_repair() -> ScriptedClient {
-    ScriptedClient
-        .new(
-            [
-                root.ai.ModelTurn {
-                    content: [root.ai.Text { text: "let me think about that" }],
-                    stop_reason: root.ai.StopReason.Complete,
-                    usage: null,
-                },
-                root.ai.ModelTurn {
-                    content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
-                    stop_reason: root.ai.StopReason.Complete,
-                    usage: null,
-                },
-            ],
-        )
+    ScriptedClient.new(
+        [
+            root.ai.ModelTurn {
+                content: [root.ai.Text { text: "let me think about that" }],
+                stop_reason: root.ai.StopReason.Complete,
+                usage: null,
+            },
+            root.ai.ModelTurn {
+                content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
+                stop_reason: root.ai.StopReason.Complete,
+                usage: null,
+            },
+        ],
+    )
 }

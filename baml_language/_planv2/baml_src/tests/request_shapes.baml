@@ -7,18 +7,15 @@ function repaired_first_step_journal() -> root.ai.Journal {
     let j = root.ai.Journal { log: [root.ai.RunStarted { spec_name: "PlanTrip", arguments: args }] };
     // a repaired first step: the model chatted, the runner committed the
     // failure and the correction request
-    j
-        .append_all(
-            [
-                root
-                    .ai
-                    .AssistantMessage {
-                    content: [root.ai.Text { text: "what is your budget?" }],
-                    client_id: "anthropic/test",
-                },
-                root.ai.UserMessage { content: "Answer again with only the corrected value." },
-            ],
-        );
+    j.append_all(
+        [
+            root.ai.AssistantMessage {
+                content: [root.ai.Text { text: "what is your budget?" }],
+                client_id: "anthropic/test",
+            },
+            root.ai.UserMessage { content: "Answer again with only the corrected value." },
+        ],
+    );
     j
 }
 
@@ -49,18 +46,15 @@ test "claude code envelope offers final result or tool calls" {
 test "claude code transcript marks successful tool results" {
     let args: map<string, unknown> = {};
     let j = root.ai.Journal { log: [root.ai.RunStarted { spec_name: "PlanTrip", arguments: args }] };
-    j
-        .append_all(
-            [
-                root
-                    .ai
-                    .AssistantMessage {
-                    content: [root.ai.ToolUse { id: "c1", name: "search_flights", args: args }],
-                    client_id: "claude-code/haiku",
-                },
-                root.ai.ToolCompleted { id: "c1", output: `[{"airline":"ANA"}]` },
-            ],
-        );
+    j.append_all(
+        [
+            root.ai.AssistantMessage {
+                content: [root.ai.ToolUse { id: "c1", name: "search_flights", args: args }],
+                client_id: "claude-code/haiku",
+            },
+            root.ai.ToolCompleted { id: "c1", output: `[{"airline":"ANA"}]` },
+        ],
+    );
     let text = root.claude_code.internal.transcript_text(j);
     assert.contains(text, "tool result id=c1 is_error=false");
     assert.contains(text, "assistant tool_call")

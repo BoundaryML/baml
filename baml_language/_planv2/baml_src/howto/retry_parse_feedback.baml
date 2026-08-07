@@ -22,12 +22,14 @@ function turn_with_feedback<Out>(
         _ => {
             if (attempts > 1) {
                 // commit the failed reply and the correction request, then ask again
-                j.append_all([
-                    root.ai.AssistantMessage { content: turn.content, client_id: c.id() },
-                    root.ai.UserMessage {
-                        content: "The reply did not match the required schema. Answer again with only the corrected value.",
-                    },
-                ]);
+                j.append_all(
+                    [
+                        root.ai.AssistantMessage { content: turn.content, client_id: c.id() },
+                        root.ai.UserMessage {
+                            content: "The reply did not match the required schema. Answer again with only the corrected value.",
+                        },
+                    ],
+                );
                 return turn_with_feedback<Out>(c, spec, j, attempts - 1);
             } else {
                 throw e // out of attempts; the journal already shows every try

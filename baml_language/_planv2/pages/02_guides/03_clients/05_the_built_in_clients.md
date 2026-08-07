@@ -475,6 +475,12 @@ claude -p --output-format json --model haiku --permission-mode default \
   it as labeled text (`user:`, `assistant:`,
   `tool result id=... is_error=false: ...`); each invoke is a fresh
   process whose only memory is that text.
+- The transport is `baml.sys.start_process` with
+  `--output-format stream-json`: the harness's complete event
+  transcript — init, hooks, its inner assistant turns and tool
+  attempts — logs live, line by line, as the run executes. This is
+  observability, not journal content; the journal records only the
+  normalized turn.
 - Credentials are the CLI's own login. There is no API key.
 
 BAML tools ride the `outcome` envelope, the native-schema variant of
@@ -506,11 +512,17 @@ request, and the prompt carries the catalog and the protocol:
 A `calls` outcome normalizes to `ToolUse` blocks with
 `stop_reason: ToolUse`; the runner executes the BAML tools and the
 next invoke shows their results in the conversation text. A final
-outcome becomes the terminal `Text` candidate. Two protocol lines are
-load-bearing: an outcome with no tool results yet in the conversation
-must be a calls request (the model otherwise invents data), and a
-successful result must never be re-requested (each invoke is a fresh
-process). Claude Code's own tools (`--tools`) run inside the harness
+outcome becomes the terminal `Text` candidate. Three protocol lines
+are load-bearing, each learned from a live event transcript: the
+catalog tools must be declared NOT installed (the harness's inner
+agent otherwise attempts native `tool_use` calls against them and
+burns a round of internal errors before finding the envelope); an
+outcome with no tool results yet in the conversation must be a calls
+request (the model otherwise invents data); and a successful result
+must never be re-requested (each invoke is a fresh process). The event
+transcript also shows how `--json-schema` works internally: the
+constrained output is emitted through a harness-internal
+`StructuredOutput` tool. Claude Code's own tools (`--tools`) run inside the harness
 and are configured separately via `harness_tools`; only envelope calls
 dispatch to BAML.
 

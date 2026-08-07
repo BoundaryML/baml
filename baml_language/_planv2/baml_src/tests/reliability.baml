@@ -35,21 +35,24 @@ class AlwaysInvalid {
 }
 
 function final_turn_only() -> ScriptedClient {
-    ScriptedClient
-        .new(
-            [
-                root.ai.ModelTurn {
-                    content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 1.0}` }],
-                    stop_reason: root.ai.StopReason.Complete,
-                    usage: null,
-                },
-            ],
-        )
+    ScriptedClient.new(
+        [
+            root.ai.ModelTurn {
+                content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 1.0}` }],
+                stop_reason: root.ai.StopReason.Complete,
+                usage: null,
+            },
+        ],
+    )
 }
 
 test "Retry replays Safe network failures and succeeds" {
     let flaky = FlakyClient { fail_first: 2, calls: 0, inner: final_turn_only() };
-    let reliable = root.ai.Retry.new(flaky, max_attempts = 3, backoff = root.ai.Backoff.new(initial_ms = 1, multiplier = 1, max_ms = 1));
+    let reliable = root.ai.Retry.new(
+        flaky,
+        max_attempts = 3,
+        backoff = root.ai.Backoff.new(initial_ms = 1, multiplier = 1, max_ms = 1),
+    );
     let spec = plan_trip_spec("anywhere", reliable);
     let result = root.ai.Agent<Itinerary>.new().run(spec);
     assert.equal(result.value.total_cost_usd, 1.0);

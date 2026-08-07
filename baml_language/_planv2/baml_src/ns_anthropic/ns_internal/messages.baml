@@ -223,14 +223,9 @@ function invoke(
             null
         } else if (b.type == "tool_use") {
             let empty_args: map<string, unknown> = {};
-            content
-                .push(
-                    root.ai.ToolUse {
-                        id: b.id ?? "",
-                        name: b.name ?? "",
-                        args: b.input ?? empty_args,
-                    },
-                );
+            content.push(
+                root.ai.ToolUse { id: b.id ?? "", name: b.name ?? "", args: b.input ?? empty_args },
+            );
             null
         } else {
             null

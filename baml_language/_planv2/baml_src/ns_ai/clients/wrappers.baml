@@ -70,13 +70,15 @@ class Retry {
         self.inner.invoke(input) catch_all (e) {
             let f: root.ai.errors.Failure => {
                 // the safety gate is not overridable; the judgment is
-                if (remaining > 1 && f.retry_safety() == root.ai.errors.RetrySafety.Safe && self.retry_if(f)) {
+                if (
+                    remaining > 1
+                        && f.retry_safety() == root.ai.errors.RetrySafety.Safe
+                        && self.retry_if(f)
+                ) {
                     let attempt = self.max_attempts - remaining + 1;
-                    let _ = baml
-                        .sys
-                        .sleep(
-                            baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
-                        ) catch_all (se) {
+                    let _ = baml.sys.sleep(
+                        baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
+                    ) catch_all (se) {
                         _ => null,
                     };
                     self._attempt(input, remaining - 1)
@@ -107,7 +109,10 @@ class Fallback {
             let c: Client => {
                 c.invoke(input) catch_all (e) {
                     let f: root.ai.errors.Failure => {
-                        if (index + 1 < self.members.length() && f.retry_safety() == root.ai.errors.RetrySafety.Safe) {
+                        if (
+                            index + 1 < self.members.length()
+                                && f.retry_safety() == root.ai.errors.RetrySafety.Safe
+                        ) {
                             self._try(input, index + 1)
                         } else {
                             throw e

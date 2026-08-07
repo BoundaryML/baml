@@ -149,8 +149,9 @@ function openai_parse(resp: OaResponse) -> root.ai.ModelTurn {
             if let s: string = item.arguments {
                 args = baml.json.from_string<map<string, unknown>>(s);
             }
-            content
-                .push(root.ai.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args });
+            content.push(
+                root.ai.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
+            );
             null
         } else if (item.type == "message") {
             if let parts: OaContentPart[] = item.content {
