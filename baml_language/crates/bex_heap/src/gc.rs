@@ -666,6 +666,7 @@ impl BexHeap {
             Object::Type(type_value) => {
                 worklist.extend(type_value.defs().classes.values().copied());
                 worklist.extend(type_value.defs().enums.values().copied());
+                worklist.extend(type_value.defs().impl_rules.iter().copied());
             }
             Object::Class(class) => {
                 if let Some(runtime) = &class.runtime_type {
@@ -833,6 +834,9 @@ impl BexHeap {
                     *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
                 }
                 for ptr in type_value.defs_mut().enums.values_mut() {
+                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                }
+                for ptr in &mut type_value.defs_mut().impl_rules {
                     *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
                 }
             }
@@ -1132,6 +1136,7 @@ impl BexHeap {
                         .classes
                         .values()
                         .chain(type_value.defs().enums.values())
+                        .chain(type_value.defs().impl_rules.iter())
                         .copied()
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
