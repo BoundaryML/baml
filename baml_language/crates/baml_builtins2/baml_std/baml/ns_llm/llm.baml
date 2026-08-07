@@ -58,6 +58,16 @@ function render_prompt(client: Client, function_name: string, args: map<string, 
   primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
 }
 
+/// Companion-only rendering path. Unlike the public name-based helper, this
+/// receives the instantiated LLM return type through the generic call frame.
+/// That preserves a runtime `unreflect(...)` mint for output-format rendering.
+function render_prompt_typed<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> PromptAst {
+  let return_type = type.of<T>();
+  let primitive_client = client.to_primitive_client(lenient = true);
+  let template = prompt_template_for(function_name, prompt_closure);
+  primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
+}
+
 function build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> root.http.Request {
   let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();

@@ -7086,14 +7086,14 @@ impl<'a> Parser<'a> {
 
             // Parse first type argument
             if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
-                p.parse_type();
+                p.parse_generic_arg();
 
                 // Parse remaining type arguments
                 while p.eat(TokenKind::Comma) {
                     if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
                         break; // Trailing comma
                     }
-                    p.parse_type();
+                    p.parse_generic_arg();
                 }
             }
 
@@ -7120,6 +7120,29 @@ impl<'a> Parser<'a> {
             }
             self.pending_greaters = 0;
             self.pending_greater_span = None;
+        }
+    }
+
+    /// Parse one call-site generic argument. `unreflect(expr)` is the only
+    /// value-position form and is lowered through the normal type-value call
+    /// channel.
+    fn parse_generic_arg(&mut self) {
+        let is_unreflect = self.at(TokenKind::Word)
+            && self
+                .current()
+                .is_some_and(|token| token.text == "unreflect")
+            && self
+                .peek(1)
+                .is_some_and(|token| token.kind == TokenKind::LParen);
+        if is_unreflect {
+            self.with_node(SyntaxKind::UNREFLECT_ARG, |p| {
+                p.bump(); // unreflect
+                p.expect(TokenKind::LParen);
+                p.parse_expr();
+                p.expect(TokenKind::RParen);
+            });
+        } else {
+            self.parse_type();
         }
     }
 

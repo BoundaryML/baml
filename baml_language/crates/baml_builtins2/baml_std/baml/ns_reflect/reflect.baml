@@ -76,7 +76,7 @@ class Diagnostic {
 class Package {
   _inner unknown
 
-  function compile(files: map<string, string>, packages: map<string, Package> = {}) -> Package throws baml.reflect.errors.CompilationError {
+  function compile(files: map<string, string>, packages: map<string, Package> = {}) -> Package throws unknown {
     let artifact = Package._compile(files, packages)
     Package._finish(artifact, packages)
   }

@@ -137,21 +137,22 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
     for symbol in &object_imports {
         match symbol.kind {
             SymbolKind::Class => {
-                let idx = classes.len() as u32;
+                let idx = u32::try_from(classes.len()).expect("runtime class imports fit u32");
                 classes.push(placeholder());
                 exports
                     .objects
                     .push((symbol.fq_name.clone(), LocalRef::Class(idx)));
             }
             SymbolKind::Enum => {
-                let idx = enums.len() as u32;
+                let idx = u32::try_from(enums.len()).expect("runtime enum imports fit u32");
                 enums.push(placeholder());
                 exports
                     .objects
                     .push((symbol.fq_name.clone(), LocalRef::Enum(idx)));
             }
             SymbolKind::Interface => {
-                let idx = interfaces.len() as u32;
+                let idx =
+                    u32::try_from(interfaces.len()).expect("runtime interface imports fit u32");
                 interfaces.push(placeholder());
                 exports
                     .objects
@@ -163,7 +164,7 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
 
     let mut function_code = HashMap::<String, u32>::new();
     for name in &required_functions {
-        let idx = code.len() as u32;
+        let idx = u32::try_from(code.len()).expect("runtime function imports fit u32");
         code.push(placeholder());
         function_code.insert(name.clone(), idx);
         exports.objects.push((name.clone(), LocalRef::Code(idx)));
@@ -176,7 +177,10 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
         }
     }
     for (slot, name) in required_functions.iter().chain(&let_names).enumerate() {
-        exports.globals.push((name.clone(), slot as u32));
+        exports.globals.push((
+            name.clone(),
+            u32::try_from(slot).expect("runtime global imports fit u32"),
+        ));
     }
 
     // Candidate-owned generic bases are imports of the synthetic unit; live
@@ -204,7 +208,7 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
             });
             GlobalIndex::from_raw(exports.globals.len() + import_pos)
         };
-        let idx = code.len() as u32;
+        let idx = u32::try_from(code.len()).expect("runtime generic imports fit u32");
         code.push(Object::GenericFunction(crate::GenericFunction {
             function,
             type_args: key.type_args.clone().into_boxed_slice(),

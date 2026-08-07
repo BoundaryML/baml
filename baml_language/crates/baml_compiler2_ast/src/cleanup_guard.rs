@@ -127,6 +127,7 @@ pub fn maybe_inject_cleanup_guard(class: &mut ClassDef) {
         let condition = body.exprs.alloc(Expr::Call {
             callee,
             type_args: vec![],
+            dynamic_type_args: vec![],
             args: vec![CallArg::positional(self_arg)],
         });
         source_map.expr_spans.alloc(span);

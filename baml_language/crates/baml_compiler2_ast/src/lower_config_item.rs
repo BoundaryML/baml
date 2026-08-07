@@ -167,6 +167,7 @@ fn lower_config_value_node(
                 alloc(Expr::Call {
                     callee,
                     type_args: vec![],
+                    dynamic_type_args: vec![],
                     args: vec![CallArg::positional(arg)],
                 })
             }
@@ -180,6 +181,7 @@ fn lower_config_value_node(
                 alloc(Expr::Call {
                     callee,
                     type_args: vec![],
+                    dynamic_type_args: vec![],
                     args: vec![CallArg::positional(arg), CallArg::positional(lenient)],
                 })
             }

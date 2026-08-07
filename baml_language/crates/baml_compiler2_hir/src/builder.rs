@@ -673,7 +673,21 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
-            ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
+            ast::Expr::Call {
+                callee,
+                dynamic_type_args,
+                args,
+                ..
+            } => {
+                self.walk_expr(*callee, body, source_map, true);
+                for dynamic in dynamic_type_args.iter().flatten() {
+                    self.walk_expr(*dynamic, body, source_map, true);
+                }
+                for arg in args {
+                    self.walk_expr(arg.expr, body, source_map, true);
+                }
+            }
+            ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
                 for arg in args {
                     self.walk_expr(arg.expr, body, source_map, true);
@@ -2254,13 +2268,19 @@ impl<'db> SemanticIndexBuilder<'db> {
                 generic_args,
                 ..
             } => {
-                // Allow `baml.errors.*`, `root.errors.*`, and `baml.json.*` (fully qualified).
+                // Allow `baml.errors.*`, `baml.reflect.errors.*`,
+                // `root.errors.*`, and `baml.json.*` (fully qualified).
                 // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
                 // `baml.json.JsonSerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
                 let is_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
-                    && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
+                    && (segments[1].as_str() == "errors"
+                        || segments[1].as_str() == "json"
+                        || (segments[1].as_str() == "reflect"
+                            && segments
+                                .get(2)
+                                .is_some_and(|name| name.as_str() == "errors")));
                 // Allow single-segment class names (e.g. `JsonParseError`) in
                 // builtin files — the class is resolvable in the current namespace
                 // and TIR will type-check it.  This allows builtin functions to
@@ -2320,8 +2340,10 @@ impl<'db> SemanticIndexBuilder<'db> {
                             && segments.len() == 1
                             && allowed_generic_params.iter().any(|name| name == &segments[0])
                 ) => {}
-            // `throws never` is the explicit "infallible" marker — always valid.
-            ast::TypeExprKind::Never { .. } => {}
+            // `throws never` and `throws unknown` are the two explicit effect
+            // bounds and are both valid for host-bound functions. The latter
+            // is needed by continuations that execute user bytecode.
+            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::BuiltinUnknown { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }

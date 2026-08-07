@@ -108,8 +108,20 @@ impl ExprBody {
                 out.push(BodyNode::Expr(*base));
                 out.push(BodyNode::Expr(*index));
             }
-            Expr::Call { callee, args, .. } => {
+            Expr::Call {
+                callee,
+                dynamic_type_args,
+                args,
+                ..
+            } => {
                 out.push(BodyNode::Expr(*callee));
+                out.extend(
+                    dynamic_type_args
+                        .iter()
+                        .flatten()
+                        .copied()
+                        .map(BodyNode::Expr),
+                );
                 out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
             }
             Expr::OptionalCall { callee, args } => {

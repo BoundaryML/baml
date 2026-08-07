@@ -327,8 +327,16 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, *value, body, out);
             }
         }
-        Expr::Call { callee, args, .. } => {
+        Expr::Call {
+            callee,
+            dynamic_type_args,
+            args,
+            ..
+        } => {
             collect_from_expr(context, *callee, body, out);
+            for dynamic in dynamic_type_args.iter().flatten() {
+                collect_from_expr(context, *dynamic, body, out);
+            }
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);

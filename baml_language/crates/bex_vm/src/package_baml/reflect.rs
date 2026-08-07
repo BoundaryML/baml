@@ -17,7 +17,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact,
     link::link_dynamic,
-    types::{LocalName, Package, RuntimePackage, TypeValue, Value},
+    types::{LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage, TypeValue, Value},
 };
 use indexmap::IndexMap;
 
@@ -116,8 +116,8 @@ fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDia
         let file = Value::object(vm.alloc_string(span.file.as_str()));
         copy::reflect::Span {
             file,
-            start: span.start as i64,
-            end: span.end as i64,
+            start: i64::try_from(span.start).expect("source offsets fit BAML int"),
+            end: i64::try_from(span.end).expect("source offsets fit BAML int"),
         }
         .to_value(vm)
     });
@@ -170,21 +170,19 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         artifact: &Value,
         packages: &IndexMap<bex_str::BexStr, Value>,
     ) -> NativeCallResult {
-        let artifact_inner =
-            match artifact
+        let Some(artifact_inner) =
+            artifact
                 .as_object_ptr()
                 .and_then(|ptr| match vm.get_object(ptr) {
                     Object::Instance(instance) => Some(instance.load_field(0)),
                     _ => None,
-                }) {
-                Some(value) => value,
-                None => {
-                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                        message: "reflect.Package._finish received an invalid artifact".to_string(),
-                    })
-                    .into();
-                }
-            };
+                })
+        else {
+            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "reflect.Package._finish received an invalid artifact".to_string(),
+            })
+            .into();
+        };
         let artifact = match vm.as_rust_data::<RuntimeCompileArtifact>(&artifact_inner) {
             Ok(artifact) => artifact.clone(),
             Err(error) => return error.into(),
@@ -230,6 +228,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 interface_blob: artifact.interface_blob,
                 diagnostics: artifact.diagnostics,
                 dependencies: dependencies.values().copied().collect(),
+                dependency_names: dependencies.clone(),
                 init: None,
                 initialized: false,
             })),
@@ -268,6 +267,40 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 _ => {}
             }
             objects.push(vm.alloc(object));
+        }
+
+        // Compile-time heap construction resolves `ConstValue::Object` into
+        // stable pointers before execution. Dynamic functions need the same
+        // pass after every linked object has been grafted. Keep any boxed float
+        // constants in the package-owned object graph as well.
+        let function_ptrs = objects
+            .iter()
+            .copied()
+            .filter(|ptr| matches!(vm.get_object(*ptr), Object::Function(_)))
+            .collect::<Vec<_>>();
+        for function_ptr in function_ptrs {
+            let constants = match vm.get_object(function_ptr) {
+                Object::Function(function) => function.bytecode.constants.clone(),
+                _ => unreachable!(),
+            };
+            let mut resolved = Vec::with_capacity(constants.len());
+            for constant in constants {
+                let value = match constant {
+                    bex_vm_types::ConstValue::Type(_)
+                    | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                    bex_vm_types::ConstValue::Float(value) => {
+                        let ptr = vm.alloc_float(value);
+                        objects.push(ptr);
+                        Value::object(ptr)
+                    }
+                    other => other.to_value(|index| objects[index.raw()]),
+                };
+                resolved.push(value);
+            }
+            let Object::Function(function) = vm.get_object_mut(function_ptr) else {
+                unreachable!()
+            };
+            function.bytecode.resolved_constants = resolved;
         }
 
         let external_globals: std::collections::HashMap<usize, _> = plan
@@ -321,6 +354,38 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .iter()
             .map(|(name, index)| (name.clone(), objects[index.raw()]))
             .collect::<IndexMap<_, _>>();
+        let mut impl_rules = IndexMap::new();
+        for (interface_index, rules) in &program_package.impl_rules {
+            let interface_ptr = objects[interface_index.raw()];
+            let mut pointers = Vec::with_capacity(rules.len());
+            for rule in rules {
+                let runtime_rule = RuntimeImplRule {
+                    interface_head: objects[rule.interface_head.raw()],
+                    for_ty_pattern: rule.for_ty_pattern.clone(),
+                    generic_param_bounds: rule.generic_param_bounds.clone(),
+                    interface_args: rule.interface_args.clone(),
+                    interface_assoc: rule.interface_assoc.clone(),
+                    methods: rule
+                        .methods
+                        .iter()
+                        .map(|(name, method)| {
+                            (
+                                name.clone(),
+                                MethodImpl {
+                                    fqn: objects[method.fqn.raw()],
+                                    frame: method.frame.clone(),
+                                },
+                            )
+                        })
+                        .collect(),
+                    field_links: rule.field_links.clone(),
+                };
+                let pointer = vm.alloc(Object::ImplRule(Box::new(runtime_rule)));
+                objects.push(pointer);
+                pointers.push(pointer);
+            }
+            impl_rules.insert(interface_ptr, pointers);
+        }
         let functions = plan
             .program
             .function_indices
@@ -340,7 +405,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .program
             .package_init_order
             .iter()
-            .find(|name| name.starts_with("user."))
+            .find(|name| name.as_str() == "$init" || name.starts_with("user.$init"))
             .and_then(|name| plan.program.function_indices.get(name))
             .map(|index| objects[*index]);
 
@@ -371,6 +436,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         package.classes = classes;
         package.enums = enums;
         package.interfaces = interfaces;
+        package.impl_rules = impl_rules;
         let runtime = package.runtime.as_mut().expect("runtime package image");
         runtime.objects = objects.into_boxed_slice();
         runtime.globals = globals.into_boxed_slice();

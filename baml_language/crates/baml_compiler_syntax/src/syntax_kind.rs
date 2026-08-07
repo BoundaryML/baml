@@ -392,6 +392,8 @@ pub enum SyntaxKind {
     CALL_ARGS,
     CALL_ARG,
     GENERIC_ARGS,
+    /// Runtime type argument expression: `unreflect(expr)` inside `<...>`.
+    UNREFLECT_ARG,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,
     /// A single type parameter name inside a `GENERIC_PARAM_LIST`.

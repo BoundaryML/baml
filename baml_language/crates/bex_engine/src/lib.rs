@@ -132,6 +132,14 @@ pub trait RuntimeCompiler: Send + Sync + 'static {
     ) -> Result<bex_vm_types::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>;
 }
 
+/// Runtime-owned schema data for one sys-op plus handles that keep every
+/// contributing package stable across the async permit release/GC window.
+struct RuntimeSchemaOverlay {
+    classes: indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    enums: indexmap::IndexMap<baml_type::TypeName, sys_types::EnumDefinition>,
+    named_owners: indexmap::IndexMap<String, bex_external_types::Handle>,
+}
+
 /// Sets the VM park request flag for the lifetime of a pending GC park request.
 ///
 /// In particular, dropping the future returned by [`BexEngine::collect_garbage`]
@@ -2176,6 +2184,90 @@ impl BexEngine {
             }
         }
         defs
+    }
+
+    fn runtime_schema_overlay(&self, vm: &BexVm, args: &[Value]) -> Option<RuntimeSchemaOverlay> {
+        let mut pending = args
+            .iter()
+            .filter_map(Value::as_object_ptr)
+            .filter_map(|ptr| match vm.get_object(ptr) {
+                Object::Type(value) if !value.owner.is_null() => Some(value.owner),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut seen = std::collections::HashSet::<usize>::new();
+        let mut classes = IndexMap::new();
+        let mut enums = IndexMap::new();
+        let mut named_owners = IndexMap::new();
+
+        while let Some(owner) = pending.pop() {
+            if !seen.insert(owner.as_ptr() as usize) {
+                continue;
+            }
+            let Object::Package(package) = vm.get_object(owner) else {
+                continue;
+            };
+            let Some(runtime) = package.runtime.as_ref() else {
+                continue;
+            };
+            pending.extend(runtime.dependencies.iter().copied());
+            let handle = self.heap.create_handle(owner);
+            for ptr in package.classes.values().copied() {
+                let Object::Class(class) = vm.get_object(ptr) else {
+                    continue;
+                };
+                classes.insert(
+                    class.name.clone(),
+                    sys_types::ClassDefinition {
+                        name: class.name.display_name().to_string(),
+                        description: class.description.clone(),
+                        alias: class.alias.clone(),
+                        fields: class
+                            .fields
+                            .iter()
+                            .map(|field| sys_types::ClassFieldDefinition {
+                                name: field.name.clone(),
+                                field_type: field.field_type.clone(),
+                                description: field.description.clone(),
+                                alias: field.alias.clone(),
+                                skip: field.skip,
+                            })
+                            .collect(),
+                    },
+                );
+                named_owners.insert(class.name.to_string(), handle.clone());
+            }
+            for ptr in package.enums.values().copied() {
+                let Object::Enum(enm) = vm.get_object(ptr) else {
+                    continue;
+                };
+                enums.insert(
+                    enm.name.clone(),
+                    sys_types::EnumDefinition {
+                        name: enm.name.display_name().to_string(),
+                        description: enm.description.clone(),
+                        alias: enm.alias.clone(),
+                        variants: enm
+                            .variants
+                            .iter()
+                            .filter(|variant| !variant.skip)
+                            .map(|variant| sys_types::EnumVariantDefinition {
+                                name: variant.name.clone(),
+                                description: variant.description.clone(),
+                                alias: variant.alias.clone(),
+                            })
+                            .collect(),
+                    },
+                );
+                named_owners.insert(enm.name.to_string(), handle.clone());
+            }
+        }
+
+        (!named_owners.is_empty()).then_some(RuntimeSchemaOverlay {
+            classes,
+            enums,
+            named_owners,
+        })
     }
 
     /// Get a reference to the shared heap.
@@ -5093,10 +5185,11 @@ impl BexEngine {
                     }
 
                     let runtime_compile_request = if operation == SysOp::BamlReflectPackageCompile {
-                        Some(self.runtime_compile_request(&thread.vm, &args)?)
+                        Some(Self::runtime_compile_request(&thread.vm, &args)?)
                     } else {
                         None
                     };
+                    let runtime_schema_overlay = self.runtime_schema_overlay(&thread.vm, &args);
 
                     let bex_args: Vec<BexExternalValue> =
                         if operation == SysOp::BamlHostCallHostValue {
@@ -5162,7 +5255,14 @@ impl BexEngine {
                     let sys_op_result = if let Some(request) = runtime_compile_request {
                         self.execute_runtime_compile(request)
                     } else {
-                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof())
+                        self.execute_sys_op(
+                            operation,
+                            &bex_args,
+                            call_id,
+                            cancel,
+                            thread.proof(),
+                            runtime_schema_overlay.as_ref(),
+                        )
                     };
 
                     let outcome = match sys_op_result {
@@ -5293,6 +5393,12 @@ impl BexEngine {
                                         &mut thread,
                                         external,
                                         host_ret_ty.as_ref(),
+                                    )?
+                                } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
+                                    self.convert_external_to_vm_value_with_runtime_schema(
+                                        &mut thread,
+                                        external,
+                                        overlay,
                                     )?
                                 } else {
                                     self.convert_external_to_vm_value(&mut thread, external)?
@@ -5653,6 +5759,7 @@ impl BexEngine {
         call_id: CallId,
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
+        runtime_schema: Option<&RuntimeSchemaOverlay>,
     ) -> SysOpResult {
         fn check(op: SysOp, err: &OpError) {
             if let sys_types::OpErrorPayload::Vm(kind) = &err.payload {
@@ -5679,6 +5786,14 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        if let Some(runtime_schema) = runtime_schema {
+            let mut classes = ctx.class_definitions.as_ref().clone();
+            classes.extend(runtime_schema.classes.clone());
+            ctx.class_definitions = Arc::new(classes);
+            let mut enums = ctx.enum_definitions.as_ref().clone();
+            enums.extend(runtime_schema.enums.clone());
+            ctx.enum_definitions = Arc::new(enums);
+        }
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.
         ctx.runtime_io =
@@ -5709,7 +5824,6 @@ impl BexEngine {
     }
 
     fn runtime_compile_request(
-        &self,
         vm: &BexVm,
         args: &[Value],
     ) -> Result<bex_vm_types::RuntimeCompileRequest, EngineError> {
@@ -5807,8 +5921,8 @@ impl BexEngine {
                         type_args: Vec::new(),
                         fields: indexmap::indexmap! {
                             "file".to_string() => string(span.file),
-                            "start".to_string() => BexExternalValue::Int(span.start as i64),
-                            "end".to_string() => BexExternalValue::Int(span.end as i64),
+                            "start".to_string() => BexExternalValue::Int(i64::try_from(span.start).expect("source offsets fit BAML int")),
+                            "end".to_string() => BexExternalValue::Int(i64::try_from(span.end).expect("source offsets fit BAML int")),
                         },
                     });
             BexExternalValue::Instance {

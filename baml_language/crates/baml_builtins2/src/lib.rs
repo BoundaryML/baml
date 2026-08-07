@@ -140,6 +140,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_random/random.baml"),
     // `baml.reflect` (BEP-066 I-9: `reflect` is a keyword shorthand for it).
     builtin!("baml", "ns_reflect/reflect.baml"),
+    builtin!("baml", "ns_reflect/ns_errors/errors.baml"),
     builtin!("baml", "ns_reflect/ns_class/class.baml"),
     builtin!("baml", "ns_reflect/ns_enum/enum.baml"),
     builtin!("baml", "ns_reflect/ns_union/union.baml"),

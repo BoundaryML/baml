@@ -540,6 +540,7 @@ impl ExprBody {
             Expr::Call {
                 callee,
                 type_args,
+                dynamic_type_args: _,
                 args,
             } => {
                 let ty_args_str = if type_args.is_empty() {
@@ -873,6 +874,9 @@ pub enum Expr {
         /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
         /// Empty vec when no `<...>` was written.
         type_args: Vec<TypeExpr>,
+        /// Runtime type arguments aligned with `type_args`. `Some(expr)` is an
+        /// `unreflect(expr)` slot; static positions are `None`.
+        dynamic_type_args: Vec<Option<ExprId>>,
         args: Vec<CallArg>,
     },
     Object {
@@ -1915,7 +1919,8 @@ pub struct RetryPolicyDef {
     pub name_span: TextRange,
 }
 
-/// A top-level let binding — compiler-generated, not user syntax.
+/// A top-level let binding. Source `let` declarations and compiler-generated
+/// client/retry-policy bindings share the same `$init` pipeline.
 /// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LetDef {

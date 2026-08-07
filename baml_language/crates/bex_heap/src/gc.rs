@@ -667,10 +667,16 @@ impl BexHeap {
                 worklist.extend(package.classes.values().copied());
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
+                for (interface, rules) in &package.impl_rules {
+                    worklist.push(*interface);
+                    worklist.extend(rules.iter().copied());
+                }
                 if let Some(runtime) = &package.runtime {
                     worklist.extend(runtime.objects.iter().copied());
+                    worklist.extend(runtime.functions.values().copied());
                     worklist.extend(runtime.class_types.values().copied());
                     worklist.extend(runtime.dependencies.iter().copied());
+                    worklist.extend(runtime.dependency_names.values().copied());
                     worklist.extend(runtime.init);
                     worklist.extend(
                         runtime
@@ -683,6 +689,13 @@ impl BexHeap {
             Object::Function(function) => {
                 if !function.runtime_package.as_ptr().is_null() {
                     worklist.push(function.runtime_package);
+                    worklist.extend(
+                        function
+                            .bytecode
+                            .resolved_constants
+                            .iter()
+                            .filter_map(Value::as_object_ptr),
+                    );
                 }
             }
             Object::GenericFunction(function) => {
@@ -853,6 +866,18 @@ impl BexHeap {
                         *ptr = new_ptr;
                     }
                 }
+                let old_rules = std::mem::take(&mut package.impl_rules);
+                package.impl_rules = old_rules
+                    .into_iter()
+                    .map(|(interface, rules)| {
+                        let interface = forwarding.get(&interface).copied().unwrap_or(interface);
+                        let rules = rules
+                            .into_iter()
+                            .map(|rule| forwarding.get(&rule).copied().unwrap_or(rule))
+                            .collect();
+                        (interface, rules)
+                    })
+                    .collect();
                 if let Some(runtime) = &mut package.runtime {
                     for ptr in runtime.objects.iter_mut() {
                         if let Some(&new_ptr) = forwarding.get(ptr) {
@@ -864,7 +889,17 @@ impl BexHeap {
                             *ptr = new_ptr;
                         }
                     }
+                    for ptr in runtime.functions.values_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
                     for ptr in runtime.dependencies.iter_mut() {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
+                        }
+                    }
+                    for ptr in runtime.dependency_names.values_mut() {
                         if let Some(&new_ptr) = forwarding.get(ptr) {
                             *ptr = new_ptr;
                         }
@@ -884,6 +919,11 @@ impl BexHeap {
             Object::Function(function) => {
                 if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
                     function.runtime_package = new_ptr;
+                }
+                if !function.runtime_package.as_ptr().is_null() {
+                    for value in &mut function.bytecode.resolved_constants {
+                        self.fixup_value(value, forwarding);
+                    }
                 }
             }
             Object::GenericFunction(function) => {
@@ -1170,13 +1210,24 @@ impl BexHeap {
                     .chain(package.interfaces.values())
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
+                worklist.extend(
+                    package
+                        .impl_rules
+                        .iter()
+                        .flat_map(|(interface, rules)| {
+                            std::iter::once(*interface).chain(rules.iter().copied())
+                        })
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
                 if let Some(runtime) = &package.runtime {
                     worklist.extend(
                         runtime
                             .objects
                             .iter()
+                            .chain(runtime.functions.values())
                             .chain(runtime.class_types.values())
                             .chain(runtime.dependencies.iter())
+                            .chain(runtime.dependency_names.values())
                             .copied()
                             .filter(|ptr| self.generation_of(*ptr).is_young()),
                     );
@@ -1199,6 +1250,16 @@ impl BexHeap {
                     && self.generation_of(function.runtime_package).is_young()
                 {
                     worklist.push(function.runtime_package);
+                }
+                if !function.runtime_package.as_ptr().is_null() {
+                    worklist.extend(
+                        function
+                            .bytecode
+                            .resolved_constants
+                            .iter()
+                            .filter_map(Value::as_object_ptr)
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
                 }
             }
             Object::GenericFunction(function) => {

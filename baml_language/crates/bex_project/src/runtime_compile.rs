@@ -31,7 +31,11 @@ fn owned_diagnostic(
     let span = diagnostic.primary_span().and_then(|span| {
         db.file_id_to_path(span.file_id)
             .map(|path| RuntimeSourceSpan {
-                file: path.to_string_lossy().into_owned(),
+                file: path
+                    .strip_prefix("<runtime>")
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .into_owned(),
                 start: usize::from(span.range.start()),
                 end: usize::from(span.range.end()),
             })
@@ -59,7 +63,11 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         db.set_project_root(Path::new("<runtime>"));
         db.set_mounted_packages(request.packages.into_iter().collect());
         for (path, source) in request.files {
-            db.add_file(path, &source);
+            // Runtime input names are package-relative. Mounting them beneath
+            // the synthetic root makes `ns_foo/` namespace derivation behave
+            // exactly like an ordinary project without exposing the synthetic
+            // prefix in diagnostics.
+            db.add_file(Path::new("<runtime>").join(path), &source);
         }
 
         let diagnostics: Vec<_> = collect_diagnostics(&db)
@@ -85,15 +93,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         let options = CompileOptions {
             emit_test_cases: false,
         };
-        let units = emit_units(&db, &options, OptLevel::One)
-            .map_err(|error| {
-                vec![RuntimeCompileDiagnostic {
-                    code: "E_RUNTIME_EMIT".to_string(),
-                    message: error.to_string(),
-                    severity: RuntimeDiagnosticSeverity::Error,
-                    span: None,
-                }]
-            })?
+        let emitted = emit_units(&db, &options, OptLevel::One).map_err(|error| {
+            vec![RuntimeCompileDiagnostic {
+                code: "E_RUNTIME_EMIT".to_string(),
+                message: error.to_string(),
+                severity: RuntimeDiagnosticSeverity::Error,
+                span: None,
+            }]
+        })?;
+        let units: Vec<_> = emitted
             .into_iter()
             .filter(|unit| unit.package.as_str() == "user")
             .collect();

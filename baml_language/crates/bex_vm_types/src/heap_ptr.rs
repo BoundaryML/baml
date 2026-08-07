@@ -109,6 +109,12 @@ impl HeapPtr {
         self.ptr
     }
 
+    /// Whether this is the inert compile-time/runtime-owner sentinel.
+    #[inline]
+    pub fn is_null(self) -> bool {
+        self.ptr.is_null()
+    }
+
     /// Dereference to get a reference to the object.
     ///
     /// # Safety

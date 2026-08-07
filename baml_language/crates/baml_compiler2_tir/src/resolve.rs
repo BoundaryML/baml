@@ -180,7 +180,7 @@ pub fn resolve_path_at<'db>(
     let (pkg_name, ns_head): (Name, &[Name]) = if res_ctx.items_for_package(db, &pkg_name).is_some()
     {
         (pkg_name, &segments[1..])
-    } else if matches!(segments[0].as_str(), "reflect" | "type") {
+    } else if matches!(segments[0].as_str(), "reflect" | "type" | "json") {
         (Name::new("baml"), segments)
     } else {
         return ResolvedName::Unknown;
@@ -233,7 +233,7 @@ pub fn resolve_namespace_prefix(
     let (pkg_name, ns_prefix): (Name, &[Name]) =
         if res_ctx.items_for_package(db, &pkg_name).is_some() {
             (pkg_name, &segments[1..])
-        } else if matches!(first.as_str(), "reflect" | "type") {
+        } else if matches!(first.as_str(), "reflect" | "type" | "json") {
             (Name::new("baml"), segments)
         } else {
             return None;

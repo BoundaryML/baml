@@ -54,6 +54,10 @@ pub struct RuntimePackage {
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
     /// Runtime package objects imported by this image.
     pub dependencies: Box<[HeapPtr]>,
+    /// Direct import alias to runtime package. Kept alongside the dense list so
+    /// runtime type names such as `dep.models.Base` resolve by their compiler
+    /// package identity.
+    pub dependency_names: IndexMap<String, HeapPtr>,
     /// The candidate `$init`, if one exists.
     pub init: Option<HeapPtr>,
     /// False while `$init` may write package globals; true after commit.

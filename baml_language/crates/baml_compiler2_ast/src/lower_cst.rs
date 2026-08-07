@@ -159,6 +159,13 @@ pub fn lower_file_with_path_and_test_owner(
                     items.push(let_item);
                 }
             }
+            baml_compiler_syntax::SyntaxKind::LET_STMT => {
+                if let Some(let_item) =
+                    lower_expr_body::lower_top_level_let(&child, &mut diags, &mut env_var_refs)
+                {
+                    items.push(Item::Let(let_item));
+                }
+            }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
                 if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
                     items.push(Item::ImplementsFor(imp));
@@ -825,6 +832,7 @@ pub fn synthesize_llm_builtin_call(
     let call = alloc(Expr::Call {
         callee,
         type_args,
+        dynamic_type_args: vec![],
         args: vec![
             CallArg::positional(client_arg),
             CallArg::positional(fn_name_expr),
@@ -888,6 +896,7 @@ pub(crate) fn synthesize_llm_parse_call(
     let call = alloc(Expr::Call {
         callee,
         type_args,
+        dynamic_type_args: vec![],
         args: vec![CallArg::positional(json_expr)],
     });
 
@@ -976,6 +985,7 @@ pub fn synthesize_llm_make_stream_call(
     let call = alloc(Expr::Call {
         callee,
         type_args,
+        dynamic_type_args: vec![],
         args: vec![CallArg::positional(sse_expr)],
     });
 
@@ -2204,6 +2214,7 @@ fn synthesize_register_call(
                 Expr::Call {
                     callee: method_call_target,
                     type_args: vec![],
+                    dynamic_type_args: vec![],
                     args: vec![
                         CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),
@@ -2274,6 +2285,7 @@ fn synthesize_register_call(
                 Expr::Call {
                     callee: method_call_target,
                     type_args: vec![],
+                    dynamic_type_args: vec![],
                     args: vec![
                         CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),

@@ -49,6 +49,14 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
   $rust_function
 }
 
+/// Encode a value using its concrete runtime type. This is the dynamic-shape
+/// endpoint used when `T` is statically `unknown` (for example a value parsed
+/// from `unreflect(...)`).
+//baml:mut_vm
+function encode<T>(v: T) -> string throws JsonSerializationError {
+  $rust_function
+}
+
 /// Serialize any BAML value to its `json` representation by dispatching on
 /// the value's runtime type.
 ///

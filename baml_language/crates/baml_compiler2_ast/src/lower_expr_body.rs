@@ -15,8 +15,8 @@ use crate::{
     ast::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
-        LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param, PatId,
-        Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
+        LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
+        PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
         TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
@@ -120,6 +120,57 @@ pub(crate) fn lower(
     diags.extend(ctx_diags);
     env_var_refs.extend(ctx_env_refs);
     (body, source_map)
+}
+
+/// Lower a source-level root `let name = expression` into the same `LetDef`
+/// representation used by synthesized clients and retry policies. The parser
+/// deliberately reuses `LET_STMT` at file and block scope; file lowering must
+/// therefore extract the binding rather than silently dropping the CST node.
+pub(crate) fn lower_top_level_let(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> Option<LetDef> {
+    let mut ctx = LoweringContext::new();
+    let stmt = ctx.lower_let_stmt(node);
+    let Stmt::Let {
+        pattern,
+        initializer,
+        else_branch,
+        ..
+    } = ctx.stmts[stmt].clone()
+    else {
+        unreachable!("lower_let_stmt always allocates Stmt::Let")
+    };
+    let Pattern::Bind { name, subpat } = ctx.patterns[pattern].clone() else {
+        diags.push(LoweringDiagnostic::InvalidPatternAscription {
+            reason: "top-level lets require a single named binding",
+            span: node.span_range(),
+        });
+        return None;
+    };
+    if subpat.is_some() || else_branch.is_some() {
+        diags.push(LoweringDiagnostic::InvalidPatternAscription {
+            reason: "top-level lets do not support patterns or `else`",
+            span: node.span_range(),
+        });
+        return None;
+    }
+    let name_span = node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .find(|token| token.text() == name.as_str())
+        .map_or_else(|| node.span_range(), |token| token.text_range());
+    let (body, source_map, mut ctx_diags, mut ctx_env_refs) = ctx.finish(initializer);
+    diags.append(&mut ctx_diags);
+    env_var_refs.append(&mut ctx_env_refs);
+    Some(LetDef {
+        name,
+        initializer: Some((body, source_map)),
+        origin: LetOrigin::Source,
+        span: node.span_range(),
+        name_span,
+    })
 }
 
 pub(crate) fn lower_default_expr_nodes(
@@ -351,6 +402,7 @@ pub(crate) fn synthesize_llm_call_with_prompt(
         Expr::Call {
             callee,
             type_args,
+            dynamic_type_args: vec![],
             args: vec![
                 CallArg::positional(client_arg),
                 CallArg::positional(fn_name_expr),
@@ -2447,9 +2499,9 @@ impl LoweringContext {
         //      method's frame correctly (e.g. `Box.from_json` sees
         //      `T = Secret`).
         let callee_generic_args = callee_node.as_ref().and_then(find_callee_generic_args);
-        let type_args: Vec<TypeExpr> = callee_generic_args
+        let (type_args, dynamic_type_args) = callee_generic_args
             .as_ref()
-            .map(|ga| Self::lower_generic_args_node(ga, &mut self.diags))
+            .map(|ga| self.lower_call_generic_args_node(ga))
             .unwrap_or_default();
         // Mark EVERY `GENERIC_ARGS` node in the callee subtree as consumed, so
         // lowering the callee/receiver below does not wrap any of them into an
@@ -2497,6 +2549,7 @@ impl LoweringContext {
             Expr::Call {
                 callee,
                 type_args,
+                dynamic_type_args,
                 args,
             },
             node.span_range(),
@@ -2593,6 +2646,41 @@ impl LoweringContext {
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te, diags))
             .collect()
+    }
+
+    /// Lower call-site generic args, retaining `unreflect(expr)` as an
+    /// evaluated expression aligned with an `unknown` static placeholder.
+    fn lower_call_generic_args_node(
+        &mut self,
+        ga: &SyntaxNode,
+    ) -> (Vec<TypeExpr>, Vec<Option<ExprId>>) {
+        let mut type_args = Vec::new();
+        let mut dynamic_type_args = Vec::new();
+        for child in ga.children() {
+            match child.kind() {
+                SyntaxKind::TYPE_EXPR => {
+                    if let Some(te) = baml_compiler_syntax::ast::TypeExpr::cast(child) {
+                        type_args.push(crate::lower_type_expr::lower_type_expr_node(
+                            &te,
+                            &mut self.diags,
+                        ));
+                        dynamic_type_args.push(None);
+                    }
+                }
+                SyntaxKind::UNREFLECT_ARG => {
+                    let span = child.text_range();
+                    let expr = child
+                        .children()
+                        .next()
+                        .map(|node| self.lower_expr(&node))
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
+                    type_args.push(TypeExprKind::BuiltinUnknown { attrs: vec![] }.at(span));
+                    dynamic_type_args.push(Some(expr));
+                }
+                _ => {}
+            }
+        }
+        (type_args, dynamic_type_args)
     }
 
     /// If `node` has a direct, unconsumed `GENERIC_ARGS` child, wrap `base` in an
@@ -2818,6 +2906,7 @@ impl LoweringContext {
             Expr::Call {
                 callee,
                 type_args: vec![],
+                dynamic_type_args: vec![],
                 args: vec![CallArg::positional(arg)],
             },
             range,
@@ -3211,6 +3300,7 @@ impl LoweringContext {
             Expr::Call {
                 callee,
                 type_args: Vec::new(),
+                dynamic_type_args: Vec::new(),
                 args: vec![CallArg::positional(inner)],
             },
             span,
@@ -3824,6 +3914,7 @@ impl LoweringContext {
             Expr::Call {
                 callee,
                 type_args: Vec::new(),
+                dynamic_type_args: Vec::new(),
                 args: vec![CallArg::positional(arg)],
             },
             at,
@@ -4915,6 +5006,7 @@ impl LoweringContext {
             Expr::Call {
                 callee: method_target,
                 type_args: vec![],
+                dynamic_type_args: vec![],
                 args: vec![
                     CallArg::positional(name_expr),
                     CallArg::positional(lambda_arg),
@@ -5001,6 +5093,7 @@ impl LoweringContext {
             Expr::Call {
                 callee: method_target,
                 type_args: vec![],
+                dynamic_type_args: vec![],
                 args: vec![
                     CallArg::positional(name_expr),
                     CallArg::positional(sub_collector_arg),

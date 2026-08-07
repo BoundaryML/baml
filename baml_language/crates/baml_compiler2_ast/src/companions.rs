@@ -160,12 +160,20 @@ fn make_llm_companion(
     // use it so the companion renders the prompt through its closure — matching
     // execution. Legacy Jinja parents fall back to the plain 3-arg builtin call.
     let (body, source_map) = llm_companion_body(parent, target).unwrap_or_else(|| {
+        let (builtin_target, type_args) = if target == "render_prompt" {
+            (
+                "render_prompt_typed",
+                parent.return_type.clone().into_iter().collect(),
+            )
+        } else {
+            (target, Vec::new())
+        };
         synthesize_llm_builtin_call(
-            target,
+            builtin_target,
             parent.name.as_str(),
             &param_names,
             client_arg_name,
-            Vec::new(),
+            type_args,
             parent.span,
         )
     });

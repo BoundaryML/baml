@@ -9317,11 +9317,16 @@ impl LoweringContext<'_> {
         if max_count == Some(0) {
             return Vec::new();
         }
-        let ast_type_args: Vec<AstTypeExpr> =
-            if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
-                type_args.clone()
+        let (ast_type_args, dynamic_type_args): (Vec<AstTypeExpr>, Vec<Option<AstExprId>>) =
+            if let AstExpr::Call {
+                type_args,
+                dynamic_type_args,
+                ..
+            } = &self.body.exprs[call_expr_id]
+            {
+                (type_args.clone(), dynamic_type_args.clone())
             } else {
-                Vec::new()
+                (Vec::new(), Vec::new())
             };
         if !ast_type_args.is_empty() {
             let ast_type_args: Vec<AstTypeExpr> = match max_count {
@@ -9339,7 +9344,11 @@ impl LoweringContext<'_> {
                 .tir_call_plan(self.expr_metadata_key(call_expr_id))
                 .map(|plan| plan.type_args.clone())
                 .unwrap_or_default();
-            return self.lower_explicit_type_args(&ast_type_args, &solved_type_args);
+            return self.lower_explicit_type_args(
+                &ast_type_args,
+                &dynamic_type_args,
+                &solved_type_args,
+            );
         }
         if !include_inferred {
             return Vec::new();
@@ -9388,6 +9397,7 @@ impl LoweringContext<'_> {
     fn lower_explicit_type_args(
         &mut self,
         ast_type_args: &[AstTypeExpr],
+        dynamic_type_args: &[Option<AstExprId>],
         solved_type_args: &[Tir2Ty],
     ) -> Vec<Operand> {
         if ast_type_args.is_empty() {
@@ -9399,6 +9409,10 @@ impl LoweringContext<'_> {
 
         let mut operands = Vec::with_capacity(ast_type_args.len());
         for (idx, type_arg) in ast_type_args.iter().enumerate() {
+            if let Some(dynamic) = dynamic_type_args.get(idx).copied().flatten() {
+                operands.push(self.lower_to_operand(dynamic));
+                continue;
+            }
             // A `_` wildcard (or a nested one, e.g. `Box<_>`) is a compile
             // error whose lowering cannot cross the runtime boundary. Where TIR
             // recorded a type for that position, swap it in; otherwise lower
