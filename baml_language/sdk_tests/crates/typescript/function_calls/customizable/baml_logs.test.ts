@@ -24,9 +24,13 @@ const isLogSinkChild =
   Boolean(process.env?.BAML_TS_LOG_SINK_CHILD);
 
 // Runs the env-gated child test in a child vitest process with the given
-// BAML_LOG value (undefined leaves it unset) and returns the child's combined
-// output; captured BAML logs land on the child's stderr.
-function runEmitLogsChild(bamlLog: string | undefined, marker: string): string {
+// BAML_LOG value (undefined leaves it unset). Captured BAML logs land on the
+// child's stderr (vitest forwards worker fd-2 writes there); the combined
+// output serves diagnostics and absence checks.
+function runEmitLogsChild(
+  bamlLog: string | undefined,
+  marker: string,
+): { stderr: string; combined: string } {
   // This test file lives at <generated>/node/baml_logs.test.ts; the package
   // root with node_modules and vitest.node.config.ts is one level up.
   const generatedRoot = path.dirname(
@@ -52,9 +56,9 @@ function runEmitLogsChild(bamlLog: string | undefined, marker: string): string {
     ],
     { cwd: generatedRoot, encoding: "utf8", env, timeout: 180_000 },
   );
-  const output = `${child.stdout}\n${child.stderr}`;
-  expect(child.status, `child vitest failed:\n${output}`).toBe(0);
-  return output;
+  const combined = `${child.stdout}\n${child.stderr}`;
+  expect(child.status, `child vitest failed:\n${combined}`).toBe(0);
+  return { stderr: child.stderr, combined };
 }
 
 // The parent/child split within the Node runtime is gated at runtime via
@@ -69,20 +73,21 @@ describe.runIf(isTestRuntime("node"))(
       { timeout: 180_000 },
       (ctx) => {
         if (isLogSinkChild) return ctx.skip();
-        const output = runEmitLogsChild("info", "ts-log-marker");
-        expect(output).toContain("[INFO] info ts-log-marker");
-        expect(output).toContain("[WARN] warn ts-log-marker");
-        expect(output).toContain("[ERROR] error ts-log-marker");
-        // debug is below the requested info threshold.
-        expect(output).not.toContain("debug ts-log-marker");
+        const { stderr, combined } = runEmitLogsChild("info", "ts-log-marker");
+        expect(stderr).toContain("[INFO] info ts-log-marker");
+        expect(stderr).toContain("[WARN] warn ts-log-marker");
+        expect(stderr).toContain("[ERROR] error ts-log-marker");
+        // debug is below the requested info threshold; absence is checked on
+        // the combined output, which is strictly stronger.
+        expect(combined).not.toContain("debug ts-log-marker");
       },
     );
 
     // SDK_PARITY_LINT(skip): requires subprocess-level SDK harness support
     it("baml_logs_stay_off_without_baml_log", { timeout: 180_000 }, (ctx) => {
       if (isLogSinkChild) return ctx.skip();
-      const output = runEmitLogsChild(undefined, "ts-quiet-marker");
-      expect(output).not.toContain("info ts-quiet-marker");
+      const { combined } = runEmitLogsChild(undefined, "ts-quiet-marker");
+      expect(combined).not.toContain("info ts-quiet-marker");
     });
 
     // SDK_PARITY_LINT(skip): child-process entry point for the BAML_LOG stderr tests
