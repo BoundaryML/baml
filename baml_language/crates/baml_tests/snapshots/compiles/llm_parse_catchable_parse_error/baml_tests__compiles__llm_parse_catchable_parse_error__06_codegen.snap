@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16410
 ---
 function $init() -> null {
     call $init_let_0
@@ -49,6 +48,7 @@ function user.ExtractInvoice$build_request(text: string, client: baml.llm.Client
     store_var client
 
   L0:
+    load_type Invoice
     load_var client
     load_const "ExtractInvoice"
     load_var text
@@ -70,6 +70,7 @@ function user.ExtractInvoice$build_request_stream(text: string, client: baml.llm
     store_var client
 
   L0:
+    load_type Invoice
     load_var client
     load_const "ExtractInvoice"
     load_var text
@@ -123,6 +124,7 @@ function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client
     store_var client
 
   L0:
+    load_type Invoice
     load_var client
     load_const "ExtractInvoice"
     load_var text

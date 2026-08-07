@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16128
 ---
 function $init() -> null {
     call $init_let_0
@@ -49,6 +48,7 @@ function user.GenerateImage$build_request(prompt: string, client: baml.llm.Clien
     store_var client
 
   L0:
+    load_type image
     load_var client
     load_const "GenerateImage"
     load_var prompt
@@ -70,6 +70,7 @@ function user.GenerateImage$build_request_stream(prompt: string, client: baml.ll
     store_var client
 
   L0:
+    load_type image
     load_var client
     load_const "GenerateImage"
     load_var prompt
@@ -123,6 +124,7 @@ function user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Clien
     store_var client
 
   L0:
+    load_type image
     load_var client
     load_const "GenerateImage"
     load_var prompt
@@ -189,6 +191,7 @@ function user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Cl
     store_var client
 
   L0:
+    load_type image[]
     load_var client
     load_const "GenerateImageSet"
     load_var prompt
@@ -210,6 +213,7 @@ function user.GenerateImageSet$build_request_stream(prompt: string, client: baml
     store_var client
 
   L0:
+    load_type image[]
     load_var client
     load_const "GenerateImageSet"
     load_var prompt
@@ -263,6 +267,7 @@ function user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Cl
     store_var client
 
   L0:
+    load_type image[]
     load_var client
     load_const "GenerateImageSet"
     load_var prompt
@@ -329,6 +334,7 @@ function user.GenerateMixedImageNarrative$build_request(prompt: string, client: 
     store_var client
 
   L0:
+    load_type (image | string)[]
     load_var client
     load_const "GenerateMixedImageNarrative"
     load_var prompt
@@ -350,6 +356,7 @@ function user.GenerateMixedImageNarrative$build_request_stream(prompt: string, c
     store_var client
 
   L0:
+    load_type (image | string)[]
     load_var client
     load_const "GenerateMixedImageNarrative"
     load_var prompt
@@ -403,6 +410,7 @@ function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: 
     store_var client
 
   L0:
+    load_type (image | string)[]
     load_var client
     load_const "GenerateMixedImageNarrative"
     load_var prompt

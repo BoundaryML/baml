@@ -1953,26 +1953,26 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((b
         "" : ""
   }
 }
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
+function baml.llm.render_prompt<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
-    let return_type = get_return_type(function_name) : type
+    let return_type = type.of() : type
     let primitive_client = client.to_primitive_client(lenient = true) : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
   }
 }
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
+function baml.llm.build_request<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
-    let return_type = get_return_type(function_name) : type
+    let return_type = type.of() : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
     primitive_client.build_request(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
+function baml.llm.build_request_stream<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
-    let return_type = get_return_type(function_name) : type
+    let return_type = type.of() : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
@@ -2541,8 +2541,19 @@ class baml.llm.PrimitiveClient {
   provider: string
   options: baml.llm.PrimitiveClientOptions
 }
-function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.RenderPrompt | baml.errors.LlmClient {
+function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.RenderPrompt | baml.errors.LlmClient | baml.reflect.errors.CompilationError {
   { : baml.llm.PromptAst
+    match (return_type.as_enum() : baml.reflect.enum.Type | null) : void
+      enum_type: baml.reflect.enum.Type =>
+        { : void
+          if (enum_type.values().length() == 0 : bool) : void
+            { : never
+              throw baml.reflect.errors.CompilationError { diagnostics: [baml.reflect.Diagnostic { code: "E0159", span: null, message: "empty enum `" + return_type.to_string() + "` cannot be rende..." }] } : baml.reflect.errors.CompilationError
+            }
+        }
+      null =>
+        { : void
+        }
     let prompt = : baml.llm.PromptAst
       match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
         null =>
@@ -3024,6 +3035,26 @@ class baml.reflect.enum.Value$stream {
 class baml.reflect.enum.Type$stream {
 }
 
+--- <builtin>/baml/ns_reflect/ns_errors/errors.baml ---
+class baml.reflect.errors.CompilationError {
+  diagnostics: baml.reflect.Diagnostic[]
+}
+class baml.reflect.errors.EvaluationError {
+  message: string
+}
+class baml.reflect.errors.SessionBusy {
+  message: string
+}
+class baml.reflect.errors.CompilationError$stream {
+  diagnostics: baml.reflect.Diagnostic$stream[]
+}
+class baml.reflect.errors.EvaluationError$stream {
+  message: string | null
+}
+class baml.reflect.errors.SessionBusy$stream {
+  message: string | null
+}
+
 --- <builtin>/baml/ns_reflect/ns_function/function.baml ---
 class baml.reflect.function.Parameter {
   name: string | null
@@ -3081,6 +3112,23 @@ class baml.reflect.Meta {
   docstring: string | null
   other: map<string, string>
 }
+class baml.reflect.WithMeta {
+  ty: T
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+class baml.reflect.Span {
+  file: string | null
+  start: int
+  end: int
+}
+class baml.reflect.Diagnostic {
+  code: string
+  span: baml.reflect.Span | null
+  message: string
+}
 type baml.reflect.TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
 class baml.reflect.Signature {
   name: string | null
@@ -3104,6 +3152,23 @@ class baml.reflect.Meta$stream {
   description: string | null
   docstring: string | null
   other: map<string, string>
+}
+class baml.reflect.WithMeta$stream {
+  ty: T | null
+  alias: string | null
+  description: string | null
+  docstring: string | null
+  other: map<string, string>
+}
+class baml.reflect.Span$stream {
+  file: string | null
+  start: int | null
+  end: int | null
+}
+class baml.reflect.Diagnostic$stream {
+  code: string | null
+  span: baml.reflect.Span$stream | null
+  message: string | null
 }
 type baml.reflect.TypeKind$stream = baml.reflect.class.Type$stream | baml.reflect.enum.Type$stream | baml.reflect.union.Type$stream | baml.reflect.literal.Type$stream | baml.reflect.array.Type$stream | baml.reflect.map.Type$stream | baml.reflect.interface.Type$stream | baml.reflect.primitive.Type$stream | baml.reflect.function.Type$stream
 class baml.reflect.Signature$stream {

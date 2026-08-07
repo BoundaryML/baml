@@ -962,6 +962,9 @@ function baml.TypeValue.implements(self: baml.TypeValue, other: type) -> bool {
 function baml.TypeValue.kind(self: baml.TypeValue) -> baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type {
 }
 
+function baml.TypeValue.meta(self: baml.TypeValue, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.WithMeta<type> {
+}
+
 function baml.Uint8Array._to_string_impl(self: baml.Uint8Array) -> string {
 }
 
@@ -5102,30 +5105,64 @@ function baml.llm.PrimitiveClient.render_prompt(self: baml.llm.PrimitiveClient, 
 }
 
 function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst {
+    load_var return_type
+    call baml.TypeValue.as_enum
+    store_var _7
+    load_var _7
+    narrow_bind baml.reflect.enum.Type, slot=6
+    pop_jump_if_false L0
+    load_var _7
+    call baml.reflect.enum.Type.values
+    container_len
+    store_var _10
+    load_var _10
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
     load_var prompt_closure
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_false L1
+    jump L2
 
-  L0:
+  L1:
     load_var2 1 4
     call baml.llm.build_prompt_context
     load_var prompt_closure
     call_indirect
     store_var prompt
-    jump L2
+    jump L3
 
-  L1:
+  L2:
     load_var2 1 2
     load_var2 3 4
     sys_op baml.llm.PrimitiveClient.render_prompt
     store_var prompt
 
-  L2:
-    load_var2 1 6
+  L3:
+    load_var2 1 9
     sys_op baml.llm.PrimitiveClient.specialize_prompt
     return
+
+  L4:
+    load_var return_type
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _17
+    load_const "E0159"
+    load_const null
+    load_const "empty enum `"
+    load_var _17
+    bin_op +
+    load_const "` cannot be rendered as an LLM output schema"
+    bin_op +
+    init_instance baml.reflect.Diagnostic .code, .span, .message
+    load_type baml.reflect.Diagnostic
+    alloc_array 1
+    init_instance baml.reflect.errors.CompilationError .diagnostics
+    throw
 }
 
 function baml.llm.PrimitiveClient.specialize_prompt(self: baml.llm.PrimitiveClient, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst {
@@ -5444,8 +5481,7 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     store_var prompt_closure
 
   L0:
-    load_var function_name
-    sys_op baml.llm.get_return_type
+    load_type #0
     store_var return_type
     load_var client
     load_const <omitted>
@@ -5474,8 +5510,7 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     store_var prompt_closure
 
   L0:
-    load_var function_name
-    sys_op baml.llm.get_return_type
+    load_type #0
     store_var return_type
     load_var client
     load_const <omitted>
@@ -5618,9 +5653,6 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     store_var prompt_closure
 
   L0:
-    load_var function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
     load_var client
     load_const true
     call baml.llm.Client.to_primitive_client
@@ -5628,8 +5660,9 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     load_var2 2 4
     call baml.llm.prompt_template_for
     store_var template
-    load_var2 6 7
-    load_var2 3 5
+    load_var2 5 6
+    load_var args
+    load_type #0
     load_var prompt_closure
     call baml.llm.PrimitiveClient.render_specialized_prompt
     return
@@ -6349,6 +6382,15 @@ function baml.reflect.enum.Type.meta(self: baml.reflect.enum.Type) -> baml.refle
 }
 
 function baml.reflect.enum.Type.values(self: baml.reflect.enum.Type) -> baml.reflect.enum.Value[] {
+}
+
+function baml.reflect.enum.get_value(value: unknown) -> string {
+}
+
+function baml.reflect.enum.new(name: string, values: (string | baml.reflect.enum.Value)[]) -> type {
+}
+
+function baml.reflect.enum.value(name: string, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.enum.Value {
 }
 
 function baml.reflect.function.Type.baml.reflect.TypeView.as_type(self: baml.reflect.function.Type) -> type {

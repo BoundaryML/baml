@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4282
 ---
 function $init() -> null {
     call $init_let_0
@@ -96,6 +95,7 @@ function user.Greet$build_request(name: string, client: baml.llm.Client) -> baml
     make_closure .<tagged(Greet$build_request, 0)>, 1
     call baml.llm.prompt
     store_var _5
+    load_type string
     load_var client
     load_const "Greet"
     load_deref ?1
@@ -124,6 +124,7 @@ function user.Greet$build_request_stream(name: string, client: baml.llm.Client) 
     make_closure .<tagged(Greet$build_request_stream, 0)>, 1
     call baml.llm.prompt
     store_var _5
+    load_type string
     load_var client
     load_const "Greet"
     load_deref ?1
@@ -184,6 +185,7 @@ function user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml
     make_closure .<tagged(Greet$render_prompt, 0)>, 1
     call baml.llm.prompt
     store_var _5
+    load_type string
     load_var client
     load_const "Greet"
     load_deref ?1

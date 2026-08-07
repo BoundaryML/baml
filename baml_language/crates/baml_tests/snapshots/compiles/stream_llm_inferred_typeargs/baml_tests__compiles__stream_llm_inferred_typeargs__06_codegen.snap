@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24338
 ---
 function $init() -> null {
     call $init_let_0
@@ -78,6 +77,7 @@ function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "TestFunc"
     load_var input
@@ -99,6 +99,7 @@ function user.TestFunc$build_request_stream(input: string, client: baml.llm.Clie
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "TestFunc"
     load_var input
@@ -152,6 +153,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
+    load_type string
     load_var client
     load_const "TestFunc"
     load_var input

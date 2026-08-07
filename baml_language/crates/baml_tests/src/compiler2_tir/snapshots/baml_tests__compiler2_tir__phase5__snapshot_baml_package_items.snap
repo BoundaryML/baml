@@ -21,7 +21,7 @@ namespace baml:
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, _to_string_impl, implements, implemented_by, implementors, to_string] }
+  class TypeValue { methods: [kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, meta, _to_string_impl, implements, implemented_by, implementors, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
@@ -227,8 +227,8 @@ namespace baml.llm:
   function assemble_prompt_ast
   function build_output_format
   function build_prompt_context
-  function build_request
-  function build_request_stream
+  function build_request<T>
+  function build_request_stream<T>
   function call_llm_function<T>
   function from_shorthand
   function get_jinja_template
@@ -238,7 +238,7 @@ namespace baml.llm:
   function prompt
   function prompt_template_for
   function render_output_format
-  function render_prompt
+  function render_prompt<T>
   function stream_llm_function<TStream, TFinal>
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
@@ -292,11 +292,14 @@ namespace baml.random:
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
 namespace baml.reflect:
   class Arg { methods: [] }
+  class Diagnostic { methods: [] }
   class InvalidArgumentError { methods: [] }
   class Meta { methods: [] }
   class Signature { methods: [] }
+  class Span { methods: [] }
   type TypeKind
   type TypeView
+  class WithMeta<T> { methods: [] }
   function call_any<R, E>
   function signature
 namespace baml.reflect.array:
@@ -307,6 +310,13 @@ namespace baml.reflect.class:
 namespace baml.reflect.enum:
   class Type { methods: [values, meta, as_type] }
   class Value { methods: [] }
+  function get_value
+  function new
+  function value
+namespace baml.reflect.errors:
+  class CompilationError { methods: [] }
+  class EvaluationError { methods: [] }
+  class SessionBusy { methods: [] }
 namespace baml.reflect.function:
   class Parameter { methods: [] }
   class Type { methods: [params, return_type, as_type] }
