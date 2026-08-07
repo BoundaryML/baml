@@ -2965,6 +2965,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             std::mem::take(&mut self.interface_method_generic_params);
         let saved_owner_type_arg_binding_seed =
             std::mem::take(&mut self.owner_type_arg_binding_seed);
+        let saved_foreign_callable_exprs = std::mem::take(&mut self.foreign_callable_exprs);
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
@@ -3092,6 +3093,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
         self.owner_type_arg_binding_seed = saved_owner_type_arg_binding_seed;
+        self.foreign_callable_exprs = saved_foreign_callable_exprs;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.call_plans = saved_call_plans;
         self.call_type_instantiations = saved_call_type_instantiations;

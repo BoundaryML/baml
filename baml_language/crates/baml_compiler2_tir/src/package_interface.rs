@@ -102,8 +102,11 @@ pub enum ExportedType {
         qtn: QualifiedTypeName,
         resolved: Ty,
     },
-    /// An interface declaration's full loc-free surface (BEP-066 slice 6a),
-    /// consumed for mounted type/bound/member resolution and virtual dispatch.
+    /// An interface declaration's full loc-free surface (BEP-066 slice 6a).
+    /// Resolution consumes these rows for mounted (source-less) dependencies,
+    /// where the exported blob is the sole representation. They remain
+    /// invisible for source-backed dependencies, whose interfaces resolve
+    /// through source items instead.
     ///
     /// Every type below is lowered at the interface's *own declaration scope*:
     /// the declared generic parameters are rigid `TypeVar`s and `Self` is the

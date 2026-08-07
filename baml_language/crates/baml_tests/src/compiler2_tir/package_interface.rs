@@ -1388,6 +1388,30 @@ function r() -> int throws never {
     }
 
     #[test]
+    fn mounted_callable_default_metadata_does_not_leak_into_body() {
+        // Parameter defaults and function bodies have separate expression
+        // arenas. Both paths below are ExprId(0), so recording the mounted
+        // callable in the defaults arena must not mark the local body call as
+        // a call into a mounted package.
+        let db = consumer_db(
+            lib_blob(),
+            &[(
+                "main.baml",
+                r#"
+function local() -> int throws never {
+    1
+}
+
+function use(f: (a: int, b: int) -> int = app.add) -> int throws never {
+    local()
+}
+"#,
+            )],
+        );
+        assert_clean(&db);
+    }
+
+    #[test]
     fn user_impl_overlapping_mounted_blanket_impl_is_coherence_checked() {
         // The blob exports `implement<T> Taggable for T`. A user impl of
         // `app.Taggable` for a local class overlaps it — E0132, attributed
