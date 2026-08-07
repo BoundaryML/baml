@@ -223,6 +223,19 @@ pub(crate) fn interface_associated_type_names_for_qtn(
     db: &dyn crate::Db,
     qtn: &crate::ty::QualifiedTypeName,
 ) -> FxHashSet<Name> {
+    let mut visited = FxHashSet::default();
+    interface_associated_type_names_for_qtn_inner(db, qtn, &mut visited)
+}
+
+fn interface_associated_type_names_for_qtn_inner(
+    db: &dyn crate::Db,
+    qtn: &crate::ty::QualifiedTypeName,
+    visited: &mut FxHashSet<crate::ty::QualifiedTypeName>,
+) -> FxHashSet<Name> {
+    if !visited.insert(qtn.clone()) {
+        return FxHashSet::default();
+    }
+
     // A MOUNTED (source-less) interface answers from its exported row; its
     // `requires` rows are the pre-flattened transitive closure, so one level
     // of name collection per entry covers inheritance (BEP-066 slice 6a).
@@ -234,7 +247,11 @@ pub(crate) fn interface_associated_type_names_for_qtn(
     {
         let mut names: FxHashSet<Name> = associated_types.iter().map(|a| a.name.clone()).collect();
         for required in requires {
-            names.extend(interface_associated_type_names_for_qtn(db, &required.name));
+            names.extend(interface_associated_type_names_for_qtn_inner(
+                db,
+                &required.name,
+                visited,
+            ));
         }
         return names;
     }

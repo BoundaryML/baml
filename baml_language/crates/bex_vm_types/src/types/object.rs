@@ -281,6 +281,71 @@ impl BorshSerialize for Object {
     }
 }
 
+/// Whether deriving a static mint for this wire type may consult program facts
+/// that generic Borsh decoding cannot provide.
+///
+/// A named alias always needs its definition. A union also becomes
+/// fact-dependent when interface absorption or enum completeness can change its
+/// canonical form. The remaining shapes are fact-free exactly when their
+/// children are.
+fn type_wire_requires_facts(ty: &baml_type::RealizedTy) -> bool {
+    use baml_type::RealizedTy;
+
+    match ty {
+        RealizedTy::TypeAlias(..) => true,
+        RealizedTy::Union(members, _) => {
+            members.iter().any(type_wire_requires_facts)
+                || members.iter().any(|member| {
+                    matches!(
+                        member,
+                        RealizedTy::Interface(..) | RealizedTy::EnumVariant(..)
+                    )
+                })
+        }
+        RealizedTy::Class(_, args, _) => args.iter().any(type_wire_requires_facts),
+        RealizedTy::Interface(_, args, bindings, _) => {
+            args.iter().any(type_wire_requires_facts)
+                || bindings
+                    .iter()
+                    .any(|(_, binding)| type_wire_requires_facts(binding))
+        }
+        RealizedTy::List(inner, _) => type_wire_requires_facts(inner),
+        RealizedTy::Map { key, value, .. } | RealizedTy::Future(key, value, _) => {
+            type_wire_requires_facts(key) || type_wire_requires_facts(value)
+        }
+        RealizedTy::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| type_wire_requires_facts(&param.ty))
+                || type_wire_requires_facts(ret)
+                || type_wire_requires_facts(throws)
+        }
+        RealizedTy::Int { .. }
+        | RealizedTy::Bigint { .. }
+        | RealizedTy::Float { .. }
+        | RealizedTy::String { .. }
+        | RealizedTy::Bool { .. }
+        | RealizedTy::Null { .. }
+        | RealizedTy::Uint8Array { .. }
+        | RealizedTy::Media(..)
+        | RealizedTy::Literal(..)
+        | RealizedTy::Enum(..)
+        | RealizedTy::EnumVariant(..)
+        | RealizedTy::RustType { .. }
+        | RealizedTy::Type { .. }
+        | RealizedTy::Resource { .. }
+        | RealizedTy::PromptAst { .. }
+        | RealizedTy::Void { .. }
+        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Never { .. } => false,
+    }
+}
+
 impl BorshDeserialize for Object {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let proxy = ObjectWire::deserialize_reader(reader)?;
@@ -318,15 +383,18 @@ impl BorshDeserialize for Object {
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
             ObjectWire::Type(v) => {
+                if type_wire_requires_facts(&v) {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "fact-dependent type values require context-aware decoding",
+                    ));
+                }
                 // Re-derive the static mint (H-4: identity never rides the
                 // wire). Borsh decode has no fact source to consult, so the
-                // digest is fact-free here; that matches the VM's digest for
-                // every type whose canonical form needs no program fact
-                // (classes, enums, primitives, containers, plain unions).
+                // generic wire path accepts only types whose canonical form is
+                // fact-free. Context-dependent payloads are rejected above.
                 // No compiled `Program` pools an `Object::Type` today — see
-                // the `ObjectWire::Type` doc — so a fact-dependent payload
-                // (recursive alias, absorbing union) cannot reach this path
-                // from real programs.
+                // the `ObjectWire::Type` doc.
                 #[expect(
                     deprecated,
                     reason = "borsh decode is a boundary with no fact context to supply; \
@@ -523,5 +591,19 @@ mod type_wire_tests {
         assert_eq!(type_value.ty, ty);
         assert!(matches!(type_value.mint(), MintId::Static(_)));
         assert_ne!(type_value.mint(), MintId::Runtime(91));
+    }
+
+    #[test]
+    fn type_wire_rejects_a_type_whose_mint_needs_program_facts() {
+        let alias = baml_type::RealizedTy::TypeAlias(
+            baml_type::QualifiedTypeName::local(baml_base::Name::new("Recursive")),
+            baml_type::TyAttr::default(),
+        );
+        let encoded =
+            borsh::to_vec(&ObjectWire::Type(Box::new(alias))).expect("wire proxy serializes");
+
+        let error = Object::try_from_slice(&encoded).expect_err("fact-dependent type is rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("context-aware decoding"));
     }
 }

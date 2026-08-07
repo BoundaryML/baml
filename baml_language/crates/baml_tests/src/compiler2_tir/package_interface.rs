@@ -1247,6 +1247,7 @@ class Card {
 "#,
             )],
         );
+        assert_error_containing(&db, "[E0113]");
         assert_error_containing(&db, "describe");
     }
 
@@ -1271,6 +1272,7 @@ class Card {
 "#,
             )],
         );
+        assert_error_containing(&db, "[E0120]");
         assert_error_containing(&db, "describe");
     }
 

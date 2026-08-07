@@ -14,7 +14,8 @@
 ///
 /// The returned `type` value supports:
 ///   - `.to_string()` — returns the BAML type name (e.g. "User", "int[]", "map<string, User>")
-///   - `==` / `!=`   — structural equality (two `of<User>()` are equal)
+///   - `==` / `!=`   — minted identity equality (canonical static values of
+///                     the same type compare equal)
 function of<T>() -> type {
     $compiler_intrinsic
 }

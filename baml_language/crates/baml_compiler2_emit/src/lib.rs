@@ -555,10 +555,14 @@ fn build_packages(
                     )
                 });
             }
-            if !default_methods.is_empty() {
-                let entry = iface_defaults.entry(qtn.clone()).or_default();
-                for method in default_methods {
-                    entry
+            for method in default_methods {
+                // A mounted default body exists only in the linked base image.
+                // Base-less compilation may still carry mounted check metadata;
+                // keep its FQN out of the debug-checked resolver in that mode.
+                if function_indices.contains_key(&method.callable_fqn) {
+                    iface_defaults
+                        .entry(qtn.clone())
+                        .or_default()
                         .entry(method.name.clone())
                         .or_insert_with(|| method.callable_fqn.clone());
                 }

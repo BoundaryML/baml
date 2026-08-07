@@ -2966,6 +2966,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_owner_type_arg_binding_seed =
             std::mem::take(&mut self.owner_type_arg_binding_seed);
         let saved_self_pinned_rigid_var = std::mem::take(&mut self.self_pinned_rigid_var);
+        let saved_foreign_callable_exprs = std::mem::take(&mut self.foreign_callable_exprs);
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
@@ -3093,6 +3094,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.interface_method_generic_params = saved_interface_method_generic_params;
         self.owner_type_arg_binding_seed = saved_owner_type_arg_binding_seed;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
+        self.foreign_callable_exprs = saved_foreign_callable_exprs;
         self.call_plans = saved_call_plans;
         self.call_type_instantiations = saved_call_type_instantiations;
         self.function_coercions = saved_function_coercions;
@@ -6446,7 +6448,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    #[inline(never)]
     /// Report the reserved BEP-066 slice 6a diagnostic when a mounted callee
     /// has no loc-free link contract (currently compiler/VM builtin bodies).
     fn report_reserved_mounted_call(&mut self, callee: ExprId, at: ExprId) {
@@ -6456,6 +6457,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    #[inline(never)]
     fn check_call_expr(
         &mut self,
         expr_id: ExprId,

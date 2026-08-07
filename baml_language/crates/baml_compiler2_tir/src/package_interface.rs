@@ -843,7 +843,13 @@ fn lower_interface_export<'db>(
     // off the outer type expression into `FieldData::attributes`; the
     // interface-field lowering does not, leaving them on the field's outer
     // `TypeRef` — read both homes so the export is complete either way.
-    let fields = crate::interfaces::resolve_interface_fields(db, iface_loc)
+    let resolved_fields = crate::interfaces::resolve_interface_fields(db, iface_loc);
+    debug_assert_eq!(
+        resolved_fields.fields.len(),
+        iface.fields.len(),
+        "resolve_interface_fields lowers `iface.fields` in order, so the two lists run parallel"
+    );
+    let fields = resolved_fields
         .fields
         .iter()
         .zip(&iface.fields)
@@ -1205,12 +1211,13 @@ fn exported_impl_method<'db>(
     // type variables even though runtime layout later erases them.
     let impl_param_count = impl_param_names.len();
     let scope_generics = crate::function_generic_params(db, method_loc);
+    let impl_params = scope_generics.get(..impl_param_count)?;
     debug_assert_eq!(
-        &scope_generics[..impl_param_count],
+        impl_params,
         impl_param_names.as_slice(),
         "an impl method's function environment must begin with the impl parameters"
     );
-    let own_params = &scope_generics[impl_param_count..];
+    let own_params = scope_generics.get(impl_param_count..)?;
     let mut bounds: crate::lower_type_expr::TypeVarBoundsMap =
         data.generic_params.iter().cloned().collect();
     // Lowering diagnostics are dropped, matching every export path: the
@@ -1220,10 +1227,8 @@ fn exported_impl_method<'db>(
     let mut generic_params = Vec::new();
     let mut generic_param_bounds = Vec::new();
     let declared_count = spec.generic_bounds().len();
-    for (param, declared) in own_params[..declared_count]
-        .iter()
-        .zip(spec.generic_bounds())
-    {
+    let declared_params = own_params.get(..declared_count)?;
+    for (param, declared) in declared_params.iter().zip(spec.generic_bounds()) {
         let ifaces = crate::interfaces::lower_generic_param_interface_bounds(
             db,
             spec.bound_store(),
@@ -1237,7 +1242,8 @@ fn exported_impl_method<'db>(
         generic_params.push(param.clone());
         generic_param_bounds.push(ifaces);
     }
-    for param in &own_params[declared_count..] {
+    let synthetic_params = own_params.get(declared_count..)?;
+    for param in synthetic_params {
         bounds.insert(param.clone(), Vec::new());
         generic_params.push(param.clone());
         generic_param_bounds.push(Vec::new());

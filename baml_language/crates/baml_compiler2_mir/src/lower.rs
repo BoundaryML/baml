@@ -872,7 +872,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                             )
                         })
                         .unwrap_or_else(|| raw_owner.clone());
-                    assert_eq!(
+                    debug_assert_eq!(
                         owner, raw_owner,
                         "structural impl symbol must preserve the source-era B-693 spelling"
                     );
