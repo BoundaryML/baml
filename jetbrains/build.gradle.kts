@@ -133,24 +133,8 @@ tasks {
     }
 
     // This task is inherited from a dependency, "intellij platform" maybe?
-    processResources {
-        dependsOn("copyTextmateFiles")
-    }
-
-    // This task is inherited from a dependency, "intellij platform" maybe?
     publishPlugin {
         dependsOn(patchChangelog)
-    }
-
-    register<Copy>("copyTextmateFiles") {
-        group = "build"
-        from("../typescript/apps/vscode-ext") {
-            include("package.json")
-            include("language-configuration.json")
-            include("syntaxes/baml.tmLanguage.json")
-            include("syntaxes/jinja.tmLanguage.json")
-        }
-        into("src/main/resources/textmate")
     }
     
     // Configure the runIde task to auto-open integ-tests directory
