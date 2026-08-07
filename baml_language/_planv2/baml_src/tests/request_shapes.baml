@@ -35,3 +35,33 @@ test "anthropic messages always start with a user role" {
     // message and omits system in that case (asserted structurally above;
     // the branch itself is exercised by the live smokes).
 }
+
+test "claude code envelope offers final result or tool calls" {
+    let schema = root.claude_code.internal.envelope_schema(reflect.type_of<Itinerary>());
+    let j = baml.json.to_json(schema);
+    let outcome = baml.json.path_or<json>(j, ".properties.outcome", null);
+    let variants = baml.json.path_or<json[]>(outcome, ".anyOf", []);
+    assert.equal(variants.length(), 2);
+    // T's $defs lift to the envelope root so refs stay valid
+    assert.is_true(baml.json.path_or<json>(j, ".$defs", null) != null)
+}
+
+test "claude code transcript marks successful tool results" {
+    let args: map<string, unknown> = {};
+    let j = root.ai.Journal { log: [root.ai.RunStarted { spec_name: "PlanTrip", arguments: args }] };
+    j
+        .append_all(
+            [
+                root
+                    .ai
+                    .AssistantMessage {
+                    content: [root.ai.ToolUse { id: "c1", name: "search_flights", args: args }],
+                    client_id: "claude-code/haiku",
+                },
+                root.ai.ToolCompleted { id: "c1", output: `[{"airline":"ANA"}]` },
+            ],
+        );
+    let text = root.claude_code.internal.transcript_text(j);
+    assert.contains(text, "tool result id=c1 is_error=false");
+    assert.contains(text, "assistant tool_call")
+}

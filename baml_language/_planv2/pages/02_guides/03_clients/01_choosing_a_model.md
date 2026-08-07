@@ -36,6 +36,7 @@ The built-in prefixes and their credentials:
 | `openai` | `OpenAiClient` | OpenAI Responses | `OPENAI_API_KEY` |
 | `anthropic` | `AnthropicClient` | Anthropic Messages | `ANTHROPIC_API_KEY` |
 | `google` | `GoogleClient` | Gemini `generateContent` | `GOOGLE_API_KEY` |
+| `claude-code` | `ClaudeCodeClient` | the Claude Code CLI (local process) | the CLI's own login |
 
 A `client:` field resolves when the spec is created, so a missing
 credential fails at the call site, before any model turn.

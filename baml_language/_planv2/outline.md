@@ -267,6 +267,9 @@ _planv2/
   reserved-function fallback when tools are present.
 - Media lowering — the per-provider argument table; rejected cells
   throw `Unsupported`; media output normalization is phase 2.
+- Claude Code (`ClaudeCodeClient`) — a harness client over the CLI as
+  a local process; contract native via `--json-schema`; BAML tools via
+  the `outcome` envelope; `session_id` as a phase 3 checkpoint.
 - Prompt-mode tools are a wrapper, not a mode — the phase 2
   `PromptTools` wrapper client; empty toolbox for the inner client;
   the calls-envelope rewrite; the discriminator caution.

@@ -24,6 +24,8 @@ baml_src/
 │   └── ns_internal/
 ├── ns_google/                root.google.GoogleClient (generateContent API)
 │   └── ns_internal/
+├── ns_claude_code/           root.claude_code.ClaudeCodeClient (the CLI as a client)
+│   └── ns_internal/          prompt folding, the outcome envelope, exec + parse
 ├── examples/plan_trip.baml   the travel-agent fixture; plan_trip_spec is the
 │                             manual form of PlanTrip@spec until the desugar exists
 ├── howto/                    the how-to pages as running code
@@ -42,6 +44,7 @@ cd _planv2
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_openai()'
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_anthropic()'
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_google()'
+../target/debug/baml-cli run -e 'live_claude_code()'   # uses the CLI's own login
 ```
 
 All three live smokes complete a real tool loop (>= 1 `ToolCompleted`) and
@@ -63,6 +66,9 @@ return a typed `Itinerary`.
   `Fallback` advances past a dead member. `FlakyClient` in the tests is the
   minimal custom client.
 - `resolve("prefix/model")` builds the right provider client.
+- The Claude Code envelope offers final-result-or-calls with `$defs`
+  lifted, and the transcript folding marks successful tool results —
+  the live smoke proves BAML tools execute through the harness.
 
 ## Deviations from the BEP pages (to sync back)
 
@@ -114,6 +120,16 @@ return a typed `Itinerary`.
 14. The failure taxonomy is its own namespace: `ai.errors` (ns_ai/ns_errors/),
     mirroring `baml.errors` — `root.ai.errors.Failure`, `classify_http`, and
     the classified classes.
+15. `ClaudeCodeClient` is a harness client over `baml.sys.exec` — no HTTP.
+    The output contract is native (`--json-schema`, `render_text("")`), BAML
+    tools ride the `outcome` envelope, and the protocol line "no tool
+    results yet means outcome MUST be calls" is required in practice: haiku
+    otherwise answers directly and invents data. `session_id` + `--resume`
+    is the phase 3 continuation candidate. The runner still drives the
+    loop — the harness's inner episode is an inside-the-turn capability —
+    but `max_steps` counts envelope rounds, and with `harness_tools`
+    non-empty a mid-run failure should classify `Unknown` rather than
+    `Safe` (not yet implemented).
 
 ## Language findings (kept in `baml describe`-verifiable form)
 

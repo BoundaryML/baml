@@ -97,6 +97,7 @@ ai
 │   ├── OpenAiClient                      the OpenAI Responses wire API
 │   ├── AnthropicClient                   the Anthropic Messages wire API
 │   ├── GoogleClient                      the Gemini generateContent wire API
+│   ├── ClaudeCodeClient                  the Claude Code CLI as a client; tools via the outcome envelope
 │   ├── Retry                             wrapper client; retries replay-safe failures
 │   └── Fallback                          wrapper client; advances to the next member
 ├── wire                                  shared helpers for client authors

@@ -13,6 +13,8 @@ function resolve(shorthand: string) -> root.ai.Client {
             root.anthropic.AnthropicClient.new(model = model)
         } else if (prefix == "google") {
             root.google.GoogleClient.new(model = model)
+        } else if (prefix == "claude-code") {
+            root.claude_code.ClaudeCodeClient.new(model = model)
         } else {
             throw baml.errors.InvalidArgument { message: `unknown client prefix: ${prefix}` }
         }

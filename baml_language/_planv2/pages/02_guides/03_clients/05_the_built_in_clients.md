@@ -456,6 +456,79 @@ When the function's return type is exactly `image` or `image[]`, the
 runner binds the turn's `Media` blocks as the final value instead of
 parsing text (`../../05_appendix/03_future_phases.md`).
 
+## Claude Code (`ClaudeCodeClient`)
+
+A harness client: the transport is the authenticated `claude` CLI as a
+local process, not HTTP, which is the first proof that `Client`
+abstracts more than wire APIs. One `invoke` is one CLI run:
+
+```
+claude -p --output-format json --model haiku --permission-mode default \
+    --no-session-persistence --tools "" --json-schema <schema> <prompt>
+```
+
+- The output contract travels natively: the client passes an empty
+  string to `render_text` and sends the schema through `--json-schema`
+  — the one shipped client whose contract is on the wire rather than
+  in the prompt.
+- The CLI's `-p` mode takes a single prompt, so the journal folds into
+  it as labeled text (`user:`, `assistant:`,
+  `tool result id=... is_error=false: ...`); each invoke is a fresh
+  process whose only memory is that text.
+- Credentials are the CLI's own login. There is no API key.
+
+BAML tools ride the `outcome` envelope, the native-schema variant of
+the `PromptTools` technique: when the toolbox is non-empty the schema
+becomes one object that offers either the final result or a tool
+request, and the prompt carries the catalog and the protocol:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "outcome": {
+      "anyOf": [
+        { "...": "schema for Itinerary; its $defs lift to the envelope root" },
+        {
+          "type": "object",
+          "properties": {
+            "calls": { "type": "array", "items": { "...": "{id, name, args}" } }
+          },
+          "required": ["calls"]
+        }
+      ]
+    }
+  },
+  "required": ["outcome"]
+}
+```
+
+A `calls` outcome normalizes to `ToolUse` blocks with
+`stop_reason: ToolUse`; the runner executes the BAML tools and the
+next invoke shows their results in the conversation text. A final
+outcome becomes the terminal `Text` candidate. Two protocol lines are
+load-bearing: an outcome with no tool results yet in the conversation
+must be a calls request (the model otherwise invents data), and a
+successful result must never be re-requested (each invoke is a fresh
+process). Claude Code's own tools (`--tools`) run inside the harness
+and are configured separately via `harness_tools`; only envelope calls
+dispatch to BAML.
+
+The result JSON carries `structured_output` (decoded directly, no
+repair), `usage` (with `cache_read_input_tokens` mapping to
+`cached_input_tokens`), `is_error`/`subtype` (mapped to `Refused`),
+and a `session_id` that the CLI's `--resume` accepts — a natural
+continuation checkpoint for phase 3.
+
+The responsibility split holds: the runner drives the loop, and the
+harness's internal episode is an inside-the-turn capability, like a
+hosted tool. Two consequences follow. `max_steps` counts envelope
+rounds, not the harness's underlying model calls, so one step can be
+long and expensive. And retry safety is honest only while
+`harness_tools` is empty: with the harness's own side-effectful tools
+enabled, a mid-run transport failure cannot claim `Safe`, and the
+client should classify it `Unknown` — not yet implemented.
+
 ## Prompt-mode tools are a wrapper, not a mode
 
 Prompt-mode tool calling — describing the tool catalog in text and
