@@ -734,9 +734,26 @@ impl BexEngine {
     pub(crate) fn convert_external_to_vm_value_with_ty<T: RootHaver + TlabHolder>(
         &self,
         holder: &mut impl HeapPermit<T>,
-        external: BexExternalValue,
+        mut external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
     ) -> Result<Value, EngineError> {
+        // A `baml.json.json` slot materializes containers with the alias as
+        // their element/value type, exactly like BAML-born `baml.json.parse`
+        // values (`serde_to_value`), so runtime type tests (`match (j) { let
+        // m: map<string, json> => ... }`) treat host and BAML json alike.
+        // `coerce_inbound_arg` already re-annotates argument trees; this hook
+        // covers the paths that convert without a coercion pass, notably
+        // host-callable return values.
+        if let Some(declared @ RuntimeTy::TypeAlias(name, _)) = expected_ty
+            && name.display_name().as_str() == "baml.json.json"
+            && matches!(
+                external,
+                BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
+            )
+            && value_satisfies_json(&external)
+        {
+            external = annotate_json_container_types(external, declared);
+        }
         // Structural host-only stash (03b §F/§G): when the declared slot resolves
         // to `RustType` (the generic var bound to `rust_type`) but the value is a
         // structural `BexExternalValue` (e.g. an unbound generic instance), ride
@@ -3601,6 +3618,27 @@ fn coerce_arg_to_declared_type_with_aliases(
             )?;
             Ok(BexExternalValue::typed(coerced, effective_type.clone()))
         }
+        // A declared `baml.json.json` slot receiving a container. Untyped
+        // bridge encoders (Go `baml.JSON`, Python dicts/lists, `--json-args`)
+        // send containers without a `value_type` annotation, which the wire
+        // decoder defaults to a scalar-union element type. Left as-is, the
+        // materialized VM map/list would carry that synthesized type and fail
+        // runtime type tests such as `match (j) { let m: map<string, json> =>
+        // ... }` — diverging from BAML-born `baml.json.parse` values, whose
+        // containers carry the `json` alias itself (`serde_to_value`).
+        // Re-annotate the container tree with the declared alias so both
+        // materialize identically. Values outside the JSON algebra are left
+        // unchanged for the standard validation paths to reject.
+        (value, declared @ RuntimeTy::TypeAlias(name, _))
+            if name.display_name().as_str() == "baml.json.json"
+                && matches!(
+                    value,
+                    BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
+                )
+                && value_satisfies_json(&value) =>
+        {
+            Ok(annotate_json_container_types(value, declared))
+        }
         (BexExternalValue::Array { items, .. }, RuntimeTy::List(expected_element, _)) => {
             Ok(BexExternalValue::Array {
                 element_type: expected_element.as_ref().clone(),
@@ -3743,6 +3781,32 @@ fn coerce_arg_to_declared_type_with_aliases(
 
         // ── Numeric / optional / union ───────────────────────────────────
         (v, ty) => coerce_numeric_to_declared_type(v, ty),
+    }
+}
+
+/// Rewrite every container annotation in a JSON value tree to the `json`
+/// alias itself: lists become `json[]`, maps become `map<string, json>`.
+/// Scalars carry no annotation and pass through. The caller has already
+/// proven the tree inhabits the JSON algebra (`value_satisfies_json`), so
+/// only `Array` and `Map` recursion arms are needed.
+fn annotate_json_container_types(value: BexExternalValue, json_ty: &RuntimeTy) -> BexExternalValue {
+    match value {
+        BexExternalValue::Array { items, .. } => BexExternalValue::Array {
+            element_type: json_ty.clone(),
+            items: items
+                .into_iter()
+                .map(|item| annotate_json_container_types(item, json_ty))
+                .collect(),
+        },
+        BexExternalValue::Map { entries, .. } => BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: json_ty.clone(),
+            entries: entries
+                .into_iter()
+                .map(|(key, entry)| (key, annotate_json_container_types(entry, json_ty)))
+                .collect(),
+        },
+        scalar => scalar,
     }
 }
 
@@ -4021,6 +4085,65 @@ mod union_container_selection_tests {
         assert!(runtime_ty_structurally_equal(
             &metadata.selected_option,
             &json
+        ));
+    }
+
+    #[test]
+    fn canonical_json_alias_reannotates_untyped_inbound_containers() {
+        // Untyped bridges (Go `baml.JSON`, Python dicts, `--json-args`) send
+        // containers without element annotations; the wire decoder synthesizes
+        // a scalar-union element type. A declared `json` slot must rewrite
+        // those to the alias itself so the materialized VM containers pass
+        // `match (j) { let m: map<string, json> => ... }` exactly like
+        // BAML-born `baml.json.parse` values.
+        let json = json_ty();
+        let nested_list = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![BexExternalValue::Int(1)],
+        };
+        let mut nested_entries = indexmap::IndexMap::new();
+        nested_entries.insert("inner".to_string(), nested_list);
+        let object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: nested_entries,
+        };
+
+        let coerced = coerce_arg_to_declared_type(object, &json).unwrap();
+        let BexExternalValue::Map {
+            key_type,
+            value_type,
+            entries,
+        } = coerced
+        else {
+            panic!("JSON object must stay a map")
+        };
+        assert!(runtime_ty_structurally_equal(&key_type, &RuntimeTy::string()));
+        assert!(runtime_ty_structurally_equal(&value_type, &json));
+        let BexExternalValue::Array { element_type, .. } = &entries["inner"] else {
+            panic!("nested JSON list must stay a list")
+        };
+        assert!(runtime_ty_structurally_equal(element_type, &json));
+
+        // A tree outside the JSON algebra is left untouched for the standard
+        // validation paths to reject.
+        let mut binary_entries = indexmap::IndexMap::new();
+        binary_entries.insert(
+            "bytes".to_string(),
+            BexExternalValue::Uint8Array(vec![1, 2]),
+        );
+        let binary = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: binary_entries,
+        };
+        let untouched = coerce_arg_to_declared_type(binary, &json).unwrap();
+        let BexExternalValue::Map { value_type, .. } = untouched else {
+            panic!("non-JSON map must stay a map")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &value_type,
+            &RuntimeTy::unknown()
         ));
     }
 
