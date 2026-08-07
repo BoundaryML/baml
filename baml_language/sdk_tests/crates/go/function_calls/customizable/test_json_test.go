@@ -179,7 +179,6 @@ func Test_canonical_json_class_union_uses_declared_field_codecs(t *testing.T) {
 	}
 }
 
-// SDK_PARITY_LINT(skip): engine-side regression exercised via the Go and Python bridges
 func Test_host_supplied_json_supports_typed_narrowing(t *testing.T) {
 	// Host-supplied json objects must materialize with `json` container
 	// typing: a `match (j) { let m: map<string, json> => ... }` inside BAML
@@ -225,10 +224,13 @@ func Test_host_supplied_json_supports_typed_narrowing(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "missing field") {
 		t.Fatalf("json_path_string(.absent) error = %v; want missing-field JsonPathError", err)
 	}
+}
 
+func Test_json_returned_from_host_callback_supports_typed_narrowing(t *testing.T) {
 	// json returned from a host callback converts on the host-return path
 	// (no argument coercion pass); it must narrow identically.
-	got, err = baml_sdk.GoJsonTestsJsonCallbackKind(ctx, func(value any) any {
+	ctx := context.Background()
+	got, err := baml_sdk.GoJsonTestsJsonCallbackKind(ctx, func(value any) any {
 		return map[string]any{"wrapped": value}
 	}, "payload")
 	if err != nil || got != "object" {
