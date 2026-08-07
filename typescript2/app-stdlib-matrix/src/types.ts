@@ -239,7 +239,13 @@ export function stateOf(links: Links, side: Side, index: number): SymbolState {
       strongest = judgement.verdict;
     }
   }
-  return strongest;
+  // `unnecessary` is a statement about a TypeScript API, not about a BAML
+  // symbol. A BAML symbol only reaches it by being named as how you would do
+  // the thing anyway — `Date.prototype.setUTCHours` is unnecessary because
+  // values are immutable, and `ZonedDateTime.from_components` is what you use
+  // instead. From that side it is simply claimed, so it reads as one. Folded
+  // here rather than in the renderers so the square and the bar cannot disagree.
+  return side === 'baml' && strongest === 'unnecessary' ? 'match' : strongest;
 }
 
 /** A tree's size, counting every descendant — what a group's bar is drawn to. */

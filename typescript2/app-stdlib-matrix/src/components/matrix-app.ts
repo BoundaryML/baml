@@ -44,16 +44,18 @@ function legendFor(side: Side): ReadonlyArray<readonly [string, string]> {
   const shared = [
     [side === 'ts' ? 'swatch-baml' : 'swatch-ts', 'in both'],
     ['swatch-striped', 'in both, reached differently'],
-    ['swatch-unnecessary', 'unnecessary in BAML'],
   ] as const;
   return side === 'ts'
     ? [
         ...shared,
         ['swatch-ts', 'no BAML counterpart'],
+        ['swatch-unnecessary', 'unnecessary in BAML'],
         ['swatch-unjudged-ts', 'not yet judged'],
       ]
-    : // The BAML side has no judged-absence state: a symbol here is either
-      // named by a judgement or not, and "not" means nothing asked about it.
+    : // The BAML side has neither of the last two. An absence names no BAML
+      // symbol, and a symbol named by an `unnecessary` judgement is named as
+      // how you would do the thing anyway, so it reads as claimed — see
+      // `stateOf`. Here a symbol is either named by a judgement or not.
       [...shared, ['swatch-baml', 'no judgement names it']];
 }
 

@@ -32,14 +32,19 @@ function segmentsFor(
   const shared = [
     ['match', side === 'ts' ? 'seg-baml' : 'seg-ts', 'in both'],
     ['divergent', 'seg-striped', 'in both, reached differently'],
-    ['unnecessary', 'seg-unnecessary', 'unnecessary in BAML'],
   ] as const;
-  // The BAML side has no judged-absence state, so its solid segment is the
-  // unnamed one.
+  // `unnecessary` sits past `none`: both say there is no counterpart, and the
+  // difference between them is why. Reading left to right the bar goes from
+  // answered, through answered-differently, to not-there, to not-needed.
+  //
+  // The BAML side has neither — an absence names no BAML symbol, and
+  // `unnecessary` folds into `match` there (see `stateOf`) — so its solid
+  // segment is the unnamed one.
   return side === 'ts'
     ? [
         ...shared,
         ['none', 'seg-ts', 'no BAML counterpart'],
+        ['unnecessary', 'seg-unnecessary', 'unnecessary in BAML'],
         ['unjudged', 'seg-unjudged', 'not yet judged'],
       ]
     : [...shared, ['unjudged', 'seg-baml', 'no judgement names it']];

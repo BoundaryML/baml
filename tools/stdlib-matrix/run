@@ -13,6 +13,7 @@ baseline_file=""
 previous_file=""
 review_all=0
 concurrency=""
+only=""
 use_llm=0
 
 absolute_path() {
@@ -26,7 +27,7 @@ usage() {
     cat <<'EOF'
 Usage: tools/stdlib-matrix/run [--output PATH] [--json-output PATH]
                                [--skip-extract] [--llm] [--previous PATH]
-                               [--review-all] [--concurrency N]
+                               [--review-all] [--concurrency N] [--only SUBJECT]
                                [--check --baseline PATH]
 
 Compare the BAML stdlib surface against the TypeScript stdlib and write two
@@ -38,9 +39,11 @@ run: they are gitignored, derived from the compiler at HEAD and the
 lockfile-pinned typescript/@types/node packages. --skip-extract reuses
 existing data/ files instead.
 
---llm is unavailable: the alignment passes are being rebuilt TypeScript-first,
-around a model that searches the BAML surface with tools rather than being
-handed a lexically narrowed menu. The deterministic name pass still runs.
+--llm judges the surface. One session per TypeScript container asks what a BAML
+developer would do instead, looking the answer up with `baml describe`,
+`baml describe --search`, the repository's own call sites, and the type system
+reference. Nothing else produces a judgement: without --llm every symbol comes
+out unjudged. Requires ANTHROPIC_API_KEY in the environment.
 
 --previous PATH carries judgements forward from an earlier report. A symbol
 keeps its previous answer when it and every type it names are unchanged, so a
@@ -56,6 +59,11 @@ question being asked has moved rather than the surface being asked about.
 --concurrency N caps how many calls are in flight (default 8). Raise it if your
 account's rate limits allow; the passes are wide, so this is what bounds a cold
 run's wall clock.
+
+--only SUBJECT judges only the sessions whose subject contains SUBJECT, as a
+substring, case-insensitively: --only Date, --only node:fs. For proving the loop
+end to end without paying for the whole surface. The report it writes is a real
+report with almost everything unjudged, so do not publish one.
 
 The report is not checked into the repository: it is a generated artifact.
 CI publishes matrix.json per run; locally it lands in report/ (gitignored).
@@ -102,6 +110,10 @@ while (($# > 0)); do
         --review-all)
             review_all=1
             shift
+            ;;
+        --only)
+            only="$2"
+            shift 2
             ;;
         --concurrency)
             concurrency="$2"
@@ -232,12 +244,26 @@ if ((check_only == 1)); then
     target="check_matrix"
     target_args+=(--baseline_file "${baseline_file}")
 elif ((use_llm == 1)); then
-    # The alignment passes are being rebuilt TypeScript-first. Refusing outright
-    # rather than falling back to the name pass: a report that silently cost
-    # nothing and judged nothing reads exactly like one that ran.
-    echo "stdlib-matrix: --llm is unavailable while the alignment passes are rebuilt" \
-         "TypeScript-first. The name pass still runs without it." >&2
-    exit 2
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        echo "stdlib-matrix: --llm requires ANTHROPIC_API_KEY in the environment" >&2
+        exit 2
+    fi
+    target="build_matrix_aligned"
+    # The sessions look things up with the compiler and with the repository, so
+    # they need to be told where both are. `repo_root` is this checkout;
+    # `baml_bin` is the same binary that produced the surface being compared,
+    # never whichever `baml` happens to be installed.
+    target_args+=(--repo_root "${tool_repo}")
+    target_args+=(--type_system_file "${tool_repo}/baml_language/TYPE_SYSTEM.md")
+    target_args+=(--skill_cache "${data_dir}/baml_skill.md")
+    target_args+=(--baml_bin "${baml_bin}")
+    target_args+=(--scratch_root "${data_dir}/scratch")
+    if [[ -n "${concurrency}" ]]; then
+        target_args+=(--concurrency "${concurrency}")
+    fi
+    if [[ -n "${only}" ]]; then
+        target_args+=(--only "${only}")
+    fi
 fi
 
 cd "${tool_repo}"
@@ -343,3 +369,17 @@ echo "TypeScript: $(field .report.counts.matched) of $(field .report.counts.ts_s
      "$(field .report.counts.unjudged) unjudged"
 echo "BAML: $(field '(.report.counts.baml_symbols - .report.counts.baml_unclaimed)') of" \
      "$(field .report.counts.baml_symbols) symbols are named by a judgement"
+
+if ((use_llm == 1)); then
+    echo "Sessions: $(field .carried) carried · $(field .sessions) sessions ·" \
+         "$(field .judged) judged"
+    rejected_count="$(field '(.rejected | length)')"
+    if [[ "${rejected_count}" != "0" && "${rejected_count}" != "?" ]]; then
+        echo "${rejected_count} claims refused:" >&2
+        jq -r '.rejected[]? | "  refused: \(.)"' "${temporary_dir}/result.json" >&2 || true
+    fi
+    failures="$(field .failures)"
+    if [[ "${failures}" != "0" && "${failures}" != "?" ]]; then
+        echo "${failures} sessions did not come back; see the failures list in the report" >&2
+    fi
+fi

@@ -125,6 +125,77 @@ function check_matrix(
     }
 }
 
+/// `build_matrix_aligned`'s result: the same artifacts, what the sessions
+/// contributed, and what was refused.
+class AlignedMatrixResult {
+    markdown: string,
+    output_file: string,
+    json_file: string,
+    report: SymbolMatrix,
+    carried: int,
+    sessions: int,
+    judged: int,
+    rejected: string[],
+    failures: int,
+}
+
+/// The full pass: the surfaces, then a session per TypeScript container over
+/// everything a previous revision did not already answer.
+///
+/// Reads ANTHROPIC_API_KEY from the environment.
+function build_matrix_aligned(
+    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
+    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
+    output_file: string = "tools/stdlib-matrix/report/matrix.md",
+    json_file: string = "tools/stdlib-matrix/report/matrix.json",
+    baml_surface_sha256: string = "",
+    previous_file: string = "",
+    review_all: bool = false,
+    concurrency: int = 0,
+    repo_root: string = ".",
+    type_system_file: string = "baml_language/TYPE_SYSTEM.md",
+    skill_cache: string = "tools/stdlib-matrix/data/baml_skill.md",
+    baml_bin: string = "baml",
+    scratch_root: string = "tools/stdlib-matrix/data/scratch",
+    only: string = "",
+) -> AlignedMatrixResult {
+    // The sessions see the previous revision too: a symbol that changed still
+    // arrives with what was concluded about it last time, so the model can
+    // repeat a conclusion rather than rediscover it. Read once, used twice.
+    let revision: Revision? = if (previous_file.length() > 0) {
+        load_revision(previous_file)
+    } else {
+        null
+    };
+    let base = build_matrix(
+        baml_surface_file = baml_surface_file,
+        ts_surface_file = ts_surface_file,
+        output_file = output_file,
+        json_file = json_file,
+        baml_surface_sha256 = baml_surface_sha256,
+        review_all = review_all,
+        previous = revision,
+    );
+    // Fetched before anything is spent. A run that loses its documentation
+    // produces worse judgements that look exactly like good ones, so this is
+    // the right place to fail.
+    let skill = load_skill(skill_cache);
+    report_progress(`skill loaded, ${skill.length()} bytes`);
+    let box = build_toolbox(repo_root, type_system_file, baml_bin, skill, scratch_root);
+    let outcome = align_matrix(base.report, box, revision, concurrency, only);
+    AlignedMatrixResult {
+        markdown: render_matrix_markdown(outcome.matrix),
+        output_file: output_file,
+        json_file: json_file,
+        report: outcome.matrix,
+        carried: base.carried,
+        sessions: outcome.sessions,
+        judged: outcome.judged,
+        rejected: outcome.rejected,
+        failures: outcome.matrix.failures.length(),
+    }
+}
+
 function main() -> MatrixResult {
     build_matrix()
 }
@@ -145,10 +216,11 @@ function dump_tools(
     type_system_file: string = "baml_language/TYPE_SYSTEM.md",
     skill_cache: string = "tools/stdlib-matrix/data/baml_skill.md",
     baml_bin: string = "baml",
+    scratch_root: string = "tools/stdlib-matrix/data/scratch",
     tool: string = "",
     argument: string = "",
 ) -> ToolReport {
-    let box = build_toolbox(repo_root, type_system_file, baml_bin);
+    let box = build_toolbox(repo_root, type_system_file, baml_bin, "", scratch_root);
     let answers: string[] = [];
     if (tool.length() > 0) {
         answers.push(run_tool(box, tool, argument));
@@ -168,5 +240,53 @@ function dump_tools(
         doc_sections: box.doc_headings,
         skill_bytes: load_skill(skill_cache).length(),
         answers: answers,
+    }
+}
+
+/// What the sessions would be asked, without asking. Inspection only — this is
+/// how a prompt change is reviewed before it costs anything.
+class PlanReport {
+    sessions: int,
+    symbols_queued: int,
+    largest: string,
+    /// The whole first turn of one session, rendered exactly as it will be sent.
+    sample: string,
+}
+
+function dump_plan(
+    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
+    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
+    subject: string = "(globals).Date",
+) -> PlanReport {
+    let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), "inspection");
+    let requests = session_requests(matrix, null);
+    let queued = 0;
+    let largest = "";
+    let most = 0;
+    let sample = "";
+    for (let request in requests) {
+        queued += request.ts_lines.length();
+        if (request.ts_lines.length() > most) {
+            most = request.ts_lines.length();
+            largest = `${request.subject} (${request.ts_lines.length()} symbols)`;
+        }
+        if (request.subject == subject) {
+            // The skill is fetched at run time and is the same for every
+            // session, so it is left out here: what changes between runs, and
+            // what a review is actually looking at, is the rest.
+            sample
+                = render_turns(
+                    [
+                        Turn { role: "system", text: session_rules() },
+                        Turn { role: "user", text: session_user(request) },
+                    ],
+                );
+        }
+    }
+    PlanReport {
+        sessions: requests.length(),
+        symbols_queued: queued,
+        largest: largest,
+        sample: sample,
     }
 }

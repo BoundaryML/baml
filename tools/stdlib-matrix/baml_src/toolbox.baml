@@ -33,23 +33,41 @@
 
 /// Everything the tools answer from, assembled once per run.
 class Toolbox {
+    /// The BAML skill, which every session is given up front. Held here
+    /// because it is the other half of what a session is handed: the tools let
+    /// it look things up, and this tells it what the language is.
+    skill: string,
     /// TYPE_SYSTEM.md, split on its `##` headings.
     doc_headings: string[],
     doc_bodies: map<string, string>,
     /// Where the subprocess tools run.
     repo_root: string,
+    /// Where snippet checks build their throwaway projects.
+    scratch_root: string,
     /// The compiler to ask. Passed in rather than found on `PATH`, so a run
     /// describes the stdlib it is comparing rather than whichever `baml` a
     /// machine happens to have installed.
+    ///
+    /// Absolute, or on `PATH`. A relative path breaks the tools that set a
+    /// working directory for the child, since the program is resolved against
+    /// that directory rather than against this process's.
     baml_bin: string,
 }
 
-function build_toolbox(repo_root: string, type_system_file: string, baml_bin: string) -> Toolbox {
+function build_toolbox(
+    repo_root: string,
+    type_system_file: string,
+    baml_bin: string,
+    skill: string,
+    scratch_root: string,
+) -> Toolbox {
     let sections = load_doc_sections(type_system_file);
     Toolbox {
+        skill: skill,
         doc_headings: sections.headings,
         doc_bodies: sections.bodies,
         repo_root: repo_root,
+        scratch_root: scratch_root,
         baml_bin: baml_bin,
     }
 }
@@ -345,5 +363,78 @@ function fetch_skill() -> string {
     }
     response.text() catch_all (_) {
         _ => "",
+    }
+}
+
+// ── checking a snippet ──────────────────────────────────────────────────────
+
+/// Whether a BAML snippet compiles, and what is wrong with it if not.
+///
+/// An example that does not compile is worse than no example. It is the part of
+/// a judgement a reader will copy, and it arrives with the authority of
+/// everything around it — a plausible call to a method that does not exist
+/// teaches a wrong API more effectively than prose ever could. So every snippet
+/// is put through the real compiler, and a model that writes one that fails is
+/// shown the diagnostic and asked again.
+///
+/// Compiled rather than run: checking is the strongest guarantee available
+/// without side effects, and an example is allowed to delete files, spawn
+/// processes and make requests. Type-correct is the bar; behaviour is the
+/// reviewer's job.
+///
+/// Returns null when the snippet is good.
+function check_snippet(box: Toolbox, code: string) -> string? {
+    if (code.trim().length() == 0) {
+        return "the snippet is empty";
+    }
+    // A directory per check, because sessions run concurrently and would
+    // otherwise overwrite each other's snippet mid-compile.
+    let directory = `${box.scratch_root}/${baml.id.new()}`;
+    let outcome = check_snippet_in(box, directory, code) catch_all (error) {
+        _ => `could not check the snippet: ${error}`,
+    };
+    let _ = baml.fs.remove_dir_all(directory) catch_all (_) {
+        _ => null,
+    };
+    if (outcome.length() == 0) {
+        null
+    } else {
+        outcome
+    }
+}
+
+/// The check itself, in a directory the caller cleans up. Returns "" when the
+/// snippet compiles.
+function check_snippet_in(
+    box: Toolbox,
+    directory: string,
+    code: string,
+) -> string throws baml.errors.Io | baml.errors.Timeout {
+    baml.fs.mkdir(`${directory}/baml_src`, baml.fs.MkdirOptions { recursive: true });
+    baml.fs.write(`${directory}/baml.toml`, "[package]\nname = \"snippet\"\n");
+    baml.fs.write(`${directory}/baml_src/snippet.baml`, code);
+    let result = baml.sys.exec(
+        box.baml_bin,
+        ["check", "--color", "never", "--directory", directory],
+        // No `cwd`: `--directory` already says what to compile, and setting
+        // one would re-root the compiler's own path. `baml.sys.exec`
+        // resolves the program against the child's working directory, so a
+        // relative `baml_bin` plus a `cwd` is a spawn failure.
+        baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 60000, stdin: null },
+    );
+    if (result.ok()) {
+        return "";
+    }
+    let out = baml.String.from_utf8(result.stdout) catch_all (_) {
+        _ => "",
+    };
+    let err = baml.String.from_utf8(result.stderr) catch_all (_) {
+        _ => "",
+    };
+    let text = `${strip_warnings(out)}\n${strip_warnings(err)}`.trim();
+    if (text.length() == 0) {
+        `the snippet did not compile (exit ${result.exit_code})`
+    } else {
+        text
     }
 }
