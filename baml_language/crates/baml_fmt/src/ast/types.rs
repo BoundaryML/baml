@@ -583,7 +583,25 @@ impl UnionTypeMember {
                 let mut rest = Vec::new();
                 while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
                     let dot = t::Dot::from_cst(dot)?;
-                    let word: t::Word = it.expect_parse()?;
+                    let segment = it.expect_next("type path segment after `.`")?;
+                    let token = StrongAstError::assert_is_token(segment)?;
+                    if !matches!(
+                        token.kind(),
+                        SyntaxKind::WORD
+                            | SyntaxKind::KW_SPAWN
+                            | SyntaxKind::KW_AWAIT
+                            | SyntaxKind::KW_CLASS
+                            | SyntaxKind::KW_ENUM
+                            | SyntaxKind::KW_INTERFACE
+                            | SyntaxKind::KW_FUNCTION
+                    ) {
+                        return Err(StrongAstError::UnexpectedKindDesc {
+                            expected_desc: "type path segment".into(),
+                            found: token.kind(),
+                            at: token.text_range(),
+                        });
+                    }
+                    let word = t::Word::new_from_span(token.text_range());
                     rest.push((dot, word));
                 }
                 Ok(UnionTypeMember::Path(PathType { first, rest }))

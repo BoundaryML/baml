@@ -2089,11 +2089,11 @@ impl BexVm {
                     ObjectType::of(other)
                 ),
             },
-            // A `type` value (e.g. `type.of<T>()`) — its concrete type is
-            // the `type` primitive, the subject of `implement I for type`.
-            Object::Type(_) => ConcreteRealizedTy::Type {
-                attr: TyAttr::default(),
-            },
+            // A `type` value reports its precise sealed reflection-kind class.
+            // Each kind class is a subtype of the `type` carrier.
+            Object::Type(type_value) => {
+                baml_type::type_kind::classify_type(&type_value.ty).concrete_class_ty()
+            }
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
             Object::Array(arr) => {

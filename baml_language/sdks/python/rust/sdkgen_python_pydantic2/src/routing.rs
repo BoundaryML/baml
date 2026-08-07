@@ -58,27 +58,26 @@ pub(crate) fn route(name: &Name, symbol: &Symbol) -> LeafPath {
     route_inner(name, !matches!(symbol, Symbol::Function(_)))
 }
 
+/// Python's hard keywords. A keyword cannot be used in a dotted reference or
+/// relative import, so every routed occurrence receives a trailing `_`.
+const PYTHON_KEYWORDS: &[&str] = &[
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
+    "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
+    "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
+    "with", "yield",
+];
+
 /// Sanitize a path segment so it's a usable Python module identifier.
-/// Handles `assert` (the BAML stdlib package whose name collides with
-/// Python's `assert` keyword — `from . import assert` is a `SyntaxError`)
-/// and `type` (the `baml.type` carrier namespace, BEP-066: a submodule
-/// named `type` re-exported from `baml/__init__.pyi` shadows the builtin
-/// `type` in sibling annotations — pyright's reportInvalidTypeForm
-/// "Module cannot be used as a type"; BEP-066 H-1 prescribes the `type_`
-/// mangling). The routed leaf becomes `…/assert_/…` / `baml/type_/…` and
-/// cross-leaf references render accordingly. The runtime BAML FQN passed
-/// to `_define_function` is built from `Name`, not `LeafPath`, so it is
-/// *not* affected.
 ///
-/// TODO(reserved-keywords): generalize to all Python keywords and any
-/// other invalid identifiers. User packages or namespaces named after
-/// keywords (`class`, `def`, `pass`, …) would hit the same issue, but
-/// none exist today; broaden this set when one shows up.
+/// In addition to the hard keywords above, `type` retains its existing
+/// trailing-underscore spelling. The `baml.type` carrier submodule would
+/// otherwise shadow the builtin `type` in sibling annotations. Runtime BAML
+/// FQNs are built from `Name`, not `LeafPath`, so routing does not alter them.
 fn sanitize_python_module_segment(seg: &str) -> String {
-    match seg {
-        "assert" => "assert_".to_string(),
-        "type" => "type_".to_string(),
-        _ => seg.to_string(),
+    if seg == "type" || PYTHON_KEYWORDS.contains(&seg) {
+        format!("{seg}_")
+    } else {
+        seg.to_string()
     }
 }
 
@@ -318,6 +317,29 @@ mod tests {
         let n = name("user", &["assert"], "Foo");
         let lp = route(&n, &class_sym(&n));
         assert_eq!(lp.segments, vec!["assert_".to_string()]);
+    }
+
+    #[test]
+    fn every_python_keyword_segment_is_sanitized_in_packages_and_namespaces() {
+        for &keyword in PYTHON_KEYWORDS {
+            let expected = format!("{keyword}_");
+
+            let package_name = name(keyword, &[], "Thing");
+            let package_leaf = route(&package_name, &class_sym(&package_name));
+            assert_eq!(
+                package_leaf.segments,
+                vec!["vendor".to_string(), expected.clone()],
+                "package segment {keyword:?}",
+            );
+
+            let namespace_name = name("user", &[keyword], "Thing");
+            let namespace_leaf = route(&namespace_name, &class_sym(&namespace_name));
+            assert_eq!(
+                namespace_leaf.segments,
+                vec![expected],
+                "namespace segment {keyword:?}",
+            );
+        }
     }
 
     #[test]

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 417
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:30
@@ -272,10 +271,25 @@ class            baml.random.SystemRandom         <builtin>/baml/ns_random/rando
 class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
 class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:114
 class            baml.reflect.Arg                 <builtin>/baml/ns_reflect/reflect.baml:2
-class            baml.reflect.Signature           <builtin>/baml/ns_reflect/reflect.baml:17
-class            baml.reflect.InvalidArgumentError <builtin>/baml/ns_reflect/reflect.baml:39
-function         baml.reflect.signature           <builtin>/baml/ns_reflect/reflect.baml:52
-function         baml.reflect.call_any            <builtin>/baml/ns_reflect/reflect.baml:67
+class            baml.reflect.Meta                <builtin>/baml/ns_reflect/reflect.baml:14
+interface        baml.reflect.TypeView            <builtin>/baml/ns_reflect/reflect.baml:22
+type             baml.reflect.TypeKind            <builtin>/baml/ns_reflect/reflect.baml:27
+class            baml.reflect.Signature           <builtin>/baml/ns_reflect/reflect.baml:33
+class            baml.reflect.InvalidArgumentError <builtin>/baml/ns_reflect/reflect.baml:55
+function         baml.reflect.signature           <builtin>/baml/ns_reflect/reflect.baml:68
+function         baml.reflect.call_any            <builtin>/baml/ns_reflect/reflect.baml:83
+class            baml.reflect.array.Type          <builtin>/baml/ns_reflect/ns_array/array.baml:2
+class            baml.reflect.class.Field         <builtin>/baml/ns_reflect/ns_class/class.baml:1
+class            baml.reflect.class.Type          <builtin>/baml/ns_reflect/ns_class/class.baml:8
+class            baml.reflect.enum.Value          <builtin>/baml/ns_reflect/ns_enum/enum.baml:1
+class            baml.reflect.enum.Type           <builtin>/baml/ns_reflect/ns_enum/enum.baml:7
+class            baml.reflect.function.Parameter  <builtin>/baml/ns_reflect/ns_function/function.baml:1
+class            baml.reflect.function.Type       <builtin>/baml/ns_reflect/ns_function/function.baml:9
+class            baml.reflect.interface.Type      <builtin>/baml/ns_reflect/ns_interface/interface.baml:2
+class            baml.reflect.literal.Type        <builtin>/baml/ns_reflect/ns_literal/literal.baml:2
+class            baml.reflect.map.Type            <builtin>/baml/ns_reflect/ns_map/map.baml:2
+class            baml.reflect.primitive.Type      <builtin>/baml/ns_reflect/ns_primitive/primitive.baml:2
+class            baml.reflect.union.Type          <builtin>/baml/ns_reflect/ns_union/union.baml:2
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:5
 function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:12
 function         baml.schema.json_schema          <builtin>/baml/ns_schema/schema.baml:8

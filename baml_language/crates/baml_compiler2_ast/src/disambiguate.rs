@@ -20,6 +20,13 @@ pub fn is_field_attr(name: &str) -> bool {
     FIELD_ATTR_NAMES.contains(&name)
 }
 
+/// Whether a direct outer attribute on a class field belongs to field metadata.
+/// Known type transforms stay on the type; unknown names are user schema
+/// annotations and are hoisted for reflection read-back.
+pub(crate) fn should_hoist_field_attr(name: &str) -> bool {
+    is_field_attr(name) || !name.starts_with("stream.")
+}
+
 /// Post-lowering validation: report field attrs that appear in nested type
 /// positions (inside parens, on union members, inside generics).
 /// These were not hoisted during lowering because they weren't at the

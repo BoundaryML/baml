@@ -202,9 +202,9 @@ test "of_value_array_reports_element_type" {
     assert.is_true(type.of_value(xs) == type.of<int[]>())
 }
 
-test "of_value_of_a_type_value_is_type" {
-    // A `type` value's concrete type is the `type` primitive itself.
-    assert.is_true(type.of_value(type.of<User>()) == type.of<type>())
+test "of_value_of_a_type_value_is_precise_kind" {
+    // A reflected class type value has the sealed class-kind view as its concrete type.
+    assert.is_true(type.of_value(type.of<User>()) == type.of<baml.reflect.class.Type>())
 }
 
 test "of_value_widened_unknown_slot" {

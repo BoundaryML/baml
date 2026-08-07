@@ -825,6 +825,69 @@ mod tests {
     }
 
     #[test]
+    fn reflect_kind_namespaces_are_routed_legally_across_the_generated_surface() {
+        let mut pool: SymbolPool = HashMap::new();
+        let kind_namespaces = [
+            ("class", "class_"),
+            ("enum", "enum"),
+            ("interface", "interface"),
+            ("function", "function"),
+        ];
+
+        for (source, _) in kind_namespaces {
+            let type_name = cg_name("baml", &["reflect", source], "Type");
+            pool.insert(type_name.clone(), class(type_name));
+        }
+
+        let consumer_name = cg_name("user", &["consumer"], "KindViews");
+        pool.insert(
+            consumer_name.clone(),
+            Symbol::Class(Class {
+                generic_params: Vec::new(),
+                name: consumer_name,
+                docstring: None,
+                properties: kind_namespaces
+                    .iter()
+                    .map(|(source, _)| ClassProperty {
+                        name: BaseName::new(format!("{source}_type")),
+                        docstring: None,
+                        ty: class_ty(cg_name("baml", &["reflect", source], "Type"), vec![]),
+                    })
+                    .collect(),
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let reflect_pyi = &out[&PathBuf::from("baml/reflect/__init__.pyi")];
+        let consumer_py = &out[&PathBuf::from("consumer/__init__.py")];
+        let consumer_pyi = &out[&PathBuf::from("consumer/__init__.pyi")];
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+
+        for (source, routed) in kind_namespaces {
+            assert!(out.contains_key(&PathBuf::from(format!("baml/reflect/{routed}/__init__.py"))));
+            if source != routed {
+                assert!(
+                    !out.contains_key(&PathBuf::from(format!("baml/reflect/{source}/__init__.py")))
+                );
+            }
+            assert!(reflect_pyi.contains(&format!("from . import {routed}\n")));
+
+            let reference = format!("baml.reflect.{routed}.Type");
+            assert!(consumer_py.contains(&reference));
+            assert!(consumer_pyi.contains(&reference));
+            assert!(typemap.contains(&format!(
+                "\"baml.reflect.{source}.Type\": (\"baml_sdk.baml.reflect.{routed}\", \"Type\")"
+            )));
+        }
+
+        assert!(!consumer_py.contains("baml.reflect.class.Type"));
+        assert!(!consumer_pyi.contains("baml.reflect.class.Type"));
+    }
+
+    #[test]
     fn enum_body_renders() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Sentiment");

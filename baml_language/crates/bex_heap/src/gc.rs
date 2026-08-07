@@ -1390,10 +1390,14 @@ mod tests {
                 name: "A".to_string(),
                 description: None,
                 alias: None,
+                docstring: None,
+                other: Default::default(),
                 skip: false,
             }],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
         }))];
         let debug = HeapDebuggerConfig {
@@ -1434,10 +1438,14 @@ mod tests {
                 }),
                 description: None,
                 alias: None,
+                docstring: None,
+                other: Default::default(),
                 skip: false,
             }],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
@@ -2079,6 +2087,8 @@ mod tests {
             fields: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 0,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
@@ -2122,6 +2132,8 @@ mod tests {
             variants: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: TyAttr::default(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
@@ -2347,6 +2359,8 @@ mod tests {
             fields: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 42,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
@@ -2373,6 +2387,8 @@ mod tests {
             variants: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: TyAttr::default(),
         })));
 
@@ -2798,6 +2814,8 @@ mod tests {
             fields: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             type_tag: 0,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
@@ -2815,6 +2833,8 @@ mod tests {
             variants: vec![],
             description: None,
             alias: None,
+            docstring: None,
+            other: Default::default(),
             ty_attr: TyAttr::default(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
