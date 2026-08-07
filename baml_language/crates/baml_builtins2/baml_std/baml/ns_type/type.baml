@@ -41,13 +41,3 @@ function of<T>() -> type {
 function of_value(v: unknown) -> type throws never {
   $rust_function
 }
-
-/// Pair this type value with schema metadata without changing its mint.
-//baml:mut_vm
-function meta(
-  self,
-  alias: string? = null,
-  description: string? = null,
-  docstring: string? = null,
-  other: map<string, string> = {},
-) -> baml.reflect.WithMeta<type> throws never { $rust_function }

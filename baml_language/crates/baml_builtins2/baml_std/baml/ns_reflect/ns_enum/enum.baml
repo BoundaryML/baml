@@ -10,14 +10,14 @@ function value(
   alias: string? = null,
   description: string? = null,
   docstring: string? = null,
-  other: map<string, string> = {},
+  other: map<string, string>? = null,
 ) -> Value throws never { $rust_function }
 
 /// Mint a fresh runtime enum definition. Every evaluation has distinct type
 /// identity even when its name and rows are byte-identical.
 //baml:mut_vm
 //baml:fallible
-function new(name: string, values: (string | Value)[]) -> Type throws baml.reflect.errors.CompilationError {
+function new(name: string, values: (string | Value)[]) -> type throws baml.reflect.errors.CompilationError {
   $rust_function
 }
 

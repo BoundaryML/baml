@@ -478,6 +478,32 @@ mod tests {
     }
 
     #[test]
+    fn call_unreflect_bare_path_keeps_its_operand() {
+        let function = first_function(parse_and_lower(
+            "function main(t: type) -> type { return type.of<unreflect(t)>() }",
+        ));
+        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
+            panic!("expected expression body")
+        };
+        let operand = body
+            .exprs
+            .iter()
+            .find_map(|(_, expr)| match expr {
+                Expr::Call { type_args, .. } => type_args.iter().find_map(|arg| match arg {
+                    crate::ast::TypeArg::Unreflect(operand) => Some(*operand),
+                    crate::ast::TypeArg::Static(_) => None,
+                }),
+                _ => None,
+            })
+            .expect("expected unreflect type argument");
+        assert!(
+            matches!(&body.exprs[operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
+            "unreflect operand lowered as {:?}",
+            body.exprs[operand]
+        );
+    }
+
+    #[test]
     fn llm_function_user_client_param_is_reserved() {
         let source = r##"
 client<llm> GPT4 {

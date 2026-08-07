@@ -395,7 +395,10 @@ fn lower_function(
                         name.as_str(),
                         &param_names,
                         client_arg_name,
-                        Vec::new(),
+                        return_type
+                            .as_ref()
+                            .map(|return_type| vec![return_type.clone()])
+                            .unwrap_or_default(),
                         backtick,
                         llm_body_def.span,
                     );

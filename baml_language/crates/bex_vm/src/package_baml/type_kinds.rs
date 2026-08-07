@@ -25,9 +25,9 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
         alias: Option<&bex_str::BexStr>,
         description: Option<&bex_str::BexStr>,
         docstring: Option<&bex_str::BexStr>,
-        other: &IndexMap<bex_str::BexStr, Value>,
+        other: Option<&IndexMap<bex_str::BexStr, Value>>,
     ) -> Value {
-        let other = string_map(vm, other);
+        let other = other.map_or_else(IndexMap::new, |other| string_map(vm, other));
         let meta = alloc_meta(
             vm,
             alias.map(bex_str::BexStr::as_str),

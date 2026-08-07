@@ -673,7 +673,22 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
-            ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
+            ast::Expr::Call {
+                callee,
+                type_args,
+                args,
+            } => {
+                self.walk_expr(*callee, body, source_map, true);
+                for type_arg in type_args {
+                    if let ast::TypeArg::Unreflect(operand) = type_arg {
+                        self.walk_expr(*operand, body, source_map, true);
+                    }
+                }
+                for arg in args {
+                    self.walk_expr(arg.expr, body, source_map, true);
+                }
+            }
+            ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
                 for arg in args {
                     self.walk_expr(arg.expr, body, source_map, true);

@@ -2615,16 +2615,23 @@ impl LoweringContext {
                         .next()
                         .map(|expr| self.lower_expr(&expr))
                         .or_else(|| {
+                            let mut skipped_marker = false;
                             node.children_with_tokens()
                                 .filter_map(rowan::NodeOrToken::into_token)
                                 .find(|token| {
-                                    !token.kind().is_trivia()
-                                        && !matches!(
+                                    if token.kind().is_trivia()
+                                        || matches!(
                                             token.kind(),
-                                            SyntaxKind::WORD
-                                                | SyntaxKind::L_PAREN
-                                                | SyntaxKind::R_PAREN
+                                            SyntaxKind::L_PAREN | SyntaxKind::R_PAREN
                                         )
+                                    {
+                                        return false;
+                                    }
+                                    if !skipped_marker && token.text() == "unreflect" {
+                                        skipped_marker = true;
+                                        return false;
+                                    }
+                                    true
                                 })
                                 .map(|token| {
                                     let expr = lower_bare_token_expr(self, &token);

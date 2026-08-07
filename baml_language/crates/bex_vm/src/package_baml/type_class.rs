@@ -6,20 +6,39 @@ use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolv
 use crate::{BexVm, errors::VmRustFnError};
 
 impl BamlNamespaceType for PackageBamlImpl {
+    /// BEP-066 K-13: `type.of_value(v)` — the runtime `type` value describing
+    /// `v`'s concrete type, reconstructed by `BexVm::value_concrete_ty`.
+    ///
+    /// K-12 holds by construction: `value_concrete_ty` reports value types
+    /// (`int` for `5`), never literal types. A value with no reconstructable
+    /// BAML type — a compile-time definition object (package, class, enum,
+    /// interface, impl rule) or an opaque native handle — yields the `unknown`
+    /// type value, the same fail-open convention `reflect.signature` /
+    /// `reflect.call_any` use for unreconstructable argument types.
+    fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
+        let ty = vm
+            .value_concrete_ty(*v)
+            .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
+        Ok(Value::object(vm.alloc_static_type(ty)))
+    }
+}
+
+impl BamlClassTypeValue for PackageBamlImpl {
     fn meta(
         vm: &mut BexVm,
         self_value: &Value,
         alias: Option<&bex_str::BexStr>,
         description: Option<&bex_str::BexStr>,
         docstring: Option<&bex_str::BexStr>,
-        other: &IndexMap<bex_str::BexStr, Value>,
+        other: Option<&IndexMap<bex_str::BexStr, Value>>,
     ) -> Value {
         fn opt_string(vm: &mut BexVm, value: Option<&bex_str::BexStr>) -> Value {
             value.map_or(Value::NULL, |s| Value::object(vm.alloc_string(s.clone())))
         }
 
         let entries = other
-            .iter()
+            .into_iter()
+            .flatten()
             .map(|(key, value)| {
                 let value = vm
                     .as_string(value)
@@ -46,24 +65,6 @@ impl BamlNamespaceType for PackageBamlImpl {
         .to_value(vm)
     }
 
-    /// BEP-066 K-13: `type.of_value(v)` — the runtime `type` value describing
-    /// `v`'s concrete type, reconstructed by `BexVm::value_concrete_ty`.
-    ///
-    /// K-12 holds by construction: `value_concrete_ty` reports value types
-    /// (`int` for `5`), never literal types. A value with no reconstructable
-    /// BAML type — a compile-time definition object (package, class, enum,
-    /// interface, impl rule) or an opaque native handle — yields the `unknown`
-    /// type value, the same fail-open convention `reflect.signature` /
-    /// `reflect.call_any` use for unreconstructable argument types.
-    fn of_value(vm: &mut BexVm, v: &Value) -> Result<Value, VmRustFnError> {
-        let ty = vm
-            .value_concrete_ty(*v)
-            .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
-        Ok(Value::object(vm.alloc_static_type(ty)))
-    }
-}
-
-impl BamlClassTypeValue for PackageBamlImpl {
     fn kind(_vm: &BexVm, self_value: &Value) -> Value {
         *self_value
     }
