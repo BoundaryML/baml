@@ -8,12 +8,17 @@ structure. During the run it is the transcript source: each model turn
 renders from it. After the run it is the trace: `RunResult.journal`
 holds the complete record.
 
-The journal is append-only, and only the runner writes it. Events are
-never rewritten, so what a client rendered on turn three is derivable
-from the journal at turn three. `Journal.with(events)` is not a write:
-it returns an extended copy for rendering — how a runner shows the
-model something without recording it — and there is no public append,
-so the copy has no path into durable state
+The journal is append-only, and the driving runner is the only writer:
+clients and tools never append. `Journal.append_all(events)` is the
+write, and events are never rewritten, so what a client rendered on
+turn three is derivable from the journal at turn three.
+
+The journal is the complete record. Repair attempts, correction
+requests, and failures are ordinary events, committed like everything
+else — there is no side channel that shows the model something without
+recording it. What varies is rendering, not the record: a journal-only
+event such as `ToolRequested` lowers to nothing, and later features
+filter the transcript the same way
 (`../03_how_to/01_retry_a_failed_parse_with_feedback.md`).
 
 ## Built-in events

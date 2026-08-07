@@ -2,8 +2,9 @@
 
 ## The catalog
 
-Every class implements `Failure` unless noted. All live under
-`ai` except `baml.errors.UnknownError`.
+Every class implements `Failure` unless noted. All live under the
+`ai.errors` namespace, mirroring `baml.errors`, except
+`baml.errors.UnknownError` itself.
 
 | Class | Fields | Retry safety | Thrown by | Condition |
 |---|---|---|---|---|
@@ -13,7 +14,7 @@ Every class implements `Failure` unless noted. All live under
 | `Refused` | `provider: string`, `reason: string`, `raw_body: string?` | `Safe` | clients | the model or provider declined to answer (`stop_reason: Refused`) |
 | `ParseFailed` | `provider: string`, `raw_output: string` | `Safe` | clients, the runner | an unusable response envelope, a truncated turn (`MaxTokens`), or a final candidate that repair could not fix |
 | `StepBudgetExceeded` | `steps: int` | `Safe` | the runner | `max_steps` model turns completed without a final output |
-| `ToolFailedError` | `id: string`, `name: string`, `message: string`, `cause: (Failure \| baml.errors.UnknownError)?` | `Safe` | the runner | a `Raise`-mode tool threw; the `ToolFailed` event is appended first |
+| `ToolFailedError` | `id: string`, `name: string`, `message: string`, `cause: Failure?` | `Safe` | the runner | a `Raise`-mode tool threw; the `ToolFailed` event is appended first |
 | `baml.errors.UnknownError` | `message: string` | not a `Failure` | anywhere | an untyped throw crossed a boundary and was wrapped |
 
 `Unsafe` and `Unknown` have no built-in class in this phase, because a

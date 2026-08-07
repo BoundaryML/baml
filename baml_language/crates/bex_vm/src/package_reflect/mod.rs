@@ -224,6 +224,41 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     normalize::is_subtype(&actual, &expected, vm)
 }
 
+/// The one implicit conversion at the reflection call boundary: an integer
+/// value supplied for a `float` (or `float?`) parameter widens to float.
+///
+/// Dynamic argument maps arrive from sources that follow JSON Schema's
+/// `number`, which admits integral literals (an LLM emits `{"budget": 150}`
+/// for a `float` parameter), so the boundary accepts what the schema
+/// promised. The language itself keeps no implicit int→float coercion; this
+/// applies only where `call_any` validates `unknown` values against the
+/// callee's signature. Returns `None` when the widening does not apply —
+/// non-int values, non-float parameters — and nothing else converts (no
+/// float→int truncation, no string parsing).
+fn widen_int_for_float(vm: &mut BexVm, value: Value, expected: &RealizedTy) -> Option<Value> {
+    let i = value.as_int()?;
+    // `strip_null` reduces `float?` (the nullable union) to its non-null
+    // member, so plain `float` and `float?` both widen; a wider union such
+    // as `float | string` stays an error, as does everything else.
+    match expected.strip_null() {
+        RealizedTy::Float { .. } => {
+            // Widen only when the conversion is exact. An f64 represents
+            // every integer up to 2^53; beyond that, silent precision loss
+            // would corrupt the argument, so the value stays an
+            // InvalidArgumentError like any other mismatch.
+            #[allow(clippy::cast_precision_loss)]
+            let f = i as f64;
+            #[allow(clippy::cast_possible_truncation)]
+            if f as i64 == i {
+                Some(Value::object(vm.alloc_float(f)))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
 ///
 /// Every argument is keyed by parameter name; a nameless positional is
@@ -272,11 +307,15 @@ fn call_any_impl(
         }
         match (param.mode, value) {
             (_, Some(value)) => {
-                if !value_fits(vm, value, &param.ty) {
+                let value = if value_fits(vm, value, &param.ty) {
+                    value
+                } else if let Some(widened) = widen_int_for_float(vm, value, &param.ty) {
+                    widened
+                } else {
                     let expected = param.ty.clone();
                     let got = value_realized_ty(vm, value);
                     return raise_invalid_argument(vm, key.as_deref().unwrap_or(""), expected, got);
-                }
+                };
                 matched += 1;
                 final_args.push(value);
             }

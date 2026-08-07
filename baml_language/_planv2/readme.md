@@ -66,7 +66,7 @@ ai
 ├── FunctionSpec<Out>                     MyFunc@spec(args); one unit of model work, bound and unrun
 │   ├── name() / arguments()              identity and the bound argument values
 │   ├── output_type()                     the return type as a runtime type value
-│   └── tools() / client()                the initial toolbox; the resolved default client
+│   └── tools() / default_client          the initial toolbox; the resolved default client
 ├── Runner<Out>                           interface: type Output, type Error; run(spec) -> Self.Output
 ├── Agent<Out>                            the default runner; $ parameters set these fields
 │   ├── max_steps                         model-turn budget, default 12
@@ -97,15 +97,13 @@ ai
 │   ├── OpenAiClient                      the OpenAI Responses wire API
 │   ├── AnthropicClient                   the Anthropic Messages wire API
 │   ├── GoogleClient                      the Gemini generateContent wire API
-│   ├── ScriptedClient                    deterministic fake; drives tests without a network
 │   ├── Retry                             wrapper client; retries replay-safe failures
 │   └── Fallback                          wrapper client; advances to the next member
 ├── wire                                  shared helpers for client authors
 │   ├── send_as<T>(req, provider)         send, classify the status, decode the body as T
 │   ├── render_output_format(type)        the ctx.output_format text in the standard dialect
-│   ├── tool_schemas(toolbox)             JSON Schemas derived from tool signatures
 │   └── closed_schema / strict_schema     per-API schema rewrites
-└── failures
+└── errors                                the ai.errors namespace, mirroring baml.errors
     ├── Failure                           interface: retry_safety() -> RetrySafety
     ├── RetrySafety                       Safe | Unknown | Unsafe
     ├── RateLimited / NetworkFailure      classified provider failures
@@ -139,8 +137,8 @@ baml.env
 └── get(name) / get_or_panic(name)        credential resolution in registry factories
 ```
 
-`wire.tool_schemas` is `baml.schema.json_schema` applied over tool
-signatures; `wire.render_output_format` lowers the same schema into
+`tool()` derives each `Tool.input_schema` with `baml.schema.json_schema`
+over the signature; `wire.render_output_format` lowers the same schema into
 prompt text; `wire.send_as<T>` wraps `baml.http.send` with status
 classification and typed decoding of the response body, with
 `T = json` as the untyped form. A client that needs different behavior

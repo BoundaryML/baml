@@ -7,13 +7,13 @@ Only the runner produces events. All classes live under `ai`.
 | Event | Fields | Producer appends it |
 |---|---|---|
 | `RunStarted` | `spec_name: string`, `arguments: map<string, unknown>` | once, when the journal is created |
-| `UserMessage` | `content: string` | by custom runners; the repair loop uses it ephemerally, without committing |
+| `UserMessage` | `content: string` | by the runner: the repair loop's correction requests, and custom runners' injected input |
 | `AssistantMessage` | `content: ContentBlock[]`, `client_id: string` | in the turn batch, after a successful `invoke` |
-| `ToolRequested` | `id: string`, `name: string`, `args: json` | in the turn batch, one per `ToolUse` block, in block order |
-| `ToolCompleted` | `id: string`, `output: json` | when the correlated tool returns |
+| `ToolRequested` | `id: string`, `name: string`, `args: map<string, unknown>` | in the turn batch, one per `ToolUse` block, in block order |
+| `ToolCompleted` | `id: string`, `output: string` | when the correlated tool returns |
 | `ToolFailed` | `id: string`, `message: string` | when the correlated tool throws or its arguments fail validation |
 | `Usage` | `input_tokens: int`, `output_tokens: int`, `cached_input_tokens: int?`, `reasoning_tokens: int?` | in the turn batch, from the API-reported numbers |
-| `FinalProduced` | `value: json` | once, when the final candidate parses as the return type |
+| `FinalProduced` | `value_json: string` | once, when the final candidate parses as the return type |
 
 ## Ordering rules
 
@@ -28,8 +28,10 @@ Only the runner produces events. All classes live under `ai`.
   `ToolFailedError` propagates, so an aborted run's journal is
   complete up to the abort.
 - `FinalProduced` is the last event of a successful run.
-- Ephemeral repair attempts commit nothing. A `UserMessage` appears in
-  a journal only when a runner appends it deliberately.
+- Repair attempts are recorded. A failed attempt commits its
+  `AssistantMessage`, its `Usage`, and the correction `UserMessage`
+  like any other events; the journal is the complete record, and a
+  repair attempt does not consume a step.
 
 ## Rendering rules
 

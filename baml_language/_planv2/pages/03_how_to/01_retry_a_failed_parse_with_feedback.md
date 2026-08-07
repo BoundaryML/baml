@@ -5,44 +5,48 @@ fails to parse
 (`../02_guides/02_specs_and_runners/02_the_default_runner.md`). Write
 the loop yourself when you want your own feedback wording or attempt
 policy. The pieces are public primitives: `spec.prompt()`,
-`Journal.with`, `UserMessage`, and `client.invoke`.
+`Journal.append_all`, `UserMessage`, and `client.invoke`.
+
+Every attempt is committed. The journal is the complete record of the
+run, so the re-ask sees the failed reply and the correction request
+because they are in the journal, not because of any side channel.
 
 ```baml
 function turn_with_feedback<Out>(
-    client: Client,
+    c: Client,
     spec: FunctionSpec<Out>,
     j: Journal,
     attempts: int,
-    extra: Event[] = [],    // feedback for this attempt; rendered, never committed
-) -> ModelTurn throws Failure | baml.errors.UnknownError {
-    let turn = client.invoke(ModelTurnInput {
+) -> ModelTurn {
+    let turn = c.invoke(ModelTurnInput {
         prompt: spec.prompt(),
-        journal: j.with(extra),    // an extended copy for rendering; j itself is unchanged
+        journal: j,
         toolbox: spec.tools(),
         output_type: spec.output_type(),
     });
-    let _ = baml.sap.parse<Out>(terminal_text(turn)) catch_all (e) {
-        let p: ParseFailed => {
+    let candidate = turn.terminal_text() ?? "";
+    let _ = baml.sap.parse<Out>(candidate) catch_all (e) {
+        _ => {
             if (attempts > 1) {
-                // show the model its failed reply, then ask again with one less attempt
-                return turn_with_feedback<Out>(client, spec, j, attempts - 1, extra = [
-                    AssistantMessage { content: turn.content, client_id: client.id() },
+                // commit the failed reply and the correction request, then ask again
+                j.append_all([
+                    AssistantMessage { content: turn.content, client_id: c.id() },
                     UserMessage {
                         content: "The reply did not match the required schema. Answer again with only the corrected value.",
                     },
                 ]);
+                return turn_with_feedback<Out>(c, spec, j, attempts - 1);
             } else {
-                throw e    // out of attempts
+                throw e    // out of attempts; the journal already shows every try
             }
         },
-        _ => throw e,    // not a parse failure; propagate untouched
     };
-    turn    // it parsed; the caller commits this turn and nothing else
+    turn    // it parsed; the caller commits this turn
 }
 ```
 
-`j.with(extra)` renders the failed turn and the feedback for the next
-attempt while leaving the underlying journal unchanged, so failed
-attempts leave no record. The caller commits only the returned turn
-and parses it as usual. A runner built around this helper upholds the
-usual rules (`../02_guides/02_specs_and_runners/03_writing_a_runner.md`).
+A failed attempt stays visible to later turns, which is an ordinary
+conversation: the model sees what it got wrong and what was asked of
+it. The runner's built-in repair commits the same events; a repair
+attempt does not consume a step
+(`../02_guides/02_specs_and_runners/02_the_default_runner.md`).

@@ -1,0 +1,126 @@
+# BEP phase 1 — working reference
+
+This tree implements the BEP in `../pages/` with code that actually runs:
+the loop, the clients, and the how-tos are executable, and every design
+claim listed below is covered by an offline test or a live smoke run.
+
+## Layout
+
+```
+baml_src/
+├── ns_ai/                    the public surface: baml describe root.ai
+│   ├── ns_errors/            ai.errors: RetrySafety, Failure, the classes, classify_http
+│   ├── journal.baml          content blocks, events, Journal (Journal.new)
+│   ├── spec.baml             Prompt, FunctionSpec
+│   ├── tools.baml            ToolErrorMode, Tool (Tool.call), tool(), Toolbox
+│   ├── turn.baml             ModelTurnInput, ModelTurn (terminal_text, tool_uses), Client
+│   ├── wire.baml             send_as<T>, render_output_format
+│   ├── runner.baml           Runner, RunResult, Agent
+│   ├── clients/              Retry and Fallback wrappers
+│   └── ns_internal/          helpers; not part of the public surface
+├── ns_openai/                root.openai.OpenAiClient (Responses API)
+│   └── ns_internal/          envelope classes, render/lower/parse
+├── ns_anthropic/             root.anthropic.AnthropicClient (Messages API)
+│   └── ns_internal/
+├── ns_google/                root.google.GoogleClient (generateContent API)
+│   └── ns_internal/
+├── examples/plan_trip.baml   the travel-agent fixture; plan_trip_spec is the
+│                             manual form of PlanTrip@spec until the desugar exists
+├── howto/                    the how-to pages as running code
+├── tests/                    offline: ScriptedClient (test scaffolding,
+│                             root namespace, not part of root.ai) drives everything
+├── live/                     live_openai() / live_anthropic() / live_google()
+└── resolve.baml              "prefix/model" -> client value (root, not ns_ai)
+```
+
+## Running
+
+```bash
+cd _planv2
+../target/debug/baml-cli check
+../target/debug/baml-cli test          # 9 offline tests, no network
+infisical run --env=test -- ../target/debug/baml-cli run -e 'live_openai()'
+infisical run --env=test -- ../target/debug/baml-cli run -e 'live_anthropic()'
+infisical run --env=test -- ../target/debug/baml-cli run -e 'live_google()'
+```
+
+All three live smokes complete a real tool loop (>= 1 `ToolCompleted`) and
+return a typed `Itinerary`.
+
+## What the tests prove
+
+- The scripted loop: tool calls execute concurrently, results correlate by
+  id, the final candidate parses as the return type.
+- Tool errors report to the model by default; the journal records the
+  failure the model saw.
+- `StepBudgetExceeded` is thrown typed and catchable.
+- The within-turn repair loop: a Complete-but-unparseable turn triggers a
+  committed re-ask — the failed attempt, its usage, and the correction
+  request are journal events, and a repair attempt does not consume a step.
+- The parse-feedback how-to works from public primitives only
+  (`spec.prompt()`, `Journal.append_all`, `UserMessage`, `client.invoke`).
+- `Retry` replays Safe network failures, never resends a rejected request;
+  `Fallback` advances past a dead member. `FlakyClient` in the tests is the
+  minimal custom client.
+- `resolve("prefix/model")` builds the right provider client.
+
+## Deviations from the BEP pages (to sync back)
+
+1. `client` is a keyword: `spec.client()` cannot exist; the impl exposes the
+   `default_client` field. The `Agent.client` FIELD works (checker +
+   runtime) but crashes `baml fmt` (formatter bug, filed).
+2. `Tool.on_error` is `ToolErrorMode?` where null inherits the run's
+   `tool_errors`; this is what makes "per-tool wins" coherent.
+3. `ToolUse.args` is `map<string, unknown>` and `ToolCompleted.output` /
+   `FinalProduced.value_json` are JSON strings — not `json`-typed fields.
+4. `Prompt` has `render_text` only; the media `InstructionPart[]` form and
+   the `Media` content block are not implemented (no media in phase 1
+   fixtures).
+5. Wire APIs constrain how a journal may open. Gemini rejects
+   `systemInstruction` + a journal that opens with a function-call turn, so
+   the Google client sends the instructions as leading user content on
+   EVERY turn. Anthropic requires the first message to be user-role, which
+   a committed first-step repair violates, so the Anthropic client leads
+   with the instructions as a user message whenever the lowered journal
+   does not start with one (`tests/request_shapes.baml`).
+6. `resolve` lives in root, not `ai.clients`: the core namespace never
+   depends on the providers. `register()` needs process-global state and is
+   deferred.
+7. Model defaults are real models: `gpt-4o-mini`, `claude-haiku-4-5`
+   (3-5-haiku is retired), `gemini-2.5-flash`.
+8. `reflect.call_any` itself widens integral JSON numbers into `float` and
+   `float?` parameters (fixed in `bex_vm/package_reflect`; models send `150`
+   for `150.0`, and JSON Schema `number` accepts both). Without it Gemini
+   loops to death on a retried invalid call. The widening is lossless-only:
+   a per-value round-trip check admits integers up to 2^53 and rejects
+   anything f64 cannot represent exactly, so this is not an `i64 <: f64`
+   type-level coercion. The interim BAML-side workaround was removed;
+   `tests/float_widening.baml` proves the boundary behavior directly.
+9. The runner accepts a turn when it has tool calls OR parses; the repair
+   budget is fixed at 2 re-asks per step (no `max_parse_attempts` knob, per
+   the BEP). Repair attempts are committed events: the journal is the
+   complete record, and `Journal.with` was removed in favor of a public
+   `append_all` whose only writer is the driving runner.
+10. Reasoning blocks are dropped when re-lowering assistant turns
+    (Anthropic rejects unsigned thinking blocks) — the phase 2 replay
+    capsule story, confirmed on the wire.
+11. `ScriptedClient` is test scaffolding in `tests/` (root namespace), not
+    a member of the public `ai` surface as the BEP's tree showed.
+12. `ToolFailedError.cause` is `Failure?` rather than the reference's
+    `(Failure | UnknownError)?`: an untyped cause carries in `message` as
+    text and `cause` stays null.
+13. `Retry` implements the documented `Backoff` (exponential with a cap,
+    `retry_after_ms` hint override, `baml.sys.sleep`).
+14. The failure taxonomy is its own namespace: `ai.errors` (ns_ai/ns_errors/),
+    mirroring `baml.errors` — `root.ai.errors.Failure`, `classify_http`, and
+    the classified classes.
+
+## Language findings (kept in `baml describe`-verifiable form)
+
+- No catch-arm guards; guard inside the arm with an if/else expression.
+- `?.method()` on an interface-typed optional trips a VM error; use if-let.
+- Lambdas over union-typed arrays need parameter annotations.
+- A lambda calling a throwing function fails to unify with `throws never`
+  parameters; wrap in `catch_all` inside the lambda.
+- `string.substring(start, end)`, not `slice`.
+- Struct spread `T { ...base, f: v }` exists and copies.

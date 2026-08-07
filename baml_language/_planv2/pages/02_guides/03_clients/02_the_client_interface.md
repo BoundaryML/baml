@@ -66,7 +66,9 @@ differently:
   results by call id in the API's result format, roles per the API's
   role set. On a first turn with an empty journal, an API that
   requires a user message may receive the instructions as the sole
-  user message.
+  user message, and a wire API may require the instructions as the
+  leading user content on every turn, as Gemini does
+  (`05_the_built_in_clients.md`).
 
 The concrete mappings for the built-in clients, with the wire bodies,
 are `05_the_built_in_clients.md`.
@@ -78,7 +80,7 @@ type ContentBlock = Text | Reasoning | ToolUse | Media
 
 class Text      { text: string }
 class Reasoning { summary: string }                   // the readable projection only
-class ToolUse   { id: string, name: string, args: json }
+class ToolUse   { id: string, name: string, args: map<string, unknown> }
 class Media     { value: image | audio }              // inline model output, normalized
 
 enum StopReason { Complete, ToolUse, MaxTokens, Refused }

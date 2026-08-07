@@ -4,7 +4,9 @@ An OpenAI-compatible server (Ollama, vLLM, LM Studio) reuses the
 OpenAI codec with different configuration. No client code is needed.
 
 To make the model available as a string, register a prefix once at
-application startup:
+application startup (`register` is designed surface; the reference
+implementation does not provide it yet, so use the client-value form
+below there):
 
 ```baml
 ai.clients.register("ollama", (model: string) -> Client {

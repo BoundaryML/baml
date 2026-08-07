@@ -40,6 +40,10 @@ The built-in prefixes and their credentials:
 A `client:` field resolves when the spec is created, so a missing
 credential fails at the call site, before any model turn.
 
+In the reference implementation `resolve` lives in the application
+root rather than under `ai.clients`, so the core namespace never
+depends on the provider clients.
+
 ## Same implementation, different model
 
 `"openai/gpt-5.6"` and `"openai/gpt-5.5"` resolve to the same class
@@ -72,7 +76,8 @@ An OpenAI-compatible endpoint is configuration over the existing
 codec, not a new implementation. A genuinely new wire API implements
 the `Client` interface (`03_writing_a_client.md`) and registers the
 same way. Registration happens at application startup; a prefix
-registered twice throws.
+registered twice throws. The reference implementation does not yet
+provide `register`, because a registry requires process-global state.
 
 ## The one override
 

@@ -63,9 +63,9 @@ the `T | ToolCalls` envelope travels inside the native schema.
 - Every tool schema on this page derives from one source.
   `reflect.signature(search_flights)` supplies the name, the docstring
   as the description, and the parameters with their types and
-  defaults; `baml.schema.json_schema` lowers the types; and
-  `wire.tool_schemas` packages the result. A client only reshapes that
-  schema into its wire format — the three `parameters` /
+  defaults; `baml.schema.json_schema` lowers the types into
+  `Tool.input_schema`. A client only reshapes that
+  field into its wire format — the three `parameters` /
   `input_schema` / `parametersJsonSchema` bodies below are the same
   schema in three framings.
 - Executing a call is never wire work. The runner validates the
@@ -225,8 +225,8 @@ required `max_tokens` from the client's configuration.
 
 ```json
 {
-  "model": "claude-sonnet-5",
-  "max_tokens": 8192,
+  "model": "claude-haiku-4-5",
+  "max_tokens": 4096,
   "system": "You are a travel agent. The brief: 2 weeks in Japan\n...",
   "messages": [
     { "role": "user", "content": "You are a travel agent. The brief: 2 weeks in Japan\n..." }
@@ -251,10 +251,12 @@ required `max_tokens` from the client's configuration.
 }
 ```
 
-The API requires a non-empty message list, so on the first turn the
-instructions stand as the sole user message; afterwards `system`
-carries the fresh instructions and `messages` carries the lowered
-journal.
+The API requires a non-empty message list that starts with a user
+message. Whenever the lowered journal does not begin with one — the
+first turn, or a first step opened by a committed repair attempt — the
+instructions lead as a user message and `system` is omitted; otherwise
+`system` carries the fresh instructions and `messages` carries the
+lowered journal.
 
 The model calls a tool with interleaved content blocks:
 
@@ -335,9 +337,6 @@ the same codec.
 
 ```json
 {
-  "systemInstruction": {
-    "parts": [{ "text": "You are a travel agent. The brief: 2 weeks in Japan\n..." }]
-  },
   "contents": [
     { "role": "user", "parts": [{ "text": "You are a travel agent. The brief: 2 weeks in Japan\n..." }] }
   ],
@@ -363,6 +362,14 @@ the same codec.
   "toolConfig": { "functionCallingConfig": { "mode": "AUTO" } }
 }
 ```
+
+The client never sends `systemInstruction`. The instructions render
+fresh into the leading user content of `contents` on every turn, and
+the lowered journal follows them. The API rejects a request whose
+lowered journal opens with a function-call turn ("function call turn
+must come immediately after a user turn or a function response turn"),
+so the first-turn mapping the other clients apply generalizes to every
+turn here.
 
 The model's calls arrive as parts of one candidate:
 

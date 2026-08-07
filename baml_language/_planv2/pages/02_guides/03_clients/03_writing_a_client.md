@@ -51,7 +51,7 @@ function mylab_render(c: MyLabClient, input: ModelTurnInput) -> baml.http.Reques
         body: baml.json.stringify({
             "model": c.model,
             "messages": messages,
-            "tools": ai.wire.tool_schemas(input.toolbox),
+            "tools": input.toolbox.list().map((t) -> { t.input_schema }),
         }),
     }
 }
@@ -64,9 +64,9 @@ message, lower the instructions as the sole user message on that turn.
 
 ## Lowering tools
 
-`wire.tool_schemas` returns one JSON Schema per tool, derived from
-signatures through `baml.schema.json_schema`. Your render function
-wraps them in the wire API's shape. If the API constrains schemas —
+Each `Tool` carries its `input_schema`, derived from the signature
+through `baml.schema.json_schema` when the tool is constructed. Your
+render function reads the field and wraps it in the wire API's shape. If the API constrains schemas —
 closed objects, all-required properties — apply the shared rewrites
 (`wire.closed_schema`, `wire.strict_schema`) rather than writing a
 walker.
@@ -100,7 +100,6 @@ rewrite:
 |---|---|
 | `send_as<T>(req, provider)` | `baml.http.send`, classify non-2xx via `classify_http`, decode the body as `T`, throw `ParseFailed` on garbage; `T = json` skips typing |
 | `render_output_format(t)` | the schema as prompt text in the standard dialect |
-| `tool_schemas(toolbox)` | one JSON Schema per tool, from signatures |
 | `closed_schema(s)` | `additionalProperties: false` recursively, `required` preserved |
 | `strict_schema(s)` | closed plus every property required |
 

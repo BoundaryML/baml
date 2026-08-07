@@ -32,19 +32,21 @@ standard loop embeds an `Agent` and passes it through, which keeps
 
 ## The building blocks
 
-The default runner is built from library functions that custom runners
-reuse rather than reimplement:
+The default runner is built from the same public primitives any runner
+uses; there are no intermediate loop helpers to learn:
 
-- `Journal.new(spec)` — a journal with `RunStarted` appended.
-- `ai.run_turn(client, spec, journal)` — one model turn: assemble
-  the input, invoke, commit the batch, return the committed turn.
-- `ai.run_tools(toolbox, calls, mode)` — execute a turn's tool
-  calls concurrently (`reflect.call_any` under `invoke_tool`), append
-  correlated results, and apply the failure policy.
+- `Journal.new(spec)` — a journal with `RunStarted` appended;
+  `append_all` is the write.
+- `client.invoke(ModelTurnInput { ... })` — one model turn, from
+  materials the runner assembles, which is also where a custom toolbox
+  goes.
+- `Tool.call(args)` — validated dispatch through
+  `reflect.call_any`.
 - `baml.sap.parse<Out>(candidate)` — the schema-aware final parse.
 
-A runner that composes these keeps the invariants for free, because
-`run_turn` commits atomically and `run_tools` enforces correlation.
+The parse-feedback recipe is the worked example of composing them
+(`../../03_how_to/01_retry_a_failed_parse_with_feedback.md`). A runner
+that drives its own loop upholds the invariants below itself.
 
 ## Example: a wrapping runner
 

@@ -47,7 +47,9 @@ One placeholder exists:
 
 On the first turn of a run there is no conversation yet. A wire API
 that requires a user message may receive the instructions as the sole
-user message on that turn; the mapping belongs to the client
+user message on that turn, and a wire API may require the instructions
+as the leading user content on every turn, as Gemini does; the mapping
+belongs to the client
 (`../03_clients/02_the_client_interface.md`).
 
 ## The return type is the contract

@@ -18,8 +18,8 @@ ai
 ├── Journal / events                      the run record; RunStarted ... FinalProduced
 ├── tools                                 Tool, Toolbox, tool(), ToolErrorMode
 ├── clients                               register/resolve; built-ins; Retry, Fallback
-├── wire                                  send_as<T>, render_output_format, tool_schemas, schema rewrites
-└── failures                              Failure, RetrySafety, the classified classes, classify_http
+├── wire                                  send_as<T>, render_output_format, schema rewrites
+└── errors                                the ai.errors namespace: Failure, RetrySafety, the classes, classify_http
 ```
 
 ## `FunctionSpec<Out>`
@@ -28,18 +28,20 @@ Created by `MyFunc@spec(args)`. Immutable; getters only.
 
 ```baml
 class FunctionSpec<Out> {
+    default_client: Client,
+
     function name(self) -> string throws never
     function arguments(self) -> map<string, unknown> throws never
     function output_type(self) -> type throws never
     function prompt(self) -> Prompt throws never
     function tools(self) -> Toolbox throws never
-    function client(self) -> Client throws never
 }
 ```
 
-`client()` returns the resolved client; resolution of the function's
-`client:` string happens at spec creation and throws there on an
-unknown prefix or missing credential.
+`default_client` holds the resolved client; `client` is a keyword and
+cannot be a method name. Resolution of the function's `client:` string
+happens at spec creation and throws there on an unknown prefix or
+missing credential.
 
 ## `Runner<Out>` and `Agent<Out>`
 
@@ -54,7 +56,7 @@ enum ToolErrorMode { Report, Raise }
 
 class Agent<Out> {
     max_steps: int,                                  // default 12
-    client: Client?,                                 // default null: use spec.client()
+    client: Client?,                                 // default null: use spec.default_client
     tool_errors: ToolErrorMode,                      // default Report
     on_event: ((Event) -> null throws never)?,       // default null
 
@@ -80,25 +82,13 @@ tool fails, and otherwise propagates the client's classified failure.
 The loop's exact sequence is
 `../02_guides/02_specs_and_runners/02_the_default_runner.md`.
 
-Loop building blocks for custom runners:
-
-```baml
-function run_turn<Out>(
-    client: Client,
-    spec: FunctionSpec<Out>,
-    j: Journal,
-    tools: Toolbox? = null,      // default: spec.tools()
-) -> ModelTurn
-    throws Failure | baml.errors.UnknownError
-function run_tools(tb: Toolbox, calls: ToolUse[], mode: ToolErrorMode, j: Journal) -> null
-    throws ToolFailedError
-```
-
-`run_turn` assembles the input, invokes, and commits the turn's batch
-to `j` before returning; a `tools` argument replaces the spec's
-toolbox for the turn, which is how a custom runner runs a function
-with a different toolbox. `run_tools` executes concurrently, appends
-one correlated result per call, and throws only in `Raise` mode.
+There are no intermediate loop helpers. A custom runner composes the
+primitives directly — `Journal.new(spec)` and `append_all`,
+`client.invoke` with a `ModelTurnInput` it assembles (which is also
+how it supplies a different toolbox), `Tool.call` for dispatch, and
+`baml.sap.parse<Out>` for the final parse — and upholds the loop
+invariants itself
+(`../02_guides/02_specs_and_runners/03_writing_a_runner.md`).
 
 ## `RunResult<Out>`
 
@@ -130,6 +120,11 @@ class ModelTurn {
     content: ContentBlock[],
     stop_reason: StopReason,
     usage: Usage?,
+
+    function terminal_text(self) -> string? throws never
+        // the terminal Text block — the final candidate the runner parses
+    function tool_uses(self) -> ToolUse[] throws never
+        // the turn's ToolUse blocks, in order
 }
 ```
 
@@ -144,7 +139,7 @@ type ContentBlock = Text | Reasoning | ToolUse | Media
 
 class Text      { text: string }
 class Reasoning { summary: string }
-class ToolUse   { id: string, name: string, args: json }
+class ToolUse   { id: string, name: string, args: map<string, unknown> }
 class Media     { value: image | audio }
 
 enum StopReason { Complete, ToolUse, MaxTokens, Refused }
@@ -183,8 +178,9 @@ lowers the journal as messages after the instructions.
 class Journal {
     function entries(self) -> Event[] throws never
     function new<Out>(spec: FunctionSpec<Out>) -> Journal throws never   // appends RunStarted
-    function with(self, events: Event[]) -> Journal throws never
-        // an extended copy for rendering; the underlying journal is unchanged
+    function append_all(self, events: Event[]) -> void throws never
+        // the write. The driving runner is the only writer; clients and
+        // tools never append.
 }
 ```
 
@@ -198,10 +194,17 @@ class Tool {
     description: string,
     input_schema: json,
     handler: baml.AnyFunction<Returns = unknown>,
-    on_error: ToolErrorMode,
+    on_error: ToolErrorMode?,                // null: inherit the run's tool_errors mode
+
+    function call(self, args: map<string, unknown>) -> string
+        throws baml.errors.InvalidArgument | baml.errors.UnknownError
+        // the total boundary: validate, dispatch via reflect.call_any,
+        // serialize the result as JSON text
 }
 
 class Toolbox {
+    function new(tools: Tool[]) -> Toolbox throws baml.errors.InvalidArgument
+        // rejects duplicate names, so a toolbox is well-formed on construction
     function list(self) -> Tool[] throws never
     function get(self, name: string) -> Tool? throws never
 }
@@ -210,7 +213,7 @@ function tool(
     handler: baml.AnyFunction<Returns = unknown>,
     name: string? = null,                    // default: the function's name
     description: string? = null,             // default: the docstring
-    on_error: ToolErrorMode = ToolErrorMode.Report,
+    on_error: ToolErrorMode? = null,         // null: inherit the run's tool_errors mode
 ) -> Tool throws never
 ```
 
@@ -218,8 +221,14 @@ A `tools:` list accepts functions and `Tool` values; functions
 normalize through `tool()`. Duplicate names in one toolbox throw at
 spec creation, and the name `__baml_return_output` is reserved
 (`../02_guides/03_clients/05_the_built_in_clients.md`). Tool execution validates arguments against
-`input_schema`, calls the handler via `reflect.call_any`, and maps any
-throw to a result or `ToolFailedError` per `on_error`.
+`input_schema`, calls the handler via `reflect.call_any` — whose
+validation widens an integral JSON number into a `float` or `float?`
+parameter when the value is exactly representable (up to 2^53; JSON
+Schema `number` accepts integers, and a lossy value stays an
+`InvalidArgumentError`) — and maps
+any throw to a result or `ToolFailedError` per the effective mode. A
+null `on_error` inherits the run's `tool_errors` mode; an explicit
+per-tool value wins.
 
 ## `clients`
 
@@ -249,7 +258,7 @@ class OpenAiClient {
     output_mode: OutputMode,
 
     function new(
-        model: string = "gpt-5.6",
+        model: string = "gpt-4o-mini",
         api_key: string? = null,                 // null: read OPENAI_API_KEY
         base_url: string? = null,
         extra_headers: map<string, string>? = null,
@@ -265,10 +274,10 @@ class AnthropicClient {
     output_mode: OutputMode,
 
     function new(
-        model: string = "claude-sonnet-5",
+        model: string = "claude-haiku-4-5",
         api_key: string? = null,                 // null: read ANTHROPIC_API_KEY
         base_url: string? = null,
-        max_tokens: int = 8192,
+        max_tokens: int = 4096,
         output_mode: OutputMode = OutputMode.Sap,
     ) -> AnthropicClient throws baml.errors.InvalidArgument
 }
@@ -294,8 +303,10 @@ existing client derives a variant (`OpenAiClient { ...base, model: "gpt-5.5" }`)
 (`../02_guides/03_clients/05_the_built_in_clients.md`); `Sap` renders
 it as prompt text.
 
-`ScriptedClient` returns pre-written turns in order and records the
-inputs it received:
+`ScriptedClient` is test scaffolding, not a member of the `ai`
+namespace: any value implementing `Client` works, so the deterministic
+fake ships with the tests and lives in application space. It returns
+pre-written turns in order and records the inputs it received:
 
 ```baml
 class ScriptedClient {
@@ -328,7 +339,6 @@ id.
 function send_as<T>(req: baml.http.Request, provider: string) -> T
     throws RateLimited | NetworkFailure | InvalidRequest | ParseFailed
 function render_output_format(t: type) -> string throws baml.errors.Unsupported
-function tool_schemas(tb: Toolbox) -> json[] throws never
 function closed_schema(s: json) -> json throws never
 function strict_schema(s: json) -> json throws never
 ```
@@ -343,9 +353,11 @@ fields. `send_as<json>` returns the undecoded body. `closed_schema` sets
 `properties`, `$defs`, `definitions`, `patternProperties`, and
 `dependentSchemas`.
 
-## `failures`
+## `errors`
 
-Classes, fields, and the classification table are `03_errors.md`.
+The failure taxonomy is its own namespace, `ai.errors`, mirroring
+`baml.errors`. Classes, fields, and the classification table are
+`03_errors.md`.
 
 ```baml
 interface Failure {
@@ -363,7 +375,7 @@ BEP:
 
 | Primitive | Used by |
 |---|---|
-| `baml.schema.json_schema(t: type) -> json` | `wire.tool_schemas`, `wire.render_output_format`, custom clients |
+| `baml.schema.json_schema(t: type) -> json` | `tool()` schema derivation, `wire.render_output_format`, custom clients |
 | `baml.sap.parse<T>(text: string) -> T` | the runner's final parse; custom runners |
 | `baml.json.parse` / `stringify` / `from_json<T>` / `from_string<T>` | clients, everywhere JSON crosses a boundary |
 | `baml.http.Request` / `Response` / `send` / `fetch_sse` | `wire.send_as`; clients that bypass it; streaming later |

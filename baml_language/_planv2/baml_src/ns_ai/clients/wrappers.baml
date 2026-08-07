@@ -1,0 +1,140 @@
+// Reliability composes at the client boundary: wrapper clients.
+// Mirrors _planv2/pages/02_guides/03_clients/04_reliability.md.
+
+// The default judgment: a request the provider rejected does not become
+// valid by resending.
+function default_retry_judgment(f: root.ai.errors.Failure) -> bool {
+    match (f) {
+        let r: root.ai.errors.Refused => false,
+        let i: root.ai.errors.InvalidRequest => false,
+        let p: root.ai.errors.ParseFailed => false,
+        _ => true,
+    }
+}
+
+class Backoff {
+    initial_ms: int,
+    multiplier: int,
+    max_ms: int,
+
+    function new(initial_ms: int = 250, multiplier: int = 2, max_ms: int = 10000) -> Backoff {
+        Backoff { initial_ms: initial_ms, multiplier: multiplier, max_ms: max_ms }
+    }
+
+    // The delay before attempt N (first retry is attempt 1). A
+    // root.ai.errors.RateLimited.retry_after_ms hint overrides the computed value.
+    function delay_ms(self, attempt: int, f: root.ai.errors.Failure) -> int {
+        let hinted = match (f) {
+            let r: root.ai.errors.RateLimited => r.retry_after_ms,
+            _ => null,
+        };
+        if let h: int = hinted {
+            h
+        } else {
+            let d = self.initial_ms;
+            let i = 1;
+            while (i < attempt) {
+                d = d * self.multiplier;
+                i = i + 1;
+            }
+            if (d > self.max_ms) {
+                self.max_ms
+            } else {
+                d
+            }
+        }
+    }
+}
+
+class Retry {
+    inner: Client,
+    max_attempts: int,
+    retry_if: (root.ai.errors.Failure) -> bool throws never,
+    backoff: Backoff,
+
+    function new(
+        inner: Client,
+        max_attempts: int = 3,
+        retry_if: ((root.ai.errors.Failure) -> bool throws never)? = null,
+        backoff: Backoff? = null,
+    ) -> Retry {
+        Retry {
+            inner: inner,
+            max_attempts: max_attempts,
+            retry_if: retry_if ?? default_retry_judgment,
+            backoff: backoff ?? Backoff.new(),
+        }
+    }
+
+    function _attempt(self, input: ModelTurnInput, remaining: int) -> ModelTurn {
+        self.inner.invoke(input) catch_all (e) {
+            let f: root.ai.errors.Failure => {
+                // the safety gate is not overridable; the judgment is
+                if (remaining > 1 && f.retry_safety() == root.ai.errors.RetrySafety.Safe && self.retry_if(f)) {
+                    let attempt = self.max_attempts - remaining + 1;
+                    let _ = baml
+                        .sys
+                        .sleep(
+                            baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
+                        ) catch_all (se) {
+                        _ => null,
+                    };
+                    self._attempt(input, remaining - 1)
+                } else {
+                    throw e
+                }
+            },
+            _ => throw e, // untyped failures are never retried
+        }
+    }
+
+    implements Client {
+        function id(self) -> string {
+            self.inner.id()
+        }
+
+        function invoke(self, input: ModelTurnInput) -> ModelTurn {
+            self._attempt(input, self.max_attempts)
+        }
+    }
+}
+
+class Fallback {
+    members: Client[],
+
+    function _try(self, input: ModelTurnInput, index: int) -> ModelTurn {
+        match (self.members.at(index)) {
+            let c: Client => {
+                c.invoke(input) catch_all (e) {
+                    let f: root.ai.errors.Failure => {
+                        if (index + 1 < self.members.length() && f.retry_safety() == root.ai.errors.RetrySafety.Safe) {
+                            self._try(input, index + 1)
+                        } else {
+                            throw e
+                        }
+                    },
+                    _ => throw e,
+                }
+            },
+            null => {
+                throw baml.errors.InvalidArgument { message: "Fallback needs at least one member" }
+            },
+        }
+    }
+
+    implements Client {
+        function id(self) -> string {
+            // NOTE: `?.method()` on an interface-typed optional trips a VM bug;
+            // if-let is the reliable form.
+            if let c: Client = self.members.at(0) {
+                c.id()
+            } else {
+                "fallback"
+            }
+        }
+
+        function invoke(self, input: ModelTurnInput) -> ModelTurn {
+            self._try(input, 0)
+        }
+    }
+}

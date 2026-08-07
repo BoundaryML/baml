@@ -278,3 +278,44 @@ and implementable, at the cost of no long-lived conversations yet.
 Re-entry requires journal persistence and a session runner; the
 surface they build on is already stable
 (`03_future_phases.md`).
+
+## 20. Adjustments forced by the reference implementation
+
+Building the working reference changed five details of the designed
+surface. `client` is a keyword and cannot be a method name, so the
+spec exposes the resolved default client as the `default_client` field
+rather than a `client()` getter. `Tool.on_error` is `ToolErrorMode?`
+defaulting to null, where null inherits the run's `tool_errors` mode,
+which is what makes the per-tool-wins rule coherent. The Gemini API
+rejects a request whose lowered journal opens with a function-call
+turn, so the Google client sends the instructions as the leading user
+content on every turn and never uses `systemInstruction`. `reflect.call_any`'s argument
+validation widens integral JSON numbers into `float` and `float?`
+parameters, because models emit `150` for `150.0` and JSON Schema
+`number` accepts integers. The widening is a value-level check, not a
+type-level coercion: BAML ints are i64 and floats are f64, so only
+values that round-trip exactly (up to 2^53) widen, a lossy value
+remains an `InvalidArgumentError`, and language-level typing keeps no
+implicit coercion. Events carry serialized JSON rather than
+`json`-typed fields — `ToolUse.args` is `map<string, unknown>` and
+`ToolCompleted.output` is JSON text — pending a design for
+`json`-typed event fields.
+
+## 21. The journal records repair attempts
+
+A failed repair attempt commits its `AssistantMessage`, its `Usage`,
+and the correction `UserMessage` as ordinary events. The journal is
+the complete record of the run, and failed attempts stay visible to
+later turns as ordinary conversation.
+
+Rejected: an ephemeral rendering extension (`Journal.with(events)`)
+that showed the model a failed attempt without recording it. The
+first implementation shipped that design, and it set a bad precedent:
+the journal claimed to be the record while real model interactions —
+and their token spend — happened off it. The system already had the
+correct pattern in `ToolRequested`: record everything, and let
+rendering decide what lowers. `Journal.with` was removed;
+`Journal.append_all` is the public write, with the rule that the
+driving runner is the only writer. The cost is that repair exchanges
+occupy context in later turns; a rendering filter can address that if
+it matters, without touching the record.

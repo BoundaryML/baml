@@ -57,7 +57,10 @@ The model's arguments are validated against the schema before the tool
 runs. A call with missing, extra, or mistyped arguments does not reach
 your function; it produces a tool error that the model sees and can
 correct on its next turn. Validation failures are never application
-exceptions.
+exceptions. The reflection call boundary widens an exactly
+representable integral JSON number into a `float`
+parameter before dispatch, because models emit `150` for `150.0` and
+JSON Schema `number` accepts integers.
 
 ## Tool errors are data
 
@@ -101,7 +104,9 @@ Or for every tool in a run, at the call site:
 let trip: Itinerary = PlanTrip(request, $tool_errors = Raise);
 ```
 
-The per-tool setting wins over the run-wide one. The journal records
+The `on_error` parameter is `ToolErrorMode?` and defaults to null. A
+null value inherits the run's `$tool_errors` mode, and an explicitly
+set per-tool value wins over the run-wide one. The journal records
 the failure before the exception propagates, so the trace shows what
 happened regardless of the policy.
 

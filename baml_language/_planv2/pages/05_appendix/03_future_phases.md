@@ -107,7 +107,8 @@ describes them, built on this BEP's surface:
   types; clients already lower events they recognize and skip the
   rest.
 - Policies consume events and issue commands to the loop; the loop's
-  building blocks (`run_turn`, `run_tools`) are already public.
+  primitives (`Journal.new`/`append_all`, `client.invoke`,
+  `Tool.call`) are already public.
 - Mid-run toolbox changes, budgets beyond `max_steps`, and approval
   flows live in the policy layer.
 

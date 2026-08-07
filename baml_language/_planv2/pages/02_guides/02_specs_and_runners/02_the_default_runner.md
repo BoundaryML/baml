@@ -41,7 +41,7 @@ let result: RunResult<Itinerary> = runner.run(PlanTrip@spec(trip_request = "2 we
 `run` appends `RunStarted` and iterates:
 
 1. Select the client: the runner's `client` field if set, otherwise
-   `spec.client()`.
+   `spec.default_client`.
 2. Check the budget. If `max_steps` model turns have completed, throw
    `StepBudgetExceeded`.
 3. Assemble a `ModelTurnInput` from the spec's prompt, the journal,
@@ -55,8 +55,8 @@ let result: RunResult<Itinerary> = runner.run(PlanTrip@spec(trip_request = "2 we
    `ToolFailed` event is appended.
 6. If the turn produced a final candidate, parse it as `Out`. On
    success, append `FinalProduced` and return. Parse repair happens
-   within the turn under its own attempt budget; a turn whose
-   candidate cannot be repaired fails with `ParseFailed`.
+   within the turn under a fixed budget of two re-asks per step; a
+   turn whose candidate cannot be repaired fails with `ParseFailed`.
 
 ## The correlation invariant
 
@@ -76,16 +76,19 @@ turn's final candidate — a terminal `Text` block — with
 which wire mechanism carried the value, and the client never touches
 `Out`.
 
-When the candidate does not parse and repair cannot fix it, the runner
-re-asks within the same step: it invokes the client again with an
-ephemeral journal extension — the failed turn plus a `UserMessage`
-asking for a correction — under the turn's attempt budget. Ephemeral
-attempts are never committed, so a malformed reply consumes no step
-and leaves no journal record; only the attempt that succeeds is
-committed. A turn whose last attempt still fails throws `ParseFailed`.
+A turn is accepted when it requests tool calls or its candidate
+parses. When the candidate does not parse and repair cannot fix it,
+the runner re-asks within the same step: it commits the failed turn
+and a `UserMessage` asking for a correction as ordinary events, then
+invokes again, under a fixed budget of two re-asks per step. The
+journal is the complete record — every attempt, its usage, and the
+correction request are events — but a repair attempt does not consume
+a step, and each attempt's token usage counts toward
+`RunResult.usage`. A turn whose last attempt still fails throws
+`ParseFailed`, with the whole exchange on the record.
 A custom runner can write the same loop with its own feedback wording,
 because the pieces are public primitives — `spec.prompt()`,
-`Journal.with`, `UserMessage`, and `client.invoke`
+`Journal.append_all`, `UserMessage`, and `client.invoke`
 (`../../03_how_to/01_retry_a_failed_parse_with_feedback.md`).
 
 ## `RunResult`

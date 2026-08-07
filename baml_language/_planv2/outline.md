@@ -145,7 +145,7 @@ _planv2/
 - A spec is a recipe — no journal, no conversation, no wire state;
   runnable any number of times; the prompt is not pre-rendered.
 - Reading a spec — `name`, `arguments`, `output_type`, `prompt`,
-  `tools`, `client`.
+  `tools`, `default_client`.
 - Specs are read-only — getters only; every override lives on the
   runner that consumes the spec.
 - What specs are for — custom runners, evals across clients, later
@@ -160,9 +160,9 @@ _planv2/
 - The correlation invariant — every `ToolUse` id receives exactly one
   result before the next model turn.
 - Final parsing — the client normalizes a candidate; the runner runs
-  the schema-aware parser; the ephemeral feedback loop re-asks within
-  the turn, committing nothing until an attempt succeeds; the same
-  loop is writable from public primitives.
+  the schema-aware parser; the repair loop re-asks within the step,
+  committing every attempt to the journal; the same loop is writable
+  from public primitives.
 - `RunResult` — value, journal, usage.
 - Observing a run — `on_event`; deltas are out of scope until
   streaming.
@@ -172,10 +172,9 @@ _planv2/
 - The `Runner` interface — the associated `Output` and `Error` types;
   why both vary by runner; `run` never throws untyped; no required
   fields, and the embed-an-`Agent` convention for shared options.
-- The building blocks — the library functions the default runner is
-  made of: journal construction, the turn commit, tool dispatch
-  (`reflect.call_any` under `invoke_tool`), and the final parse
-  (`baml.sap.parse<T>`).
+- The building blocks — the public primitives, with no intermediate
+  helpers: `Journal.new`/`append_all`, `client.invoke` over assembled
+  materials, `Tool.call`, and `baml.sap.parse<T>`.
 - Example: a wrapping runner — retry or budget logic around an inner
   runner.
 - Example: an eval runner — one spec, several clients, scored results;
@@ -252,7 +251,7 @@ _planv2/
   default; `PromptTools` wrapper); the axes compose without
   cross-field validation.
 - Rules shared by every client — schemas derive from
-  `reflect.signature` through `wire.tool_schemas`; execution is the
+  `reflect.signature` into `Tool.input_schema`; execution is the
   runner's `reflect.call_any`, never the client's; the per-turn
   decision; uniform result serialization; no argument repair; the
   reserved name; reasoning as readable projection only.
@@ -262,9 +261,10 @@ _planv2/
 - Anthropic (`AnthropicClient`) — system plus messages; interleaved
   content blocks including thinking; `output_config` composes with
   tools, so no reserved function.
-- Google (`GoogleClient`) — `generateContent`; synthesized call ids;
-  `responseJsonSchema` versus the reserved-function fallback when
-  tools are present.
+- Google (`GoogleClient`) — `generateContent`; instructions as the
+  leading user content on every turn, never `systemInstruction`;
+  synthesized call ids; `responseJsonSchema` versus the
+  reserved-function fallback when tools are present.
 - Media lowering — the per-provider argument table; rejected cells
   throw `Unsupported`; media output normalization is phase 2.
 - Prompt-mode tools are a wrapper, not a mode — the phase 2
@@ -288,8 +288,8 @@ entry notes the task.
 
 - `readme.md` — what belongs in this section; the page list.
 - `01_retry_a_failed_parse_with_feedback.md` — the feedback loop from
-  public primitives: `spec.prompt()`, `Journal.with`, `UserMessage`,
-  `client.invoke`.
+  public primitives: `spec.prompt()`, `Journal.append_all`,
+  `UserMessage`, `client.invoke`; every attempt is committed.
 - `02_test_without_a_network.md` — `ScriptedClient` drives the loop;
   assert on `received()`; tools still execute for real.
 - `03_use_a_local_model.md` — register a prefix over the OpenAI codec
@@ -315,7 +315,7 @@ entry notes the task.
 - `tools` — `Tool`, `Toolbox`, constructors.
 - `clients` — registry functions, built-in clients, wrappers.
 - `wire` — each helper, signature, behavior.
-- `failures` — the interface, `RetrySafety`, each class.
+- `errors` — the `ai.errors` namespace: the interface, `RetrySafety`, each class.
 - Standard library dependencies — `baml.schema.json_schema`,
   `baml.sap.parse`, `baml.json`, `baml.http`, `reflect`, `baml.env`;
   which layer uses each and where the `wire` helpers sit above them.
@@ -398,6 +398,12 @@ entry notes the task.
   shared options come from embedding an `Agent`.
 - No sessions in this BEP — what forced the cut, what re-entry
   requires.
+- Adjustments forced by the reference implementation — the `client`
+  keyword and `default_client`; nullable per-tool `on_error`; Gemini's
+  every-turn instructions rule; float widening in argument validation;
+  events carrying serialized JSON pending a `json`-typed event design.
+- The journal records repair attempts — `Journal.with` removed;
+  `append_all` is the write; rendering filters, the record does not.
 
 ### 03_future_phases.md
 

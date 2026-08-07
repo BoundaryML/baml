@@ -2,7 +2,9 @@
 
 `ScriptedClient` returns pre-written turns in order and records every
 input it receives, so an agent loop runs deterministically with no
-provider. This page tests the travel agent:
+provider. It is test scaffolding rather than an `ai` namespace member —
+any value implementing `Client` works, and the fake ships alongside
+the tests. This page tests the travel agent:
 
 ```baml
 function PlanTrip(trip_request: string) -> Itinerary {
@@ -21,7 +23,7 @@ sent:
 
 ```baml
 test plan_trip_runs_the_tool_loop {
-    let scripted = ai.clients.ScriptedClient {
+    let scripted = ScriptedClient {
         turns: [
             // turn 1: "the model" calls a tool
             ModelTurn {

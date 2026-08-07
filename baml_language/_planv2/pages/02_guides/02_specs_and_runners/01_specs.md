@@ -43,11 +43,13 @@ spec.arguments()     // { "trip_request": "2 weeks in Japan" }
 spec.output_type()   // the Itinerary type, as a runtime value
 spec.prompt()        // the prompt template with arguments bound
 spec.tools()         // the initial Toolbox
-spec.client()        // the resolved default Client
+spec.default_client  // the resolved default Client
 ```
 
 `output_type()` returns a runtime type value, usable with
-`baml.schema.json_schema` and `baml.sap.parse`.
+`baml.schema.json_schema` and `baml.sap.parse`. `client` is a keyword
+and cannot be a method name, so the resolved default client is the
+`default_client` field.
 
 ## Specs are read-only
 
