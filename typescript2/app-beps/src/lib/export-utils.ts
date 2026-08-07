@@ -348,12 +348,39 @@ export function generateReadme(data: ExportData): string {
     md += `${contentWithComments}\n\n`;
   }
 
-  // Additional pages (linked)
+  // Additional pages (children listed under their parent, indented one step
+  // per ancestor)
   if (pages.length > 0) {
     md += `---\n\n## Additional Pages\n\n`;
+    const bySlug = new Map(pages.map((p) => [p.slug, p]));
+    const childrenByParent = new Map<string, ExportPage[]>();
+    const roots: ExportPage[] = [];
     for (const page of pages) {
-      md += `- [${page.title}](${pageExportPath(page, pages)})\n`;
+      // Pages with a missing or self-referential parent list at top level
+      if (
+        page.parentSlug &&
+        page.parentSlug !== page.slug &&
+        bySlug.has(page.parentSlug)
+      ) {
+        const list = childrenByParent.get(page.parentSlug) ?? [];
+        list.push(page);
+        childrenByParent.set(page.parentSlug, list);
+      } else {
+        roots.push(page);
+      }
     }
+    const listed = new Set<string>();
+    const listSubtree = (page: ExportPage, depth: number) => {
+      if (listed.has(page.slug)) return;
+      listed.add(page.slug);
+      md += `${"  ".repeat(depth)}- [${page.title}](${pageExportPath(page, pages)})\n`;
+      for (const child of childrenByParent.get(page.slug) ?? []) {
+        listSubtree(child, depth + 1);
+      }
+    };
+    for (const page of roots) listSubtree(page, 0);
+    // Pages trapped in parent cycles have no root; surface them at top level
+    for (const page of pages) listSubtree(page, 0);
     md += `\n`;
   }
 

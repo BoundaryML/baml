@@ -472,6 +472,7 @@ BEP-001-your-proposal-slug/
 └── pages/              # Additional pages (addenda)
     ├── background.md
     ├── examples.md
+    ├── design.md       # Parent page for files in design/
     └── design/         # Subfolders nest pages under a parent page
         ├── api.md      # Becomes a child of the "design" page
         ├── schema.md
