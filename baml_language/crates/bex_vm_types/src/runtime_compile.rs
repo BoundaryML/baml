@@ -9,9 +9,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use indexmap::IndexMap;
-
 use baml_type::{Interface, Name, QualifiedTypeName, RealizedTy, Ty};
+use indexmap::IndexMap;
 
 use crate::CompilationUnit;
 

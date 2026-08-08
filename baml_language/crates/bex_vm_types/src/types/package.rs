@@ -1,8 +1,9 @@
+use std::sync::{Arc, atomic::AtomicBool};
+
 use baml_base::Name;
 use baml_type::{RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
-use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
     AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, Value,
