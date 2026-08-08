@@ -47,6 +47,9 @@ PACK_E2E = (
 CFFI_BUILDER = (
     ROOT / ".github" / "workflows" / "build2-bridge-cffi.reusable.yaml"
 )
+CPP_VERIFIER = (
+    ROOT / ".github" / "workflows" / "verify-cpp-sdk.reusable.yaml"
+)
 PACK_PRODUCT = (
     ROOT
     / "baml_language"
@@ -657,6 +660,24 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
+    def test_cpp_verifier_stamps_the_frozen_release_plan(self) -> None:
+        workflow = CPP_VERIFIER.read_text(encoding="utf-8")
+        verify = job_block(workflow, "verify")
+        stamp = step_block(verify, "Stamp release plan")
+
+        self.assertIn(
+            "scripts/baml-language-version stamp --plan release-plan.json",
+            stamp,
+        )
+        self.assertLess(
+            stamp.index("printf '%s\\n' \"$RELEASE_PLAN_JSON\""),
+            stamp.index("scripts/baml-language-version stamp"),
+        )
+        self.assertLess(
+            workflow.index("scripts/baml-language-version stamp"),
+            workflow.index("cmake -S baml_language/sdks/cpp/bridge_cpp/tests"),
+        )
+
     def test_cargo_jobs_name_targets_and_run_pack_e2e_on_musl(self) -> None:
         workflow = CARGO_TESTS.read_text(encoding="utf-8")
         for target in (

@@ -591,13 +591,43 @@ impl Word {
         Self { token_span }
     }
 }
+
+/// True for token kinds the parser accepts as identifiers in name positions.
+///
+/// The lexer emits dedicated keyword kinds for these words, but the parser
+/// keeps them valid as field, parameter, method, and member-access names
+/// (e.g. a class field or parameter named `client`, or `x.implements(y)` on
+/// the reflection `type` value). The CST therefore contains the keyword kind
+/// where the strong AST expects a name, and [`Word::from_cst`] must accept it.
+/// Mirrors `at_member_name` and `parse_parameter` in `baml_compiler_parser`.
+#[must_use]
+pub fn is_word_like(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WORD
+            | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_FUNCTION
+            | SyntaxKind::KW_IMPLEMENTS
+            | SyntaxKind::KW_IMPLEMENT
+            | SyntaxKind::KW_EXTENDS
+            | SyntaxKind::KW_REQUIRES
+            | SyntaxKind::KW_INTERFACE
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
+    )
+}
+
 impl FromCST for Word {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
-        // `client` lexes as KW_CLIENT but remains a valid identifier (field,
-        // parameter, object key, ...) — mirror the parser's allowance.
-        if token.kind() != SyntaxKind::KW_CLIENT {
-            StrongAstError::assert_kind_token(&token, SyntaxKind::WORD)?;
+        if !is_word_like(token.kind()) {
+            return Err(StrongAstError::UnexpectedKind {
+                expected: SyntaxKind::WORD,
+                found: token.kind(),
+                at: token.text_range(),
+            });
         }
         Ok(Self::new_from_span(token.text_range()))
     }
