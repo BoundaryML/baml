@@ -9242,6 +9242,76 @@ fn baml.reflect.Package.tests = builtin(vm)
 
 fn baml.reflect.Package.diagnostics = builtin(vm)
 
+fn baml.reflect.Session.new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session {
+    // Locals:
+    let _0: baml.reflect.Session // _0 // return
+    let _1: map<string, baml.reflect.Package> // packages // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = {  }: map<string, baml.reflect.Package>;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.reflect.Session._new(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.reflect.Session._new = builtin(vm)
+
+fn baml.reflect.Session.eval(self: baml.reflect.Session, source: string) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: baml.reflect.Session // self // param
+    let _2: string // source // param
+    let _3: baml.reflect.Package // artifact
+    let _4: type
+    let _5: unknown // _
+    let _6: baml.reflect.Package
+    let _7: type
+    let _8: baml.reflect.errors.EvaluationError
+
+    bb0: {
+        _4 = load_type(#0);
+        _3 = sys_op const fn baml.reflect.Session._compile(copy _1, copy _2, copy _4) -> bb1;
+    }
+
+    bb1: {
+        _6 = copy _3;
+        _7 = load_type(#0);
+        _0 = call const fn baml.reflect.Session._finish<copy _7>(copy _1, copy _6) -> [bb2, unwind: bb3];
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw_if_panic copy _5 -> bb4;
+    }
+
+    bb4: {
+        _8 = baml.reflect.errors.EvaluationError { const "session evaluation failed" };
+        throw copy _8;
+    }
+}
+
+fn baml.reflect.Session._compile = builtin(io)
+
+fn baml.reflect.Session._finish = builtin(vm)
+
+fn baml.reflect.Session.diagnostics = builtin(vm)
+
 fn baml.reflect.signature = builtin(vm)
 
 fn baml.reflect.call_any = builtin(vm)

@@ -6428,6 +6428,53 @@ function baml.reflect.Package.tests(self: baml.reflect.Package) -> map<string, (
 function baml.reflect.Package.with_types(self: baml.reflect.Package, types: map<string, type | baml.reflect.TypeView>) -> baml.reflect.Package {
 }
 
+function baml.reflect.Session._compile(self: baml.reflect.Session, source: string) -> baml.reflect.Package {
+}
+
+function baml.reflect.Session._finish(self: baml.reflect.Session, artifact: baml.reflect.Package) -> #0 {
+}
+
+function baml.reflect.Session._new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session {
+}
+
+function baml.reflect.Session.diagnostics(self: baml.reflect.Session) -> baml.reflect.Diagnostic[] {
+}
+
+function baml.reflect.Session.eval(self: baml.reflect.Session, source: string) -> #0 {
+    load_var2 1 2
+    load_type #0
+    sys_op baml.reflect.Session._compile
+    store_var artifact
+    load_type #0
+    load_var2 1 3
+    call baml.reflect.Session._finish
+    jump L0
+    load_var _
+    throw_if_panic
+    load_const "session evaluation failed"
+    init_instance baml.reflect.errors.EvaluationError .message
+    throw
+
+  L0:
+    return
+}
+
+function baml.reflect.Session.new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type baml.reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var packages
+    call baml.reflect.Session._new
+    return
+}
+
 function baml.reflect.array.Type.baml.reflect.TypeView.as_type(self: baml.reflect.array.Type) -> type {
 }
 

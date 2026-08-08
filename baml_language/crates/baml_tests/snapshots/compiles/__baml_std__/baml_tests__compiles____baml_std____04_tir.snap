@@ -3188,6 +3188,23 @@ function baml.reflect.Package.compile(files: map<string, string>, packages: map<
     Package._finish(artifact, packages) : baml.reflect.Package
   }
 }
+class baml.reflect.Session {
+  _inner: unknown
+}
+function baml.reflect.Session.new(packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Session throws baml.reflect.errors.CompilationError {
+  { : baml.reflect.Session
+    Session._new(packages) : baml.reflect.Session
+  }
+}
+function baml.reflect.Session.eval<T>(self: baml.reflect.Session, source: string) -> T throws baml.reflect.errors.CompilationError | baml.reflect.errors.EvaluationError | baml.reflect.errors.SessionBusy {
+  { : T
+    let artifact = self._compile(source) : baml.reflect.Package
+    catch (self._finish<T>(artifact) : T) : T
+      catch (_)
+        _ =>
+          throw baml.reflect.errors.EvaluationError { message: "session evaluatio..." } : never
+  }
+}
 class baml.reflect.Arg$stream {
   name: string | null
   type: unknown
@@ -3230,6 +3247,9 @@ class baml.reflect.InvalidArgumentError$stream {
   got: unknown
 }
 class baml.reflect.Package$stream {
+  _inner: unknown
+}
+class baml.reflect.Session$stream {
   _inner: unknown
 }
 

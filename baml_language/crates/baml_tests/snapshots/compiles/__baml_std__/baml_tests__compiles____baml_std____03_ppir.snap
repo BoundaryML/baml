@@ -2147,6 +2147,12 @@ class baml.reflect.Package {
 class baml.reflect.Package$stream {
   _inner: unknown
 }
+class baml.reflect.Session {
+  _inner: unknown
+}
+class baml.reflect.Session$stream {
+  _inner: unknown
+}
 class baml.reflect.Signature {
   name: string?
   args: baml.reflect.Arg[]
@@ -2190,7 +2196,10 @@ class baml.reflect.WithMeta$stream {
 type baml.reflect.TypeKind = baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type
 type baml.reflect.TypeKind$stream = baml.reflect.class.Type$stream | baml.reflect.enum.Type$stream | baml.reflect.union.Type$stream | baml.reflect.literal.Type$stream | baml.reflect.array.Type$stream | baml.reflect.map.Type$stream | baml.reflect.interface.Type$stream | baml.reflect.primitive.Type$stream | baml.reflect.function.Type$stream
 function baml.reflect._compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package  [builtin]
+function baml.reflect._compile(self: ?, source: string) -> baml.reflect.Package  [builtin]
 function baml.reflect._finish(artifact: baml.reflect.Package, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package  [builtin]
+function baml.reflect._finish(self: ?, artifact: baml.reflect.Package) -> T  [builtin]
+function baml.reflect._new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session  [builtin]
 function baml.reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
 function baml.reflect.classes(self: ?) -> map<string, baml.reflect.class.Type>  [builtin]
 function baml.reflect.compile(files: map<string, string>, packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Package  [expr] {
@@ -2198,9 +2207,16 @@ function baml.reflect.compile(files: map<string, string>, packages: map<string, 
 }
 function baml.reflect.current() -> baml.reflect.Package  [builtin]
 function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
+function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
+function baml.reflect.eval(self: ?, source: string) -> T  [expr] {
+  { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => throw baml.reflect.errors.EvaluationError { message: "session evaluatio..." } }
+}
 function baml.reflect.functions(self: ?) -> map<string, baml.reflect.function.Type>  [builtin]
 function baml.reflect.get_class(self: ?, name: string) -> baml.reflect.class.Type?  [builtin]
 function baml.reflect.get_function(self: ?, name: string) -> F?  [builtin]
+function baml.reflect.new(packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Session  [expr] {
+  {  } Session._new(packages)
+}
 function baml.reflect.signature(f: baml.AnyFunction) -> baml.reflect.Signature  [builtin]
 function baml.reflect.tests(self: ?) -> map<string, () -> null throws unknown>  [builtin]
 function baml.reflect.with_types(self: ?, types: map<string, type | baml.reflect.TypeView>) -> baml.reflect.Package  [builtin]
