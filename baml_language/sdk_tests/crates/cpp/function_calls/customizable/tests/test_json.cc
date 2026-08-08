@@ -14,8 +14,8 @@
 #include <utility>
 #include <vector>
 
-using baml_sdk::baml::json::JsonPathError;
 using baml_sdk::baml::json::json;
+using baml_sdk::baml::json::JsonPathError;
 
 namespace {
 
@@ -51,9 +51,9 @@ BAML_TEST(host_supplied_json_supports_typed_narrowing) {
 
   BAML_ASSERT_EQ(baml_sdk::go_json_tests::json_path_string(object, ".type"),
                  std::string("ok"));
-  BAML_ASSERT_EQ(baml_sdk::go_json_tests::json_path_string(
-                     object, ".nested.list[1].deep"),
-                 std::string("found"));
+  BAML_ASSERT_EQ(
+      baml_sdk::go_json_tests::json_path_string(object, ".nested.list[1].deep"),
+      std::string("found"));
   BAML_ASSERT_EQ(baml_sdk::go_json_tests::json_path_string_or(
                      object, ".missing", "fallback"),
                  std::string("fallback"));
