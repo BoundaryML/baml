@@ -9,10 +9,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useState } from 'react';
+import BamlEditor from '@/app/learn2/_components/baml-editor-lazy';
 import { DiscordCta } from '@/components/discord-cta';
 import { Navbar } from '@/components/navbar';
 import { BamlCode } from '../../learn2/_components/BamlCode';
-import BamlEditor from '@/app/learn2/_components/baml-editor-lazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
 import {
   CODE_THEMES,

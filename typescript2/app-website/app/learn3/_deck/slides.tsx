@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { BamlCode } from '../../learn2/_components/BamlCode';
 import BamlEditor from '@/app/learn2/_components/baml-editor-lazy';
+import { BamlCode } from '../../learn2/_components/BamlCode';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
 import {
   Bullets,
