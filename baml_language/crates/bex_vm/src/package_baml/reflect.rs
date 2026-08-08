@@ -1274,22 +1274,22 @@ fn graft_session_submission(
     let mut next_global = existing_len;
     let mut imported_values = HashMap::<usize, Value>::new();
     let mut cached_import_names = Vec::<(String, usize)>::new();
-    for plan_index in 0..plan.program.globals.len() {
+    for (plan_index, stable_slot) in global_map.iter_mut().enumerate() {
         if let Some(symbol) = external_globals.get(&plan_index) {
             if let Some(&stable) = existing_globals.get(&symbol.fq_name) {
-                global_map[plan_index] = stable;
+                *stable_slot = stable;
                 continue;
             }
             let value = session_external_global(vm, package_ptr, &dependencies, &symbol.fq_name)
                 .ok_or_else(|| VmBamlError::InvalidArgument {
                     message: format!("Session link could not resolve global `{}`", symbol.fq_name),
                 })?;
-            global_map[plan_index] = next_global;
+            *stable_slot = next_global;
             imported_values.insert(plan_index, value);
             cached_import_names.push((symbol.fq_name.clone(), next_global));
             next_global += 1;
         } else {
-            global_map[plan_index] = next_global;
+            *stable_slot = next_global;
             next_global += 1;
         }
     }
