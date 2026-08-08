@@ -1,4 +1,5 @@
 import { html, LitElement, nothing, type PropertyValues } from 'lit';
+import { compositionBar } from '../composition';
 import { flash, type GotoTarget } from '../navigation';
 import type { Links, Side, SymbolMatrix, TreeNode } from '../types';
 import './matrix-symbol';
@@ -17,6 +18,8 @@ export class MatrixGroupElement extends LitElement {
     members: { attribute: false },
     name: {},
     open: { state: true, type: Boolean },
+    rowScale: { type: Number },
+    scale: { type: Number },
     side: {},
     target: { attribute: false },
   };
@@ -28,6 +31,12 @@ export class MatrixGroupElement extends LitElement {
   declare matrix: SymbolMatrix;
   declare target: GotoTarget | null;
   declare open: boolean;
+  /** The largest group's size, which every group bar is drawn as a fraction
+   *  of. */
+  declare scale: number;
+  /** The largest member-holding row's size, which the rows inside are drawn as
+   *  a fraction of. Groups and rows are scaled against their own peers. */
+  declare rowScale: number;
   #focused = -1;
 
   constructor() {
@@ -37,6 +46,8 @@ export class MatrixGroupElement extends LitElement {
     this.members = [];
     this.target = null;
     this.open = false;
+    this.scale = 0;
+    this.rowScale = 0;
   }
 
   protected createRenderRoot() {
@@ -62,16 +73,7 @@ export class MatrixGroupElement extends LitElement {
     flash(this);
   }
 
-  private get tally() {
-    let matched = 0;
-    for (const member of this.members) {
-      if (this.links.for(this.side, member.index).length > 0) matched += 1;
-    }
-    return { matched, unmatched: this.members.length - matched };
-  }
-
   render() {
-    const { matched, unmatched } = this.tally;
     return html`
       <button
         type="button"
@@ -89,18 +91,8 @@ export class MatrixGroupElement extends LitElement {
           >▶</span
         >
         <span class="font-mono font-semibold">${this.name}</span>
-        <span class="ml-auto flex gap-2.5 text-xs text-zinc-500">
-          ${[
-            ['matched', matched],
-            ['unmatched', unmatched],
-          ].map(([label, value]) =>
-            value === 0
-              ? nothing
-              : html`<span
-                  ><b class="font-semibold text-zinc-900 dark:text-zinc-100">${value}</b>
-                  ${label}</span
-                >`,
-          )}
+        <span class="ml-auto">
+          ${compositionBar(this.members, this.links, this.side, this.scale, 'group')}
         </span>
       </button>
       ${
@@ -114,6 +106,7 @@ export class MatrixGroupElement extends LitElement {
                   .node=${node}
                   .links=${this.links}
                   .matrix=${this.matrix}
+                  .scale=${this.rowScale}
                   .target=${this.target?.path[0] === node.index ? this.target : null}
                   .depth=${0}
                 ></matrix-symbol>
