@@ -258,6 +258,7 @@ fn fill_package_slots(
                 .test_init
                 .map(|index| heap.compile_time_ptr(index.into_raw())),
             runtime: None,
+            session: None,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
         index

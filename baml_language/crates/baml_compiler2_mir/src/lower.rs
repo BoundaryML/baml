@@ -6205,10 +6205,41 @@ impl<'db> LoweringContext<'db> {
                 .unwrap_or_else(|| self.builder.local_ty(self_local));
             (place, ty)
         } else {
-            // Root not found as a local or capture; emit null.
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            return;
+            // A multi-segment path can also be rooted at a package-level let
+            // (`config.value`). Unlike lexical locals it has no `Place` yet:
+            // materialize the global read before projecting its fields. TIR
+            // already records the precise root type for the path, so the
+            // ordinary class/interface projection code below remains the
+            // single source of field indices.
+            let span_start = self
+                .source_map
+                .as_ref()
+                .map(|source_map| source_map.expr_span(expr_id).start())
+                .unwrap_or_default();
+            match resolve_name_at_in_scope(
+                self.db,
+                self.file,
+                span_start,
+                &segments[0],
+                self.scope_func_name.as_ref(),
+            ) {
+                ResolvedName::Item(def @ Definition::Let(_)) => {
+                    let ty =
+                        self.path_root_ty(expr_id)
+                            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            });
+                    let local = self.builder.temp(ty.clone());
+                    self.lower_item_ref(expr_id, def, Place::local(local));
+                    (Place::Local(local), ty)
+                }
+                _ => {
+                    // Root not found as a local, capture, or global let.
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                    return;
+                }
+            }
         };
 
         let mut skip_next_segment = false;

@@ -2,6 +2,7 @@ use baml_base::Name;
 use baml_type::{RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
+use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
     AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, Value,
@@ -41,6 +42,21 @@ pub struct Package {
     /// Present only for a package produced by `reflect.Package.compile`.
     #[borsh(skip)]
     pub runtime: Option<Box<RuntimePackage>>,
+    /// Present only for the package-shaped payload owned by a Session.
+    #[borsh(skip)]
+    pub session: Option<Box<SessionState>>,
+}
+
+/// Compiler-free persistent state of one `reflect.Session`.
+#[derive(Clone, Debug)]
+pub struct SessionState {
+    /// Committed, hygienically lowered source, replayed into every fresh DB.
+    pub history: IndexMap<String, String>,
+    /// Newest source-visible name to its persistent generated symbol.
+    pub visible: IndexMap<String, crate::SessionVisibleSymbol>,
+    /// Atomic single-eval admission bit shared with RAII compile artifacts.
+    pub busy: Arc<AtomicBool>,
+    pub submission_counter: u64,
 }
 
 /// Runtime-only package image grafted into the moving heap.
@@ -49,6 +65,9 @@ pub struct RuntimePackage {
     /// Linked local object table. Imported entries point into static or other
     /// runtime packages; owned entries point back into this package's graph.
     pub objects: Box<[HeapPtr]>,
+    /// Newest-wins dynamic object link table. Old objects stay in `objects`,
+    /// while later submissions resolve a repeated source name to this entry.
+    pub object_names: IndexMap<String, HeapPtr>,
     /// Package-local global slots, mutable only while `$init` is running.
     pub globals: Box<[AtomicValueSlot]>,
     /// Fully-qualified function/let name to this image's local global slot.

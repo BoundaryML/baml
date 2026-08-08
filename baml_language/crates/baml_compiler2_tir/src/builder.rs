@@ -2207,6 +2207,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// BEP-066 Session.eval is the one generic call whose omitted result
+    /// contract is meaningful: `s.eval(source)` is deliberately
+    /// `eval<unknown>(source)`. Every other uninferable generic remains an
+    /// error under the ordinary realization contract.
+    fn is_uncontracted_session_eval(&self, callee: ExprId, body: &ExprBody) -> bool {
+        let receiver = match &body.exprs[callee] {
+            Expr::MemberAccess { base, member } if member.as_str() == "eval" => {
+                self.expressions.get(base).cloned()
+            }
+            Expr::Path(segments) if segments.len() == 2 && segments[1].as_str() == "eval" => self
+                .locals
+                .get(&segments[0])
+                .map(|binding| binding.current_ty.clone()),
+            _ => None,
+        };
+        matches!(
+            receiver.map(|ty| self.expand_alias_chains(ty)),
+            Some(Ty::Class(name, _, _)) if name.to_string() == "baml.reflect.Session"
+        )
+    }
+
     /// Whether `expr` is a bare reference to a generic *free function* — an
     /// unrealized function value that must be specialized (`identity` →
     /// `identity<int>`). Only `Free` resolutions with declared user generic params
@@ -4353,6 +4374,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     bindings.retain(|name, _| {
                         crate::generics::is_value_call_inferable(name, &generic_params)
                     });
+                }
+
+                if !explicit_args_used
+                    && callee_expr
+                        .is_some_and(|callee| self.is_uncontracted_session_eval(callee, body))
+                {
+                    for generic in &generic_params {
+                        bindings
+                            .entry(generic.clone())
+                            .or_insert_with(|| Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            });
+                    }
                 }
 
                 // Capture caller type-variable correspondences so generic

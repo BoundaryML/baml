@@ -22,7 +22,11 @@ baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
+baml_compiler2_ppir = { workspace = true }
 baml_compiler2_tir = { workspace = true }
+baml_compiler_lexer = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
@@ -47,6 +51,7 @@ lsp-types = { workspace = true }
 paste = { workspace = true }
 percent-encoding = { workspace = true }
 regex = { workspace = true }
+rowan = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

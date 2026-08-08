@@ -117,6 +117,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             test_init: None,
             runtime: Some(Box::new(RuntimePackage {
                 objects: Box::new([]),
+                object_names: IndexMap::new(),
                 globals: Box::new([]),
                 global_names: IndexMap::new(),
                 class_types: IndexMap::new(),
@@ -126,6 +127,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
                 init: None,
                 initialized: true,
             })),
+            session: None,
         };
         let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
         let ty = RealizedTy::Class(

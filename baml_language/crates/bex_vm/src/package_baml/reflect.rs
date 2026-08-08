@@ -12,22 +12,29 @@
 //! reaches a native at all; `type.of_value` lives in
 //! [`crate::package_baml::type_class`].)
 
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, atomic::AtomicBool},
+};
+
 use baml_compiler_diagnostics::DiagnosticId;
 use baml_type::{RealizedTy, Ty, TyAttr, normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact,
+    AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact, RuntimeSessionCompileArtifact,
+    SessionEvalLease,
     link::link_dynamic,
+    relink::{IndexOperand, visit_object_operands},
     types::{
         DynTypeDefs, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
-        RuntimeTypeProvenance, TypeValue, Value,
+        RuntimeTypeProvenance, SessionState, TypeValue, Value,
     },
 };
 use indexmap::IndexMap;
 
 use super::{
-    BamlClassReflectPackage, BamlNamespaceReflect, Continuation, ImplResolver, NativeCallResult,
-    PackageBamlImpl, PassThroughContinuation, copy,
+    BamlClassReflectPackage, BamlClassReflectSession, BamlNamespaceReflect, Continuation,
+    ImplResolver, NativeCallResult, PackageBamlImpl, PassThroughContinuation, copy,
 };
 use crate::{
     BexVm,
@@ -476,6 +483,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             test_init: None,
             runtime: Some(Box::new(RuntimePackage {
                 objects: Box::new([]),
+                object_names: IndexMap::new(),
                 globals: Box::new([]),
                 global_names: IndexMap::new(),
                 class_types: IndexMap::new(),
@@ -485,6 +493,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 init: None,
                 initialized: false,
             })),
+            session: None,
         };
         let package_ptr = vm.alloc(Object::Package(Box::new(package)));
 
@@ -932,6 +941,717 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             return Vec::new();
         };
         let diagnostics = match vm.get_object(ptr) {
+            Object::Package(package) => package
+                .runtime
+                .as_ref()
+                .map(|runtime| runtime.diagnostics.clone())
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic_value(vm, diagnostic))
+            .collect()
+    }
+}
+
+fn session_external_object(
+    vm: &BexVm,
+    session: HeapPtr,
+    dependencies: &IndexMap<String, HeapPtr>,
+    name: &str,
+) -> Option<HeapPtr> {
+    if let Object::Package(package) = vm.get_object(session)
+        && let Some(pointer) = package
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.object_names.get(name))
+    {
+        return Some(*pointer);
+    }
+    vm.packages.object_by_name(name).or_else(|| {
+        let (alias, local) = name.split_once('.')?;
+        dependency_object(vm, *dependencies.get(alias)?, local)
+    })
+}
+
+fn session_external_global(
+    vm: &BexVm,
+    session: HeapPtr,
+    dependencies: &IndexMap<String, HeapPtr>,
+    name: &str,
+) -> Option<Value> {
+    if let Object::Package(package) = vm.get_object(session)
+        && let Some(runtime) = package.runtime.as_ref()
+        && let Some(index) = runtime.global_names.get(name)
+    {
+        return runtime.load_global(*index);
+    }
+    vm.packages
+        .global_by_name(name)
+        .map(|index| vm.globals.get(vm.proof(), index))
+        .or_else(|| {
+            let (alias, local) = name.split_once('.')?;
+            let dependency = *dependencies.get(alias)?;
+            let Object::Package(package) = vm.get_object(dependency) else {
+                return None;
+            };
+            if let Some(runtime) = package.runtime.as_ref() {
+                let index = runtime
+                    .global_names
+                    .get(&format!("user.{local}"))
+                    .or_else(|| runtime.global_names.get(local))?;
+                runtime.load_global(*index)
+            } else {
+                let package_name = vm.packages.package_name(dependency)?;
+                let index = vm
+                    .packages
+                    .global_by_name(&format!("{package_name}.{local}"))?;
+                Some(vm.globals.get(vm.proof(), index))
+            }
+        })
+}
+
+#[derive(Clone, Copy)]
+struct SessionAction {
+    helper: HeapPtr,
+    target: usize,
+    step: Option<usize>,
+}
+
+struct SessionExecution {
+    package: HeapPtr,
+    actions: Vec<SessionAction>,
+    current: usize,
+    metadata: RuntimeSessionCompileArtifact,
+    result: Value,
+    lease: SessionEvalLease,
+}
+
+impl Drop for SessionExecution {
+    fn drop(&mut self) {
+        // A callback throw unwinds and drops the native continuation without
+        // calling it again. Release here as well as on normal completion so
+        // the RustData artifact's cloned lease cannot leave the Session busy.
+        self.lease.release();
+    }
+}
+
+impl SessionExecution {
+    fn next(self: Box<Self>) -> NativeCallResult {
+        let action = self.actions[self.current];
+        NativeCallResult::YieldToCall {
+            callee: action.helper,
+            args: Vec::new(),
+            type_args: Vec::new(),
+            continuation: self,
+        }
+    }
+}
+
+impl Continuation for SessionExecution {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let action = self.actions[self.current];
+        {
+            let Object::Package(package) = vm.get_object_mut(self.package) else {
+                unreachable!("Session continuation retained its package")
+            };
+            let runtime = package.runtime.as_mut().expect("Session runtime image");
+            runtime.globals[action.target].store(value);
+
+            if let Some(step_index) = action.step {
+                let step = &self.metadata.steps[step_index];
+                let state = package.session.as_mut().expect("Session state");
+                if let Some(source) = &step.replay_source {
+                    state
+                        .history
+                        .entry(self.metadata.submission_name.clone())
+                        .or_default()
+                        .push_str(source);
+                }
+                if let Some((name, symbol)) = &step.binding {
+                    state.visible.insert(name.clone(), symbol.clone());
+                }
+                if step.returns_value {
+                    self.result = value;
+                }
+            }
+        }
+        vm.heap.write_barrier(self.package, value);
+
+        self.current += 1;
+        if self.current < self.actions.len() {
+            return self.next();
+        }
+        self.lease.release();
+        NativeCallResult::Done(self.result)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        std::iter::once(self.package)
+            .chain(self.actions.iter().map(|action| action.helper))
+            .chain(self.result.as_object_ptr())
+            .collect()
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if let Some(&pointer) = forwarding.get(&self.package) {
+            self.package = pointer;
+        }
+        for action in &mut self.actions {
+            if let Some(&pointer) = forwarding.get(&action.helper) {
+                action.helper = pointer;
+            }
+        }
+        if let Some(pointer) = self.result.as_object_ptr()
+            && let Some(&forwarded) = forwarding.get(&pointer)
+        {
+            self.result = Value::object(forwarded);
+        }
+    }
+}
+
+fn graft_session_submission(
+    vm: &mut BexVm,
+    package_ptr: HeapPtr,
+    artifact: &RuntimeCompileArtifact,
+    metadata: &RuntimeSessionCompileArtifact,
+) -> Result<Vec<SessionAction>, VmRustFnError> {
+    let plan = link_dynamic(&artifact.units).map_err(|error| VmBamlError::InvalidArgument {
+        message: format!("Session runtime link failed: {error}"),
+    })?;
+    let (dependencies, existing_globals, existing_objects, existing_len, runtime_objects) = {
+        let Object::Package(package) = vm.get_object(package_ptr) else {
+            unreachable!("Session payload is a Package")
+        };
+        let runtime = package.runtime.as_ref().expect("Session runtime image");
+        (
+            runtime.dependency_names.clone(),
+            runtime.global_names.clone(),
+            runtime.object_names.clone(),
+            runtime.globals.len(),
+            runtime.objects.to_vec(),
+        )
+    };
+    let external_objects = plan
+        .external_objects
+        .iter()
+        .map(|(index, symbol)| (index.raw(), symbol))
+        .collect::<HashMap<_, _>>();
+    let external_globals = plan
+        .external_globals
+        .iter()
+        .map(|(index, symbol)| (index.raw(), symbol))
+        .collect::<HashMap<_, _>>();
+
+    // Assign stable Session slots first. Imports of prior Session cells reuse
+    // their old slot; every new definition gets a fresh slot, which is the
+    // cell/shadowing boundary.
+    let mut global_map = vec![0usize; plan.program.globals.len()];
+    let mut next_global = existing_len;
+    let mut imported_values = HashMap::<usize, Value>::new();
+    let mut cached_import_names = Vec::<(String, usize)>::new();
+    for plan_index in 0..plan.program.globals.len() {
+        if let Some(symbol) = external_globals.get(&plan_index) {
+            if let Some(&stable) = existing_globals.get(&symbol.fq_name) {
+                global_map[plan_index] = stable;
+                continue;
+            }
+            let value = session_external_global(vm, package_ptr, &dependencies, &symbol.fq_name)
+                .ok_or_else(|| VmBamlError::InvalidArgument {
+                    message: format!("Session link could not resolve global `{}`", symbol.fq_name),
+                })?;
+            global_map[plan_index] = next_global;
+            imported_values.insert(plan_index, value);
+            cached_import_names.push((symbol.fq_name.clone(), next_global));
+            next_global += 1;
+        } else {
+            global_map[plan_index] = next_global;
+            next_global += 1;
+        }
+    }
+
+    // Allocate all owned objects before patching any object operands so cycles
+    // and mutually-recursive declarations have a complete pointer map.
+    let mut objects = Vec::with_capacity(plan.program.objects.len());
+    let mut owned = Vec::new();
+    for (index, object) in plan.program.objects.iter().enumerate() {
+        let external = external_objects.get(&index).and_then(|symbol| {
+            (!matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn))
+                .then(|| {
+                    existing_objects.get(&symbol.fq_name).copied().or_else(|| {
+                        session_external_object(vm, package_ptr, &dependencies, &symbol.fq_name)
+                    })
+                })
+                .flatten()
+        });
+        if let Some(pointer) = external {
+            objects.push(pointer);
+        } else {
+            let pointer = vm.alloc(object.clone());
+            objects.push(pointer);
+            owned.push(pointer);
+        }
+    }
+    let mut object_map = vec![0usize; objects.len()];
+    let mut appended_objects = Vec::new();
+    for (index, pointer) in objects.iter().copied().enumerate() {
+        if let Some(stable) = runtime_objects
+            .iter()
+            .position(|existing| *existing == pointer)
+        {
+            object_map[index] = stable;
+        } else {
+            object_map[index] = runtime_objects.len() + appended_objects.len();
+            appended_objects.push(pointer);
+        }
+    }
+    let stable_objects = runtime_objects
+        .iter()
+        .copied()
+        .chain(appended_objects.iter().copied())
+        .collect::<Vec<_>>();
+    for pointer in &owned {
+        let object = vm.get_object_mut(*pointer);
+        visit_object_operands(object, |operand| match operand {
+            IndexOperand::Object(index) => {
+                *index = bex_vm_types::ObjectIndex::from_raw(object_map[index.raw()]);
+            }
+            IndexOperand::Global(index) => {
+                *index = bex_vm_types::GlobalIndex::from_raw(global_map[index.raw()]);
+            }
+        });
+        match object {
+            Object::Function(function) => {
+                function.runtime_package = package_ptr;
+                function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+            }
+            Object::GenericFunction(function) => function.runtime_package = package_ptr,
+            _ => {}
+        }
+    }
+
+    let function_ptrs = owned
+        .iter()
+        .copied()
+        .filter(|pointer| matches!(vm.get_object(*pointer), Object::Function(_)))
+        .collect::<Vec<_>>();
+    let mut extra_owned = Vec::new();
+    for function_ptr in function_ptrs {
+        let constants = match vm.get_object(function_ptr) {
+            Object::Function(function) => function.bytecode.constants.clone(),
+            _ => unreachable!(),
+        };
+        let mut resolved = Vec::with_capacity(constants.len());
+        for constant in constants {
+            let value = match constant {
+                bex_vm_types::ConstValue::Type(_)
+                | bex_vm_types::ConstValue::ClassWithTypeArgs { .. } => Value::NULL,
+                bex_vm_types::ConstValue::Float(value) => {
+                    let pointer = vm.alloc_float(value);
+                    extra_owned.push(pointer);
+                    Value::object(pointer)
+                }
+                other => other.to_value(|index| stable_objects[index.raw()]),
+            };
+            resolved.push(value);
+        }
+        let Object::Function(function) = vm.get_object_mut(function_ptr) else {
+            unreachable!()
+        };
+        function.bytecode.resolved_constants = resolved;
+    }
+
+    let mut appended = vec![Value::NULL; next_global - existing_len];
+    for (plan_index, constant) in plan.program.globals.iter().enumerate() {
+        let stable = global_map[plan_index];
+        if stable < existing_len {
+            continue;
+        }
+        let value = if let Some(value) = imported_values.get(&plan_index) {
+            *value
+        } else {
+            match constant {
+                bex_vm_types::ConstValue::Float(value) => {
+                    let pointer = vm.alloc_float(*value);
+                    extra_owned.push(pointer);
+                    Value::object(pointer)
+                }
+                other => other.to_value(|index| objects[index.raw()]),
+            }
+        };
+        appended[stable - existing_len] = value;
+    }
+
+    let program_package = plan
+        .program
+        .packages
+        .get(&baml_type::Name::new("user"))
+        .cloned()
+        .unwrap_or_default();
+    let new_classes = program_package
+        .classes
+        .iter()
+        .map(|(name, index)| (name.clone(), objects[index.raw()]))
+        .collect::<IndexMap<_, _>>();
+    let new_enums = program_package
+        .enums
+        .iter()
+        .map(|(name, index)| (name.clone(), objects[index.raw()]))
+        .collect::<IndexMap<_, _>>();
+    let new_interfaces = program_package
+        .interfaces
+        .iter()
+        .map(|(name, index)| (name.clone(), objects[index.raw()]))
+        .collect::<IndexMap<_, _>>();
+    let new_functions = program_package
+        .functions
+        .iter()
+        .map(|(name, index)| (name.clone(), objects[index.raw()]))
+        .collect::<IndexMap<_, _>>();
+    let mut new_impl_rules = IndexMap::<HeapPtr, Vec<HeapPtr>>::new();
+    for (interface_index, rules) in &program_package.impl_rules {
+        let interface = objects[interface_index.raw()];
+        let mut pointers = Vec::new();
+        for rule in rules {
+            let runtime_rule = RuntimeImplRule {
+                interface_head: objects[rule.interface_head.raw()],
+                for_ty_pattern: rule.for_ty_pattern.clone(),
+                generic_param_bounds: rule.generic_param_bounds.clone(),
+                interface_args: rule.interface_args.clone(),
+                interface_assoc: rule.interface_assoc.clone(),
+                methods: rule
+                    .methods
+                    .iter()
+                    .map(|(name, method)| {
+                        (
+                            name.clone(),
+                            MethodImpl {
+                                fqn: objects[method.fqn.raw()],
+                                frame: method.frame.clone(),
+                            },
+                        )
+                    })
+                    .collect(),
+                field_links: rule.field_links.clone(),
+            };
+            let pointer = vm.alloc(Object::ImplRule(Box::new(runtime_rule)));
+            extra_owned.push(pointer);
+            pointers.push(pointer);
+        }
+        new_impl_rules.insert(interface, pointers);
+    }
+
+    let mut class_types = IndexMap::new();
+    for (name, class_ptr) in &new_classes {
+        let Object::Class(class) = vm.get_object(*class_ptr) else {
+            continue;
+        };
+        let ty = RealizedTy::Class(class.name.clone(), Vec::new(), TyAttr::default());
+        let mint = vm.heap.mint_runtime_id();
+        let type_ptr = vm.alloc_type(TypeValue::runtime(ty, mint, package_ptr));
+        extra_owned.push(type_ptr);
+        let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
+            unreachable!()
+        };
+        class.runtime_type = Some(RuntimeTypeProvenance {
+            mint,
+            defs: DynTypeDefs::default(),
+            owner: package_ptr,
+        });
+        let local = name
+            .namespace
+            .iter()
+            .map(baml_type::Name::as_str)
+            .chain(std::iter::once(name.name.as_str()))
+            .collect::<Vec<_>>()
+            .join(".");
+        class_types.insert(local, type_ptr);
+    }
+    let source_defs = DynTypeDefs {
+        classes: new_classes
+            .values()
+            .filter_map(|pointer| match vm.get_object(*pointer) {
+                Object::Class(class) if !class.name.name().as_str().ends_with("$stream") => {
+                    Some((class.name.clone(), *pointer))
+                }
+                _ => None,
+            })
+            .collect(),
+        enums: new_enums
+            .values()
+            .filter_map(|pointer| match vm.get_object(*pointer) {
+                Object::Enum(enm) => Some((enm.name.clone(), *pointer)),
+                _ => None,
+            })
+            .collect(),
+    };
+    for pointer in new_classes.values() {
+        if let Object::Class(class) = vm.get_object_mut(*pointer)
+            && let Some(runtime_type) = &mut class.runtime_type
+        {
+            runtime_type.defs = source_defs.clone();
+        }
+    }
+    for pointer in new_enums.values() {
+        let mint = vm.heap.mint_runtime_id();
+        if let Object::Enum(enm) = vm.get_object_mut(*pointer) {
+            enm.runtime_type = Some(RuntimeTypeProvenance {
+                mint,
+                defs: source_defs.clone(),
+                owner: package_ptr,
+            });
+        }
+    }
+
+    let mut object_name_updates = IndexMap::new();
+    for (name, index) in &plan.program.function_indices {
+        if name.starts_with("user.") {
+            object_name_updates.insert(name.clone(), objects[*index]);
+        }
+    }
+    for (name, pointer) in new_classes.iter().chain(&new_enums).chain(&new_interfaces) {
+        object_name_updates.insert(
+            format!(
+                "user.{}",
+                display_local_name(name).trim_start_matches("root.")
+            ),
+            *pointer,
+        );
+    }
+    let global_name_updates = plan
+        .program
+        .function_global_indices
+        .iter()
+        .chain(&plan.program.let_global_indices)
+        .filter(|(name, _)| name.starts_with("user."))
+        .map(|(name, index)| (name.clone(), global_map[*index]))
+        .collect::<Vec<_>>();
+
+    let named_slots = plan
+        .program
+        .function_global_indices
+        .values()
+        .chain(plan.program.let_global_indices.values())
+        .copied()
+        .collect::<HashSet<_>>();
+    let helper_globals = plan
+        .program
+        .globals
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !named_slots.contains(index))
+        .filter_map(|(_, value)| match value {
+            bex_vm_types::ConstValue::Object(index) => match &plan.program.objects[*index] {
+                Object::Function(function) if function.source_file == metadata.submission_name => {
+                    Some(objects[index.raw()])
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let step_by_global = metadata
+        .steps
+        .iter()
+        .enumerate()
+        .map(|(index, step)| (step.global.as_str(), index))
+        .collect::<HashMap<_, _>>();
+    let actions = metadata
+        .initializers
+        .iter()
+        .map(|initializer| {
+            let helper = helper_globals
+                .get(initializer.helper_slot as usize)
+                .copied()
+                .ok_or_else(|| VmBamlError::InvalidArgument {
+                    message: "Session initializer helper was not linked".to_string(),
+                })?;
+            let plan_global = plan
+                .program
+                .let_global_indices
+                .get(&initializer.target_global)
+                .ok_or_else(|| VmBamlError::InvalidArgument {
+                    message: format!(
+                        "Session initializer target `{}` was not linked",
+                        initializer.target_global
+                    ),
+                })?;
+            let step = step_by_global
+                .get(initializer.target_global.as_str())
+                .copied();
+            let target = step
+                .and_then(|index| metadata.steps[index].commit_global.as_ref())
+                .and_then(|name| existing_globals.get(name))
+                .copied()
+                .unwrap_or(global_map[*plan_global]);
+            Ok(SessionAction {
+                helper,
+                target,
+                step,
+            })
+        })
+        .collect::<Result<Vec<_>, VmBamlError>>()?;
+    let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+        unreachable!()
+    };
+    package.classes.extend(new_classes);
+    package.enums.extend(new_enums);
+    package.interfaces.extend(new_interfaces);
+    package.functions.extend(new_functions);
+    package
+        .recursive_type_aliases
+        .extend(program_package.recursive_type_aliases);
+    for (interface, rules) in new_impl_rules {
+        package
+            .impl_rules
+            .entry(interface)
+            .or_default()
+            .extend(rules);
+    }
+    package.interface_blob.clone_from(&artifact.interface_blob);
+    let state = package.session.as_mut().expect("Session state");
+    if !metadata.declaration_source.trim().is_empty() {
+        state.history.insert(
+            metadata.submission_name.clone(),
+            metadata.declaration_source.clone(),
+        );
+    }
+    state.visible.extend(metadata.declarations.clone());
+    let runtime = package.runtime.as_mut().expect("Session runtime image");
+    let mut globals = runtime.globals.to_vec();
+    globals.extend(appended.into_iter().map(AtomicValueSlot::new));
+    runtime.globals = globals.into_boxed_slice();
+    let mut retained_objects = runtime.objects.to_vec();
+    retained_objects.extend(appended_objects);
+    retained_objects.extend(extra_owned);
+    runtime.objects = retained_objects.into_boxed_slice();
+    runtime.object_names.extend(object_name_updates);
+    runtime.global_names.extend(cached_import_names);
+    runtime.global_names.extend(global_name_updates);
+    runtime.class_types.extend(class_types);
+    runtime.diagnostics.clone_from(&artifact.diagnostics);
+    Ok(actions)
+}
+
+impl BamlClassReflectSession for PackageBamlImpl {
+    fn _new(
+        vm: &mut BexVm,
+        packages: &IndexMap<bex_str::BexStr, Value>,
+    ) -> Result<Value, VmRustFnError> {
+        const RESERVED: &[&str] = &[
+            "baml", "boundary", "testing", "assert", "log", "user", "root", "env",
+        ];
+        let mut dependencies = IndexMap::new();
+        for (alias, value) in packages {
+            if RESERVED.contains(&alias.as_str()) {
+                let diagnostic = super::type_kinds::compiler_diagnostic(
+                    DiagnosticId::InvalidSyntax,
+                    format!("package alias `{alias}` is reserved"),
+                );
+                return Err(VmRustFnError::Thrown(
+                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+                ));
+            }
+            dependencies.insert(alias.to_string(), package_ptr(vm, *value)?);
+        }
+        let package = Package {
+            classes: IndexMap::new(),
+            enums: IndexMap::new(),
+            interfaces: IndexMap::new(),
+            impl_rules: IndexMap::new(),
+            functions: IndexMap::new(),
+            recursive_type_aliases: IndexMap::new(),
+            interface_blob: Vec::new(),
+            test_init: None,
+            runtime: Some(Box::new(RuntimePackage {
+                objects: Box::new([]),
+                object_names: IndexMap::new(),
+                globals: Box::new([]),
+                global_names: IndexMap::new(),
+                class_types: IndexMap::new(),
+                diagnostics: Vec::new(),
+                dependencies: dependencies.values().copied().collect(),
+                dependency_names: dependencies,
+                init: None,
+                // Session cells intentionally stay mutable between evals.
+                initialized: false,
+            })),
+            session: Some(Box::new(SessionState {
+                history: IndexMap::new(),
+                visible: IndexMap::new(),
+                busy: Arc::new(AtomicBool::new(false)),
+                submission_counter: 0,
+            })),
+        };
+        let package = vm.alloc(Object::Package(Box::new(package)));
+        Ok(copy::reflect::Session {
+            _inner: Value::object(package),
+        }
+        .to_value(vm))
+    }
+
+    fn _finish(vm: &mut BexVm, session: &Value, artifact: &Value) -> NativeCallResult {
+        let package = match package_ptr(vm, *session) {
+            Ok(package) => package,
+            Err(error) => return error.into(),
+        };
+        let Some(artifact_inner) =
+            artifact
+                .as_object_ptr()
+                .and_then(|pointer| match vm.get_object(pointer) {
+                    Object::Instance(instance) => Some(instance.load_field(0)),
+                    _ => None,
+                })
+        else {
+            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "Session._finish received an invalid artifact".to_string(),
+            })
+            .into();
+        };
+        let mut artifact = match vm.as_rust_data::<RuntimeCompileArtifact>(&artifact_inner) {
+            Ok(artifact) => artifact.clone(),
+            Err(error) => return error.into(),
+        };
+        let Some(metadata) = artifact.session.clone() else {
+            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "Session._finish received a Package.compile artifact".to_string(),
+            })
+            .into();
+        };
+        let Some(lease) = artifact.session_lease.take() else {
+            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "Session artifact has already been consumed".to_string(),
+            })
+            .into();
+        };
+        let actions = match graft_session_submission(vm, package, &artifact, &metadata) {
+            Ok(actions) => actions,
+            Err(error) => {
+                lease.release();
+                return error.into();
+            }
+        };
+        if actions.is_empty() {
+            lease.release();
+            return NativeCallResult::Done(Value::NULL);
+        }
+        Box::new(SessionExecution {
+            package,
+            actions,
+            current: 0,
+            metadata,
+            result: Value::NULL,
+            lease,
+        })
+        .next()
+    }
+
+    fn diagnostics(vm: &mut BexVm, session: &Value) -> Vec<Value> {
+        let Ok(package) = package_ptr(vm, *session) else {
+            return Vec::new();
+        };
+        let diagnostics = match vm.get_object(package) {
             Object::Package(package) => package
                 .runtime
                 .as_ref()

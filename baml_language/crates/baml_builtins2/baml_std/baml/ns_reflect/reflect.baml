@@ -142,6 +142,44 @@ class Package {
   }
 }
 
+/// A live incremental evaluation environment. Its dependency aliases are
+/// fixed at construction; every eval checks in a fresh compiler context and
+/// commits successful statements to this Session's persistent runtime image.
+class Session {
+  _inner unknown
+
+  function new(packages: map<string, Package> = {}) -> Session throws baml.reflect.errors.CompilationError {
+    Session._new(packages)
+  }
+
+  //baml:mut_vm
+  function _new(packages: map<string, Package>) -> Session throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
+
+  function eval<T>(self, source: string) -> T throws baml.reflect.errors.CompilationError | baml.reflect.errors.EvaluationError | baml.reflect.errors.SessionBusy {
+    let artifact = self._compile<T>(source)
+    self._finish<T>(artifact) catch (_) {
+      _ => throw baml.reflect.errors.EvaluationError { message: "session evaluation failed" }
+    }
+  }
+
+  function _compile<T>(self, source: string) -> Package throws baml.reflect.errors.CompilationError | baml.reflect.errors.SessionBusy {
+    $rust_io_function
+  }
+
+  //baml:mut_vm
+  //baml:may_yield
+  function _finish<T>(self, artifact: Package) -> T throws unknown {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function diagnostics(self) -> Diagnostic[] throws never {
+    $rust_function
+  }
+}
+
 /// Returns the runtime signature of `f`.
 ///
 /// Usage:

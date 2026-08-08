@@ -4,9 +4,131 @@
 //! the engine owns only an injected compiler trait object, while the concrete
 //! compiler implementation is assembled in `bex_project`.
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use indexmap::IndexMap;
 
 use crate::CompilationUnit;
+
+/// The kind of a name retained in a Session's compile-time scope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionVisibleKind {
+    Declaration,
+    Let,
+    TypeBinding,
+}
+
+/// One source-visible name and the hygienic name used in replayed source.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SessionVisibleSymbol {
+    pub internal: String,
+    pub kind: SessionVisibleKind,
+    /// Backing top-level value for a scoped runtime type binding.
+    pub type_value: Option<String>,
+}
+
+/// Session-specific inputs copied out of the heap before the compiler yield.
+#[derive(Clone, Debug)]
+pub struct RuntimeSessionCompileRequest {
+    /// Stable virtual file name for the new submission.
+    pub submission_name: String,
+    /// The user's source, before hygienic session lowering.
+    pub source: String,
+    /// Successfully committed prior submissions, already lowered and named.
+    pub history: IndexMap<String, String>,
+    /// The newest source-visible binding for every flat-scope name.
+    pub visible: IndexMap<String, SessionVisibleSymbol>,
+    /// Runtime contract supplied by `eval<T>` (unknown for uncontracted eval).
+    pub expected: baml_type::RuntimeTy,
+    /// Keeps the one-eval permit live across compile and execution.
+    pub lease: SessionEvalLease,
+}
+
+/// What one emitted initializer commits when it returns successfully.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeSessionStep {
+    /// Fully-qualified generated global receiving the initializer result.
+    pub global: String,
+    /// Existing Session cell to update after this initializer succeeds. `None`
+    /// means the generated global itself receives the value.
+    pub commit_global: Option<String>,
+    /// Source-visible binding committed by this step, if it is a `let`.
+    pub binding: Option<(String, SessionVisibleSymbol)>,
+    /// Replayed source fragment to append only after this step succeeds.
+    pub replay_source: Option<String>,
+    /// Whether this step is the submission's observable final expression.
+    pub returns_value: bool,
+}
+
+/// Compiler-owned Session metadata retained after the fresh database drops.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeSessionCompileArtifact {
+    pub submission_name: String,
+    /// Hoisted declarations are committed before the first initializer runs.
+    pub declaration_source: String,
+    pub declarations: IndexMap<String, SessionVisibleSymbol>,
+    pub steps: Vec<RuntimeSessionStep>,
+    /// Current-submission initializer helpers in execution order. `helper_slot`
+    /// addresses the anonymous helper-slot list retained in the pruned tail.
+    pub initializers: Vec<RuntimeSessionInitializer>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeSessionInitializer {
+    pub helper_slot: u32,
+    pub target_global: String,
+}
+
+/// RAII permit for S-9. Every cancellation/error path releases the busy bit
+/// simply by dropping the last clone; successful evaluation releases it
+/// explicitly after the final continuation.
+#[derive(Clone)]
+pub struct SessionEvalLease(Arc<SessionEvalLeaseInner>);
+
+#[derive(Debug)]
+struct SessionEvalLeaseInner {
+    busy: Arc<AtomicBool>,
+}
+
+impl SessionEvalLease {
+    pub fn acquire(busy: Arc<AtomicBool>) -> Option<Self> {
+        busy.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| Self(Arc::new(SessionEvalLeaseInner { busy })))
+    }
+
+    pub fn release(&self) {
+        self.0.busy.store(false, Ordering::Release);
+    }
+}
+
+impl std::fmt::Debug for SessionEvalLease {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionEvalLease").finish_non_exhaustive()
+    }
+}
+
+impl Drop for SessionEvalLeaseInner {
+    fn drop(&mut self) {
+        self.busy.store(false, Ordering::Release);
+    }
+}
+
+/// Which runtime compilation door created a request.
+#[derive(Clone, Debug)]
+pub enum RuntimeCompileMode {
+    Package,
+    Session(RuntimeSessionCompileRequest),
+}
+
+impl Default for RuntimeCompileMode {
+    fn default() -> Self {
+        Self::Package
+    }
+}
 
 /// One isolated `reflect.Package.compile` request.
 #[derive(Clone, Debug, Default)]
@@ -15,6 +137,7 @@ pub struct RuntimeCompileRequest {
     pub files: IndexMap<String, String>,
     /// Source-less dependency package name to enriched `PackageInterface` blob.
     pub packages: IndexMap<String, Vec<u8>>,
+    pub mode: RuntimeCompileMode,
 }
 
 /// Severity retained from the compiler diagnostic stream.
@@ -51,4 +174,8 @@ pub struct RuntimeCompileArtifact {
     pub interface_blob: Vec<u8>,
     /// Non-error diagnostics produced by the successful compilation.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
+    /// Present only for `reflect.Session.eval`.
+    pub session: Option<RuntimeSessionCompileArtifact>,
+    /// S-9 permit transferred from the request to the successful artifact.
+    pub session_lease: Option<SessionEvalLease>,
 }

@@ -1383,6 +1383,24 @@ impl io::IoClassReflectPackage for DefaultIoOps {
     }
 }
 
+impl io::IoClassReflectSession for DefaultIoOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _session: io::owned::reflect::Session,
+        _source: String,
+        _type_arg_0: baml_type::RuntimeTy,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        // BexEngine intercepts Session compilation for the same reason as
+        // Package.compile: the concrete compiler is injected above sys_ops.
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
 impl io::IoNamespaceReflect for DefaultIoOps {}
 
 impl io::IoClassFsFile for DefaultIoOps {

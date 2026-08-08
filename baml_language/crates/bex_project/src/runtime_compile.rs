@@ -1,19 +1,31 @@
 //! Concrete runtime compiler assembled above the engine/compiler dependency
 //! boundary.
 
-use std::{path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use baml_base::Name;
-use baml_compiler_diagnostics::Severity;
+use baml_compiler_diagnostics::{DiagnosticId, Severity};
+use baml_compiler_lexer::{TokenKind, lex_lossless};
+use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
 use baml_compiler2_emit::{CompileOptions, OptLevel, emit_units};
-use baml_compiler2_hir::package::PackageId;
+use baml_compiler2_hir::{
+    body::{LetBody, let_body},
+    contributions::Definition,
+    package::PackageId,
+};
 use baml_compiler2_tir::package_interface::package_interface;
 use baml_project::{ProjectDatabase, collect_diagnostics};
 use bex_engine::RuntimeCompiler;
 use bex_vm_types::{
-    RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileRequest,
-    RuntimeDiagnosticSeverity, RuntimeSourceSpan,
+    InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
+    RuntimeCompileRequest, RuntimeDiagnosticSeverity, RuntimeSessionCompileArtifact,
+    RuntimeSessionCompileRequest, RuntimeSessionInitializer, RuntimeSessionStep, RuntimeSourceSpan,
+    SessionVisibleKind, SessionVisibleSymbol,
+    bytecode::Instruction,
+    relink::{IndexOperand, visit_object_operands},
 };
+use indexmap::IndexMap;
+use rowan::ast::AstNode;
 
 /// Stateless compiler provider. A fresh database is allocated inside every
 /// [`RuntimeCompiler::compile`] call and dropped before the call returns.
@@ -52,17 +64,886 @@ fn owned_diagnostic(
     }
 }
 
+fn runtime_diagnostic(
+    code: DiagnosticId,
+    file: &str,
+    start: usize,
+    end: usize,
+    message: impl Into<String>,
+) -> RuntimeCompileDiagnostic {
+    RuntimeCompileDiagnostic {
+        code: code.code().to_string(),
+        message: message.into(),
+        severity: RuntimeDiagnosticSeverity::Error,
+        span: Some(RuntimeSourceSpan {
+            file: file.to_string(),
+            start,
+            end,
+        }),
+    }
+}
+
+fn byte_range(node: &SyntaxNode) -> std::ops::Range<usize> {
+    let range = node.text_range();
+    usize::from(range.start())..usize::from(range.end())
+}
+
+fn declaration_kind(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::FUNCTION_DEF
+            | SyntaxKind::CLASS_DEF
+            | SyntaxKind::ENUM_DEF
+            | SyntaxKind::INTERFACE_DEF
+            | SyntaxKind::CLIENT_DEF
+            | SyntaxKind::GENERATOR_DEF
+            | SyntaxKind::RETRY_POLICY_DEF
+            | SyntaxKind::TEMPLATE_STRING_DEF
+            | SyntaxKind::TYPE_ALIAS_DEF
+            | SyntaxKind::IMPLEMENTS_FOR
+    )
+}
+
+fn declaration_name(node: &SyntaxNode) -> Option<(String, std::ops::Range<usize>)> {
+    if node.kind() == SyntaxKind::CLIENT_DEF {
+        return node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .last()
+            .map(|token| {
+                let range = token.text_range();
+                (
+                    token.text().to_string(),
+                    usize::from(range.start())..usize::from(range.end()),
+                )
+            });
+    }
+    let mut saw_head = false;
+    for token in node
+        .children_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+    {
+        if matches!(
+            token.kind(),
+            SyntaxKind::KW_FUNCTION
+                | SyntaxKind::KW_CLASS
+                | SyntaxKind::KW_ENUM
+                | SyntaxKind::KW_INTERFACE
+                | SyntaxKind::KW_CLIENT
+                | SyntaxKind::KW_GENERATOR
+                | SyntaxKind::KW_RETRY_POLICY
+                | SyntaxKind::KW_TEMPLATE_STRING
+                | SyntaxKind::KW_TYPE
+        ) {
+            saw_head = true;
+            continue;
+        }
+        if saw_head && token.kind() == SyntaxKind::WORD {
+            let range = token.text_range();
+            return Some((
+                token.text().to_string(),
+                usize::from(range.start())..usize::from(range.end()),
+            ));
+        }
+    }
+    None
+}
+
+fn first_pattern_name(node: &SyntaxNode) -> Option<(String, std::ops::Range<usize>)> {
+    let pattern = node
+        .children()
+        .find(|child| child.kind() == SyntaxKind::PATTERN)?;
+    let token = pattern
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .find(|token| token.kind() == SyntaxKind::WORD)?;
+    let range = token.text_range();
+    Some((
+        token.text().to_string(),
+        usize::from(range.start())..usize::from(range.end()),
+    ))
+}
+
+fn expression_is_assignment(node: &SyntaxNode) -> bool {
+    node.children_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .any(|token| {
+            matches!(
+                token.kind(),
+                SyntaxKind::EQUALS
+                    | SyntaxKind::PLUS_EQUALS
+                    | SyntaxKind::MINUS_EQUALS
+                    | SyntaxKind::STAR_EQUALS
+                    | SyntaxKind::SLASH_EQUALS
+                    | SyntaxKind::PERCENT_EQUALS
+                    | SyntaxKind::AND_EQUALS
+                    | SyntaxKind::PIPE_EQUALS
+                    | SyntaxKind::CARET_EQUALS
+                    | SyntaxKind::LESS_LESS_EQUALS
+                    | SyntaxKind::GREATER_GREATER_EQUALS
+            )
+        })
+}
+
+fn assignment_parts(source: &str) -> Option<(&str, &'static str, &str)> {
+    let tokens = lex_lossless(source, baml_base::FileId::new(0));
+    let (token, operator) = tokens.iter().find_map(|token| {
+        let operator = match token.kind {
+            TokenKind::Equals => "=",
+            TokenKind::PlusEquals => "+",
+            TokenKind::MinusEquals => "-",
+            TokenKind::StarEquals => "*",
+            TokenKind::SlashEquals => "/",
+            TokenKind::PercentEquals => "%",
+            TokenKind::AndEquals => "&",
+            TokenKind::PipeEquals => "|",
+            TokenKind::CaretEquals => "^",
+            TokenKind::LessLessEquals => "<<",
+            TokenKind::GreaterGreaterEquals => ">>",
+            _ => return None,
+        };
+        Some((token, operator))
+    })?;
+    let start = usize::from(token.span.range.start());
+    let end = usize::from(token.span.range.end());
+    Some((source[..start].trim(), operator, source[end..].trim()))
+}
+
+fn locally_bound_names(
+    node: &SyntaxNode,
+    outer_let: Option<std::ops::Range<usize>>,
+) -> HashSet<String> {
+    let mut names = HashSet::new();
+    for local in node
+        .descendants()
+        .filter(|child| matches!(child.kind(), SyntaxKind::PARAMETER | SyntaxKind::LET_STMT))
+    {
+        if local.kind() == SyntaxKind::LET_STMT {
+            if let Some((name, range)) = first_pattern_name(&local)
+                && outer_let.as_ref() != Some(&range)
+            {
+                names.insert(name);
+            }
+        } else if let Some(token) = local
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+        {
+            names.insert(token.text().to_string());
+        }
+    }
+    names
+}
+
+fn structural_name_ranges(node: &SyntaxNode) -> HashSet<std::ops::Range<usize>> {
+    node.descendants()
+        .filter(|child| matches!(child.kind(), SyntaxKind::FIELD | SyntaxKind::ENUM_VARIANT))
+        .filter_map(|child| {
+            child
+                .children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .find(|token| token.kind() == SyntaxKind::WORD)
+                .map(|token| {
+                    let range = token.text_range();
+                    usize::from(range.start())..usize::from(range.end())
+                })
+        })
+        .collect()
+}
+
+/// Lossless, lexer-driven renaming of flat Session globals. Member/field keys
+/// and lexically local names are intentionally excluded; every other bare word
+/// resolves through the newest visible Session symbol.
+fn rewrite_identifiers(
+    source: &str,
+    mapping: &indexmap::IndexMap<String, String>,
+    forced: &indexmap::IndexMap<std::ops::Range<usize>, String>,
+    skipped: &HashSet<std::ops::Range<usize>>,
+    local_names: &HashSet<String>,
+) -> String {
+    // The lexer is intentionally context-free and exposes words inside quoted
+    // strings/comments. Mark those byte ranges before considering identifier
+    // tokens. Backtick strings stay live because `${...}` interpolation must
+    // still resolve Session names (literal words there are harmless unless
+    // they exactly equal a visible identifier).
+    let bytes = source.as_bytes();
+    let mut quoted_or_comment = vec![false; bytes.len()];
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        let start = cursor;
+        let end = if bytes[cursor..].starts_with(b"//") {
+            cursor += 2;
+            while cursor < bytes.len() && bytes[cursor] != b'\n' {
+                cursor += 1;
+            }
+            cursor
+        } else if bytes[cursor..].starts_with(b"/*") {
+            cursor += 2;
+            while cursor + 1 < bytes.len() && !bytes[cursor..].starts_with(b"*/") {
+                cursor += 1;
+            }
+            (cursor + 2).min(bytes.len())
+        } else if bytes[cursor] == b'#' {
+            let hashes = bytes[cursor..]
+                .iter()
+                .take_while(|byte| **byte == b'#')
+                .count();
+            if bytes.get(cursor + hashes) == Some(&b'"') {
+                cursor += hashes + 1;
+                loop {
+                    let Some(relative) = bytes[cursor..].iter().position(|byte| *byte == b'"')
+                    else {
+                        cursor = bytes.len();
+                        break;
+                    };
+                    cursor += relative + 1;
+                    if bytes
+                        .get(cursor..cursor.saturating_add(hashes))
+                        .is_some_and(|suffix| suffix.iter().all(|byte| *byte == b'#'))
+                    {
+                        cursor += hashes;
+                        break;
+                    }
+                }
+                cursor
+            } else {
+                cursor += 1;
+                continue;
+            }
+        } else if bytes[cursor] == b'"' {
+            cursor += 1;
+            let mut escaped = false;
+            while cursor < bytes.len() {
+                let byte = bytes[cursor];
+                cursor += 1;
+                if byte == b'"' && !escaped {
+                    break;
+                }
+                escaped = byte == b'\\' && !escaped;
+                if byte != b'\\' {
+                    escaped = false;
+                }
+            }
+            cursor
+        } else {
+            cursor += 1;
+            continue;
+        };
+        for byte in &mut quoted_or_comment[start..end] {
+            *byte = true;
+        }
+        cursor = end;
+    }
+    let tokens = lex_lossless(source, baml_base::FileId::new(0));
+    let significant = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| {
+            let start = usize::from(token.span.range.start());
+            if quoted_or_comment.get(start).copied().unwrap_or(false) {
+                return false;
+            }
+            !matches!(token.kind, TokenKind::Whitespace | TokenKind::Newline)
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    let significant_pos = significant
+        .iter()
+        .enumerate()
+        .map(|(position, index)| (*index, position))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut output = String::with_capacity(source.len());
+    for (index, token) in tokens.iter().enumerate() {
+        let range = usize::from(token.span.range.start())..usize::from(token.span.range.end());
+        if let Some(replacement) = forced.get(&range) {
+            output.push_str(replacement);
+            continue;
+        }
+        let replacement = if token.kind == TokenKind::Word
+            && !quoted_or_comment.get(range.start).copied().unwrap_or(false)
+            && !skipped.contains(&range)
+            && !local_names.contains(token.text.as_str())
+        {
+            significant_pos.get(&index).and_then(|position| {
+                let prev = position
+                    .checked_sub(1)
+                    .and_then(|p| significant.get(p))
+                    .map(|&i| tokens[i].kind);
+                let next = significant.get(position + 1).map(|&i| tokens[i].kind);
+                if prev == Some(TokenKind::Dot) || next == Some(TokenKind::Colon) {
+                    None
+                } else {
+                    mapping.get(token.text.as_str())
+                }
+            })
+        } else {
+            None
+        };
+        output.push_str(replacement.map_or(token.text.as_str(), String::as_str));
+    }
+    output
+}
+
+struct LoweredSession {
+    source: String,
+    artifact: RuntimeSessionCompileArtifact,
+    result_global: String,
+}
+
+fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
+    let package_id = PackageId::new(db, Name::new("user"));
+    let package_items = baml_compiler2_hir::package::package_items(db, package_id);
+    let let_loc = match package_items.lookup_value(&[], &Name::new(name))? {
+        Definition::Let(let_loc) => let_loc,
+        _ => return None,
+    };
+    let scope = baml_compiler2_ppir::item_data::let_scope(db, let_loc)?;
+    let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope);
+    let body = let_body(db, let_loc);
+    let LetBody::Expr(body) = body.as_ref() else {
+        return None;
+    };
+    body.root_expr
+        .and_then(|root| inference.expression_type(root).cloned())
+}
+
+fn lower_session_submission(
+    request: &RuntimeSessionCompileRequest,
+) -> Result<LoweredSession, Vec<RuntimeCompileDiagnostic>> {
+    // P-6 is deliberately unavailable in a Session: its lexical package would
+    // be ambiguous between the submitting package and the transient unit.
+    if let Some(start) = request.source.find("reflect.Package.current") {
+        return Err(vec![runtime_diagnostic(
+            DiagnosticId::InvalidSyntax,
+            &request.submission_name,
+            start,
+            start + "reflect.Package.current".len(),
+            "`reflect.Package.current()` is not available inside a Session submission",
+        )]);
+    }
+
+    let sequence = request
+        .submission_name
+        .chars()
+        .filter(char::is_ascii_digit)
+        .collect::<String>();
+    let sequence = if sequence.is_empty() { "0" } else { &sequence };
+    let internal = |name: &str| format!("__baml_session_{sequence}_{name}");
+
+    let tokens = lex_lossless(&request.source, baml_base::FileId::new(0));
+    let (green, _) = baml_compiler_parser::parse_file(&tokens);
+    let root = SyntaxNode::new_root(green);
+    let declarations_nodes = root
+        .children()
+        .filter(|node| declaration_kind(node.kind()))
+        .collect::<Vec<_>>();
+
+    let mut declarations = IndexMap::new();
+    let mut declaration_name_ranges = IndexMap::new();
+    for node in &declarations_nodes {
+        if let Some((name, range)) = declaration_name(node) {
+            let symbol = SessionVisibleSymbol {
+                internal: internal(&name),
+                kind: SessionVisibleKind::Declaration,
+                type_value: None,
+            };
+            declaration_name_ranges.insert(range, symbol.internal.clone());
+            declarations.insert(name, symbol);
+        }
+    }
+
+    let mut declaration_mapping = request
+        .visible
+        .iter()
+        .filter(|(_, symbol)| symbol.kind != SessionVisibleKind::Let)
+        .map(|(name, symbol)| (name.clone(), symbol.internal.clone()))
+        .collect::<IndexMap<_, _>>();
+    declaration_mapping.extend(
+        declarations
+            .iter()
+            .map(|(name, symbol)| (name.clone(), symbol.internal.clone())),
+    );
+
+    let mut declaration_source = String::new();
+    let mut masked = request.source.as_bytes().to_vec();
+    for node in &declarations_nodes {
+        let range = byte_range(node);
+        let fragment = &request.source[range.clone()];
+        let forced = declaration_name_ranges
+            .iter()
+            .filter_map(|(name_range, replacement)| {
+                (name_range.start >= range.start && name_range.end <= range.end).then(|| {
+                    (
+                        name_range.start - range.start..name_range.end - range.start,
+                        replacement.clone(),
+                    )
+                })
+            })
+            .collect::<IndexMap<_, _>>();
+        let skipped = structural_name_ranges(node)
+            .into_iter()
+            .map(|name_range| name_range.start - range.start..name_range.end - range.start)
+            .collect();
+        let locals = locally_bound_names(node, None);
+        declaration_source.push_str(&rewrite_identifiers(
+            fragment,
+            &declaration_mapping,
+            &forced,
+            &skipped,
+            &locals,
+        ));
+        declaration_source.push('\n');
+        for byte in &mut masked[range] {
+            if *byte != b'\n' && *byte != b'\r' {
+                *byte = b' ';
+            }
+        }
+    }
+    let masked = String::from_utf8(masked).expect("masking source preserves UTF-8");
+    let prefix = "function __baml_session_parse__() -> unknown {\n";
+    let wrapped = format!("{prefix}{masked}\n}}\n");
+    let wrapped_tokens = lex_lossless(&wrapped, baml_base::FileId::new(0));
+    let (wrapped_green, parse_errors) = baml_compiler_parser::parse_file(&wrapped_tokens);
+    if let Some(error) = parse_errors.first() {
+        let (span, message) = match error {
+            baml_compiler_diagnostics::ParseError::UnexpectedToken {
+                expected,
+                found,
+                span,
+            } => (
+                *span,
+                format!("unexpected token: expected {expected}, found {found}"),
+            ),
+            baml_compiler_diagnostics::ParseError::UnexpectedEof { expected, span } => (
+                *span,
+                format!("unexpected end of file: expected {expected}"),
+            ),
+            baml_compiler_diagnostics::ParseError::InvalidSyntax { message, span }
+            | baml_compiler_diagnostics::ParseError::RemovedFeature { message, span } => {
+                (*span, message.clone())
+            }
+        };
+        let range = span.range;
+        let start = usize::from(range.start()).saturating_sub(prefix.len());
+        let end = usize::from(range.end()).saturating_sub(prefix.len());
+        return Err(vec![runtime_diagnostic(
+            DiagnosticId::InvalidSyntax,
+            &request.submission_name,
+            start,
+            end,
+            message,
+        )]);
+    }
+    let wrapped_root = SyntaxNode::new_root(wrapped_green);
+    let block_node = wrapped_root
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::BLOCK_EXPR)
+        .expect("synthetic function has a block");
+    let block = BlockExpr::cast(block_node).expect("BLOCK_EXPR cast");
+    let elements = block
+        .elements()
+        .filter(|element| !matches!(element, BlockElement::HeaderComment(_)))
+        .collect::<Vec<_>>();
+
+    let mut visible_mapping = request
+        .visible
+        .iter()
+        .map(|(name, symbol)| (name.clone(), symbol.internal.clone()))
+        .collect::<IndexMap<_, _>>();
+    visible_mapping.extend(
+        declarations
+            .iter()
+            .map(|(name, symbol)| (name.clone(), symbol.internal.clone())),
+    );
+    let mut generated = declaration_source.clone();
+    let mut steps = Vec::new();
+
+    for (index, element) in elements.iter().enumerate() {
+        let (node, wrapped_range, has_semicolon, is_statement) = match element {
+            BlockElement::Stmt(node) => (
+                Some(node),
+                byte_range(node),
+                element.has_trailing_semicolon(),
+                true,
+            ),
+            BlockElement::ExprNode(node) => (
+                Some(node),
+                byte_range(node),
+                element.has_trailing_semicolon(),
+                expression_is_assignment(node),
+            ),
+            BlockElement::ExprToken(token) => {
+                let range = token.text_range();
+                (
+                    None,
+                    usize::from(range.start())..usize::from(range.end()),
+                    element.has_trailing_semicolon(),
+                    false,
+                )
+            }
+            BlockElement::HeaderComment(_) => continue,
+        };
+        let mut source_range = wrapped_range.start.saturating_sub(prefix.len())
+            ..wrapped_range.end.saturating_sub(prefix.len());
+        if has_semicolon {
+            let bytes = request.source.as_bytes();
+            let mut end = source_range.end;
+            while end < bytes.len() && bytes[end].is_ascii_whitespace() {
+                end += 1;
+            }
+            if bytes.get(end) == Some(&b';') {
+                source_range.end = end + 1;
+            }
+        }
+        let raw = &request.source[source_range.clone()];
+        let is_outer_let = node.is_some_and(|node| node.kind() == SyntaxKind::LET_STMT);
+        let outer_binding = node.and_then(first_pattern_name);
+        let local_names = node.map_or_else(HashSet::new, |node| {
+            locally_bound_names(node, outer_binding.as_ref().map(|(_, range)| range.clone()))
+        });
+        let mut forced = IndexMap::new();
+        let mut binding = None;
+        let generated_name = if let Some((name, wrapped_name_range)) = outer_binding {
+            let internal_name = internal(&name);
+            let local_range = wrapped_name_range.start.saturating_sub(prefix.len())
+                - source_range.start
+                ..wrapped_name_range.end.saturating_sub(prefix.len()) - source_range.start;
+            forced.insert(local_range, internal_name.clone());
+            let symbol = SessionVisibleSymbol {
+                internal: internal_name.clone(),
+                kind: SessionVisibleKind::Let,
+                type_value: None,
+            };
+            binding = Some((name, symbol));
+            internal_name
+        } else {
+            format!("__baml_session_{sequence}_stmt_{index}")
+        };
+        let assignment = is_statement
+            .then(|| assignment_parts(raw))
+            .flatten()
+            .and_then(|(target, operator, rhs)| {
+                let symbol = request.visible.get(target)?;
+                (symbol.kind == SessionVisibleKind::Let).then(|| (symbol, operator, rhs))
+            });
+        let (step_source, commit_global) = if let Some((target, operator, rhs)) = assignment {
+            let rhs = rewrite_identifiers(
+                rhs,
+                &visible_mapping,
+                &IndexMap::new(),
+                &HashSet::new(),
+                &local_names,
+            );
+            let value = if operator == "=" {
+                rhs
+            } else {
+                format!("{} {operator} ({rhs})", target.internal)
+            };
+            (
+                format!("let {generated_name} = ({value})\n"),
+                Some(format!("user.{}", target.internal)),
+            )
+        } else {
+            let rewritten = rewrite_identifiers(
+                raw,
+                &visible_mapping,
+                &forced,
+                &HashSet::new(),
+                &local_names,
+            );
+            let source = if is_outer_let {
+                format!("{rewritten}\n")
+            } else if !is_statement && !has_semicolon {
+                format!("let {generated_name} = ({rewritten})\n")
+            } else {
+                format!("let {generated_name} = {{\n{rewritten}\nnull\n}}\n")
+            };
+            (source, None)
+        };
+        generated.push_str(&step_source);
+        let returns_value =
+            index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
+        steps.push(RuntimeSessionStep {
+            global: format!("user.{generated_name}"),
+            commit_global,
+            binding: binding.clone(),
+            replay_source: binding.as_ref().map(|_| step_source),
+            returns_value,
+        });
+        if let Some((name, symbol)) = binding {
+            visible_mapping.insert(name, symbol.internal);
+        }
+    }
+
+    if !steps.iter().any(|step| step.returns_value) {
+        let generated_name = format!("__baml_session_{sequence}_result");
+        let step_source = format!("let {generated_name} = null\n");
+        generated.push_str(&step_source);
+        steps.push(RuntimeSessionStep {
+            global: format!("user.{generated_name}"),
+            commit_global: None,
+            binding: None,
+            replay_source: None,
+            returns_value: true,
+        });
+    }
+    let result_global = steps
+        .iter()
+        .find(|step| step.returns_value)
+        .expect("session lowering always has a result")
+        .global
+        .clone();
+    Ok(LoweredSession {
+        source: generated,
+        artifact: RuntimeSessionCompileArtifact {
+            submission_name: request.submission_name.clone(),
+            declaration_source,
+            declarations,
+            steps,
+            initializers: Vec::new(),
+        },
+        result_global,
+    })
+}
+
+/// Retain only initializer helpers owned by the new submission. A fresh
+/// compile correctly checks all replayed source, but its group-wide init tail
+/// contains every historical helper; retaining that tail would make Session
+/// runtime growth quadratic and would rerun old initializers.
+fn prune_session_init_tail(
+    tail: InitTail,
+    submission_name: &str,
+) -> Result<(InitTail, Vec<RuntimeSessionInitializer>), String> {
+    let old_object_count = tail.objects.len();
+    let old_slot_count = tail.slot_objects.len();
+    let named_objects = tail
+        .named
+        .iter()
+        .map(|(_, index)| *index as usize)
+        .collect::<HashSet<_>>();
+    let helper_slots = tail
+        .slot_objects
+        .iter()
+        .enumerate()
+        .filter(|(_, object)| !named_objects.contains(&(**object as usize)))
+        .map(|(slot, object)| (slot, *object as usize))
+        .collect::<Vec<_>>();
+    let selected = helper_slots
+        .iter()
+        .filter(|(_, object)| {
+            matches!(
+                tail.objects.get(*object),
+                Some(bex_vm_types::Object::Function(function))
+                    if function.source_file == submission_name
+            )
+        })
+        .copied()
+        .collect::<Vec<_>>();
+    let selected_slot_map = selected
+        .iter()
+        .enumerate()
+        .map(|(new, (old, _))| (*old, new))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let init_object = tail
+        .package_init_order
+        .iter()
+        .find_map(|init_name| {
+            tail.named
+                .iter()
+                .find(|(name, _)| name == init_name)
+                .map(|(_, index)| *index as usize)
+        })
+        .and_then(|index| tail.objects.get(index));
+    let mut initializers = Vec::new();
+    if let Some(bex_vm_types::Object::Function(init)) = init_object {
+        let mut pending = None;
+        for instruction in &init.bytecode.instructions {
+            match instruction {
+                Instruction::Call { callee, .. }
+                | Instruction::CallWithRuntimeId { callee, .. } => {
+                    pending = selected_slot_map.get(&callee.raw()).copied();
+                }
+                Instruction::StoreGlobal(target) => {
+                    if let Some(helper_slot) = pending.take() {
+                        let raw = target.raw();
+                        if raw < old_slot_count {
+                            return Err(format!(
+                                "Session init helper stored into unexpected tail-local slot {raw}"
+                            ));
+                        }
+                        let symbol =
+                            tail.global_imports
+                                .get(raw - old_slot_count)
+                                .ok_or_else(|| {
+                                    format!("Session init global import {raw} is out of bounds")
+                                })?;
+                        initializers.push(RuntimeSessionInitializer {
+                            helper_slot: u32::try_from(helper_slot)
+                                .map_err(|_| "too many Session initializer helpers".to_string())?,
+                            target_global: symbol.fq_name.clone(),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if initializers.len() != selected.len() {
+        return Err(format!(
+            "Session init tail retained {} helpers but found {} stores",
+            selected.len(),
+            initializers.len()
+        ));
+    }
+
+    // Each helper's literals/lambdas immediately precede its function object.
+    // The preceding slot owner therefore marks the start of this helper group.
+    let mut selected_old_objects = Vec::new();
+    for (old_slot, helper_object) in &selected {
+        let start = old_slot
+            .checked_sub(1)
+            .and_then(|slot| tail.slot_objects.get(slot))
+            .map_or(0, |object| *object as usize + 1);
+        selected_old_objects.extend(start..=*helper_object);
+    }
+    let object_map = selected_old_objects
+        .iter()
+        .enumerate()
+        .map(|(new, old)| (*old, new))
+        .collect::<std::collections::HashMap<_, _>>();
+    let new_object_count = selected_old_objects.len();
+    let new_slot_count = selected.len();
+    let mut used_object_imports = std::collections::BTreeSet::new();
+    let mut used_global_imports = std::collections::BTreeSet::new();
+    for old in &selected_old_objects {
+        let mut object = tail.objects[*old].clone();
+        visit_object_operands(&mut object, |operand| match operand {
+            IndexOperand::Object(index) if index.raw() >= old_object_count => {
+                used_object_imports.insert(index.raw() - old_object_count);
+            }
+            IndexOperand::Global(index) if index.raw() >= old_slot_count => {
+                used_global_imports.insert(index.raw() - old_slot_count);
+            }
+            _ => {}
+        });
+    }
+    let object_import_map = used_object_imports
+        .iter()
+        .enumerate()
+        .map(|(new, old)| (*old, new))
+        .collect::<std::collections::HashMap<_, _>>();
+    let global_import_map = used_global_imports
+        .iter()
+        .enumerate()
+        .map(|(new, old)| (*old, new))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut objects = Vec::with_capacity(new_object_count);
+    for old in &selected_old_objects {
+        let mut object = tail.objects[*old].clone();
+        let mut relocation_error = None;
+        visit_object_operands(&mut object, |operand| match operand {
+            IndexOperand::Object(index) => {
+                let raw = index.raw();
+                let relocated = if raw < old_object_count {
+                    object_map.get(&raw).copied().ok_or_else(|| {
+                        format!("Session helper references omitted tail object {raw}")
+                    })
+                } else {
+                    object_import_map
+                        .get(&(raw - old_object_count))
+                        .map(|import| new_object_count + *import)
+                        .ok_or_else(|| format!("Session helper object import {raw} was omitted"))
+                };
+                match relocated {
+                    Ok(raw) => *index = bex_vm_types::ObjectIndex::from_raw(raw),
+                    Err(error) => relocation_error = Some(error),
+                }
+            }
+            IndexOperand::Global(index) => {
+                let raw = index.raw();
+                let relocated = if raw < old_slot_count {
+                    selected_slot_map
+                        .get(&raw)
+                        .copied()
+                        .ok_or_else(|| format!("Session helper references omitted tail slot {raw}"))
+                } else {
+                    global_import_map
+                        .get(&(raw - old_slot_count))
+                        .map(|import| new_slot_count + *import)
+                        .ok_or_else(|| format!("Session helper global import {raw} was omitted"))
+                };
+                match relocated {
+                    Ok(raw) => *index = bex_vm_types::GlobalIndex::from_raw(raw),
+                    Err(error) => relocation_error = Some(error),
+                }
+            }
+        });
+        if let Some(error) = relocation_error {
+            return Err(error);
+        }
+        objects.push(object);
+    }
+    let slot_objects = selected
+        .iter()
+        .map(|(_, old_object)| {
+            object_map
+                .get(old_object)
+                .copied()
+                .and_then(|index| u32::try_from(index).ok())
+                .ok_or_else(|| "Session helper object relocation failed".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((
+        InitTail {
+            objects,
+            object_imports: used_object_imports
+                .into_iter()
+                .map(|index| tail.object_imports[index].clone())
+                .collect(),
+            global_imports: used_global_imports
+                .into_iter()
+                .map(|index| tail.global_imports[index].clone())
+                .collect(),
+            slot_objects,
+            named: Vec::new(),
+            package_init_order: Vec::new(),
+        },
+        initializers,
+    ))
+}
+
 impl RuntimeCompiler for ProjectRuntimeCompiler {
     fn compile(
         &self,
         request: RuntimeCompileRequest,
     ) -> Result<RuntimeCompileArtifact, Vec<RuntimeCompileDiagnostic>> {
+        let RuntimeCompileRequest {
+            files,
+            packages,
+            mode,
+        } = request;
+        let (files, mut session_artifact, result_contract, session_lease) = match mode {
+            RuntimeCompileMode::Package => (files, None, None, None),
+            RuntimeCompileMode::Session(session) => {
+                let lowered = lower_session_submission(&session)?;
+                let mut files = session.history.clone();
+                files.insert(session.submission_name.clone(), lowered.source);
+                (
+                    files,
+                    Some(lowered.artifact),
+                    Some((lowered.result_global, session.expected.clone())),
+                    Some(session.lease),
+                )
+            }
+        };
         // This local is the transience guarantee: no handle to `db` occurs in
         // either return type, and all retained values below are deep-owned.
         let mut db = ProjectDatabase::new();
         db.set_project_root(Path::new("<runtime>"));
-        db.set_mounted_packages(request.packages.into_iter().collect());
-        for (path, source) in request.files {
+        db.set_mounted_packages(packages.into_iter().collect());
+        for (path, source) in files {
             // Runtime input names are package-relative. Mounting them beneath
             // the synthetic root makes `ns_foo/` namespace derivation behave
             // exactly like an ordinary project without exposing the synthetic
@@ -79,6 +960,44 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             .any(|diagnostic| diagnostic.severity == RuntimeDiagnosticSeverity::Error)
         {
             return Err(diagnostics);
+        }
+
+        if let Some((result_global, expected)) = &result_contract
+            && !matches!(expected, baml_type::RuntimeTy::BuiltinUnknown { .. })
+        {
+            let result_name = result_global
+                .strip_prefix("user.")
+                .unwrap_or(result_global.as_str());
+            let package_id = PackageId::new(&db, Name::new("user"));
+            let actual =
+                let_initializer_type(&db, result_name).unwrap_or_else(baml_type::Ty::unknown);
+            let expected = baml_type::Ty::from(expected.clone());
+            let aliases = baml_compiler2_tir::inference::package_resolved_aliases(&db, package_id);
+            let res_ctx =
+                baml_compiler2_tir::package_interface::package_resolution_context(&db, package_id);
+            let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
+            let context = baml_compiler2_tir::type_context::GlobalTypeContext {
+                db: &db,
+                res_ctx,
+                aliases,
+                bounds: &bounds,
+            };
+            if !baml_type::normalize::is_subtype(&actual, &expected, &context) {
+                let file = session_artifact
+                    .as_ref()
+                    .map_or("$submission.baml", |artifact| {
+                        artifact.submission_name.as_str()
+                    });
+                return Err(vec![runtime_diagnostic(
+                    DiagnosticId::TypeMismatch,
+                    file,
+                    0,
+                    0,
+                    format!(
+                        "submission result has type `{actual}`, which is not a subtype of requested contract `{expected}`"
+                    ),
+                )]);
+            }
         }
 
         let interface = package_interface(&db, PackageId::new(&db, Name::new("user")));
@@ -101,14 +1020,40 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 span: None,
             }]
         })?;
-        let units: Vec<_> = emitted
+        let mut units: Vec<_> = emitted
             .into_iter()
-            .filter(|unit| unit.package.as_str() == "user")
+            .filter(|unit| {
+                unit.package.as_str() == "user"
+                    && session_artifact
+                        .as_ref()
+                        .is_none_or(|session| unit.source_file == session.submission_name)
+            })
             .collect();
+        if let Some(session) = session_artifact.as_mut() {
+            let mut initializers = Vec::new();
+            for unit in &mut units {
+                if let Some(tail) = unit.init_tail.take() {
+                    let (tail, retained) = prune_session_init_tail(tail, &session.submission_name)
+                        .map_err(|message| {
+                            vec![RuntimeCompileDiagnostic {
+                                code: "E_RUNTIME_SESSION_INIT".to_string(),
+                                message,
+                                severity: RuntimeDiagnosticSeverity::Error,
+                                span: None,
+                            }]
+                        })?;
+                    unit.init_tail = Some(tail);
+                    initializers.extend(retained);
+                }
+            }
+            session.initializers = initializers;
+        }
         Ok(RuntimeCompileArtifact {
             units,
             interface_blob,
             diagnostics,
+            session: session_artifact,
+            session_lease,
         })
     }
 }
