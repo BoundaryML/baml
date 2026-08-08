@@ -263,7 +263,7 @@ fn generated_functions<'a>(
             _ => None,
         })
         .collect::<Vec<_>>();
-    functions.sort_by(|(left, _), (right, _)| left.cmp(right));
+    functions.sort_by_key(|(left, _)| *left);
     let mut generated = functions
         .into_iter()
         .map(|(name, function)| {
@@ -329,7 +329,7 @@ fn generated_functions<'a>(
             _ => None,
         })
         .collect::<Vec<_>>();
-    classes.sort_by(|(left, _), (right, _)| left.cmp(right));
+    classes.sort_by_key(|(left, _)| *left);
     for (owner_name, class) in classes {
         let mut methods = class
             .instance_methods
@@ -851,7 +851,7 @@ fn generated_classes<'a>(
             _ => None,
         })
         .collect::<Vec<_>>();
-    classes.sort_by(|(left, _), (right, _)| left.cmp(right));
+    classes.sort_by_key(|(left, _)| *left);
     classes
         .into_iter()
         .map(|(name, class)| {
@@ -893,7 +893,7 @@ fn generated_enums<'a>(
             _ => None,
         })
         .collect::<Vec<_>>();
-    enums.sort_by(|(left, _), (right, _)| left.cmp(right));
+    enums.sort_by_key(|(left, _)| *left);
     enums
         .into_iter()
         .map(|(name, enum_)| {
@@ -939,7 +939,7 @@ fn generated_aliases<'a>(
             _ => None,
         })
         .collect::<Vec<_>>();
-    aliases.sort_by(|(left, _), (right, _)| left.cmp(right));
+    aliases.sort_by_key(|(left, _)| *left);
     aliases
         .into_iter()
         .map(|(name, alias)| GeneratedAlias {

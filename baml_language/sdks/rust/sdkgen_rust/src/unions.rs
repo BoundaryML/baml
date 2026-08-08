@@ -102,7 +102,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     let mut registry = UnionRegistry::default();
 
     let mut symbols: Vec<_> = pool.iter().collect();
-    symbols.sort_by(|(a, _), (b, _)| a.cmp(b));
+    symbols.sort_by_key(|(name, _)| *name);
     for (name, symbol) in symbols {
         let leaf = analysis.renamed(&routing::route(name).segments).to_vec();
         let mut tys: Vec<&Ty> = Vec::new();

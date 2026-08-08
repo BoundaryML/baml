@@ -86,8 +86,8 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Function(_) => {}
         }
     }
-    classes.sort_by(|(a, _), (b, _)| a.cmp(b));
-    aliases.sort_by(|(a, _), (b, _)| a.cmp(b));
+    classes.sort_by_key(|(name, _)| *name);
+    aliases.sort_by_key(|(name, _)| *name);
 
     // Per-class field requirements: either a list of nominal types the
     // fields reference, or the reason the class is structurally
