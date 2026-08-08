@@ -502,9 +502,6 @@ function AgentPane({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className={`${styles.body} ${styles.agentPane}`}>
-      <div className={styles.promptLead}>
-        paste into your favorite coding agent
-      </div>
       <div
         className={`${styles.promptWrap}${expanded ? ` ${styles.expanded}` : ''}`}
       >

@@ -4,9 +4,7 @@
 .unit {
   max-width: 560px;
   overflow: hidden;
-  font-family:
-    var(--font-geist-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo,
-    Consolas, monospace;
+  font-family: inherit;
   background: #fffdf7;
   border: 1px solid #d8cfbd;
   border-radius: 10px;
@@ -159,6 +157,9 @@
 }
 
 .row {
+  font-family:
+    var(--font-geist-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo,
+    Consolas, monospace;
   word-break: break-word;
   white-space: pre-wrap;
 }
