@@ -67,18 +67,11 @@ class TestJson {
         // json returned from a host callback converts on the host-return path
         // (no argument coercion pass); it must narrow identically.
         //
-        // java-port note: the generated slot types the callback as
-        // `Function<json, json>`, but the bridge hands the callback the decoded
-        // RAW host value (String/List/Map, mirroring Go's `any` and Python's
-        // plain objects) and encodes the raw return value generically on the
-        // host-return path. Building the callable as `Function<Object, Object>`
-        // and laundering it through a wildcard cast is the same documented
-        // raw/unchecked idiom as TestHostCallables' value-level async tests —
-        // at runtime the erased `apply` sees the raw value, so no
-        // ClassCastException.
-        Function<Object, Object> rawCb = v -> Map.of("wrapped", v);
-        @SuppressWarnings("unchecked")
-        Function<json, json> cb = (Function<json, json>) (Function<?, ?>) rawCb;
+        // The generated slot types the callback as `Function<json, json>` and
+        // the bridge honors that signature: the callback receives the sealed
+        // `json` union the parameter declares (here a `json.StringValue`), and
+        // returns a `json` value the bridge encodes back to BAML.
+        Function<json, json> cb = v -> new json.jsonMapValue(Map.of("wrapped", v));
 
         assertEquals("object", Fns.json_callback_kind(cb, new json.StringValue("payload")));
     }
