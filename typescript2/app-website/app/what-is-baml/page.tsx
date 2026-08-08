@@ -358,19 +358,6 @@ const CSS = `
 .wib-deck { margin: 0 0 var(--sp-7); font-size: var(--fs-lead); font-weight: 400;
   line-height: 1.5; color: var(--ink); }
 .wib-hero p { color: #2b2620; margin: 0 0 var(--sp-4); font-size: var(--fs-lead); line-height: 1.5; }
-.wib-users { display: flex; align-items: center; gap: var(--sp-10);
-  margin: var(--sp-5) 0 0; padding: 0; list-style: none; }
-/* per-logo optical sizing: the marks have very different visual weights.
-   multiply blends away white boxes; grayscale + opacity evens the tone. */
-/* brightness(0) flattens every mark to a single ink, then one shared
-   opacity gives them all the identical grey */
-.wib-users img { width: auto; display: block; mix-blend-mode: multiply;
-  filter: brightness(0); opacity: 0.5; }
-.wib-users .u-google { height: 32px; }
-.wib-users .u-aws { height: 30px; }
-/* SAP is a solid plate with knocked-out letters: flattening it to one ink
-   turns it into a blob, so it keeps its own grayscale treatment */
-.wib-users .u-sap { height: 27px; filter: grayscale(1); opacity: 0.45; }
 .wib-borrow-list { margin: var(--sp-3) 0 var(--sp-2); padding: 0; list-style: none; font-size: var(--fs-lead);
   display: flex; flex-direction: column; gap: var(--sp-2); color: var(--ink); }
 .wib-borrow-list li { display: flex; align-items: center; }
@@ -749,21 +736,6 @@ export default function WhatIsBamlPage() {
             ))}
           </ul>
         </div>
-
-        <p className="wib-lead">
-          And is used by some of the world&rsquo;s largest companies.
-        </p>
-        <ul className="wib-users">
-          <li>
-            <img alt="Google" className="u-google" src="/google3.png" />
-          </li>
-          <li>
-            <img alt="AWS" className="u-aws" src="/testimonials/logos/aws.png" />
-          </li>
-          <li>
-            <img alt="SAP" className="u-sap" src="/testimonials/logos/sapLogo.png" />
-          </li>
-        </ul>
 
         <p className="wib-lead">The parts different from TypeScript are:</p>
 
