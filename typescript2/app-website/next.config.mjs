@@ -50,6 +50,16 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: '/what-is-baml',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/explore',
+        destination: '/',
+        permanent: false,
+      },
+      {
         source: '/built-with-baml',
         destination: '/',
         permanent: true,

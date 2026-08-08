@@ -10,7 +10,7 @@ export const metadata = createMetadata({
   description:
     "Why agents need a real programming language, plus BAML's tooling for agents and humans and how to adopt it.",
   ogTitle: 'Why agents need a new language',
-  path: '/explore',
+  path: '/explore-legacy',
   timeline: true,
   title: 'Explore BAML',
 });
