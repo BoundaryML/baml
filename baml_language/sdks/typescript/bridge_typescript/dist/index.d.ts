@@ -16,8 +16,8 @@ export { CtxManager } from './ctx_manager.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 export type { GenericParams } from './define_function.js';
-export { Never, lowerTypeToWireTy } from './wire_ty.js';
-export type { BamlType, BamlPrimitiveToken, BamlClassCtor } from './wire_ty.js';
+export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
+export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the

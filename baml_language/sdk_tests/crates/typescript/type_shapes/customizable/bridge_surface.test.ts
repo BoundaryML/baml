@@ -15,6 +15,7 @@ const packageRootExports = [
   "BamlPdf",
   "BamlRuntime",
   "BamlStream",
+  "BamlType",
   "BamlTypeMap",
   "BamlVideo",
   "Collector",
@@ -45,6 +46,7 @@ const packageRootExports = [
   "initializeRuntimeFromBytecode",
   "lowerTypeToWireTy",
   "newFunctionCall",
+  "reflectType",
   "setTypeMap",
   "wrapNativeError",
 ] as const;
@@ -63,6 +65,7 @@ const constructors = [
   "BamlPdf",
   "BamlRuntime",
   "BamlStream",
+  "BamlType",
   "BamlTypeMap",
   "BamlVideo",
   "Collector",

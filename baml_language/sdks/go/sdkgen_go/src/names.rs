@@ -59,6 +59,7 @@ pub(crate) enum GoNameKind {
     FunctionOptionSetter,
     MethodOptionSetter,
     Class,
+    InterfaceToken,
     Enum,
     EnumVariant,
     TypeAlias,
@@ -218,6 +219,7 @@ impl NameRequest {
             | GoNameKind::MethodOptionType
             | GoNameKind::MethodOptionSetter
             | GoNameKind::Class
+            | GoNameKind::InterfaceToken
             | GoNameKind::Enum
             | GoNameKind::EnumVariant
             | GoNameKind::TypeAlias => NameScope::Package(self.fqn.symbol.package().clone()),
@@ -376,6 +378,7 @@ impl GoNames {
         pool: &SymbolPool,
         packages: &GoPackages,
         projection: &GoTypeProjection<'_>,
+        interface_tokens: &BTreeSet<Name>,
     ) -> Self {
         let mut requests = Vec::new();
         let mut wire_overrides = HashMap::new();
@@ -401,6 +404,7 @@ impl GoNames {
                     .arguments
                     .iter()
                     .any(|argument| argument.default.is_some())
+                    || !function.generic_params.is_empty()
                 {
                     requests.push(NameRequest::new(
                         fqn.clone(),
@@ -488,6 +492,8 @@ impl GoNames {
                         .arguments
                         .iter()
                         .any(|argument| argument.default.is_some())
+                        || !class.generic_params.is_empty()
+                        || !method.generic_params.is_empty()
                     {
                         requests.push(NameRequest::new(
                             method_fqn.clone(),
@@ -531,6 +537,13 @@ impl GoNames {
                     requests.push(request);
                 }
             }
+        }
+        for name in interface_tokens {
+            requests.push(NameRequest::new(
+                BamlFqn::symbol(name),
+                GoNameKind::InterfaceToken,
+                GoVisibility::Exported,
+            ));
         }
         let generated_package_aliases = packages
             .iter()
@@ -1128,7 +1141,11 @@ fn literal_component(literal: &GoLiteral) -> String {
 fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
     let mut value = String::new();
     match request.kind {
-        GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
+        GoNameKind::Function
+        | GoNameKind::Class
+        | GoNameKind::InterfaceToken
+        | GoNameKind::Enum
+        | GoNameKind::TypeAlias => {
             for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
@@ -1220,6 +1237,7 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         GoNameKind::Function
         | GoNameKind::FunctionOptionType
         | GoNameKind::Class
+        | GoNameKind::InterfaceToken
         | GoNameKind::Enum
         | GoNameKind::TypeAlias => BamlWireName::Symbol(request.fqn.symbol.clone()),
         GoNameKind::Method | GoNameKind::MethodHelper | GoNameKind::MethodOptionType => {
@@ -1280,6 +1298,7 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::Method => 9,
         GoNameKind::MethodHelper => 14,
         GoNameKind::Class => 1,
+        GoNameKind::InterfaceToken => 16,
         GoNameKind::Enum => 2,
         GoNameKind::TypeAlias => 3,
         GoNameKind::Parameter => 4,

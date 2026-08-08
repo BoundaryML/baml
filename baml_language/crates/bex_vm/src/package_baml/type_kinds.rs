@@ -6,7 +6,9 @@ use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
     Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
-    MintId, Object, RuntimeImplRule, RuntimeTypeProvenance, TypeValue, Value,
+    MintId, Object, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
+    PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeImplRule,
+    RuntimeTypeProvenance, TypeValue, Value,
 };
 use indexmap::IndexMap;
 
@@ -21,6 +23,245 @@ use super::{
     PackageBamlImpl, copy,
 };
 use crate::BexVm;
+
+impl BexVm {
+    /// Copy a minted type's reachable nominal schemas into a pointer-free host
+    /// carrier. The mint and package owner are deliberately not represented.
+    pub fn export_portable_type_def(&self, type_value: &TypeValue) -> PortableTypeDef {
+        let mut class_ptrs = type_value
+            .defs()
+            .classes
+            .values()
+            .copied()
+            .collect::<Vec<_>>();
+        let mut enum_ptrs = type_value
+            .defs()
+            .enums
+            .values()
+            .copied()
+            .collect::<Vec<_>>();
+        if !type_value.owner.is_null()
+            && let Object::Package(package) = self.get_object(type_value.owner)
+        {
+            for ptr in package.classes.values().copied() {
+                if !class_ptrs.contains(&ptr)
+                    && !matches!(self.get_object(ptr), Object::Class(class) if class.name.name().as_str().ends_with("$stream"))
+                {
+                    class_ptrs.push(ptr);
+                }
+            }
+            for ptr in package.enums.values().copied() {
+                if !enum_ptrs.contains(&ptr) {
+                    enum_ptrs.push(ptr);
+                }
+            }
+        }
+        let metadata = |description: &Option<String>,
+                        alias: &Option<String>,
+                        docstring: &Option<String>,
+                        other: &IndexMap<String, String>| PortableMetadata {
+            description: description.clone(),
+            alias: alias.clone(),
+            docstring: docstring.clone(),
+            other: other.clone(),
+        };
+        let classes = class_ptrs
+            .into_iter()
+            .filter_map(|ptr| {
+                let Object::Class(class) = self.get_object(ptr) else {
+                    return None;
+                };
+                Some(PortableClassDef {
+                    name: class.name.clone(),
+                    fields: class
+                        .fields
+                        .iter()
+                        .map(|field| PortableClassFieldDef {
+                            name: field.name.clone(),
+                            ty: field.field_type.clone(),
+                            metadata: metadata(
+                                &field.description,
+                                &field.alias,
+                                &field.docstring,
+                                &field.other,
+                            ),
+                            skip: field.skip,
+                        })
+                        .collect(),
+                    metadata: metadata(
+                        &class.description,
+                        &class.alias,
+                        &class.docstring,
+                        &class.other,
+                    ),
+                    generic_param_count: class.generic_param_count,
+                })
+            })
+            .collect();
+        let enums = enum_ptrs
+            .into_iter()
+            .filter_map(|ptr| {
+                let Object::Enum(enm) = self.get_object(ptr) else {
+                    return None;
+                };
+                Some(PortableEnumDef {
+                    name: enm.name.clone(),
+                    variants: enm
+                        .variants
+                        .iter()
+                        .map(|variant| PortableEnumVariantDef {
+                            name: variant.name.clone(),
+                            metadata: metadata(
+                                &variant.description,
+                                &variant.alias,
+                                &variant.docstring,
+                                &variant.other,
+                            ),
+                            skip: variant.skip,
+                        })
+                        .collect(),
+                    metadata: metadata(&enm.description, &enm.alias, &enm.docstring, &enm.other),
+                })
+            })
+            .collect();
+        PortableTypeDef {
+            root: type_value.ty.clone().into(),
+            classes,
+            enums,
+            witnesses: type_value.defs().witnesses.clone(),
+        }
+    }
+
+    /// Materialize an inbound portable definition with fresh heap objects and
+    /// fresh runtime identity. Names remain definition keys; identity is the
+    /// new mint, never the wire spelling.
+    pub fn materialize_portable_type_def(
+        &mut self,
+        definition: PortableTypeDef,
+    ) -> Result<TypeValue, String> {
+        let root = baml_type::RealizedTy::try_from(&definition.root)
+            .map_err(|error| format!("host type definition root is not realized: {error}"))?;
+        for class in &definition.classes {
+            for field in &class.fields {
+                baml_type::RealizedTy::try_from(&field.ty).map_err(|error| {
+                    format!(
+                        "host type definition field `{}.{}` is not realized: {error}",
+                        class.name, field.name
+                    )
+                })?;
+            }
+        }
+        let root_mint = self.tlab.heap().mint_runtime_id();
+        let mut named_mints = IndexMap::new();
+        for class in &definition.classes {
+            let mint = if matches!(&root, baml_type::RealizedTy::Class(name, _, _) if name == &class.name)
+            {
+                root_mint
+            } else {
+                self.tlab.heap().mint_runtime_id()
+            };
+            named_mints.insert(class.name.clone(), mint);
+        }
+        for enm in &definition.enums {
+            let mint = if matches!(&root, baml_type::RealizedTy::Enum(name, _) if name == &enm.name)
+            {
+                root_mint
+            } else {
+                self.tlab.heap().mint_runtime_id()
+            };
+            named_mints.insert(enm.name.clone(), mint);
+        }
+
+        let mut defs = DynTypeDefs {
+            classes: IndexMap::new(),
+            enums: IndexMap::new(),
+            witnesses: definition.witnesses,
+        };
+        for class in &definition.classes {
+            let ptr = self.tlab.alloc(Object::Class(Box::new(Class {
+                name: class.name.clone(),
+                fields: class
+                    .fields
+                    .iter()
+                    .map(|field| ClassField {
+                        name: field.name.clone(),
+                        field_type: field.ty.clone(),
+                        field_template: baml_type::TyTemplate::from(
+                            baml_type::RealizedTy::try_from(&field.ty)
+                                .expect("portable fields validated as realized"),
+                        ),
+                        description: field.metadata.description.clone(),
+                        alias: field.metadata.alias.clone(),
+                        docstring: field.metadata.docstring.clone(),
+                        other: field.metadata.other.clone(),
+                        skip: field.skip,
+                        runtime_type: None,
+                    })
+                    .collect(),
+                description: class.metadata.description.clone(),
+                alias: class.metadata.alias.clone(),
+                docstring: class.metadata.docstring.clone(),
+                other: class.metadata.other.clone(),
+                type_tag: baml_type::typetag::class_type_tag(&class.name.to_string()),
+                ty_attr: baml_type::TyAttr::default(),
+                has_cleanup: false,
+                generic_param_count: class.generic_param_count,
+                runtime_type: None,
+            })));
+            defs.classes.insert(class.name.clone(), ptr);
+            self.dynamic_dispatch
+                .register_class(class.name.clone(), ptr);
+        }
+        for enm in &definition.enums {
+            let ptr = self.tlab.alloc(Object::Enum(Box::new(Enum {
+                name: enm.name.clone(),
+                variants: enm
+                    .variants
+                    .iter()
+                    .map(|variant| EnumVariant {
+                        name: variant.name.clone(),
+                        description: variant.metadata.description.clone(),
+                        alias: variant.metadata.alias.clone(),
+                        docstring: variant.metadata.docstring.clone(),
+                        other: variant.metadata.other.clone(),
+                        skip: variant.skip,
+                    })
+                    .collect(),
+                description: enm.metadata.description.clone(),
+                alias: enm.metadata.alias.clone(),
+                docstring: enm.metadata.docstring.clone(),
+                other: enm.metadata.other.clone(),
+                ty_attr: baml_type::TyAttr::default(),
+                runtime_type: None,
+            })));
+            defs.enums.insert(enm.name.clone(), ptr);
+        }
+
+        for (name, ptr) in defs.classes.clone() {
+            let mint = named_mints[&name];
+            let Object::Class(class) = self.get_object_mut(ptr) else {
+                unreachable!()
+            };
+            class.runtime_type = Some(RuntimeTypeProvenance {
+                mint,
+                defs: defs.clone(),
+                owner: bex_vm_types::HeapPtr::null(),
+            });
+        }
+        for (name, ptr) in defs.enums.clone() {
+            let mint = named_mints[&name];
+            let Object::Enum(enm) = self.get_object_mut(ptr) else {
+                unreachable!()
+            };
+            enm.runtime_type = Some(RuntimeTypeProvenance {
+                mint,
+                defs: defs.clone(),
+                owner: bex_vm_types::HeapPtr::null(),
+            });
+        }
+        Ok(TypeValue::from_parts_with_defs(root, root_mint, defs))
+    }
+}
 
 impl BamlNamespaceReflectArray for PackageBamlImpl {}
 

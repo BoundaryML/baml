@@ -54,7 +54,8 @@ fn decode_call(encoded_args: &[u8]) -> Result<DecodedCall, BridgeError> {
     let type_args = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
     let kwargs = kwargs_to_bex_values(call.kwargs, &HANDLE_TABLE)?;
     let context = function_call_context_builder(bex_project::CallId(call.call_id))
-        .with_type_args(type_args)
+        .with_type_args(type_args.type_args)
+        .with_type_defs(type_args.type_defs)
         .build();
     Ok(DecodedCall {
         runtime: crate::get_runtime()?,

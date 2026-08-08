@@ -37,6 +37,7 @@ struct DecodedCallArgs {
     /// Explicit, named `TypeVar` bindings for a generic call, in De Bruijn
     /// order (empty for non-generic calls). See `CallFunctionArgs.type_args`.
     type_args: IndexMap<String, RuntimeTy>,
+    type_defs: IndexMap<String, bex_project::PortableTypeDef>,
 }
 
 /// Decode protobuf-encoded `CallFunctionArgs` bytes into `BexArgs`.
@@ -69,7 +70,8 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
         kwargs: kwargs.into(),
         call_id,
         target,
-        type_args,
+        type_args: type_args.type_args,
+        type_defs: type_args.type_defs,
     })
 }
 
@@ -94,6 +96,7 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
 
     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
         .with_type_args(decoded.type_args)
+        .with_type_defs(decoded.type_defs)
         .build();
 
     // Block on the shared multi-thread tokio runtime, like the pyo3 sync path
@@ -387,9 +390,11 @@ fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
         call_id: engine_call_id,
         target,
         type_args,
+        type_defs,
     } = decoded;
     let call_ctx = bridge_cffi::function_call_context_builder(engine_call_id)
         .with_type_args(type_args)
+        .with_type_defs(type_defs)
         .build();
 
     rt.spawn(async move {

@@ -7,6 +7,7 @@
  */
 import { baml_bridge } from './proto/baml_cffi.js';
 import { HandleKey } from './native.js';
+import { BamlType } from './wire_ty.js';
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
  * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
@@ -26,7 +27,7 @@ export interface EncodeCallArgsOptions {
      * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
-    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy]>;
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
 }
 /**
  * Encode kwargs into `CallFunctionArgs` bytes.

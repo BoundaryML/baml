@@ -23,12 +23,90 @@
 use baml_type::{Literal, MediaKind, Name, RuntimeTy, TypeName};
 
 use crate::baml_bridge::cffi::{
-    BamlTy, BamlTyAssociatedBinding, BamlTyAssociatedTypeProjection, BamlTyClass, BamlTyEnum,
+    BamlClassDef, BamlClassFieldDef, BamlEnumDef, BamlEnumVariantDef, BamlTy,
+    BamlTyAssociatedBinding, BamlTyAssociatedTypeProjection, BamlTyClass, BamlTyDef, BamlTyEnum,
     BamlTyEnumVariant, BamlTyFunction, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyFuture,
-    BamlTyInterface, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMediaKind, BamlTyOptional,
-    BamlTyPrimitive, BamlTyPrimitiveKind, BamlTyTypeAlias, BamlTyTypeVar, BamlTyUnion,
-    baml_ty::Ty as TyVariant, baml_ty_literal::Literal as TyLiteralVariant,
+    BamlTyInterface, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMediaKind, BamlTyMetadata,
+    BamlTyOptional, BamlTyPrimitive, BamlTyPrimitiveKind, BamlTyTypeAlias, BamlTyTypeVar,
+    BamlTyUnion, BamlWitnessDef, BamlWitnessFieldLink, baml_ty::Ty as TyVariant,
+    baml_ty_literal::Literal as TyLiteralVariant,
 };
+
+pub fn portable_type_def_to_proto(definition: &bex_project::PortableTypeDef) -> BamlTyDef {
+    let metadata = |value: &bex_project::PortableMetadata| BamlTyMetadata {
+        description: value.description.clone(),
+        alias: value.alias.clone(),
+        docstring: value.docstring.clone(),
+        other: value.other.clone().into_iter().collect(),
+    };
+    BamlTyDef {
+        root: Some(runtime_ty_to_proto_ty(&definition.root)),
+        classes: definition
+            .classes
+            .iter()
+            .map(|class| BamlClassDef {
+                name: class.name.render_dotted(false),
+                fields: class
+                    .fields
+                    .iter()
+                    .map(|field| BamlClassFieldDef {
+                        name: field.name.clone(),
+                        ty: Some(runtime_ty_to_proto_ty(&field.ty)),
+                        metadata: Some(metadata(&field.metadata)),
+                        skip: field.skip,
+                    })
+                    .collect(),
+                metadata: Some(metadata(&class.metadata)),
+                generic_param_count: u32::try_from(class.generic_param_count).unwrap_or(u32::MAX),
+            })
+            .collect(),
+        enums: definition
+            .enums
+            .iter()
+            .map(|enm| BamlEnumDef {
+                name: enm.name.render_dotted(false),
+                variants: enm
+                    .variants
+                    .iter()
+                    .map(|variant| BamlEnumVariantDef {
+                        name: variant.name.clone(),
+                        metadata: Some(metadata(&variant.metadata)),
+                        skip: variant.skip,
+                    })
+                    .collect(),
+                metadata: Some(metadata(&enm.metadata)),
+            })
+            .collect(),
+        witnesses: definition
+            .witnesses
+            .iter()
+            .map(|witness| BamlWitnessDef {
+                interface: witness.interface.render_dotted(false),
+                interface_args: witness
+                    .interface_args
+                    .iter()
+                    .map(|ty| runtime_ty_to_proto_ty(&RuntimeTy::from(ty)))
+                    .collect(),
+                associated_types: witness
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| BamlTyAssociatedBinding {
+                        name: name.as_str().to_string(),
+                        ty: Some(runtime_ty_to_proto_ty(&RuntimeTy::from(ty))),
+                    })
+                    .collect(),
+                field_links: witness
+                    .field_links
+                    .iter()
+                    .map(|(interface_field, class_field)| BamlWitnessFieldLink {
+                        interface_field: interface_field.as_str().to_string(),
+                        class_field: class_field.as_str().to_string(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
 
 /// Encode a `RuntimeTy` into a wire `BamlTy`.
 pub fn runtime_ty_to_proto_ty(ty: &RuntimeTy) -> BamlTy {

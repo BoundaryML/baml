@@ -27,7 +27,13 @@ import {
     tryRehydrateHostValueByKey,
 } from './host_value_registry.js';
 import { BamlTypeMap, getTypeMap } from './typemap.js';
-import { lowerTypeToWireTy, outboundTyToBamlType, type BamlType } from './wire_ty.js';
+import {
+    BamlType,
+    BamlTypeMetadataRow,
+    lowerTypeToWireTy,
+    outboundTyToBamlTypeToken,
+    type BamlTypeToken,
+} from './wire_ty.js';
 
 const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_bridge.cffi.v1.BamlOutboundValue;
@@ -89,7 +95,7 @@ export interface EncodeCallArgsOptions {
      * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
-    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy]>;
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
 }
 
 /**
@@ -111,7 +117,17 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
     if (value === null || value === undefined) {
         return; // Leave oneof unset → null
     }
-    if (typeof value === 'boolean') {
+    if (value instanceof BamlType) {
+        iv.tyDefValue = value._wireCopy();
+    } else if (value instanceof BamlTypeMetadataRow) {
+        const fields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
+        for (const key of ['ty', 'alias', 'description', 'docstring', 'other'] as const) {
+            const child: baml_bridge.cffi.v1.IInboundValue = {};
+            setInboundValue(child, value[key], ctx);
+            fields.push({ stringKey: key, value: child });
+        }
+        iv.classValue = { fields };
+    } else if (typeof value === 'boolean') {
         iv.boolValue = value;
     } else if (typeof value === 'number') {
         if (Number.isInteger(value)) {
@@ -245,7 +261,7 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
             const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
             const params = genericParamNames(value);
             if (fqn) {
-                const userTypes = (value as { $types?: Record<string, BamlType> }).$types;
+                const userTypes = (value as { $types?: Record<string, BamlTypeToken> }).$types;
                 const classFields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [k, v] of Object.entries(value)) {
                     // Skip method bindings (behavior, not state) and the synthetic
@@ -318,10 +334,9 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             entry.value = iv;
             entries.push(entry);
         }
-        const typeArgs = (options.typeArgs ?? []).map(([typeVar, typeValue]) => ({
-            typeVar,
-            typeValue,
-        }));
+        const typeArgs = (options.typeArgs ?? []).map(([typeVar, value]) => value instanceof BamlType
+            ? { typeVar, typeDefinition: value._wireCopy() }
+            : { typeVar, typeValue: value });
         const msg = CallFunctionArgs.fromObject({
             kwargs: entries,
             callId: callId.toString(),
@@ -383,6 +398,8 @@ function decodeValueHolder(
     if (holder.floatValue != null) return holder.floatValue;
     if (holder.boolValue != null) return holder.boolValue;
     if (holder.uint8arrayValue != null) return holder.uint8arrayValue;
+    if (holder.tyDefValue) return BamlType._fromWire(holder.tyDefValue);
+    if (holder.tyValue) return BamlType._fromWire({ root: holder.tyValue });
     if (holder.classValue) {
         return decodeClass(holder.classValue, typeMap);
     }
@@ -570,9 +587,9 @@ function decodeClass(
             const params = Array.isArray(Ctor.$generic) ? Ctor.$generic : null;
             const typeArgs = classValue.typeArgs;
             if (params && typeArgs && typeArgs.length) {
-                const types: Record<string, BamlType> = {};
+                const types: Record<string, BamlTypeToken | undefined> = {};
                 params.forEach((p, i) => {
-                    types[p] = outboundTyToBamlType(typeArgs[i]);
+                    types[p] = outboundTyToBamlTypeToken(typeArgs[i]);
                 });
                 Object.defineProperty(instance, '$types', {
                     value: types,
@@ -976,8 +993,11 @@ function setInboundTypedThrowValue(
             const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
             if (fqn) {
                 const params = genericParamNames(value);
-                const userTypes = (value as { $types?: Record<string, BamlType> }).$types;
-                const typeArgs = params?.map((param) => lowerTypeToWireTy(userTypes?.[param])) ?? [];
+                const userTypes = (value as { $types?: Record<string, BamlTypeToken> }).$types;
+                const typeArgs = params?.map((param) => {
+                    const token = userTypes?.[param];
+                    return token === undefined ? { unknown: {} } : lowerTypeToWireTy(token);
+                }) ?? [];
                 const fields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [key, fieldValue] of Object.entries(value)) {
                     if (typeof fieldValue === 'function' || key === '$types') continue;

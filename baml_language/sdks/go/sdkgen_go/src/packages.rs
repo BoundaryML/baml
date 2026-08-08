@@ -44,11 +44,20 @@ pub(crate) struct GoPackages {
 }
 
 impl GoPackages {
+    #[cfg(test)]
     pub(crate) fn for_pool(pool: &SymbolPool) -> Self {
+        Self::for_pool_with_interfaces(pool, &BTreeSet::new())
+    }
+
+    pub(crate) fn for_pool_with_interfaces(
+        pool: &SymbolPool,
+        interface_tokens: &BTreeSet<baml_codegen_types::Name>,
+    ) -> Self {
         let mut baml_names = pool
             .keys()
             .map(|name| name.package().clone())
             .collect::<BTreeSet<_>>();
+        baml_names.extend(interface_tokens.iter().map(|name| name.package().clone()));
         baml_names.insert(Name::new("user"));
 
         // `project_package_name` has already escaped every shared protected

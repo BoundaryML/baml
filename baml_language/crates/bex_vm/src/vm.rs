@@ -45,6 +45,22 @@ fn lower_named_type_args(
     positional
 }
 
+fn lower_named_type_values(
+    param_names: &[String],
+    type_values: IndexMap<String, TypeValue>,
+) -> Vec<Option<TypeValue>> {
+    if param_names.is_empty() {
+        return type_values.into_values().map(Some).collect();
+    }
+    let mut positional = vec![None; param_names.len()];
+    for (name, value) in type_values {
+        if let Some(idx) = param_names.iter().position(|param| *param == name) {
+            positional[idx] = Some(value);
+        }
+    }
+    positional
+}
+
 /// `unreachable_unchecked()` guarded by a debug-build check.
 ///
 /// Specialized opcodes and frame dispatch rely on the bytecode verifier /
@@ -267,6 +283,12 @@ impl RootHaver for BytecodeFrame {
                 .flatten()
                 .flat_map(|value| value.defs().enums.values().copied()),
         );
+        roots.extend(
+            self.type_values
+                .iter()
+                .flatten()
+                .flat_map(|value| value.defs().classes.values().copied()),
+        );
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
@@ -282,6 +304,9 @@ impl RootHaver for BytecodeFrame {
                 *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
             }
             for ptr in value.defs_mut().enums.values_mut() {
+                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
+            }
+            for ptr in value.defs_mut().classes.values_mut() {
                 *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
             }
         }
@@ -2652,6 +2677,19 @@ impl BexVm {
         args: &[Value],
         type_args: IndexMap<String, baml_type::RealizedTy>,
     ) {
+        self.set_entry_point_with_type_values(function, args, type_args, IndexMap::new());
+    }
+
+    /// Entry-point variant that preserves exact definition-carrying host type
+    /// values in the generic slots. Structural/static bindings omit entries in
+    /// `type_values` and retain the normal reconstruction path.
+    pub fn set_entry_point_with_type_values(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        type_args: IndexMap<String, baml_type::RealizedTy>,
+        type_values: IndexMap<String, TypeValue>,
+    ) {
         debug_assert!(
             matches!(
                 self.get_object(function),
@@ -2668,6 +2706,7 @@ impl BexVm {
         // callee's generic params before seeding the frame.
         let param_names = self.entry_point_generic_param_names(function);
         let type_args = lower_named_type_args(&param_names, type_args);
+        let type_values = lower_named_type_values(&param_names, type_values);
 
         // Host closures have no backing `Object::Function`, so enter them
         // through a tiny `CALL_INDIRECT; RETURN` bytecode wrapper. This is the
@@ -2686,6 +2725,7 @@ impl BexVm {
         // `GenericFunction` pointer.
         let mut dispatch_ptr = function;
         let mut effective_type_args = type_args;
+        let mut effective_type_values = type_values;
         let (callable_kind, entry_function_id) = match self.get_object(function) {
             Object::Function(f) => (f.kind, f.function_id),
             Object::Closure(closure) => {
@@ -2697,6 +2737,7 @@ impl BexVm {
             }
             Object::GenericFunction(gf) => {
                 effective_type_args = gf.type_args.to_vec();
+                effective_type_values = vec![None; effective_type_args.len()];
                 let inner = self.load_global_in(gf.runtime_package, gf.function);
                 dispatch_ptr = self
                     .as_object_ptr(inner, FunctionType::Callable.into())
@@ -2712,6 +2753,12 @@ impl BexVm {
         match callable_kind {
             FunctionKind::Bytecode => {
                 self.pending_call_type_args.clone_from(&effective_type_args);
+                self.pending_call_type_values =
+                    effective_type_values.iter().flatten().cloned().collect();
+                let mut type_defs = DynTypeDefs::default();
+                for value in effective_type_values.iter().flatten() {
+                    type_defs.merge_from(value.defs());
+                }
                 self.stack.extend(args.iter().copied());
                 // The thread-root call: parent_call_id is 0 on a fresh VM.
                 let (call_id, parent_call_id) = self.prof_enter_call(entry_function_id, None);
@@ -2720,8 +2767,8 @@ impl BexVm {
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
                     type_args: effective_type_args,
-                    type_defs: DynTypeDefs::default(),
-                    type_values: Vec::new(),
+                    type_defs,
+                    type_values: effective_type_values,
                     faulting_pc: 0,
                     call_id,
                     parent_call_id,
@@ -2734,7 +2781,13 @@ impl BexVm {
                     .expect("entry point must be a valid function frame");
             }
             FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
-                self.push_trampoline_frame(dispatch_ptr, args, effective_type_args, callable_kind);
+                self.push_trampoline_frame(
+                    dispatch_ptr,
+                    args,
+                    effective_type_args,
+                    &effective_type_values,
+                    callable_kind,
+                );
             }
             FunctionKind::NativeUnresolved => {
                 unreachable!("entry point kind is not directly invokable: {callable_kind:?}");
@@ -2788,6 +2841,7 @@ impl BexVm {
         function: HeapPtr,
         args: &[Value],
         type_args: Vec<baml_type::RealizedTy>,
+        type_values: &[Option<TypeValue>],
         callable_kind: FunctionKind,
     ) {
         let callee_global = self
@@ -2803,8 +2857,11 @@ impl BexVm {
         self.pending_call_type_args.clear();
         match callable_kind {
             FunctionKind::Native(_) => {
-                for ty in type_args {
-                    let ty_ptr = self.alloc_static_type(ty);
+                for (index, ty) in type_args.into_iter().enumerate() {
+                    let ty_ptr = match type_values.get(index).and_then(Clone::clone) {
+                        Some(value) => self.alloc_type(value),
+                        None => self.alloc_static_type(ty),
+                    };
                     self.stack.push(Value::object(ty_ptr));
                 }
                 self.stack.extend(args.iter().copied());
@@ -8484,6 +8541,11 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 .flat_map(|value| value.defs().enums.values().copied()),
         );
         roots.extend(
+            self.pending_call_type_values
+                .iter()
+                .flat_map(|value| value.defs().classes.values().copied()),
+        );
+        roots.extend(
             self.seen_throw_values
                 .iter()
                 .filter_map(Value::as_object_ptr),
@@ -8528,6 +8590,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
         for value in &mut self.pending_call_type_values {
             value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
             for ptr in value.defs_mut().enums.values_mut() {
+                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
+            }
+            for ptr in value.defs_mut().classes.values_mut() {
                 *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
             }
         }

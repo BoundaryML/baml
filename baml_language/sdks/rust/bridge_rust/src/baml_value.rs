@@ -166,7 +166,7 @@ pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
         Some(Out::PromptAstValue(_)) => "prompt ast",
         Some(Out::Uint8arrayValue(_)) => "uint8array",
         Some(Out::BigintValue(_)) => "bigint",
-        Some(Out::TyValue(_)) => "type",
+        Some(Out::TyValue(_) | Out::TyDefValue(_)) => "type",
     }
 }
 

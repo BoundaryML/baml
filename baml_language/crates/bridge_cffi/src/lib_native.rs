@@ -159,7 +159,9 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     }
     let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
-    let call_ctx = function_call_context_builder(call_id).with_type_args(type_args);
+    let call_ctx = function_call_context_builder(call_id)
+        .with_type_args(type_args.type_args)
+        .with_type_defs(type_args.type_defs);
 
     get_tokio_runtime()?.spawn(async move {
         let encoded = AssertUnwindSafe(async move {

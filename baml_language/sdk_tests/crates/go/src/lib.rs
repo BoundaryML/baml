@@ -10,6 +10,7 @@ mod generated_formatting_tests {
         let fixtures = [
             "docstrings_etc",
             "function_calls",
+            "host_reflect",
             "llm_functions",
             "package_edges",
             "type_shapes",

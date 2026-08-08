@@ -61,7 +61,8 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         // `_BamlHandle` is the runtime opaque-handle type; Phase 4 emits the
         // `import type { BamlHandle as _BamlHandle }` when this token appears.
         Ty::RustType { .. } => TranslatedType::bare("_BamlHandle"),
-        Ty::Type { .. } | Ty::Resource { .. } | Ty::PromptAst { .. } | Ty::Future(..) => {
+        Ty::Type { .. } => TranslatedType::bare("BamlType"),
+        Ty::Resource { .. } | Ty::PromptAst { .. } | Ty::Future(..) => {
             TranslatedType::bare("unknown")
         }
 
@@ -133,6 +134,12 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         }
 
         Ty::Class(name, args, _) => {
+            // Host token positions intentionally erase the distinct reflected
+            // kind hierarchy (H-9). All `baml.reflect.<kind>.Type` values cross
+            // the bridge as the same opaque `BamlType` definition handle.
+            if is_reflect_kind_type(name) {
+                return TranslatedType::bare("BamlType");
+            }
             let mut result = render_name_ref(name, ctx);
             if !args.is_empty() {
                 let mut arg_imports = BTreeSet::new();
@@ -219,6 +226,25 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             }
         }
     }
+}
+
+fn is_reflect_kind_type(name: &Name) -> bool {
+    const KINDS: &[&str] = &[
+        "array",
+        "class",
+        "enum",
+        "function",
+        "interface",
+        "literal",
+        "map",
+        "primitive",
+        "union",
+    ];
+    name.package().as_str() == "baml"
+        && name.name() == "Type"
+        && name.namespace().len() == 2
+        && name.namespace()[0].as_str() == "reflect"
+        && KINDS.contains(&name.namespace()[1].as_str())
 }
 
 fn media_ref(bare: &str, ctx: &TranslateCtx) -> TranslatedType {

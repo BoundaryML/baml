@@ -13,6 +13,56 @@ use indexmap::IndexMap;
 
 use crate::HeapPtr;
 
+/// Heap-independent definition graph used at host boundaries. It contains no
+/// mint and no pointers, so serializing it cannot leak engine identity. The VM
+/// reconstructs ordinary `Class`/`Enum` objects and assigns fresh runtime
+/// mints whenever one arrives from a host (BEP-066 H-4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortableTypeDef {
+    pub root: baml_type::RuntimeTy,
+    pub classes: Vec<PortableClassDef>,
+    pub enums: Vec<PortableEnumDef>,
+    pub witnesses: Vec<DynWitnessDef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortableMetadata {
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortableClassDef {
+    pub name: QualifiedTypeName,
+    pub fields: Vec<PortableClassFieldDef>,
+    pub metadata: PortableMetadata,
+    pub generic_param_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortableClassFieldDef {
+    pub name: String,
+    pub ty: baml_type::RuntimeTy,
+    pub metadata: PortableMetadata,
+    pub skip: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortableEnumDef {
+    pub name: QualifiedTypeName,
+    pub variants: Vec<PortableEnumVariantDef>,
+    pub metadata: PortableMetadata,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortableEnumVariantDef {
+    pub name: String,
+    pub metadata: PortableMetadata,
+    pub skip: bool,
+}
+
 /// Runtime schema definitions carried by a minted `type` value.
 ///
 /// The map is a per-value overlay, never a process/global registry. Heap

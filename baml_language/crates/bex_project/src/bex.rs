@@ -209,8 +209,8 @@ impl Bex for BexEngine {
                     .await
                     .acquire()
                     .await;
-                let owned_result =
-                    BexValue::from(&result).as_owned_but_very_slow(self.heap(), permit.proof())?;
+                let owned_result = BexValue::from(&result)
+                    .as_owned_with_package_handles(self.heap(), permit.proof())?;
                 Ok(owned_result)
             }
             Err(err) => Err(RuntimeError::from(err)),

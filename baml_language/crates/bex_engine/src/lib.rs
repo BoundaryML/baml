@@ -2802,6 +2802,7 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args,
+            type_defs,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -2819,6 +2820,7 @@ impl BexEngine {
                 cancel,
                 profile_enabled,
                 type_args,
+                type_defs,
             },
             copy_objects,
         )
@@ -2848,6 +2850,7 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args,
+            type_defs,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -3023,7 +3026,22 @@ impl BexEngine {
             }
         }
 
-        let type_args = type_args;
+        let mut type_args = type_args;
+
+        // Materialize definition-carrying host type bindings once per call.
+        // Every call receives fresh mints, while the exact `TypeValue`s remain
+        // attached to the entry frame so `LoadType<T>` preserves that arrival's
+        // identity and definition overlay.
+        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        let mut type_values = IndexMap::new();
+        for (name, definition) in type_defs {
+            let type_value = thread
+                .vm
+                .materialize_portable_type_def(definition)
+                .map_err(|message| EngineError::TypeMismatch { message })?;
+            type_args.insert(name.clone(), RuntimeTy::from(&type_value.ty));
+            type_values.insert(name, type_value);
+        }
 
         // Always fold the recovered bindings into the return type. This is the
         // pre-existing streaming fix (a generic `self` method's return type
@@ -3138,10 +3156,6 @@ impl BexEngine {
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Create the root thread (shared heap, own TLAB) and acquire its
-        // permit. This named-entry path is the genuine top-level root run.
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
-
         // Reuse the (substituted) `param_types` to thread the expected
         // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
         // `Object::HostClosure` needs it: the closure carries the declared
@@ -3173,6 +3187,7 @@ impl BexEngine {
             function_index,
             vm_args,
             type_args,
+            type_values,
             return_type,
             throws_type,
             host_call_id,
@@ -3240,6 +3255,7 @@ impl BexEngine {
         entry_ptr: HeapPtr,
         vm_args: Vec<Value>,
         type_args: indexmap::IndexMap<String, RuntimeTy>,
+        type_values: indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
@@ -3295,7 +3311,7 @@ impl BexEngine {
             .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
         thread
             .vm
-            .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
+            .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
         thread
             .vm
             .install_boundary_id_for_current_call(boundary.boundary_id);
@@ -3474,6 +3490,7 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args: _,
+            type_defs: _,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -3828,6 +3845,7 @@ impl BexEngine {
             entry,
             vm_args,
             seed_type_args,
+            IndexMap::new(),
             return_type,
             throws_type,
             host_call_id,

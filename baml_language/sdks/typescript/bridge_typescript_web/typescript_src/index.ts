@@ -10,7 +10,8 @@ export { BamlTypeMap, getTypeMap, setTypeMap } from "./shared/typemap.js";
 export { defineFunction, defineInstanceFunction, UNSET } from "./shared/define_function.js";
 export type { GenericParams } from "./shared/define_function.js";
 export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
-export type { BamlClassCtor, BamlPrimitiveToken, BamlType } from "./shared/wire_ty.js";
+export { BamlType, reflectType } from "./shared/wire_ty.js";
+export type { BamlClassCtor, BamlInterfaceToken, BamlPrimitiveToken, BamlTypeMetadata, BamlTypeToken } from "./shared/wire_ty.js";
 export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, wrapNativeError } from "./shared/errors.js";
 export { decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 
