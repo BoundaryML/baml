@@ -349,6 +349,52 @@ fn assignment_parts(source: &str) -> Option<(&str, &'static str, &str)> {
     Some((source[..start].trim(), operator, source[end..].trim()))
 }
 
+/// Recognize the statement-only `type T = unreflect(expr)` form and return
+/// the source-visible name plus the operand text. The parser has already
+/// validated the delimiters for block statements; this small lexical helper
+/// is also used to distinguish the same token shape from a top-level alias
+/// during Session's initial declaration-hoisting pass.
+fn runtime_type_binding_parts(source: &str) -> Option<(String, &str)> {
+    let tokens = lex_lossless(source, baml_base::FileId::new(0));
+    let words = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| token.kind == TokenKind::Word)
+        .collect::<Vec<_>>();
+    let [(_, type_word), (_, name), (unreflect_index, unreflect), ..] = words.as_slice() else {
+        return None;
+    };
+    if type_word.text.as_str() != "type" || unreflect.text.as_str() != "unreflect" {
+        return None;
+    }
+    let open = tokens
+        .iter()
+        .skip(*unreflect_index + 1)
+        .find(|token| token.kind == TokenKind::LParen)?;
+    let close = tokens
+        .iter()
+        .rev()
+        .find(|token| token.kind == TokenKind::RParen)?;
+    let start = usize::from(open.span.range.end());
+    let end = usize::from(close.span.range.start());
+    (start <= end).then(|| (name.text.to_string(), source[start..end].trim()))
+}
+
+fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol>) -> String {
+    let mut prelude = String::new();
+    for symbol in bindings.values() {
+        if symbol.kind == SessionVisibleKind::TypeBinding
+            && let Some(type_value) = &symbol.type_value
+        {
+            prelude.push_str(&format!(
+                "type {} = unreflect({type_value});\n",
+                symbol.internal
+            ));
+        }
+    }
+    prelude
+}
+
 fn locally_bound_names(
     node: &SyntaxNode,
     outer_let: Option<std::ops::Range<usize>>,
@@ -575,7 +621,13 @@ fn lower_session_submission(
     let root = SyntaxNode::new_root(green);
     let declarations_nodes = root
         .children()
-        .filter(|node| declaration_kind(node.kind()))
+        .filter(|node| {
+            declaration_kind(node.kind())
+                && (node.kind() == SyntaxKind::IMPLEMENTS_FOR
+                    || declaration_name(node).is_some())
+                && !(node.kind() == SyntaxKind::TYPE_ALIAS_DEF
+                    && runtime_type_binding_parts(&node.text().to_string()).is_some())
+        })
         .collect::<Vec<_>>();
 
     let mut declarations = IndexMap::new();
@@ -695,6 +747,12 @@ fn lower_session_submission(
             .iter()
             .map(|(name, symbol)| (name.clone(), symbol.internal.clone())),
     );
+    let mut active_type_bindings = request
+        .visible
+        .iter()
+        .filter(|(_, symbol)| symbol.kind == SessionVisibleKind::TypeBinding)
+        .map(|(name, symbol)| (name.clone(), symbol.clone()))
+        .collect::<IndexMap<_, _>>();
     let mut generated = declaration_source.clone();
     let mut steps = Vec::new();
 
@@ -736,69 +794,110 @@ fn lower_session_submission(
             }
         }
         let raw = &request.source[source_range.clone()];
+        let is_type_binding = node.is_some_and(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT);
         let is_outer_let = node.is_some_and(|node| node.kind() == SyntaxKind::LET_STMT);
-        let outer_binding = node.and_then(first_pattern_name);
+        let outer_binding = (!is_type_binding)
+            .then(|| node.and_then(first_pattern_name))
+            .flatten();
         let local_names = node.map_or_else(HashSet::new, |node| {
             locally_bound_names(node, outer_binding.as_ref().map(|(_, range)| range.clone()))
         });
-        let mut forced = IndexMap::new();
-        let mut binding = None;
-        let generated_name = if let Some((name, wrapped_name_range)) = outer_binding {
-            let internal_name = internal(&name);
-            let local_range = wrapped_name_range.start.saturating_sub(prefix.len())
-                - source_range.start
-                ..wrapped_name_range.end.saturating_sub(prefix.len()) - source_range.start;
-            forced.insert(local_range, internal_name.clone());
-            let symbol = SessionVisibleSymbol {
-                internal: internal_name.clone(),
-                kind: SessionVisibleKind::Let,
-                type_value: None,
+        let prelude = runtime_type_binding_prelude(&active_type_bindings);
+        let (generated_name, step_source, commit_global, binding) = if is_type_binding {
+            let Some((name, operand)) = runtime_type_binding_parts(raw) else {
+                return Err(vec![runtime_diagnostic(
+                    DiagnosticId::InvalidSyntax,
+                    &request.submission_name,
+                    source_range.start,
+                    source_range.end,
+                    "invalid runtime type binding",
+                )]);
             };
-            binding = Some((name, symbol));
-            internal_name
-        } else {
-            format!("__baml_session_{sequence}_stmt_{index}")
-        };
-        let assignment = is_statement
-            .then(|| assignment_parts(raw))
-            .flatten()
-            .and_then(|(target, operator, rhs)| {
-                let symbol = request.visible.get(target)?;
-                (symbol.kind == SessionVisibleKind::Let).then(|| (symbol, operator, rhs))
-            });
-        let (step_source, commit_global) = if let Some((target, operator, rhs)) = assignment {
-            let rhs = rewrite_identifiers(
-                rhs,
+            let type_name = internal(&name);
+            let backing_name = format!("__baml_session_{sequence}_type_value_{name}");
+            let operand = rewrite_identifiers(
+                operand,
                 &visible_mapping,
                 &IndexMap::new(),
                 &HashSet::new(),
                 &local_names,
             );
-            let value = if operator == "=" {
-                rhs
-            } else {
-                format!("{} {operator} ({rhs})", target.internal)
+            let source = format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n");
+            let symbol = SessionVisibleSymbol {
+                internal: type_name,
+                kind: SessionVisibleKind::TypeBinding,
+                type_value: Some(backing_name.clone()),
             };
-            (
-                format!("let {generated_name} = ({value})\n"),
-                Some(format!("user.{}", target.internal)),
-            )
+            (backing_name, source, None, Some((name, symbol)))
         } else {
-            let rewritten = rewrite_identifiers(
-                raw,
-                &visible_mapping,
-                &forced,
-                &HashSet::new(),
-                &local_names,
-            );
-            let source = if is_outer_let {
-                format!("{rewritten}\n")
-            } else if !is_statement && !has_semicolon {
-                format!("let {generated_name} = ({rewritten})\n")
+            let mut forced = IndexMap::new();
+            let mut binding = None;
+            let generated_name = if let Some((name, wrapped_name_range)) = outer_binding {
+                let internal_name = internal(&name);
+                let local_range = wrapped_name_range.start.saturating_sub(prefix.len())
+                    - source_range.start
+                    ..wrapped_name_range.end.saturating_sub(prefix.len()) - source_range.start;
+                forced.insert(local_range, internal_name.clone());
+                let symbol = SessionVisibleSymbol {
+                    internal: internal_name.clone(),
+                    kind: SessionVisibleKind::Let,
+                    type_value: None,
+                };
+                binding = Some((name, symbol));
+                internal_name
             } else {
-                format!("let {generated_name} = {{\n{rewritten}\nnull\n}}\n")
+                format!("__baml_session_{sequence}_stmt_{index}")
             };
-            (source, None)
+            let assignment = is_statement
+                .then(|| assignment_parts(raw))
+                .flatten()
+                .and_then(|(target, operator, rhs)| {
+                    let symbol = request.visible.get(target)?;
+                    (symbol.kind == SessionVisibleKind::Let).then(|| (symbol, operator, rhs))
+                });
+            let (source, commit_global) = if let Some((target, operator, rhs)) = assignment {
+                let rhs = rewrite_identifiers(
+                    rhs,
+                    &visible_mapping,
+                    &IndexMap::new(),
+                    &HashSet::new(),
+                    &local_names,
+                );
+                let value = if operator == "=" {
+                    rhs
+                } else {
+                    format!("{} {operator} ({rhs})", target.internal)
+                };
+                let source = if prelude.is_empty() {
+                    format!("let {generated_name} = ({value})\n")
+                } else {
+                    format!("let {generated_name} = {{\n{prelude}({value})\n}}\n")
+                };
+                (source, Some(format!("user.{}", target.internal)))
+            } else {
+                let rewritten = rewrite_identifiers(
+                    raw,
+                    &visible_mapping,
+                    &forced,
+                    &HashSet::new(),
+                    &local_names,
+                );
+                let source = if is_outer_let && prelude.is_empty() {
+                    format!("{rewritten}\n")
+                } else if is_outer_let {
+                    format!(
+                        "let {generated_name} = {{\n{prelude}{rewritten}\n{generated_name}\n}}\n"
+                    )
+                } else if !is_statement && !has_semicolon && prelude.is_empty() {
+                    format!("let {generated_name} = ({rewritten})\n")
+                } else if !is_statement && !has_semicolon {
+                    format!("let {generated_name} = {{\n{prelude}{rewritten}\n}}\n")
+                } else {
+                    format!("let {generated_name} = {{\n{prelude}{rewritten}\nnull\n}}\n")
+                };
+                (source, None)
+            };
+            (generated_name, source, commit_global, binding)
         };
         generated.push_str(&step_source);
         let returns_value =
@@ -811,7 +910,10 @@ fn lower_session_submission(
             returns_value,
         });
         if let Some((name, symbol)) = binding {
-            visible_mapping.insert(name, symbol.internal);
+            visible_mapping.insert(name.clone(), symbol.internal.clone());
+            if symbol.kind == SessionVisibleKind::TypeBinding {
+                active_type_bindings.insert(name, symbol);
+            }
         }
     }
 
