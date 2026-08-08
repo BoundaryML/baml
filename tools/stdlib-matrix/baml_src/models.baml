@@ -247,4 +247,3 @@ class BaselineComparison {
     improvements: string[],
     neutral: string[],
 }
-

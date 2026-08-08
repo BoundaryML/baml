@@ -110,10 +110,11 @@ function fixture_ts_text() -> string {
 }
 
 test "id helpers split kind prefixes and path segments" {
-    assert.equal(
-        strip_kind_prefix("X:baml.impl[baml.Comparable for baml.Foo]"),
-        "baml.impl[baml.Comparable for baml.Foo]",
-    );
+    assert
+        .equal(
+            strip_kind_prefix("X:baml.impl[baml.Comparable for baml.Foo]"),
+            "baml.impl[baml.Comparable for baml.Foo]",
+        );
     assert.equal(last_segment("baml.json"), "json");
 }
 
@@ -364,17 +365,17 @@ test "the markdown view renders both sides" {
 
 test "a rendered type is split into the names it mentions" {
     assert.is_true(baml.deep_equals(type_names("baml.fs.DirEntry[]"), ["baml.fs.DirEntry"]));
-    assert.is_true(
-        baml.deep_equals(type_names("map<string, unknown>"), ["map", "string", "unknown"]),
-    );
+    assert
+        .is_true(baml.deep_equals(type_names("map<string, unknown>"), ["map", "string", "unknown"]));
     // A dotted path is one name, and the punctuation around a projection does
     // not glue onto either side of it.
-    assert.is_true(
-        baml.deep_equals(
-            type_names("(Self as baml.Comparable).CompareError"),
-            ["Self", "as", "baml.Comparable", "CompareError"],
-        ),
-    );
+    assert
+        .is_true(
+            baml.deep_equals(
+                type_names("(Self as baml.Comparable).CompareError"),
+                ["Self", "as", "baml.Comparable", "CompareError"],
+            ),
+        );
     // String-literal contents survive as names that resolve to nothing.
     assert.is_true(baml.deep_equals(type_names("\"r\" | \"w+\""), ["r", "w"]));
 }
@@ -428,18 +429,20 @@ test "a bare name resolves through its own scope, never across the surface" {
     let _ = index_put(index.types, "baml.toml.Item", "T:baml.toml.Item");
 
     // Written inside `baml.iter`, `Chain` finds its neighbour.
-    assert.equal(
-        resolve_reference(index, "Chain", ["baml", "iter", "ArrayIterator"]) ?? "",
-        "T:baml.iter.Chain",
-    );
+    assert
+        .equal(
+            resolve_reference(index, "Chain", ["baml", "iter", "ArrayIterator"]) ?? "",
+            "T:baml.iter.Chain",
+        );
     // `Item` inside `baml.iter` is an associated type, not `baml.toml.Item`.
     // Matching bare names across the whole surface is what would pair them.
     assert.is_true(resolve_reference(index, "Item", ["baml", "iter"]) == null);
     // Qualified, it resolves from anywhere.
-    assert.equal(
-        resolve_reference(index, "baml.toml.Item", ["baml", "iter"]) ?? "",
-        "T:baml.toml.Item",
-    );
+    assert
+        .equal(
+            resolve_reference(index, "baml.toml.Item", ["baml", "iter"]) ?? "",
+            "T:baml.toml.Item",
+        );
 }
 
 test "a name two declarations answer to points at neither" {
@@ -459,15 +462,16 @@ test "impl entries address themselves and name what they re-list" {
     for (let method in impl_methods) {
         ids.push(method.id);
     }
-    assert.is_true(
-        baml.deep_equals(
-            ids,
-            [
-                "X:baml.impl[baml.Comparable for baml.Foo]::compare",
-                "X:baml.impl[baml.Comparable for baml.Foo]::index_of",
-            ],
-        ),
-    );
+    assert
+        .is_true(
+            baml.deep_equals(
+                ids,
+                [
+                    "X:baml.impl[baml.Comparable for baml.Foo]::compare",
+                    "X:baml.impl[baml.Comparable for baml.Foo]::index_of",
+                ],
+            ),
+        );
     // The re-listed one carries the declaration it came from; the override
     // declared only in the block has no other address.
     if let relisted: BamlSymbol = impl_methods.at(1) {
@@ -734,20 +738,22 @@ test "a judged absence survives only while the BAML surface could not have gaine
     let absent: string[] = [];
     let no_counterpart: string[] = [];
     if let symbol: TsSymbol = source.ts.at(0) {
-        source.judgements.push(
-            Judgement {
-                ts: symbol.id,
-                baml: no_counterpart,
-                verdict: "none",
-                basis: "model",
-                confidence: "high",
-                reason: "BAML has no equivalent",
-                divergence: null,
-                rejected: absent,
-                verified: true,
-                example: null,
-            },
-        );
+        source
+            .judgements
+            .push(
+                Judgement {
+                    ts: symbol.id,
+                    baml: no_counterpart,
+                    verdict: "none",
+                    basis: "model",
+                    confidence: "high",
+                    reason: "BAML has no equivalent",
+                    divergence: null,
+                    rejected: absent,
+                    verified: true,
+                    example: null,
+                },
+            );
     }
     let before = fixture_revision(source);
 
@@ -771,20 +777,22 @@ test "a reworded BAML docstring does not expire an absence" {
     let absent: string[] = [];
     let no_counterpart: string[] = [];
     if let symbol: TsSymbol = source.ts.at(0) {
-        source.judgements.push(
-            Judgement {
-                ts: symbol.id,
-                baml: no_counterpart,
-                verdict: "none",
-                basis: "model",
-                confidence: "high",
-                reason: "BAML has no equivalent",
-                divergence: null,
-                rejected: absent,
-                verified: true,
-                example: null,
-            },
-        );
+        source
+            .judgements
+            .push(
+                Judgement {
+                    ts: symbol.id,
+                    baml: no_counterpart,
+                    verdict: "none",
+                    basis: "model",
+                    confidence: "high",
+                    reason: "BAML has no equivalent",
+                    divergence: null,
+                    rejected: absent,
+                    verified: true,
+                    example: null,
+                },
+            );
     }
     let before = fixture_revision(source);
     let same = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
@@ -829,33 +837,40 @@ test "an unnecessary symbol is neither matched nor missing" {
     let none: string[] = [];
     let no_counterpart: string[] = [];
     if let symbol: TsSymbol = matrix.ts.at(0) {
-        matrix.judgements.push(
-            Judgement {
-                ts: symbol.id,
-                baml: no_counterpart,
-                verdict: "unnecessary",
-                basis: "model",
-                confidence: "high",
-                reason: "pattern matching answers this",
-                divergence: null,
-                rejected: none,
-                verified: true,
-                example: CodeExample { typescript: "Array.isArray(foo)", baml: "foo is int[]", note: null },
-            },
-        );
+        matrix
+            .judgements
+            .push(
+                Judgement {
+                    ts: symbol.id,
+                    baml: no_counterpart,
+                    verdict: "unnecessary",
+                    basis: "model",
+                    confidence: "high",
+                    reason: "pattern matching answers this",
+                    divergence: null,
+                    rejected: none,
+                    verified: true,
+                    example: CodeExample {
+                        typescript: "Array.isArray(foo)",
+                        baml: "foo is int[]",
+                        note: null,
+                    },
+                },
+            );
     }
     matrix.counts = recount(matrix);
     assert.equal(matrix.counts.unnecessary, 1);
     // It was recorded against a symbol nothing else speaks for, so the matched
     // tally is untouched and nothing was double counted.
     assert.equal(matrix.counts.matched, before);
-    assert.equal(
-        matrix.counts.matched
-            + matrix.counts.unnecessary
-            + matrix.counts.unmatched
-            + matrix.counts.unjudged,
-        matrix.counts.ts_symbols,
-    );
+    assert
+        .equal(
+            matrix.counts.matched
+                + matrix.counts.unnecessary
+                + matrix.counts.unmatched
+                + matrix.counts.unjudged,
+            matrix.counts.ts_symbols,
+        );
 }
 
 test "the strongest verdict about a symbol is the one that counts" {

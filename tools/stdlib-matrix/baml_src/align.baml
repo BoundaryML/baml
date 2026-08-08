@@ -375,12 +375,13 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
         // turn explains. Saying it as well is not redundant — a model handed a
         // schema it did not expect does better for being told why.
         if (round == lookup_rounds()) {
-            turns.push(
-                Turn {
-                    role: "user",
-                    text: "No more lookups are available. Answer now for every symbol, using only what you have seen. A symbol you could not resolve is `none` with a reason.",
-                },
-            );
+            turns
+                .push(
+                    Turn {
+                        role: "user",
+                        text: "No more lookups are available. Answer now for every symbol, using only what you have seen. A symbol you could not resolve is `none` with a reason.",
+                    },
+                );
         }
         let step = session_step(render_turns(turns)) catch_all (error) {
             _ => {
@@ -402,9 +403,7 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
                         // it would not appear in the refused count either, and
                         // that count is the only signal that a prompt has begun
                         // answering questions nobody asked.
-                        report_progress(
-                            `${request.subject}: answered about ${finding.ts}, which it was not shown`,
-                        );
+                        report_progress(`${request.subject}: answered about ${finding.ts}, which it was not shown`);
                         continue;
                     }
                     if (covered.has(finding.ts)) {
@@ -418,9 +417,10 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
                         },
                         let error: string => {
                             let _ = held.set(finding.ts, finding);
-                            complaints.push(
-                                `[${finding.ts}] this example does not compile:\n${finding.example?.baml ?? ""}\n\n${error}`,
-                            );
+                            complaints
+                                .push(
+                                    `[${finding.ts}] this example does not compile:\n${finding.example?.baml ?? ""}\n\n${error}`,
+                                );
                         },
                     }
                 }
@@ -440,9 +440,8 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
                     failure = "";
                 } else {
                     turns.push(Turn { role: "assistant", text: render_findings(answer) });
-                    turns.push(
-                        Turn { role: "user", text: retry_turn(request, covered, complaints) },
-                    );
+                    turns
+                        .push(Turn { role: "user", text: retry_turn(request, covered, complaints) });
                 }
             },
         }
@@ -499,9 +498,10 @@ function retry_turn(
     if (complaints.length() > 0) {
         parts.push(complaints.join("\n\n"));
     }
-    parts.push(
-        `You have not answered for these symbols:\n${missing.join("\n")}\n\nAnswer for exactly these. Everything else you said is kept — do not repeat it. If an example above would not compile, fix it or leave the example out; the finding matters, the example is optional.`,
-    );
+    parts
+        .push(
+            `You have not answered for these symbols:\n${missing.join("\n")}\n\nAnswer for exactly these. Everything else you said is kept — do not repeat it. If an example above would not compile, fix it or leave the example out; the finding matters, the example is optional.`,
+        );
     parts.join("\n\n")
 }
 
@@ -579,9 +579,10 @@ function run_lookups(box: Toolbox, investigate: Investigate) -> string {
         }
     }
     if (investigate.lookups.length() > ran) {
-        blocks.push(
-            `(${investigate.lookups.length() - ran} further lookups were not run — at most ${lookups_per_round()} per round)`,
-        );
+        blocks
+            .push(
+                `(${investigate.lookups.length() - ran} further lookups were not run — at most ${lookups_per_round()} per round)`,
+            );
     }
     blocks.join("\n\n")
 }
@@ -684,14 +685,15 @@ function session_requests(matrix: SymbolMatrix, revision: Revision?) -> SessionR
             } else {
                 subject
             };
-            requests.push(
-                SessionRequest {
-                    subject: label,
-                    ts_ids: ts_ids,
-                    ts_lines: ts_lines,
-                    prior_lines: prior_lines,
-                },
-            );
+            requests
+                .push(
+                    SessionRequest {
+                        subject: label,
+                        ts_ids: ts_ids,
+                        ts_lines: ts_lines,
+                        prior_lines: prior_lines,
+                    },
+                );
         }
     }
     requests
@@ -845,20 +847,22 @@ function apply_findings(matrix: SymbolMatrix, results: SessionResult[]) -> Align
                         continue;
                     }
                     let _ = judged.set(finding.ts, true);
-                    matrix.judgements.push(
-                        Judgement {
-                            ts: finding.ts,
-                            baml: counterparts,
-                            verdict: finding.verdict,
-                            basis: "model",
-                            confidence: finding.confidence,
-                            reason: finding.reason,
-                            divergence: finding.divergence,
-                            rejected: none,
-                            verified: false,
-                            example: finding.example,
-                        },
-                    );
+                    matrix
+                        .judgements
+                        .push(
+                            Judgement {
+                                ts: finding.ts,
+                                baml: counterparts,
+                                verdict: finding.verdict,
+                                basis: "model",
+                                confidence: finding.confidence,
+                                reason: finding.reason,
+                                divergence: finding.divergence,
+                                rejected: none,
+                                verified: false,
+                                example: finding.example,
+                            },
+                        );
                     applied += 1;
                 }
             },
