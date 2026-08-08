@@ -265,14 +265,20 @@ impl<'a> GoTypeProjection<'a> {
                 Literal::Bool(value) => GoLiteral::Bool(*value),
             }),
             Ty::TypeVar(param, _) => GoTy::TypeVar(param.name().clone()),
-            Ty::Class(name, arguments, _) => GoTy::Class(
-                name.clone(),
-                arguments
-                    .iter()
-                    .map(|argument| self.project_inner(argument, aliases))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-            ),
+            Ty::Class(name, arguments, _) => {
+                if is_reflect_kind_type(name) {
+                    GoTy::ReflectedType
+                } else {
+                    GoTy::Class(
+                        name.clone(),
+                        arguments
+                            .iter()
+                            .map(|argument| self.project_inner(argument, aliases))
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    )
+                }
+            }
             Ty::Enum(name, _) => GoTy::Enum(name.clone()),
             Ty::EnumVariant(name, variant, _) => GoTy::EnumVariant(name.clone(), variant.clone()),
             Ty::List(inner, _) => GoTy::List(Box::new(self.project_inner(inner, aliases))),
@@ -496,6 +502,27 @@ impl<'a> GoTypeProjection<'a> {
             other => projected.push(self.project_inner(other, aliases)),
         }
     }
+}
+
+fn is_reflect_kind_type(name: &Name) -> bool {
+    matches!(
+        name.namespace().as_slice(),
+        [reflect, kind]
+            if reflect.as_str() == "reflect"
+                && matches!(
+                    kind.as_str(),
+                    "array"
+                        | "class"
+                        | "enum"
+                        | "function"
+                        | "interface"
+                        | "literal"
+                        | "map"
+                        | "primitive"
+                        | "union"
+                )
+    ) && name.package().as_str() == "baml"
+        && name.name().as_str() == "Type"
 }
 
 fn is_baml_json(name: &Name) -> bool {
