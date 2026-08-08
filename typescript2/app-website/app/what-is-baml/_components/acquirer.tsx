@@ -15,16 +15,21 @@ export function Acquirer() {
   const [out, setOut] = useState(false);
 
   useEffect(() => {
-    // Fade the current name out, swap it, fade the next one in.
+    // Fade the current name out, swap it, fade the next one in. The inner
+    // timeout must be cleared by the effect cleanup, not the setTimeout
+    // callback's return value (which setTimeout discards).
+    let swap: ReturnType<typeof setTimeout> | undefined;
     const hold = setTimeout(() => {
       setOut(true);
-      const swap = setTimeout(() => {
+      swap = setTimeout(() => {
         setI((n) => (n + 1) % ACQUIRERS.length);
         setOut(false);
       }, FADE_MS);
-      return () => clearTimeout(swap);
     }, HOLD_MS);
-    return () => clearTimeout(hold);
+    return () => {
+      clearTimeout(hold);
+      if (swap) clearTimeout(swap);
+    };
   }, [i]);
 
   return (

@@ -186,10 +186,6 @@ const EXAMPLES: Record<string, Panel[]> = {
       tab: 'Compile Faster',
     },
     {
-      blocks: [{ code: PACK_BENCH_TEXT, lang: 'term' }],
-      tab: 'Build Cheaper',
-    },
-    {
       blocks: [
         { code: termText(GREP_EVENTS), label: 'grep', lang: 'term' },
         {
@@ -208,6 +204,7 @@ const EXAMPLES: Record<string, Panel[]> = {
       blocks: [
         { code: BAML_PACKED, fn: 'main', label: 'main.baml', lang: 'baml' },
         { code: termText(PACK_EVENTS), label: 'baml pack', lang: 'term' },
+        { code: PACK_BENCH_TEXT, label: 'measured', lang: 'term' },
       ],
       tab: 'Ship Anywhere',
     },
@@ -289,6 +286,21 @@ function LiveBlock({
   label: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // Escape closes the overlay and the page behind it stops scrolling while
+  // the dialog is up.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [expanded]);
   // Hydration-safe: the hint appears after mount, and only until the visitor
   // has expanded a playground once (persisted).
   const [showHint, setShowHint] = useState(false);
@@ -340,7 +352,7 @@ function LiveBlock({
             onClick={() => setExpanded(false)}
             type="button"
           />
-          <div className="wib-x-live ex">
+          <div aria-modal="true" className="wib-x-live ex" role="dialog">
             <button
               aria-label="Collapse playground"
               className="wib-x-expand"
@@ -434,6 +446,8 @@ export function CodeExplorer({
   if (!panels) return null;
 
   const panel = panels[Math.min(active, panels.length - 1)];
+  const panelId = `wib-x-panel-${sectionId}`;
+  const tabId = (i: number) => `wib-x-tab-${sectionId}-${i}`;
   const offset = panels
     .slice(0, panels.indexOf(panel))
     .reduce((n, p) => n + p.blocks.length, 0);
@@ -443,8 +457,10 @@ export function CodeExplorer({
       <div aria-label="Examples" className="wib-x-tabs" role="tablist">
         {panels.map((p, i) => (
           <button
+            aria-controls={panelId}
             aria-selected={i === active}
             className={`wib-x-tab${i === active ? ' on' : ''}`}
+            id={tabId(i)}
             key={p.tab}
             onClick={() => setActive(i)}
             role="tab"
@@ -454,7 +470,12 @@ export function CodeExplorer({
           </button>
         ))}
       </div>
-      <div className="wib-x-body">
+      <div
+        aria-labelledby={tabId(Math.min(active, panels.length - 1))}
+        className="wib-x-body"
+        id={panelId}
+        role="tabpanel"
+      >
         {panel.blocks.map((b, i) => (
           <div className="wib-x-block" key={`${panel.tab}-${b.label ?? i}`}>
             {b.label ? <div className="wib-x-label">{b.label}</div> : null}
@@ -511,6 +532,9 @@ export function CodeExplorer({
         .wib-x-ov { background: rgba(26, 22, 18, 0.45); border: none; cursor: zoom-out; inset: 0; position: fixed; z-index: 59; }
         .wib-x-expand { align-items: center; background: #FFFFFF; border: 1px solid #D9D3C4; border-radius: 6px; color: #5C5852; cursor: pointer; display: inline-flex; font-size: 15px; height: 26px; justify-content: center; line-height: 1; position: absolute; right: 8px; top: 8px; width: 26px; z-index: 5; }
         .wib-x-expand:hover { border-color: #7C3AED; color: #7C3AED; }
+        /* no expanded playground on touch/small screens: the overlay + Monaco
+           on mobile is chaos, so the affordance simply is not there */
+        @media (max-width: 700px), (pointer: coarse) { .wib-x-expand, .wib-x-hintchip { display: none; } }
         .wib-x-expand.glow { animation: wib-x-glow 1.6s ease-in-out infinite; border-color: #7C3AED; color: #7C3AED; }
         @keyframes wib-x-glow {
           0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.45); }

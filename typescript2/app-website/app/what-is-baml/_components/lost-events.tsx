@@ -181,8 +181,9 @@ export function LostEvents() {
         <Field remember={false} />
         <EventFeed keepAll={false} />
         <p className="lev-note">
-          The field forgets as fast as it learns. {dropped} events dropped since
-          you opened this page.
+          The field forgets as fast as it learns.{' '}
+          {dropped.toLocaleString('en-US')} events dropped since you opened this
+          page.
         </p>
       </div>
       <div className="lev-col">

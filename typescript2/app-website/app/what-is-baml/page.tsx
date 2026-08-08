@@ -296,7 +296,7 @@ const SECTIONS: Section[] = [
     body: 'Decide for yourself. BAML reads like TypeScript and is already an official language on GitHub, so models should know most of it. We don’t leave the rest up to vibes. We measure how agents write programs: how long it takes, what it costs, how many turns. `baml describe` wasn’t a coincidence. It’s a science.\nAnd remember, today is the worst the models will ever be at BAML.',
     id: 'models-write',
     num: 8,
-    readMore: 'agent-tries-baml',
+    readMore: 'Agent tries BAML',
     title: '{elephant} Can models actually write BAML?',
   },
   {
