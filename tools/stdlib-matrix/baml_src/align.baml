@@ -396,11 +396,19 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
                 attempts += 1;
                 let complaints: string[] = [];
                 for (let finding in answer.findings) {
-                    if (!asked.has(finding.ts) || covered.has(finding.ts)) {
-                        // Not asked about here, or already settled by an
-                        // earlier attempt. `apply_findings` refuses the first
-                        // kind too; saying nothing keeps the retry focused on
-                        // what is actually missing.
+                    if (!asked.has(finding.ts)) {
+                        // A symbol this session was not shown. Reported rather
+                        // than dropped: it never reaches `apply_findings`, so
+                        // it would not appear in the refused count either, and
+                        // that count is the only signal that a prompt has begun
+                        // answering questions nobody asked.
+                        report_progress(
+                            `${request.subject}: answered about ${finding.ts}, which it was not shown`,
+                        );
+                        continue;
+                    }
+                    if (covered.has(finding.ts)) {
+                        // Settled by an earlier attempt; the first answer wins.
                         continue;
                     }
                     match (example_error(box, finding)) {
@@ -426,15 +434,8 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
                 if (missing.length() == 0) {
                     answered = true;
                 } else if (attempts >= answer_attempts()) {
-                    // Out of attempts. Whatever was held back for a broken
-                    // example is taken without it: a judgement with no example
-                    // is worth having, one with a broken example is not.
-                    for (let id in missing) {
-                        if let finding: Finding = held.get(id) {
-                            collected.push(without_example(finding));
-                            let _ = covered.set(id, true);
-                        }
-                    }
+                    // Out of attempts. What was held back for a broken example
+                    // is taken below, on the way out.
                     answered = true;
                     failure = "";
                 } else {
@@ -446,6 +447,21 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
             },
         }
         round += 1;
+    }
+
+    // Anything held back for an example that would not compile is taken without
+    // it: a judgement with no example is worth having, one with a broken
+    // example is not. Drained here rather than where the attempts run out,
+    // because the loop can also end by running out of *rounds* — and on that
+    // path the finding was being discarded entirely, which is the opposite of
+    // the rule it was meant to follow.
+    for (let id in request.ts_ids) {
+        if (!covered.has(id)) {
+            if let finding: Finding = held.get(id) {
+                collected.push(without_example(finding));
+                let _ = covered.set(id, true);
+            }
+        }
     }
 
     if (!answered && collected.length() == 0) {
@@ -726,21 +742,43 @@ function baml_finding_names(matrix: SymbolMatrix) -> map<string, string> {
     let names: map<string, string> = {};
     for (let symbol in matrix.baml) {
         let _ = names.set(symbol.id, symbol.id);
-        let _ = names.set(strip_kind_prefix(symbol.id), symbol.id);
+    }
+    // Paths first, then displays, so a path always wins a name a display also
+    // wants. Both go through the same rule: a name two symbols answer to is
+    // recorded as ambiguous rather than resolved.
+    for (let symbol in matrix.baml) {
+        claim_name(names, strip_kind_prefix(symbol.id), symbol.id);
     }
     for (let symbol in matrix.baml) {
-        match (names.get(symbol.display)) {
-            null => {
-                let _ = names.set(symbol.display, symbol.id);
-            },
-            let existing: string => {
-                if (existing != symbol.id) {
-                    let _ = names.set(symbol.display, "");
-                }
-            },
-        }
+        claim_name(names, symbol.display, symbol.id);
     }
     names
+}
+
+/// Records a name for a symbol, or marks it ambiguous if another already has
+/// it.
+///
+/// Ambiguity is possible for a dotted path as well as for a display, which is
+/// the whole reason the export prefixes its ids by kind: BAML's type and value
+/// namespaces are distinct, so `baml.Foo` can name both a class and a function.
+/// The current standard library has no such pair — but resolving one silently
+/// to whichever was iterated last would attach a judgement to the wrong symbol,
+/// and that is a wrong answer rather than a missing one.
+function claim_name(names: map<string, string>, key: string, id: string) -> null {
+    if (key.length() == 0) {
+        return null;
+    }
+    match (names.get(key)) {
+        null => {
+            let _ = names.set(key, id);
+        },
+        let existing: string => {
+            if (existing != id) {
+                let _ = names.set(key, "");
+            }
+        },
+    }
+    null
 }
 
 /// The id a name refers to, or null when nothing does — or when more than one

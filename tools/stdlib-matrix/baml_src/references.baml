@@ -326,11 +326,24 @@ function ts_name_index(symbols: TsSymbol[]) -> NameIndex {
 /// point at the `Error.message` property.
 function attach_ts_references(symbols: TsSymbol[]) -> null {
     let index = ts_name_index(symbols);
-    let no_scope: string[] = [];
     let nothing: string[] = [];
     for (let symbol in symbols) {
         let texts: string[] = [symbol.signature];
-        symbol.references = resolve_all(index, texts, no_scope, nothing, symbol.id);
+        // The module is the scope. A node signature writes `Readable`, not
+        // `node:stream.Readable`, and only global containers claim a bare name
+        // — so without this, none of the 59 node containers was reachable from
+        // any signature and every node symbol's `references` came back empty.
+        // That is not a cosmetic gap: `is_fresh` reads references to decide
+        // whether a judgement may be carried, so a node symbol looked fresh
+        // even when a type it names had changed.
+        //
+        // `resolve_reference` walks the scope by joining with a dot, so this
+        // tries `node:stream.Readable` before falling back to the bare name.
+        // Cross-module bare matching is not reintroduced: `(globals)` and
+        // `(web)` prefixes match nothing, and those containers are found by the
+        // bare-name fallback they already own.
+        let scope: string[] = [symbol.symbol.at(0) ?? ""];
+        symbol.references = resolve_all(index, texts, scope, nothing, symbol.id);
     }
     null
 }

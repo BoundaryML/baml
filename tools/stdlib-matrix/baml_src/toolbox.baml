@@ -351,9 +351,19 @@ function load_skill(cache_file: string) -> string {
     };
 }
 
+/// How long to wait for the skill before giving up on the network.
+///
+/// `baml.http.fetch` imposes no deadline by default, which makes the cached
+/// fallback in `load_skill` unreachable: a host that accepts the connection and
+/// then says nothing never produces an error to fall back *from*, so the run
+/// hangs before it has spent anything.
+function skill_timeout() -> baml.time.Duration {
+    baml.time.Duration.from_seconds(30)
+}
+
 /// The skill, or an empty string if it could not be fetched.
 function fetch_skill() -> string {
-    let response = baml.http.fetch(skill_url()) catch_all (_) {
+    let response = baml.http.fetch(skill_url(), timeout = skill_timeout()) catch_all (_) {
         _ => {
             return "";
         },

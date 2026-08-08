@@ -315,35 +315,20 @@ export class MatrixSymbolElement extends LitElement {
           this.counterparts.length > 0
             ? html`
               ${SECTION(other)}
-              ${this.counterparts.flatMap((link) =>
-                this.facing(link).map((id) => this.counterpart(link, id)),
-              )}
+              ${this.counterparts.map((link) => this.judgement(link))}
             `
             : nothing
         }
-        ${this.unnecessary.map((judgement) => this.unneeded(judgement))}
+        ${
+          this.unnecessary.length > 0
+            ? html`
+              ${SECTION('unnecessary in BAML')}
+              ${this.unnecessary.map((link) => this.judgement(link))}
+            `
+            : nothing
+        }
         ${this.absences.map((judgement) => this.absence(judgement, other))}
       </div>
-    `;
-  }
-
-  /**
-   * A symbol BAML does not need, and why.
-   *
-   * The reasoning is the whole content here — more so than for an absence,
-   * because the reader's next question is always "then how do I do it". Often
-   * the answer is not a symbol at all but a piece of syntax, which is what the
-   * example is for: `Array.isArray` has no counterpart to link to, and
-   * `foo is int[]` is the answer.
-   */
-  private unneeded(judgement: Judgement): TemplateResult {
-    return html`
-      ${SECTION('unnecessary in BAML')}
-      <p class="my-1 text-sm text-zinc-600 dark:text-zinc-400">
-        ${judgement.reason ?? 'no reason recorded'}
-      </p>
-      ${this.example(judgement)}
-      ${this.provenance(judgement)}
     `;
   }
 
@@ -402,7 +387,7 @@ export class MatrixSymbolElement extends LitElement {
           </div>`
           : nothing
       }
-      ${this.provenance(judgement)}
+      ${this.example(judgement)} ${this.provenance(judgement)}
     `;
   }
 
@@ -433,25 +418,38 @@ export class MatrixSymbolElement extends LitElement {
     return this.side === 'baml' ? [link.ts] : link.baml;
   }
 
-  private counterpart(
-    link: Judgement,
-    wanted: string,
-  ): TemplateResult | typeof nothing {
+  /**
+   * One judgement: everything it points at, then why — each said once.
+   *
+   * Structured around the judgement rather than around its endpoints, because
+   * the reasoning belongs to the judgement. Rendering per endpoint repeated the
+   * reason, the example and the provenance once per symbol named, which for the
+   * 173 judgements naming more than one read as several separate findings that
+   * happened to agree.
+   */
+  private judgement(link: Judgement): TemplateResult {
     const otherSide: Side = this.side === 'baml' ? 'ts' : 'baml';
-    // A judgement names its ends by id; the views address rows by index.
     const symbols: Array<BamlSymbol | TsSymbol> =
       otherSide === 'ts' ? this.matrix.ts : this.matrix.baml;
-    const index = symbols.findIndex((candidate) => candidate.id === wanted);
-    const symbol = symbols[index];
-    if (!symbol) return nothing;
+    const found = this.facing(link)
+      .map((wanted) =>
+        symbols.findIndex((candidate) => candidate.id === wanted),
+      )
+      .filter((index) => index >= 0);
     return html`
       <div class="my-1">
-        <div class="font-mono text-[0.8rem]">
-          ${this.crossLink(otherSide, index, symbol.display)}
-        </div>
-        <div class="font-mono text-xs text-zinc-500">
-          ${this.signatureOf(symbol, otherSide)}
-        </div>
+        ${found.map((index) => {
+          const symbol = symbols[index];
+          if (!symbol) return nothing;
+          return html`<div class="mb-1">
+            <div class="font-mono text-[0.8rem]">
+              ${this.crossLink(otherSide, index, symbol.display)}
+            </div>
+            <div class="font-mono text-xs text-zinc-500">
+              ${this.signatureOf(symbol, otherSide)}
+            </div>
+          </div>`;
+        })}
         ${
           link.verdict === 'divergent'
             ? html`<p
@@ -464,7 +462,7 @@ export class MatrixSymbolElement extends LitElement {
         }
         ${
           link.reason
-            ? html`<p class="my-1 text-xs text-zinc-500">${link.reason}</p>`
+            ? html`<p class="my-1 text-sm text-zinc-600 dark:text-zinc-400">${link.reason}</p>`
             : nothing
         }
         ${this.example(link)} ${this.provenance(link)}

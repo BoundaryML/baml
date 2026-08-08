@@ -116,7 +116,11 @@ jobs:
           # as --previous or --baseline is a hard error, which would fail the
           # job rather than fall back to a cold run. The format has changed once
           # already (the judgement key moved to the TypeScript side).
-          version="$(jq -r '.format_version // 0' previous.json)"
+          #
+          # `|| echo` rather than a bare `jq`: `set -e` is active, and a body
+          # that is not JSON at all — an error page served with status 200 — is
+          # the same situation as an old format, not a reason to fail.
+          version="$(jq -r '.format_version // 0' previous.json 2>/dev/null || echo unreadable)"
           if [[ "${version}" != "2" ]]; then
             echo "have=false" >> "$GITHUB_OUTPUT"
             echo "::notice::deployed report is format v${version}, this tool writes v2; judging the whole surface"

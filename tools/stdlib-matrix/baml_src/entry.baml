@@ -220,7 +220,12 @@ function dump_tools(
     tool: string = "",
     argument: string = "",
 ) -> ToolReport {
-    let box = build_toolbox(repo_root, type_system_file, baml_bin, "", scratch_root);
+    // Loaded once and given to the toolbox, exactly as a real run does. Not
+    // tolerated when it fails: the skill is what a session is told BAML *is*,
+    // and inspecting the tools against a toolbox that never got it would be
+    // inspecting something other than what runs.
+    let skill = load_skill(skill_cache);
+    let box = build_toolbox(repo_root, type_system_file, baml_bin, skill, scratch_root);
     let answers: string[] = [];
     if (tool.length() > 0) {
         answers.push(run_tool(box, tool, argument));
@@ -236,11 +241,7 @@ function dump_tools(
         answers.push(run_tool(box, "docs", "Pattern Matching"));
         answers.push(run_tool(box, "invented", "anything"));
     }
-    ToolReport {
-        doc_sections: box.doc_headings,
-        skill_bytes: load_skill(skill_cache).length(),
-        answers: answers,
-    }
+    ToolReport { doc_sections: box.doc_headings, skill_bytes: box.skill.length(), answers: answers }
 }
 
 /// What the sessions would be asked, without asking. Inspection only — this is
@@ -263,6 +264,8 @@ function dump_plan(
     let queued = 0;
     let largest = "";
     let most = 0;
+    // The first matching session; a chunked container has several and they
+    // differ only in which symbols they carry.
     let sample = "";
     for (let request in requests) {
         queued += request.ts_lines.length();
@@ -270,7 +273,10 @@ function dump_plan(
             most = request.ts_lines.length();
             largest = `${request.subject} (${request.ts_lines.length()} symbols)`;
         }
-        if (request.subject == subject) {
+        // The same rule `--only` uses, so the two select sessions alike. Equality
+        // was wrong for exactly the default: `(globals).Date` chunks into
+        // `(globals).Date (part 1 of 2)` and matched nothing.
+        if (request.subject.to_lower_case().includes(subject.trim().to_lower_case())) {
             // The skill is fetched at run time and is the same for every
             // session, so it is left out here: what changes between runs, and
             // what a review is actually looking at, is the rest.

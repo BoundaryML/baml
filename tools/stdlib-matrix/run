@@ -170,6 +170,10 @@ if ((review_all == 1)); then
         exit 2
     fi
 fi
+if [[ -n "${only}" ]] && ((use_llm == 0)); then
+    echo "stdlib-matrix: --only selects which sessions to judge, so it needs --llm" >&2
+    exit 2
+fi
 if [[ -n "${concurrency}" ]]; then
     if [[ ! "${concurrency}" =~ ^[1-9][0-9]*$ ]]; then
         echo "stdlib-matrix: --concurrency takes a positive integer, got ${concurrency}" >&2

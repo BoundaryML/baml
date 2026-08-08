@@ -134,11 +134,13 @@ fn candidates(export: &PackageExport) -> Vec<Candidate> {
         if item.synthetic {
             continue;
         }
-        let mut path = item.namespace.join(".");
-        if !path.is_empty() {
-            path.push('.');
-        }
-        path.push_str(&item.name);
+        // The package is not part of `item.namespace`, and without it a result
+        // reads `sys.exec`: ambiguous across packages, and not the name the id
+        // beside it uses or the one `describe` accepts.
+        let mut segments: Vec<&str> = vec![export.package.as_str()];
+        segments.extend(item.namespace.iter().map(String::as_str));
+        segments.push(&item.name);
+        let path = segments.join(".");
 
         let member =
             |name: &str, id: &str, kind: &'static str, docstring: Option<&String>| Candidate {
