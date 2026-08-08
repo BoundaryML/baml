@@ -623,8 +623,7 @@ fn lower_session_submission(
         .children()
         .filter(|node| {
             declaration_kind(node.kind())
-                && (node.kind() == SyntaxKind::IMPLEMENTS_FOR
-                    || declaration_name(node).is_some())
+                && (node.kind() == SyntaxKind::IMPLEMENTS_FOR || declaration_name(node).is_some())
                 && !(node.kind() == SyntaxKind::TYPE_ALIAS_DEF
                     && runtime_type_binding_parts(&node.text().to_string()).is_some())
         })
