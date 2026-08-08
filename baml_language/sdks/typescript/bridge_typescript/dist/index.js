@@ -26,7 +26,7 @@ export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 // Generic-type spelling for `$types` bindings on generic classes / calls.
-export { Never, lowerTypeToWireTy } from './wire_ty.js';
+export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the

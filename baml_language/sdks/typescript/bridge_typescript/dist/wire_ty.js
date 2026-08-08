@@ -5,28 +5,82 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-// wire_ty.ts — lower a host-supplied type token to a wire `Ty` (baml_type.proto).
-//
-// The Node analog of `python_type_to_wire_ty` / `_fill_wire_ty` in
-// sdks/python/src/baml_bridge/proto.py. Python recovers a generic instance's
-// concrete type args from Pydantic's runtime generic metadata and lowers
-// Python `type` objects (`int`, `str`, `Box[int]`, …) to a wire `Ty`. TypeScript
-// erases generics at runtime, so there is no metadata to recover and no `type`
-// object to inspect — the host must spell the binding explicitly. A generic
-// class instance carries its bindings in a `$types` field, and a generic
-// function/method call carries them in a `$types` call option; both hold
-// {@link BamlType} tokens that this module lowers.
-//
-// `undefined` / `null` (an absent binding) lowers to the unknown/top type —
-// the engine treats it as a wildcard, matching Python's `_fill_wire_ty(None)`.
+// Host type tokens and opaque BEP-066 reflected type definitions.
 import { baml_bridge } from './proto/baml_cffi.js';
 import { getTypeMap } from './typemap.js';
 const TyPrimitiveKind = baml_bridge.cffi.v1.BamlTyPrimitiveKind;
-/**
- * The bottom type (BAML `never`). Pass as a `$types` binding to bind a TypeVar
- * to `never`, mirroring Python's `_types={"T": Never}`.
- */
+const BamlTyDefMessage = baml_bridge.cffi.v1.BamlTyDef;
+/** The bottom type (BAML `never`). */
 export const Never = Symbol('baml.Never');
+/** Internal row consumed by the generated `reflect.class.new` binding. */
+export class BamlTypeMetadataRow {
+    ty;
+    alias;
+    description;
+    docstring;
+    other;
+    constructor(ty, alias, description, docstring, other = {}) {
+        this.ty = ty;
+        this.alias = alias;
+        this.description = description;
+        this.docstring = docstring;
+        this.other = other;
+    }
+}
+function cloneDefinition(definition) {
+    const message = BamlTyDefMessage.fromObject(definition);
+    return BamlTyDefMessage.decode(BamlTyDefMessage.encode(message).finish());
+}
+/**
+ * Opaque, process-local handle for a reflected BAML definition. Only the
+ * composing operations required by H-11 are public. Each wire occurrence
+ * carries a copied definition graph; JavaScript identity is never type
+ * identity.
+ */
+export class BamlType {
+    #definition;
+    constructor(definition) {
+        this.#definition = cloneDefinition(definition);
+    }
+    /** @internal Bridge/codegen hook; not a host inspection surface. */
+    static _fromWire(definition) {
+        return new BamlType(definition);
+    }
+    /** @internal Bridge hook returning a fresh protobuf graph. */
+    _wireCopy() {
+        return cloneDefinition(this.#definition);
+    }
+    static from(token) {
+        return token instanceof BamlType
+            ? token
+            : new BamlType({ root: lowerTypeToWireTy(token) });
+    }
+    meta(options = {}) {
+        return new BamlTypeMetadataRow(this, options.alias ?? null, options.description ?? null, options.docstring ?? null, { ...(options.other ?? {}) });
+    }
+    array() {
+        const definition = this._wireCopy();
+        definition.root = { list: { item: definition.root } };
+        return new BamlType(definition);
+    }
+    optional() {
+        const definition = this._wireCopy();
+        definition.root = { optional: { inner: definition.root } };
+        return new BamlType(definition);
+    }
+    toJSON() {
+        throw new TypeError('BamlType values are runtime handles and cannot be serialized');
+    }
+    toString() {
+        return 'BamlType(<opaque>)';
+    }
+}
+/** Runtime member installed as generated `reflect.type`. */
+export const reflectType = Object.freeze({
+    of(token) {
+        return BamlType.from(token);
+    },
+});
 const PRIMITIVE_KIND = {
     int: TyPrimitiveKind.BAML_TY_PRIMITIVE_INT,
     float: TyPrimitiveKind.BAML_TY_PRIMITIVE_FLOAT,
@@ -36,53 +90,67 @@ const PRIMITIVE_KIND = {
     bytes: TyPrimitiveKind.BAML_TY_PRIMITIVE_BYTES,
     bigint: TyPrimitiveKind.BAML_TY_PRIMITIVE_BIGINT,
 };
-/**
- * Lower a {@link BamlType} token to a wire `BamlTy` (an `IBamlTy` plain object the
- * protobufjs `fromObject` path accepts). Mirrors `_fill_wire_ty`: an
- * unrecognized or absent token leaves the unknown/top type, which binds
- * nothing.
- */
+function unsupported(token) {
+    const rendered = typeof token === 'function'
+        ? token.name || '<anonymous constructor>'
+        : Object.prototype.toString.call(token);
+    throw new TypeError(`unsupported TypeScript type token: ${rendered}`);
+}
+/** Lower a statically-known token to a sparse wire `BamlTy`. */
 export function lowerTypeToWireTy(token) {
-    // Absent binding → unknown/top (matches Python's `_fill_wire_ty(None)`).
-    if (token === null || token === undefined) {
-        return { unknown: {} };
-    }
-    // Bottom type.
-    if (token === Never) {
+    if (token === Never)
         return { never: {} };
-    }
-    // Primitive spelling.
+    if (token === String)
+        return { primitive: { kind: PRIMITIVE_KIND.string } };
+    if (token === Boolean)
+        return { primitive: { kind: PRIMITIVE_KIND.bool } };
+    if (token === BigInt)
+        return { primitive: { kind: PRIMITIVE_KIND.bigint } };
+    if (token === Uint8Array)
+        return { primitive: { kind: PRIMITIVE_KIND.bytes } };
     if (typeof token === 'string') {
         const kind = PRIMITIVE_KIND[token];
-        if (kind !== undefined) {
+        if (kind !== undefined)
             return { primitive: { kind } };
-        }
-        return { unknown: {} };
+        return unsupported(token);
     }
-    // A bare class constructor → that class, no concrete args.
     if (typeof token === 'function') {
-        return classWireTy(token, []);
+        return namedWireTy(token, []);
     }
-    if (typeof token === 'object') {
-        if ('class' in token) {
-            return classWireTy(token.class, token.args ?? []);
+    if (token !== null && typeof token === 'object') {
+        const shape = token;
+        if ('__baml_interface_fqn__' in shape) {
+            const name = shape.__baml_interface_fqn__;
+            if (typeof name !== 'string' || !name)
+                return unsupported(token);
+            return { interface: { name } };
         }
-        if ('list' in token) {
-            return { list: { item: lowerTypeToWireTy(token.list) } };
+        if ('class' in shape) {
+            const args = shape.args === undefined ? [] : shape.args;
+            if (!Array.isArray(args))
+                return unsupported(token);
+            return namedWireTy(shape.class, args);
         }
-        if ('map' in token) {
-            const [k, v] = token.map;
-            return { map: { key: lowerTypeToWireTy(k), value: lowerTypeToWireTy(v) } };
+        if ('list' in shape)
+            return { list: { item: lowerTypeToWireTy(shape.list) } };
+        if ('map' in shape) {
+            if (!Array.isArray(shape.map) || shape.map.length !== 2)
+                return unsupported(token);
+            const [key, value] = shape.map;
+            return { map: { key: lowerTypeToWireTy(key), value: lowerTypeToWireTy(value) } };
         }
-        if ('optional' in token) {
-            return { optional: { inner: lowerTypeToWireTy(token.optional) } };
+        if ('optional' in shape)
+            return { optional: { inner: lowerTypeToWireTy(shape.optional) } };
+        if ('union' in shape) {
+            if (!Array.isArray(shape.union))
+                return unsupported(token);
+            return { union: { options: shape.union.map(lowerTypeToWireTy) } };
         }
-        if ('union' in token) {
-            return { union: { options: token.union.map(lowerTypeToWireTy) } };
-        }
+        const fqn = getTypeMap().jsTypeToBamlType(token);
+        if (fqn)
+            return { enum: { name: fqn } };
     }
-    // Unrecognized: leave as unknown/top (binds nothing).
-    return { unknown: {} };
+    return unsupported(token);
 }
 const TY_PRIMITIVE_TOKEN = {
     [TyPrimitiveKind.BAML_TY_PRIMITIVE_INT]: 'int',
@@ -93,55 +161,55 @@ const TY_PRIMITIVE_TOKEN = {
     [TyPrimitiveKind.BAML_TY_PRIMITIVE_BYTES]: 'bytes',
     [TyPrimitiveKind.BAML_TY_PRIMITIVE_BIGINT]: 'bigint',
 };
-/**
- * Decode a wire `Ty` (baml_type.proto) back to a {@link BamlType} token — the
- * exact inverse of {@link lowerTypeToWireTy}, used to repopulate a generic
- * instance's `$types` field on decode. Mirrors the engine's
- * `ty_encode::runtime_ty_to_proto_ty` and Python's `_ty_to_python_type`.
- * Positions with no concrete JS binding (a structural union, an enum, a type
- * variable, an opaque/runtime-only type) decode to `undefined`, i.e. an unbound
- * wildcard.
- */
-export function outboundTyToBamlType(ty) {
+/** Decode the sparse value-level type channel on generated class instances. */
+export function outboundTyToBamlTypeToken(ty) {
     if (!ty)
         return undefined;
-    if (ty.primitive) {
-        return TY_PRIMITIVE_TOKEN[ty.primitive.kind ?? -1] ?? undefined;
+    if (ty.primitive)
+        return TY_PRIMITIVE_TOKEN[ty.primitive.kind ?? -1];
+    if (ty.list) {
+        const item = outboundTyToBamlTypeToken(ty.list.item);
+        return item === undefined ? undefined : { list: item };
     }
-    if (ty.list)
-        return { list: outboundTyToBamlType(ty.list.item) };
     if (ty.map) {
-        return { map: [outboundTyToBamlType(ty.map.key), outboundTyToBamlType(ty.map.value)] };
+        const key = outboundTyToBamlTypeToken(ty.map.key);
+        const value = outboundTyToBamlTypeToken(ty.map.value);
+        return key === undefined || value === undefined ? undefined : { map: [key, value] };
     }
-    if (ty.optional)
-        return { optional: outboundTyToBamlType(ty.optional.inner) };
+    if (ty.optional) {
+        const inner = outboundTyToBamlTypeToken(ty.optional.inner);
+        return inner === undefined ? undefined : { optional: inner };
+    }
     if (ty.classTy) {
-        const fqn = ty.classTy.name ?? '';
-        const args = (ty.classTy.typeArgs ?? []).map((a) => outboundTyToBamlType(a));
-        let ctor;
-        try {
-            ctor = getTypeMap().getClass(fqn);
-        }
-        catch {
-            ctor = undefined; // unmapped FQN — leave unbound
-        }
-        if (!ctor)
+        const token = resolveNamedToken(ty.classTy.name ?? '');
+        if (typeof token !== 'function')
             return undefined;
-        return args.length ? { class: ctor, args } : ctor;
+        const args = (ty.classTy.typeArgs ?? []).map(outboundTyToBamlTypeToken);
+        if (args.some((arg) => arg === undefined))
+            return undefined;
+        return args.length ? { class: token, args: args } : token;
     }
-    // union / enum / literal / media / type_var / unknown / any other →
-    // unbound wildcard (a structural union is unbound for `class<args>`).
+    if (ty.enum)
+        return resolveNamedToken(ty.enum.name ?? '');
     return undefined;
 }
-/** Build a `class_ty` wire `Ty` for a codegen class constructor and its
- * concrete generic args. The FQN comes from the typemap reverse map; an
- * unmapped constructor lowers to unknown so it can't manufacture a bogus
- * class reference. */
-function classWireTy(ctor, args) {
-    const fqn = getTypeMap().jsTypeToBamlType(ctor);
-    if (!fqn) {
-        return { unknown: {} };
+function resolveNamedToken(fqn) {
+    try {
+        return getTypeMap().getClass(fqn);
     }
+    catch {
+        try {
+            return getTypeMap().getEnum(fqn);
+        }
+        catch {
+            return undefined;
+        }
+    }
+}
+function namedWireTy(token, args) {
+    const fqn = getTypeMap().jsTypeToBamlType(token);
+    if (!fqn)
+        return unsupported(token);
     return { classTy: { name: fqn, typeArgs: args.map(lowerTypeToWireTy) } };
 }
 //# sourceMappingURL=wire_ty.js.map
