@@ -28,7 +28,16 @@ pub struct Package {
     /// May include implementations for interfaces in the package's dependencies.
     /// key references an `Object::Interface` and each value is an `Object::ImplRule`
     pub impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
+    /// Exported free functions, keyed by their package-local name. This is the
+    /// runtime projection of the package surface, shared by static and dynamic
+    /// packages so reflection never has to deserialize compiler IR.
+    pub functions: IndexMap<LocalName, HeapPtr>,
     pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// Enriched, source-less compiler interface for mounting this package under
+    /// an alias in a later `Package.compile` call.
+    pub interface_blob: Vec<u8>,
+    /// Compiler-synthesized test registrar for this package, when it has tests.
+    pub test_init: Option<HeapPtr>,
     /// Present only for a package produced by `reflect.Package.compile`.
     #[borsh(skip)]
     pub runtime: Option<Box<RuntimePackage>>,
@@ -42,14 +51,10 @@ pub struct RuntimePackage {
     pub objects: Box<[HeapPtr]>,
     /// Package-local global slots, mutable only while `$init` is running.
     pub globals: Box<[AtomicValueSlot]>,
-    /// Named functions defined by this package.
-    pub functions: IndexMap<String, HeapPtr>,
     /// Fully-qualified function/let name to this image's local global slot.
     pub global_names: IndexMap<String, usize>,
     /// Created-once reflected class type values, keyed by source-visible FQN.
     pub class_types: IndexMap<String, HeapPtr>,
-    /// Source-less check artifact used when this package is mounted later.
-    pub interface_blob: Vec<u8>,
     /// Compiler warnings retained on a successful package.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
     /// Runtime package objects imported by this image.
@@ -82,10 +87,16 @@ pub struct ProgramPackage {
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
     pub interfaces: IndexMap<LocalName, ObjectIndex>,
+    /// Exported free functions only (methods and compiler helpers are excluded).
+    pub functions: IndexMap<LocalName, ObjectIndex>,
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).
     pub impl_rules: IndexMap<ObjectIndex, Vec<ProgramImplRule>>,
     pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
+    pub interface_blob: Vec<u8>,
+    /// The package's synthesized `$init_test`, if present.
+    pub test_init: Option<ObjectIndex>,
 }
 
 impl ProgramPackage {
@@ -107,6 +118,7 @@ impl ProgramPackage {
         self.enums.sort_keys();
         self.recursive_type_aliases.sort_keys();
         self.interfaces.sort_keys();
+        self.functions.sort_keys();
         self.impl_rules.sort_keys();
         for rules in self.impl_rules.values_mut() {
             rules.sort_by_cached_key(|rule| {

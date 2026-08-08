@@ -867,6 +867,11 @@ pub enum Instruction {
     /// Appended to preserve the serialized discriminants of existing
     /// instructions.
     RuntimeIsType,
+
+    /// Reify the package selected lexically by the compiler. The operand is a
+    /// constant-pool string naming the static package; a dynamic function's
+    /// runtime owner takes precedence.
+    LoadCurrentPackage(usize),
 }
 
 /// Compact bytecode opcodes.
@@ -1053,6 +1058,9 @@ pub enum OpCode {
 
     // Runtime nominal identity test, appended to preserve discriminants.
     RuntimeIsType,
+
+    // Lexical Package.current(): u32 constant-pool string index.
+    LoadCurrentPackage,
 }
 
 impl OpCode {
@@ -1178,6 +1186,8 @@ impl OpCode {
             | Self::VirtualStoreField
             | Self::VirtualCallWithRuntimeId => 5,
 
+            Self::LoadCurrentPackage => 5,
+
             // 3-byte: opcode + u16
             Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
 
@@ -1219,6 +1229,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::RuntimeIsType as u8 => Ok(Self::RuntimeIsType),
+            x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
@@ -1357,6 +1368,7 @@ impl std::fmt::Display for OpCode {
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
             Self::RuntimeIsType => "RUNTIME_IS_TYPE",
+            Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1674,6 +1686,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::RuntimeIsType => f.write_str("RUNTIME_IS_TYPE"),
+            Instruction::LoadCurrentPackage(i) => write!(f, "LOAD_CURRENT_PACKAGE {i}"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
                 write!(f, "NARROW_BIND {ty} {destination}")
@@ -2198,6 +2211,7 @@ impl Bytecode {
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
+                | Instruction::LoadCurrentPackage(v)
                 | Instruction::LoadDeref(v)
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
@@ -2554,6 +2568,7 @@ impl Bytecode {
             Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
+            Instruction::LoadCurrentPackage(_) => OpCode::LoadCurrentPackage,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,

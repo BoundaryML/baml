@@ -1449,6 +1449,11 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn load_current_package(&mut self, _package: &str) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
+
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error> {
         self.make_closure_with_type_args(lambda_idx, capture_count, 0)
     }

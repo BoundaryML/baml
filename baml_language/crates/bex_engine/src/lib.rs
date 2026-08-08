@@ -6004,32 +6004,29 @@ impl BexEngine {
                     message: format!("Package.compile dependency `{alias}` must be a Package"),
                 });
             };
-            let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("Package.compile dependency `{alias}` must be a Package"),
-                });
-            };
-            let inner = wrapper.load_field(0);
-            let Some(package_ptr) = inner.as_object_ptr() else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("Package.compile dependency `{alias}` is not initialized"),
-                });
+            let package_ptr = match vm.get_object(wrapper_ptr) {
+                Object::Package(_) => wrapper_ptr,
+                Object::Instance(wrapper) => {
+                    wrapper.load_field(0).as_object_ptr().ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Package.compile dependency `{alias}` is not initialized"
+                            ),
+                        }
+                    })?
+                }
+                _ => {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("Package.compile dependency `{alias}` must be a Package"),
+                    });
+                }
             };
             let Object::Package(package) = vm.get_object(package_ptr) else {
                 return Err(EngineError::TypeMismatch {
                     message: format!("Package.compile dependency `{alias}` is not initialized"),
                 });
             };
-            let interface = package
-                .runtime
-                .as_ref()
-                .map(|runtime| runtime.interface_blob.clone())
-                .ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!(
-                        "Package.compile dependency `{alias}` is not a runtime package"
-                    ),
-                })?;
-            packages.insert(alias.to_string(), interface);
+            packages.insert(alias.to_string(), package.interface_blob.clone());
         }
         Ok(bex_vm_types::RuntimeCompileRequest { files, packages })
     }

@@ -550,7 +550,7 @@ fn exported_function<'db>(
         params: sig.params.clone(),
         return_type: sig.return_type.clone(),
         declared_throws: sig.declared_throws.clone(),
-        callable_throws: crate::callable::callable_throws(db, func_loc).clone(),
+        callable_throws: canonical_exported_throws(crate::callable::callable_throws(db, func_loc)),
         generic_param_bounds: sig
             .generic_params
             .iter()
@@ -560,6 +560,35 @@ fn exported_function<'db>(
         builtin_kind: sig.builtin_kind,
         interface_target: method_implements_target_qtn(db, func_loc),
         callable_fqn: callable_fqn_of(db, func_loc),
+    }
+}
+
+/// Remove the inference-only `Ty::Unknown` cycle sentinel from an exported
+/// throws contract.
+///
+/// Throw inference computes a least fixpoint: when a recursive callable has no
+/// other throw fact, its effect is `never`; inside a union, the recovery
+/// sentinel contributes no fact. Salsa may expose that cycle seed through an
+/// already-memoized inference query depending on which checking path demanded
+/// the recursive method first. It must not cross the package-artifact boundary.
+/// Source-written `throws unknown` is `Ty::BuiltinUnknown` and is deliberately
+/// preserved here.
+fn canonical_exported_throws(throws: &Ty) -> Ty {
+    match throws {
+        Ty::Unknown { attr } => Ty::Never { attr: attr.clone() },
+        Ty::Union(members, attr) => {
+            let mut members = members
+                .iter()
+                .filter(|member| !matches!(member, Ty::Unknown { .. }))
+                .cloned()
+                .collect::<Vec<_>>();
+            match members.len() {
+                0 => Ty::Never { attr: attr.clone() },
+                1 => members.pop().expect("one throws union member"),
+                _ => Ty::Union(members, attr.clone()),
+            }
+        }
+        throws => throws.clone(),
     }
 }
 
@@ -886,7 +915,8 @@ fn lower_interface_export<'db>(
                 .is_some();
         // A default method has a body: pair the symbolic signature with the
         // same effective-throws oracle every exported function carries.
-        let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
+        let callable_throws =
+            canonical_exported_throws(crate::callable::callable_throws(db, func_loc));
         let builtin_kind = crate::callable::function_signature_ty(db, func_loc).builtin_kind;
         if let Some(exported) = exported_interface_method(
             &qtn,
@@ -1308,7 +1338,9 @@ fn exported_impl_method<'db>(
             // unwritten — `lower_signature`'s `Missing` convention); the
             // effective contract is the body-inferred oracle, as everywhere.
             declared_throws: declared_throws_written.then(|| (*throws).clone()),
-            callable_throws: crate::callable::callable_throws(db, method_loc).clone(),
+            callable_throws: canonical_exported_throws(crate::callable::callable_throws(
+                db, method_loc,
+            )),
             generic_params,
             generic_param_bounds,
             builtin_kind,

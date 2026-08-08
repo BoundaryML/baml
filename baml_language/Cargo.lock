@@ -1099,6 +1099,7 @@ dependencies = [
  "baml_exec",
  "bex_engine",
  "bex_events",
+ "bex_project",
  "borsh",
  "libsui",
  "sys_native",

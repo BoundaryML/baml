@@ -100,6 +100,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             runtime_type: Some(RuntimeTypeProvenance {
                 mint,
                 defs: child_defs.clone(),
+                owner: bex_vm_types::HeapPtr::null(),
             }),
         })));
         let ty = baml_type::RealizedTy::Class(
@@ -289,6 +290,7 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
             runtime_type: Some(RuntimeTypeProvenance {
                 mint,
                 defs: DynTypeDefs::default(),
+                owner: bex_vm_types::HeapPtr::null(),
             }),
         })));
         let ty = baml_type::RealizedTy::Enum(type_name.clone(), baml_type::TyAttr::default());
@@ -603,11 +605,11 @@ fn is_baml_identifier(value: &str) -> bool {
         && segments.all(|part| segment(part, true))
 }
 
-fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {
+pub(super) fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {
     Diagnostic::error(id, message).with_phase(DiagnosticPhase::Hir)
 }
 
-fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
+pub(super) fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
     let message = diagnostics
         .first()
         .map_or("runtime schema validation failed", |diagnostic| {

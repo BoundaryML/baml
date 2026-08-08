@@ -607,6 +607,9 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }
+        Rvalue::CurrentPackage(package) => {
+            write!(f, "current_package({package})")
+        }
         Rvalue::MakeGenericFunction {
             item,
             type_arg_templates,

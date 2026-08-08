@@ -667,13 +667,14 @@ impl BexHeap {
                 worklist.extend(package.classes.values().copied());
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
+                worklist.extend(package.functions.values().copied());
+                worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
                     worklist.push(*interface);
                     worklist.extend(rules.iter().copied());
                 }
                 if let Some(runtime) = &package.runtime {
                     worklist.extend(runtime.objects.iter().copied());
-                    worklist.extend(runtime.functions.values().copied());
                     worklist.extend(runtime.class_types.values().copied());
                     worklist.extend(runtime.dependencies.iter().copied());
                     worklist.extend(runtime.dependency_names.values().copied());
@@ -712,6 +713,9 @@ impl BexHeap {
             }
             Object::Class(class) => {
                 if let Some(runtime) = &class.runtime_type {
+                    if !runtime.owner.as_ptr().is_null() {
+                        worklist.push(runtime.owner);
+                    }
                     worklist.extend(runtime.defs.classes.values().copied());
                     worklist.extend(runtime.defs.enums.values().copied());
                 }
@@ -720,6 +724,15 @@ impl BexHeap {
                         worklist.extend(type_value.defs().classes.values().copied());
                         worklist.extend(type_value.defs().enums.values().copied());
                     }
+                }
+            }
+            Object::Enum(enm) => {
+                if let Some(runtime) = &enm.runtime_type {
+                    if !runtime.owner.as_ptr().is_null() {
+                        worklist.push(runtime.owner);
+                    }
+                    worklist.extend(runtime.defs.classes.values().copied());
+                    worklist.extend(runtime.defs.enums.values().copied());
                 }
             }
             // Primitives have no references
@@ -733,7 +746,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Enum(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
             | Object::RustData(_)
@@ -874,10 +886,16 @@ impl BexHeap {
                     .values_mut()
                     .chain(package.enums.values_mut())
                     .chain(package.interfaces.values_mut())
+                    .chain(package.functions.values_mut())
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
                         *ptr = new_ptr;
                     }
+                }
+                if let Some(ptr) = &mut package.test_init
+                    && let Some(&new_ptr) = forwarding.get(ptr)
+                {
+                    *ptr = new_ptr;
                 }
                 let old_rules = std::mem::take(&mut package.impl_rules);
                 package.impl_rules = old_rules
@@ -898,11 +916,6 @@ impl BexHeap {
                         }
                     }
                     for ptr in runtime.class_types.values_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
-                    for ptr in runtime.functions.values_mut() {
                         if let Some(&new_ptr) = forwarding.get(ptr) {
                             *ptr = new_ptr;
                         }
@@ -957,6 +970,10 @@ impl BexHeap {
             }
             Object::Class(class) => {
                 if let Some(runtime) = &mut class.runtime_type {
+                    runtime.owner = forwarding
+                        .get(&runtime.owner)
+                        .copied()
+                        .unwrap_or(runtime.owner);
                     for ptr in runtime.defs.classes.values_mut() {
                         *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
                     }
@@ -976,6 +993,20 @@ impl BexHeap {
                     }
                 }
             }
+            Object::Enum(enm) => {
+                if let Some(runtime) = &mut enm.runtime_type {
+                    runtime.owner = forwarding
+                        .get(&runtime.owner)
+                        .copied()
+                        .unwrap_or(runtime.owner);
+                    for ptr in runtime.defs.classes.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
+                    for ptr in runtime.defs.enums.values_mut() {
+                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
+                    }
+                }
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -985,7 +1016,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Enum(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
             | Object::RustData(_)
@@ -1247,6 +1277,7 @@ impl BexHeap {
                     .values()
                     .chain(package.enums.values())
                     .chain(package.interfaces.values())
+                    .chain(package.functions.values())
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
                 worklist.extend(
@@ -1258,12 +1289,16 @@ impl BexHeap {
                         })
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
+                if let Some(ptr) = package.test_init
+                    && self.generation_of(ptr).is_young()
+                {
+                    worklist.push(ptr);
+                }
                 if let Some(runtime) = &package.runtime {
                     worklist.extend(
                         runtime
                             .objects
                             .iter()
-                            .chain(runtime.functions.values())
                             .chain(runtime.class_types.values())
                             .chain(runtime.dependencies.iter())
                             .chain(runtime.dependency_names.values())
@@ -1324,6 +1359,11 @@ impl BexHeap {
             }
             Object::Class(class) => {
                 if let Some(runtime) = &class.runtime_type {
+                    if !runtime.owner.as_ptr().is_null()
+                        && self.generation_of(runtime.owner).is_young()
+                    {
+                        worklist.push(runtime.owner);
+                    }
                     worklist.extend(
                         runtime
                             .defs
@@ -1348,6 +1388,24 @@ impl BexHeap {
                     }
                 }
             }
+            Object::Enum(enm) => {
+                if let Some(runtime) = &enm.runtime_type {
+                    if !runtime.owner.as_ptr().is_null()
+                        && self.generation_of(runtime.owner).is_young()
+                    {
+                        worklist.push(runtime.owner);
+                    }
+                    worklist.extend(
+                        runtime
+                            .defs
+                            .classes
+                            .values()
+                            .chain(runtime.defs.enums.values())
+                            .copied()
+                            .filter(|ptr| self.generation_of(*ptr).is_young()),
+                    );
+                }
+            }
             // Primitives/leaf variants have no heap references.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -1356,7 +1414,6 @@ impl BexHeap {
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Enum(_)
             | Object::Interface(_)
             | Object::ImplRule(_)
             | Object::RustData(_)
@@ -2781,6 +2838,7 @@ mod tests {
             runtime_type: Some(RuntimeTypeProvenance {
                 mint: MintId::Runtime(42),
                 defs: DynTypeDefs::default(),
+                owner: bex_vm_types::HeapPtr::null(),
             }),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(

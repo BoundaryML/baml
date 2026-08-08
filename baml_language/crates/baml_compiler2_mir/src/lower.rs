@@ -8514,6 +8514,20 @@ impl<'db> LoweringContext<'db> {
             return;
         }
 
+        // `Package.current()` is lexical, like `type.of`: bake the enclosing
+        // package identity at this call site instead of emitting a callable.
+        if matches!(
+            &callee_operand,
+            Operand::Constant(Constant::Function(item))
+                if item.to_string() == "baml.reflect.Package.current"
+        ) {
+            let package = file_package(self.db, self.file).package.to_string();
+            self.builder.assign(dest, Rvalue::CurrentPackage(package));
+            self.builder.goto(target);
+            self.builder.set_current_block(target);
+            return;
+        }
+
         // Check if callee is `.length()` on a container — emit Rvalue::Len instead of Call.
         if let Operand::Constant(Constant::Function(ref item)) = callee_operand {
             let name = item.to_string();

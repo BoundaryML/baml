@@ -914,6 +914,11 @@ pub enum Rvalue {
     /// Emitted by the `type.of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
     LoadType(TyTemplate),
+
+    /// Reify the package lexically enclosing this call site. The package name
+    /// is baked by lowering; dynamically compiled code substitutes its owning
+    /// runtime package at execution.
+    CurrentPackage(String),
 }
 
 /// The kind of aggregate being constructed.

@@ -28,28 +28,30 @@ impl BamlNamespaceType for PackageBamlImpl {
                         class.runtime_type.as_ref().map(|runtime| {
                             let mut defs = runtime.defs.clone();
                             defs.classes.insert(class.name.clone(), definition_ptr);
-                            TypeValue::from_parts_with_defs(
-                                baml_type::RealizedTy::Class(
-                                    class.name.clone(),
-                                    Vec::new(),
-                                    baml_type::TyAttr::default(),
-                                ),
-                                runtime.mint,
-                                defs,
-                            )
+                            let ty = baml_type::RealizedTy::Class(
+                                class.name.clone(),
+                                Vec::new(),
+                                baml_type::TyAttr::default(),
+                            );
+                            if runtime.owner.is_null() {
+                                TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
+                            } else {
+                                TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
+                            }
                         })
                     }
                     Object::Enum(enm) if !is_class => enm.runtime_type.as_ref().map(|runtime| {
                         let mut defs = runtime.defs.clone();
                         defs.enums.insert(enm.name.clone(), definition_ptr);
-                        TypeValue::from_parts_with_defs(
-                            baml_type::RealizedTy::Enum(
-                                enm.name.clone(),
-                                baml_type::TyAttr::default(),
-                            ),
-                            runtime.mint,
-                            defs,
-                        )
+                        let ty = baml_type::RealizedTy::Enum(
+                            enm.name.clone(),
+                            baml_type::TyAttr::default(),
+                        );
+                        if runtime.owner.is_null() {
+                            TypeValue::from_parts_with_defs(ty, runtime.mint, defs)
+                        } else {
+                            TypeValue::runtime_with_defs(ty, runtime.mint, defs, runtime.owner)
+                        }
                     }),
                     _ => None,
                 };
@@ -75,6 +77,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
                 baml_type::TyAttr::default(),
             ),
             type_value.defs().clone(),
+            type_value.owner,
         )
     }
 
@@ -91,6 +94,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
             vm,
             baml_type::RealizedTy::Union(members, baml_type::TyAttr::default()),
             type_value.defs().clone(),
+            type_value.owner,
         )
     }
 
@@ -216,7 +220,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
         let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *other) else {
             return false;
         };
-        resolve::ImplResolver::new(vm).type_implements(
+        resolve::ImplResolver::for_value(vm, *self_value).type_implements(
             &self_ty,
             &iface_name,
             &iface_args,
@@ -252,7 +256,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
         // Materialize the filtered entries first: the resolver holds a shared
         // borrow of the VM, which must end before the TLAB allocations below
         // take unique access.
-        let resolver = resolve::ImplResolver::new(vm);
+        let resolver = resolve::ImplResolver::for_value(vm, *self_value);
         let entries: Vec<_> = resolver
             .implementor_entries(&iface_name)
             .into_iter()
@@ -288,12 +292,15 @@ fn alloc_runtime_type(
     vm: &mut BexVm,
     ty: baml_type::RealizedTy,
     defs: bex_vm_types::types::DynTypeDefs,
+    owner: bex_vm_types::HeapPtr,
 ) -> Value {
     let mint = vm.tlab.heap().mint_runtime_id();
-    Value::object(
-        vm.tlab
-            .alloc_type(TypeValue::from_parts_with_defs(ty, mint, defs)),
-    )
+    let value = if owner.is_null() {
+        TypeValue::from_parts_with_defs(ty, mint, defs)
+    } else {
+        TypeValue::runtime_with_defs(ty, mint, defs, owner)
+    };
+    Value::object(vm.tlab.alloc_type(value))
 }
 
 fn quoted(value: &str) -> String {

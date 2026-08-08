@@ -5394,6 +5394,13 @@ impl<'a> Parser<'a> {
                 | TokenKind::Hash
                 | TokenKind::LParen
                 | TokenKind::RParen
+                // Function types are valid call-site arguments, including
+                // named parameters: `pkg.get_function<(x: Input) -> Output>(...)`.
+                // Keep their punctuation in the generic-vs-comparison
+                // lookahead so the Pratt parser commits to GENERIC_ARGS.
+                | TokenKind::Colon
+                | TokenKind::Arrow
+                | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
                 // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
@@ -6935,6 +6942,11 @@ impl<'a> Parser<'a> {
                 | TokenKind::Hash
                 | TokenKind::LParen
                 | TokenKind::RParen
+                // Function-type arguments such as `(Input) -> Output` (and
+                // their named-parameter form `(x: Input) -> Output`).
+                | TokenKind::Colon
+                | TokenKind::Arrow
+                | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
                 // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
@@ -10783,6 +10795,32 @@ function Demo() -> int {
             text.contains("-1"),
             "expected `-1` inside GENERIC_ARGS, got `{text}`"
         );
+    }
+
+    #[test]
+    fn method_generic_args_accept_function_types() {
+        let source = r#"
+function Demo(pkg: any, state: AgentState) -> AgentAction {
+  let run = pkg.get_function<(AgentState) -> AgentAction>("root.Run");
+  run(state)
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let generic_args = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::GENERIC_ARGS)
+            .expect("expected GENERIC_ARGS on method call");
+        assert!(
+            generic_args
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::FUNCTION_TYPE_PARAM),
+            "expected function type inside method generic arguments"
+        );
+        assert!(generic_args.descendants_with_tokens().any(
+            |element| matches!(element, rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::ARROW)
+        ));
     }
 
     /// Helper: does the parse tree contain a `GENERIC_ARGS` node?

@@ -125,7 +125,7 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::LoadConst(index) => {
+        Instruction::LoadConst(index) | Instruction::LoadCurrentPackage(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))
@@ -366,6 +366,7 @@ const COLUMN_MARGIN: usize = 3;
 fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
         Instruction::LoadConst(_)
+        | Instruction::LoadCurrentPackage(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadVar2(..)
         | Instruction::LoadGlobal(_)
@@ -942,6 +943,10 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("load_type {name}")
         }
+        Instruction::LoadCurrentPackage(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("load_current_package {name}")
+        }
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode
@@ -1355,6 +1360,7 @@ pub fn display_compact_bytecode(
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
+            | OpCode::LoadCurrentPackage
             | OpCode::MakeBoundMethod
             | OpCode::LoadDeref
             | OpCode::StoreDeref

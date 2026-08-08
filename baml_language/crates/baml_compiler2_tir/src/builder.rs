@@ -2558,21 +2558,29 @@ impl<'db> TypeInferenceBuilder<'db> {
         let scope_bounds = self.scope_type_var_bounds();
         let self_ty = self.body_self_ty.clone();
         let suppress_diags = self.is_auto_derived_body;
+        let extraction_contract = self.is_reflect_package_get_function(callee_id);
         for (param_name, type_arg) in declared_params.iter().zip(type_args.iter()) {
             let mut diags = Vec::new();
             let ty = match type_arg {
-                ast::TypeArg::Static(type_arg_expr) => crate::lower_type_expr::lower_type_expr(
-                    type_arg_expr,
-                    &crate::lower_type_expr::ScopeCtx {
+                ast::TypeArg::Static(type_arg_expr) => {
+                    let ctx = crate::lower_type_expr::ScopeCtx {
                         db,
                         package_items: self.package_items,
                         ns_context: &ns,
                         generic_params: &caller_generic_params,
                         bounds: &scope_bounds,
                         self_ty: self_ty.clone(),
-                    },
-                    &mut diags,
-                ),
+                    };
+                    if extraction_contract {
+                        crate::lower_type_expr::lower_extraction_contract_type_expr(
+                            type_arg_expr,
+                            &ctx,
+                            &mut diags,
+                        )
+                    } else {
+                        crate::lower_type_expr::lower_type_expr(type_arg_expr, &ctx, &mut diags)
+                    }
+                }
                 ast::TypeArg::Unreflect(operand) => {
                     self.check_expr(
                         *operand,
@@ -2601,6 +2609,44 @@ impl<'db> TypeInferenceBuilder<'db> {
             bindings.insert(param_name.clone(), ty);
         }
         Some(bindings)
+    }
+
+    /// Whether this callee resolved to the stdlib's exact
+    /// `baml.reflect.Package.get_function` method. The P-7 omitted-throws
+    /// wildcard belongs to that API contract position only; a user method with
+    /// the same short name must retain ordinary E0151 behavior.
+    fn is_reflect_package_get_function(&self, callee_id: ExprId) -> bool {
+        let resolution = self.resolutions.get(&callee_id).or_else(|| {
+            self.path_member_resolutions
+                .get(&callee_id)
+                .and_then(|resolutions| resolutions.last())
+        });
+        let (class_loc, func_loc) = match resolution {
+            Some(
+                crate::inference::MemberResolution::BoundMethod {
+                    class_loc,
+                    func_loc,
+                }
+                | crate::inference::MemberResolution::UnboundMethod {
+                    class_loc,
+                    func_loc,
+                },
+            ) => (*class_loc, *func_loc),
+            _ => return false,
+        };
+        let db = self.context.db();
+        let package = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+        package.package.as_str() == "baml"
+            && package.namespace_path.len() == 1
+            && package.namespace_path[0].as_str() == "reflect"
+            && baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                .name
+                .as_str()
+                == "Package"
+            && baml_compiler2_ppir::item_data::function_data(db, func_loc)
+                .name
+                .as_str()
+                == "get_function"
     }
 
     fn bind_call_args<'a>(

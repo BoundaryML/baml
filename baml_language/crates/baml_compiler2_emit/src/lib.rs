@@ -341,6 +341,67 @@ type IfaceAssocDecls = (
     Vec<(Name, Option<baml_compiler2_tir::ty::Ty>)>,
 );
 
+/// The source-less package surface captured before MIR/codegen starts.
+///
+/// Some interface leaves (notably inferred callable throws) share salsa queries
+/// with function lowering. Capturing this artifact after parallel codegen would
+/// let the order in which those queries were first demanded affect which cached
+/// recovery result gets serialized. Materialize it once, serially, at the emit
+/// boundary instead; the same source database then produces the same package
+/// blob regardless of the codegen schedule.
+struct PackageExportArtifact {
+    interface_blob: Vec<u8>,
+    functions: Vec<(bex_vm_types::types::LocalName, String)>,
+}
+
+struct PackageBuildMaps<'a> {
+    exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
+    packages: &'a mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+}
+
+fn capture_package_exports(
+    db: &dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
+) -> indexmap::IndexMap<Name, PackageExportArtifact> {
+    let package_names: std::collections::BTreeSet<_> = all_files
+        .iter()
+        .map(|file| file_package(db, *file).package)
+        .collect();
+    package_names
+        .into_iter()
+        .map(|package_name| {
+            let package_id = PackageId::new(db, package_name.clone());
+            let interface =
+                baml_compiler2_tir::package_interface::package_interface(db, package_id);
+            let interface_blob = borsh::to_vec(interface)
+                .expect("PackageInterface serialization into Vec is infallible");
+            let mut functions = interface
+                .functions
+                .iter()
+                .flat_map(|(namespace, functions)| {
+                    functions.iter().map(|(name, function)| {
+                        (
+                            bex_vm_types::types::LocalName {
+                                namespace: namespace.clone(),
+                                name: name.clone(),
+                            },
+                            function.callable_fqn.clone(),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
+            functions.sort_by(|(left, _), (right, _)| left.cmp(right));
+            (
+                package_name,
+                PackageExportArtifact {
+                    interface_blob,
+                    functions,
+                },
+            )
+        })
+        .collect()
+}
+
 fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
@@ -352,7 +413,7 @@ fn build_packages(
     // in rather than recomputed: a second derivation of the layout that drifted would
     // make every virtual field access read the wrong slot, silently.
     class_field_indices: &HashMap<String, HashMap<String, usize>>,
-    program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+    package_maps: PackageBuildMaps<'_>,
 ) {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_ppir::item_data::{AssociatedTypeBindingData, ImplSubjectData};
@@ -395,6 +456,11 @@ fn build_packages(
             .collect();
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
+
+    let PackageBuildMaps {
+        exports: package_exports,
+        packages: program_packages,
+    } = package_maps;
 
     // Resolve a function FQN to its emitted object index. `function_indices` holds
     // every function except `$compiler_intrinsic` / `$await_any` bodies, which
@@ -1101,6 +1167,38 @@ fn build_packages(
         }
     }
 
+    // Project the compiler's enriched export surface into the runtime package
+    // record. The blob is the source-less checking input used by a later
+    // `Package.compile`, while the function table lets reflection enumerate and
+    // extract values without deserializing compiler-owned data in the VM.
+    // A functions-only package has no class/enum/interface/impl pass to create
+    // its row, so establish every source-backed package before projecting the
+    // surface captured at the deterministic pre-codegen boundary. Packages not
+    // in this map are mounted/source-less; their artifacts come from the base.
+    for (package_name, exports) in package_exports {
+        let package = program_packages.entry(package_name.clone()).or_default();
+        package.interface_blob.clone_from(&exports.interface_blob);
+        package.functions.clear();
+        for (local_name, callable_fqn) in &exports.functions {
+            let Some(&index) = function_indices.get(callable_fqn) else {
+                // Compiler intrinsics deliberately have no callable object.
+                continue;
+            };
+            package
+                .functions
+                .insert(local_name.clone(), ObjectIndex::from_raw(index));
+        }
+        let test_init_name = if package_name.as_str() == "user" {
+            "$init_test".to_string()
+        } else {
+            format!("{package_name}.$init_test")
+        };
+        package.test_init = function_indices
+            .get(&test_init_name)
+            .copied()
+            .map(ObjectIndex::from_raw);
+    }
+
     // Deterministic order: files/classes iterate from unordered maps. Impl rules
     // are keyed by their interface's object index (assigned in deterministic
     // emission order); within one interface a `for_ty_pattern` is unique (overlap
@@ -1403,7 +1501,7 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, None, false, None)
+    generate_impl(db, options, opt, None, false, None, false)
 }
 
 /// Compile ONLY the builtin stdlib into a standalone `Program` slice.
@@ -1427,6 +1525,7 @@ pub fn generate_stdlib_program(
         None,
         true,
         None,
+        false,
     )
 }
 
@@ -1444,7 +1543,7 @@ pub fn generate_project_bytecode_with_stdlib(
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, Some(base), false, None)
+    generate_impl(db, options, opt, Some(base), false, None, false)
 }
 
 /// Compile and link a source consumer against independently emitted mounted
@@ -1491,7 +1590,7 @@ pub fn generate_project_bytecode_with_mounted_units(
 ) -> Result<Program, MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    generate_impl(db, options, opt, Some(&base), false, None)
+    generate_impl(db, options, opt, Some(&base), false, None, false)
         .map_err(MountedPackageLinkError::Consumer)
 }
 
@@ -1559,7 +1658,15 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
     // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
     // so a dirty tail-producing file no longer aborts reuse.
-    let partial = generate_impl(db, options, opt, Some(base), false, Some(clean_files))?;
+    let partial = generate_impl(
+        db,
+        options,
+        opt,
+        Some(base),
+        false,
+        Some(clean_files),
+        false,
+    )?;
 
     let mut fresh_units = decompose_units(db, options, &partial)?;
 
@@ -1696,8 +1803,14 @@ pub fn emit_units(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let program = generate_project_bytecode_with_opt(db, options, opt)?;
-    decompose_units(db, options, &program)
+    // Unit emission can represent source-less mounted dependencies as imports:
+    // checking/layout comes from PackageInterface while the linker supplies
+    // their live definitions later. A flat runnable Program cannot contain
+    // unresolved symbols, so this mode is deliberately private to the
+    // emit→decompose path.
+    let program = generate_impl(db, options, opt, None, false, None, true)?;
+    let external_objects = mounted_external_object_symbols(db, &program);
+    decompose_units_with_externals(db, options, &program, &external_objects)
 }
 
 /// Per-object attribution kind, computed during the pool walk.
@@ -1705,6 +1818,9 @@ enum PoolObjKind {
     Class,
     Enum,
     Interface,
+    /// A symbol-only mounted definition. It participates in codegen indices
+    /// but is omitted from emitted units and becomes an explicit import.
+    External(Symbol),
     /// A named function (fully-qualified name interned in `function_indices`).
     NamedFn(String),
     /// A lambda / interned literal — attributed to a file by proximity, not name.
@@ -1729,6 +1845,15 @@ pub fn decompose_units(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
     program: &Program,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    decompose_units_with_externals(db, options, program, &HashMap::new())
+}
+
+fn decompose_units_with_externals(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    program: &Program,
+    external_objects: &HashMap<usize, Symbol>,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
     let all_files = compiler2_all_files(db);
     let n_files = all_files.len();
@@ -1831,70 +1956,76 @@ pub fn decompose_units(
     #[allow(clippy::needless_range_loop)]
     for idx in 0..tail_start {
         let obj = &program.objects[ObjectIndex::from_raw(idx)];
-        let (owner, kind) = match obj {
-            Object::Class(_) => {
-                let o = *class_owner.get(ci).ok_or_else(|| {
-                    LoweringError::Internal(format!("class object {idx} has no owning file"))
-                })?;
-                ci += 1;
-                (o, PoolObjKind::Class)
-            }
-            Object::Enum(_) => {
-                let o = *enum_owner.get(ei).ok_or_else(|| {
-                    LoweringError::Internal(format!("enum object {idx} has no owning file"))
-                })?;
-                ei += 1;
-                (o, PoolObjKind::Enum)
-            }
-            Object::Interface(_) => {
-                let o = *iface_owner.get(ii).ok_or_else(|| {
-                    LoweringError::Internal(format!("interface object {idx} has no owning file"))
-                })?;
-                ii += 1;
-                (o, PoolObjKind::Interface)
-            }
-            Object::Function(f) => {
-                if let Some(name) = fn_obj_name.get(&idx) {
-                    // Named function: attribute by fq name. A synthesized
-                    // function ($init/$init_test) has no source file — reject
-                    // (Stage 2 does not yet reproduce the $init tail; §9 R2).
-                    let o = func_name_to_file.get(name).copied().ok_or_else(|| {
+        let (owner, kind) = if let Some(symbol) = external_objects.get(&idx) {
+            (usize::MAX, PoolObjKind::External(symbol.clone()))
+        } else {
+            match obj {
+                Object::Class(_) => {
+                    let o = *class_owner.get(ci).ok_or_else(|| {
+                        LoweringError::Internal(format!("class object {idx} has no owning file"))
+                    })?;
+                    ci += 1;
+                    (o, PoolObjKind::Class)
+                }
+                Object::Enum(_) => {
+                    let o = *enum_owner.get(ei).ok_or_else(|| {
+                        LoweringError::Internal(format!("enum object {idx} has no owning file"))
+                    })?;
+                    ei += 1;
+                    (o, PoolObjKind::Enum)
+                }
+                Object::Interface(_) => {
+                    let o = *iface_owner.get(ii).ok_or_else(|| {
                         LoweringError::Internal(format!(
-                            "named function `{name}` (obj {idx}) is synthesized \
-                             ($init/$init_test); Stage 2 decomposition does not \
-                             handle the $init tail yet (design §9 R2)"
+                            "interface object {idx} has no owning file"
                         ))
                     })?;
-                    (o, PoolObjKind::NamedFn(name.clone()))
-                } else {
-                    // Lambda: attribute by its (relative) source file.
-                    let o = rel_to_file
-                        .get(f.source_file.as_str())
-                        .copied()
-                        .ok_or_else(|| {
+                    ii += 1;
+                    (o, PoolObjKind::Interface)
+                }
+                Object::Function(f) => {
+                    if let Some(name) = fn_obj_name.get(&idx) {
+                        // Named function: attribute by fq name. A synthesized
+                        // function ($init/$init_test) has no source file — reject
+                        // (Stage 2 does not yet reproduce the $init tail; §9 R2).
+                        let o = func_name_to_file.get(name).copied().ok_or_else(|| {
                             LoweringError::Internal(format!(
-                                "lambda object {idx} has source_file `{}` matching no file",
-                                f.source_file
+                                "named function `{name}` (obj {idx}) is synthesized \
+                             ($init/$init_test); Stage 2 decomposition does not \
+                             handle the $init tail yet (design §9 R2)"
                             ))
                         })?;
-                    (o, PoolObjKind::CodeAnon)
+                        (o, PoolObjKind::NamedFn(name.clone()))
+                    } else {
+                        // Lambda: attribute by its (relative) source file.
+                        let o = rel_to_file
+                            .get(f.source_file.as_str())
+                            .copied()
+                            .ok_or_else(|| {
+                                LoweringError::Internal(format!(
+                                    "lambda object {idx} has source_file `{}` matching no file",
+                                    f.source_file
+                                ))
+                            })?;
+                        (o, PoolObjKind::CodeAnon)
+                    }
                 }
-            }
-            Object::String(_)
-            | Object::Bigint(_)
-            | Object::Uint8Array(_)
-            | Object::GenericFunction(_) => {
-                // Codegen-interned literal (strings/bigints/byte-arrays) or a
-                // cross-unit-interned generic-function value (§9 R1). Owner is
-                // filled by the leading-literal pass: it belongs to whichever
-                // function is compiled next.
-                (usize::MAX, PoolObjKind::CodeAnon)
-            }
-            other => {
-                return Err(LoweringError::Internal(format!(
-                    "pool object {idx} is an unexpected compiled kind: {}",
-                    obj_variant_name(other)
-                )));
+                Object::String(_)
+                | Object::Bigint(_)
+                | Object::Uint8Array(_)
+                | Object::GenericFunction(_) => {
+                    // Codegen-interned literal (strings/bigints/byte-arrays) or a
+                    // cross-unit-interned generic-function value (§9 R1). Owner is
+                    // filled by the leading-literal pass: it belongs to whichever
+                    // function is compiled next.
+                    (usize::MAX, PoolObjKind::CodeAnon)
+                }
+                other => {
+                    return Err(LoweringError::Internal(format!(
+                        "pool object {idx} is an unexpected compiled kind: {}",
+                        obj_variant_name(other)
+                    )));
+                }
             }
         };
         obj_owner[idx] = owner;
@@ -1932,7 +2063,7 @@ pub fn decompose_units(
         })
         .collect();
     // Per pool object: its LocalRef within its owning unit (bucket + offset).
-    let mut obj_localref: Vec<LocalRef> = Vec::with_capacity(tail_start);
+    let mut obj_localref: Vec<Option<LocalRef>> = Vec::with_capacity(tail_start);
     for (idx, kind) in obj_kind.iter().enumerate() {
         let u = obj_owner[idx];
         let obj = program.objects[ObjectIndex::from_raw(idx)].clone();
@@ -1940,23 +2071,32 @@ pub fn decompose_units(
             PoolObjKind::Class => {
                 let off = units[u].classes.len();
                 units[u].classes.push(obj);
-                LocalRef::Class(u32::try_from(off).expect("class offset fits u32"))
+                Some(LocalRef::Class(
+                    u32::try_from(off).expect("class offset fits u32"),
+                ))
             }
             PoolObjKind::Enum => {
                 let off = units[u].enums.len();
                 units[u].enums.push(obj);
-                LocalRef::Enum(u32::try_from(off).expect("enum offset fits u32"))
+                Some(LocalRef::Enum(
+                    u32::try_from(off).expect("enum offset fits u32"),
+                ))
             }
             PoolObjKind::Interface => {
                 let off = units[u].interfaces.len();
                 units[u].interfaces.push(obj);
-                LocalRef::Interface(u32::try_from(off).expect("interface offset fits u32"))
+                Some(LocalRef::Interface(
+                    u32::try_from(off).expect("interface offset fits u32"),
+                ))
             }
             PoolObjKind::NamedFn(_) | PoolObjKind::CodeAnon => {
                 let off = units[u].code.len();
                 units[u].code.push(obj);
-                LocalRef::Code(u32::try_from(off).expect("code offset fits u32"))
+                Some(LocalRef::Code(
+                    u32::try_from(off).expect("code offset fits u32"),
+                ))
             }
+            PoolObjKind::External(_) => None,
         };
         obj_localref.push(local_ref);
     }
@@ -2018,7 +2158,7 @@ pub fn decompose_units(
         // Precompute this unit's flat-local index for each pool object it owns.
         // (Captured references keep the closure `Fn`.)
         let flat_local = |abs: usize| -> usize {
-            match obj_localref[abs] {
+            match obj_localref[abs].expect("only owned objects have a local reference") {
                 LocalRef::Class(k) => k as usize,
                 LocalRef::Enum(k) => c + k as usize,
                 LocalRef::Interface(k) => c + e + k as usize,
@@ -2030,7 +2170,15 @@ pub fn decompose_units(
             rewrite_pool_operands(
                 object,
                 |target| {
-                    if obj_owner[target] == u {
+                    if let PoolObjKind::External(symbol) = &obj_kind[target] {
+                        let import_idx = intern_import(
+                            &mut object_imports,
+                            &mut obj_import_idx,
+                            symbol.fq_name.clone(),
+                            symbol.clone(),
+                        );
+                        Ok(n_local_objects + import_idx)
+                    } else if obj_owner[target] == u {
                         Ok(flat_local(target))
                     } else {
                         let sym = object_symbol(program, target, &obj_kind, &slot_to_name)?;
@@ -2094,15 +2242,18 @@ pub fn decompose_units(
         match &obj_kind[idx] {
             PoolObjKind::Class | PoolObjKind::Enum | PoolObjKind::Interface => {
                 let fq = def_object_fq(&program.objects[ObjectIndex::from_raw(idx)]);
-                units[u].exports.objects.push((fq, obj_localref[idx]));
+                units[u].exports.objects.push((
+                    fq,
+                    obj_localref[idx].expect("source definition has a local reference"),
+                ));
             }
             PoolObjKind::NamedFn(name) => {
-                units[u]
-                    .exports
-                    .objects
-                    .push((name.clone(), obj_localref[idx]));
+                units[u].exports.objects.push((
+                    name.clone(),
+                    obj_localref[idx].expect("source function has a local reference"),
+                ));
             }
-            PoolObjKind::CodeAnon => {}
+            PoolObjKind::CodeAnon | PoolObjKind::External(_) => {}
         }
     }
     for (name, &(u, flat)) in &name_to_local_global {
@@ -2420,6 +2571,9 @@ fn object_symbol(
                     )));
                 }
             };
+            if let PoolObjKind::External(symbol) = &obj_kind[target] {
+                return Ok(symbol.clone());
+            }
             Ok(Symbol {
                 kind,
                 fq_name,
@@ -2468,6 +2622,9 @@ fn build_package_fragment(
     for (local, &idx) in &pkg.interfaces {
         frag.interfaces.push((local.clone(), obj_fq(idx)?));
     }
+    for (local, &idx) in &pkg.functions {
+        frag.functions.push((local.clone(), obj_fq(idx)?));
+    }
     for (local, ty) in &pkg.recursive_type_aliases {
         frag.recursive_type_aliases
             .push((local.clone(), ty.clone()));
@@ -2498,6 +2655,8 @@ fn build_package_fragment(
         }
         frag.impl_rules.push((iface_fq, rule_frags));
     }
+    frag.interface_blob.clone_from(&pkg.interface_blob);
+    frag.test_init = pkg.test_init.map(obj_fq).transpose()?;
     Ok(frag)
 }
 
@@ -2727,6 +2886,7 @@ fn generate_impl(
     base: Option<&Program>,
     stdlib_only: bool,
     skip_clean: Option<&HashSet<String>>,
+    symbolic_mounted_imports: bool,
 ) -> Result<Program, LoweringError> {
     let mut all_files = compiler2_all_files(db);
     let builtin_count = all_files
@@ -2738,6 +2898,17 @@ fn generate_impl(
         // stdlib" is the full pipeline over the builtin files alone.
         all_files.truncate(builtin_count);
     }
+    // A base image supplies the builtin group bytecode and its package
+    // artifacts as one build-time capture. Recomputing those blobs in the
+    // consumer database would sever that provenance (and can observe a
+    // different query graph when source-less dependencies replace source).
+    // Only capture packages from the source group this invocation emits.
+    let package_export_start = if base.is_some() {
+        builtin_count.min(all_files.len())
+    } else {
+        0
+    };
+    let package_exports = capture_package_exports(db, &all_files[package_export_start..]);
     let alias_caches = build_alias_caches(db, &all_files);
 
     // Emit in two file groups — builtin stubs first, then user files — so the
@@ -2763,6 +2934,9 @@ fn generate_impl(
             opt,
             None,
         )?;
+    }
+    if symbolic_mounted_imports {
+        seed_mounted_import_placeholders(db, &mut program, &mut tables);
     }
     emit_file_group(
         db,
@@ -2825,7 +2999,10 @@ fn generate_impl(
         &program.function_indices,
         &tables.interface_object_indices,
         &tables.classes,
-        &mut tables.program_packages,
+        PackageBuildMaps {
+            exports: &package_exports,
+            packages: &mut tables.program_packages,
+        },
     );
     // A MOUNTED (source-less) package contributes no files to this database,
     // so `build_packages` cannot rebuild its impl rules or recursive aliases
@@ -2840,6 +3017,9 @@ fn generate_impl(
             };
             match tables.program_packages.get_mut(&pkg_name) {
                 Some(pkg) => {
+                    pkg.functions.clone_from(&base_pkg.functions);
+                    pkg.interface_blob.clone_from(&base_pkg.interface_blob);
+                    pkg.test_init = base_pkg.test_init;
                     pkg.impl_rules.clone_from(&base_pkg.impl_rules);
                     pkg.recursive_type_aliases
                         .clone_from(&base_pkg.recursive_type_aliases);
@@ -2978,6 +3158,217 @@ impl EmitTables {
 
         tables
     }
+}
+
+/// Seed just enough mounted runtime shape for MIR emission. These objects and
+/// null global slots are scaffolding: [`decompose_units_with_externals`] drops
+/// them and rewrites every reference into a symbolic import. `link_dynamic`
+/// later binds those imports to the live Package supplied for the mount alias.
+fn seed_mounted_import_placeholders(
+    db: &dyn crate::Db,
+    program: &mut Program,
+    tables: &mut EmitTables,
+) {
+    use baml_compiler2_tir::package_interface::ExportedType;
+    use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef};
+
+    let unknown = || RuntimeTy::BuiltinUnknown {
+        attr: TyAttr::default(),
+    };
+    let unknown_template = || baml_type::TyTemplate::BuiltinUnknown {
+        attr: TyAttr::default(),
+    };
+
+    for alias in baml_compiler2_hir::package::mounted_package_names(db) {
+        let Some(interface) = baml_compiler2_tir::package_interface::mounted_interface(db, &alias)
+        else {
+            continue;
+        };
+
+        let mut types = interface
+            .types
+            .iter()
+            .flat_map(|(namespace, rows)| {
+                rows.iter().map(move |(name, row)| (namespace, name, row))
+            })
+            .collect::<Vec<_>>();
+        types.sort_by_key(|(namespace, name, _)| {
+            namespace
+                .iter()
+                .map(Name::as_str)
+                .chain(std::iter::once(name.as_str()))
+                .collect::<Vec<_>>()
+                .join(".")
+        });
+
+        for (namespace, name, row) in types {
+            let alias_fq = std::iter::once(alias.as_str())
+                .chain(namespace.iter().map(Name::as_str))
+                .chain(std::iter::once(name.as_str()))
+                .collect::<Vec<_>>()
+                .join(".");
+            match row {
+                ExportedType::Class {
+                    qtn,
+                    fields,
+                    generic_params,
+                    ..
+                } => {
+                    let field_indices = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (name, ..))| (name.to_string(), index))
+                        .collect::<HashMap<_, _>>();
+                    let class_fields = fields
+                        .iter()
+                        .map(|(name, ..)| ClassField {
+                            name: name.to_string(),
+                            field_type: unknown(),
+                            field_template: unknown_template(),
+                            description: None,
+                            alias: None,
+                            docstring: None,
+                            other: indexmap::IndexMap::new(),
+                            skip: false,
+                            runtime_type: None,
+                        })
+                        .collect();
+                    let index = program.add_object(Object::Class(Box::new(Class {
+                        name: fq_to_type_name(&alias_fq),
+                        fields: class_fields,
+                        description: None,
+                        alias: None,
+                        docstring: None,
+                        other: indexmap::IndexMap::new(),
+                        type_tag: bex_vm_types::type_tags::class_type_tag(&alias_fq),
+                        ty_attr: TyAttr::default(),
+                        has_cleanup: false,
+                        generic_param_count: generic_params.len(),
+                        runtime_type: None,
+                    })));
+                    for key in [alias_fq.clone(), qtn.render_dotted(false)] {
+                        tables.classes.insert(key.clone(), field_indices.clone());
+                        tables.class_object_indices.insert(key, index);
+                    }
+                }
+                ExportedType::Enum { qtn, variants } => {
+                    let variant_indices = variants
+                        .iter()
+                        .enumerate()
+                        .map(|(index, name)| (name.to_string(), index))
+                        .collect::<HashMap<_, _>>();
+                    let index = program.add_object(Object::Enum(Box::new(Enum {
+                        name: fq_to_type_name(&alias_fq),
+                        variants: variants
+                            .iter()
+                            .map(|name| EnumVariant {
+                                name: name.to_string(),
+                                description: None,
+                                alias: None,
+                                docstring: None,
+                                other: indexmap::IndexMap::new(),
+                                skip: false,
+                            })
+                            .collect(),
+                        description: None,
+                        alias: None,
+                        docstring: None,
+                        other: indexmap::IndexMap::new(),
+                        ty_attr: TyAttr::default(),
+                        runtime_type: None,
+                    })));
+                    for key in [alias_fq.clone(), qtn.render_dotted(false)] {
+                        tables
+                            .enum_variants
+                            .insert(key.clone(), variant_indices.clone());
+                        tables.enum_object_indices.insert(key, index);
+                    }
+                }
+                ExportedType::Interface { qtn, fields, .. } => {
+                    let index = program.add_object(Object::Interface(Box::new(InterfaceDef {
+                        name: fq_to_type_name(&alias_fq),
+                        args: Vec::new(),
+                        requires: Vec::new(),
+                        assoc: Vec::new(),
+                        fields: fields
+                            .iter()
+                            .map(|(name, ..)| InterfaceFieldDef {
+                                name: name.clone(),
+                                ty: unknown(),
+                            })
+                            .collect(),
+                        methods: Vec::new(),
+                    })));
+                    tables
+                        .interface_object_indices
+                        .insert(fq_to_type_name(&alias_fq), index);
+                    tables
+                        .interface_object_indices
+                        .insert(fq_to_type_name(&qtn.render_dotted(false)), index);
+                }
+                ExportedType::TypeAlias { .. } => {}
+            }
+        }
+
+        let mut functions = interface
+            .functions
+            .iter()
+            .flat_map(|(namespace, rows)| rows.keys().map(move |name| (namespace, name)))
+            .collect::<Vec<_>>();
+        functions.sort_by_key(|(namespace, name)| {
+            namespace
+                .iter()
+                .map(Name::as_str)
+                .chain(std::iter::once(name.as_str()))
+                .collect::<Vec<_>>()
+                .join(".")
+        });
+        for (namespace, name) in functions {
+            let fq = std::iter::once(alias.as_str())
+                .chain(namespace.iter().map(Name::as_str))
+                .chain(std::iter::once(name.as_str()))
+                .collect::<Vec<_>>()
+                .join(".");
+            if tables.globals.contains_key(&fq) {
+                continue;
+            }
+            let slot = program.globals.len();
+            program.add_global(ConstValue::Null);
+            program.function_global_indices.insert(fq.clone(), slot);
+            tables.globals.insert(fq, slot);
+        }
+    }
+}
+
+fn mounted_external_object_symbols(
+    db: &dyn crate::Db,
+    program: &Program,
+) -> HashMap<usize, Symbol> {
+    let aliases = baml_compiler2_hir::package::mounted_package_names(db);
+    program
+        .objects
+        .iter()
+        .enumerate()
+        .filter_map(|(index, object)| {
+            let (kind, fq_name) = match object {
+                Object::Class(class) => (SymbolKind::Class, class.name.to_string()),
+                Object::Enum(enm) => (SymbolKind::Enum, enm.name.to_string()),
+                Object::Interface(interface) => (SymbolKind::Interface, interface.name.to_string()),
+                _ => return None,
+            };
+            aliases
+                .iter()
+                .any(|alias| fq_name.starts_with(&format!("{}.", alias.as_str())))
+                .then_some((
+                    index,
+                    Symbol {
+                        kind,
+                        fq_name,
+                        generic: None,
+                    },
+                ))
+        })
+        .collect()
 }
 
 /// Dirty-set throws gate (design §4): a caller-clean file may only be reused if

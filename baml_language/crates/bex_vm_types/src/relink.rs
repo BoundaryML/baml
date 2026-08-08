@@ -91,6 +91,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::DenseTag(..) => bakes_type_layout = true,
             // ── no cross-function references ─────────────────────────────
             I::LoadConst(..)
+            | I::LoadCurrentPackage(..)
             | I::LoadVar(..)
             | I::StoreVar(..)
             | I::StoreVarLoadVar(..)
