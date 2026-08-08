@@ -1,7 +1,7 @@
 import { createMetadata } from '@/app/_lib/metadata';
 // CONTENT PARITY: keep substantive copy and commands in sync with
 // content/quickstart.md. Update both representations in the same change.
-import { TryBaml } from '@/app/baml-intro/_components/TryBaml';
+import { TryBaml } from '@/app/baml-intro/_components/try-baml';
 import { DiscordCta } from '@/components/discord-cta';
 import { EapCta } from '@/components/eap-cta';
 import { FooterSection } from '@/components/footer-section';
@@ -52,7 +52,7 @@ a.qs-card:hover::after { color: #6d28d9; transform: translate(1px, -1px); }
 export default function QuickstartPage() {
   return (
     <>
-      {/* eslint-disable-next-line react/no-danger */}
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static page CSS */}
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
       <main className="qs-wrap">

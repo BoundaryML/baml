@@ -10,12 +10,6 @@
   border-radius: 10px;
 }
 
-/* Compact variant (top of /explore): drops the tabbed header and the tall
-   min-height so it reads as a quick install pointer, not the full unit. */
-.compact .body {
-  min-height: 0;
-}
-
 .head {
   display: flex;
   gap: 0.35rem;
@@ -72,6 +66,11 @@
   font-size: 13px;
   line-height: 1.75;
   color: #1a1612;
+}
+/* Compact variant (top of /explore): drops the tabbed header and the tall
+   min-height so it reads as a quick install pointer, not the full unit. */
+.compact .body {
+  min-height: 0;
 }
 
 .opt {

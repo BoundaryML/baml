@@ -1,6 +1,7 @@
+/** biome-ignore-all lint/performance/noImgElement: small static local marks, sized in css; next/image buys nothing */
 import { Fragment } from 'react';
 import { createMetadata } from '@/app/_lib/metadata';
-import { TryBaml } from '@/app/baml-intro/_components/TryBaml';
+import { TryBaml } from '@/app/baml-intro/_components/try-baml';
 import { DiscordCta } from '@/components/discord-cta';
 import { EapCta } from '@/components/eap-cta';
 import { FooterSection } from '@/components/footer-section';
@@ -706,7 +707,7 @@ function Placeholder({ tabs }: { tabs: (string | Tab)[] }) {
 export default function WhatIsBamlPage() {
   return (
     <>
-      {/* eslint-disable-next-line react/no-danger */}
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static page CSS */}
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
       <main className="wib">
@@ -758,10 +759,18 @@ export default function WhatIsBamlPage() {
             <img alt="Google" className="u-google" src="/google3.png" />
           </li>
           <li>
-            <img alt="AWS" className="u-aws" src="/testimonials/logos/aws.png" />
+            <img
+              alt="AWS"
+              className="u-aws"
+              src="/testimonials/logos/aws.png"
+            />
           </li>
           <li>
-            <img alt="SAP" className="u-sap" src="/testimonials/logos/sapLogo.png" />
+            <img
+              alt="SAP"
+              className="u-sap"
+              src="/testimonials/logos/sapLogo.png"
+            />
           </li>
         </ul>
 
@@ -833,8 +842,7 @@ export default function WhatIsBamlPage() {
                   {!s.tabs?.length && s.readMore && i === paras.length - 1 ? (
                     <>
                       {' '}
-                      Read more &rarr;{' '}
-                      <a href="/techdocs">{s.readMore}</a>
+                      Read more &rarr; <a href="/techdocs">{s.readMore}</a>
                     </>
                   ) : null}
                 </p>

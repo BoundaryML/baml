@@ -36,8 +36,8 @@ export default function NoLarpPage() {
         <h1>We&rsquo;re writing some solid articles.</h1>
         <p>
           We know there are a lot of toy &ldquo;programming languages&rdquo;
-          coming out these days. We&rsquo;ve been building BAML for a
-          while. We know our stuff. These articles are strictly no-AI. We explain our type
+          coming out these days. We&rsquo;ve been building BAML for a while. We
+          know our stuff. These articles are strictly no-AI. We explain our type
           system, our observability features, and more.
         </p>
       </main>

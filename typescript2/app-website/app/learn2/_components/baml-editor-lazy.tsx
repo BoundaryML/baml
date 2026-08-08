@@ -10,9 +10,8 @@ import dynamic from 'next/dynamic';
  * "Open Playground" lens is filtered out in `BamlEditor`.
  */
 const BamlEditor = dynamic(
-  () => import('../_editor/BamlEditor').then((m) => m.BamlEditor),
+  () => import('../_editor/baml-editor').then((m) => m.BamlEditor),
   {
-    ssr: false,
     loading: () => (
       <div className="l2-bamled-wrap">
         <div className="l2-bamled-frame">
@@ -20,6 +19,7 @@ const BamlEditor = dynamic(
         </div>
       </div>
     ),
+    ssr: false,
   },
 );
 

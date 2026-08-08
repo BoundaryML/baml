@@ -14,6 +14,7 @@ export function Acquirer() {
   const [i, setI] = useState(0);
   const [out, setOut] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-arm per name; FADE_MS/HOLD_MS are module constants
   useEffect(() => {
     // Fade the current name out, swap it, fade the next one in. The inner
     // timeout must be cleared by the effect cleanup, not the setTimeout

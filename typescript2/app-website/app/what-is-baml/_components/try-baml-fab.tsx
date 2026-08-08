@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/performance/noImgElement: 1.1em static local svg */
 'use client';
 
 import { useEffect, useState } from 'react';

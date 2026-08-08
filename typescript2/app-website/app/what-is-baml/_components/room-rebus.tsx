@@ -51,7 +51,12 @@ export function RoomRebus() {
     .join(' ');
 
   return (
-    <p aria-label="Elephant in the room" className={className} ref={ref}>
+    <p
+      aria-label="Elephant in the room"
+      className={className}
+      ref={ref}
+      role="img"
+    >
       <span aria-hidden="true">
         R
         <span className="wib-room-o">

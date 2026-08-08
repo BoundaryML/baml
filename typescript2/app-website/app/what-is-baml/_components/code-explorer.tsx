@@ -29,7 +29,7 @@ import {
   TS_INSTANCEOF,
   TS_LIES,
 } from '@/app/baml-intro/_components/snippets';
-import BamlEditor from '@/app/learn2/_components/BamlEditorLazy';
+import BamlEditor from '@/app/learn2/_components/baml-editor-lazy';
 import LivePlayground from '@/app/learn2/_components/LivePlaygroundLazy';
 import type { TermEvent } from '@/app/learn3/_components/TermPlay';
 
@@ -235,6 +235,7 @@ function useTokenized(blocks: Block[]): CodeTokens[] {
     blocks.map((b) => plainTokens(b.code)),
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tokenize once per mount; the block list is static per section
   useEffect(() => {
     let cancelled = false;
     (async () => {

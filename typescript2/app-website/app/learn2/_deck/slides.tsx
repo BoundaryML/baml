@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { BamlCode } from '../_components/BamlCode';
-import BamlEditor from '../_components/BamlEditorLazy';
+import BamlEditor from '../_components/baml-editor-lazy';
 import LivePlayground from '../_components/LivePlaygroundLazy';
 import { SpawnRace } from '../_components/SpawnRace';
 import {

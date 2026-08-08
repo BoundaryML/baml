@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { BamlCode } from '../../learn2/_components/BamlCode';
-import BamlEditor from '../../learn2/_components/BamlEditorLazy';
+import BamlEditor from '../../learn2/_components/baml-editor-lazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
 import { Terminal } from '../../learn2/_components/primitives';
 import { CoreUsage } from '../../learn3/_components/CoreUsage';
@@ -459,9 +459,9 @@ const GREP_EVENTS: TermEvent[] = [
   { text: 'main.baml:10:    greet("world").message' },
   { text: 'main.baml:18:        assert.equal(greet("bob").message, …' },
   {
+    pause: 0.5,
     text: '# 4 tool calls, a whole file in context — and the',
     tone: 'dim',
-    pause: 0.5,
   },
   { text: '# caller list is still just text matches', tone: 'dim' },
 ];
@@ -482,9 +482,9 @@ const DESCRIBE_EVENTS: TermEvent[] = [
   { text: '  baml_src/main.baml:18  assert.equal(greet("bob")…' },
   { text: '' },
   {
+    pause: 0.3,
     text: '✓ one call: signature, deps, every reference',
     tone: 'ok',
-    pause: 0.3,
   },
 ];
 
@@ -525,7 +525,7 @@ const LS_EVENTS: TermEvent[] = [
   { text: 'ns_a  ns_b' },
   { cmd: 'ls baml_src/ns_a/', pause: 0.4 },
   { text: 'a.baml' },
-  { text: '# the layout of baml_src/ is the layout', tone: 'dim', pause: 0.4 },
+  { pause: 0.4, text: '# the layout of baml_src/ is the layout', tone: 'dim' },
   { text: '# of the program. ls is a map of it.', tone: 'dim' },
 ];
 
@@ -549,7 +549,7 @@ function Section({
   const widthClass =
     width === 'full' ? 'l4-full' : width === 'wide' ? 'l4-wide' : 'l4-prose';
   return (
-    <section id={id} className={`l4-section${tall ? ' l4-section--tall' : ''}`}>
+    <section className={`l4-section${tall ? ' l4-section--tall' : ''}`} id={id}>
       <div className={widthClass}>
         {kicker ? (
           <p className="l4-kicker">
@@ -567,12 +567,10 @@ export function Story() {
   return (
     <div className="l4">
       <header className="l4-head">
-        <a href="/" className="font-mono">
+        <a className="font-mono" href="/">
           BAML <span>· a programming language for AI software</span>
         </a>
-        <span className="l4-head-install font-mono">
-          brew install baml
-        </span>
+        <span className="l4-head-install font-mono">brew install baml</span>
       </header>
 
       {/* ---- hero ---- */}
@@ -580,12 +578,12 @@ export function Story() {
         <div className="l4-hero">
           <div className="l4-hero-mark">
             <Image
-              src="/baml-sheep.png"
               alt=""
-              width={104}
-              height={104}
               className="l4-hero-sheep"
+              height={104}
               priority
+              src="/baml-sheep.png"
+              width={104}
             />
             <h1 className="l4-hero-title">BAML</h1>
           </div>
@@ -608,7 +606,7 @@ export function Story() {
       </Section>
 
       {/* ---- 01 the stack ---- */}
-      <Section id="stack" num="01" kicker="the stack we build on" width="wide">
+      <Section id="stack" kicker="the stack we build on" num="01" width="wide">
         <h2>{'AI is built on languages from before AI'}</h2>
         <p className="l4-lead">
           {
@@ -624,7 +622,7 @@ export function Story() {
       </Section>
 
       {/* ---- 02 what baml is ---- */}
-      <Section id="what" num="02" kicker="what baml is">
+      <Section id="what" kicker="what baml is" num="02">
         <h2>{'A programming language for AI software'}</h2>
         <p className="l4-lead">{'Hover anything underlined.'}</p>
         <ul className="l4-feature-list">
@@ -668,7 +666,7 @@ export function Story() {
       </Section>
 
       {/* ---- 03 the loop changed ---- */}
-      <Section id="loop" num="03" kicker="the loop changed" width="wide">
+      <Section id="loop" kicker="the loop changed" num="03" width="wide">
         <h2>{'Agents joined the development loop'}</h2>
         <p className="l4-lead">
           {
@@ -683,13 +681,13 @@ export function Story() {
         <div className="l4-pair">
           <div>
             <p className="l4-pane-label">agent without describe</p>
-            <TermPlay title="agent without describe" events={GREP_EVENTS} />
+            <TermPlay events={GREP_EVENTS} title="agent without describe" />
           </div>
           <div>
             <p className="l4-pane-label l4-pane-label--after">
               agent with describe
             </p>
-            <TermPlay title="agent with describe" events={DESCRIBE_EVENTS} />
+            <TermPlay events={DESCRIBE_EVENTS} title="agent with describe" />
           </div>
         </div>
         <p className="l4-note">
@@ -702,10 +700,10 @@ export function Story() {
       {/* ---- 04 humans in the loop ---- */}
       <Section
         id="viz"
-        num="04"
         kicker="humans, still in the loop"
-        width="full"
+        num="04"
         tall
+        width="full"
       >
         <div className="l4-prose" style={{ margin: '0 auto' }}>
           <h2>{'Agents write more of the code than we do now'}</h2>
@@ -728,7 +726,7 @@ export function Story() {
         </p>
         <p
           className="l4-dim"
-          style={{ textAlign: 'center', marginTop: '0.8rem' }}
+          style={{ marginTop: '0.8rem', textAlign: 'center' }}
         >
           {
             'The compiler already knows every call in the program, so the picture is exact and it never goes stale. Edit the code above and run it.'
@@ -737,7 +735,7 @@ export function Story() {
       </Section>
 
       {/* ---- 05 the language ---- */}
-      <Section id="lang" num="05" kicker="the language" width="wide">
+      <Section id="lang" kicker="the language" num="05" width="wide">
         <h2>{'Sixty seconds of BAML'}</h2>
         <p className="l4-lead">
           {
@@ -750,8 +748,8 @@ export function Story() {
       {/* ---- 06a the AI primitive: the LLM function ---- */}
       <Section
         id="ba-structured"
-        num="06"
         kicker="native AI primitives"
+        num="06"
         width="wide"
       >
         <h2>{'An LLM call is a language primitive'}</h2>
@@ -764,21 +762,21 @@ export function Story() {
           <div>
             <p className="l4-pane-label">before — typescript</p>
             <BamlCode
-              lang="typescript"
-              filename="classify.ts"
               code={TS_BOUNDARY}
               diagnostics={[
-                { line: 5, severity: 'warning', message: 'const data: any' },
+                { line: 5, message: 'const data: any', severity: 'warning' },
               ]}
+              filename="classify.ts"
               highlightLines={[7, 8]}
+              lang="typescript"
             />
           </div>
           <div>
             <p className="l4-pane-label l4-pane-label--after">after — baml</p>
             <BamlEditor
               filename="classify.baml"
-              initialCode={BAML_SENTIMENT}
               highlightLines={[8, 14]}
+              initialCode={BAML_SENTIMENT}
             />
           </div>
         </div>
@@ -792,8 +790,8 @@ export function Story() {
       {/* ---- 06b before/after: parallelism ---- */}
       <Section
         id="ba-parallel"
-        num="07"
         kicker="before & after · parallelism"
+        num="07"
         width="wide"
       >
         <h2>{'Reads like TypeScript. Schedules like Go.'}</h2>
@@ -811,10 +809,10 @@ export function Story() {
             <div>
               <p className="l4-pane-label">before — python</p>
               <BamlCode
-                lang="python"
-                filename="run_all.py"
                 code={PY_GATHER}
+                filename="run_all.py"
                 highlightLines={[1, 3, 8]}
+                lang="python"
               />
             </div>
             <div>
@@ -828,8 +826,8 @@ export function Story() {
             <p className="l4-pane-label l4-pane-label--after">after — baml</p>
             <BamlEditor
               filename="spawn.baml"
-              initialCode={BAML_SPAWN}
               highlightLines={[6, 11]}
+              initialCode={BAML_SPAWN}
             />
           </div>
         </div>
@@ -843,10 +841,10 @@ export function Story() {
             <div>
               <p className="l4-pane-label">before — python, a semaphore</p>
               <BamlCode
-                lang="python"
-                filename="limit.py"
                 code={PY_SEMAPHORE}
+                filename="limit.py"
                 highlightLines={[1, 4]}
+                lang="python"
               />
             </div>
             <div>
@@ -860,8 +858,8 @@ export function Story() {
             </p>
             <BamlEditor
               filename="shards.baml"
-              initialCode={BAML_SPAWN_ADV}
               highlightLines={[3, 5, 17]}
+              initialCode={BAML_SPAWN_ADV}
             />
             <p className="l4-note">
               {
@@ -875,8 +873,8 @@ export function Story() {
       {/* ---- 06c before/after: errors ---- */}
       <Section
         id="ba-errors"
-        num="08"
         kicker="before & after · errors"
+        num="08"
         width="wide"
       >
         <h2>{'The compiler knows the complete error set'}</h2>
@@ -889,10 +887,10 @@ export function Story() {
           <div>
             <p className="l4-pane-label">before — typescript</p>
             <BamlCode
-              lang="typescript"
-              filename="run.ts"
               code={TS_CATCH}
+              filename="run.ts"
               highlightLines={[3]}
+              lang="typescript"
             />
           </div>
           <div>
@@ -910,7 +908,7 @@ export function Story() {
       </Section>
 
       {/* ---- 07 nondeterminism interlude ---- */}
-      <Section id="nondet" num="09" kicker="the deeper problem" width="wide">
+      <Section id="nondet" kicker="the deeper problem" num="09" width="wide">
         <h2>{'One model call changes everything above it'}</h2>
         <p className="l4-lead">
           {
@@ -923,8 +921,8 @@ export function Story() {
       {/* ---- 08 before/after: evals ---- */}
       <Section
         id="ba-evals"
-        num="10"
         kicker="before & after · evals"
+        num="10"
         width="wide"
       >
         <h2>{'Evals are just code'}</h2>
@@ -938,10 +936,10 @@ export function Story() {
             <div>
               <p className="l4-pane-label">before — a typical eval config</p>
               <BamlCode
-                lang="yaml"
-                filename="evals.yaml"
                 code={YAML_EVAL}
+                filename="evals.yaml"
                 highlightLines={[3, 11]}
+                lang="yaml"
               />
             </div>
             <div>
@@ -950,8 +948,8 @@ export function Story() {
               </p>
               <BamlEditor
                 filename="evals.baml"
-                initialCode={BAML_PASSRATE}
                 highlightLines={[5, 6]}
+                initialCode={BAML_PASSRATE}
               />
             </div>
           </div>
@@ -967,10 +965,10 @@ export function Story() {
       {/* ---- the agent loop, observed ---- */}
       <Section
         id="agent-loop"
-        num="11"
         kicker="agents, the workload"
-        width="full"
+        num="11"
         tall
+        width="full"
       >
         <div className="l4-prose" style={{ margin: '0 auto' }}>
           <h2>{'Write the agent loop in the language'}</h2>
@@ -985,7 +983,7 @@ export function Story() {
         </div>
         <p
           className="l4-dim"
-          style={{ textAlign: 'center', marginTop: '0.8rem' }}
+          style={{ marginTop: '0.8rem', textAlign: 'center' }}
         >
           {
             'decide → execute → observe. Tools are plain functions, dispatch is a match on a literal union, and the loop is bounded at eight steps.'
@@ -996,8 +994,8 @@ export function Story() {
       {/* ---- 12 designed to be read by agents ---- */}
       <Section
         id="agents"
-        num="12"
         kicker="designed to be read by agents"
+        num="12"
         width="wide"
       >
         <h2>{'The language is legible by construction'}</h2>
@@ -1010,10 +1008,10 @@ export function Story() {
           <div className="l4-stackv">
             <p className="l4-pane-label">typescript — one class, three names</p>
             <BamlCode
-              lang="typescript"
-              filename="three files"
               code={TS_ALIAS}
+              filename="three files"
               highlightLines={[5, 8]}
+              lang="typescript"
               notes={[{ line: 9, text: 'grep "Widget" never finds this' }]}
             />
             <p className="l4-dim">
@@ -1028,22 +1026,22 @@ export function Story() {
                 baml — aliasing does not exist
               </p>
               <BamlCode
-                filename="ns_b/b.baml"
                 code={NS_BAD}
                 diagnostics={[
                   {
                     line: 2,
-                    severity: 'error',
                     message:
                       'unresolved type: Widget. Did you mean `root.a.Widget`?',
+                    severity: 'error',
                   },
                 ]}
+                filename="ns_b/b.baml"
               />
             </div>
             <div>
               <BamlCode
-                filename="ns_b/b.baml"
                 code={NS_GOOD}
+                filename="ns_b/b.baml"
                 highlightLines={[2, 3]}
               />
             </div>
@@ -1056,7 +1054,7 @@ export function Story() {
         </div>
         <div style={{ marginTop: '1.4rem' }}>
           <p className="l4-pane-label">and the namespaces are just files</p>
-          <TermPlay title="the filesystem is the map" events={LS_EVENTS} />
+          <TermPlay events={LS_EVENTS} title="the filesystem is the map" />
         </div>
         <p className="l4-note">
           {
@@ -1066,7 +1064,7 @@ export function Story() {
       </Section>
 
       {/* ---- 10 pack ---- */}
-      <Section id="pack" num="13" kicker="programs are shareable" width="wide">
+      <Section id="pack" kicker="programs are shareable" num="13" width="wide">
         <h2>{'Programs should be shareable instantly'}</h2>
         <p className="l4-lead">
           {
@@ -1077,8 +1075,8 @@ export function Story() {
           <div className="l4-stackv">
             <p className="l4-pane-label">the source — one parameter</p>
             <BamlCode
-              filename="main.baml"
               code={BAML_PACKED}
+              filename="main.baml"
               highlightLines={[1]}
               notes={[{ line: 1, text: 'name: string → --name <flag>' }]}
             />
@@ -1092,7 +1090,7 @@ export function Story() {
             <p className="l4-pane-label l4-pane-label--after">
               pack it, run it, ask it for help
             </p>
-            <TermPlay title="baml pack" events={PACK_EVENTS} />
+            <TermPlay events={PACK_EVENTS} title="baml pack" />
           </div>
         </div>
       </Section>
@@ -1100,8 +1098,8 @@ export function Story() {
       {/* ---- 11 embed ---- */}
       <Section
         id="embed"
-        num="14"
         kicker="in the app you already have"
+        num="14"
         width="wide"
       >
         <h2>{'Adopt it one function at a time'}</h2>
@@ -1125,7 +1123,7 @@ export function Story() {
       </Section>
 
       {/* ---- two-way ---- */}
-      <Section id="twoway" num="15" kicker="two-way" width="wide">
+      <Section id="twoway" kicker="two-way" num="15" width="wide">
         <h2>{'Functions go in, too'}</h2>
         <p className="l4-lead">
           {
@@ -1137,8 +1135,8 @@ export function Story() {
             <p className="l4-pane-label">baml — a function-typed parameter</p>
             <BamlEditor
               filename="tally.baml"
-              initialCode={BAML_TALLY}
               highlightLines={[2]}
+              initialCode={BAML_TALLY}
             />
           </div>
           <div>
@@ -1146,10 +1144,10 @@ export function Story() {
               python — pass a plain function
             </p>
             <BamlCode
-              lang="python"
-              filename="app.py"
               code={PY_CALLBACK}
+              filename="app.py"
               highlightLines={[6]}
+              lang="python"
             />
           </div>
         </div>
@@ -1161,7 +1159,7 @@ export function Story() {
       </Section>
 
       {/* ---- 12 metrics design ---- */}
-      <Section id="metrics" num="16" kicker="where this goes" width="wide">
+      <Section id="metrics" kicker="where this goes" num="16" width="wide">
         <span className="l3-design-tag font-mono">
           design proposal — not shipped
         </span>
@@ -1174,10 +1172,10 @@ export function Story() {
         <MetricsDag />
         <div className="l4-pair" style={{ marginTop: '1.4rem' }}>
           <BamlCode
-            lang="baml"
-            filename="resume.baml (proposed)"
             code={BAML_METRIC}
+            filename="resume.baml (proposed)"
             highlightLines={[10, 15]}
+            lang="baml"
           />
           <p className="l4-note" style={{ marginTop: 0 }}>
             {
@@ -1188,7 +1186,7 @@ export function Story() {
       </Section>
 
       {/* ---- 13 tradeoffs ---- */}
-      <Section id="tradeoffs" num="17" kicker="the honest part">
+      <Section id="tradeoffs" kicker="the honest part" num="17">
         <h2>{'What you are signing up for'}</h2>
         <ul className="l4-feature-list">
           <li>
@@ -1219,8 +1217,8 @@ export function Story() {
           <a
             className="l4-close-link"
             href="https://new.boundaryml.com/quickstart"
-            target="_blank"
             rel="noreferrer"
+            target="_blank"
           >
             new.boundaryml.com/quickstart →
           </a>
