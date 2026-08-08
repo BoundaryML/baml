@@ -2471,7 +2471,10 @@ mod tests {
             let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
             let segments: Vec<&str> = rest.split('.').collect();
             let baml_name = segments.last().unwrap();
-            let name = camel_to_snake(baml_name);
+            // Audit the identifier the generator actually emits. Rust keywords
+            // such as `Builder.type` are escaped with a trailing underscore so
+            // they can also be embedded in `__glue_{name}`.
+            let name = rust_method_name(baml_name);
             let has_mut_receiver = b
                 .receiver
                 .as_ref()
