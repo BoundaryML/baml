@@ -1,26 +1,23 @@
-// The model passes: what the name heuristic cannot reach.
+// The model side of the pipeline: the client, the transcript, and the plumbing
+// every pass shares.
 //
-// Three passes, each answering a different question:
+// The passes themselves are being rebuilt TypeScript-first. What lived here
+// before asked its question from the BAML side — for each BAML symbol, does a
+// shortlist of TypeScript candidates hold a counterpart? — and narrowed that
+// shortlist lexically because the model had no way to look anything up. Both
+// halves of that design are wrong for the question the matrix now answers, so
+// both are gone rather than adapted: a reader arrives knowing TypeScript, and a
+// model that can search the BAML surface does not need to be handed a menu.
 //
-//   1. propose — for each BAML symbol still unjudged, does its pool hold a
-//      counterpart? Runs BAML-first, one call per owner.
-//   2. sweep   — for each TypeScript symbol nothing claims, is there a BAML
-//      symbol that does its job? The other direction, because a BAML name that
-//      suggests nothing gives pass 1 nothing to search for.
-//   3. verify  — for every proposed pairing, and every pairing the name pass
-//      produced, is it actually true? Adversarial, and framed to refute.
+// What survives is what is independent of the question: the client and its
+// retry policy, the ordered transcript, the id indexes, and the concurrency and
+// progress plumbing.
 //
 // The model is a proposer, never an authority. Every claim names symbols by id
-// and is checked against the pool that was actually offered, so a prompt that
-// starts inventing shows up as a count rather than as quietly worse data. A
-// call that does not come back is recorded as a failure — never as an empty
-// verdict, which reads exactly like an honest "found nothing".
-//
-// Each pass takes an ordered transcript rather than one string, and answers
-// with a union of variants. Both are for what comes next: a `Lookup` variant
-// the runner executes and appends as another turn is then an addition rather
-// than a rewrite. Pool-narrowing is the non-agentic approximation of that
-// lookup — showing a plausible menu up front instead of letting the model ask.
+// and is checked against the surface, so a prompt that starts inventing shows
+// up as a count rather than as quietly worse data. A call that does not come
+// back is recorded as a failure — never as an empty verdict, which reads
+// exactly like an honest "found nothing".
 
 retry_policy AlignerRetry {
     max_retries: 3,
@@ -42,9 +39,8 @@ client<llm> Aligner {
 
 /// One turn of a conversation with the model.
 ///
-/// The passes each send a single turn today. The shape is a transcript because
-/// the next thing to build appends to one: ask, receive a request for detail,
-/// answer it, ask again.
+/// A transcript rather than one string because the pass being built appends to
+/// one: ask, receive a request to look something up, answer it, ask again.
 class Turn {
     role: string,
     text: string,
@@ -58,7 +54,7 @@ function render_turns(turns: Turn[]) -> string {
     parts.join("\n\n")
 }
 
-// ── what the model is shown ─────────────────────────────────────────────────
+// ── how a symbol is shown ───────────────────────────────────────────────────
 
 function first_line(doc: string?) -> string {
     let text = doc ?? "";
@@ -84,241 +80,15 @@ function ts_line(symbol: TsSymbol) -> string {
 /// What a previous run concluded about a symbol that has since changed. Shown
 /// so the model can say the conclusion still holds rather than starting over.
 function prior_line(judgement: Judgement) -> string {
-    let counterpart = judgement.ts ?? "nothing";
-    `- [${judgement.baml}] was ${judgement.verdict} with ${counterpart} — ${judgement.reason ?? "no reason recorded"}`
-}
-
-// ── pass 1: propose ─────────────────────────────────────────────────────────
-
-class Proposal {
-    baml: string @description("the BAML id from inside [ ], exactly as written"),
-    verdict: "match" | "divergent" | "none" | "bless",
-    ts: string? @description("the TypeScript id from inside [ ]; omit for none and bless"),
-    confidence: "high" | "medium" | "low",
-    reason: string @description("under 15 words"),
-    divergence: string? @description("how the two differ; only for divergent, under 20 words"),
-}
-
-class ProposeVerdict {
-    proposals: Proposal[],
-}
-
-/// A pass's answer, or the reason there is none.
-type PassResult = ProposeVerdict | PassFailure;
-
-class ProposeRequest {
-    owner: string,
-    baml_lines: string[],
-    ts_lines: string[],
-    prior_lines: string[],
-}
-
-function propose_turns(request: ProposeRequest) -> Turn[] {
-    let prior_section = if (request.prior_lines.length() > 0) {
-        `
-
-A previous run concluded the following. The symbols have changed since, so the
-conclusions are up for review — answer "bless" if one still holds.
-${request.prior_lines.join("\n")}`
+    let counterpart = if (judgement.baml.length() > 0) {
+        judgement.baml.join(", ")
     } else {
-        ""
+        "nothing"
     };
-    [
-        Turn {
-            role: "system",
-            text: #"
-                You are comparing two standard libraries: BAML and TypeScript.
-
-                For each BAML symbol, decide whether the TypeScript candidates hold a
-                counterpart. Judge behaviour, not spelling: `substring` and `slice` are the same
-                operation; `push` and `pop` are not, despite both mutating an array.
-
-                Expect the two libraries to reach the same operation differently, and record
-                that rather than rejecting the pair. BAML puts static methods on primitives
-                where TypeScript uses free functions, and reaches operators through interface
-                impls where TypeScript uses built-in syntax. Those are "divergent", not "none".
-
-                Answer once per BAML symbol, naming symbols by the id inside [ ]:
-                  match      the same operation, reached the same way
-                  divergent  the same operation, reached differently — say how
-                  none       nothing offered does this symbol's job
-                  bless      a previous conclusion, shown to you, still holds
-
-                Use each TypeScript candidate at most once. A symbol with no counterpart is a
-                real finding about the two libraries, not a failure to try harder — prefer
-                "none" over a strained pairing.
-            "#,
-        },
-        Turn {
-            role: "user",
-            text: `BAML symbols owned by ${request.owner}:
-${request.baml_lines.join("\n")}
-
-TypeScript candidates:
-${request.ts_lines.join("\n")}${prior_section}`,
-        },
-    ]
+    `- [${judgement.ts}] was ${judgement.verdict} with ${counterpart} — ${judgement.reason ?? "no reason recorded"}`
 }
 
-function propose(transcript: string) -> ProposeVerdict {
-    client: Aligner
-    prompt: `
-        ${transcript}
-
-        ${ctx.output_format}
-    `
-}
-
-/// One call, with its failure captured rather than flattened into silence.
-function propose_once(request: ProposeRequest) -> PassResult {
-    //# ask which of this owner's symbols have a counterpart in the pool
-    propose(render_turns(propose_turns(request))) catch_all (error) {
-        _ => PassFailure { pass: "propose", subject: request.owner, reason: `${error}` },
-    }
-}
-
-// ── pass 2: sweep ───────────────────────────────────────────────────────────
-
-class SweepRequest {
-    container: string,
-    ts_lines: string[],
-    baml_lines: string[],
-}
-
-function sweep_turns(request: SweepRequest) -> Turn[] {
-    [
-        Turn {
-            role: "system",
-            text: #"
-                You are comparing two standard libraries: BAML and TypeScript.
-
-                This is the reverse direction: for each TypeScript symbol, decide whether any
-                BAML candidate does its job. Everything here went unclaimed when the question
-                was asked the other way round, usually because the BAML name gives nothing to
-                search for — `baml.sys.exec` for `child_process.spawn`, `baml.id.new` for
-                `crypto.randomUUID`.
-
-                Judge behaviour, not spelling. Answer once per TypeScript symbol, naming symbols
-                by the id inside [ ]:
-                  match      the same operation, reached the same way
-                  divergent  the same operation, reached differently — say how
-                  none       no BAML candidate does this symbol's job
-
-                TypeScript has plenty BAML has not, and saying so is the point of the exercise.
-                Prefer "none" over a strained pairing.
-            "#,
-        },
-        Turn {
-            role: "user",
-            text: `Unclaimed TypeScript symbols in ${request.container}:
-${request.ts_lines.join("\n")}
-
-BAML candidates:
-${request.baml_lines.join("\n")}`,
-        },
-    ]
-}
-
-/// The sweep answers about TypeScript symbols, so a proposal's `baml` field
-/// carries the TypeScript id and `ts` the BAML one. `apply_sweep` puts them
-/// back the right way round.
-function sweep(transcript: string) -> ProposeVerdict {
-    client: Aligner
-    prompt: `
-        ${transcript}
-
-        ${ctx.output_format}
-    `
-}
-
-function sweep_once(request: SweepRequest) -> PassResult {
-    //# ask which unclaimed TypeScript symbols have a BAML counterpart
-    sweep(render_turns(sweep_turns(request))) catch_all (error) {
-        _ => PassFailure { pass: "sweep", subject: request.container, reason: `${error}` },
-    }
-}
-
-// ── pass 3: verify ──────────────────────────────────────────────────────────
-
-class Ruling {
-    baml: string @description("the BAML id from inside [ ]"),
-    ts: string @description("the TypeScript id from inside [ ]"),
-    upheld: bool,
-    reason: string @description("under 20 words"),
-    divergence: string? @description("how they differ, if it survives but is not exact"),
-}
-
-class VerifyVerdict {
-    rulings: Ruling[],
-}
-
-type VerifyResult = VerifyVerdict | PassFailure;
-
-class VerifyRequest {
-    owner: string,
-    pair_lines: string[],
-}
-
-function verify_turns(request: VerifyRequest) -> Turn[] {
-    [
-        Turn {
-            role: "system",
-            text: #"
-                You are checking claimed equivalences between the BAML and TypeScript standard
-                libraries. Each pairing below has been proposed by someone else. Your job is to
-                try to refute it.
-
-                A pairing survives only if the two really do the same job. Look for the ways
-                that fails: different units, different edge-case behaviour, one throwing where
-                the other returns null, one mutating where the other copies, one handling a case
-                the other does not, a name that promises more than the signature delivers.
-
-                Default to refuting when you are unsure. A wrong pairing is worse than a missing
-                one — it is a claim about two libraries that someone will act on, and nothing
-                downstream will question it.
-
-                If a pairing survives but the two differ in a way a reader should know, say so
-                as a divergence. Answer once per pairing.
-            "#,
-        },
-        Turn {
-            role: "user",
-            text: `Claimed equivalences involving ${request.owner}:
-${request.pair_lines.join("\n")}`,
-        },
-    ]
-}
-
-function verify(transcript: string) -> VerifyVerdict {
-    client: Aligner
-    prompt: `
-        ${transcript}
-
-        ${ctx.output_format}
-    `
-}
-
-function verify_once(request: VerifyRequest) -> VerifyResult {
-    //# try to refute each claimed equivalence
-    verify(render_turns(verify_turns(request))) catch_all (error) {
-        _ => PassFailure { pass: "verify", subject: request.owner, reason: `${error}` },
-    }
-}
-
-// ── running the passes ──────────────────────────────────────────────────────
-
-/// What a full alignment did, in numbers a reader can check against the report.
-class AlignOutcome {
-    matrix: SymbolMatrix,
-    proposed: int,
-    swept: int,
-    upheld: int,
-    refuted: int,
-    /// Claims naming a symbol that was never offered, or a second claim on a
-    /// symbol already spoken for. Counted by name so a drifting prompt is
-    /// visible rather than merely quieter.
-    rejected: string[],
-}
+// ── indexes ─────────────────────────────────────────────────────────────────
 
 function symbols_by_id(matrix: SymbolMatrix) -> map<string, BamlSymbol> {
     let index: map<string, BamlSymbol> = {};
@@ -336,587 +106,25 @@ function ts_by_id(matrix: SymbolMatrix) -> map<string, TsSymbol> {
     index
 }
 
-/// Builds one request per owner that has symbols left to judge and a pool to
-/// judge them against. An owner whose pool is empty never becomes a request —
-/// `record_empty_pools` answers for it without a call.
-function propose_requests(
-    matrix: SymbolMatrix,
-    pools: CandidatePool[],
-    revision: Revision?,
-) -> ProposeRequest[] {
-    let pending = pending_symbols(matrix);
-    let by_owner: map<string, BamlSymbol[]> = {};
-    for (let symbol in pending) {
-        let owner = baml_owner_display(symbol);
-        let bucket: BamlSymbol[] = by_owner.get(owner) ?? [];
-        bucket.push(symbol);
-        let _ = by_owner.set(owner, bucket);
-    }
-
-    let ts_index = ts_by_id(matrix);
-    let requests: ProposeRequest[] = [];
-    for (let pool in pools) {
-        if (pool.ts_ids.length() == 0) {
-            continue;
-        }
-        let members: BamlSymbol[] = by_owner.get(pool.owner) ?? [];
-        let baml_lines: string[] = [];
-        let prior_lines: string[] = [];
-        // A pre-typed empty: `?? []` in an expression position yields
-        // `Judgement[] | _[]` rather than unifying with the map's value type.
-        let no_priors: Judgement[] = [];
-        for (let member in members) {
-            baml_lines.push(baml_line(member));
-            if let before: Revision = revision {
-                for (let judgement in before.judgements.get(member.id) ?? no_priors) {
-                    prior_lines.push(prior_line(judgement));
-                }
-            }
-        }
-        let ts_lines: string[] = [];
-        for (let id in pool.ts_ids) {
-            if let symbol: TsSymbol = ts_index.get(id) {
-                ts_lines.push(ts_line(symbol));
-            }
-        }
-        requests
-            .push(
-                ProposeRequest {
-                    owner: pool.owner,
-                    baml_lines: baml_lines,
-                    ts_lines: ts_lines,
-                    prior_lines: prior_lines,
-                },
-            );
-    }
-    requests
-}
-
-/// An owner with no plausible counterpart is answered without asking.
-///
-/// This is the cheapest judgement in the pipeline and one of the most honest:
-/// `baml.csv` has no TypeScript counterpart, the table says so, and spending a
-/// call to be told the same thing would only add a way to be wrong.
-function record_empty_pools(matrix: SymbolMatrix, pools: CandidatePool[]) -> int {
-    let pending = pending_symbols(matrix);
-    let by_owner: map<string, BamlSymbol[]> = {};
-    for (let symbol in pending) {
-        let owner = baml_owner_display(symbol);
-        let bucket: BamlSymbol[] = by_owner.get(owner) ?? [];
-        bucket.push(symbol);
-        let _ = by_owner.set(owner, bucket);
-    }
-    let recorded = 0;
-    let none: string[] = [];
-    let no_members: BamlSymbol[] = [];
-    for (let pool in pools) {
-        if (pool.ts_ids.length() > 0) {
-            continue;
-        }
-        for (let member in by_owner.get(pool.owner) ?? no_members) {
-            matrix
-                .judgements
-                .push(
-                    Judgement {
-                        baml: member.id,
-                        ts: null,
-                        verdict: "none",
-                        basis: "no-candidates",
-                        confidence: null,
-                        reason: `nothing in TypeScript corresponds to ${pool.owner}`,
-                        divergence: null,
-                        rejected: none,
-                        verified: false,
-                    },
-                );
-            recorded += 1;
-        }
-    }
-    recorded
-}
-
-/// Folds proposals in, keeping only those that name symbols actually offered.
-function apply_proposals(
-    matrix: SymbolMatrix,
-    results: PassResult[],
-    revision: Revision?,
-) -> AlignOutcome {
-    let baml_index = symbols_by_id(matrix);
-    let ts_index = ts_by_id(matrix);
-    let judged: map<string, bool> = {};
-    for (let judgement in matrix.judgements) {
-        let _ = judged.set(judgement.baml, true);
-    }
-
-    let rejected: string[] = [];
-    let applied = 0;
-    let none: string[] = [];
-    for (let result in results) {
-        match (result) {
-            let failure: PassFailure => {
-                matrix.failures.push(failure);
-            },
-            let verdict: ProposeVerdict => {
-                for (let proposal in verdict.proposals) {
-                    if (!baml_index.has(proposal.baml)) {
-                        rejected.push(`${proposal.baml} is not a BAML symbol`);
-                        continue;
-                    }
-                    if (judged.has(proposal.baml)) {
-                        rejected.push(`${proposal.baml} was already judged`);
-                        continue;
-                    }
-                    let pairs = proposal.verdict == "match" || proposal.verdict == "divergent";
-                    let counterpart = proposal.ts ?? "";
-                    if (pairs && !ts_index.has(counterpart)) {
-                        rejected.push(`${counterpart} is not a TypeScript symbol`);
-                        continue;
-                    }
-                    if (proposal.verdict == "bless") {
-                        let carried = carry_blessed(proposal, revision);
-                        match (carried) {
-                            null => {
-                                rejected.push(`${proposal.baml} has no previous verdict to bless`);
-                            },
-                            let judgement: Judgement => {
-                                let _ = judged.set(proposal.baml, true);
-                                matrix.judgements.push(judgement);
-                                applied += 1;
-                            },
-                        }
-                        continue;
-                    }
-                    let _ = judged.set(proposal.baml, true);
-                    matrix
-                        .judgements
-                        .push(
-                            Judgement {
-                                baml: proposal.baml,
-                                ts: if (pairs) {
-                                    counterpart
-                                } else {
-                                    null
-                                },
-                                verdict: proposal.verdict,
-                                basis: "model",
-                                confidence: proposal.confidence,
-                                reason: proposal.reason,
-                                divergence: proposal.divergence,
-                                rejected: none,
-                                verified: false,
-                            },
-                        );
-                    applied += 1;
-                }
-            },
-        }
-    }
-
-    matrix.counts = recount(matrix);
-    AlignOutcome {
-        matrix: matrix,
-        proposed: applied,
-        swept: 0,
-        upheld: 0,
-        refuted: 0,
-        rejected: rejected,
-    }
-}
-
-/// A blessed proposal takes the previous verdict whole, and records that a
-/// model looked at it again. The pairing is the old one; only the endorsement
-/// is new.
-function carry_blessed(proposal: Proposal, revision: Revision?) -> Judgement? {
-    let out: Judgement? = null;
-    let no_priors: Judgement[] = [];
-    if let before: Revision = revision {
-        if let prior: Judgement = (before.judgements.get(proposal.baml) ?? no_priors).at(0) {
-            out
-                = Judgement {
-                    baml: prior.baml,
-                    ts: prior.ts,
-                    verdict: prior.verdict,
-                    basis: "model",
-                    confidence: proposal.confidence,
-                    reason: `unchanged in substance: ${proposal.reason}`,
-                    divergence: prior.divergence,
-                    rejected: prior.rejected,
-                    verified: true,
-                };
-        }
-    }
-    out
-}
-
-/// One request per container that still holds unclaimed symbols.
-function sweep_requests(matrix: SymbolMatrix) -> SweepRequest[] {
-    let claimed: map<string, bool> = {};
-    for (let judgement in matrix.judgements) {
-        if (judgement_pairs(judgement)) {
-            if let ts: string = judgement.ts {
-                let _ = claimed.set(ts, true);
-            }
-        }
-    }
-
-    let by_container: map<string, TsSymbol[]> = {};
-    let order: string[] = [];
-    for (let symbol in matrix.ts) {
-        if (claimed.has(symbol.id)) {
-            continue;
-        }
-        let container = symbol.symbol.at(0) ?? "";
-        if (!by_container.has(container)) {
-            let empty: TsSymbol[] = [];
-            let _ = by_container.set(container, empty);
-            order.push(container);
-        }
-        if let bucket: TsSymbol[] = by_container.get(container) {
-            bucket.push(symbol);
-        }
-    }
-
-    let candidates = unpaired_symbols(matrix);
-    let scope = sweep_scope(candidates);
-    let requests: SweepRequest[] = [];
-    for (let container in order) {
-        let members: TsSymbol[] = by_container.get(container) ?? [];
-        let offered = baml_candidates_for(candidates, container, members, scope);
-        if (offered.length() == 0) {
-            continue;
-        }
-        let ts_lines: string[] = [];
-        for (let member in members) {
-            ts_lines.push(ts_line(member));
-        }
-        let baml_lines: string[] = [];
-        for (let candidate in offered) {
-            baml_lines.push(baml_line(candidate));
-        }
-        requests
-            .push(SweepRequest { container: container, ts_lines: ts_lines, baml_lines: baml_lines });
-    }
-    requests
-}
-
-/// The pool, inverted: which BAML symbols could answer for this container.
-///
-/// The same two sources as the forward pool — the correspondence table, read
-/// backwards, and a lexical shortlist — so the two directions agree about what
-/// is in scope even though they ask different questions.
-function baml_candidates_for(
-    universe: BamlSymbol[],
-    container: string,
-    members: TsSymbol[],
-    scope: SweepScope,
-) -> BamlSymbol[] {
-    let candidates: BamlSymbol[] = [];
-    let taken: map<string, bool> = {};
-    let index = 0;
-    for (let symbol in universe) {
-        // `scope.keys` is empty for the kinds a TypeScript member could never
-        // correspond to — a declaration is not an operation.
-        let eligible = (scope.keys.at(index) ?? "").length() > 0;
-        if (eligible && (scope.containers.at(index)?.includes(container) ?? false)) {
-            let _ = taken.set(symbol.id, true);
-            candidates.push(symbol);
-        }
-        index += 1;
-    }
-    let member_keys = ts_match_keys(members);
-    let scan = 0;
-    for (let symbol in universe) {
-        let key = scope.keys.at(scan) ?? "";
-        scan += 1;
-        if (taken.has(symbol.id) || key.length() == 0) {
-            continue;
-        }
-        if (candidates.length() >= pool_cap()) {
-            continue;
-        }
-        let shares = false;
-        for (let member_key in member_keys) {
-            if (!shares && stems_share(key, member_key)) {
-                shares = true;
-            }
-        }
-        if (shares) {
-            let _ = taken.set(symbol.id, true);
-            candidates.push(symbol);
-        }
-    }
-    candidates
-}
-
-/// The BAML side, normalized once for the whole sweep.
-///
-/// Every container asks the same two questions of every BAML symbol — which
-/// containers does its owner correspond to, and what is its match key — and
-/// answering them per container is what made this pass quadratic. Types and
-/// variants are excluded here rather than per container: neither is something a
-/// TypeScript member could be.
-class SweepScope {
-    containers: string[][],
-    keys: string[],
-}
-
-function sweep_scope(universe: BamlSymbol[]) -> SweepScope {
-    let by_owner: map<string, string[]> = {};
-    let containers: string[][] = [];
-    let keys: string[] = [];
-    let no_containers: string[] = [];
-    for (let symbol in universe) {
-        let owner = baml_owner_display(symbol);
-        if (!by_owner.has(owner)) {
-            let _ = by_owner.set(owner, pool_containers(owner));
-        }
-        containers.push(by_owner.get(owner) ?? no_containers);
-        keys.push(
-            if (symbol.origin == "type" || symbol.origin == "variant") {
-                ""
-            } else {
-                match_key(baml_name_of(symbol))
-            },
-        );
-    }
-    SweepScope { containers: containers, keys: keys }
-}
-
-/// Folds the sweep in. Its answers are about TypeScript symbols, so the sides
-/// arrive swapped: `baml` holds the TypeScript id it was asked about, `ts` the
-/// BAML symbol it proposes.
-function apply_sweep(matrix: SymbolMatrix, results: PassResult[]) -> AlignOutcome {
-    let baml_index = symbols_by_id(matrix);
-    let ts_index = ts_by_id(matrix);
-    let paired: map<string, bool> = {};
-    let claimed: map<string, bool> = {};
-    for (let judgement in matrix.judgements) {
-        if (judgement_pairs(judgement)) {
-            let _ = paired.set(judgement.baml, true);
-            if let ts: string = judgement.ts {
-                let _ = claimed.set(ts, true);
-            }
-        }
-    }
-    // A symbol the forward pass judged to have no counterpart may be overturned
-    // here: that judgement was made against a pool which evidently did not hold
-    // the answer, and finding it from the other side is what this pass is for.
-    let overturned: map<string, bool> = {};
-
-    let rejected: string[] = [];
-    let applied = 0;
-    let none: string[] = [];
-    for (let result in results) {
-        match (result) {
-            let failure: PassFailure => {
-                matrix.failures.push(failure);
-            },
-            let verdict: ProposeVerdict => {
-                for (let proposal in verdict.proposals) {
-                    let ts_id = proposal.baml;
-                    let baml_id = proposal.ts ?? "";
-                    if (proposal.verdict == "none" || proposal.verdict == "bless") {
-                        // The sweep only adds pairings. A TypeScript symbol with
-                        // no BAML counterpart is already recorded by absence.
-                        continue;
-                    }
-                    if (!ts_index.has(ts_id)) {
-                        rejected.push(`${ts_id} is not a TypeScript symbol`);
-                        continue;
-                    }
-                    if (!baml_index.has(baml_id)) {
-                        rejected.push(`${baml_id} is not a BAML symbol`);
-                        continue;
-                    }
-                    if (paired.has(baml_id)) {
-                        rejected.push(`${baml_id} already has a counterpart`);
-                        continue;
-                    }
-                    if (claimed.has(ts_id)) {
-                        rejected.push(`${ts_id} was already claimed`);
-                        continue;
-                    }
-                    let _ = paired.set(baml_id, true);
-                    let _ = claimed.set(ts_id, true);
-                    let _ = overturned.set(baml_id, true);
-                    matrix
-                        .judgements
-                        .push(
-                            Judgement {
-                                baml: baml_id,
-                                ts: ts_id,
-                                verdict: proposal.verdict,
-                                basis: "model",
-                                confidence: proposal.confidence,
-                                reason: proposal.reason,
-                                divergence: proposal.divergence,
-                                rejected: none,
-                                verified: false,
-                            },
-                        );
-                    applied += 1;
-                }
-            },
-        }
-    }
-
-    // Drop the absences this pass overturned, keeping the pairing that replaced
-    // them. Leaving both would have one symbol claiming a counterpart and
-    // denying one in the same report.
-    let kept: Judgement[] = [];
-    for (let judgement in matrix.judgements) {
-        if (!judgement_pairs(judgement) && overturned.has(judgement.baml)) {
-            continue;
-        }
-        kept.push(judgement);
-    }
-    matrix.judgements = kept;
-    matrix.counts = recount(matrix);
-    AlignOutcome {
-        matrix: matrix,
-        proposed: 0,
-        swept: applied,
-        upheld: 0,
-        refuted: 0,
-        rejected: rejected,
-    }
-}
-
-/// One request per owner whose pairings have not been checked. Name matches go
-/// in alongside model proposals: name agreement is a heuristic, and this is the
-/// pass that decides whether to believe it.
-function verify_requests(matrix: SymbolMatrix) -> VerifyRequest[] {
-    let baml_index = symbols_by_id(matrix);
-    let ts_index = ts_by_id(matrix);
-    let by_owner: map<string, string[]> = {};
-    let order: string[] = [];
-    for (let judgement in matrix.judgements) {
-        if (!judgement_pairs(judgement) || judgement.verified) {
-            continue;
-        }
-        if let symbol: BamlSymbol = baml_index.get(judgement.baml) {
-            if let counterpart: TsSymbol = ts_index.get(judgement.ts ?? "") {
-                let owner = baml_owner_display(symbol);
-                if (!by_owner.has(owner)) {
-                    let empty: string[] = [];
-                    let _ = by_owner.set(owner, empty);
-                    order.push(owner);
-                }
-                if let bucket: string[] = by_owner.get(owner) {
-                    bucket.push(pair_line(symbol, counterpart, judgement));
-                }
-            }
-        }
-    }
-
-    let requests: VerifyRequest[] = [];
-    for (let owner in order) {
-        let lines: string[] = by_owner.get(owner) ?? [];
-        requests.push(VerifyRequest { owner: owner, pair_lines: lines });
-    }
-    requests
-}
-
-function pair_line(symbol: BamlSymbol, counterpart: TsSymbol, judgement: Judgement) -> string {
-    let claim = judgement.reason ?? "names and owners agree";
-    [
-        `- [${symbol.id}] ${symbol.display}${symbol.signature?.display ?? ""}`,
-        `  ↔ [${counterpart.id}] ${counterpart.signature.lines().at(0) ?? ""}`,
-        `  claimed because: ${claim}`,
-    ]
-    .join("\n")
-}
-
-/// Folds rulings in.
-///
-/// A refuted pairing becomes a recorded absence carrying the counterpart that
-/// was refused, so the next run does not propose it again. That is the whole
-/// reason to record a refutation rather than simply dropping the pairing.
-function apply_rulings(matrix: SymbolMatrix, results: VerifyResult[]) -> AlignOutcome {
-    let rulings: map<string, Ruling> = {};
-    for (let result in results) {
-        match (result) {
-            let failure: PassFailure => {
-                matrix.failures.push(failure);
-            },
-            let verdict: VerifyVerdict => {
-                for (let ruling in verdict.rulings) {
-                    let _ = rulings.set(`${ruling.baml}\u{1f}${ruling.ts}`, ruling);
-                }
-            },
-        }
-    }
-
-    let upheld = 0;
-    let refuted = 0;
-    let kept: Judgement[] = [];
-    for (let judgement in matrix.judgements) {
-        let key = `${judgement.baml}\u{1f}${judgement.ts ?? ""}`;
-        match (rulings.get(key)) {
-            null => {
-                kept.push(judgement);
-            },
-            let ruling: Ruling => {
-                if (ruling.upheld) {
-                    judgement.verified = true;
-                    if let divergence: string = ruling.divergence {
-                        judgement.verdict = "divergent";
-                        judgement.divergence = divergence;
-                    }
-                    kept.push(judgement);
-                    upheld += 1;
-                } else {
-                    let refused = judgement.rejected;
-                    if let counterpart: string = judgement.ts {
-                        refused.push(counterpart);
-                    }
-                    kept.push(
-                        Judgement {
-                            baml: judgement.baml,
-                            ts: null,
-                            verdict: "none",
-                            basis: "model",
-                            confidence: null,
-                            reason: `refuted: ${ruling.reason}`,
-                            divergence: null,
-                            rejected: refused,
-                            verified: true,
-                        },
-                    );
-                    refuted += 1;
-                }
-            },
-        }
-    }
-    matrix.judgements = kept;
-    matrix.counts = recount(matrix);
-    AlignOutcome {
-        matrix: matrix,
-        proposed: 0,
-        swept: 0,
-        upheld: upheld,
-        refuted: refuted,
-        rejected: [],
-    }
-}
-
 /// Judgements in a fixed order, so a report diffs against its predecessor
-/// rather than against the order three concurrent passes happened to finish in.
+/// rather than against the order concurrent sessions happened to finish in.
 function sort_judgements(matrix: SymbolMatrix) -> null {
     matrix.judgements.sort_by_key((judgement) -> {
-        `${judgement.baml}\u{1f}${judgement.ts ?? ""}`
+        `${judgement.ts}\u{1f}${judgement.baml.join(",")}`
     });
     null
 }
 
+// ── running a pass ──────────────────────────────────────────────────────────
+
 /// How many calls may be in flight at once, by default.
 ///
-/// A cold run is a few hundred calls that would otherwise all start at the same
-/// instant, which is the shape of traffic a provider rate-limits hardest. The
-/// cap is deliberately modest: the passes are wide rather than deep, so the run
-/// is bounded by the slowest call in each batch either way, and a 429 costs a
-/// retry with backoff that would have taken longer than waiting. `--concurrency`
-/// raises it for an account whose limits allow.
+/// A cold run is a few hundred sessions that would otherwise all start at the
+/// same instant, which is the shape of traffic a provider rate-limits hardest.
+/// The cap is deliberately modest: the passes are wide rather than deep, so the
+/// run is bounded by the slowest call in each batch either way, and a 429 costs
+/// a retry with backoff that would have taken longer than waiting.
+/// `--concurrency` raises it for an account whose limits allow.
 function call_limit() -> int {
     8
 }
@@ -942,99 +150,771 @@ function report_progress(message: string) -> void {
     baml.io.eprintln(`  stdlib-matrix: ${message}`);
 }
 
-/// Runs a pass's calls with a bounded number in flight, reporting as they land.
+// ── the session ─────────────────────────────────────────────────────────────
+//
+// One session per TypeScript container, answering for the container and every
+// member it holds. A container is the right unit because its members share a
+// context: whoever has just worked out that `Date` is `baml.time.Instant` is
+// the cheapest possible judge of `Date.now`, and asking per member would pay
+// for that discovery fifty-one times.
+//
+// The session is a loop, not a call. The model may look things up, and what it
+// looks up is decided by what it has already seen — which is the whole reason
+// the old shortlist could not work: a menu has to be built before the question
+// is understood.
+
+/// A lookup the model wants run.
+class Lookup {
+    tool: string @description("one of: describe, search, examples, docs"),
+    query: string,
+    why: string? @description("what you expect to learn, under 10 words"),
+}
+
+/// The model asking to see something before it answers.
+class Investigate {
+    lookups: Lookup[] @description("at most 4 at a time"),
+}
+
+/// What was concluded about one TypeScript symbol.
+class Finding {
+    ts: string @description("the TypeScript id from inside [ ], exactly as written"),
+    verdict: "match" | "divergent" | "unnecessary" | "none",
+    baml: string[] @description(
+        "full dotted BAML paths, e.g. baml.time.Instant.now; empty for none and usually for unnecessary",
+    ),
+    confidence: "high" | "medium" | "low",
+    reason: string @description("under 20 words"),
+    divergence: string? @description("how the two differ; only for divergent, under 25 words"),
+    example: CodeExample? @description("only where seeing both spellings teaches something prose cannot"),
+}
+
+/// The model's answer for every symbol it was asked about.
+class Answer {
+    findings: Finding[],
+}
+
+/// A turn of the loop: look something up, or answer.
+type Step = Investigate | Answer;
+
+/// What one session was asked about.
+class SessionRequest {
+    /// The container or module, for progress and for failure reporting.
+    subject: string,
+    /// The TypeScript ids this session must answer for — all of them. Kept
+    /// apart from the rendered lines because completeness is checked against
+    /// it: a session that answers for some of its symbols is sent back.
+    ts_ids: string[],
+    ts_lines: string[],
+    prior_lines: string[],
+}
+
+/// A session that produced nothing, and why.
+type SessionResult = Answer | PassFailure;
+
+function session_rules() -> string {
+    #"
+        You are mapping the TypeScript standard library onto BAML's, for a developer who
+        knows TypeScript and wants to know how to do the same thing in BAML.
+
+        You will be shown TypeScript symbols. For each one, decide what a BAML developer
+        would do instead, and say so. You do not know the BAML standard library from
+        memory — look it up. Guessing at a symbol that does not exist is the one failure
+        that matters here, because it is indistinguishable from an answer.
+
+        Tools, one JSON object each:
+          describe  a BAML symbol or namespace by name — `baml.sys.exec`, `baml.time`
+          search    what something does, in words — "run a subprocess", "parse a date"
+          examples  real call sites for a symbol, from the BAML repository
+          docs      one section of the BAML type system reference
+
+        `search` is the one to reach for first when you do not know the name, which is
+        most of the time. `describe` is for confirming a name you have.
+
+        Answer once per TypeScript symbol, with one of:
+          match        the same operation, reached the same way
+          divergent    the same operation, reached differently — say how in `divergence`
+          unnecessary  BAML makes the question not arise
+          none         nothing in BAML does this symbol's job
+
+        `unnecessary` is the verdict that needs care, and it is often the right one.
+        `Array.isArray` is not missing from BAML and has no counterpart: BAML checks
+        types by pattern matching, so the question only comes up for a value in a union,
+        and `foo is int[]` answers it there. Say that, rather than "none". The same goes
+        for anything the language answers instead of the library — `Object.freeze`
+        against immutable values, `typeof` against `match`.
+
+        Name TypeScript symbols by the id inside [ ], exactly as written. Name BAML
+        symbols by their full dotted path, the way the tools print it —
+        `baml.time.Instant.now`, not `Instant.now`. A BAML path you have not seen in a
+        tool result does not exist; leave `baml` empty and say what you looked for.
+
+        Prefer "none" over a strained pairing. TypeScript has plenty BAML has not, and
+        saying so is a finding rather than a failure to try harder.
+
+        Attach an `example` only where seeing both spellings teaches something the
+        reason cannot — a divergence, or an `unnecessary` whose answer is syntax rather
+        than a symbol. Most findings want none.
+
+        An example's `baml` field is compiled before your answer is accepted. It must be
+        a complete BAML file: declarations at the top level, statements inside a
+        function. This compiles:
+
+          function example() -> string {
+              let parts = "a,b,c".split(",");
+              parts.join("-")
+          }
+
+        If it does not compile you will be shown the error and asked again. Dropping the
+        example is a fine outcome; an example that does not compile is not, because it is
+        the part a reader will copy.
+    "#
+}
+
+/// What a session is told before it is asked anything: what BAML is, then what
+/// the job is.
 ///
-/// The group caps concurrency; the spawn still returns immediately and queues
-/// FIFO, so this reads exactly like the unthrottled version. Each result is
-/// awaited in order rather than through `future.all`, which is what makes
-/// progress reportable at all — `all` yields once, at the end.
-function run_propose_pass(pass: string, requests: ProposeRequest[], limit: int) -> PassResult[] {
-    let group = baml.spawn.TaskGroup.new(limit, name = pass);
-    let pending = requests.map((request) -> {
-        spawn with baml.spawn.options(group = group) { propose_once(request) }
-    });
-    report_progress(`${pass}: ${requests.length()} calls, ${limit} at a time`);
-    let results: PassResult[] = [];
-    for (let future in pending) {
-        results.push(await future);
-        if (results.length() % 10 == 0 || results.length() == pending.length()) {
-            report_progress(`${pass}: ${results.length()}/${pending.length()}`);
-        }
-    }
-    results
+/// The skill goes first because it is the part that changes what the model
+/// believes rather than what it does — a model that thinks BAML is a prompt
+/// template DSL will look for the wrong things whatever the instructions say.
+function session_system(box: Toolbox) -> string {
+    `
+        ${box.skill}
+
+        ---
+
+        ${session_rules()}
+    `
 }
 
-function run_sweep_pass(requests: SweepRequest[], limit: int) -> PassResult[] {
-    let group = baml.spawn.TaskGroup.new(limit, name = "sweep");
-    let pending = requests.map((request) -> {
-        spawn with baml.spawn.options(group = group) { sweep_once(request) }
-    });
-    report_progress(`sweep: ${requests.length()} calls, ${limit} at a time`);
-    let results: PassResult[] = [];
-    for (let future in pending) {
-        results.push(await future);
-        if (results.length() % 10 == 0 || results.length() == pending.length()) {
-            report_progress(`sweep: ${results.length()}/${pending.length()}`);
-        }
-    }
-    results
+function session_user(request: SessionRequest) -> string {
+    let prior = if (request.prior_lines.length() > 0) {
+        `
+
+A previous run concluded the following. The symbols have changed since, so these
+are up for review — repeat a conclusion if it still holds.
+${request.prior_lines.join("\n")}`
+    } else {
+        ""
+    };
+    `TypeScript symbols in ${request.subject}:
+${request.ts_lines.join("\n")}${prior}
+
+Look up what you need, then answer for every symbol above.`
 }
 
-function run_verify_pass(requests: VerifyRequest[], limit: int) -> VerifyResult[] {
-    let group = baml.spawn.TaskGroup.new(limit, name = "verify");
-    let pending = requests.map((request) -> {
-        spawn with baml.spawn.options(group = group) { verify_once(request) }
-    });
-    report_progress(`verify: ${requests.length()} calls, ${limit} at a time`);
-    let results: VerifyResult[] = [];
-    for (let future in pending) {
-        results.push(await future);
-        if (results.length() % 10 == 0 || results.length() == pending.length()) {
-            report_progress(`verify: ${results.length()}/${pending.length()}`);
-        }
-    }
-    results
+/// One turn of the conversation with the model.
+function session_step(transcript: string) -> Step {
+    client: Aligner
+    prompt: `
+        ${transcript}
+
+        ${ctx.output_format}
+    `
 }
 
-/// Runs all three passes over a matrix, in order.
-function align_matrix(matrix: SymbolMatrix, revision: Revision?, concurrency: int) -> AlignOutcome {
-    let limit = effective_limit(concurrency);
-    // Built once: every owner's pool is drawn from the same normalized view of
-    // the TypeScript surface.
-    report_progress("building pools");
-    let pools = build_pools(matrix, pending_symbols(matrix));
-    let requests = propose_requests(matrix, pools, revision);
-    let empty_pools = record_empty_pools(matrix, pools);
-    report_progress(`${empty_pools} symbols answered without a call (no candidates)`);
+/// How many rounds of lookups a session may take before it must answer.
+///
+/// Enough to search, read two or three candidates, and check an example; past
+/// that a session is not converging and another round is unlikely to help.
+function lookup_rounds() -> int {
+    6
+}
 
-    let proposed = apply_proposals(matrix, run_propose_pass("propose", requests, limit), revision);
-    report_progress(`propose: ${proposed.proposed} judged, ${proposed.rejected.length()} claims refused`);
+/// At most this many lookups per round, so one round cannot become a scan of
+/// the whole surface.
+function lookups_per_round() -> int {
+    4
+}
 
-    let sweeps = run_sweep_pass(sweep_requests(proposed.matrix), limit);
-    let swept = apply_sweep(proposed.matrix, sweeps);
-    report_progress(`sweep: ${swept.swept} judged, ${swept.rejected.length()} claims refused`);
-
-    let rulings = run_verify_pass(verify_requests(swept.matrix), limit);
-    let verified = apply_rulings(swept.matrix, rulings);
-    report_progress(`verify: ${verified.upheld} upheld, ${verified.refuted} refuted`);
-    if (verified.matrix.failures.length() > 0) {
-        report_progress(`${verified.matrix.failures.length()} calls did not come back`);
+/// Runs one session to an answer.
+///
+/// A session that will not answer is a failure, never an empty verdict: an
+/// `Answer` with no findings and a session that ran out of rounds are the same
+/// JSON, and they mean opposite things about the two libraries.
+/// Runs one session until it has answered for every symbol it was asked about.
+///
+/// Findings accumulate rather than replace. A model that answers for 51 of 52
+/// symbols has done nearly all the work, and throwing that away to ask again
+/// from scratch would be both wasteful and worse — it gets a second chance to
+/// change its mind about the 51 it already got right. So each attempt
+/// contributes what it covers, and only what is still outstanding is asked for
+/// again.
+///
+/// A finding is outstanding if it never arrived, or if it arrived carrying an
+/// example that does not compile. Those are the same problem — a symbol without
+/// a usable answer — so they take the same route back.
+///
+/// A session that will not answer is a failure, never an empty verdict: an
+/// `Answer` with no findings and a session that ran out of rounds are the same
+/// JSON, and they mean opposite things about the two libraries.
+function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
+    let turns: Turn[] = [
+        Turn { role: "system", text: session_system(box) },
+        Turn { role: "user", text: session_user(request) },
+    ];
+    let asked: map<string, bool> = {};
+    for (let id in request.ts_ids) {
+        let _ = asked.set(id, true);
     }
 
-    sort_judgements(verified.matrix);
+    let collected: Finding[] = [];
+    let covered: map<string, bool> = {};
+    // Findings that arrived with an example that would not compile. Held back
+    // so the symbol is asked about again, but kept so that running out of
+    // attempts costs the example rather than the judgement.
+    let held: map<string, Finding> = {};
+
+    let round = 0;
+    let attempts = 0;
+    let answered = false;
+    let failure = `no answer after ${lookup_rounds()} rounds of lookups`;
+
+    while (!answered && round <= lookup_rounds()) {
+        // The last round cannot look anything up: `session_final` returns an
+        // answer and nothing else, so the shape of the call enforces what this
+        // turn explains. Saying it as well is not redundant — a model handed a
+        // schema it did not expect does better for being told why.
+        if (round == lookup_rounds()) {
+            turns
+                .push(
+                    Turn {
+                        role: "user",
+                        text: "No more lookups are available. Answer now for every symbol, using only what you have seen. A symbol you could not resolve is `none` with a reason.",
+                    },
+                );
+        }
+        let step = session_step(render_turns(turns)) catch_all (error) {
+            _ => {
+                return PassFailure { pass: "session", subject: request.subject, reason: `${error}` };
+            },
+        };
+        match (step) {
+            let investigate: Investigate => {
+                turns.push(Turn { role: "assistant", text: render_lookups(investigate) });
+                turns.push(Turn { role: "tool", text: run_lookups(box, investigate) });
+            },
+            let answer: Answer => {
+                attempts += 1;
+                let complaints: string[] = [];
+                for (let finding in answer.findings) {
+                    if (!asked.has(finding.ts)) {
+                        // A symbol this session was not shown. Reported rather
+                        // than dropped: it never reaches `apply_findings`, so
+                        // it would not appear in the refused count either, and
+                        // that count is the only signal that a prompt has begun
+                        // answering questions nobody asked.
+                        report_progress(`${request.subject}: answered about ${finding.ts}, which it was not shown`);
+                        continue;
+                    }
+                    if (covered.has(finding.ts)) {
+                        // Settled by an earlier attempt; the first answer wins.
+                        continue;
+                    }
+                    match (example_error(box, finding)) {
+                        null => {
+                            let _ = covered.set(finding.ts, true);
+                            collected.push(finding);
+                        },
+                        let error: string => {
+                            let _ = held.set(finding.ts, finding);
+                            complaints
+                                .push(
+                                    `[${finding.ts}] this example does not compile:\n${finding.example?.baml ?? ""}\n\n${error}`,
+                                );
+                        },
+                    }
+                }
+
+                let missing: string[] = [];
+                for (let id in request.ts_ids) {
+                    if (!covered.has(id)) {
+                        missing.push(id);
+                    }
+                }
+                if (missing.length() == 0) {
+                    answered = true;
+                } else if (attempts >= answer_attempts()) {
+                    // Out of attempts. What was held back for a broken example
+                    // is taken below, on the way out.
+                    answered = true;
+                    failure = "";
+                } else {
+                    turns.push(Turn { role: "assistant", text: render_findings(answer) });
+                    turns
+                        .push(Turn { role: "user", text: retry_turn(request, covered, complaints) });
+                }
+            },
+        }
+        round += 1;
+    }
+
+    // Anything held back for an example that would not compile is taken without
+    // it: a judgement with no example is worth having, one with a broken
+    // example is not. Drained here rather than where the attempts run out,
+    // because the loop can also end by running out of *rounds* — and on that
+    // path the finding was being discarded entirely, which is the opposite of
+    // the rule it was meant to follow.
+    for (let id in request.ts_ids) {
+        if (!covered.has(id)) {
+            if let finding: Finding = held.get(id) {
+                collected.push(without_example(finding));
+                let _ = covered.set(id, true);
+            }
+        }
+    }
+
+    if (!answered && collected.length() == 0) {
+        PassFailure { pass: "session", subject: request.subject, reason: failure }
+    } else {
+        Answer { findings: collected }
+    }
+}
+
+/// How many answers a session may give before what it has is taken as final.
+///
+/// Three: the first, one to fill gaps, one to fix what the second broke. A
+/// session still incomplete after that is not converging, and the coverage line
+/// reports what it left.
+function answer_attempts() -> int {
+    3
+}
+
+/// What to say when an answer was not complete.
+///
+/// Names the symbols rather than counting them. "You did not answer for 1 of 52"
+/// makes the model re-derive which one; naming it does not.
+function retry_turn(
+    request: SessionRequest,
+    covered: map<string, bool>,
+    complaints: string[],
+) -> string {
+    let missing: string[] = [];
+    for (let id in request.ts_ids) {
+        if (!covered.has(id)) {
+            missing.push(`- ${id}`);
+        }
+    }
+    let parts: string[] = [];
+    if (complaints.length() > 0) {
+        parts.push(complaints.join("\n\n"));
+    }
+    parts
+        .push(
+            `You have not answered for these symbols:\n${missing.join("\n")}\n\nAnswer for exactly these. Everything else you said is kept — do not repeat it. If an example above would not compile, fix it or leave the example out; the finding matters, the example is optional.`,
+        );
+    parts.join("\n\n")
+}
+
+/// Why a finding's example will not do, or null when it has none or it compiles.
+function example_error(box: Toolbox, finding: Finding) -> string? {
+    let out: string? = null;
+    if let example: CodeExample = finding.example {
+        out = check_snippet(box, example.baml);
+    }
+    out
+}
+
+function without_example(finding: Finding) -> Finding {
+    Finding {
+        ts: finding.ts,
+        verdict: finding.verdict,
+        baml: finding.baml,
+        confidence: finding.confidence,
+        reason: finding.reason,
+        divergence: finding.divergence,
+        example: null,
+    }
+}
+
+/// An answer as the transcript should record it, so a retry can see what it
+/// already said rather than being asked to remember.
+function render_findings(answer: Answer) -> string {
+    let lines: string[] = [];
+    for (let finding in answer.findings) {
+        lines.push(`${finding.ts} ${finding.verdict} ${finding.baml.join(", ")}`);
+    }
+    lines.join("\n")
+}
+
+function render_lookups(investigate: Investigate) -> string {
+    let lines: string[] = [];
+    for (let lookup in investigate.lookups) {
+        lines.push(`${lookup.tool} ${lookup.query}`);
+    }
+    lines.join("\n")
+}
+
+/// The most one lookup may contribute to a transcript.
+///
+/// Every round's results stay in the transcript for every later round, so an
+/// unbounded tool is a transcript that grows unboundedly: four lookups of the
+/// `Interfaces` section of the type-system reference is 44KB in one round and
+/// 264KB by the sixth. Eight thousand characters holds any `describe` output
+/// whole and truncates only the two largest documentation sections.
+function lookup_budget() -> int {
+    8000
+}
+
+/// A tool's answer, cut to size, saying so where it was cut.
+///
+/// Silent truncation would be the worse failure by far: the model would read a
+/// class's members as complete and conclude that the one it needed is absent.
+function clip(text: string, budget: int) -> string {
+    if (text.length() <= budget) {
+        text
+    } else {
+        `${text.substring(0, budget)}\n… truncated at ${budget} characters; ask something narrower to see the rest`
+    }
+}
+
+/// Runs the round's lookups and renders what they said.
+function run_lookups(box: Toolbox, investigate: Investigate) -> string {
+    let blocks: string[] = [];
+    let ran = 0;
+    for (let lookup in investigate.lookups) {
+        if (ran < lookups_per_round()) {
+            ran += 1;
+            let answer = clip(run_tool(box, lookup.tool, lookup.query), lookup_budget());
+            blocks.push(`$ ${lookup.tool} ${lookup.query}\n${answer}`);
+        }
+    }
+    if (investigate.lookups.length() > ran) {
+        blocks
+            .push(
+                `(${investigate.lookups.length() - ran} further lookups were not run — at most ${lookups_per_round()} per round)`,
+            );
+    }
+    blocks.join("\n\n")
+}
+
+// ── planning and folding ────────────────────────────────────────────────────
+
+/// What a full alignment did, in numbers a reader can check against the report.
+class AlignOutcome {
+    matrix: SymbolMatrix,
+    sessions: int,
+    judged: int,
+    /// Claims naming a symbol that was never offered, or a second claim on a
+    /// symbol already spoken for. Counted by name so a drifting prompt is
+    /// visible rather than merely quieter.
+    rejected: string[],
+}
+
+/// The session a symbol belongs to: its container, or its module when it is
+/// reached on the module itself.
+function session_subject(symbol: TsSymbol) -> string {
+    if (symbol.origin == "free") {
+        symbol.symbol.at(0) ?? "(unknown)"
+    } else {
+        let module = symbol.symbol.at(0) ?? "";
+        let container = symbol.symbol.at(1) ?? "";
+        `${module}.${container}`
+    }
+}
+
+/// The most symbols one session is asked about.
+///
+/// Not a cost control — the sessions are wide, so splitting one costs a second
+/// system prompt and little else. It is a correctness control. `node:fs` has 92
+/// symbols and `node:buffer.Buffer` 77, and a model that answers for sixty of
+/// them and stops produces exactly what a complete answer produces: findings
+/// for the ones it reached, and silence for the rest. Silence is already what
+/// "nobody has looked" means, so a truncated session would be indistinguishable
+/// from one that never ran. Thirty is comfortably inside what a single response
+/// holds, and the median session is ten.
+function session_chunk() -> int {
+    30
+}
+
+/// One request per container, plus one per module for its free functions.
+///
+/// A container's members ride with it because they share a context; a module's
+/// free functions have no container to share, so they are batched into one
+/// session for the module rather than asked about one at a time.
+function session_requests(matrix: SymbolMatrix, revision: Revision?) -> SessionRequest[] {
+    let judged: map<string, bool> = {};
+    for (let judgement in matrix.judgements) {
+        let _ = judged.set(judgement.ts, true);
+    }
+
+    let groups: map<string, TsSymbol[]> = {};
+    let order: string[] = [];
+    for (let symbol in matrix.ts) {
+        if (judged.has(symbol.id)) {
+            continue;
+        }
+        let subject = session_subject(symbol);
+        if (!groups.has(subject)) {
+            let empty: TsSymbol[] = [];
+            let _ = groups.set(subject, empty);
+            order.push(subject);
+        }
+        if let bucket: TsSymbol[] = groups.get(subject) {
+            bucket.push(symbol);
+        }
+    }
+
+    let no_priors: Judgement[] = [];
+    let requests: SessionRequest[] = [];
+    for (let subject in order) {
+        let members: TsSymbol[] = groups.get(subject) ?? [];
+        let chunks = (members.length() + session_chunk() - 1) / session_chunk();
+        let index = 0;
+        while (index < members.length()) {
+            let ts_ids: string[] = [];
+            let ts_lines: string[] = [];
+            let prior_lines: string[] = [];
+            let taken = 0;
+            while (taken < session_chunk() && index < members.length()) {
+                if let member: TsSymbol = members.at(index) {
+                    ts_ids.push(member.id);
+                    ts_lines.push(ts_line(member));
+                    if let before: Revision = revision {
+                        for (let judgement in before.judgements.get(member.id) ?? no_priors) {
+                            prior_lines.push(prior_line(judgement));
+                        }
+                    }
+                }
+                index += 1;
+                taken += 1;
+            }
+            // A part number only when there is more than one, so the common
+            // case reads as the container it is.
+            let label = if (chunks > 1) {
+                `${subject} (part ${(index + session_chunk() - 1) / session_chunk()} of ${chunks})`
+            } else {
+                subject
+            };
+            requests
+                .push(
+                    SessionRequest {
+                        subject: label,
+                        ts_ids: ts_ids,
+                        ts_lines: ts_lines,
+                        prior_lines: prior_lines,
+                    },
+                );
+        }
+    }
+    requests
+}
+
+/// The sessions whose subject contains `only`, or all of them when it is empty.
+///
+/// For proving the loop end to end without paying for the whole surface: a cold
+/// run is two hundred sessions, and the first thing worth knowing about a
+/// prompt change is whether one session works at all.
+function only_matching(requests: SessionRequest[], only: string) -> SessionRequest[] {
+    let wanted = only.trim().to_lower_case();
+    if (wanted.length() == 0) {
+        return requests;
+    }
+    let kept: SessionRequest[] = [];
+    for (let request in requests) {
+        if (request.subject.to_lower_case().includes(wanted)) {
+            kept.push(request);
+        }
+    }
+    report_progress(`--only ${only}: ${kept.length()} of ${requests.length()} sessions`);
+    kept
+}
+
+/// Every name a BAML symbol answers to in a finding, mapped to its id.
+///
+/// Distinct from `baml_name_index` in references.baml, which resolves names
+/// inside a signature against the scope that wrote them. This resolves names a
+/// model typed after reading tool output, so it accepts every spelling the
+/// tools print and none of the scoping.
+///
+/// A finding names symbols the way the tools printed them, which is not the way
+/// the export addresses them: `baml describe` says `baml.time.Instant.now`,
+/// while the id is `M:baml.time.Instant.now`. The kind prefix is an
+/// implementation detail of the export IR — it exists because BAML's type and
+/// value namespaces are distinct, so a bare path would be ambiguous between
+/// them — and nothing outside this program knows about it or should have to.
+/// Demanding it rejected 39 correct answers in a row and, because a pairing
+/// with no surviving counterpart is dropped, left 20 symbols unjudged.
+///
+/// Dotted paths are unique and are recorded first. A display is recorded only
+/// if nothing has claimed it, and a display two symbols share is recorded as
+/// ambiguous rather than resolved: answering with whichever came first would
+/// silently attach a judgement to the wrong symbol, which is worse than
+/// refusing it.
+function baml_finding_names(matrix: SymbolMatrix) -> map<string, string> {
+    let names: map<string, string> = {};
+    for (let symbol in matrix.baml) {
+        let _ = names.set(symbol.id, symbol.id);
+    }
+    // Paths first, then displays, so a path always wins a name a display also
+    // wants. Both go through the same rule: a name two symbols answer to is
+    // recorded as ambiguous rather than resolved.
+    for (let symbol in matrix.baml) {
+        claim_name(names, strip_kind_prefix(symbol.id), symbol.id);
+    }
+    for (let symbol in matrix.baml) {
+        claim_name(names, symbol.display, symbol.id);
+    }
+    names
+}
+
+/// Records a name for a symbol, or marks it ambiguous if another already has
+/// it.
+///
+/// Ambiguity is possible for a dotted path as well as for a display, which is
+/// the whole reason the export prefixes its ids by kind: BAML's type and value
+/// namespaces are distinct, so `baml.Foo` can name both a class and a function.
+/// The current standard library has no such pair — but resolving one silently
+/// to whichever was iterated last would attach a judgement to the wrong symbol,
+/// and that is a wrong answer rather than a missing one.
+function claim_name(names: map<string, string>, key: string, id: string) -> null {
+    if (key.length() == 0) {
+        return null;
+    }
+    match (names.get(key)) {
+        null => {
+            let _ = names.set(key, id);
+        },
+        let existing: string => {
+            if (existing != id) {
+                let _ = names.set(key, "");
+            }
+        },
+    }
+    null
+}
+
+/// The id a name refers to, or null when nothing does — or when more than one
+/// thing does.
+function resolve_baml_name(names: map<string, string>, named: string) -> string? {
+    let out: string? = null;
+    if let found: string = names.get(named.trim()) {
+        if (found.length() > 0) {
+            out = found;
+        }
+    }
+    out
+}
+
+/// Folds a session's findings in, keeping only those that name real symbols.
+///
+/// Every id is checked against the surface rather than trusted. A model that
+/// invents `baml.array.sort` is not obviously wrong to a reader — it is exactly
+/// what the answer should look like — so an unchecked claim is worse than no
+/// claim, and the count of refusals is how a drifting prompt becomes visible.
+function apply_findings(matrix: SymbolMatrix, results: SessionResult[]) -> AlignOutcome {
+    let baml_names = baml_finding_names(matrix);
+    let ts_index = ts_by_id(matrix);
+    let judged: map<string, bool> = {};
+    for (let judgement in matrix.judgements) {
+        let _ = judged.set(judgement.ts, true);
+    }
+
     let rejected: string[] = [];
-    for (let name in proposed.rejected) {
-        rejected.push(name);
+    let applied = 0;
+    let none: string[] = [];
+    for (let result in results) {
+        match (result) {
+            let failure: PassFailure => {
+                matrix.failures.push(failure);
+            },
+            let answer: Answer => {
+                for (let finding in answer.findings) {
+                    if (!ts_index.has(finding.ts)) {
+                        rejected.push(`${finding.ts} is not a TypeScript symbol`);
+                        continue;
+                    }
+                    if (judged.has(finding.ts)) {
+                        rejected.push(`${finding.ts} was already judged`);
+                        continue;
+                    }
+                    let counterparts: string[] = [];
+                    let invented = false;
+                    for (let named in finding.baml) {
+                        match (resolve_baml_name(baml_names, named)) {
+                            let id: string => {
+                                counterparts.push(id);
+                            },
+                            null => {
+                                rejected.push(`${named} is not a BAML symbol`);
+                                invented = true;
+                            },
+                        }
+                    }
+                    // A pairing whose only counterpart was invented is not a
+                    // pairing. Recording it as one with an empty list would
+                    // turn a hallucination into a confident "no counterpart".
+                    if (invented && counterparts.length() == 0 && finding.verdict != "none") {
+                        continue;
+                    }
+                    let _ = judged.set(finding.ts, true);
+                    matrix
+                        .judgements
+                        .push(
+                            Judgement {
+                                ts: finding.ts,
+                                baml: counterparts,
+                                verdict: finding.verdict,
+                                basis: "model",
+                                confidence: finding.confidence,
+                                reason: finding.reason,
+                                divergence: finding.divergence,
+                                rejected: none,
+                                verified: false,
+                                example: finding.example,
+                            },
+                        );
+                    applied += 1;
+                }
+            },
+        }
     }
-    for (let name in swept.rejected) {
-        rejected.push(name);
+
+    matrix.counts = recount(matrix);
+    AlignOutcome { matrix: matrix, sessions: results.length(), judged: applied, rejected: rejected }
+}
+
+function run_sessions(box: Toolbox, requests: SessionRequest[], limit: int) -> SessionResult[] {
+    let group = baml.spawn.TaskGroup.new(limit, name = "sessions");
+    let pending = requests.map((request) -> {
+        spawn with baml.spawn.options(group = group) { run_session(box, request) }
+    });
+    report_progress(`${requests.length()} sessions, ${limit} at a time`);
+    let results: SessionResult[] = [];
+    for (let future in pending) {
+        results.push(await future);
+        if (results.length() % 10 == 0 || results.length() == pending.length()) {
+            report_progress(`sessions: ${results.length()}/${pending.length()}`);
+        }
     }
-    AlignOutcome {
-        matrix: verified.matrix,
-        proposed: proposed.proposed + empty_pools,
-        swept: swept.swept,
-        upheld: verified.upheld,
-        refuted: verified.refuted,
-        rejected: rejected,
+    results
+}
+
+/// Judges everything the revision did not carry.
+function align_matrix(
+    matrix: SymbolMatrix,
+    box: Toolbox,
+    revision: Revision?,
+    concurrency: int,
+    only: string,
+) -> AlignOutcome {
+    let limit = effective_limit(concurrency);
+    let requests = only_matching(session_requests(matrix, revision), only);
+    //# ask, per container, what a BAML developer would do instead
+    let queued = 0;
+    for (let request in requests) {
+        queued += request.ts_lines.length();
     }
+    let outcome = apply_findings(matrix, run_sessions(box, requests, limit));
+    report_progress(`${outcome.judged} of ${queued} judged, ${outcome.rejected.length()} claims refused`);
+    // A session that answers for some of its symbols and not the rest leaves
+    // exactly what a session that never ran leaves. Saying so is the only way
+    // the difference is visible.
+    if (outcome.judged < queued) {
+        report_progress(`${queued - outcome.judged} symbols were asked about and not answered`);
+    }
+    if (outcome.matrix.failures.length() > 0) {
+        report_progress(`${outcome.matrix.failures.length()} sessions did not come back`);
+    }
+    sort_judgements(outcome.matrix);
+    outcome
 }

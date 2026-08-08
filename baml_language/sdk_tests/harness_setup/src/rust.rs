@@ -118,6 +118,11 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_optional_args.rs",
         Gate::Later("needs the optional-arg matrix and methods on classes"),
     ),
+    (
+        "function_calls",
+        "test_json.rs",
+        Gate::Later("needs a canonical baml.json.json projection in sdkgen_rust"),
+    ),
     ("function_calls", "test_raises.rs", Gate::Now),
     (
         "function_calls",
