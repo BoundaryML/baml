@@ -1,48 +1,88 @@
 // The matrix: two symbol lists and the correspondences between them.
 //
-// The two languages are not 1:1, so neither hierarchy can be the document's
-// structure without distorting the other. A BAML method reached through an
-// interface impl has no TypeScript shape; a TypeScript container holds members
-// scattered across several BAML namespaces. Privileging one would force a
-// reader of the other to rebuild their own view out of a foreign tree.
+// Both sides are stored flat, each symbol carrying its own path, with
+// judgements as a separate relation. That much is symmetric, and both views
+// read the same relation — a TypeScript-rooted view groups `ts` by module, a
+// BAML-rooted view groups `baml` by namespace, and nothing is duplicated.
 //
-// So both sides are stored flat, each symbol carrying its own path, with
-// correspondences as a separate relation. A BAML-rooted view groups `baml` by
-// namespace; a TypeScript-rooted view groups `ts` by container; both read the
-// same correspondences. Neither is privileged and nothing is duplicated.
+// The relation itself is not symmetric, and deliberately so. A judgement is
+// keyed on a TypeScript symbol because that is the question the matrix answers:
+// a reader knows how to do something in TypeScript and wants to know how it is
+// done in BAML. The BAML view is a reverse lookup over the same judgements.
 //
-// `key` and `status` are gone: identity is the path, and matching state is
-// derivable — a symbol with no correspondences is unmatched.
+// The consequence is worth stating plainly, because it is easy to misread the
+// numbers otherwise. A TypeScript symbol can be judged to have no counterpart —
+// something looked, and that absence is a finding. A BAML symbol that no
+// judgement names is *not* the same claim: nothing asked whether it has a
+// counterpart, so it is silence rather than a finding. `unmatched` and
+// `baml_unclaimed` count those two different things and must not be added up.
 
-/// What was concluded about one BAML symbol, and on what grounds.
+/// Two snippets showing the same job done in each language.
+///
+/// Only worth carrying where the shapes genuinely differ — an exact match
+/// teaches nothing by being spelled twice. A verifier that has just worked out
+/// *how* two APIs differ is the one place in the pipeline that knows enough to
+/// write this, which is why it is attached to the judgement rather than
+/// generated later.
+class CodeExample {
+    typescript: string,
+    baml: string,
+    note: string?,
+}
+
+/// What was concluded about one TypeScript symbol, and on what grounds.
+///
+/// Keyed on the TypeScript side, because that is the side a reader arrives
+/// from: they know how to do something in TypeScript and want to know how it is
+/// done in BAML. A judgement is the answer to that question, so the question is
+/// the key.
+///
+/// `baml` is a list. "How you would do this" is not always one symbol —
+/// `child_process.spawn` is `baml.sys.exec` plus its `ShellOutput`, and
+/// `Array.prototype.sort` reaches BAML through both `sort` and the `Comparable`
+/// interface it needs. Zero entries means nothing does this job.
 ///
 /// Recorded rather than derived, because the interesting part is not the
-/// pairing but the reasoning: a symbol judged to have no TypeScript counterpart
-/// is a finding about the two libraries, and one judged to have a *divergent*
+/// pairing but the reasoning: a symbol judged to have no BAML counterpart is a
+/// finding about the two libraries, and one judged to have a *divergent*
 /// counterpart — the same operation reached differently — is the finding this
 /// matrix exists for. Both are indistinguishable from silence unless written
 /// down.
 ///
-/// Both sides are ids, never array indices. Indices shift whenever the stdlib
-/// does, which makes a report undiffable and a previous revision useless as a
-/// cache; ids are content-derived and survive.
+/// Every side is an id, never an array index. Indices shift whenever either
+/// stdlib does, which makes a report undiffable and a previous revision useless
+/// as a cache; ids are content-derived and survive.
 ///
 /// `verdict` is what is true:
-///   - `match`      — the same operation, reached the same way
-///   - `divergent`  — the same operation, reached differently; `divergence` says how
-///   - `none`       — nothing on the other side does this symbol's job
+///   - `match`        — the same operation, reached the same way
+///   - `divergent`    — the same operation, reached differently; `divergence` says how
+///   - `unnecessary`  — BAML makes the question not arise
+///   - `none`         — nothing in BAML does this symbol's job
+///
+/// `unnecessary` is a distinct finding from `none`, and the more useful one. A
+/// reader who cannot find `Array.isArray` needs to be told not that BAML lacks
+/// it but that BAML does not need it: types are checked by pattern matching, so
+/// the question only comes up for a value in a union, and then `foo is int[]`
+/// answers it. That is a different thing to say than "there is nothing here",
+/// and rendering the two the same way loses the whole explanation.
+///
+/// Such a judgement may still name BAML symbols, and usually carries an
+/// `example`: the answer is often syntax rather than a symbol, and `baml` can
+/// only hold symbols.
 ///
 /// `basis` is why it is believed:
-///   - `name`           — deterministic agreement of name and owner
 ///   - `model`          — a model judged it, and said why
 ///   - `no-candidates`  — no plausible counterpart existed to ask about
+///
+/// There is no `name` basis. Deterministic name agreement was tried and
+/// removed; see `build_symbol_matrix`.
 ///
 /// There is no `carried` basis. A judgement held over from a previous revision
 /// is the same judgement on the same evidence — see revision.baml — and marking
 /// it would describe the run that copied it rather than the two libraries.
 class Judgement {
-    baml: string,
-    ts: string?,
+    ts: string,
+    baml: string[],
     verdict: string,
     basis: string,
     confidence: string?,
@@ -57,6 +97,7 @@ class Judgement {
     /// Whether a judge examined this pairing, as opposed to it standing on the
     /// proposer's word alone.
     verified: bool,
+    example: CodeExample?,
 }
 
 /// A call that did not come back. Recorded rather than swallowed: a failed
@@ -73,14 +114,19 @@ class MatrixCounts {
     baml_symbols: int,
     ts_symbols: int,
     judgements: int,
-    /// BAML symbols with a counterpart, exact or divergent.
+    /// TypeScript symbols with a BAML counterpart, exact or divergent.
     matched: int,
-    /// BAML symbols judged to have none — considered, and found wanting.
+    /// TypeScript symbols BAML makes unnecessary. Counted apart from both
+    /// `matched` and `unmatched`: it is neither a correspondence nor a gap.
+    unnecessary: int,
+    /// TypeScript symbols judged to have none — considered, and found wanting.
     unmatched: int,
-    /// BAML symbols nothing has judged yet.
+    /// TypeScript symbols nothing has judged yet.
     unjudged: int,
-    /// TypeScript symbols no judgement claims.
-    ts_unclaimed: int,
+    /// BAML symbols no judgement names. Not the same claim as the TypeScript
+    /// side's `unmatched`: nothing asked whether these have a counterpart, so
+    /// this counts silence, not a finding.
+    baml_unclaimed: int,
 }
 
 class SymbolMatrix {
@@ -99,37 +145,78 @@ function judgement_pairs(judgement: Judgement) -> bool {
     judgement.verdict == "match" || judgement.verdict == "divergent"
 }
 
+/// The strongest thing said about a symbol, when more than one judgement speaks
+/// for it.
+///
+/// Divergence outranks an exact match because it is the finding a reader is
+/// scanning for, and `unnecessary` outranks an absence because it explains one.
+/// An unrecognized verdict — and the absence of any — ranks below every real
+/// one, so a symbol nothing has judged never displaces a symbol something has.
+/// The view applies the same order, so the square and the tally cannot disagree.
+function judgement_rank(verdict: string) -> int {
+    match (verdict) {
+        "divergent" => 4,
+        "match" => 3,
+        "unnecessary" => 2,
+        "none" => 1,
+        _ => 0,
+    }
+}
+
+/// What a symbol's judgements amount to, or `""` when there are none.
+function verdict_of(judgements: Judgement[]) -> string {
+    let strongest = "";
+    for (let judgement in judgements) {
+        if (judgement_rank(judgement.verdict) > judgement_rank(strongest)) {
+            strongest = judgement.verdict;
+        }
+    }
+    strongest
+}
+
 /// Recomputes the tallies from the relation rather than by adjusting the old
 /// numbers, so a pass that forgets to increment cannot leave the report lying.
 function recount(matrix: SymbolMatrix) -> MatrixCounts {
-    let paired: map<string, bool> = {};
-    let judged: map<string, bool> = {};
-    let ts_claimed: map<string, bool> = {};
+    let verdicts: map<string, string> = {};
+    let baml_claimed: map<string, bool> = {};
     for (let judgement in matrix.judgements) {
-        let _ = judged.set(judgement.baml, true);
-        if (judgement_pairs(judgement)) {
-            let _ = paired.set(judgement.baml, true);
-            if let ts: string = judgement.ts {
-                let _ = ts_claimed.set(ts, true);
-            }
+        let strongest = verdicts.get(judgement.ts) ?? "";
+        if (judgement_rank(judgement.verdict) > judgement_rank(strongest)) {
+            let _ = verdicts.set(judgement.ts, judgement.verdict);
+        }
+        // Named is named, whatever the verdict: a symbol offered as the way to
+        // do something BAML makes unnecessary has still been pointed at.
+        for (let id in judgement.baml) {
+            let _ = baml_claimed.set(id, true);
         }
     }
     let matched = 0;
+    let unnecessary = 0;
     let unmatched = 0;
     let unjudged = 0;
-    for (let symbol in matrix.baml) {
-        if (paired.has(symbol.id)) {
-            matched += 1;
-        } else if (judged.has(symbol.id)) {
-            unmatched += 1;
-        } else {
-            unjudged += 1;
+    for (let symbol in matrix.ts) {
+        match (verdicts.get(symbol.id) ?? "") {
+            "match" => {
+                matched += 1;
+            },
+            "divergent" => {
+                matched += 1;
+            },
+            "unnecessary" => {
+                unnecessary += 1;
+            },
+            "none" => {
+                unmatched += 1;
+            },
+            _ => {
+                unjudged += 1;
+            },
         }
     }
-    let ts_unclaimed = 0;
-    for (let symbol in matrix.ts) {
-        if (!ts_claimed.has(symbol.id)) {
-            ts_unclaimed += 1;
+    let baml_unclaimed = 0;
+    for (let symbol in matrix.baml) {
+        if (!baml_claimed.has(symbol.id)) {
+            baml_unclaimed += 1;
         }
     }
     MatrixCounts {
@@ -137,104 +224,32 @@ function recount(matrix: SymbolMatrix) -> MatrixCounts {
         ts_symbols: matrix.ts.length(),
         judgements: matrix.judgements.length(),
         matched: matched,
+        unnecessary: unnecessary,
         unmatched: unmatched,
         unjudged: unjudged,
-        ts_unclaimed: ts_unclaimed,
+        baml_unclaimed: baml_unclaimed,
     }
 }
 
-/// A TS symbol's own name — the last path step.
-function ts_name_of(symbol: TsSymbol) -> string {
-    symbol.symbol.at(symbol.symbol.length() - 1) ?? symbol.display
-}
-
-/// The owner two symbols must share for a name match to mean anything.
+/// Builds the matrix from both symbol layers, with no correspondences at all.
 ///
-/// Matching on the member name alone is far too loose: `baml.env.get` collides
-/// with `Headers.get`, `Map.get`, and `URLSearchParams.get`, none of which have
-/// anything to do with environment variables. Requiring the owners to agree
-/// kills that whole class of coincidence.
+/// There is deliberately no deterministic pass here. Name agreement was tried
+/// and removed: it produced 99 pairings it could not explain and one it could
+/// not detect was wrong — `node:http.request` against `baml.http.Request`,
+/// which agree on owner and, after normalization, on name, and which are a
+/// function that sends a request and the type of a received one. Tightening the
+/// rule only moves that line; nothing in a pair of names says whether the
+/// agreement means anything.
 ///
-/// The two languages spell the same owner differently, so both sides normalize
-/// to a common key: case and underscores are dropped, node's module decoration
-/// is stripped, and a short table covers the places where the spellings simply
-/// differ — BAML's `T[]` against TypeScript's `Array`, BAML's three numeric
-/// types against TypeScript's one `Number`.
+/// What made it not worth keeping is what happens downstream. A judgement
+/// carries the reasoning that justifies it, and a name match has none to carry,
+/// so it reaches the reader as a bare assertion and reaches the next run as a
+/// conclusion no later pass will revisit. A model pairing costs a call and
+/// arrives with its reasons, its confidence, and something a verifier can
+/// refute.
 ///
-/// This is a heuristic and it is deliberately biased toward precision. It will
-/// miss real pairs whose owners do not correspond (`baml.time.Instant.now`
-/// against `Date.now`); those are what the model passes are for. A false match
-/// is worse, because it arrives already labelled as agreement.
-function owner_key(name: string) -> string {
-    let normalized = name.to_lower_case().replace_all("node:", "").replace_all("/promises", "").replace_all("_", "");
-    match (normalized) {
-        "t[]" => "array",
-        "readonlyarray" => "array",
-        "map<k, v>" => "map",
-        // BAML splits the numeric tower TypeScript keeps as one `number`.
-        "int" => "number",
-        "float" => "number",
-        "bigint" => "number",
-        "bool" => "boolean",
-        _ => normalized,
-    }
-}
-
-/// A BAML symbol's owner: the type it is declared on, the namespace it lives
-/// in, or — for an impl method — the receiver the impl is written for.
-function baml_owner_key(symbol: BamlSymbol) -> string {
-    let names: string[] = [];
-    let base = "";
-    for (let step in symbol.symbol) {
-        match (step) {
-            let plain: string => {
-                names.push(plain);
-            },
-            let node: ImplStep => {
-                base = node.base;
-            },
-        }
-    }
-    if (base.length() > 0) {
-        owner_key(base)
-    } else if (names.length() > 1) {
-        owner_key(type_display_name(names.slice(0, names.length() - 1).join(".")))
-    } else {
-        ""
-    }
-}
-
-function ts_owner_key(symbol: TsSymbol) -> string {
-    owner_key(symbol.symbol.at(0) ?? "")
-}
-
-/// A BAML symbol's own name. An impl method matches on its method name, not on
-/// the interface it arrives through.
-function baml_name_of(symbol: BamlSymbol) -> string {
-    let name = "";
-    for (let step in symbol.symbol) {
-        match (step) {
-            let plain: string => {
-                name = plain;
-            },
-            _ => {},
-        }
-    }
-    name
-}
-
-/// Builds the matrix from both symbol layers using deterministic name matching
-/// only.
-///
-/// A name match is a *proposal*, not a conclusion: it arrives unverified, and
-/// the verify pass is expected to look at it like any other. Name agreement
-/// after normalization is a good heuristic and nothing more — `baml.env.get`
-/// and `Headers.get` agree on their name and on nothing else.
-///
-/// Symbols this pass says nothing about get no judgement at all. Silence and a
-/// judged absence are different states, and conflating them would make the
-/// first run indistinguishable from one where a model considered every symbol
-/// and found nothing.
+/// So every TypeScript symbol starts unjudged, which is the honest state: no
+/// one has looked yet.
 function build_symbol_matrix(
     export_doc: PackageExportDoc,
     ts_doc: TsSurfaceDoc,
@@ -242,44 +257,10 @@ function build_symbol_matrix(
 ) -> SymbolMatrix {
     let baml_symbols = extract_symbols(export_doc);
     let ts_symbols = extract_ts_symbols(ts_doc);
-
-    let by_key: map<string, TsSymbol[]> = {};
-    for (let symbol in ts_symbols) {
-        let key = match_key(ts_name_of(symbol));
-        let bucket: TsSymbol[] = by_key.get(key) ?? [];
-        bucket.push(symbol);
-        let _ = by_key.set(key, bucket);
-    }
-
     let judgements: Judgement[] = [];
-    for (let symbol in baml_symbols) {
-        let bucket: TsSymbol[] = by_key.get(match_key(baml_name_of(symbol))) ?? [];
-        let owner = baml_owner_key(symbol);
-        for (let candidate in bucket) {
-            // The name agreeing is not enough; the owners must too.
-            if (owner.length() > 0 && owner == ts_owner_key(candidate)) {
-                let none: string[] = [];
-                judgements
-                    .push(
-                        Judgement {
-                            baml: symbol.id,
-                            ts: candidate.id,
-                            verdict: "match",
-                            basis: "name",
-                            confidence: null,
-                            reason: null,
-                            divergence: null,
-                            rejected: none,
-                            verified: false,
-                        },
-                    );
-            }
-        }
-    }
-
     let no_failures: PassFailure[] = [];
     let matrix = SymbolMatrix {
-        format_version: 1,
+        format_version: 2,
         provenance: MatrixProvenance {
             baml_surface_sha256: baml_surface_sha256,
             export_format_version: export_doc.format_version,
@@ -295,9 +276,10 @@ function build_symbol_matrix(
             ts_symbols: 0,
             judgements: 0,
             matched: 0,
+            unnecessary: 0,
             unmatched: 0,
             unjudged: 0,
-            ts_unclaimed: 0,
+            baml_unclaimed: 0,
         },
     };
     matrix.counts = recount(matrix);

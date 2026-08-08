@@ -32,6 +32,11 @@ function fixture_export_text() -> string {
                   "signature": {"params": [{"name": "parts", "ty": {"display": "int"}}], "returns": {"display": "baml.Foo"}}
                 },
                 {
+                  "id": "M:baml.Foo.clone",
+                  "name": "clone",
+                  "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}], "returns": {"display": "baml.Foo"}}
+                },
+                {
                   "id": "M:baml.Foo.sort_helper",
                   "name": "sort_helper",
                   "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}]}
@@ -73,28 +78,35 @@ function fixture_export_text() -> string {
 function fixture_ts_text() -> string {
     #"
         {
-          "format_version": 1,
+          "format_version": 2,
           "typescript_version": "5.8.3-test",
           "types_node_version": null,
-          "containers": [
+          "modules": [
             {
-              "name": "Foo",
-              "kind": "interface",
-              "members": [
-                {"name": "indexOf", "static": false, "signatures": ["indexOf(x: number): number"], "doc": "Finds x.", "since": "es5"},
-                {"name": "only", "static": false, "signatures": ["only(): void"], "doc": null, "since": "es5"},
-                {"name": "sortStuff", "static": false, "signatures": ["sortStuff(): void"], "doc": null, "since": "es2015"}
+              "name": "(globals)",
+              "kind": "globals",
+              "containers": [
+                {
+                  "name": "Foo",
+                  "kind": "class",
+                  "singleton": false,
+                  "doc": "A fixture container.",
+                  "since": "es5",
+                  "members": [
+                    {"name": "indexOf", "static": false, "signatures": ["indexOf(x: number): number"], "doc": "Finds x.", "since": "es5"},
+                    {"name": "only", "static": false, "signatures": ["only(): void"], "doc": null, "since": "es5"},
+                    {"name": "sortStuff", "static": false, "signatures": ["sortStuff(): void"], "doc": null, "since": "es2015"},
+                    {"name": "clone", "static": false, "signatures": ["clone(): Foo"], "doc": null, "since": "es5"}
+                  ]
+                }
+              ],
+              "functions": [
+                {"name": "parseFixture", "signatures": ["parseFixture(x: string): number"], "doc": null, "since": "es5"}
               ]
             }
           ]
         }
     "#
-}
-
-test "match keys meet across snake_case and camelCase" {
-    assert.equal(match_key("to_upper_case"), "touppercase");
-    assert.equal(match_key("toUpperCase"), "touppercase");
-    assert.equal(match_key("index_of"), match_key("indexOf"));
 }
 
 test "id helpers split kind prefixes and path segments" {
@@ -169,7 +181,6 @@ test "BAML symbols carry paths, origins, and split args from kwargs" {
 }
 
 test "a static that is not callable is a property, not a static method" {
-    let container = TsContainer { name: "Number", kind: "interface", members: [] };
     let constant = TsMember {
         name: "MAX_SAFE_INTEGER",
         static: true,
@@ -179,7 +190,7 @@ test "a static that is not callable is a property, not a static method" {
     };
     // On the constructor side, but a constant. Comparing it against BAML's
     // methods rather than its fields is the wrong question to ask.
-    assert.equal(ts_origin_of(container, constant), "property");
+    assert.equal(ts_member_origin(constant), "property");
     let factory = TsMember {
         name: "isInteger",
         static: true,
@@ -187,55 +198,61 @@ test "a static that is not callable is a property, not a static method" {
         doc: null,
         since: "es2015",
     };
-    assert.equal(ts_origin_of(container, factory), "static_method");
+    assert.equal(ts_member_origin(factory), "static_method");
 }
 
 test "TypeScript symbols separate callables from properties" {
     let symbols = extract_ts_symbols(baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()));
-    assert.equal(symbols.length(), 3);
-    if let index_of: TsSymbol = symbols.at(0) {
-        assert.equal(index_of.display, "Foo.indexOf");
-        assert.equal(index_of.origin, "method");
+    // The container, its four members, and the module's free function. A
+    // container is a symbol in its own right: it is what a session is opened
+    // over, and what a judgement about `Date` is recorded against.
+    assert.equal(symbols.length(), 6);
+    if let container: TsSymbol = symbols.at(0) {
+        assert.equal(container.display, "Foo");
+        assert.equal(container.origin, "container");
+        assert.equal(container.kind, "class");
+        assert.is_true(baml.deep_equals(container.symbol, ["(globals)", "Foo"]));
     } else {
         baml.sys.panic("no TS symbols");
     }
+    if let index_of: TsSymbol = symbols.at(1) {
+        assert.equal(index_of.display, "Foo.prototype.indexOf");
+        assert.equal(index_of.origin, "method");
+        assert.is_true(baml.deep_equals(index_of.symbol, ["(globals)", "Foo", "indexOf"]));
+    } else {
+        baml.sys.panic("no member symbol");
+    }
+    if let free: TsSymbol = symbols.at(5) {
+        assert.equal(free.display, "parseFixture");
+        assert.equal(free.origin, "free");
+        assert.equal(free.kind, "function");
+    } else {
+        baml.sys.panic("no free function symbol");
+    }
 }
 
-test "the symbol matrix relates both sides without privileging either" {
+test "a fresh matrix relates both sides and concludes nothing" {
     let matrix = build_symbol_matrix(
         parse_export_text(fixture_export_text()),
         baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()),
         "sha-fixture",
     );
-    assert.equal(matrix.counts.baml_symbols, 8);
-    assert.equal(matrix.counts.ts_symbols, 3);
+    assert.equal(matrix.counts.baml_symbols, 9);
+    // `Foo`, its four members, and `parseFixture`.
+    assert.equal(matrix.counts.ts_symbols, 6);
 
-    // index_of ↔ indexOf is deterministic name agreement, and both endpoints
-    // address real symbols by id.
-    assert.is_true(matrix.judgements.length() >= 1);
-    let baml_ids: map<string, bool> = {};
-    for (let symbol in matrix.baml) {
-        let _ = baml_ids.set(symbol.id, true);
-    }
-    let ts_ids: map<string, bool> = {};
-    for (let symbol in matrix.ts) {
-        let _ = ts_ids.set(symbol.id, true);
-    }
-    if let first: Judgement = matrix.judgements.at(0) {
-        assert.equal(first.basis, "name");
-        assert.equal(first.verdict, "match");
-        // A name match arrives unverified: it is a proposal like any other.
-        assert.is_true(!first.verified);
-        assert.is_true(baml_ids.has(first.baml));
-        assert.is_true(ts_ids.has(first.ts ?? ""));
-    } else {
-        baml.sys.panic("no judgement recorded for index_of");
-    }
+    // Nothing pairs the two sides deterministically. `Foo.prototype.indexOf`
+    // and `baml.Foo.index_of` agree on their name and their owner, and that
+    // agreement is no longer taken as evidence of anything — it is the model
+    // passes that decide, with reasons attached.
+    assert.equal(matrix.judgements.length(), 0);
 
-    // A symbol nothing has looked at carries no judgement, which is a different
-    // state from one judged to have no counterpart.
-    assert.is_true(matrix.counts.unjudged > 0);
+    // Every symbol is unjudged, which is a different state from judged to have
+    // no counterpart: nobody has looked yet.
+    assert.equal(matrix.counts.unjudged, matrix.counts.ts_symbols);
     assert.equal(matrix.counts.unmatched, 0);
+    assert.equal(matrix.counts.matched, 0);
+    assert.equal(matrix.counts.baml_unclaimed, matrix.counts.baml_symbols);
 }
 
 // ── ratchet ─────────────────────────────────────────────────────────────────
@@ -250,6 +267,16 @@ function fixture_header(sha: string, ts_version: string) -> ReportHeader {
     }
 }
 
+/// A fixture that has been judged, standing in for what a model pass produces.
+///
+/// The correspondences are stated here rather than derived, because nothing
+/// derives them any more: `build_symbol_matrix` concludes nothing. That is also
+/// the more honest fixture for the revision machinery, whose whole job is
+/// carrying model judgements — a heuristic's output was never what it had to
+/// preserve.
+///
+/// `clone` is the one that names a type: its signature returns `Foo`, so it is
+/// what proves a judgement goes stale when something it *refers to* moves.
 function fixture_matrix(sha: string, ts_version: string) -> SymbolMatrix {
     let matrix = build_symbol_matrix(
         parse_export_text(fixture_export_text()),
@@ -257,7 +284,26 @@ function fixture_matrix(sha: string, ts_version: string) -> SymbolMatrix {
         sha,
     );
     matrix.provenance.typescript_version = ts_version;
+    matrix.judgements.push(fixture_judgement("Foo.prototype.indexOf", "M:baml.Foo.index_of"));
+    matrix.judgements.push(fixture_judgement("Foo.prototype.clone", "M:baml.Foo.clone"));
+    matrix.counts = recount(matrix);
     matrix
+}
+
+function fixture_judgement(ts: string, baml: string) -> Judgement {
+    let none: string[] = [];
+    Judgement {
+        ts: ts,
+        baml: [baml],
+        verdict: "match",
+        basis: "model",
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        rejected: none,
+        verified: true,
+        example: null,
+    }
 }
 
 test "an unchanged run matches its baseline" {
@@ -309,10 +355,12 @@ test "the report's header round-trips through JSON" {
 test "the markdown view renders both sides" {
     let markdown = render_matrix_markdown(fixture_matrix("sha-a", "5.8.3-test"));
     assert.is_true(markdown.includes("# BAML ↔ TypeScript stdlib matrix"));
-    assert.is_true(markdown.includes("## BAML surface"));
-    assert.is_true(markdown.includes("TypeScript symbols with no BAML counterpart"));
-    // An impl method groups under the impl it arrives through.
-    assert.is_true(markdown.includes("baml.Foo as baml.Comparable"));
+    // The TypeScript-rooted view, grouped by module, with the BAML side listed
+    // after it as what no judgement named.
+    assert.is_true(markdown.includes("## TypeScript surface"));
+    assert.is_true(markdown.includes("### (globals)"));
+    assert.is_true(markdown.includes("BAML symbols no judgement names"));
+    assert.is_true(markdown.includes("Foo.prototype.indexOf"));
 }
 
 test "a rendered type is split into the names it mentions" {
@@ -463,7 +511,15 @@ test "the static and instance sides of a container are addressed apart" {
     // `Uint8Array.BYTES_PER_ELEMENT` is declared on both the constructor and
     // the instance. They are different members, and TypeScript reaches them
     // differently.
-    let instance = TsContainer { name: "Uint8Array", kind: "interface", members: [] };
+    let globals = TsModule { name: "(globals)", kind: "globals", containers: [], functions: [] };
+    let instance = TsContainer {
+        name: "Uint8Array",
+        kind: "class",
+        singleton: false,
+        doc: null,
+        since: "es5",
+        members: [],
+    };
     let member = TsMember {
         name: "BYTES_PER_ELEMENT",
         static: false,
@@ -471,11 +527,11 @@ test "the static and instance sides of a container are addressed apart" {
         doc: null,
         since: "es5",
     };
-    assert.equal(ts_id_of(instance, member, "property"), "Uint8Array.prototype.BYTES_PER_ELEMENT");
-    // The same name on the constructor side. `static` decides, not `origin`:
-    // the constructor holds constants as well as methods and both are reached
-    // on it, so deciding from `origin` put a constant behind `prototype` and
-    // gave the two sides one address.
+    assert.equal(ts_member_id(globals, instance, member), "Uint8Array.prototype.BYTES_PER_ELEMENT");
+    // The same name on the constructor side. `static` decides, not the member's
+    // kind: the constructor holds constants as well as methods and both are
+    // reached on it, so deciding from the kind put a constant behind
+    // `prototype` and gave the two sides one address.
     let constructor_side = TsMember {
         name: "BYTES_PER_ELEMENT",
         static: true,
@@ -483,10 +539,67 @@ test "the static and instance sides of a container are addressed apart" {
         doc: null,
         since: "es5",
     };
-    assert.equal(ts_id_of(instance, constructor_side, "property"), "Uint8Array.BYTES_PER_ELEMENT");
-    // A free function has no receiver to be reached through.
-    let globals = TsContainer { name: "(globals)", kind: "functions", members: [] };
-    assert.equal(ts_id_of(globals, member, "free"), "(globals).BYTES_PER_ELEMENT");
+    assert.equal(ts_member_id(globals, instance, constructor_side), "Uint8Array.BYTES_PER_ELEMENT");
+}
+
+test "node modules qualify their addresses and the globals do not" {
+    // `Server` is declared by `http`, `net`, and `tls`. Three symbols sharing
+    // one address is three wrong answers, so the module qualifies them; the
+    // globals and the web platform share one namespace and add nothing.
+    let net = TsModule { name: "node:net", kind: "node", containers: [], functions: [] };
+    let globals = TsModule { name: "(globals)", kind: "globals", containers: [], functions: [] };
+    let server = TsContainer {
+        name: "Server",
+        kind: "class",
+        singleton: false,
+        doc: null,
+        since: "node",
+        members: [],
+    };
+    let listen = TsMember {
+        name: "listen",
+        static: false,
+        signatures: ["listen(port: number): this"],
+        doc: null,
+        since: "node",
+    };
+    assert.equal(ts_container_id(net, server), "node:net.Server");
+    assert.equal(ts_member_id(net, server, listen), "node:net.Server.prototype.listen");
+    // The scheme is how you import the module, not how you call into it.
+    assert.equal(ts_display_of(ts_member_id(net, server, listen)), "net.Server.prototype.listen");
+
+    let date = TsContainer {
+        name: "Date",
+        kind: "class",
+        singleton: false,
+        doc: null,
+        since: "es5",
+        members: [],
+    };
+    assert.equal(ts_container_id(globals, date), "Date");
+    assert.equal(ts_display_of(ts_container_id(globals, date)), "Date");
+}
+
+test "a namespace object's members hang off the value, not a prototype" {
+    // `Math.floor`, not `Math.prototype.floor` — there is no prototype for
+    // anything to hang off, and an id that says otherwise is a wrong address.
+    let globals = TsModule { name: "(globals)", kind: "globals", containers: [], functions: [] };
+    let math = TsContainer {
+        name: "Math",
+        kind: "namespace",
+        singleton: true,
+        doc: null,
+        since: "es5",
+        members: [],
+    };
+    let floor = TsMember {
+        name: "floor",
+        static: false,
+        signatures: ["floor(x: number): number"],
+        doc: null,
+        since: "es5",
+    };
+    assert.equal(ts_member_id(globals, math, floor), "Math.floor");
 }
 
 // ── carrying a revision forward ─────────────────────────────────────────────
@@ -497,19 +610,47 @@ test "the static and instance sides of a container are addressed apart" {
 function fixture_revision(matrix: SymbolMatrix) -> Revision {
     let report = baml.json.to<PriorReport>(baml.json.parse(baml.json.serialize(matrix)));
     let texts: map<string, string> = {};
+    let baml_ids: map<string, bool> = {};
     for (let symbol in report.baml) {
         let _ = texts.set(symbol.id, prior_symbol_text(symbol));
+        let _ = baml_ids.set(symbol.id, true);
     }
     for (let symbol in report.ts) {
         let _ = texts.set(symbol.id, ts_symbol_text(symbol));
     }
     let judgements: map<string, Judgement[]> = {};
     for (let judgement in report.judgements) {
-        let bucket: Judgement[] = judgements.get(judgement.baml) ?? [];
+        let bucket: Judgement[] = judgements.get(judgement.ts) ?? [];
         bucket.push(judgement);
-        let _ = judgements.set(judgement.baml, bucket);
+        let _ = judgements.set(judgement.ts, bucket);
     }
-    Revision { provenance: report.provenance, texts: texts, judgements: judgements }
+    Revision {
+        provenance: report.provenance,
+        texts: texts,
+        baml_ids: baml_ids,
+        judgements: judgements,
+    }
+}
+
+/// A BAML symbol the export never produced, for asking what happens when the
+/// surface gains something.
+function fixture_new_baml_symbol(id: string) -> BamlSymbol {
+    let none: string[] = [];
+    BamlSymbol {
+        id: id,
+        declared_by: null,
+        symbol: ["baml", "invented"],
+        display: "baml.invented",
+        kind: "function",
+        origin: "free",
+        generics: none,
+        ty: null,
+        resolved: null,
+        default: null,
+        signature: null,
+        doc: null,
+        references: none,
+    }
 }
 
 test "a report round-trips into the revision it describes" {
@@ -535,81 +676,139 @@ test "an unchanged symbol keeps its judgement without being asked again" {
 test "a reworded doc comment invalidates the symbol that carries it" {
     let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
     let matrix = fixture_matrix("sha-a", "5.8.3-test");
-    let judged_id = (matrix.judgements.at(0)?.baml) ?? "";
-    for (let symbol in matrix.baml) {
+    let judged_id = (matrix.judgements.at(0)?.ts) ?? "";
+    let baseline = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+    for (let symbol in matrix.ts) {
         if (symbol.id == judged_id) {
             symbol.doc = "reworded";
         }
     }
+    // One symbol moved, so one judgement stops carrying. The others are
+    // untouched, which is the whole point of asking per symbol.
     let outcome = apply_revision(matrix, before);
-    assert.equal(outcome.carried, 0);
+    assert.equal(outcome.carried, baseline.carried - 1);
 }
 
 test "a changed reference invalidates the symbols that name it" {
     let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
     let matrix = fixture_matrix("sha-a", "5.8.3-test");
-    // `Foo.index_of` names `baml.Foo`; changing the type it names must unsettle
-    // the method, whose own text has not moved at all.
-    let judged_id = (matrix.judgements.at(0)?.baml) ?? "";
+    // Changing a type a signature names must unsettle the symbol, whose own
+    // text has not moved at all. `Foo.prototype.clone` returns `Foo`, so it is
+    // the one with something to be unsettled by.
     let named: string[] = [];
-    for (let symbol in matrix.baml) {
-        if (symbol.id == judged_id) {
+    for (let symbol in matrix.ts) {
+        if (symbol.id == "Foo.prototype.clone") {
             named = symbol.references;
         }
     }
-    assert.is_true(named.length() > 0);
-    for (let symbol in matrix.baml) {
+    assert.is_true(named.includes("Foo"));
+
+    let baseline = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+    for (let symbol in matrix.ts) {
         if (named.includes(symbol.id)) {
             symbol.doc = "the referenced type changed";
         }
     }
+    // Exactly one judgement stops carrying: the one whose signature names the
+    // type that moved. Nothing else in the fixture mentions it.
     let outcome = apply_revision(matrix, before);
-    assert.equal(outcome.carried, 0);
+    assert.equal(outcome.carried, baseline.carried - 1);
+    assert.equal(outcome.queued, baseline.queued + 1);
 }
 
 test "a changed counterpart invalidates the pairing" {
     let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
     let matrix = fixture_matrix("sha-a", "5.8.3-test");
-    let paired = (matrix.judgements.at(0)?.ts) ?? "";
-    for (let symbol in matrix.ts) {
-        if (symbol.id == paired) {
-            symbol.signature = "indexOf(x: number, from: number): number";
+    // The counterpart is on the BAML side now: a judgement survives only while
+    // every symbol it names reads as it did.
+    let paired: string[] = (matrix.judgements.at(0)?.baml) ?? [];
+    assert.is_true(paired.length() > 0);
+    let baseline = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+    for (let symbol in matrix.baml) {
+        if (paired.includes(symbol.id)) {
+            symbol.doc = "the counterpart changed";
         }
     }
     let outcome = apply_revision(matrix, before);
-    assert.equal(outcome.carried, 0);
+    assert.equal(outcome.carried, baseline.carried - 1);
 }
 
-test "a judged absence survives only while the surface it was judged against does" {
+test "a judged absence survives only while the BAML surface could not have gained it" {
     let source = fixture_matrix("sha-a", "5.8.3-test");
     let absent: string[] = [];
-    if let symbol: BamlSymbol = source.baml.at(0) {
+    let no_counterpart: string[] = [];
+    if let symbol: TsSymbol = source.ts.at(0) {
         source
             .judgements
             .push(
                 Judgement {
-                    baml: symbol.id,
-                    ts: null,
+                    ts: symbol.id,
+                    baml: no_counterpart,
                     verdict: "none",
                     basis: "model",
                     confidence: "high",
-                    reason: "TypeScript has no equivalent",
+                    reason: "BAML has no equivalent",
                     divergence: null,
                     rejected: absent,
                     verified: true,
+                    example: null,
                 },
             );
     }
     let before = fixture_revision(source);
 
-    // The same TypeScript release: the absence still holds.
+    // The same BAML surface: the absence still holds.
     let same = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
     assert.is_true(same.carried > 0);
 
-    // A new TypeScript release could have added the very thing the absence
-    // denies, so the claim is no longer one this revision can make.
-    let bumped = apply_revision(fixture_matrix("sha-a", "5.9.0-test"), before);
-    assert.is_true(bumped.carried < same.carried);
+    // A BAML symbol that did not exist before could be the very thing the
+    // absence denies, so the claim is no longer one this revision can make.
+    let grown = fixture_matrix("sha-a", "5.8.3-test");
+    grown.baml.push(fixture_new_baml_symbol("V:baml.invented"));
+    let after = apply_revision(grown, before);
+    assert.is_true(after.carried < same.carried);
+}
+
+test "a reworded BAML docstring does not expire an absence" {
+    // Only new surface can falsify "there is nothing in BAML that does this".
+    // Keying absences on the surface's content would expire every one of them
+    // on every run, since we are the team editing that surface.
+    let source = fixture_matrix("sha-a", "5.8.3-test");
+    let absent: string[] = [];
+    let no_counterpart: string[] = [];
+    if let symbol: TsSymbol = source.ts.at(0) {
+        source
+            .judgements
+            .push(
+                Judgement {
+                    ts: symbol.id,
+                    baml: no_counterpart,
+                    verdict: "none",
+                    basis: "model",
+                    confidence: "high",
+                    reason: "BAML has no equivalent",
+                    divergence: null,
+                    rejected: absent,
+                    verified: true,
+                    example: null,
+                },
+            );
+    }
+    let before = fixture_revision(source);
+    let same = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+
+    let reworded = fixture_matrix("sha-a", "5.8.3-test");
+    for (let symbol in reworded.baml) {
+        symbol.doc = "every docstring rewritten";
+    }
+    // The pairings expire — they name BAML symbols whose text moved — but the
+    // absence, which names none, survives.
+    let outcome = apply_revision(reworded, before);
+    assert.is_true(outcome.carried < same.carried);
+    let absences = outcome.matrix.judgements.filter((judgement) -> {
+        judgement.verdict == "none"
+    });
+    assert.equal(absences.length(), 1);
 }
 
 test "a symbol the previous revision never saw is queued, not carried" {
@@ -617,366 +816,326 @@ test "a symbol the previous revision never saw is queued, not carried" {
     let matrix = fixture_matrix("sha-a", "5.8.3-test");
     let queued_before = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before).queued;
     // A judgement about a symbol that no longer exists simply finds no home.
-    let empty_revision = Revision { provenance: before.provenance, texts: {}, judgements: before.judgements };
+    let empty_revision = Revision {
+        provenance: before.provenance,
+        texts: {},
+        baml_ids: before.baml_ids,
+        judgements: before.judgements,
+    };
     let outcome = apply_revision(matrix, empty_revision);
     assert.equal(outcome.carried, 0);
-    assert.equal(outcome.queued, matrix.baml.length());
-    assert.is_true(queued_before < matrix.baml.length());
+    assert.equal(outcome.queued, matrix.ts.length());
+    assert.is_true(queued_before < matrix.ts.length());
 }
 
-// ── candidate pools ─────────────────────────────────────────────────────────
-
-test "the correspondence table walks outward until it has something to say" {
-    // A type inherits the answer for the namespace it lives in.
-    assert.is_true(baml.deep_equals(pool_containers("baml.time.ZonedDateTime"), ["Date"]));
-    assert.is_true(baml.deep_equals(pool_containers("baml.time"), ["Date"]));
-    // A type with its own entry does not.
-    assert.is_true(baml.deep_equals(pool_containers("baml.http.Response"), ["Response"]));
-    // An empty entry is an answer, and the walk stops there rather than
-    // inheriting something from further out.
+test "an unnecessary symbol is neither matched nor missing" {
+    // `Array.isArray` is the case this verdict exists for: BAML does not lack
+    // it, BAML does not need it. Counting it as either would make the report
+    // say something false.
+    let matrix = fixture_matrix("sha-u", "5.8.3-test");
+    let before = matrix.counts.matched;
     let none: string[] = [];
-    assert.is_true(baml.deep_equals(pool_containers("baml.csv.CsvReader"), none));
-    assert.is_true(baml.deep_equals(pool_containers("baml.nowhere.At.All"), none));
-}
-
-test "a companion class is keyed by the type it backs" {
-    let symbols = extract_symbols(parse_export_text(fixture_export_text()));
-    for (let symbol in symbols) {
-        if (symbol.display == "Foo.index_of") {
-            assert.equal(baml_owner_display(symbol), "baml.Foo");
-        }
+    let no_counterpart: string[] = [];
+    if let symbol: TsSymbol = matrix.ts.at(0) {
+        matrix
+            .judgements
+            .push(
+                Judgement {
+                    ts: symbol.id,
+                    baml: no_counterpart,
+                    verdict: "unnecessary",
+                    basis: "model",
+                    confidence: "high",
+                    reason: "pattern matching answers this",
+                    divergence: null,
+                    rejected: none,
+                    verified: true,
+                    example: CodeExample {
+                        typescript: "Array.isArray(foo)",
+                        baml: "foo is int[]",
+                        note: null,
+                    },
+                },
+            );
     }
-    // An impl's receiver reduces to the type that owns it, generics and all.
-    assert.equal(normalize_impl_base("float[]"), "T[]");
-    assert.equal(normalize_impl_base("map<string, V>"), "map<K, V>");
-    assert.equal(normalize_impl_base("baml.String"), "string");
-    assert.equal(normalize_impl_base("baml.iter.Chain<T, E, E2>"), "baml.iter.Chain");
+    matrix.counts = recount(matrix);
+    assert.equal(matrix.counts.unnecessary, 1);
+    // It was recorded against a symbol nothing else speaks for, so the matched
+    // tally is untouched and nothing was double counted.
+    assert.equal(matrix.counts.matched, before);
+    assert
+        .equal(
+            matrix.counts.matched
+                + matrix.counts.unnecessary
+                + matrix.counts.unmatched
+                + matrix.counts.unjudged,
+            matrix.counts.ts_symbols,
+        );
 }
 
-test "the lexical shortlist ignores names too short to mean anything" {
-    assert.is_true(names_share_a_stem("to_string", "toString"));
-    assert.is_true(names_share_a_stem("parse", "parseInt"));
-    // `get` agrees with `get` across a dozen unrelated containers.
-    assert.is_true(!names_share_a_stem("get", "get"));
-    assert.is_true(!names_share_a_stem("at", "at"));
-    assert.is_true(!names_share_a_stem("split", "join"));
+test "the strongest verdict about a symbol is the one that counts" {
+    // Several judgements can speak for one symbol. Divergence is the finding a
+    // reader scans for, so it outranks an exact match; `unnecessary` explains an
+    // absence, so it outranks one.
+    assert.is_true(judgement_rank("divergent") > judgement_rank("match"));
+    assert.is_true(judgement_rank("match") > judgement_rank("unnecessary"));
+    assert.is_true(judgement_rank("unnecessary") > judgement_rank("none"));
+    // Nothing said at all ranks below everything said, so a symbol nothing has
+    // judged never displaces one something has.
+    assert.is_true(judgement_rank("none") > judgement_rank(""));
+    let empty: Judgement[] = [];
+    assert.equal(verdict_of(empty), "");
 }
 
-test "a pool keeps its container's members whatever else is claimed" {
-    let matrix = fixture_matrix("sha-p", "5.8.3-test");
-    let pools = build_pools(matrix, matrix.baml);
-    let by_owner: map<string, CandidatePool> = {};
-    for (let pool in pools) {
-        let _ = by_owner.set(pool.owner, pool);
-    }
+// ── the sessions ────────────────────────────────────────────────────────────
 
-    // `baml.Foo` has no entry in the table, so its pool is entirely lexical:
-    // `index_of` finds `indexOf`, `sort_helper` finds `sortStuff`.
-    if let foo: CandidatePool = by_owner.get("baml.Foo") {
-        assert.is_true(foo.ts_ids.includes("Foo.prototype.indexOf"));
-        assert.equal(foo.dropped, 0);
-    } else {
-        baml.sys.panic("no pool for baml.Foo");
-    }
-
-    // A symbol another judgement already claims stays in the pool. The two
-    // libraries are not in bijection, and hiding a claimed symbol from the next
-    // caller is how the right answer goes missing.
-    let claimed = (matrix.judgements.at(0)?.ts) ?? "";
-    assert.is_true(claimed.length() > 0);
-    let found = false;
-    for (let pool in pools) {
-        if (pool.ts_ids.includes(claimed)) {
-            found = true;
-        }
-    }
-    assert.is_true(found);
-}
-
-test "an owner with no plausible counterpart gets an empty pool, not a guess" {
-    let matrix = fixture_matrix("sha-p", "5.8.3-test");
-    // No container, and nothing whose name shares a stem with `only`.
-    let members = matrix.baml.filter((symbol) -> {
-        symbol.display == "helper_fn"
-    });
-    let pool = build_pool("baml.llm", members, matrix.ts);
-    assert.equal(pool.containers.length(), 0);
-    assert.equal(pool.ts_ids.length(), 0);
-}
-
-// ── the passes ──────────────────────────────────────────────────────────────
-
-/// A pass result carrying exactly the proposals given. Standing in for a call
-/// lets every fold be tested without one — the folds are where claims are
-/// accepted or refused, and that is the part worth pinning.
-function fixture_proposals(proposals: Proposal[]) -> PassResult[] {
-    let results: PassResult[] = [];
-    results.push(ProposeVerdict { proposals: proposals });
-    results
-}
-
-function fixture_proposal(
-    baml_id: string,
-    verdict: "match" | "divergent" | "none" | "bless",
-    ts_id: string?,
-) -> Proposal {
-    Proposal {
-        baml: baml_id,
+function fixture_finding(
+    ts: string,
+    verdict: "match" | "divergent" | "unnecessary" | "none",
+    baml: string[],
+) -> Finding {
+    Finding {
+        ts: ts,
         verdict: verdict,
-        ts: ts_id,
+        baml: baml,
         confidence: "high",
         reason: "fixture",
         divergence: null,
     }
 }
 
-test "a proposal naming a symbol that was never offered is refused" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let outcome = apply_proposals(
-        matrix,
-        fixture_proposals(
-            [
-                fixture_proposal("M:baml.Foo.invented", "match", "Foo.prototype.indexOf"),
-                fixture_proposal("M:baml.Foo.from_parts", "match", "Foo.prototype.invented"),
-            ],
-        ),
-        null,
-    );
-    assert.equal(outcome.proposed, 0);
-    assert.equal(outcome.rejected.length(), 2);
-    assert.is_true((outcome.rejected.at(0) ?? "").includes("not a BAML symbol"));
-    assert.is_true((outcome.rejected.at(1) ?? "").includes("not a TypeScript symbol"));
+function fixture_answers(findings: Finding[]) -> SessionResult[] {
+    let results: SessionResult[] = [];
+    results.push(Answer { findings: findings });
+    results
 }
 
-test "a proposal about an already-judged symbol is refused" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let settled = (matrix.judgements.at(0)?.baml) ?? "";
-    let outcome = apply_proposals(matrix, fixture_proposals([fixture_proposal(settled, "match", "Foo.prototype.only")]), null);
-    assert.equal(outcome.proposed, 0);
-    assert.is_true((outcome.rejected.at(0) ?? "").includes("already judged"));
+test "a finding naming a symbol that does not exist is refused" {
+    let matrix = fixture_matrix("sha-f", "5.8.3-test");
+    let invented: string[] = ["M:baml.Foo.invented"];
+    let outcome = apply_findings(
+        matrix,
+        fixture_answers(
+            [
+                fixture_finding("Foo.prototype.only", "match", invented),
+                fixture_finding("Foo.prototype.invented", "match", ["M:baml.Foo.index_of"]),
+            ],
+        ),
+    );
+    // Neither lands: one names a BAML symbol that is not there, the other a
+    // TypeScript symbol that is not there.
+    assert.equal(outcome.judged, 0);
+    assert.equal(outcome.rejected.length(), 2);
+}
+
+test "a pairing whose only counterpart was invented is dropped, not recorded as an absence" {
+    // The dangerous case. Keeping the finding and emptying its counterpart list
+    // would turn a hallucination into a confident "nothing in BAML does this" —
+    // a claim about the two libraries, made because a name was wrong.
+    let matrix = fixture_matrix("sha-g", "5.8.3-test");
+    let invented: string[] = ["V:baml.does_not_exist"];
+    let outcome = apply_findings(matrix, fixture_answers([fixture_finding("Foo.prototype.only", "match", invented)]));
+    assert.equal(outcome.judged, 0);
+    let claims = outcome.matrix.judgements.filter((judgement) -> {
+        judgement.ts == "Foo.prototype.only"
+    });
+    assert.equal(claims.length(), 0);
 }
 
 test "a judged absence is recorded, counterpart or not" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let outcome = apply_proposals(matrix, fixture_proposals([fixture_proposal("M:baml.Foo.from_parts", "none", null)]), null);
-    assert.equal(outcome.proposed, 1);
-    let recorded = outcome.matrix.judgements.filter((judgement) -> {
-        judgement.baml == "M:baml.Foo.from_parts"
-    });
-    if let judgement: Judgement = recorded.at(0) {
-        assert.equal(judgement.verdict, "none");
-        assert.is_true(judgement.ts == null);
-        assert.equal(judgement.basis, "model");
-    } else {
-        baml.sys.panic("the absence was not recorded");
-    }
-    // Judged absent is a different state from never looked at.
+    let matrix = fixture_matrix("sha-h", "5.8.3-test");
+    let nothing: string[] = [];
+    let outcome = apply_findings(matrix, fixture_answers([fixture_finding("Foo.prototype.only", "none", nothing)]));
+    assert.equal(outcome.judged, 1);
     assert.equal(outcome.matrix.counts.unmatched, 1);
 }
 
-test "blessing takes the previous verdict whole and marks it examined" {
-    let source = fixture_matrix("sha-x", "5.8.3-test");
-    let before = fixture_revision(source);
-    let settled = (source.judgements.at(0)?.baml) ?? "";
-    let paired = (source.judgements.at(0)?.ts) ?? "";
-
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    matrix.judgements = [];
-    let outcome = apply_proposals(matrix, fixture_proposals([fixture_proposal(settled, "bless", null)]), before);
-    assert.equal(outcome.proposed, 1);
-    if let judgement: Judgement = outcome.matrix.judgements.at(0) {
-        assert.equal(judgement.ts ?? "", paired);
-        assert.equal(judgement.basis, "model");
-        // A model looked at it again, which is what blessing means.
-        assert.is_true(judgement.verified);
-    } else {
-        baml.sys.panic("nothing was blessed");
-    }
+test "a finding about an already-judged symbol is refused" {
+    // `Foo.prototype.indexOf` arrives carried from the fixture's revision.
+    let matrix = fixture_matrix("sha-i", "5.8.3-test");
+    let outcome = apply_findings(matrix, fixture_answers([fixture_finding("Foo.prototype.indexOf", "none", [])]));
+    assert.equal(outcome.judged, 0);
+    assert.is_true((outcome.rejected.at(0) ?? "").includes("already judged"));
 }
 
-test "blessing with nothing to bless is refused" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    matrix.judgements = [];
-    let outcome = apply_proposals(matrix, fixture_proposals([fixture_proposal("M:baml.Foo.from_parts", "bless", null)]), null);
-    assert.equal(outcome.proposed, 0);
-    assert.is_true((outcome.rejected.at(0) ?? "").includes("no previous verdict"));
-}
-
-test "a call that does not come back is recorded, not read as finding nothing" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let results: PassResult[] = [];
-    results.push(PassFailure { pass: "propose", subject: "baml.Foo", reason: "timeout" });
-    let outcome = apply_proposals(matrix, results, null);
-    assert.equal(outcome.proposed, 0);
+test "a session that does not come back is recorded, not read as finding nothing" {
+    let matrix = fixture_matrix("sha-j", "5.8.3-test");
+    let results: SessionResult[] = [];
+    results.push(PassFailure { pass: "session", subject: "(globals).Foo", reason: "timed out" });
+    let outcome = apply_findings(matrix, results);
+    assert.equal(outcome.judged, 0);
     assert.equal(outcome.matrix.failures.length(), 1);
-    if let failure: PassFailure = outcome.matrix.failures.at(0) {
-        assert.equal(failure.subject, "baml.Foo");
-    } else {
-        baml.sys.panic("the failure was not recorded");
-    }
+    // The symbols it would have judged stay unjudged, which is what the
+    // failure entry exists to explain.
+    assert.is_true(outcome.matrix.counts.unjudged > 0);
 }
 
-test "a refuted pairing becomes an absence that remembers what it refused" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let settled = (matrix.judgements.at(0)?.baml) ?? "";
-    let paired = (matrix.judgements.at(0)?.ts) ?? "";
-    let results: VerifyResult[] = [];
-    results
-        .push(
-            VerifyVerdict {
-                rulings: [
-                    Ruling {
-                        baml: settled,
-                        ts: paired,
-                        upheld: false,
-                        reason: "one throws where the other returns null",
-                        divergence: null,
-                    },
-                ],
-            },
-        );
-    let outcome = apply_rulings(matrix, results);
-    assert.equal(outcome.refuted, 1);
-    assert.equal(outcome.upheld, 0);
-    let recorded = outcome.matrix.judgements.filter((judgement) -> {
-        judgement.baml == settled
-    });
-    if let judgement: Judgement = recorded.at(0) {
-        assert.equal(judgement.verdict, "none");
-        assert.is_true(judgement.ts == null);
-        // The refused counterpart is kept so the next run does not offer it again.
-        assert.is_true(judgement.rejected.includes(paired));
-        assert.is_true(judgement.verified);
-    } else {
-        baml.sys.panic("the refutation was not recorded");
-    }
-}
-
-test "an upheld pairing that differs is recorded as divergent" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let settled = (matrix.judgements.at(0)?.baml) ?? "";
-    let paired = (matrix.judgements.at(0)?.ts) ?? "";
-    let results: VerifyResult[] = [];
-    results
-        .push(
-            VerifyVerdict {
-                rulings: [
-                    Ruling {
-                        baml: settled,
-                        ts: paired,
-                        upheld: true,
-                        reason: "same operation",
-                        divergence: "BAML returns null where TypeScript returns -1",
-                    },
-                ],
-            },
-        );
-    let outcome = apply_rulings(matrix, results);
-    assert.equal(outcome.upheld, 1);
-    let recorded = outcome.matrix.judgements.filter((judgement) -> {
-        judgement.baml == settled
-    });
-    if let judgement: Judgement = recorded.at(0) {
-        assert.equal(judgement.verdict, "divergent");
-        assert.is_true((judgement.divergence ?? "").includes("returns -1"));
-        assert.is_true(judgement.verified);
-    } else {
-        baml.sys.panic("the ruling was not applied");
-    }
-}
-
-test "name matches are put to the verifier like anything else" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let requests = verify_requests(matrix);
+test "a session is never asked about more symbols than one answer can hold" {
+    let matrix = fixture_matrix("sha-k", "5.8.3-test");
+    let requests = session_requests(matrix, null);
     assert.is_true(requests.length() > 0);
-    let all = requests
-        .map((request) -> {
-            request.pair_lines.join("\n")
-        })
-        .join("\n");
-    assert.is_true(all.includes("names and owners agree"));
+    for (let request in requests) {
+        assert.is_true(request.ts_lines.length() <= session_chunk());
+    }
+    // Every unjudged symbol reaches exactly one session: none dropped, none
+    // asked about twice.
+    let queued = 0;
+    for (let request in requests) {
+        queued += request.ts_lines.length();
+    }
+    assert.equal(queued, matrix.counts.unjudged);
 }
 
-test "the sweep can overturn an absence but not a pairing" {
-    let matrix = fixture_matrix("sha-x", "5.8.3-test");
-    let absent: string[] = [];
-    matrix
-        .judgements
-        .push(
-            Judgement {
-                baml: "M:baml.Foo.from_parts",
-                ts: null,
-                verdict: "none",
-                basis: "model",
-                confidence: "low",
-                reason: "the pool held nothing",
-                divergence: null,
-                rejected: absent,
-                verified: false,
-            },
-        );
-    // The sweep answers about TypeScript symbols: `baml` holds the TS id.
-    let outcome = apply_sweep(
-        matrix,
-        fixture_proposals([fixture_proposal("Foo.prototype.only", "match", "M:baml.Foo.from_parts")]),
-    );
-    assert.equal(outcome.swept, 1);
-    let recorded = outcome.matrix.judgements.filter((judgement) -> {
-        judgement.baml == "M:baml.Foo.from_parts"
-    });
-    // One judgement, not two: the absence it overturned is gone.
-    assert.equal(recorded.length(), 1);
-    if let judgement: Judgement = recorded.at(0) {
-        assert.equal(judgement.verdict, "match");
-        assert.equal(judgement.ts ?? "", "Foo.prototype.only");
+test "an example that does not compile is caught, and a good one is not" {
+    // Goes through the real compiler, because that is the only check worth
+    // having: an example is the part of a judgement a reader copies, and a
+    // plausible call to a method that does not exist teaches a wrong API more
+    // effectively than prose could.
+    // Tests run with the project directory as the working directory, and the
+    // compiler under test is the same one the run wrapper defaults to.
+    let compiler = "../../baml_language/target/debug/baml-cli";
+    if (!baml.fs.exists(compiler)) {
+        baml.sys.panic(`${compiler} is not built — cargo build -p baml_cli --bin baml-cli`);
+    }
+    let box = build_toolbox("../..", "../../baml_language/TYPE_SYSTEM.md", compiler, "", "data/scratch");
+    let good = #"
+        function example() -> string {
+            let parts = "a,b,c".split(",");
+            parts.join("-")
+        }
+    "#;
+    assert.is_true(check_snippet(box, good) == null);
+
+    let bad = #"
+        function example() -> string {
+            "a,b,c".splitt(",")
+        }
+    "#;
+    if let error: string = check_snippet(box, bad) {
+        // The diagnostic goes back to the model verbatim, so it has to name
+        // what is actually wrong.
+        assert.is_true(error.includes("splitt"));
     } else {
-        baml.sys.panic("the sweep did not land");
+        baml.sys.panic("a snippet calling a method that does not exist compiled");
+    }
+
+    assert.is_true(check_snippet(box, "   ") != null);
+}
+
+test "only-matching narrows the sessions without changing them" {
+    let matrix = fixture_matrix("sha-o", "5.8.3-test");
+    let requests = session_requests(matrix, null);
+    let all = only_matching(requests, "");
+    assert.equal(all.length(), requests.length());
+    let none = only_matching(requests, "nothing-is-called-this");
+    assert.equal(none.length(), 0);
+    // Case-insensitive substring, so `--only date` finds `(globals).Date`.
+    let some = only_matching(requests, "foo");
+    assert.is_true(some.length() > 0);
+    assert.is_true(some.length() <= requests.length());
+}
+
+test "a finding names BAML symbols the way the tools print them" {
+    // The bug this exists to prevent, from a real run: the model answered with
+    // `baml.time.Instant.now`, which is what `baml describe` prints, and every
+    // one of 39 correct answers was refused because the export addresses it as
+    // `M:baml.time.Instant.now`. The kind prefix is an implementation detail of
+    // the export IR; nothing outside this program should have to know it.
+    let matrix = fixture_matrix("sha-n", "5.8.3-test");
+    let names = baml_finding_names(matrix);
+    assert.equal(resolve_baml_name(names, "baml.Foo.index_of") ?? "", "M:baml.Foo.index_of");
+    assert.equal(resolve_baml_name(names, "M:baml.Foo.index_of") ?? "", "M:baml.Foo.index_of");
+    assert.equal(resolve_baml_name(names, "Foo.index_of") ?? "", "M:baml.Foo.index_of");
+    assert.equal(resolve_baml_name(names, "baml.Foo") ?? "", "T:baml.Foo");
+    // Whitespace is the model's, not a different symbol.
+    assert.equal(resolve_baml_name(names, "  baml.Foo  ") ?? "", "T:baml.Foo");
+    // Still nothing for something that is not there.
+    assert.is_true(resolve_baml_name(names, "baml.Foo.invented") == null);
+}
+
+test "a finding that names a real symbol by path is applied" {
+    let matrix = fixture_matrix("sha-p", "5.8.3-test");
+    let path: string[] = ["baml.Foo.sort_helper"];
+    let outcome = apply_findings(matrix, fixture_answers([fixture_finding("Foo.prototype.only", "match", path)]));
+    assert.equal(outcome.judged, 1);
+    assert.equal(outcome.rejected.length(), 0);
+    // Stored as the id, whatever spelling arrived: the report keys on ids, and
+    // a judgement holding a display would not survive the next revision.
+    let applied = outcome.matrix.judgements.filter((judgement) -> {
+        judgement.ts == "Foo.prototype.only"
+    });
+    if let judgement: Judgement = applied.at(0) {
+        assert.is_true(baml.deep_equals(judgement.baml, ["M:baml.Foo.sort_helper"]));
+    } else {
+        baml.sys.panic("the finding was not applied");
     }
 }
 
-test "reviewing everything carries nothing but keeps the previous conclusions" {
-    // A revision that concluded something about a symbol the fresh run has not
-    // judged — which is what every model judgement looks like on the next run.
-    let source = fixture_matrix("sha-a", "5.8.3-test");
-    let absent: string[] = [];
-    source
-        .judgements
-        .push(
-            Judgement {
-                baml: "M:baml.Foo.from_parts",
-                ts: null,
-                verdict: "none",
-                basis: "model",
-                confidence: "high",
-                reason: "TypeScript builds these inline",
-                divergence: null,
-                rejected: absent,
-                verified: true,
-            },
-        );
-    let before = fixture_revision(source);
+test "a session knows exactly which symbols it still owes an answer for" {
+    // A real run answered for 51 of 52 symbols and was accepted, leaving
+    // `Date.prototype.setHours` silently unjudged — which reads identically to
+    // never having asked. The retry turn names what is missing rather than
+    // counting it, so the model does not have to re-derive which one it skipped.
+    let matrix = fixture_matrix("sha-r2", "5.8.3-test");
+    let requests = session_requests(matrix, null);
+    if let request: SessionRequest = requests.at(0) {
+        assert.equal(request.ts_ids.length(), request.ts_lines.length());
+        // Nothing covered yet: every symbol is owed.
+        let nothing: map<string, bool> = {};
+        let no_complaints: string[] = [];
+        let all_owed = retry_turn(request, nothing, no_complaints);
+        for (let id in request.ts_ids) {
+            assert.is_true(all_owed.includes(id));
+        }
 
-    // Carrying: nothing has changed, so the conclusion is kept without asking.
-    let carried = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
-    assert.is_true(carried.carried > 0);
-    let kept = carried.matrix.judgements.filter((judgement) -> {
-        judgement.baml == "M:baml.Foo.from_parts"
-    });
-    assert.equal(kept.length(), 1);
+        // One outstanding: it is named, and the ones already answered are not
+        // asked for again.
+        let covered: map<string, bool> = {};
+        let owed = request.ts_ids.at(0) ?? "";
+        for (let id in request.ts_ids) {
+            if (id != owed) {
+                let _ = covered.set(id, true);
+            }
+        }
+        let one = retry_turn(request, covered, no_complaints);
+        assert.is_true(one.includes(owed));
+        assert.is_true(one.includes("do not repeat it"));
+    } else {
+        baml.sys.panic("no sessions were planned");
+    }
+}
 
-    // Reviewing: the same revision is still in hand, and its conclusions are
-    // put in front of the model so it can bless them — but nothing is taken on
-    // trust, and the symbol is asked about again.
-    let matrix = fixture_matrix("sha-a", "5.8.3-test");
-    let requests = propose_requests(matrix, build_pools(matrix, pending_symbols(matrix)), before);
-    let shown = requests
-        .map((request) -> {
-            request.prior_lines.join("\n")
-        })
-        .join("\n");
-    assert.is_true(shown.includes("M:baml.Foo.from_parts"));
-    assert.is_true(shown.includes("was none with nothing"));
-    assert.is_true(shown.includes("TypeScript builds these inline"));
+test "an answer keeps its finding when only the example is bad" {
+    // Running out of attempts costs the example, never the judgement.
+    let finding = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "match",
+        baml: ["M:baml.Foo.index_of"],
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        example: CodeExample { typescript: "foo.only()", baml: "this does not compile", note: null },
+    };
+    let stripped = without_example(finding);
+    assert.is_true(stripped.example == null);
+    assert.equal(stripped.verdict, finding.verdict);
+    assert.is_true(baml.deep_equals(stripped.baml, finding.baml));
+    assert.equal(stripped.reason, finding.reason);
+}
+
+test "a long tool answer is cut, and says where" {
+    // Every round's results stay in the transcript for every later round, so an
+    // unbounded tool answer is a transcript that grows unboundedly. Silent
+    // truncation would be the worse failure: a model would read a class's
+    // members as complete and conclude the one it needed is absent.
+    let short = "already small";
+    assert.equal(clip(short, 100), short);
+    let long = "x".repeat(200);
+    let cut = clip(long, 50);
+    assert.is_true(cut.length() < long.length());
+    assert.is_true(cut.includes("truncated at 50 characters"));
+    // Exactly at the budget is not truncated.
+    assert.equal(clip("y".repeat(50), 50).length(), 50);
 }
 
 test "the concurrency cap falls back when nothing was asked for" {

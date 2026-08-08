@@ -305,12 +305,33 @@ public final class ProtoReader {
 
     /**
      * Decode a {@code BamlToHostCall} (engine→host callable dispatch) into its
-     * positional + optional argument buckets. Each arg's {@code value} is a
-     * {@code BamlOutboundValue} decoded wire-driven (the callable carries no
-     * host return descriptor); {@code is_optional_arg} routes it into the
-     * optional bucket keyed by {@code arg_name}, everything else is positional.
+     * positional + optional argument buckets, wire-driven (no descriptors — the
+     * pre-carrier behavior, kept for a callable registered without a
+     * {@code BamlTypedCallable} wrapper). {@code is_optional_arg} routes an arg
+     * into the optional bucket keyed by {@code arg_name}, everything else is
+     * positional.
      */
     public static HostCallArgs decodeBamlToHostCall(byte[] bytes) {
+        return decodeBamlToHostCall(bytes, null, null, null);
+    }
+
+    /**
+     * Type-directed sibling of {@link #decodeBamlToHostCall(byte[])}: each
+     * positional arg decodes against its declared parameter descriptor
+     * ({@code positionalDescs}, declared order) and each supplied optional
+     * against the descriptor keyed by its BAML wire name
+     * ({@code optionalNames} / {@code optionalDescs}, parallel arrays), through
+     * the same {@link #decodeWithDesc} the outbound result path uses — so a
+     * callable parameter declared as e.g. {@code baml.json.json} materializes
+     * as the generated sealed-union type, exactly like a declared return type.
+     * A {@code null} array or a {@code null} entry decodes that slot
+     * wire-driven (byte-identical to the descriptor-less overload).
+     */
+    public static HostCallArgs decodeBamlToHostCall(
+            byte[] bytes,
+            BamlType[] positionalDescs,
+            String[] optionalNames,
+            BamlType[] optionalDescs) {
         WireReader r = new WireReader(bytes);
         List<Object> positional = new ArrayList<>();
         Map<String, Object> optional = new LinkedHashMap<>();
@@ -319,7 +340,13 @@ public final class ProtoReader {
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
             if (field == TO_HOST_ARGS) {
-                decodeToHostArg(r.readMessage(), positional, optional);
+                decodeToHostArg(
+                        r.readMessage(),
+                        positional,
+                        optional,
+                        positionalDescs,
+                        optionalNames,
+                        optionalDescs);
             } else {
                 r.skipField(wire);
             }
@@ -328,7 +355,12 @@ public final class ProtoReader {
     }
 
     private static void decodeToHostArg(
-            WireReader r, List<Object> positional, Map<String, Object> optional) {
+            WireReader r,
+            List<Object> positional,
+            Map<String, Object> optional,
+            BamlType[] positionalDescs,
+            String[] optionalNames,
+            BamlType[] optionalDescs) {
         byte[] valueBytes = null;
         String argName = "";
         boolean isOptional = false;
@@ -343,12 +375,33 @@ public final class ProtoReader {
                 default -> r.skipField(wire);
             }
         }
-        Object value = valueBytes == null ? null : decodeValue(new WireReader(valueBytes), false);
+        // The engine emits required args in declared order, so the next
+        // positional slot's descriptor is at the bucket's current size.
+        BamlType desc = isOptional
+                ? optionalDescByName(argName, optionalNames, optionalDescs)
+                : positionalDescs != null && positional.size() < positionalDescs.length
+                        ? positionalDescs[positional.size()]
+                        : null;
+        Object value = valueBytes == null ? null : decodeWithDesc(valueBytes, desc, false);
         if (isOptional) {
             optional.put(argName, value);
         } else {
             positional.add(value);
         }
+    }
+
+    /** The descriptor registered for optional arg {@code argName}, or {@code null}. */
+    private static BamlType optionalDescByName(
+            String argName, String[] optionalNames, BamlType[] optionalDescs) {
+        if (optionalNames == null || optionalDescs == null) {
+            return null;
+        }
+        for (int i = 0; i < optionalNames.length && i < optionalDescs.length; i++) {
+            if (optionalNames[i].equals(argName)) {
+                return optionalDescs[i];
+            }
+        }
+        return null;
     }
 
     /**

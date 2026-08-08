@@ -1,4 +1,5 @@
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
+import { rowScaleOf } from '../composition';
 import {
   GOTO_EVENT,
   type GotoDetail,
@@ -6,7 +7,13 @@ import {
   type Ref,
   SymbolIndex,
 } from '../navigation';
-import { Links, type Side, type SymbolMatrix, type TreeNode } from '../types';
+import {
+  countNodes,
+  Links,
+  type Side,
+  type SymbolMatrix,
+  type TreeNode,
+} from '../types';
 import './matrix-group';
 
 // The page: load a report, then show it from either language's point of view.
@@ -26,25 +33,30 @@ import './matrix-group';
 /**
  * What the squares mean, for the side being viewed.
  *
- * Side-aware because the states are: an absence is recorded against the BAML
- * symbol, so only that side can distinguish "examined and found to have none"
- * from "nothing has looked yet". Naming both languages in one fixed list would
- * describe squares that are not on screen.
+ * Side-aware because the states are: an absence is recorded against the
+ * TypeScript symbol and names no BAML one, so only that side can distinguish
+ * "examined and found to have none" from "nothing has looked yet". Naming both
+ * languages in one fixed list would describe squares that are not on screen.
  */
 function legendFor(side: Side): ReadonlyArray<readonly [string, string]> {
-  const solid = side === 'baml' ? 'swatch-baml' : 'swatch-ts';
-  const other = side === 'baml' ? 'TypeScript' : 'BAML';
+  // Solid is the *other* language, so the viewing side's own colour always
+  // means "only here" — see `swatchFor` in matrix-symbol.
   const shared = [
-    ['swatch-both', 'in both'],
-    ['swatch-divergent', 'in both, reached differently'],
+    [side === 'ts' ? 'swatch-baml' : 'swatch-ts', 'in both'],
+    ['swatch-striped', 'in both, reached differently'],
   ] as const;
-  return side === 'baml'
+  return side === 'ts'
     ? [
         ...shared,
-        [solid, `no ${other} counterpart`],
-        ['swatch-unjudged-baml', 'not yet judged'],
+        ['swatch-ts', 'no BAML counterpart'],
+        ['swatch-unnecessary', 'unnecessary in BAML'],
+        ['swatch-unjudged-ts', 'not yet judged'],
       ]
-    : [...shared, [solid, `no ${other} counterpart`]];
+    : // The BAML side has neither of the last two. An absence names no BAML
+      // symbol, and a symbol named by an `unnecessary` judgement is named as
+      // how you would do the thing anyway, so it reads as claimed — see
+      // `stateOf`. Here a symbol is either named by a judgement or not.
+      [...shared, ['swatch-baml', 'no judgement names it']];
 }
 
 /**
@@ -299,15 +311,18 @@ export class MatrixAppElement extends LitElement {
     if (!matrix) return nothing;
     const c = matrix.counts;
     const parts: Array<[number, string]> =
-      this.side === 'baml'
+      this.side === 'ts'
         ? [
-            [c.matched, 'with a TypeScript counterpart'],
+            [c.matched, 'with a BAML counterpart'],
+            [c.unnecessary, 'unnecessary in BAML'],
             [c.unmatched, 'judged to have none'],
             [c.unjudged, 'unjudged'],
           ]
-        : [
-            [c.ts_symbols - c.ts_unclaimed, 'with a BAML counterpart'],
-            [c.ts_unclaimed, 'without'],
+        : // Not "judged to have none" and "unjudged": an absence names no BAML
+          // symbol, so from this side there is only named and not-named.
+          [
+            [c.baml_symbols - c.baml_unclaimed, 'named by a judgement'],
+            [c.baml_unclaimed, 'not named by any'],
           ];
     const total = this.side === 'baml' ? c.baml_symbols : c.ts_symbols;
     return html`<p class="mb-4 text-sm">
@@ -328,8 +343,19 @@ export class MatrixAppElement extends LitElement {
       return html`<p class="py-8 text-zinc-500">Loading…</p>`;
     const links = this.#links;
     const matrix = this.matrix;
+    const groups = this.#groups;
+    // Every bar is a fraction of the largest group's size, so the widths are
+    // comparable across the page rather than each filling its own row.
+    const scale = groups.reduce(
+      (largest, [, members]) => Math.max(largest, countNodes(members)),
+      0,
+    );
+    // Rows are measured against the largest row, not against the largest group:
+    // a 35-member class inside a 1140-symbol module would otherwise be a sliver
+    // whatever its composition.
+    const rowScale = rowScaleOf(groups);
     return html`<div>
-      ${this.#groups.map(
+      ${groups.map(
         ([name, members]) => html`
           <matrix-group
             class="mb-1.5 block overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800"
@@ -338,6 +364,8 @@ export class MatrixAppElement extends LitElement {
             .members=${members}
             .links=${links}
             .matrix=${matrix}
+            .scale=${scale}
+            .rowScale=${rowScale}
             .target=${this.target?.group === name ? this.target : null}
           ></matrix-group>
         `,

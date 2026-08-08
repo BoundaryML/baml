@@ -13,6 +13,7 @@ baseline_file=""
 previous_file=""
 review_all=0
 concurrency=""
+only=""
 use_llm=0
 
 absolute_path() {
@@ -26,7 +27,7 @@ usage() {
     cat <<'EOF'
 Usage: tools/stdlib-matrix/run [--output PATH] [--json-output PATH]
                                [--skip-extract] [--llm] [--previous PATH]
-                               [--review-all] [--concurrency N]
+                               [--review-all] [--concurrency N] [--only SUBJECT]
                                [--check --baseline PATH]
 
 Compare the BAML stdlib surface against the TypeScript stdlib and write two
@@ -38,11 +39,11 @@ run: they are gitignored, derived from the compiler at HEAD and the
 lockfile-pinned typescript/@types/node packages. --skip-extract reuses
 existing data/ files instead.
 
---llm adds a second pass over everything the name heuristic left unmatched,
-asking a model which symbols are the same operation under different names.
-Requires ANTHROPIC_API_KEY in the environment.
-Model-found correspondences are recorded with basis "model" and carry the
-model's confidence, so they stay distinguishable from name agreement.
+--llm judges the surface. One session per TypeScript container asks what a BAML
+developer would do instead, looking the answer up with `baml describe`,
+`baml describe --search`, the repository's own call sites, and the type system
+reference. Nothing else produces a judgement: without --llm every symbol comes
+out unjudged. Requires ANTHROPIC_API_KEY in the environment.
 
 --previous PATH carries judgements forward from an earlier report. A symbol
 keeps its previous answer when it and every type it names are unchanged, so a
@@ -58,6 +59,11 @@ question being asked has moved rather than the surface being asked about.
 --concurrency N caps how many calls are in flight (default 8). Raise it if your
 account's rate limits allow; the passes are wide, so this is what bounds a cold
 run's wall clock.
+
+--only SUBJECT judges only the sessions whose subject contains SUBJECT, as a
+substring, case-insensitively: --only Date, --only node:fs. For proving the loop
+end to end without paying for the whole surface. The report it writes is a real
+report with almost everything unjudged, so do not publish one.
 
 The report is not checked into the repository: it is a generated artifact.
 CI publishes matrix.json per run; locally it lands in report/ (gitignored).
@@ -104,6 +110,10 @@ while (($# > 0)); do
         --review-all)
             review_all=1
             shift
+            ;;
+        --only)
+            only="$2"
+            shift 2
             ;;
         --concurrency)
             concurrency="$2"
@@ -152,13 +162,17 @@ if ((review_all == 1)); then
         exit 2
     fi
     # Without the passes, "review everything again" means "carry nothing and
-    # ask no one", which would replace a report full of judgements with one
-    # holding only name matches.
+    # ask no one", which would replace a report full of judgements with an
+    # empty one — nothing else concludes anything.
     if ((use_llm == 0)); then
         echo "stdlib-matrix: --review-all needs --llm — reviewing means asking, and without it this" \
              "would discard the previous report's judgements rather than re-examine them" >&2
         exit 2
     fi
+fi
+if [[ -n "${only}" ]] && ((use_llm == 0)); then
+    echo "stdlib-matrix: --only selects which sessions to judge, so it needs --llm" >&2
+    exit 2
 fi
 if [[ -n "${concurrency}" ]]; then
     if [[ ! "${concurrency}" =~ ^[1-9][0-9]*$ ]]; then
@@ -239,8 +253,20 @@ elif ((use_llm == 1)); then
         exit 2
     fi
     target="build_matrix_aligned"
+    # The sessions look things up with the compiler and with the repository, so
+    # they need to be told where both are. `repo_root` is this checkout;
+    # `baml_bin` is the same binary that produced the surface being compared,
+    # never whichever `baml` happens to be installed.
+    target_args+=(--repo_root "${tool_repo}")
+    target_args+=(--type_system_file "${tool_repo}/baml_language/TYPE_SYSTEM.md")
+    target_args+=(--skill_cache "${data_dir}/baml_skill.md")
+    target_args+=(--baml_bin "${baml_bin}")
+    target_args+=(--scratch_root "${data_dir}/scratch")
     if [[ -n "${concurrency}" ]]; then
         target_args+=(--concurrency "${concurrency}")
+    fi
+    if [[ -n "${only}" ]]; then
+        target_args+=(--only "${only}")
     fi
 fi
 
@@ -341,15 +367,16 @@ field() {
 }
 
 echo "Wrote ${resolved_json} (canonical), ${resolved_output}, and ${raw_result} (raw)"
-echo "BAML: $(field .report.counts.matched) of $(field .report.counts.baml_symbols) symbols have a" \
-     "TypeScript counterpart · $(field .report.counts.unmatched) judged to have none ·" \
+echo "TypeScript: $(field .report.counts.matched) of $(field .report.counts.ts_symbols) symbols have a" \
+     "BAML counterpart · $(field .report.counts.unnecessary) unnecessary in BAML ·" \
+     "$(field .report.counts.unmatched) judged to have none ·" \
      "$(field .report.counts.unjudged) unjudged"
-echo "TypeScript: $(field '(.report.counts.ts_symbols - .report.counts.ts_unclaimed)') of" \
-     "$(field .report.counts.ts_symbols) are claimed by a BAML symbol"
+echo "BAML: $(field '(.report.counts.baml_symbols - .report.counts.baml_unclaimed)') of" \
+     "$(field .report.counts.baml_symbols) symbols are named by a judgement"
 
 if ((use_llm == 1)); then
-    echo "Passes: $(field .carried) carried · $(field .proposed) proposed · $(field .swept) swept ·" \
-         "$(field .upheld) upheld · $(field .refuted) refuted"
+    echo "Sessions: $(field .carried) carried · $(field .sessions) sessions ·" \
+         "$(field .judged) judged"
     rejected_count="$(field '(.rejected | length)')"
     if [[ "${rejected_count}" != "0" && "${rejected_count}" != "?" ]]; then
         echo "${rejected_count} claims refused:" >&2
@@ -357,6 +384,6 @@ if ((use_llm == 1)); then
     fi
     failures="$(field .failures)"
     if [[ "${failures}" != "0" && "${failures}" != "?" ]]; then
-        echo "${failures} calls did not come back; see the report's failures list" >&2
+        echo "${failures} sessions did not come back; see the failures list in the report" >&2
     fi
 fi
