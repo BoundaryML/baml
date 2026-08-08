@@ -91,9 +91,10 @@ function RuntimeClassify<T>(input: string) -> T {
 }
 
 function runtime_enum_llm_companions_compile() -> string {
-    let category = reflect
-        .enum
-        .new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]);
+    let category = reflect.enum.new(
+        "Category",
+        [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"],
+    );
     let prompt = RuntimeClassify$render_prompt<unreflect(category)>("sample").text();
     let parsed = RuntimeClassify$parse<unreflect(category)>(`"k7"`);
     return prompt + reflect.enum.get_value(parsed);
