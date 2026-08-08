@@ -47,6 +47,65 @@ message BamlTy {
   }
 }
 
+// A host-portable reflected type. `root` is the structural/name-reference
+// spelling and the definition tables give runtime-created nominal names their
+// meaning. Engine-local mint identity is deliberately absent: every inbound
+// decode materializes a fresh, equivalent definition graph (BEP-066 H-4).
+message BamlTyDef {
+  BamlTy root = 1;
+  repeated BamlClassDef classes = 2;
+  repeated BamlEnumDef enums = 3;
+  repeated BamlWitnessDef witnesses = 4;
+}
+
+// A pointer-free structural conformance contribution. The implemented class is
+// the class denoted by the enclosing definition's root; the interface itself
+// is a static, already-known declaration and therefore remains a name ref.
+message BamlWitnessDef {
+  string interface = 1;
+  repeated BamlTy interface_args = 2;
+  repeated BamlTyAssociatedBinding associated_types = 3;
+  repeated BamlWitnessFieldLink field_links = 4;
+}
+
+message BamlWitnessFieldLink {
+  string interface_field = 1;
+  string class_field = 2;
+}
+
+message BamlTyMetadata {
+  optional string description = 1;
+  optional string alias = 2;
+  optional string docstring = 3;
+  map<string, string> other = 4;
+}
+
+message BamlClassDef {
+  string name = 1;
+  repeated BamlClassFieldDef fields = 2;
+  BamlTyMetadata metadata = 3;
+  uint32 generic_param_count = 4;
+}
+
+message BamlClassFieldDef {
+  string name = 1;
+  BamlTy ty = 2;
+  BamlTyMetadata metadata = 3;
+  bool skip = 4;
+}
+
+message BamlEnumDef {
+  string name = 1;
+  repeated BamlEnumVariantDef variants = 2;
+  BamlTyMetadata metadata = 3;
+}
+
+message BamlEnumVariantDef {
+  string name = 1;
+  BamlTyMetadata metadata = 2;
+  bool skip = 3;
+}
+
 // Scalar/leaf types with no parameters.
 enum BamlTyPrimitiveKind {
   BAML_TY_PRIMITIVE_UNSPECIFIED = 0;

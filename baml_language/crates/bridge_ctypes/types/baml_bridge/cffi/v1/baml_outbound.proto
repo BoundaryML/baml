@@ -82,6 +82,8 @@ message BamlOutboundValue {
     // A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
     // Shares the `BamlTy` representation with the inbound side.
     BamlTy ty_value = 21;
+    // Definition-carrying type handle. Identity is intentionally not encoded.
+    BamlTyDef ty_def_value = 22;
   }
 }
 

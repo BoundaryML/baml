@@ -31,6 +31,123 @@ fn realize_host_ty(ty: RuntimeTy) -> Result<baml_type::RealizedTy, EngineError> 
     })
 }
 
+fn portable_type_def(
+    type_value: &bex_vm_types::types::TypeValue,
+) -> bex_vm_types::types::PortableTypeDef {
+    use bex_vm_types::types::{
+        PortableClassDef, PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef,
+        PortableMetadata, PortableTypeDef,
+    };
+
+    let mut class_ptrs = type_value
+        .defs()
+        .classes
+        .values()
+        .copied()
+        .collect::<Vec<_>>();
+    let mut enum_ptrs = type_value
+        .defs()
+        .enums
+        .values()
+        .copied()
+        .collect::<Vec<_>>();
+    if !type_value.owner.is_null() {
+        // SAFETY: the VM-to-external caller holds a `PermitProof`, so the
+        // owning type and all of its definition edges cannot move here.
+        if let Object::Package(package) = unsafe { type_value.owner.get() } {
+            for ptr in package.classes.values().copied() {
+                if !class_ptrs.contains(&ptr)
+                    && !matches!(unsafe { ptr.get() }, Object::Class(class) if class.name.name().as_str().ends_with("$stream"))
+                {
+                    class_ptrs.push(ptr);
+                }
+            }
+            for ptr in package.enums.values().copied() {
+                if !enum_ptrs.contains(&ptr) {
+                    enum_ptrs.push(ptr);
+                }
+            }
+        }
+    }
+    let metadata =
+        |description: &Option<String>,
+         alias: &Option<String>,
+         docstring: &Option<String>,
+         other: &indexmap::IndexMap<String, String>| PortableMetadata {
+            description: description.clone(),
+            alias: alias.clone(),
+            docstring: docstring.clone(),
+            other: other.clone(),
+        };
+    let classes = class_ptrs
+        .into_iter()
+        .filter_map(|ptr| {
+            // SAFETY: definition pointers are rooted edges of `type_value`.
+            let Object::Class(class) = (unsafe { ptr.get() }) else {
+                return None;
+            };
+            Some(PortableClassDef {
+                name: class.name.clone(),
+                fields: class
+                    .fields
+                    .iter()
+                    .map(|field| PortableClassFieldDef {
+                        name: field.name.clone(),
+                        ty: field.field_type.clone(),
+                        metadata: metadata(
+                            &field.description,
+                            &field.alias,
+                            &field.docstring,
+                            &field.other,
+                        ),
+                        skip: field.skip,
+                    })
+                    .collect(),
+                metadata: metadata(
+                    &class.description,
+                    &class.alias,
+                    &class.docstring,
+                    &class.other,
+                ),
+                generic_param_count: class.generic_param_count,
+            })
+        })
+        .collect();
+    let enums = enum_ptrs
+        .into_iter()
+        .filter_map(|ptr| {
+            // SAFETY: definition pointers are rooted edges of `type_value`.
+            let Object::Enum(enm) = (unsafe { ptr.get() }) else {
+                return None;
+            };
+            Some(PortableEnumDef {
+                name: enm.name.clone(),
+                variants: enm
+                    .variants
+                    .iter()
+                    .map(|variant| PortableEnumVariantDef {
+                        name: variant.name.clone(),
+                        metadata: metadata(
+                            &variant.description,
+                            &variant.alias,
+                            &variant.docstring,
+                            &variant.other,
+                        ),
+                        skip: variant.skip,
+                    })
+                    .collect(),
+                metadata: metadata(&enm.description, &enm.alias, &enm.docstring, &enm.other),
+            })
+        })
+        .collect();
+    PortableTypeDef {
+        root: type_value.ty.clone().into(),
+        classes,
+        enums,
+        witnesses: type_value.defs().witnesses.clone(),
+    }
+}
+
 fn host_call_parameter_types<'a>(
     params: &[baml_type::RealizedFunctionParamTy],
     positional_count: usize,
@@ -356,9 +473,7 @@ impl BexEngine {
             Object::Interface(_) => Err(EngineError::CannotConvert {
                 type_name: "interface".to_string(),
             }),
-            Object::Package(_) => Err(EngineError::CannotConvert {
-                type_name: "package".to_string(),
-            }),
+            Object::Package(_) => Ok(BexExternalValue::Handle(self.heap.create_handle(ptr))),
             Object::ImplRule(_) => Err(EngineError::CannotConvert {
                 type_name: "impl_rule".to_string(),
             }),
@@ -376,9 +491,10 @@ impl BexEngine {
             }),
             Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-            // Identity never crosses the host boundary (BEP-066 H-4).
-            Object::Type(type_value) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-                type_value.ty.clone().into(),
+            // Identity never crosses the host boundary (BEP-066 H-4), but the
+            // portable definition graph does.
+            Object::Type(type_value) => Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
+                portable_type_def(type_value),
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
@@ -494,7 +610,7 @@ impl BexEngine {
                 }
             }
             // A reflected type passed as a value inhabits the `type` metatype.
-            BexExternalValue::Adt(BexExternalAdt::Type(_)) => {
+            BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
                 SynthTy::Known(RuntimeTy::Type { attr: attr() })
             }
             // A typed heap handle already carries its concrete `RuntimeTy`.
@@ -1120,6 +1236,13 @@ impl BexEngine {
                 // The wire carries the definition only (H-4); derive a fresh
                 // static identity with the receiving VM's complete fact context.
                 Value::object(holder.holder_mut().vm.alloc_static_type(ty))
+            }
+            BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+                let vm = &mut holder.holder_mut().vm;
+                let type_value = vm
+                    .materialize_portable_type_def(definition)
+                    .map_err(|message| EngineError::TypeMismatch { message })?;
+                Value::object(vm.alloc_type(type_value))
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 return Err(EngineError::CannotConvert {
@@ -2544,7 +2667,10 @@ fn value_matches_type_with_definitions(
         }
         (BexExternalValue::FunctionRef { .. }, RuntimeTy::Function { .. }) => true,
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
-        (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
+        (
+            BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)),
+            RuntimeTy::Type { .. },
+        ) => true,
         (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
             members.iter().any(|member| {
                 selected_arm_equal(member, &metadata.selected_option)

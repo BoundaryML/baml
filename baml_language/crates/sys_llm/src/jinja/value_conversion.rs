@@ -101,9 +101,11 @@ pub(crate) fn external_value_to_jinja(
             })
         }
 
-        BexExternalValue::Adt(BexExternalAdt::Type(_)) => Err(RenderPromptError::ConversionError {
-            reason: "Type values cannot be passed to Jinja templates".to_string(),
-        }),
+        BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
+            Err(RenderPromptError::ConversionError {
+                reason: "Type values cannot be passed to Jinja templates".to_string(),
+            })
+        }
 
         BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
             Err(RenderPromptError::ConversionError {

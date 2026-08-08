@@ -69,6 +69,7 @@ pub fn inbound_to_external(
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             // A reflected BAML type passed as an argument value.
             InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
+            InboundValueVariant::TyDefValue(ty) => crate::ty_decode::proto_ty_def_to_external(&ty),
             InboundValueVariant::Handle(handle) => {
                 // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
                 // bridge owns the lookup; we construct the Arc stub here so
