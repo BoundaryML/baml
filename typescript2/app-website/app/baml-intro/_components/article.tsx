@@ -1,3 +1,5 @@
+/** biome-ignore-all lint/a11y/useAnchorContent: legacy article markup, icon links are aria-labeled elsewhere */
+/** biome-ignore-all lint/a11y/noSvgWithoutTitle: decorative inline svgs */
 'use client';
 
 // CONTENT PARITY: this component renders / and /explore. Keep substantive
@@ -7,10 +9,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useState } from 'react';
+import BamlEditor from '@/app/learn2/_components/baml-editor-lazy';
 import { DiscordCta } from '@/components/discord-cta';
 import { Navbar } from '@/components/navbar';
 import { BamlCode } from '../../learn2/_components/BamlCode';
-import BamlEditor from '../../learn2/_components/BamlEditorLazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
 import {
   CODE_THEMES,
@@ -56,7 +58,7 @@ import {
   TS_LIES,
 } from './snippets';
 import { TenetsAccordion } from './TenetsAccordion';
-import { TryBaml } from './TryBaml';
+import { TryBaml } from './try-baml';
 
 /* All sections share one reading-column width so every header aligns.
  * Editors, playgrounds, and side-by-side pairs break out wider via
@@ -398,7 +400,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
     };
     if (target) {
       const pin = () =>
-        target.scrollIntoView({ block: 'start', behavior: 'instant' });
+        target.scrollIntoView({ behavior: 'instant', block: 'start' });
       pinObserver = new ResizeObserver(pin);
       pinObserver.observe(node);
       window.addEventListener('wheel', stopPin, { passive: true });
@@ -638,8 +640,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                     diagnostics={[
                       {
                         line: 8,
-                        message:
-                          'runtime TypeError: email is undefined',
+                        message: 'runtime TypeError: email is undefined',
                         severity: 'error',
                       },
                     ]}
