@@ -37,7 +37,7 @@ export function RoomRebus() {
 
   useEffect(() => {
     if (!seen) return;
-    const timer = setTimeout(() => setExplained(true), 4000);
+    const timer = setTimeout(() => setExplained(true), 1500);
     return () => clearTimeout(timer);
   }, [seen]);
 

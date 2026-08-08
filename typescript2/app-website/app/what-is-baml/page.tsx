@@ -6,6 +6,7 @@ import { EapCta } from '@/components/eap-cta';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 import { Acquirer } from './_components/acquirer';
+import { CodeExplorer } from './_components/code-explorer';
 import { DroppedFootnote } from './_components/dropped-footnote';
 import { LostEvents } from './_components/lost-events';
 import { RoomRebus } from './_components/room-rebus';
@@ -17,7 +18,7 @@ import { TryBamlFab } from './_components/try-baml-fab';
 
 export const metadata = createMetadata({
   description:
-    "Why agents need a new language, and the parts of BAML that are different: AI functions, observability, agent-first tooling, workflows, evals, and an anti-slop base language.",
+    'Why agents need a new language, and the parts of BAML that are different: AI functions, observability, agent-first tooling, workflows, evals, and an anti-slop base language.',
   ogTitle: 'What is BAML',
   path: '/what-is-baml',
   title: 'What is BAML',
@@ -34,7 +35,12 @@ function withLamb(text: string, prefix: number) {
     const key = `${prefix}-${i}`;
     if (chunk === '{lamb}') {
       return (
-        <img alt="" className="wib-inline-lamb" key={key} src="/bamllogopurple.svg" />
+        <img
+          alt=""
+          className="wib-inline-lamb"
+          key={key}
+          src="/bamllogopurple.svg"
+        />
       );
     }
     if (chunk === 'BAML') {
@@ -56,7 +62,7 @@ function inline(text: string) {
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
         // biome-ignore lint/suspicious/noArrayIndexKey: positional split output
-        <code key={i} className="wib-code">
+        <code className="wib-code" key={i}>
           {part.slice(1, -1)}
         </code>
       );
@@ -79,34 +85,34 @@ type Card = { id: string; title: string; line: string };
 
 const CARDS: Card[] = [
   {
+    id: 'observability',
+    line: 'Every function traced and profiled, locally. Agents can read the traces.',
+    title: 'Observability and profiling',
+  },
+  {
     id: 'ai-functions',
-    title: 'AI functions',
     line: 'Streaming, batching, websockets, voice, any provider.',
+    title: 'AI functions',
   },
   {
     id: 'language',
-    title: 'The anti-slop type system',
     line: 'No `any`, no unchecked casts, no imports. But we did add pattern matching.',
-  },
-  {
-    id: 'observability',
-    title: 'Observability and profiling',
-    line: 'Every function traced and profiled, locally. Agents can read the traces.',
+    title: 'The anti-slop type system',
   },
   {
     id: 'tooling',
-    title: 'Agent-first toolchain',
     line: 'Compiles faster than Go, searches better than ripgrep, packs smaller binaries than Bun.',
+    title: 'Agent-first toolchain',
   },
   {
     id: 'workflows',
-    title: 'Workflow primitives',
     line: 'Concurrency, retries, cancellation, codemode, sandbox. It’s a lot, just read the code.',
+    title: 'Workflow primitives',
   },
   {
     id: 'evals',
-    title: 'Better testing',
     line: 'Generate tests from data or prod traces. Grade flaky (AI) functions over many runs.',
+    title: 'Better testing',
   },
 ];
 
@@ -156,8 +162,8 @@ const HOSTS = [
   { icon: '/logos/rust.svg', name: 'Rust' },
   { icon: '/logos/kotlin.svg', name: 'Kotlin', tag: 'Android' },
   { icon: '/logos/swift.svg', name: 'Swift', tag: 'iOS' },
-  { icon: '/logos/php.svg', name: 'PHP', tag: 'soon', soon: true },
-  { icon: '/logos/ruby.svg', name: 'Ruby', tag: 'soon', soon: true },
+  { icon: '/logos/php.svg', name: 'PHP', soon: true, tag: 'soon' },
+  { icon: '/logos/ruby.svg', name: 'Ruby', soon: true, tag: 'soon' },
 ];
 
 // A tab is either a plain name or a category with its own sub-tabs (the
@@ -185,10 +191,22 @@ type Section = {
 
 const SECTIONS: Section[] = [
   {
-    id: 'ai-functions',
+    body: 'Agents write more code than any human can read. Telemetry is the only way to understand what happened. BAML traces every function instead of sampling a percentage. It’s 6x faster than OpenTelemetry in Rust, 200x faster in Python, and the traces 1000x smaller.',
+    id: 'observability',
     num: 1,
-    title: 'AI functions',
+    readMore: 'How BAML keeps tracing fast enough to always leave on',
+    tabs: [
+      'Always-on Observability',
+      'Data Enrichment',
+      'Agents Using Traces',
+      'Runs at Scale',
+    ],
+    title: 'Observability and profiling',
+  },
+  {
     body: 'Calling a model should feel like calling a function, not wiring up an SDK. In BAML it’s a typed function: declare the input and output types, get structured data back. Malformed output gets repaired against your types by schema-aligned parsing, so every model gets better at structured output.',
+    id: 'ai-functions',
+    num: 2,
     readMore: 'AI functions in BAML',
     // Flat by design. The variants inside these (Heal JSON's malformed /
     // missing / wrong-type cases, Switch Models' provider list) are toggles
@@ -200,34 +218,21 @@ const SECTIONS: Section[] = [
       'Switch Models',
       'AI Classes',
     ],
+    title: 'AI functions',
   },
   {
-    id: 'language',
-    num: 2,
-    title: 'The anti-slop type system',
     body: 'Every invariant you can’t enforce is one an agent will eventually violate. Start with type erasure: we don’t do it, so there’s no `any` or unchecked cast for a model to hide behind. In BAML, invalid states don’t compile.',
     hook: 'there are no escape hatches for an agent to grab.',
+    id: 'language',
+    num: 3,
     readMore: 'The BAML language',
     tabs: ['No Any', 'switch < match', 'Typed Errors', 'Local Reasoning'],
+    title: 'The anti-slop type system',
   },
   {
-    id: 'observability',
-    num: 3,
-    title: 'Observability and profiling',
-    body: 'Agents write more code than any human can read. Telemetry is the only way to understand what happened. BAML traces every function instead of sampling a percentage. It’s 6x faster than OpenTelemetry in Rust, 200x faster in Python, and the traces 1000x smaller.',
-    readMore: 'How BAML keeps tracing fast enough to always leave on',
-    tabs: [
-      'Always-on Observability',
-      'Data Enrichment',
-      'Agents Using Traces',
-      'Runs at Scale',
-    ],
-  },
-  {
+    body: 'For decades, tooling was built for humans: LSPs, autocomplete, hover docs. It’s about time the real author of the code got fair treatment. An LSP for you, `baml describe` and friends for them. And a really fast compiler for both.',
     id: 'tooling',
     num: 4,
-    title: 'Agent-first toolchain',
-    body: 'For decades, tooling was built for humans: LSPs, autocomplete, hover docs. It’s about time the real author of the code got fair treatment. An LSP for you, `baml describe` and friends for them. And a really fast compiler for both.',
     readMore: 'The BAML toolchain',
     tabs: [
       'Compile Faster',
@@ -236,12 +241,12 @@ const SECTIONS: Section[] = [
       'Run Directly',
       'Ship Anywhere',
     ],
+    title: 'Agent-first toolchain',
   },
   {
-    id: 'workflows',
-    num: 4,
-    title: 'Workflow primitives',
     body: 'How has everyone accepted async as a good idea? Half your codebase ends up as two copies of the same function, one sync and one async. Like Go, BAML has green threads. Unlike Go, you can await what they return.',
+    id: 'workflows',
+    num: 5,
     readMore: 'Workflows in BAML',
     tabs: [
       'No Function Coloring',
@@ -249,27 +254,24 @@ const SECTIONS: Section[] = [
       'Limit Concurrency',
       'Customize Execution',
     ],
+    title: 'Workflow primitives',
   },
   {
-    id: 'evals',
-    num: 5,
-    title: 'Better testing',
     body: 'Engineers spent twenty years squashing flaky tests. Then AI made everything flaky. BAML tests can grade distributions. Cases can be hard-coded examples, golden datasets, or real prod traces.',
+    id: 'evals',
+    num: 6,
     readMore: 'Evals in BAML',
     tabs: ['Batteries Included', 'Tests from Data', 'Handle Flakiness'],
+    title: 'Better testing',
   },
   {
-    id: 'adopting',
-    num: 6,
     // {elephant} marks the four elephant-in-the-room sections: will I have to
     // rewrite everything, can models write this, where are the packages, and
     // how do these people make money. The art is a placeholder until the
     // generated lamb/elephant images land.
     art: '/elephants/elephant-adoption.png',
-    title: '{elephant} I’m hyped. How do I port my codebase to BAML?',
-    sign: 'Do not rewrite your codebase in BAML.',
     body: 'You can if you want. But we went the extra mile in the other direction: every type, every function, every method crosses the bridge to your language. Even generics. Even lambdas. Even tracing. Sh{lamb}t just works.',
-    readMore: 'Incremental adoption',
+    id: 'adopting',
     matrix: {
       features: ['Function', 'Type', 'Error', 'Method', 'Generic', 'Lambda'],
       languages: [
@@ -284,28 +286,32 @@ const SECTIONS: Section[] = [
         'Swift',
       ],
     },
-  },
-  {
-    id: 'models-write',
     num: 7,
+    readMore: 'Incremental adoption',
+    sign: 'Do not rewrite your codebase in BAML.',
+    title: '{elephant} I’m hyped. How do I port my codebase to BAML?',
+  },
+  {
     art: '/elephants/elephant-models.png',
-    title: '{elephant} Can models actually write BAML?',
     body: 'Decide for yourself. BAML reads like TypeScript and is already an official language on GitHub, so models should know most of it. We don’t leave the rest up to vibes. We measure how agents write programs: how long it takes, what it costs, how many turns. `baml describe` wasn’t a coincidence. It’s a science.\nAnd remember, today is the worst the models will ever be at BAML.',
-    readMore: 'agent-tries-baml',
-  },
-  {
-    id: 'packages',
+    id: 'models-write',
     num: 8,
-    art: '/elephants/elephant-packages.png',
-    title: '{elephant} Is there an ecosystem?',
-    body: '`npm install is-even`. It depends on `is-odd`? That depends on `is-number`?! 🤯 We’re rethinking package management from first principles. For now, we’ve shipped a thorough standard library. For anything else, ask Claude to port what you need, or pass functions over the bridge.\nBesides, no packages means no supply chain attacks. QED.',
+    readMore: 'agent-tries-baml',
+    title: '{elephant} Can models actually write BAML?',
   },
   {
-    id: 'money',
+    art: '/elephants/elephant-packages.png',
+    body: '`npm install is-even`. It depends on `is-odd`? That depends on `is-number`?! 🤯 We’re rethinking package management from first principles. For now, we’ve shipped a thorough standard library. For anything else, ask Claude to port what you need, or pass functions over the bridge.\nBesides, no packages means no supply chain attacks. QED.',
+    id: 'packages',
     num: 9,
+    title: '{elephant} Is there an ecosystem?',
+  },
+  {
     art: '/elephants/elephant-money.png',
-    title: '{elephant} Are you trying to get bought by {acquirer}',
     body: 'No thank you.\nThe BAML language is and will always be open. Apache-2, free, works offline.\nWe make money on Boundary Web Services. Build the language, the runtime, and the tracing layer, and you can make things nobody else can. We think you’ll love paying for some of them.\nSome of you may wish to build your own cloud. Good luck and Claudespeed.\nFor the rest, we’re launching with observability, and saving you from Datadog. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
+    id: 'money',
+    num: 10,
+    title: '{elephant} Are you trying to get bought by {acquirer}',
   },
 ];
 
@@ -352,6 +358,19 @@ const CSS = `
 .wib-deck { margin: 0 0 var(--sp-7); font-size: var(--fs-lead); font-weight: 400;
   line-height: 1.5; color: var(--ink); }
 .wib-hero p { color: #2b2620; margin: 0 0 var(--sp-4); font-size: var(--fs-lead); line-height: 1.5; }
+.wib-users { display: flex; align-items: center; gap: var(--sp-10);
+  margin: var(--sp-5) 0 0; padding: 0; list-style: none; }
+/* per-logo optical sizing: the marks have very different visual weights.
+   multiply blends away white boxes; grayscale + opacity evens the tone. */
+/* brightness(0) flattens every mark to a single ink, then one shared
+   opacity gives them all the identical grey */
+.wib-users img { width: auto; display: block; mix-blend-mode: multiply;
+  filter: brightness(0); opacity: 0.5; }
+.wib-users .u-google { height: 32px; }
+.wib-users .u-aws { height: 30px; }
+/* SAP is a solid plate with knocked-out letters: flattening it to one ink
+   turns it into a blob, so it keeps its own grayscale treatment */
+.wib-users .u-sap { height: 27px; filter: grayscale(1); opacity: 0.45; }
 .wib-borrow-list { margin: var(--sp-3) 0 var(--sp-2); padding: 0; list-style: none; font-size: var(--fs-lead);
   display: flex; flex-direction: column; gap: var(--sp-2); color: var(--ink); }
 .wib-borrow-list li { display: flex; align-items: center; }
@@ -444,7 +463,7 @@ a.wib-card:hover { text-decoration: none; border-color: #cdbfa4; transform: tran
 
 /* ROOM with an elephant sitting inside each O. The O's stay legible so the word
    still reads; the elephants are small enough to sit in the counter. */
-.wib-room { margin: var(--sp-24) 0 var(--sp-8); text-align: center; line-height: 1;
+.wib-room { margin: var(--sp-20) 0 var(--sp-8); text-align: center; line-height: 1;
   font-size: clamp(48px, 10vw, 88px); font-weight: 600; letter-spacing: 0.04em; }
 .wib-room-o { position: relative; display: inline-block; }
 .wib-room-eleph { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%);
@@ -466,13 +485,15 @@ a.wib-card:hover { text-decoration: none; border-color: #cdbfa4; transform: tran
 }
 /* Appears on hover, or on its own after a few seconds (which is what covers
    touch, where there is no hover). */
-.wib-room-cap { display: block; margin-top: var(--sp-3); font-family: var(--mono);
+.wib-room-cap { display: block; margin-top: var(--sp-3);
   font-size: var(--fs-label); letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--faint); opacity: 0; transition: opacity 600ms ease; }
 .wib-room:hover .wib-room-cap,
 .wib-room.is-explained .wib-room-cap { opacity: 1; }
-.wib-section { margin: var(--sp-16) 0 0; scroll-margin-top: var(--anchor-offset); }
-.wib-section h2 { font-size: var(--fs-h2); font-weight: 640; letter-spacing: -0.015em; margin: 0 0 var(--sp-4); }
+.wib-divider { border: none; border-top: 1px solid #D9D3C4; margin: var(--sp-12) 0 0; }
+.wib-divider--big { margin-top: var(--sp-20); }
+.wib-section { margin: var(--sp-12) 0 0; scroll-margin-top: var(--anchor-offset); }
+.wib-section h2 { font-size: var(--fs-h2); font-weight: 640; letter-spacing: -0.015em; margin: 0 0 var(--sp-2); }
 /* body paragraphs: a real gap between them, none after the last */
 .wib-section > p { margin: 0 0 var(--sp-4); }
 .wib-section > p:last-of-type { margin-bottom: 0; }
@@ -489,7 +510,6 @@ a.wib-card:hover { text-decoration: none; border-color: #cdbfa4; transform: tran
   .acq-name { transition: none; }
   .acq-name--out { opacity: 1; transform: none; }
 }
-.wib-more { margin: var(--sp-4) 0 0; font-size: var(--fs-meta); }
 
 .wib-art { margin: var(--sp-6) 0 0; border: 1px dashed #c9bfac; border-radius: var(--r-md); background: #fdfbf5;
   padding: var(--sp-5); }
@@ -500,52 +520,34 @@ a.wib-card:hover { text-decoration: none; border-color: #cdbfa4; transform: tran
 .wib-art-tab { font-family: var(--mono); font-size: var(--fs-label); color: var(--muted);
   border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--sp-1) var(--sp-3); background: #fff; }
 .wib-art-tab:first-child { color: var(--ink); border-color: #c2b490; background: var(--panel); }
-/* falling trace events for the observability section */
-.lev { margin: var(--sp-4) 0 0; }
-.lev-stage { position: relative; height: 132px; overflow: hidden; }
-.lev-dot { position: absolute; top: -24px; white-space: nowrap; cursor: default;
-  font-family: var(--mono); font-size: 11px; line-height: 1;
-  padding: 4px 9px; border-radius: 999px;
-  color: #B4342B; background: #FDF0EE; border: 1px solid #F0C8C2;
-  transition: color 240ms ease, background 240ms ease, border-color 240ms ease,
-    box-shadow 140ms ease; }
-.lev-dot--on { color: var(--accent); background: #F3EEFE; border-color: #DACCF7; }
-/* never instrumented: amber, and dashed because it never existed as data */
-.lev-dot--ghost { color: #8A5A00; background: #FDF3DC; border-color: #E3C97F;
-  border-style: dashed; }
-/* hover: hold the event still so you can read it. On a dropped event, that
-   reveals nothing, which is the point. */
-.lev-dot:hover { animation-play-state: paused; z-index: 2;
-  box-shadow: 0 2px 10px rgba(26,22,18,0.14); border-color: currentColor; }
-.lev-alt { display: none; }
-.lev-dot:hover .lev-face { display: none; }
-.lev-dot:hover .lev-alt { display: inline; }
+/* observability: the same event stream side by side. OTEL forgets each
+   ripple as it passes; BAML keeps its light. */
+.lev { margin: var(--sp-5) 0 0; display: grid;
+  grid-template-columns: 1fr 1fr; gap: var(--sp-6); }
+@media (max-width: 560px) { .lev { grid-template-columns: 1fr; } }
+.lev-col { display: flex; flex-direction: column; align-items: flex-start;
+  gap: var(--sp-3); min-width: 0; }
+.lev-tag { font-size: 15px; font-weight: 600; }
+.lev-tag--otel { color: #B4342B; }
+.lev-tag--baml { color: var(--accent); }
+/* rectangular field so the two columns align cleanly */
+.lev-field { display: grid; grid-template-columns: repeat(18, 1fr); gap: 6px;
+  width: 100%; aspect-ratio: 2 / 1; }
+.lev-dot { aspect-ratio: 1; border-radius: 50%;
+  transition: transform 140ms ease; }
+.lev-feed { width: 100%; font-size: 14px; line-height: 2; }
+.lev-feed-row { display: flex; justify-content: space-between; gap: 8px;
+  animation: lev-feed-in 320ms ease backwards; }
+.lev-feed-ev { color: var(--muted); }
+.lev-feed-verdict.ok { color: var(--accent); }
+.lev-feed-verdict.drop { color: #B4342B; }
+@keyframes lev-feed-in { from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lev-feed-row { animation: none; } }
+.lev-note { margin: 0; font-size: var(--fs-meta); color: var(--muted);
+  text-wrap: balance; }
 
-@media (prefers-reduced-motion: no-preference) {
-  .lev-dot { opacity: 0; animation: lev-fall 11s linear infinite; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .lev-dot { position: static; display: inline-block; margin: 0 6px 6px 0; }
-  .lev-stage { height: auto; }
-}
-@keyframes lev-fall {
-  0% { transform: translateY(0); opacity: 0; }
-  10% { opacity: 1; }
-  82% { opacity: 1; }
-  100% { transform: translateY(160px); opacity: 0; }
-}
-
-.lev-bar { display: flex; align-items: center; gap: var(--sp-3); min-height: 34px; }
-.lev-seg { display: inline-flex; flex-shrink: 0; border: 1px solid var(--border);
-  border-radius: var(--r-sm); overflow: hidden; background: #fff; }
-.lev-segbtn { font-family: var(--mono); font-size: var(--fs-label); color: var(--muted);
-  background: transparent; border: 0; padding: var(--sp-1) var(--sp-3); cursor: pointer;
-  min-width: 4.6em; transition: background 140ms ease, color 140ms ease; }
-.lev-segbtn--on { font-weight: 600; }
-.lev-segbtn--otel.lev-segbtn--on { background: #FDF0EE; color: #B4342B; }
-.lev-segbtn--baml.lev-segbtn--on { background: #F3EEFE; color: var(--accent); }
-.lev-note { margin: 0; font-size: var(--fs-meta); color: var(--muted); }
-.wib-footnote { margin: 0 0 var(--sp-4); font-family: var(--mono);
+.wib-footnote { margin: 0 0 var(--sp-4);
   font-size: var(--fs-label); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .wib-art-subrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
@@ -578,17 +580,20 @@ a.wib-fab { position: fixed; right: var(--sp-6); bottom: var(--sp-6); z-index: 4
   transition: opacity 240ms ease, transform 240ms ease; }
 a.wib-fab.is-on { opacity: 1; transform: none; pointer-events: auto; }
 a.wib-fab:hover { text-decoration: none; transform: translateY(-2px); }
-a.wib-fab img { height: 1.1em; width: auto; }
+a.wib-fab img { height: 1.1em; width: auto; filter: brightness(0) invert(1); }
 @media (max-width: 640px) {
   a.wib-fab { right: var(--sp-4); bottom: var(--sp-4); }
 }
 
-.wib-tail { margin-top: var(--sp-20); border-top: 1px solid var(--border); padding-top: var(--sp-10); }
-.wib-tail h2 { font-size: var(--fs-h3); font-weight: 640; margin: var(--sp-10) 0 var(--sp-3); }
+.wib-tail { margin-top: var(--sp-12); border-top: 1px solid var(--border); padding-top: var(--sp-12); }
+.wib-tail h2 { font-size: var(--fs-h3); font-weight: 640; margin: 0 0 var(--sp-3); }
 .wib-try { scroll-margin-top: var(--anchor-offset); }
+/* the install unit spans the column so it lines up with the CTA cards */
+.wib-try > div:not(.wib-cta-row) { max-width: none; }
 .wib-try h2 { margin-top: 0; }
 .wib-aside { margin: 0; color: var(--muted); }
 .wib-cta-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-5); }
+.wib-cta-row > * { width: 100%; }
 
 @media (max-width: 640px) {
   .wib-cards { grid-template-columns: 1fr; }
@@ -619,6 +624,7 @@ function renderTitle(s: Section) {
 // Adoption's explorer: one axis of BAML features, one of host languages. Click
 // a cell to see that definition cross the bridge. Grid shown so the shape of
 // the thing is legible before it is interactive.
+// biome-ignore lint/correctness/noUnusedVariables: parked until the two-axis explorer returns
 function MatrixPlaceholder({
   features,
   languages,
@@ -662,6 +668,7 @@ function MatrixPlaceholder({
   );
 }
 
+// biome-ignore lint/correctness/noUnusedVariables: parked until every section has a real explorer
 function Placeholder({ tabs }: { tabs: (string | Tab)[] }) {
   const rows = tabs.map((t) => (typeof t === 'string' ? { name: t } : t));
   const nested = rows.filter((t) => t.sub?.length);
@@ -715,8 +722,8 @@ export default function WhatIsBamlPage() {
           </p>
           <p>
             We designed it to fight slop. As you read the code, it should feel
-            like TypeScript (unions,
-            generics, lambdas), but with no escape hatches (like{' '}
+            like TypeScript (unions, generics, lambdas), but with no escape
+            hatches (like{' '}
             <code className="wib-code">
               <span className="tok-kw">as</span>{' '}
               <span className="tok-type">any</span>
@@ -728,7 +735,7 @@ export default function WhatIsBamlPage() {
             {BORROWS.map((b) => (
               <li className={b.cls} key={b.lang}>
                 <span className="ico">
-                  <img className="lang-ico" src={b.icon} alt="" />
+                  <img alt="" className="lang-ico" src={b.icon} />
                 </span>
                 <span>
                   <span className="trait">{b.traits[0]}</span> and{' '}
@@ -742,6 +749,21 @@ export default function WhatIsBamlPage() {
             ))}
           </ul>
         </div>
+
+        <p className="wib-lead">
+          And is used by some of the world&rsquo;s largest companies.
+        </p>
+        <ul className="wib-users">
+          <li>
+            <img alt="Google" className="u-google" src="/google3.png" />
+          </li>
+          <li>
+            <img alt="AWS" className="u-aws" src="/testimonials/logos/aws.png" />
+          </li>
+          <li>
+            <img alt="SAP" className="u-sap" src="/testimonials/logos/sapLogo.png" />
+          </li>
+        </ul>
 
         <p className="wib-lead">The parts different from TypeScript are:</p>
 
@@ -762,21 +784,19 @@ export default function WhatIsBamlPage() {
           <ul className="wib-hosts">
             {PLATFORMS.map((p) => (
               <li key={p.name}>
-                <img src={p.icon} alt="" />
+                <img alt="" src={p.icon} />
                 {p.name}
               </li>
             ))}
           </ul>
-          <p className="wib-feature-l">
-            or inside your existing projects in:
-          </p>
+          <p className="wib-feature-l">or inside your existing projects in:</p>
           <ul className="wib-hosts">
             {HOSTS.map((h) => (
               <li
                 className={h.soon ? 'soon' : undefined}
                 key={`${h.name}-${h.tag ?? ''}`}
               >
-                <img src={h.icon} alt="" />
+                <img alt="" src={h.icon} />
                 {h.name}
                 {h.tag ? <span className="host-tag">{h.tag}</span> : null}
               </li>
@@ -790,37 +810,39 @@ export default function WhatIsBamlPage() {
           </p>
         </a>
 
-        <div className="wib-try-top">
-          <div className="wib-try-h">
-            <span className="wib-try-h-t">Try BAML</span>
-            <span className="wib-try-h-alt">
-              or keep scrolling to see code
-            </span>
-          </div>
-          <TryBaml compact />
-        </div>
+        <hr className="wib-divider" />
 
         {SECTIONS.map((s) => (
           <Fragment key={s.id}>
             {/* rebus: the two elephants sit inside the O's */}
-            {s.id === 'adopting' ? <RoomRebus /> : null}
-            <section className="wib-section" id={s.id}>
-            <h2>{renderTitle(s)}</h2>
-            {s.sign ? <p className="wib-sign">{s.sign}</p> : null}
-            {/* a newline in body starts a new paragraph */}
-            {s.body.split('\n').map((para, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: positional split
-              <p key={i}>{inline(para)}</p>
-            ))}
-            {s.id === 'observability' ? <LostEvents /> : null}
-            {s.matrix ? <MatrixPlaceholder {...s.matrix} /> : null}
-            {s.tabs?.length ? <Placeholder tabs={s.tabs} /> : null}
-            {s.readMore ? (
-              <p className="wib-more">
-                Read more &rarr; <a href="#">{s.readMore}</a>
-              </p>
+            {s.id === 'adopting' ? (
+              <>
+                <hr className="wib-divider wib-divider--big" />
+                <RoomRebus />
+              </>
             ) : null}
-
+            <section className="wib-section" id={s.id}>
+              <h2>{renderTitle(s)}</h2>
+              {s.sign ? <p className="wib-sign">{s.sign}</p> : null}
+              {/* a newline in body starts a new paragraph */}
+              {s.body.split('\n').map((para, i, paras) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: positional split
+                <p key={i}>
+                  {inline(para)}
+                  {/* trailing read-more flows straight out of the prose */}
+                  {!s.tabs?.length && s.readMore && i === paras.length - 1 ? (
+                    <>
+                      {' '}
+                      Read more &rarr;{' '}
+                      <a href="/techdocs">{s.readMore}</a>
+                    </>
+                  ) : null}
+                </p>
+              ))}
+              {s.id === 'observability' ? <LostEvents /> : null}
+              {s.tabs?.length ? (
+                <CodeExplorer readMore={s.readMore} sectionId={s.id} />
+              ) : null}
             </section>
           </Fragment>
         ))}
