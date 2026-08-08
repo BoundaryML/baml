@@ -1386,6 +1386,7 @@ class InboundValue final : public ::google::protobuf::MessageLite
     kUint8ArrayValue = 11,
     kBigintValue = 12,
     kTyValue = 13,
+    kTyDefValue = 14,
     VALUE_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1486,6 +1487,7 @@ class InboundValue final : public ::google::protobuf::MessageLite
     kUint8ArrayValueFieldNumber = 11,
     kBigintValueFieldNumber = 12,
     kTyValueFieldNumber = 13,
+    kTyDefValueFieldNumber = 14,
   };
   // .baml_bridge.cffi.v1.BamlTy value_type = 1;
   bool has_value_type() const;
@@ -1697,6 +1699,25 @@ class InboundValue final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_ty_value();
 
   public:
+  // .baml_bridge.cffi.v1.BamlTyDef ty_def_value = 14;
+  bool has_ty_def_value() const;
+  private:
+  bool _internal_has_ty_def_value() const;
+
+  public:
+  void clear_ty_def_value() ;
+  const ::baml_bridge::cffi::v1::BamlTyDef& ty_def_value() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE release_ty_def_value();
+  ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL mutable_ty_def_value();
+  void set_allocated_ty_def_value(::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_ty_def_value(::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE unsafe_arena_release_ty_def_value();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlTyDef& _internal_ty_def_value() const;
+  ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL _internal_mutable_ty_def_value();
+
+  public:
   void clear_value();
   ValueCase value_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.InboundValue)
@@ -1714,11 +1735,12 @@ class InboundValue final : public ::google::protobuf::MessageLite
   void set_has_uint8array_value();
   void set_has_bigint_value();
   void set_has_ty_value();
+  void set_has_ty_def_value();
   inline bool has_value() const;
   inline void clear_has_value();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 13,
-                                   7, 73,
+  static const ::google::protobuf::internal::TcParseTable<0, 14,
+                                   8, 73,
                                    2>
       _table_;
 
@@ -1755,6 +1777,7 @@ class InboundValue final : public ::google::protobuf::MessageLite
       ::google::protobuf::internal::ArenaStringPtr uint8array_value_;
       ::google::protobuf::internal::ArenaStringPtr bigint_value_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE ty_value_;
+      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE ty_def_value_;
     } value_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1899,6 +1922,7 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
   enum : int {
     kTypeVarFieldNumber = 1,
     kTypeValueFieldNumber = 2,
+    kTypeDefinitionFieldNumber = 3,
   };
   // string type_var = 1;
   void clear_type_var() ;
@@ -1930,12 +1954,27 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_type_value();
 
   public:
+  // .baml_bridge.cffi.v1.BamlTyDef type_definition = 3;
+  bool has_type_definition() const;
+  void clear_type_definition() ;
+  const ::baml_bridge::cffi::v1::BamlTyDef& type_definition() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE release_type_definition();
+  ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL mutable_type_definition();
+  void set_allocated_type_definition(::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_type_definition(::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE unsafe_arena_release_type_definition();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlTyDef& _internal_type_definition() const;
+  ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL _internal_mutable_type_definition();
+
+  public:
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyArg)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   1, 46,
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   2, 46,
                                    2>
       _table_;
 
@@ -1958,6 +1997,7 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr type_var_;
     ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE type_value_;
+    ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE type_definition_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3165,6 +3205,76 @@ inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundValue::mutable_t
   return _msg;
 }
 
+// .baml_bridge.cffi.v1.BamlTyDef ty_def_value = 14;
+inline bool InboundValue::has_ty_def_value() const {
+  return value_case() == kTyDefValue;
+}
+inline bool InboundValue::_internal_has_ty_def_value() const {
+  return value_case() == kTyDefValue;
+}
+inline void InboundValue::set_has_ty_def_value() {
+  _impl_._oneof_case_[0] = kTyDefValue;
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE InboundValue::release_ty_def_value() {
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundValue.ty_def_value)
+  if (value_case() == kTyDefValue) {
+    clear_has_value();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef*>(_impl_.value_.ty_def_value_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.value_.ty_def_value_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::baml_bridge::cffi::v1::BamlTyDef& InboundValue::_internal_ty_def_value() const {
+  return value_case() == kTyDefValue ? *reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef*>(_impl_.value_.ty_def_value_) : reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef&>(::baml_bridge::cffi::v1::_BamlTyDef_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlTyDef& InboundValue::ty_def_value() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundValue.ty_def_value)
+  return _internal_ty_def_value();
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE InboundValue::unsafe_arena_release_ty_def_value() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.InboundValue.ty_def_value)
+  if (value_case() == kTyDefValue) {
+    clear_has_value();
+    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef*>(_impl_.value_.ty_def_value_);
+    _impl_.value_.ty_def_value_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void InboundValue::unsafe_arena_set_allocated_ty_def_value(
+    ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_value();
+  if (value) {
+    set_has_ty_def_value();
+    _impl_.value_.ty_def_value_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundValue.ty_def_value)
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL InboundValue::_internal_mutable_ty_def_value() {
+  if (value_case() != kTyDefValue) {
+    clear_value();
+    set_has_ty_def_value();
+    _impl_.value_.ty_def_value_ = reinterpret_cast<::google::protobuf::MessageLite*>(
+        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyDef>(GetArena()));
+  }
+  return reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef*>(_impl_.value_.ty_def_value_);
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL InboundValue::mutable_ty_def_value()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::baml_bridge::cffi::v1::BamlTyDef* _msg = _internal_mutable_ty_def_value();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundValue.ty_def_value)
+  return _msg;
+}
+
 inline bool InboundValue::has_value() const {
   return value_case() != VALUE_NOT_SET;
 }
@@ -3975,6 +4085,99 @@ inline void BamlTyArg::set_allocated_type_value(::baml_bridge::cffi::v1::BamlTy*
 
   _impl_.type_value_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyArg.type_value)
+}
+
+// .baml_bridge.cffi.v1.BamlTyDef type_definition = 3;
+inline bool BamlTyArg::has_type_definition() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.type_definition_ != nullptr);
+  return value;
+}
+inline const ::baml_bridge::cffi::v1::BamlTyDef& BamlTyArg::_internal_type_definition() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::baml_bridge::cffi::v1::BamlTyDef* p = _impl_.type_definition_;
+  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTyDef&>(::baml_bridge::cffi::v1::_BamlTyDef_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlTyDef& BamlTyArg::type_definition() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyArg.type_definition)
+  return _internal_type_definition();
+}
+inline void BamlTyArg::unsafe_arena_set_allocated_type_definition(
+    ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.type_definition_);
+  }
+  _impl_.type_definition_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000004u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000004u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlTyArg.type_definition)
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE BamlTyArg::release_type_definition() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000004u;
+  ::baml_bridge::cffi::v1::BamlTyDef* released = _impl_.type_definition_;
+  _impl_.type_definition_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE BamlTyArg::unsafe_arena_release_type_definition() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyArg.type_definition)
+
+  _impl_._has_bits_[0] &= ~0x00000004u;
+  ::baml_bridge::cffi::v1::BamlTyDef* temp = _impl_.type_definition_;
+  _impl_.type_definition_ = nullptr;
+  return temp;
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL BamlTyArg::_internal_mutable_type_definition() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.type_definition_ == nullptr) {
+    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyDef>(GetArena());
+    _impl_.type_definition_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef*>(p);
+  }
+  return _impl_.type_definition_;
+}
+inline ::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NONNULL BamlTyArg::mutable_type_definition()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000004u;
+  ::baml_bridge::cffi::v1::BamlTyDef* _msg = _internal_mutable_type_definition();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyArg.type_definition)
+  return _msg;
+}
+inline void BamlTyArg::set_allocated_type_definition(::baml_bridge::cffi::v1::BamlTyDef* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.type_definition_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000004u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000004u;
+  }
+
+  _impl_.type_definition_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyDef*>(value);
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyArg.type_definition)
 }
 
 // -------------------------------------------------------------------
