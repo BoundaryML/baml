@@ -281,8 +281,8 @@ type             baml.reflect.TypeKind            <builtin>/baml/ns_reflect/refl
 class            baml.reflect.Signature           <builtin>/baml/ns_reflect/reflect.baml:58
 class            baml.reflect.InvalidArgumentError <builtin>/baml/ns_reflect/reflect.baml:80
 class            baml.reflect.Package             <builtin>/baml/ns_reflect/reflect.baml:87
-function         baml.reflect.signature           <builtin>/baml/ns_reflect/reflect.baml:128
-function         baml.reflect.call_any            <builtin>/baml/ns_reflect/reflect.baml:143
+function         baml.reflect.signature           <builtin>/baml/ns_reflect/reflect.baml:152
+function         baml.reflect.call_any            <builtin>/baml/ns_reflect/reflect.baml:167
 class            baml.reflect.array.Type          <builtin>/baml/ns_reflect/ns_array/array.baml:2
 class            baml.reflect.class.Field         <builtin>/baml/ns_reflect/ns_class/class.baml:1
 function         baml.reflect.class.new           <builtin>/baml/ns_reflect/ns_class/class.baml:9

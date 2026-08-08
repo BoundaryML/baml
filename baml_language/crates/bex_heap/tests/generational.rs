@@ -11,8 +11,10 @@ use baml_type::{Name, QualifiedTypeName, RealizedTy, TyAttr};
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
-    GenericFunction, GlobalIndex, Object,
-    types::{MintId, Package, RuntimePackage, TypeValue},
+    Class, GenericFunction, GlobalIndex, Object,
+    types::{
+        DynTypeDefs, LocalName, MintId, Package, RuntimePackage, RuntimeTypeProvenance, TypeValue,
+    },
 };
 use indexmap::IndexMap;
 
@@ -109,14 +111,15 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
+            functions: IndexMap::new(),
             recursive_type_aliases: IndexMap::new(),
+            interface_blob: Vec::new(),
+            test_init: None,
             runtime: Some(Box::new(RuntimePackage {
                 objects: Box::new([]),
                 globals: Box::new([]),
-                functions: IndexMap::new(),
                 global_names: IndexMap::new(),
                 class_types: IndexMap::new(),
-                interface_blob: Vec::new(),
                 diagnostics: Vec::new(),
                 dependencies: Box::new([]),
                 dependency_names: IndexMap::new(),
@@ -131,6 +134,24 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             TyAttr::default(),
         );
         let type_ptr = tlab.alloc_type(TypeValue::runtime(ty, MintId::Runtime(1), package_ptr));
+        let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
+        let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+            name: class_name.clone(),
+            fields: Vec::new(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            type_tag: baml_type::typetag::class_type_tag("RuntimeClass"),
+            ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            runtime_type: Some(RuntimeTypeProvenance {
+                mint: MintId::Runtime(1),
+                defs: DynTypeDefs::default(),
+                owner: package_ptr,
+            }),
+        })));
         let function_ptr = tlab.alloc(Object::GenericFunction(GenericFunction {
             function: GlobalIndex::from_raw(0),
             type_args: Box::new([]),
@@ -141,8 +162,15 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         let Object::Package(package) = (unsafe { package_ptr.get_mut() }) else {
             unreachable!()
         };
+        package.classes.insert(
+            LocalName {
+                namespace: Vec::new(),
+                name: Name::new("RuntimeClass"),
+            },
+            class_ptr,
+        );
         let runtime = package.runtime.as_mut().expect("runtime image");
-        runtime.objects = vec![type_ptr, function_ptr].into_boxed_slice();
+        runtime.objects = vec![type_ptr, function_ptr, class_ptr].into_boxed_slice();
         runtime
             .class_types
             .insert("RuntimeClass".to_string(), type_ptr);
@@ -155,7 +183,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         rooted_heap.collect_garbage_generational(&[function_ptr], CollectionLevel::Major)
     };
     rooted_tlab.invalidate();
-    assert_eq!(stats.live_count, 3);
+    assert_eq!(stats.live_count, 4);
     let moved_function = roots[0];
     let Object::GenericFunction(function) = (unsafe { moved_function.get() }) else {
         panic!("root ceased to be a generic function")
@@ -169,6 +197,11 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         panic!("package mint ceased to be a type")
     };
     assert_eq!(type_value.owner, moved_package);
+    let moved_class = package.classes.values().next().copied().unwrap();
+    let Object::Class(class) = (unsafe { moved_class.get() }) else {
+        panic!("package class ceased to be a class")
+    };
+    assert_eq!(class.runtime_type.as_ref().unwrap().owner, moved_package);
     assert_eq!(forwarding.get(&package_ptr), Some(&moved_package));
 
     let dropped_heap = BexHeap::new(vec![]);
@@ -178,7 +211,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
     dropped_tlab.invalidate();
     assert!(roots.is_empty());
     assert_eq!(stats.live_count, 0);
-    assert!(stats.collected_count >= 3);
+    assert!(stats.collected_count >= 4);
     assert!(!forwarding.contains_key(&dropped_package));
 }
 
