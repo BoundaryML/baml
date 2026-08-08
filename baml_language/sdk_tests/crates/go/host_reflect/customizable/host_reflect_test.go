@@ -15,7 +15,7 @@ import (
 	baml_go "github.com/boundaryml/baml-go"
 )
 
-func TestHostReflectRuntimeEnumDefinition(t *testing.T) {
+func Test_runtime_enum_definition_decodes_alias(t *testing.T) {
 	ctx := context.Background()
 	category, err := bamlreflect.Enum(ctx, "Category", []bamlreflect.EnumValue{
 		bamlreflect.NewEnumValue("RED", bamlreflect.WithAlias("k7"), bamlreflect.WithDescription("warm")),
@@ -30,7 +30,7 @@ func TestHostReflectRuntimeEnumDefinition(t *testing.T) {
 	}
 }
 
-func TestHostReflectRuntimeClassOrderMetadataNestingAndLooseReads(t *testing.T) {
+func Test_runtime_class_definition_preserves_nested_metadata(t *testing.T) {
 	ctx := context.Background()
 	category, err := bamlreflect.Enum(ctx, "Category", []bamlreflect.EnumValue{
 		bamlreflect.NewEnumValue("RED", bamlreflect.WithAlias("k7")),
@@ -59,7 +59,7 @@ func TestHostReflectRuntimeClassOrderMetadataNestingAndLooseReads(t *testing.T) 
 	}
 }
 
-func TestHostReflectCompiledPackageClassDefinition(t *testing.T) {
+func Test_compiled_package_returns_class_graph(t *testing.T) {
 	ctx := context.Background()
 	pkg, err := bamlreflect.CompilePackage(ctx, map[string]string{
 		"runtime.baml": "class CompiledRow { amount int note string? }",
@@ -78,7 +78,7 @@ func TestHostReflectCompiledPackageClassDefinition(t *testing.T) {
 	}
 }
 
-func TestHostReflectFreshMintAndSerializationBoundary(t *testing.T) {
+func Test_wire_occurrences_are_fresh_and_handles_reject_serialization(t *testing.T) {
 	ctx := context.Background()
 	runtimeType, err := bamlreflect.Class(ctx, "Fresh", []bamlreflect.Field{
 		bamlreflect.NewField("value", bamlreflect.TypeOf[int64]()),
@@ -103,7 +103,7 @@ func TestHostReflectFreshMintAndSerializationBoundary(t *testing.T) {
 	}
 }
 
-func TestHostReflectKnownTokensCompositionAndRejection(t *testing.T) {
+func Test_known_type_tokens_compose_and_reject_unknowns(t *testing.T) {
 	ctx := context.Background()
 	assertTypeName := func(want string, ty bamlreflect.Type) {
 		t.Helper()
@@ -127,12 +127,14 @@ func TestHostReflectKnownTokensCompositionAndRejection(t *testing.T) {
 	}
 }
 
-func TestHostReflectCompositionOnlyAndTypedErrors(t *testing.T) {
+func Test_host_handles_expose_composition_only(t *testing.T) {
 	composed := bamlreflect.TypeOf[int64]().Meta(bamlreflect.WithDescription("count")).Type.Optional().Array()
 	if _, err := json.Marshal(composed); err == nil {
 		t.Fatal("composed type unexpectedly serialized")
 	}
+}
 
+func Test_reflection_compile_errors_are_typed(t *testing.T) {
 	_, err := bamlreflect.CompilePackage(context.Background(), map[string]string{
 		"broken.baml": "class {",
 	})

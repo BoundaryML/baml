@@ -12,7 +12,7 @@ import {
 } from "./baml_sdk/index.js";
 
 describe("BEP-066 TypeScript host boundary", () => {
-  it("runtime enum definitions cross and decode loosely", () => {
+  it("runtime_enum_definition_decodes_alias", () => {
     const red = reflect.enum.value("RED", { alias: "k7", description: "warm" });
     const category = reflect.enum.new("Category", [red, "BLUE"]);
 
@@ -20,7 +20,7 @@ describe("BEP-066 TypeScript host boundary", () => {
     expect(HostParse<string>('"k7"', { $types: { T: category } })).toBe("RED");
   });
 
-  it("runtime classes preserve field order, metadata, nesting, and loose reads", () => {
+  it("runtime_class_definition_preserves_nested_metadata", () => {
     const category = reflect.enum.new("Category", [
       reflect.enum.value("RED", { alias: "k7" }),
     ]);
@@ -39,7 +39,7 @@ describe("BEP-066 TypeScript host boundary", () => {
     expect(Object.keys(parsed)).toEqual(["label", "category", "scores"]);
   });
 
-  it("compiled packages return class definitions with their full graph", () => {
+  it("compiled_package_returns_class_graph", () => {
     const pkg = reflect.Package.compile({
       "runtime.baml": "class CompiledRow { amount int note string? }",
     });
@@ -53,7 +53,7 @@ describe("BEP-066 TypeScript host boundary", () => {
     ).toEqual({ amount: 7, note: null });
   });
 
-  it("fresh-mints every wire occurrence and rejects serialization", () => {
+  it("wire_occurrences_are_fresh_and_handles_reject_serialization", () => {
     const runtimeType = reflect.class.new("Fresh", {
       value: reflect.type.of("int"),
     });
@@ -61,14 +61,11 @@ describe("BEP-066 TypeScript host boundary", () => {
     expect(() => JSON.stringify(runtimeType)).toThrow(/cannot be serialized/);
   });
 
-  it("accepts known builtins, recursive shapes, generated tokens, and subclasses", () => {
-    class ChildRecord extends StaticRecord {}
-
+  it("known_type_tokens_compose_and_reject_unknowns", () => {
     expect(HostTypeName({ $types: { T: String } })).toBe("string");
     expect(HostTypeName({ $types: { T: { list: { optional: String } } } })).toBe(
       "(string | null)[]",
     );
-    expect(HostTypeName({ $types: { T: ChildRecord } })).toBe("StaticRecord");
     expect(HostTypeName({ $types: { T: StaticChoice } })).toBe("StaticChoice");
     expect(HostTypeName({ $types: { T: StaticNamed } })).toBe("StaticNamed");
     expect(reflect.type.of("int").optional().array()).toBeInstanceOf(BamlType);
@@ -81,12 +78,20 @@ describe("BEP-066 TypeScript host boundary", () => {
     );
   });
 
-  it("keeps handles composition-only and preserves typed reflection errors", () => {
+  it("generated_class_subclasses_resolve_to_declared_type", () => {
+    class ChildRecord extends StaticRecord {}
+
+    expect(HostTypeName({ $types: { T: ChildRecord } })).toBe("StaticRecord");
+  });
+
+  it("host_handles_expose_composition_only", () => {
     const runtimeType = reflect.type.of("int");
     expect("kind" in runtimeType).toBe(false);
     expect("fields" in runtimeType).toBe(false);
     expect("as_type" in runtimeType).toBe(false);
+  });
 
+  it("reflection_compile_errors_are_typed", () => {
     let thrown: unknown;
     try {
       reflect.Package.compile({ "broken.baml": "class {" });
