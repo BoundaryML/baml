@@ -140,6 +140,36 @@ static void TestUnhandledSpawnErrorUsesHostDefault() {
   Require(threw, "default unhandled-spawn handler did not rethrow");
 }
 
+static void TestTyDefReportsUnsupportedReflection() {
+  baml::detail::pb::BamlOutboundValue value;
+  value.mutable_ty_def_value();
+
+  bool decode_threw = false;
+  try {
+    (void)baml::codec<int64_t>::decode(value);
+  } catch (const baml::error& exception) {
+    decode_threw =
+        std::string(exception.what())
+            .find("requires BEP-066 reflection support") != std::string::npos;
+  }
+  Require(decode_threw,
+          "runtime type definition decode did not report unsupported "
+          "BEP-066 reflection");
+
+  bool transcode_threw = false;
+  try {
+    baml::detail::pb::InboundValue inbound;
+    baml::detail::transcode_outbound_to_inbound(inbound, value);
+  } catch (const baml::error& exception) {
+    transcode_threw =
+        std::string(exception.what())
+            .find("requires BEP-066 reflection support") != std::string::npos;
+  }
+  Require(transcode_threw,
+          "runtime type definition transcode did not report unsupported "
+          "BEP-066 reflection");
+}
+
 static void RunTest(const char* name, void (*test)()) {
   std::fprintf(stderr, "running %s\n", name);
   std::fflush(stderr);
@@ -156,6 +186,8 @@ int main() {
   RunTest("owned buffer move", TestOwnedBufferMove);
   RunTest("unhandled_spawn_error_uses_host_default",
           TestUnhandledSpawnErrorUsesHostDefault);
+  RunTest("ty_def_reports_unsupported_reflection",
+          TestTyDefReportsUnsupportedReflection);
   std::printf("bridge core smoke: all ok\n");
   return 0;
 }
