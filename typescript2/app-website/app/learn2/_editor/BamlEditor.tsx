@@ -347,6 +347,9 @@ export interface BamlEditorProps {
    * on touch). Dismisses the first time the editor is focused or edited.
    */
   editHint?: boolean;
+  /** Show the ▶ Run codelenses (default true). Embeds that defer running to
+   *  an expanded playground pass false. */
+  codeLens?: boolean;
 }
 
 /**
@@ -361,6 +364,7 @@ export function BamlEditor({
   maxHeight = 440,
   highlightLines,
   editHint = false,
+  codeLens = true,
 }: BamlEditorProps) {
   const idRef = useRef<string>('');
   if (!idRef.current) idRef.current = `cell${cellCounter++}`;
@@ -565,7 +569,7 @@ export function BamlEditor({
         </span>
       ) : null}
       <div className="l2-bamled-frame">
-        {filename || hasTests ? (
+        {filename || (hasTests && codeLens) ? (
           <div
             className={`l2-code-head${
               filename?.toLowerCase().endsWith('.baml')
@@ -581,7 +585,7 @@ export function BamlEditor({
             {filename ? (
               <span className="l2-code-name font-mono">{filename}</span>
             ) : null}
-            {hasTests ? (
+            {hasTests && codeLens ? (
               <button
                 type="button"
                 className="l2-run-btn font-mono"
@@ -603,6 +607,7 @@ export function BamlEditor({
             onChange={onChange}
             height="100%"
             options={{
+              codeLens,
               minimap: { enabled: false },
               fontSize: 13,
               fontFamily: 'var(--font-geist-mono), ui-monospace, monospace',
