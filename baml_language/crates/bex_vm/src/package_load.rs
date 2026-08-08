@@ -252,6 +252,13 @@ impl PackageIndex {
         self.by_name.values().copied()
     }
 
+    /// The canonical static package name for a package pointer.
+    pub fn package_name(&self, package: HeapPtr) -> Option<&Name> {
+        self.by_name
+            .iter()
+            .find_map(|(name, &ptr)| (ptr == package).then_some(name))
+    }
+
     /// Every loaded package, by name.
     pub fn iter(&self) -> impl Iterator<Item = (&Name, HeapPtr)> + '_ {
         self.by_name.iter().map(|(name, &ptr)| (name, ptr))
@@ -346,12 +353,20 @@ fn fill_package_slots(
             impl_rules.insert(iface_ptr, rule_ptrs);
         }
         let package = Package {
+            exported_names: pkg.exported_names.clone(),
             classes: resolve_members(heap, &pkg.classes),
             enums: resolve_members(heap, &pkg.enums),
             interfaces: resolve_members(heap, &pkg.interfaces),
             impl_rules,
+            functions: resolve_members(heap, &pkg.functions),
             recursive_type_aliases: pkg.recursive_type_aliases.clone(),
+            interface_blob: pkg.interface_blob.clone(),
+            test_init: pkg
+                .test_init
+                .map(|index| heap.compile_time_ptr(index.into_raw())),
+            mounted_types: IndexMap::new(),
             runtime: None,
+            session: None,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
         index

@@ -41,6 +41,22 @@ impl io::IoClassReflectPackage for NativeSysOps {
     }
 }
 
+impl io::IoClassReflectSession for NativeSysOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _session: io::owned::reflect::Session,
+        _source: String,
+        _type_arg_0: baml_type::RuntimeTy,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::Package> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
 impl io::IoNamespaceReflect for NativeSysOps {}
 
 // ============================================================================

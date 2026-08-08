@@ -104,6 +104,63 @@ fn pack_e2e_root_main() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
 }
 
+/// The packed envelope carries the root's enriched `PackageInterface`, and the
+/// standalone host carries the transient runtime compiler. No source files are
+/// available after packing: this is the end-to-end exit criterion for lexical
+/// `Package.current()` plus alias-mounted `Package.compile`.
+#[test]
+fn pack_e2e_current_package_compiles_and_runs_skill() {
+    let built = common::ensure_built();
+    let source = r####"
+class AgentState {
+  goal string
+  history string[]
+}
+
+interface AgentAction {
+  summary string
+}
+
+function Plan(state: AgentState) -> string {
+  "packed plan: " + state.goal
+}
+
+function main() -> string throws unknown {
+  let skill = reflect.Package.compile(
+    { "skill.baml": #"
+class PlanThenAct {
+  summary string
+  steps string[]
+  implements app.AgentAction {}
+}
+
+function Run(state: app.AgentState) -> PlanThenAct {
+  PlanThenAct { summary: app.Plan(state), steps: [] }
+}
+"# },
+    packages = { "app": reflect.Package.current() },
+  )
+  let run = skill.get_function<(AgentState) -> AgentAction>("root.Run")
+    ?? throw "missing root.Run"
+  run(AgentState { goal: "binary", history: [] }).summary
+}
+"####;
+    let (_tmp, bin) = pack_project(built, source, &["main"]);
+    let out = run(&bin, &[]);
+    assert!(
+        out.status.success(),
+        "packed runtime-compile binary exited {:?}; stdout:\n{}\nstderr:\n{}",
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("packed plan: binary"),
+        "unexpected packed output: {}",
+        String::from_utf8_lossy(&out.stdout),
+    );
+}
+
 /// `baml pack` keeps packaging progress, but should not emit the compile
 /// file-count status pair reserved for `check` and `generate`.
 #[test]

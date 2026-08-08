@@ -107,6 +107,9 @@ pub enum MintId {
 pub struct RuntimeTypeProvenance {
     pub mint: MintId,
     pub defs: DynTypeDefs,
+    /// Runtime package that owns this nominal definition. Runtime-constructed
+    /// standalone types use a null pointer. This is a GC edge.
+    pub owner: HeapPtr,
 }
 
 /// What an `Object::Type` wraps: the described type and its identity.
@@ -168,6 +171,23 @@ impl TypeValue {
             mint,
             defs,
             owner: HeapPtr::null(),
+        }
+    }
+
+    /// Assemble a package-owned type value while retaining its definition set.
+    pub fn runtime_with_defs(
+        ty: RealizedTy,
+        mint: MintId,
+        defs: DynTypeDefs,
+        owner: HeapPtr,
+    ) -> Self {
+        debug_assert!(matches!(mint, MintId::Runtime(_)));
+        debug_assert!(!owner.as_ptr().is_null());
+        Self {
+            ty,
+            mint,
+            defs,
+            owner,
         }
     }
 

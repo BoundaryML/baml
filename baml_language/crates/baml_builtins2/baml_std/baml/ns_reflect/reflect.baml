@@ -88,6 +88,11 @@ class InvalidArgumentError {
 class Package {
   _inner unknown
 
+  /// The package lexically enclosing this call site.
+  function current() -> Package throws never {
+    $compiler_intrinsic
+  }
+
   function compile(files: map<string, string>, packages: map<string, Package> = {}) -> Package throws unknown {
     let artifact = Package._compile(files, packages)
     Package._finish(artifact, packages)
@@ -108,8 +113,71 @@ class Package {
     $rust_function
   }
 
+  /// Return a derived package view that exports exact runtime type values
+  /// under source-visible names for subsequent Package.compile calls.
+  //baml:mut_vm
+  function with_types(self, types: map<string, type | baml.reflect.TypeView>) -> Package throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
+  /// Extract an exported function through an ordinary function-type contract.
+  //baml:mut_vm
+  function get_function<F>(self, name: string) -> F? throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
+
   //baml:mut_vm
   function classes(self) -> map<string, baml.reflect.class.Type> throws never {
+    $rust_function
+  }
+
+  /// Exported free-function signatures, keyed by package-local name.
+  //baml:mut_vm
+  function functions(self) -> map<string, baml.reflect.function.Type> throws never {
+    $rust_function
+  }
+
+  /// Bundled tests as directly invocable zero-argument callables.
+  //baml:mut_vm
+  //baml:may_yield
+  function tests(self) -> map<string, () -> null throws unknown> throws unknown {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function diagnostics(self) -> Diagnostic[] throws never {
+    $rust_function
+  }
+}
+
+/// A live incremental evaluation environment. Its dependency aliases are
+/// fixed at construction; every eval checks in a fresh compiler context and
+/// commits successful statements to this Session's persistent runtime image.
+class Session {
+  _inner unknown
+
+  function new(packages: map<string, Package> = {}) -> Session throws baml.reflect.errors.CompilationError {
+    Session._new(packages)
+  }
+
+  //baml:mut_vm
+  function _new(packages: map<string, Package>) -> Session throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
+
+  function eval<T>(self, source: string) -> T throws baml.reflect.errors.CompilationError | baml.reflect.errors.EvaluationError | baml.reflect.errors.SessionBusy {
+    let artifact = self._compile<T>(source)
+    self._finish<T>(artifact) catch (_) {
+      _ => throw baml.reflect.errors.EvaluationError { message: "session evaluation failed" }
+    }
+  }
+
+  function _compile<T>(self, source: string) -> Package throws baml.reflect.errors.CompilationError | baml.reflect.errors.SessionBusy {
+    $rust_io_function
+  }
+
+  //baml:mut_vm
+  //baml:may_yield
+  function _finish<T>(self, artifact: Package) -> T throws unknown {
     $rust_function
   }
 

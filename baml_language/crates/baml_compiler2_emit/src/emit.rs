@@ -798,9 +798,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
-            Rvalue::Uint8Array(_) | Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
-                false
-            }
+            Rvalue::Uint8Array(_)
+            | Rvalue::LoadType(_)
+            | Rvalue::CurrentPackage(_)
+            | Rvalue::MakeGenericFunction { .. } => false,
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 self.operand_reads_spawn_captured_local(value, seen)
             }
@@ -1484,6 +1485,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {
+                    IntrinsicOp::BindType(slot) => {
+                        let [value] = args.as_slice() else {
+                            panic!("BindType expects exactly one operand")
+                        };
+                        self.emit_operand_pull(value);
+                        self.emit(Instruction::BindType(*slot));
+                    }
                     IntrinsicOp::Log(level) => {
                         // Emit the reserved "$baml_log" event with payload
                         // { level: "<level>", data: <user_arg> }, where
@@ -3573,6 +3581,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
         let const_idx = self.add_constant(ConstValue::Type(template.clone()));
         let inst = self.emit(Instruction::LoadType(const_idx));
         self.set_operand(inst, OperandMeta::Const(template.to_string()));
+        Ok(())
+    }
+
+    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error> {
+        let object = self.mint_object(Object::String(package.into()));
+        let constant = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(object)));
+        let inst = self.emit(Instruction::LoadCurrentPackage(constant));
+        self.set_operand(inst, OperandMeta::Const(package.to_string()));
         Ok(())
     }
 

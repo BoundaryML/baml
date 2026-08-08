@@ -275,6 +275,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             runtime_type: Some(RuntimeTypeProvenance {
                 mint,
                 defs: child_defs.clone(),
+                owner: bex_vm_types::HeapPtr::null(),
             }),
         })));
         let ty = baml_type::RealizedTy::Class(
@@ -516,6 +517,7 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
             runtime_type: Some(RuntimeTypeProvenance {
                 mint,
                 defs: DynTypeDefs::default(),
+                owner: bex_vm_types::HeapPtr::null(),
             }),
         })));
         let ty = baml_type::RealizedTy::Enum(type_name.clone(), baml_type::TyAttr::default());

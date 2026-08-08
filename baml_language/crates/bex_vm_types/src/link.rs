@@ -64,11 +64,31 @@ fn import_key(symbol: &Symbol) -> String {
 pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkError> {
     let object_exports: HashSet<&str> = units
         .iter()
-        .flat_map(|unit| unit.exports.objects.iter().map(|(name, _)| name.as_str()))
+        .flat_map(|unit| {
+            unit.exports
+                .objects
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .chain(
+                    unit.init_tail
+                        .iter()
+                        .flat_map(|tail| tail.named.iter().map(|(name, _)| name.as_str())),
+                )
+        })
         .collect();
     let global_exports: HashSet<&str> = units
         .iter()
-        .flat_map(|unit| unit.exports.globals.iter().map(|(name, _)| name.as_str()))
+        .flat_map(|unit| {
+            unit.exports
+                .globals
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .chain(
+                    unit.init_tail
+                        .iter()
+                        .flat_map(|tail| tail.named.iter().map(|(name, _)| name.as_str())),
+                )
+        })
         .collect();
 
     let mut object_imports = Vec::<Symbol>::new();
@@ -106,6 +126,69 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
             for symbol in &tail.global_imports {
                 consider_global(symbol);
             }
+        }
+
+        // Package fragments also carry symbolic object references (not bytecode
+        // operands): most point at the unit's own exports, but an impl of a
+        // mounted interface or an inherited mounted default points directly at
+        // the live dependency. Feed those names into the same synthetic-prefix
+        // plan so fragment resolution and code relocation see one alias table.
+        let fragment = &unit.package_fragment;
+        for (_, fq_name) in &fragment.classes {
+            consider_object(&Symbol {
+                kind: SymbolKind::Class,
+                fq_name: fq_name.clone(),
+                generic: None,
+            });
+        }
+        for (_, fq_name) in &fragment.enums {
+            consider_object(&Symbol {
+                kind: SymbolKind::Enum,
+                fq_name: fq_name.clone(),
+                generic: None,
+            });
+        }
+        for (_, fq_name) in &fragment.interfaces {
+            consider_object(&Symbol {
+                kind: SymbolKind::Interface,
+                fq_name: fq_name.clone(),
+                generic: None,
+            });
+        }
+        for (_, fq_name) in &fragment.functions {
+            consider_object(&Symbol {
+                kind: SymbolKind::Function,
+                fq_name: fq_name.clone(),
+                generic: None,
+            });
+        }
+        for (interface, rules) in &fragment.impl_rules {
+            consider_object(&Symbol {
+                kind: SymbolKind::Interface,
+                fq_name: interface.clone(),
+                generic: None,
+            });
+            for rule in rules {
+                consider_object(&Symbol {
+                    kind: SymbolKind::Interface,
+                    fq_name: rule.interface_head.clone(),
+                    generic: None,
+                });
+                for (_, method) in &rule.methods {
+                    consider_object(&Symbol {
+                        kind: SymbolKind::Function,
+                        fq_name: method.fqn.clone(),
+                        generic: None,
+                    });
+                }
+            }
+        }
+        if let Some(test_init) = &fragment.test_init {
+            consider_object(&Symbol {
+                kind: SymbolKind::Function,
+                fq_name: test_init.clone(),
+                generic: None,
+            });
         }
     }
 
@@ -949,6 +1032,9 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             // Register the named tail functions ($init / $init_test chainers).
             for (name, tobj) in &tail.named {
                 let abs = tail_object_base + *tobj as usize;
+                if obj_by_name.insert(name.clone(), abs).is_some() {
+                    return Err(LinkError::DuplicateExport(name.clone()));
+                }
                 program.function_indices.insert(name.clone(), abs);
                 let ord = tail
                     .slot_objects
@@ -1005,11 +1091,15 @@ fn merge_package_fragment(
     frag: &ProgramPackageFrag,
     obj_by_name: &HashMap<String, usize>,
 ) -> Result<(), LinkError> {
-    if frag.classes.is_empty()
+    if frag.exported_names.is_empty()
+        && frag.classes.is_empty()
         && frag.enums.is_empty()
         && frag.interfaces.is_empty()
+        && frag.functions.is_empty()
         && frag.impl_rules.is_empty()
         && frag.recursive_type_aliases.is_empty()
+        && frag.interface_blob.is_empty()
+        && frag.test_init.is_none()
     {
         // A unit that does not carry its package's fragment: nothing to merge,
         // but ensure an (empty) package entry exists if it will gain classes
@@ -1025,6 +1115,8 @@ fn merge_package_fragment(
             .ok_or_else(|| LinkError::UnresolvedImport(fq.to_string()))
     };
     let pkg = program.packages.entry(package.clone()).or_default();
+    pkg.exported_names
+        .extend(frag.exported_names.iter().cloned());
     for (local, fq) in &frag.classes {
         let abs = resolve(fq)?;
         pkg.classes.insert(local.clone(), abs);
@@ -1037,8 +1129,18 @@ fn merge_package_fragment(
         let abs = resolve(fq)?;
         pkg.interfaces.insert(local.clone(), abs);
     }
+    for (local, fq) in &frag.functions {
+        let abs = resolve(fq)?;
+        pkg.functions.insert(local.clone(), abs);
+    }
     for (local, ty) in &frag.recursive_type_aliases {
         pkg.recursive_type_aliases.insert(local.clone(), ty.clone());
+    }
+    if !frag.interface_blob.is_empty() {
+        pkg.interface_blob.clone_from(&frag.interface_blob);
+    }
+    if let Some(test_init) = &frag.test_init {
+        pkg.test_init = Some(resolve(test_init)?);
     }
     for (iface_fq, rules) in &frag.impl_rules {
         let interface_head = resolve(iface_fq)?;

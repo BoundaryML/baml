@@ -220,7 +220,7 @@ fn dispatch_op(
     let Some(self_ty) = vm.value_concrete_ty(args[0]) else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
-    let resolver = resolve::ImplResolver::new(vm);
+    let resolver = resolve::ImplResolver::for_value(vm, args[0]);
     let Some((rule, bound_args)) =
         resolver.resolve_implements_rule(&self_ty.into(), &op_qtn, iface_args)
     else {
@@ -497,8 +497,8 @@ impl EqualsDriver {
                 }
                 // Dispatch to the enum's custom `Equals.eq` if it has one (`baml.ops.Equals`
                 // applies to enums too), else compare by variant identity.
-                if let Some((callee, type_args)) =
-                    value_concrete_ty(vm, pa).and_then(|ty| resolve_equals_eq(vm, &ty))
+                if let Some((callee, type_args)) = value_concrete_ty(vm, pa)
+                    .and_then(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
                 {
                     return Cmp::Yield {
                         callee,
@@ -526,8 +526,8 @@ impl EqualsDriver {
                 }
                 // Same concrete type: dispatch to the class's custom `Equals.eq` if it has
                 // one, else compare structurally (field by field).
-                if let Some((callee, type_args)) =
-                    value_concrete_ty(vm, pa).and_then(|ty| resolve_equals_eq(vm, &ty))
+                if let Some((callee, type_args)) = value_concrete_ty(vm, pa)
+                    .and_then(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
                 {
                     return Cmp::Yield {
                         callee,
@@ -547,9 +547,11 @@ impl EqualsDriver {
                 step(x.function == y.function && x.receiver == y.receiver)
             }
             (Object::BoundMethod(_), _) => Cmp::NotEqual,
-            (Object::GenericFunction(x), Object::GenericFunction(y)) => {
-                step(x.function == y.function && x.type_args == y.type_args)
-            }
+            (Object::GenericFunction(x), Object::GenericFunction(y)) => step(
+                x.function == y.function
+                    && x.type_args == y.type_args
+                    && x.runtime_package == y.runtime_package,
+            ),
             (Object::GenericFunction(_), _) => Cmp::NotEqual,
             (Object::HostClosure(x), Object::HostClosure(y)) => {
                 step(Arc::ptr_eq(&x.handle, &y.handle))
@@ -679,11 +681,15 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
 /// `None` when the type has no `Equals` impl (→ the structural/identity fallback). The
 /// concrete type carries any `class_type_args`, so a generic/blanket impl
 /// (`implement<T> Equals for Box<T>`) resolves at the right `T`.
-fn resolve_equals_eq(vm: &BexVm, concrete: &RealizedTy) -> Option<(HeapPtr, Vec<RealizedTy>)> {
+fn resolve_equals_eq(
+    vm: &BexVm,
+    value: Value,
+    concrete: &RealizedTy,
+) -> Option<(HeapPtr, Vec<RealizedTy>)> {
     // `Equals` is non-generic — no interface args to select on; off the resolved
     // rule, `eq` is the concrete method (the impl's own, or the merged default),
     // invoked with its frame realized against the impl's bound type args.
-    let resolver = resolve::ImplResolver::new(vm);
+    let resolver = resolve::ImplResolver::for_value(vm, value);
     let (rule, bound_args) = resolver.resolve_implements_rule(concrete, &equals_qtn(), &[])?;
     let method = rule.methods.get("eq")?;
     // `fqn` is the resolved callee's heap pointer (the impl method or merged

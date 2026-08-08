@@ -651,6 +651,10 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
+            Stmt::TypeBinding { name, value } => {
+                let operand = expr_desc(*value, body);
+                writeln!(output, "{pad}type {name} = unreflect({operand})").ok();
+            }
             Stmt::Let {
                 pattern,
                 initializer,
@@ -795,6 +799,15 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
+            Stmt::TypeBinding { name, value } => {
+                let operand = expr_desc_rich(*value, body, inference);
+                let operand_ty = expr_ty(inference, *value);
+                writeln!(
+                    output,
+                    "{pad}type {name} = unreflect({operand}) : {operand_ty}"
+                )
+                .ok();
+            }
             Stmt::Let {
                 pattern,
                 initializer,
@@ -2004,6 +2017,10 @@ pub(crate) mod support {
             use baml_compiler2_ast::Stmt;
             let stmt = &body.stmts[stmt_id];
             match stmt {
+                Stmt::TypeBinding { name, value } => format!(
+                    "type {name} = unreflect({})",
+                    expr_desc_hir(*value, body, prefix, local_type_names)
+                ),
                 Stmt::Let {
                     pattern,
                     initializer,

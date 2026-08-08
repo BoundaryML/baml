@@ -474,6 +474,28 @@ pub fn lower_type_expr(
     lower_type_ref(&store, id, ctx, diagnostics)
 }
 
+/// Resolve the explicit function contract supplied to
+/// `reflect.Package.get_function<F>`. P-7 gives this one type-argument position
+/// special meaning: when the outer function type omits `throws`, its throw set
+/// is an inference wildcard rather than the E0151 error used by ordinary
+/// function-type positions.
+pub(crate) fn lower_extraction_contract_type_expr(
+    type_expr: &TypeExpr,
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    let mut type_refs = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+    let id = type_refs.lower(type_expr);
+    let (store, _spans) = type_refs.finish();
+    lower_type_ref_at(
+        &store,
+        id,
+        ctx,
+        diagnostics,
+        TypePosition::ExtractionContract,
+    )
+}
+
 /// The syntactic position of the node being lowered, deciding how an interface
 /// head treats associated-type members it does not spell (`TYPE_SYSTEM.md`
 /// "Interfaces"): an existential denotes one complete instantiation, so its
@@ -516,6 +538,10 @@ pub enum TypePosition {
     /// arity-checked, and associated-type completeness is not enforced (a
     /// non-class head is diagnosed by construction inference itself).
     ConstructorHead,
+    /// The outer function type supplied as `Package.get_function<F>`'s
+    /// contract. Structurally this is an existential position; only an omitted
+    /// outer `throws` differs, becoming the P-7 inference wildcard.
+    ExtractionContract,
 }
 
 /// Resolve a span-free [`TypeRef`](baml_compiler2_hir::type_ref::TypeRef) to a
@@ -570,6 +596,13 @@ fn lower_type_ref_at(
     position: TypePosition,
 ) -> Ty {
     use baml_compiler2_hir::type_ref::TypeRefKind;
+
+    let extraction_contract = position == TypePosition::ExtractionContract;
+    let position = if extraction_contract {
+        TypePosition::Existential
+    } else {
+        position
+    };
 
     match &store[id].kind {
         TypeRefKind::Path {
@@ -661,12 +694,10 @@ fn lower_type_ref_at(
             // A function type carries no generics of its own; its type variables
             // come from the enclosing context.
             //
-            // The `throws` clause is required here (`TYPE_SYSTEM.md` rule 5): the only
-            // positions that may omit it never reach this lowering with `None` — a
-            // declaration's immediate callback parameter is opened to a synthetic effect
-            // parameter by HIR signature elaboration, and lambda literals infer their
-            // own throws from the body. Recover with `never` so downstream checking
-            // doesn't cascade.
+            // The `throws` clause is required in ordinary function-type
+            // positions (TYPE_SYSTEM.md rule 5). The sole exception is the
+            // outer contract supplied to `Package.get_function<F>`, where P-7
+            // defines omission as an inference wildcard.
             Ty::Function {
                 params: params
                     .iter()
@@ -681,14 +712,11 @@ fn lower_type_ref_at(
                     })
                     .collect(),
                 ret: Box::new(lower_type_ref(store, *ret, ctx, diagnostics)),
-                // #4034 (E0151): a function TYPE must declare its throws. The
-                // positions that legitimately omit it never reach here with `None`
-                // (declaration callback params are opened to a synthetic effect
-                // param by signature elaboration; lambda literals infer their own),
-                // so a `None` here is a user error — report it and recover with
-                // `never` so downstream checking doesn't cascade.
                 throws: Box::new(match throws {
                     Some(throws) => lower_type_ref(store, *throws, ctx, diagnostics),
+                    None if extraction_contract => Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    },
                     None => {
                         diagnostics.push(TirTypeError::FunctionTypeMissingThrows);
                         Ty::Never {

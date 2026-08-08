@@ -187,6 +187,7 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
+                IntrinsicOp::BindType(slot) => return write!(f, "bind_type({slot}, {args:?});"),
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -608,6 +609,9 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
+        }
+        Rvalue::CurrentPackage(package) => {
+            write!(f, "current_package({package})")
         }
         Rvalue::MakeGenericFunction {
             item,

@@ -36,7 +36,7 @@ mod media;
 mod ops;
 mod ops_math;
 mod random;
-mod reflect;
+pub(crate) mod reflect;
 mod resolve;
 pub(crate) mod runtime_class_builder;
 pub(crate) use resolve::ImplResolver;

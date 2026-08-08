@@ -1319,7 +1319,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 position,
             )
         } else {
-            let generic_params: Vec<_> = self.type_bindings.keys().cloned().collect();
+            let mut generic_params = self.generic_params.clone();
+            let additional = self
+                .type_bindings
+                .keys()
+                .filter(|param| !generic_params.contains(param))
+                .cloned()
+                .collect::<Vec<_>>();
+            generic_params.extend(additional);
             crate::generics::substitute_ty(
                 &crate::lower_type_expr::lower_type_expr_at(
                     ty_expr,
@@ -2213,6 +2220,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// BEP-066 Session.eval is the one generic call whose omitted result
+    /// contract is meaningful: `s.eval(source)` is deliberately
+    /// `eval<unknown>(source)`. Every other uninferable generic remains an
+    /// error under the ordinary realization contract.
+    fn is_uncontracted_session_eval(&self, callee: ExprId, body: &ExprBody) -> bool {
+        let receiver = match &body.exprs[callee] {
+            Expr::MemberAccess { base, member } if member.as_str() == "eval" => {
+                self.expressions.get(base).cloned()
+            }
+            Expr::Path(segments) if segments.len() == 2 && segments[1].as_str() == "eval" => self
+                .locals
+                .get(&segments[0])
+                .map(|binding| binding.current_ty.clone()),
+            _ => None,
+        };
+        matches!(
+            receiver.map(|ty| self.expand_alias_chains(ty)),
+            Some(Ty::Class(name, _, _)) if name.to_string() == "baml.reflect.Session"
+        )
+    }
+
     /// Whether `expr` is a bare reference to a generic *free function* — an
     /// unrealized function value that must be specialized (`identity` →
     /// `identity<int>`). Only `Free` resolutions with declared user generic params
@@ -2590,6 +2618,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let scope_bounds = self.scope_type_var_bounds();
         let self_ty = self.body_self_ty.clone();
         let suppress_diags = self.is_auto_derived_body;
+        let extraction_contract = self.is_reflect_package_get_function(callee_id);
         for ((param_name, param_bounds), type_arg) in declared_params
             .iter()
             .zip(declared_bounds.iter())
@@ -2597,18 +2626,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             let mut diags = Vec::new();
             let ty = match type_arg {
-                ast::TypeArg::Static(type_arg_expr) => crate::lower_type_expr::lower_type_expr(
-                    type_arg_expr,
-                    &crate::lower_type_expr::ScopeCtx {
+                ast::TypeArg::Static(type_arg_expr) => {
+                    let ctx = crate::lower_type_expr::ScopeCtx {
                         db,
                         package_items: self.package_items,
                         ns_context: &ns,
                         generic_params: &caller_generic_params,
                         bounds: &scope_bounds,
                         self_ty: self_ty.clone(),
-                    },
-                    &mut diags,
-                ),
+                    };
+                    if extraction_contract {
+                        crate::lower_type_expr::lower_extraction_contract_type_expr(
+                            type_arg_expr,
+                            &ctx,
+                            &mut diags,
+                        )
+                    } else {
+                        crate::lower_type_expr::lower_type_expr(type_arg_expr, &ctx, &mut diags)
+                    }
+                }
                 ast::TypeArg::Unreflect(operand) => {
                     self.runtime_checked_type_params
                         .entry(call_expr_id)
@@ -2642,6 +2678,44 @@ impl<'db> TypeInferenceBuilder<'db> {
             bindings.insert(param_name.clone(), ty);
         }
         Some(bindings)
+    }
+
+    /// Whether this callee resolved to the stdlib's exact
+    /// `baml.reflect.Package.get_function` method. The P-7 omitted-throws
+    /// wildcard belongs to that API contract position only; a user method with
+    /// the same short name must retain ordinary E0151 behavior.
+    fn is_reflect_package_get_function(&self, callee_id: ExprId) -> bool {
+        let resolution = self.resolutions.get(&callee_id).or_else(|| {
+            self.path_member_resolutions
+                .get(&callee_id)
+                .and_then(|resolutions| resolutions.last())
+        });
+        let (class_loc, func_loc) = match resolution {
+            Some(
+                crate::inference::MemberResolution::BoundMethod {
+                    class_loc,
+                    func_loc,
+                }
+                | crate::inference::MemberResolution::UnboundMethod {
+                    class_loc,
+                    func_loc,
+                },
+            ) => (*class_loc, *func_loc),
+            _ => return false,
+        };
+        let db = self.context.db();
+        let package = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+        package.package.as_str() == "baml"
+            && package.namespace_path.len() == 1
+            && package.namespace_path[0].as_str() == "reflect"
+            && baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                .name
+                .as_str()
+                == "Package"
+            && baml_compiler2_ppir::item_data::function_data(db, func_loc)
+                .name
+                .as_str()
+                == "get_function"
     }
 
     fn bind_call_args<'a>(
@@ -3855,7 +3929,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         refs: &mut Vec<Name>,
     ) {
         match &body.stmts[stmt_id] {
-            Stmt::Expr(expr) | Stmt::Return(Some(expr)) | Stmt::Throw { value: expr } => {
+            Stmt::Expr(expr)
+            | Stmt::TypeBinding { value: expr, .. }
+            | Stmt::Return(Some(expr))
+            | Stmt::Throw { value: expr } => {
                 Self::collect_default_expr_forward_references(
                     *expr,
                     body,
@@ -4364,6 +4441,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     bindings.retain(|name, _| {
                         crate::generics::is_value_call_inferable(name, &generic_params)
                     });
+                }
+
+                if !explicit_args_used
+                    && callee_expr
+                        .is_some_and(|callee| self.is_uncontracted_session_eval(callee, body))
+                {
+                    for generic in &generic_params {
+                        bindings
+                            .entry(generic.clone())
+                            .or_insert_with(|| Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            });
+                    }
                 }
 
                 // Capture caller type-variable correspondences so generic
@@ -5045,6 +5135,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Block { stmts, tail_expr } => {
                 let snapshot = self.snapshot_scoped_locals();
+                let generic_scope_start = self.generic_params.len();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -5074,6 +5165,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                         })
                 };
                 self.restore_scoped_locals(&snapshot);
+                let scoped_params = self.generic_params[generic_scope_start..].to_vec();
+                let ty = crate::generics::erase_typevars_matching(&ty, &|param| {
+                    scoped_params.contains(param)
+                });
+                for binding in self.locals.values_mut() {
+                    binding.current_ty =
+                        crate::generics::erase_typevars_matching(&binding.current_ty, &|param| {
+                            scoped_params.contains(param)
+                        });
+                }
+                self.generic_params.truncate(generic_scope_start);
                 ty
             }
             Expr::MemberAccess { base, member } => {
@@ -7280,6 +7382,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Block: check the tail expression against expected type
             Expr::Block { stmts, tail_expr } => {
                 let snapshot = self.snapshot_scoped_locals();
+                let generic_scope_start = self.generic_params.len();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -7327,6 +7430,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 };
                 self.restore_scoped_locals(&snapshot);
+                let scoped_params = self.generic_params[generic_scope_start..].to_vec();
+                let ty = crate::generics::erase_typevars_matching(&ty, &|param| {
+                    scoped_params.contains(param)
+                });
+                for binding in self.locals.values_mut() {
+                    binding.current_ty =
+                        crate::generics::erase_typevars_matching(&binding.current_ty, &|param| {
+                            scoped_params.contains(param)
+                        });
+                }
+                self.generic_params.truncate(generic_scope_start);
                 self.record_expr_type(expr_id, ty.clone());
                 ty
             }
@@ -7648,6 +7762,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Expr(expr_id) => {
                 let ty = self.infer_expr(*expr_id, body);
                 matches!(ty, Ty::Never { .. })
+            }
+            Stmt::TypeBinding { name, value } => {
+                self.validate_runtime_type_arg_operand(*value, body);
+                self.generic_params.push(crate::ty::ParamTy::new(
+                    0x8000_0000 | stmt_id.into_raw().into_u32(),
+                    name.clone(),
+                ));
+                false
             }
             Stmt::Let {
                 pattern,
@@ -10150,7 +10272,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         out: &mut BTreeSet<Ty>,
     ) {
         match &body.stmts[stmt_id] {
-            Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
+            Stmt::Expr(expr_id) | Stmt::TypeBinding { value: expr_id, .. } => {
+                self.collect_throw_facts_from_expr(*expr_id, body, out);
+            }
             Stmt::Let {
                 initializer,
                 else_branch,

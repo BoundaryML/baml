@@ -5303,10 +5303,14 @@ impl BexEngine {
                     }
 
                     let runtime_type_overlay = self.runtime_type_overlay(&args, thread.proof());
-                    let runtime_compile_request = if operation == SysOp::BamlReflectPackageCompile {
-                        Some(Self::runtime_compile_request(&thread.vm, &args)?)
-                    } else {
-                        None
+                    let runtime_compile_request = match operation {
+                        SysOp::BamlReflectPackageCompile => {
+                            Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
+                        }
+                        SysOp::BamlReflectSessionCompile => {
+                            Some(Self::runtime_session_compile_request(&mut thread.vm, &args))
+                        }
+                        _ => None,
                     };
                     let runtime_schema_overlay = self.runtime_schema_overlay(&thread.vm, &args);
 
@@ -5372,7 +5376,10 @@ impl BexEngine {
                         };
 
                     let sys_op_result = if let Some(request) = runtime_compile_request {
-                        self.execute_runtime_compile(request)
+                        match request {
+                            Ok(request) => self.execute_runtime_compile(request, operation),
+                            Err(error) => SysOpResult::Ready(Err(error)),
+                        }
                     } else {
                         self.execute_sys_op(
                             operation,
@@ -5967,6 +5974,110 @@ impl BexEngine {
         vm: &BexVm,
         args: &[Value],
     ) -> Result<bex_vm_types::RuntimeCompileRequest, EngineError> {
+        fn type_mount(
+            vm: &BexVm,
+            export_name: &str,
+            ptr: bex_vm_types::HeapPtr,
+        ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
+            let Object::Type(value) = vm.get_object(ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("with_types entry `{export_name}` is not a type"),
+                });
+            };
+            let identity_name = match &value.ty {
+                baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _) => {
+                    qtn.clone()
+                }
+                _ => {
+                    let suffix = match value.mint() {
+                        bex_vm_types::types::MintId::Runtime(n) => format!("r-{n}"),
+                        bex_vm_types::types::MintId::Static(n) => format!("s-{n}"),
+                    };
+                    baml_type::QualifiedTypeName::new(
+                        baml_type::Name::new("user"),
+                        vec![baml_type::Name::new("$dyn"), baml_type::Name::new(suffix)],
+                        baml_type::Name::new(export_name),
+                    )
+                }
+            };
+            let classes = value
+                .defs()
+                .classes
+                .iter()
+                .filter_map(|(qtn, ptr)| {
+                    let Object::Class(class) = vm.get_object(*ptr) else {
+                        return None;
+                    };
+                    Some(bex_vm_types::RuntimeMountedClass {
+                        qtn: qtn.clone(),
+                        fields: class
+                            .fields
+                            .iter()
+                            .map(|field| {
+                                (
+                                    baml_type::Name::new(&field.name),
+                                    baml_type::Ty::from(&field.field_type),
+                                    bex_vm_types::RuntimeMountedFieldAttrs {
+                                        alias: field.alias.clone(),
+                                        description: field.description.clone(),
+                                    },
+                                )
+                            })
+                            .collect(),
+                    })
+                })
+                .collect();
+            let enums = value
+                .defs()
+                .enums
+                .iter()
+                .filter_map(|(qtn, ptr)| {
+                    let Object::Enum(enm) = vm.get_object(*ptr) else {
+                        return None;
+                    };
+                    Some(bex_vm_types::RuntimeMountedEnum {
+                        qtn: qtn.clone(),
+                        variants: enm
+                            .variants
+                            .iter()
+                            .map(|variant| baml_type::Name::new(&variant.name))
+                            .collect(),
+                    })
+                })
+                .collect();
+            let witnesses = value
+                .defs()
+                .witnesses
+                .iter()
+                .map(|witness| {
+                    (
+                        baml_type::Interface::new(
+                            witness.interface.clone(),
+                            witness
+                                .interface_args
+                                .iter()
+                                .map(baml_type::Ty::from)
+                                .collect(),
+                            witness
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), baml_type::Ty::from(ty)))
+                                .collect(),
+                        ),
+                        witness.field_links.clone(),
+                    )
+                })
+                .collect();
+            Ok(bex_vm_types::RuntimeTypeMount {
+                export_name: baml_type::Name::new(export_name),
+                identity_name,
+                ty: value.ty.clone(),
+                classes,
+                enums,
+                witnesses,
+            })
+        }
+
         fn map_entries(
             vm: &BexVm,
             value: Value,
@@ -6018,37 +6129,175 @@ impl BexEngine {
                     message: format!("Package.compile dependency `{alias}` must be a Package"),
                 });
             };
-            let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("Package.compile dependency `{alias}` must be a Package"),
-                });
-            };
-            let inner = wrapper.load_field(0);
-            let Some(package_ptr) = inner.as_object_ptr() else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("Package.compile dependency `{alias}` is not initialized"),
-                });
+            let package_ptr = match vm.get_object(wrapper_ptr) {
+                Object::Package(_) => wrapper_ptr,
+                Object::Instance(wrapper) => {
+                    wrapper.load_field(0).as_object_ptr().ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Package.compile dependency `{alias}` is not initialized"
+                            ),
+                        }
+                    })?
+                }
+                _ => {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("Package.compile dependency `{alias}` must be a Package"),
+                    });
+                }
             };
             let Object::Package(package) = vm.get_object(package_ptr) else {
                 return Err(EngineError::TypeMismatch {
                     message: format!("Package.compile dependency `{alias}` is not initialized"),
                 });
             };
-            let interface = package
-                .runtime
-                .as_ref()
-                .map(|runtime| runtime.interface_blob.clone())
-                .ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!(
-                        "Package.compile dependency `{alias}` is not a runtime package"
-                    ),
-                })?;
-            packages.insert(alias.to_string(), interface);
+            let types = package
+                .mounted_types
+                .iter()
+                .map(|(name, ptr)| type_mount(vm, name, *ptr))
+                .collect::<Result<Vec<_>, _>>()?;
+            packages.insert(
+                alias.to_string(),
+                bex_vm_types::RuntimePackageMount {
+                    interface_blob: package.interface_blob.clone(),
+                    types,
+                },
+            );
         }
-        Ok(bex_vm_types::RuntimeCompileRequest { files, packages })
+        Ok(bex_vm_types::RuntimeCompileRequest {
+            files,
+            packages,
+            mode: bex_vm_types::RuntimeCompileMode::Package,
+        })
     }
 
-    fn execute_runtime_compile(&self, request: bex_vm_types::RuntimeCompileRequest) -> SysOpResult {
+    fn runtime_session_compile_request(
+        vm: &mut BexVm,
+        args: &[Value],
+    ) -> Result<bex_vm_types::RuntimeCompileRequest, OpError> {
+        let operation = SysOp::BamlReflectSessionCompile;
+        let invalid = |message: String| {
+            OpError::new(
+                operation,
+                bex_vm_types::errors::VmBamlError::InvalidArgument { message },
+            )
+        };
+        let receiver = args
+            .first()
+            .copied()
+            .ok_or_else(|| invalid("Session.eval is missing its receiver".to_string()))?;
+        let wrapper_ptr = receiver
+            .as_object_ptr()
+            .ok_or_else(|| invalid("Session.eval receiver is not an instance".to_string()))?;
+        let package_ptr = match vm.get_object(wrapper_ptr) {
+            Object::Package(_) => wrapper_ptr,
+            Object::Instance(wrapper) => wrapper
+                .load_field(0)
+                .as_object_ptr()
+                .ok_or_else(|| invalid("Session is not initialized".to_string()))?,
+            _ => {
+                return Err(invalid(
+                    "Session.eval receiver is not an instance".to_string(),
+                ));
+            }
+        };
+        let source_ptr = args
+            .get(1)
+            .and_then(Value::as_object_ptr)
+            .ok_or_else(|| invalid("Session.eval source is not a string".to_string()))?;
+        let Object::String(source) = vm.get_object(source_ptr) else {
+            return Err(invalid("Session.eval source is not a string".to_string()));
+        };
+        let source = source.to_string();
+        let expected = host_call_type_arg(args.get(2).copied(), 2, "eval type contract")
+            .map_err(|error| OpError::new(operation, error))?;
+
+        let busy = {
+            let Object::Package(package) = vm.get_object(package_ptr) else {
+                return Err(invalid(
+                    "Session has an invalid runtime payload".to_string(),
+                ));
+            };
+            package
+                .session
+                .as_ref()
+                .map(|state| state.busy.clone())
+                .ok_or_else(|| invalid("Session has an invalid runtime payload".to_string()))?
+        };
+        let Some(lease) = bex_vm_types::SessionEvalLease::acquire(busy) else {
+            return Err(OpError::host_thrown_value(
+                operation,
+                BexExternalValue::Instance {
+                    class_name: "baml.reflect.errors.SessionBusy".to_string(),
+                    type_args: Vec::new(),
+                    fields: indexmap::indexmap! {
+                        "message".to_string() => BexExternalValue::String(
+                            "a Session permits only one active eval".into(),
+                        ),
+                    },
+                },
+            ));
+        };
+        let (history, visible, dependency_names, sequence) = {
+            let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+                return Err(invalid(
+                    "Session has an invalid runtime payload".to_string(),
+                ));
+            };
+            let state = package
+                .session
+                .as_mut()
+                .ok_or_else(|| invalid("Session has an invalid runtime payload".to_string()))?;
+            let sequence = state.submission_counter;
+            state.submission_counter = state.submission_counter.saturating_add(1);
+            let dependencies = package
+                .runtime
+                .as_ref()
+                .map(|runtime| runtime.dependency_names.clone())
+                .unwrap_or_default();
+            (
+                state.history.clone(),
+                state.visible.clone(),
+                dependencies,
+                sequence,
+            )
+        };
+        let mut packages = IndexMap::new();
+        for (alias, ptr) in dependency_names {
+            let Object::Package(package) = vm.get_object(ptr) else {
+                return Err(invalid(format!(
+                    "Session dependency `{alias}` has an invalid runtime payload"
+                )));
+            };
+            packages.insert(
+                alias,
+                bex_vm_types::RuntimePackageMount {
+                    interface_blob: package.interface_blob.clone(),
+                    types: Vec::new(),
+                },
+            );
+        }
+        let submission_name = format!("$submission_{sequence}.baml");
+        let session = bex_vm_types::RuntimeSessionCompileRequest {
+            submission_name,
+            source,
+            history,
+            visible,
+            expected,
+            lease,
+        };
+        Ok(bex_vm_types::RuntimeCompileRequest {
+            files: IndexMap::new(),
+            packages,
+            mode: bex_vm_types::RuntimeCompileMode::Session(Box::new(session)),
+        })
+    }
+
+    fn execute_runtime_compile(
+        &self,
+        request: bex_vm_types::RuntimeCompileRequest,
+        operation: SysOp,
+    ) -> SysOpResult {
         fn string(value: impl Into<String>) -> BexExternalValue {
             BexExternalValue::String(value.into().into())
         }
@@ -6080,7 +6329,7 @@ impl BexEngine {
         SysOpResult::Async(Box::pin(async move {
             let Some(compiler) = compiler else {
                 return Err(OpError::new(
-                    SysOp::BamlReflectPackageCompile,
+                    operation,
                     bex_vm_types::errors::VmBamlError::Unsupported {
                         message: "runtime compiler was not installed by the host".to_string(),
                     },
@@ -6106,7 +6355,7 @@ impl BexEngine {
                         );
                     let items = diagnostics.into_iter().map(diagnostic).collect();
                     Err(OpError::host_thrown_value(
-                        SysOp::BamlReflectPackageCompile,
+                        operation,
                         BexExternalValue::Instance {
                             class_name: "baml.reflect.errors.CompilationError".to_string(),
                             type_args: Vec::new(),

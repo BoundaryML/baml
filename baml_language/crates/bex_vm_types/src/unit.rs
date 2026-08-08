@@ -121,6 +121,8 @@ pub struct ExportTable {
 /// emit order the `IndexMap`s in `ProgramPackage` require.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackageFrag {
+    /// All source-visible declaration names (types, aliases, and values).
+    pub exported_names: Vec<LocalName>,
     /// Local class name to fully-qualified class name (resolved to `ObjectIndex`
     /// at link).
     pub classes: Vec<(LocalName, String)>,
@@ -128,12 +130,18 @@ pub struct ProgramPackageFrag {
     pub enums: Vec<(LocalName, String)>,
     /// Local interface name to fully-qualified interface name.
     pub interfaces: Vec<(LocalName, String)>,
+    /// Local exported free-function name to its fully-qualified symbol.
+    pub functions: Vec<(LocalName, String)>,
     /// Implemented-interface fully-qualified name to the impl rules declared for
     /// it in this unit (the interface may live in a dependency package).
     pub impl_rules: Vec<(String, Vec<ProgramImplRuleFrag>)>,
     /// Recursive type aliases, carried verbatim (they hold no object refs to
     /// relocate).
     pub recursive_type_aliases: Vec<(LocalName, RuntimeTy)>,
+    /// Whole-package enriched interface. Exactly one unit is its carrier.
+    pub interface_blob: Vec<u8>,
+    /// Fully-qualified synthesized `$init_test` symbol, when present.
+    pub test_init: Option<String>,
 }
 
 /// Symbolic twin of `ProgramImplRule`: `interface_head` and each method `fqn`
