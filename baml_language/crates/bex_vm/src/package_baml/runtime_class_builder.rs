@@ -741,6 +741,7 @@ fn build_group(vm: &mut BexVm, start: Value) -> Result<Value, VmRustFnError> {
             // adds this class pointer back while the other recursively-linked
             // group members remain available as dependencies.
             defs: provenance_defs,
+            owner: HeapPtr::null(),
         });
     }
 

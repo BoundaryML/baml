@@ -2518,6 +2518,7 @@ impl BlockExpr {
                     match n.kind() {
                         // Statement nodes
                         SyntaxKind::LET_STMT
+                        | SyntaxKind::TYPE_BINDING_STMT
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
                         | SyntaxKind::WHILE_LET_STMT

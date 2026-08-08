@@ -6,7 +6,45 @@
 
 use indexmap::IndexMap;
 
+use baml_type::{Interface, Name, QualifiedTypeName, RealizedTy, Ty};
+
 use crate::CompilationUnit;
+
+/// Compiler-neutral structural projection of one runtime class definition.
+#[derive(Clone, Debug)]
+pub struct RuntimeMountedClass {
+    pub qtn: QualifiedTypeName,
+    pub fields: Vec<(Name, Ty, RuntimeMountedFieldAttrs)>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeMountedEnum {
+    pub qtn: QualifiedTypeName,
+    pub variants: Vec<Name>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RuntimeMountedFieldAttrs {
+    pub alias: Option<String>,
+    pub description: Option<String>,
+}
+
+/// One exact type value mounted under a source-visible export name.
+#[derive(Clone, Debug)]
+pub struct RuntimeTypeMount {
+    pub export_name: Name,
+    pub identity_name: QualifiedTypeName,
+    pub ty: RealizedTy,
+    pub classes: Vec<RuntimeMountedClass>,
+    pub enums: Vec<RuntimeMountedEnum>,
+    pub witnesses: Vec<(Interface, Vec<(Name, Name)>)>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RuntimePackageMount {
+    pub interface_blob: Vec<u8>,
+    pub types: Vec<RuntimeTypeMount>,
+}
 
 /// One isolated `reflect.Package.compile` request.
 #[derive(Clone, Debug, Default)]
@@ -14,7 +52,7 @@ pub struct RuntimeCompileRequest {
     /// Project-root-relative submitted paths and their source text.
     pub files: IndexMap<String, String>,
     /// Source-less dependency package name to enriched `PackageInterface` blob.
-    pub packages: IndexMap<String, Vec<u8>>,
+    pub packages: IndexMap<String, RuntimePackageMount>,
 }
 
 /// Severity retained from the compiler diagnostic stream.

@@ -706,6 +706,10 @@ pub enum Instruction {
     /// which must hold a `ConstValue::Type(TyTemplate)` at that slot.
     LoadType(usize),
 
+    /// Pop an exact `Object::Type` and bind it to a frame type-argument slot.
+    /// Later `LoadType(TypeArgRef(slot))` reproduces the same mint and defs.
+    BindType(usize),
+
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
     ///
     /// Pops the type tag (from a preceding `TypeTag` instruction), computes
@@ -895,6 +899,11 @@ pub enum Instruction {
     /// Appended to preserve the serialized discriminants of existing
     /// instructions.
     RuntimeIsType,
+
+    /// Reify the package selected lexically by the compiler. The operand is a
+    /// constant-pool string naming the static package; a dynamic function's
+    /// runtime owner takes precedence.
+    LoadCurrentPackage(usize),
 }
 
 /// Compact bytecode opcodes.
@@ -1019,6 +1028,7 @@ pub enum OpCode {
     IsType,
     DenseTag,
     LoadType,
+    BindType,
     MakeBoundMethod,
     LoadDeref,
     StoreDeref,
@@ -1081,6 +1091,9 @@ pub enum OpCode {
 
     // Runtime nominal identity test, appended to preserve discriminants.
     RuntimeIsType,
+
+    // Lexical Package.current(): u32 constant-pool string index.
+    LoadCurrentPackage,
 }
 
 impl OpCode {
@@ -1192,6 +1205,7 @@ impl OpCode {
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
+            | Self::BindType
             | Self::MakeBoundMethod
             | Self::LoadDeref
             | Self::StoreDeref
@@ -1205,6 +1219,8 @@ impl OpCode {
             | Self::VirtualLoadField
             | Self::VirtualStoreField
             | Self::VirtualCallWithRuntimeId => 5,
+
+            Self::LoadCurrentPackage => 5,
 
             // 3-byte: opcode + u16
             Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
@@ -1247,6 +1263,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::RuntimeIsType as u8 => Ok(Self::RuntimeIsType),
+            x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
@@ -1335,6 +1352,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
+            x if x == Self::BindType as u8 => Ok(Self::BindType),
             x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
             x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
             x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
@@ -1385,6 +1403,7 @@ impl std::fmt::Display for OpCode {
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
             Self::RuntimeIsType => "RUNTIME_IS_TYPE",
+            Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1474,6 +1493,7 @@ impl std::fmt::Display for OpCode {
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
+            Self::BindType => "BIND_TYPE",
             Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
             Self::LoadDeref => "LOAD_DEREF",
             Self::StoreDeref => "STORE_DEREF",
@@ -1702,11 +1722,13 @@ impl std::fmt::Display for Instruction {
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::RuntimeIsType => f.write_str("RUNTIME_IS_TYPE"),
+            Instruction::LoadCurrentPackage(i) => write!(f, "LOAD_CURRENT_PACKAGE {i}"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
                 write!(f, "NARROW_BIND {ty} {destination}")
             }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
+            Instruction::BindType(i) => write!(f, "BIND_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
@@ -2226,6 +2248,8 @@ impl Bytecode {
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
+                | Instruction::BindType(v)
+                | Instruction::LoadCurrentPackage(v)
                 | Instruction::LoadDeref(v)
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
@@ -2582,6 +2606,8 @@ impl Bytecode {
             Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
+            Instruction::BindType(_) => OpCode::BindType,
+            Instruction::LoadCurrentPackage(_) => OpCode::LoadCurrentPackage,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,

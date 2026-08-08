@@ -820,6 +820,7 @@ name = "baml_compiler2_emit"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_mir",
@@ -1099,6 +1100,7 @@ dependencies = [
  "baml_exec",
  "bex_engine",
  "bex_events",
+ "bex_project",
  "borsh",
  "libsui",
  "sys_native",

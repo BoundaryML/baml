@@ -5967,6 +5967,110 @@ impl BexEngine {
         vm: &BexVm,
         args: &[Value],
     ) -> Result<bex_vm_types::RuntimeCompileRequest, EngineError> {
+        fn type_mount(
+            vm: &BexVm,
+            export_name: &str,
+            ptr: bex_vm_types::HeapPtr,
+        ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
+            let Object::Type(value) = vm.get_object(ptr) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("with_types entry `{export_name}` is not a type"),
+                });
+            };
+            let identity_name = match &value.ty {
+                baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _) => {
+                    qtn.clone()
+                }
+                _ => {
+                    let suffix = match value.mint() {
+                        bex_vm_types::types::MintId::Runtime(n) => format!("r-{n}"),
+                        bex_vm_types::types::MintId::Static(n) => format!("s-{n}"),
+                    };
+                    baml_type::QualifiedTypeName::new(
+                        baml_type::Name::new("user"),
+                        vec![baml_type::Name::new("$dyn"), baml_type::Name::new(suffix)],
+                        baml_type::Name::new(export_name),
+                    )
+                }
+            };
+            let classes = value
+                .defs()
+                .classes
+                .iter()
+                .filter_map(|(qtn, ptr)| {
+                    let Object::Class(class) = vm.get_object(*ptr) else {
+                        return None;
+                    };
+                    Some(bex_vm_types::RuntimeMountedClass {
+                        qtn: qtn.clone(),
+                        fields: class
+                            .fields
+                            .iter()
+                            .map(|field| {
+                                (
+                                    baml_type::Name::new(&field.name),
+                                    baml_type::Ty::from(&field.field_type),
+                                    bex_vm_types::RuntimeMountedFieldAttrs {
+                                        alias: field.alias.clone(),
+                                        description: field.description.clone(),
+                                    },
+                                )
+                            })
+                            .collect(),
+                    })
+                })
+                .collect();
+            let enums = value
+                .defs()
+                .enums
+                .iter()
+                .filter_map(|(qtn, ptr)| {
+                    let Object::Enum(enm) = vm.get_object(*ptr) else {
+                        return None;
+                    };
+                    Some(bex_vm_types::RuntimeMountedEnum {
+                        qtn: qtn.clone(),
+                        variants: enm
+                            .variants
+                            .iter()
+                            .map(|variant| baml_type::Name::new(&variant.name))
+                            .collect(),
+                    })
+                })
+                .collect();
+            let witnesses = value
+                .defs()
+                .witnesses
+                .iter()
+                .map(|witness| {
+                    (
+                        baml_type::Interface::new(
+                            witness.interface.clone(),
+                            witness
+                                .interface_args
+                                .iter()
+                                .map(baml_type::Ty::from)
+                                .collect(),
+                            witness
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), baml_type::Ty::from(ty)))
+                                .collect(),
+                        ),
+                        witness.field_links.clone(),
+                    )
+                })
+                .collect();
+            Ok(bex_vm_types::RuntimeTypeMount {
+                export_name: baml_type::Name::new(export_name),
+                identity_name,
+                ty: value.ty.clone(),
+                classes,
+                enums,
+                witnesses,
+            })
+        }
+
         fn map_entries(
             vm: &BexVm,
             value: Value,
@@ -6018,32 +6122,40 @@ impl BexEngine {
                     message: format!("Package.compile dependency `{alias}` must be a Package"),
                 });
             };
-            let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("Package.compile dependency `{alias}` must be a Package"),
-                });
-            };
-            let inner = wrapper.load_field(0);
-            let Some(package_ptr) = inner.as_object_ptr() else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("Package.compile dependency `{alias}` is not initialized"),
-                });
+            let package_ptr = match vm.get_object(wrapper_ptr) {
+                Object::Package(_) => wrapper_ptr,
+                Object::Instance(wrapper) => {
+                    wrapper.load_field(0).as_object_ptr().ok_or_else(|| {
+                        EngineError::TypeMismatch {
+                            message: format!(
+                                "Package.compile dependency `{alias}` is not initialized"
+                            ),
+                        }
+                    })?
+                }
+                _ => {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("Package.compile dependency `{alias}` must be a Package"),
+                    });
+                }
             };
             let Object::Package(package) = vm.get_object(package_ptr) else {
                 return Err(EngineError::TypeMismatch {
                     message: format!("Package.compile dependency `{alias}` is not initialized"),
                 });
             };
-            let interface = package
-                .runtime
-                .as_ref()
-                .map(|runtime| runtime.interface_blob.clone())
-                .ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!(
-                        "Package.compile dependency `{alias}` is not a runtime package"
-                    ),
-                })?;
-            packages.insert(alias.to_string(), interface);
+            let types = package
+                .mounted_types
+                .iter()
+                .map(|(name, ptr)| type_mount(vm, name, *ptr))
+                .collect::<Result<Vec<_>, _>>()?;
+            packages.insert(
+                alias.to_string(),
+                bex_vm_types::RuntimePackageMount {
+                    interface_blob: package.interface_blob.clone(),
+                    types,
+                },
+            );
         }
         Ok(bex_vm_types::RuntimeCompileRequest { files, packages })
     }

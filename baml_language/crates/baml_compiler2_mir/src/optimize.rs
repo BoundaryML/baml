@@ -407,7 +407,9 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 scan_operand(value, set);
             }
-            crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            crate::Rvalue::LoadType(_)
+            | crate::Rvalue::CurrentPackage(_)
+            | crate::Rvalue::MakeGenericFunction { .. } => {
                 // LoadType takes no local operands.
             }
         }
@@ -710,7 +712,9 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
             count_in_operand(value, uses);
         }
-        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+        crate::Rvalue::LoadType(_)
+        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands.
         }
     }
@@ -1078,7 +1082,9 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
             apply_subst_to_operand(value, subst);
         }
-        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+        crate::Rvalue::LoadType(_)
+        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to substitute.
         }
     }
@@ -1381,7 +1387,9 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
             remap_operand(value, map);
         }
-        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+        crate::Rvalue::LoadType(_)
+        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to remap.
         }
     }
@@ -1660,7 +1668,9 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                             check_operand(value, &blk);
                         }
-                        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+                        crate::Rvalue::LoadType(_)
+                        | crate::Rvalue::CurrentPackage(_)
+                        | crate::Rvalue::MakeGenericFunction { .. } => {
                             // LoadType takes no local operands — nothing to check.
                         }
                     }

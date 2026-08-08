@@ -107,6 +107,90 @@ class Broken { value MissingType }
 }
 "####;
 
+const SCENARIO_6_SOURCE: &str = r####"
+class AgentState {
+  goal string
+  history string[]
+}
+
+interface AgentAction {
+  summary string
+}
+
+function Plan(state: AgentState) -> string {
+  log.info("LIVE_PLAN:" + state.goal)
+  "planned " + state.goal
+}
+
+function main() -> string throws unknown {
+  let skill_source = #"
+class PlanThenAct {
+  summary string
+  steps string[]
+  implements app.AgentAction {}
+}
+
+function Run(state: app.AgentState) -> PlanThenAct {
+  PlanThenAct {
+    summary: app.Plan(state),
+    steps: [],
+  }
+}
+"#
+  let skill = reflect.Package.compile(
+    { "skill.baml": skill_source },
+    packages = { "app": reflect.Package.current() },
+  )
+  let run = skill.get_function<(AgentState) -> AgentAction>("root.Run")
+    ?? throw "missing root.Run"
+  let action = run(AgentState { goal: "ship", history: [] })
+  let functions = skill.functions()
+  if (functions.get("root.Run") == null) { throw "root.Run not enumerated" } else { null }
+  action.summary
+}
+
+function absent_function_is_null() -> bool throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": "function Present(value: string) -> string { value }"
+  })
+  pkg.get_function<(string) -> string>("root.Missing") == null
+}
+
+function mismatched_function_contract() -> null throws unknown {
+  let pkg = reflect.Package.compile({
+    "main.baml": "function Present(value: string) -> string { value }"
+  })
+  let _ = pkg.get_function<(int) -> string>("root.Present")
+  null
+}
+
+function alias_order_and_reserved_names() -> string throws unknown {
+  let root_package = reflect.Package.current()
+  let generated = reflect.Package.compile(
+    { "main.baml": #"
+function Read(state: app.AgentState) -> string {
+  app.Plan(state) + ":" + baml.Array.length(["o", "k"]).to_string()
+}
+"# },
+    packages = { "z_last": root_package, "baml": root_package, "app": root_package },
+  )
+  let read = generated.get_function<(AgentState) -> string>("root.Read")
+    ?? throw "missing root.Read"
+  read(AgentState { goal: "ordered", history: [] })
+}
+
+test "enumerated package test" {
+  assert.equal(1, 1)
+}
+
+function enumerated_test_runs() -> bool throws unknown {
+  let tests = reflect.Package.current().tests()
+  let run = tests.get("root::enumerated package test") ?? throw "test not enumerated"
+  run()
+  tests.length() == 1
+}
+"####;
+
 async fn run_main_with_logs(
     source: &str,
 ) -> (Result<BexExternalValue, EngineError>, TraceLogDrainReport) {
@@ -247,4 +331,58 @@ async fn rejected_compile_returns_real_diagnostic_without_running_init() {
         span.get("file"),
         Some(&BexExternalValue::String("schema.baml".into()))
     );
+}
+
+#[tokio::test]
+async fn scenario_6_extracts_and_calls_the_live_aliased_function() {
+    let (result, report) = run_main_with_logs(SCENARIO_6_SOURCE).await;
+    assert_eq!(result, Ok(BexExternalValue::String("planned ship".into())));
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert_eq!(report.logs.len(), 1);
+    assert_eq!(report.logs[0].body, "LIVE_PLAN:ship");
+}
+
+#[tokio::test]
+async fn get_function_absence_is_null() {
+    let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "absent_function_is_null");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
+    let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "mismatched_function_contract");
+    let Err(EngineError::UnhandledThrow { value, .. }) = output.result else {
+        panic!("expected CompilationError, got {:?}", output.result)
+    };
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = *value
+    else {
+        panic!("expected CompilationError instance")
+    };
+    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
+        panic!("missing diagnostics: {fields:?}")
+    };
+    assert!(items.iter().any(|item| matches!(
+        item,
+        BexExternalValue::Instance { fields, .. }
+            if fields.get("code") == Some(&BexExternalValue::String("E0001".into()))
+                && matches!(fields.get("message"), Some(BexExternalValue::String(message)) if message.contains("not a subtype"))
+    )));
+}
+
+#[tokio::test]
+async fn alias_maps_are_order_independent_and_cannot_shadow_stdlib() {
+    let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "alias_order_and_reserved_names");
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("planned ordered:2".into()))
+    );
+}
+
+#[tokio::test]
+async fn package_tests_enumerate_invocable_zero_arg_functions() {
+    let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "enumerated_test_runs");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

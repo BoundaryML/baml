@@ -90,10 +90,11 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
 
     let argv = build_argv(&target.subcommand_name);
 
-    let engine = match BexEngine::new(
+    let engine = match BexEngine::new_with_runtime_compiler(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
         argv.clone(),
+        bex_project::runtime_compiler(),
     ) {
         Ok(e) => Arc::new(e),
         Err(e) => {
@@ -163,10 +164,11 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
     bootstrap_argv.push(String::new());
     bootstrap_argv.extend(trailing.iter().cloned());
 
-    let mut engine = match BexEngine::new(
+    let mut engine = match BexEngine::new_with_runtime_compiler(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
         bootstrap_argv,
+        bex_project::runtime_compiler(),
     ) {
         Ok(e) => e,
         Err(e) => {

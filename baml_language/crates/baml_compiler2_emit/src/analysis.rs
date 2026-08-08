@@ -725,7 +725,7 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         | Rvalue::VirtualFieldAccess { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
-        Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
+        Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
             // No local operands — the templates are compile-time data.
         }
         Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1562,7 +1562,9 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::MakeBoundMethod { receiver, .. }
         | Rvalue::MakeVirtualBoundMethod { receiver, .. }
         | Rvalue::VirtualFieldAccess { receiver, .. } => operand_has_projection(receiver),
-        Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => false,
+        Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
+            false
+        }
         Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
     }
 }

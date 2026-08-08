@@ -246,6 +246,7 @@ pub struct BytecodeFrame {
 impl RootHaver for BytecodeFrame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.function);
+        roots.extend(self.type_defs.classes.values().copied());
         roots.extend(self.type_defs.enums.values().copied());
         roots.extend(
             self.type_values
@@ -258,16 +259,28 @@ impl RootHaver for BytecodeFrame {
             self.type_values
                 .iter()
                 .flatten()
+                .flat_map(|value| value.defs().classes.values().copied()),
+        );
+        roots.extend(
+            self.type_values
+                .iter()
+                .flatten()
                 .flat_map(|value| value.defs().enums.values().copied()),
         );
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
+        for ptr in self.type_defs.classes.values_mut() {
+            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
+        }
         for ptr in self.type_defs.enums.values_mut() {
             *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
         }
         for value in self.type_values.iter_mut().flatten() {
             value.owner = roots.get(&value.owner).copied().unwrap_or(value.owner);
+            for ptr in value.defs_mut().classes.values_mut() {
+                *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
+            }
             for ptr in value.defs_mut().enums.values_mut() {
                 *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
             }
@@ -1876,10 +1889,19 @@ impl BexVm {
             .iter()
             .rev()
             .find_map(|frame| match frame {
-                Frame::Bytecode(frame) => match self.get_object(frame.function) {
-                    Object::Function(function) => Some(function.runtime_package),
-                    _ => None,
-                },
+                Frame::Bytecode(frame) => Some(match self.get_object(frame.function) {
+                    Object::Function(function) => function.runtime_package,
+                    Object::GenericFunction(function) => function.runtime_package,
+                    Object::Closure(closure) => match unsafe { closure.function.get() } {
+                        Object::Function(function) => function.runtime_package,
+                        _ => HeapPtr::null(),
+                    },
+                    Object::BoundMethod(method) => match unsafe { method.function.get() } {
+                        Object::Function(function) => function.runtime_package,
+                        _ => HeapPtr::null(),
+                    },
+                    _ => HeapPtr::null(),
+                }),
                 Frame::Native(_) => None,
             })
             .unwrap_or_else(HeapPtr::null)
@@ -2374,6 +2396,43 @@ impl BexVm {
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => return None,
         })
+    }
+
+    /// Runtime package that owns a value's nominal/callable definition.
+    /// Static values and standalone runtime-constructed types return null.
+    pub(crate) fn value_runtime_package(&self, value: Value) -> HeapPtr {
+        let Some(ptr) = value.as_object_ptr() else {
+            return HeapPtr::null();
+        };
+        match self.get_object(ptr) {
+            Object::Instance(instance) => match self.get_object(instance.class) {
+                Object::Class(class) => class
+                    .runtime_type
+                    .as_ref()
+                    .map_or_else(HeapPtr::null, |runtime| runtime.owner),
+                _ => HeapPtr::null(),
+            },
+            Object::Variant(variant) => match self.get_object(variant.enm) {
+                Object::Enum(enm) => enm
+                    .runtime_type
+                    .as_ref()
+                    .map_or_else(HeapPtr::null, |runtime| runtime.owner),
+                _ => HeapPtr::null(),
+            },
+            Object::Type(value) => value.owner,
+            Object::Function(function) => function.runtime_package,
+            Object::GenericFunction(function) => function.runtime_package,
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(function) => function.runtime_package,
+                _ => HeapPtr::null(),
+            },
+            Object::BoundMethod(method) => match unsafe { method.function.get() } {
+                Object::Function(function) => function.runtime_package,
+                _ => HeapPtr::null(),
+            },
+            Object::Cell(cell) => self.value_runtime_package(cell.load()),
+            _ => HeapPtr::null(),
+        }
     }
 
     /// Get array from a Value. Acquires the container's mutex; the
@@ -3688,7 +3747,7 @@ impl BexVm {
                     self.type_of(&receiver)
                 )
             }));
-        let slot = crate::package_baml::ImplResolver::new(self)
+        let slot = crate::package_baml::ImplResolver::for_value(self, receiver)
             .resolve_implements_rule(&self_ty, iface_qtn, iface_args)
             .and_then(|(rule, _bound_args)| rule.field_links.get(field_index).copied());
         let slot = slot.ok_or_else(|| VmInternalError::UnresolvedVirtualFieldAccess {
@@ -6824,7 +6883,8 @@ impl BexVm {
                         }),
                     );
                     let (callee_ptr, type_args) = {
-                        let (rule, bound_args) = crate::package_baml::ImplResolver::new(self)
+                        let resolver = crate::package_baml::ImplResolver::for_value(self, receiver);
+                        let (rule, bound_args) = resolver
                             .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
                             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
@@ -6842,8 +6902,7 @@ impl BexVm {
                         // or the interface's args + associated types for an inherited
                         // default), then the method-level type args — matching the
                         // callee's De Bruijn layout `[owner… ++ method…]`.
-                        let mut frame = crate::package_baml::ImplResolver::new(self)
-                            .realize_frame(&method.frame, &bound_args)?;
+                        let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
                         frame.extend(method_type_args.tys);
                         (callee, frame)
                     };
@@ -7483,6 +7542,39 @@ impl BexVm {
                     self.stack.push(value);
                 }
 
+                // ── Lexical runtime type binding ────────────────────────────
+                OpCode::BindType => {
+                    let slot = read_u32_unchecked(code, pc) as usize;
+                    let value = self.stack.ensure_pop();
+                    let ptr = self.as_object_ptr(value, ObjectType::Type)?;
+                    let Object::Type(type_value) = self.get_object(ptr) else {
+                        unreachable!("ObjectType::Type was validated above")
+                    };
+                    let type_value = (**type_value).clone();
+                    let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] else {
+                        unreachable!("compact bytecode runs in a bytecode frame")
+                    };
+                    frame
+                        .type_args
+                        .resize(slot + 1, baml_type::RealizedTy::unknown());
+                    frame.type_values.resize(slot + 1, None);
+                    frame.type_args[slot] = type_value.ty.clone();
+                    frame.type_defs.merge_from(type_value.defs());
+                    frame.type_values[slot] = Some(type_value);
+                }
+
+                // ── Package.current() ───────────────────────────────────────
+                OpCode::LoadCurrentPackage => {
+                    let idx = read_u32_unchecked(code, pc) as usize;
+                    let package_name = {
+                        let value = function.bytecode.resolved_constants[idx];
+                        self.as_string(&value)?.to_string()
+                    };
+                    let value =
+                        crate::package_baml::reflect::current_package_value(self, &package_name);
+                    self.stack.push(value);
+                }
+
                 // ── MakeBoundMethod ───────────────────────────────────────────
                 OpCode::MakeBoundMethod => {
                     let raw = { read_u32_unchecked(code, pc) };
@@ -7553,7 +7645,8 @@ impl BexVm {
                         }),
                     );
                     let (function_ptr, type_args) = {
-                        let (rule, bound_args) = crate::package_baml::ImplResolver::new(self)
+                        let resolver = crate::package_baml::ImplResolver::for_value(self, receiver);
+                        let (rule, bound_args) = resolver
                             .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
                             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
@@ -7563,8 +7656,7 @@ impl BexVm {
                                 method: method_name.clone(),
                             }
                         })?;
-                        let mut frame = crate::package_baml::ImplResolver::new(self)
-                            .realize_frame(&method.frame, &bound_args)?;
+                        let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
                         frame.extend(method_type_args.tys);
                         (method.fqn, frame)
                     };

@@ -88,6 +88,11 @@ class InvalidArgumentError {
 class Package {
   _inner unknown
 
+  /// The package lexically enclosing this call site.
+  function current() -> Package throws never {
+    $compiler_intrinsic
+  }
+
   function compile(files: map<string, string>, packages: map<string, Package> = {}) -> Package throws unknown {
     let artifact = Package._compile(files, packages)
     Package._finish(artifact, packages)
@@ -108,8 +113,34 @@ class Package {
     $rust_function
   }
 
+  /// Return a derived package view that exports exact runtime type values
+  /// under source-visible names for subsequent Package.compile calls.
+  //baml:mut_vm
+  function with_types(self, types: map<string, type | baml.reflect.TypeView>) -> Package throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
+
+  /// Extract an exported function through an ordinary function-type contract.
+  //baml:mut_vm
+  function get_function<F>(self, name: string) -> F? throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
+
   //baml:mut_vm
   function classes(self) -> map<string, baml.reflect.class.Type> throws never {
+    $rust_function
+  }
+
+  /// Exported free-function signatures, keyed by package-local name.
+  //baml:mut_vm
+  function functions(self) -> map<string, baml.reflect.function.Type> throws never {
+    $rust_function
+  }
+
+  /// Bundled tests as directly invocable zero-argument callables.
+  //baml:mut_vm
+  //baml:may_yield
+  function tests(self) -> map<string, () -> null throws unknown> throws unknown {
     $rust_function
   }
 

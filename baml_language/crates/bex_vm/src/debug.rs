@@ -125,7 +125,7 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::LoadConst(index) => {
+        Instruction::LoadConst(index) | Instruction::LoadCurrentPackage(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))
@@ -263,7 +263,8 @@ pub(crate) fn display_instruction(
         | Instruction::SendEvent
         | Instruction::ContainerLen
         | Instruction::Spawn
-        | Instruction::LoadType(_) => String::new(),
+        | Instruction::LoadType(_)
+        | Instruction::BindType(_) => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -366,6 +367,7 @@ const COLUMN_MARGIN: usize = 3;
 fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
         Instruction::LoadConst(_)
+        | Instruction::LoadCurrentPackage(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadVar2(..)
         | Instruction::LoadGlobal(_)
@@ -440,6 +442,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::IsType(_)
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
+        | Instruction::BindType(_)
         | Instruction::ThrowIfPanic => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
@@ -942,6 +945,11 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("load_type {name}")
         }
+        Instruction::BindType(slot) => format!("bind_type {slot}"),
+        Instruction::LoadCurrentPackage(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("load_current_package {name}")
+        }
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode
@@ -1355,6 +1363,8 @@ pub fn display_compact_bytecode(
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
+            | OpCode::BindType
+            | OpCode::LoadCurrentPackage
             | OpCode::MakeBoundMethod
             | OpCode::LoadDeref
             | OpCode::StoreDeref

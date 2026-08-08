@@ -2196,9 +2196,14 @@ function baml.reflect.classes(self: ?) -> map<string, baml.reflect.class.Type>  
 function baml.reflect.compile(files: map<string, string>, packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Package  [expr] {
   { let artifact = Package._compile(files, packages) } Package._finish(artifact, packages)
 }
+function baml.reflect.current() -> baml.reflect.Package  [builtin]
 function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
+function baml.reflect.functions(self: ?) -> map<string, baml.reflect.function.Type>  [builtin]
 function baml.reflect.get_class(self: ?, name: string) -> baml.reflect.class.Type?  [builtin]
+function baml.reflect.get_function(self: ?, name: string) -> F?  [builtin]
 function baml.reflect.signature(f: baml.AnyFunction) -> baml.reflect.Signature  [builtin]
+function baml.reflect.tests(self: ?) -> map<string, () -> null throws unknown>  [builtin]
+function baml.reflect.with_types(self: ?, types: map<string, type | baml.reflect.TypeView>) -> baml.reflect.Package  [builtin]
 
 --- <builtin>/baml/ns_sap/sap.baml ---
 function baml.sap.parse(text: string) -> T  [expr] {

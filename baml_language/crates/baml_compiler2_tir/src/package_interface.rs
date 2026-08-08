@@ -504,7 +504,23 @@ pub fn mounted_type_row<'db>(
     db: &'db dyn crate::Db,
     qtn: &QualifiedTypeName,
 ) -> Option<&'db ExportedType> {
-    mounted_interface(db, qtn.package())?.lookup_type(qtn.namespace(), qtn.name())
+    if let Some(row) = mounted_interface(db, qtn.package())
+        .and_then(|iface| iface.lookup_type(qtn.namespace(), qtn.name()))
+    {
+        return Some(row);
+    }
+    // Runtime-minted names intentionally retain their internal `user.$dyn…`
+    // identity even when a derived package view is mounted under an arbitrary
+    // dependency alias. Search mounted blobs by that hidden identity rather
+    // than rewriting the qtn (which would break runtime object identity).
+    qtn.is_runtime_minted().then(|| {
+        baml_compiler2_hir::package::mounted_package_names(db)
+            .into_iter()
+            .find_map(|package| {
+                mounted_interface(db, &package)
+                    .and_then(|iface| iface.lookup_type(qtn.namespace(), qtn.name()))
+            })
+    })?
 }
 
 impl ExportedType {

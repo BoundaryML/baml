@@ -34,11 +34,36 @@ use crate::{BexVm, type_context::StructuralEquivCtx};
 #[derive(Clone, Copy)]
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
+    root_package: Option<bex_vm_types::HeapPtr>,
 }
 
 impl<'vm> ImplResolver<'vm> {
     pub(crate) fn new(vm: &'vm BexVm) -> Self {
-        Self { vm }
+        Self {
+            vm,
+            root_package: None,
+        }
+    }
+
+    /// Resolve using an explicitly selected runtime package as the dynamic
+    /// world root. Reflection needs this when checking a package value from
+    /// code lexically owned by a different package.
+    pub(crate) fn for_package(vm: &'vm BexVm, package: bex_vm_types::HeapPtr) -> Self {
+        Self {
+            vm,
+            root_package: Some(package),
+        }
+    }
+
+    /// Resolve in the dynamic world that owns `value`, falling back to the
+    /// lexical frame's world for static values and primitives.
+    pub(crate) fn for_value(vm: &'vm BexVm, value: bex_vm_types::Value) -> Self {
+        let package = vm.value_runtime_package(value);
+        if package.is_null() {
+            Self::new(vm)
+        } else {
+            Self::for_package(vm, package)
+        }
     }
 
     /// Every impl rule of `iface` in the program, in package-load order.
@@ -54,7 +79,10 @@ impl<'vm> ImplResolver<'vm> {
         };
         let mut pointers = Vec::new();
         pointers.extend(self.vm.packages.impl_rules_of(iface_ptr));
-        let mut packages = vec![self.vm.current_runtime_package()];
+        let mut packages = vec![
+            self.root_package
+                .unwrap_or_else(|| self.vm.current_runtime_package()),
+        ];
         let mut seen = std::collections::HashSet::new();
         while let Some(package_ptr) = packages.pop() {
             if package_ptr.is_null() || !seen.insert(package_ptr) {

@@ -1087,6 +1087,12 @@ impl CallArg {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Expr(ExprId),
+    /// Evaluate a runtime `type` value once and bind its exact identity to a
+    /// lexical type parameter for the remainder of the enclosing block.
+    TypeBinding {
+        name: Name,
+        value: ExprId,
+    },
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
         /// as the bind's sub-pattern slot, not as a separate field on

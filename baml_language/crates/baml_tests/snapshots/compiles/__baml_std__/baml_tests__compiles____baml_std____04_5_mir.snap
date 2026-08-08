@@ -9189,6 +9189,8 @@ fn baml.reflect.union.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.union.Type.member_types = builtin(vm)
 
+fn baml.reflect.Package.current = builtin(intrinsic)
+
 fn baml.reflect.Package.compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
     // Locals:
     let _0: baml.reflect.Package // _0 // return
@@ -9228,7 +9230,15 @@ fn baml.reflect.Package._finish = builtin(vm)
 
 fn baml.reflect.Package.get_class = builtin(vm)
 
+fn baml.reflect.Package.with_types = builtin(vm)
+
+fn baml.reflect.Package.get_function = builtin(vm)
+
 fn baml.reflect.Package.classes = builtin(vm)
+
+fn baml.reflect.Package.functions = builtin(vm)
+
+fn baml.reflect.Package.tests = builtin(vm)
 
 fn baml.reflect.Package.diagnostics = builtin(vm)
 
