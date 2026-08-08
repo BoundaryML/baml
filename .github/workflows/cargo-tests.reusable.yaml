@@ -1371,6 +1371,17 @@ jobs:
         run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
         working-directory: baml_language
 
+      # TEMPORARY (BEP-066 diagnosis): the anyfunction_reflect formatter
+      # snapshot fails on CI only, with identical code, input, and snapshot
+      # bytes. Rerun it with plain cargo test so insta's full expected/actual
+      # diff reaches the log. Remove once diagnosed.
+      - name: "Debug formatter snapshot (temporary)"
+        if: failure()
+        run: |
+          cargo test -p baml_tests --all-features test_10_formatter_main -- --nocapture 2>&1 | tail -200 || true
+          sha256sum crates/baml_tests/projects/compiles/anyfunction_reflect/baml_src/main.baml crates/baml_tests/snapshots/compiles/anyfunction_reflect/baml_tests__compiles__anyfunction_reflect__10_formatter__main.snap || true
+        working-directory: baml_language
+
       - name: "Check for snapshot changes"
         run: |
           pathspecs=(
