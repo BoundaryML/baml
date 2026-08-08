@@ -6289,7 +6289,7 @@ impl BexEngine {
         Ok(bex_vm_types::RuntimeCompileRequest {
             files: IndexMap::new(),
             packages,
-            mode: bex_vm_types::RuntimeCompileMode::Session(session),
+            mode: bex_vm_types::RuntimeCompileMode::Session(Box::new(session)),
         })
     }
 

@@ -156,16 +156,11 @@ impl Drop for SessionEvalLeaseInner {
 }
 
 /// Which runtime compilation door created a request.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum RuntimeCompileMode {
+    #[default]
     Package,
-    Session(RuntimeSessionCompileRequest),
-}
-
-impl Default for RuntimeCompileMode {
-    fn default() -> Self {
-        Self::Package
-    }
+    Session(Box<RuntimeSessionCompileRequest>),
 }
 
 /// One isolated `reflect.Package.compile` request.

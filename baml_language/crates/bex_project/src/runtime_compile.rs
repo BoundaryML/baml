@@ -3,6 +3,7 @@
 
 use std::{
     collections::{BTreeMap, HashSet},
+    fmt::Write as _,
     path::Path,
     sync::Arc,
 };
@@ -377,7 +378,7 @@ fn runtime_type_binding_parts(source: &str) -> Option<(String, &str)> {
         .find(|token| token.kind == TokenKind::RParen)?;
     let start = usize::from(open.span.range.end());
     let end = usize::from(close.span.range.start());
-    (start <= end).then(|| (name.text.to_string(), source[start..end].trim()))
+    (start <= end).then(|| (name.text.clone(), source[start..end].trim()))
 }
 
 fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol>) -> String {
@@ -386,10 +387,11 @@ fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol
         if symbol.kind == SessionVisibleKind::TypeBinding
             && let Some(type_value) = &symbol.type_value
         {
-            prelude.push_str(&format!(
-                "type {} = unreflect({type_value});\n",
+            let _ = writeln!(
+                prelude,
+                "type {} = unreflect({type_value});",
                 symbol.internal
-            ));
+            );
         }
     }
     prelude
@@ -397,7 +399,7 @@ fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol
 
 fn locally_bound_names(
     node: &SyntaxNode,
-    outer_let: Option<std::ops::Range<usize>>,
+    outer_let: Option<&std::ops::Range<usize>>,
 ) -> HashSet<String> {
     let mut names = HashSet::new();
     for local in node
@@ -406,7 +408,7 @@ fn locally_bound_names(
     {
         if local.kind() == SyntaxKind::LET_STMT {
             if let Some((name, range)) = first_pattern_name(&local)
-                && outer_let.as_ref() != Some(&range)
+                && outer_let != Some(&range)
             {
                 names.insert(name);
             }
@@ -579,9 +581,8 @@ struct LoweredSession {
 fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
     let package_id = PackageId::new(db, Name::new("user"));
     let package_items = baml_compiler2_hir::package::package_items(db, package_id);
-    let let_loc = match package_items.lookup_value(&[], &Name::new(name))? {
-        Definition::Let(let_loc) => let_loc,
-        _ => return None,
+    let Definition::Let(let_loc) = package_items.lookup_value(&[], &Name::new(name))? else {
+        return None;
     };
     let scope = baml_compiler2_ppir::item_data::let_scope(db, let_loc)?;
     let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope);
@@ -662,13 +663,14 @@ fn lower_session_submission(
         let fragment = &request.source[range.clone()];
         let forced = declaration_name_ranges
             .iter()
-            .filter_map(|(name_range, replacement)| {
-                (name_range.start >= range.start && name_range.end <= range.end).then(|| {
-                    (
-                        name_range.start - range.start..name_range.end - range.start,
-                        replacement.clone(),
-                    )
-                })
+            .filter(|(name_range, _)| {
+                name_range.start >= range.start && name_range.end <= range.end
+            })
+            .map(|(name_range, replacement)| {
+                (
+                    name_range.start - range.start..name_range.end - range.start,
+                    replacement.clone(),
+                )
             })
             .collect::<IndexMap<_, _>>();
         let skipped = structural_name_ranges(node)
@@ -799,7 +801,7 @@ fn lower_session_submission(
             .then(|| node.and_then(first_pattern_name))
             .flatten();
         let local_names = node.map_or_else(HashSet::new, |node| {
-            locally_bound_names(node, outer_binding.as_ref().map(|(_, range)| range.clone()))
+            locally_bound_names(node, outer_binding.as_ref().map(|(_, range)| range))
         });
         let prelude = runtime_type_binding_prelude(&active_type_bindings);
         let (generated_name, step_source, commit_global, binding) = if is_type_binding {
@@ -852,7 +854,7 @@ fn lower_session_submission(
                 .flatten()
                 .and_then(|(target, operator, rhs)| {
                     let symbol = request.visible.get(target)?;
-                    (symbol.kind == SessionVisibleKind::Let).then(|| (symbol, operator, rhs))
+                    (symbol.kind == SessionVisibleKind::Let).then_some((symbol, operator, rhs))
                 });
             let (source, commit_global) = if let Some((target, operator, rhs)) = assignment {
                 let rhs = rewrite_identifiers(
@@ -952,7 +954,7 @@ fn lower_session_submission(
 /// contains every historical helper; retaining that tail would make Session
 /// runtime growth quadratic and would rerun old initializers.
 fn prune_session_init_tail(
-    tail: InitTail,
+    tail: &InitTail,
     submission_name: &str,
 ) -> Result<(InitTail, Vec<RuntimeSessionInitializer>), String> {
     let old_object_count = tail.objects.len();
@@ -1167,6 +1169,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         let (files, mut session_artifact, result_contract, session_lease) = match mode {
             RuntimeCompileMode::Package => (files, None, None, None),
             RuntimeCompileMode::Session(session) => {
+                let session = *session;
                 let lowered = lower_session_submission(&session)?;
                 let mut files = session.history.clone();
                 files.insert(session.submission_name.clone(), lowered.source);
@@ -1278,7 +1281,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             let mut initializers = Vec::new();
             for unit in &mut units {
                 if let Some(tail) = unit.init_tail.take() {
-                    let (tail, retained) = prune_session_init_tail(tail, &session.submission_name)
+                    let (tail, retained) = prune_session_init_tail(&tail, &session.submission_name)
                         .map_err(|message| {
                             vec![RuntimeCompileDiagnostic {
                                 code: "E_RUNTIME_SESSION_INIT".to_string(),
