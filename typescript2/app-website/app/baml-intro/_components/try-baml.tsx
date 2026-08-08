@@ -570,10 +570,12 @@ export function TryBaml({ compact = false }: { compact?: boolean } = {}) {
     'baml init',
     'baml agent install',
     'baml run main',
-    ...envLines.filter((l) => l.cmd).map((l) => l.cmd),
     ...(compact
       ? []
-      : bridgeLines(bridgeOpt).flatMap((l) => (l.cmd ? [l.cmd] : []))),
+      : [
+          ...envLines.filter((l) => l.cmd).map((l) => l.cmd),
+          ...bridgeLines(bridgeOpt).flatMap((l) => (l.cmd ? [l.cmd] : [])),
+        ]),
   ].join('\n');
   const promptText = PROMPT.replace(/`/g, '');
   const headText = tab === 'humans' ? humansText : promptText;

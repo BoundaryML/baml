@@ -12,7 +12,7 @@ import { type ReactNode, useCallback, useState } from 'react';
 import { DiscordCta } from '@/components/discord-cta';
 import { Navbar } from '@/components/navbar';
 import { BamlCode } from '../../learn2/_components/BamlCode';
-import BamlEditor from '../../learn2/_components/baml-editor-lazy';
+import BamlEditor from '@/app/learn2/_components/baml-editor-lazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
 import {
   CODE_THEMES,
