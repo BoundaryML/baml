@@ -199,7 +199,8 @@ fn build_interface_def(
                         bounds: &TypeVarBoundsMap,
                         params: &[FunctionParamData],
                         return_type: Option<TypeRefId>,
-                        throws: Option<TypeRefId>|
+                        throws: Option<TypeRefId>,
+                        default_fqn: Option<String>|
      -> InterfaceMethodDef {
         // An untyped parameter is a syntax-level error, so it cannot reach emit; the
         // top type keeps the positional layout intact if one ever did.
@@ -230,6 +231,7 @@ fn build_interface_def(
             kwargs,
             returns: return_type.map_or_else(void, |id| lower_rt(store, id, scope, bounds)),
             errors: throws.map_or_else(void, |id| lower_rt(store, id, scope, bounds)),
+            default_fqn,
         }
     };
 
@@ -287,6 +289,7 @@ fn build_interface_def(
                 &m.params,
                 m.return_type,
                 m.throws,
+                None,
             )
         })
         .collect();
@@ -309,6 +312,7 @@ fn build_interface_def(
             &f.params,
             f.return_type,
             f.throws,
+            Some(def_to_item_ref(db, Definition::Function(loc)).to_string()),
         )
     }));
 
@@ -351,12 +355,16 @@ type IfaceAssocDecls = (
 /// blob regardless of the codegen schedule.
 struct PackageExportArtifact {
     interface_blob: Vec<u8>,
+    exported_names: Vec<bex_vm_types::types::LocalName>,
     functions: Vec<(bex_vm_types::types::LocalName, String)>,
 }
 
-struct PackageBuildMaps<'a> {
-    exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
-    packages: &'a mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+/// Read-only whole-project facts consumed while assembling runtime packages.
+struct PackageBuildMetadata<'a> {
+    /// Field-name → slot for each emitted class, keyed by rendered FQN.
+    class_field_indices: &'a HashMap<String, HashMap<String, usize>>,
+    /// Typed source-less export artifacts captured before parallel codegen.
+    package_exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
 }
 
 fn capture_package_exports(
@@ -373,8 +381,19 @@ fn capture_package_exports(
             let package_id = PackageId::new(db, package_name.clone());
             let interface =
                 baml_compiler2_tir::package_interface::package_interface(db, package_id);
-            let interface_blob = borsh::to_vec(interface)
-                .expect("PackageInterface serialization into Vec is infallible");
+            // Every runtime compiler already owns the exact same stdlib source,
+            // and reserved packages cannot be mounted over it. Only packages
+            // that can cross the source-less dependency boundary need to carry
+            // an interface blob in the executable image. Besides avoiding
+            // redundant payload, this keeps body-inference cycle recovery in a
+            // stdlib method from becoming observable program data.
+            let interface_blob =
+                if baml_builtins2::stdlib_package_names().contains(&package_name.as_str()) {
+                    Vec::new()
+                } else {
+                    borsh::to_vec(interface)
+                        .expect("PackageInterface serialization into Vec is infallible")
+                };
             let mut functions = interface
                 .functions
                 .iter()
@@ -391,10 +410,24 @@ fn capture_package_exports(
                 })
                 .collect::<Vec<_>>();
             functions.sort_by(|(left, _), (right, _)| left.cmp(right));
+            let mut exported_names = interface
+                .types
+                .iter()
+                .flat_map(|(namespace, types)| {
+                    types.keys().map(|name| bex_vm_types::types::LocalName {
+                        namespace: namespace.clone(),
+                        name: name.clone(),
+                    })
+                })
+                .chain(functions.iter().map(|(name, _)| name.clone()))
+                .collect::<Vec<_>>();
+            exported_names.sort();
+            exported_names.dedup();
             (
                 package_name,
                 PackageExportArtifact {
                     interface_blob,
+                    exported_names,
                     functions,
                 },
             )
@@ -408,12 +441,8 @@ fn build_packages(
     alias_caches: &HashMap<Name, ResolvedAliases>,
     function_indices: &HashMap<String, usize>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
-    // Field-name → slot for every emitted class, keyed by rendered fully-qualified
-    // name. This is the *same* map the class pass built `Class::fields` from, threaded
-    // in rather than recomputed: a second derivation of the layout that drifted would
-    // make every virtual field access read the wrong slot, silently.
-    class_field_indices: &HashMap<String, HashMap<String, usize>>,
-    package_maps: PackageBuildMaps<'_>,
+    metadata: &PackageBuildMetadata<'_>,
+    program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_ppir::item_data::{AssociatedTypeBindingData, ImplSubjectData};
@@ -457,10 +486,11 @@ fn build_packages(
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
 
-    let PackageBuildMaps {
-        exports: package_exports,
-        packages: program_packages,
-    } = package_maps;
+    // These are the same class layout and pre-codegen exports already computed
+    // by their authoritative passes. Recomputing either here could silently
+    // drift virtual field slots or persisted package data.
+    let class_field_indices = metadata.class_field_indices;
+    let package_exports = metadata.package_exports;
 
     // Resolve a function FQN to its emitted object index. `function_indices` holds
     // every function except `$compiler_intrinsic` / `$await_any` bodies, which
@@ -1178,6 +1208,7 @@ fn build_packages(
     for (package_name, exports) in package_exports {
         let package = program_packages.entry(package_name.clone()).or_default();
         package.interface_blob.clone_from(&exports.interface_blob);
+        package.exported_names.clone_from(&exports.exported_names);
         package.functions.clear();
         for (local_name, callable_fqn) in &exports.functions {
             let Some(&index) = function_indices.get(callable_fqn) else {
@@ -2613,6 +2644,7 @@ fn build_package_fragment(
         }
     };
     let mut frag = ProgramPackageFrag::default();
+    frag.exported_names.clone_from(&pkg.exported_names);
     for (local, &idx) in &pkg.classes {
         frag.classes.push((local.clone(), obj_fq(idx)?));
     }
@@ -2998,11 +3030,11 @@ fn generate_impl(
         &alias_caches,
         &program.function_indices,
         &tables.interface_object_indices,
-        &tables.classes,
-        PackageBuildMaps {
-            exports: &package_exports,
-            packages: &mut tables.program_packages,
+        &PackageBuildMetadata {
+            class_field_indices: &tables.classes,
+            package_exports: &package_exports,
         },
+        &mut tables.program_packages,
     );
     // A MOUNTED (source-less) package contributes no files to this database,
     // so `build_packages` cannot rebuild its impl rules or recursive aliases
@@ -3018,6 +3050,7 @@ fn generate_impl(
             match tables.program_packages.get_mut(&pkg_name) {
                 Some(pkg) => {
                     pkg.functions.clone_from(&base_pkg.functions);
+                    pkg.exported_names.clone_from(&base_pkg.exported_names);
                     pkg.interface_blob.clone_from(&base_pkg.interface_blob);
                     pkg.test_init = base_pkg.test_init;
                     pkg.impl_rules.clone_from(&base_pkg.impl_rules);
@@ -4084,6 +4117,7 @@ fn emit_file_group(
                 }], // type not needed for chainer dispatch
                 param_has_default: vec![false],
                 display_type_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
                 throws_type: baml_type::TyTemplate::Never {
@@ -4215,6 +4249,20 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
     f.docstring.clone_from(&sig.docstring);
     f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
+    f.generic_param_bounds = sig
+        .generic_param_bounds
+        .iter()
+        .map(|bounds| {
+            bounds
+                .iter()
+                .map(|bound| bex_vm_types::types::InterfaceBound {
+                    interface: bound.interface.clone(),
+                    args: bound.args.clone(),
+                    assoc: bound.assoc.clone(),
+                })
+                .collect()
+        })
+        .collect();
     f.display_param_types.clone_from(&sig.display_param_types);
     f.display_return_type.clone_from(&sig.display_return_type);
 }
@@ -4696,6 +4744,32 @@ fn compute_function_metadata<'db>(
         (null_template(), "null".to_string())
     };
 
+    let runtime_generic_param_bounds = frame_params
+        .iter()
+        .map(|param| {
+            generic_param_bounds
+                .get(param.name())
+                .into_iter()
+                .flatten()
+                .filter_map(|bound| {
+                    let Ty::Interface(interface, args, assoc, _) = bound else {
+                        // Declaration validation already rejects non-interface
+                        // bounds. Keep malformed recovery metadata inert.
+                        return None;
+                    };
+                    Some(baml_compiler2_mir::RuntimeInterfaceBound {
+                        interface: interface.clone(),
+                        args: args.iter().map(&to_template).collect(),
+                        assoc: assoc
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), to_template(ty)))
+                            .collect(),
+                    })
+                })
+                .collect()
+        })
+        .collect();
+
     baml_compiler2_mir::RuntimeSignature {
         param_names,
         param_types,
@@ -4707,6 +4781,7 @@ fn compute_function_metadata<'db>(
         docstring: func.docstring.clone(),
         name: Some(func.name.to_string()),
         display_type_params,
+        generic_param_bounds: runtime_generic_param_bounds,
         display_param_types,
         display_return_type,
     }
@@ -5656,6 +5731,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
         throws_type: baml_type::TyTemplate::Never {
@@ -5968,6 +6044,7 @@ fn compile_init_function<'db>(
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
                     display_type_params: Vec::new(),
+                    generic_param_bounds: Vec::new(),
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
                     throws_type: baml_type::TyTemplate::Never {
@@ -6046,6 +6123,7 @@ fn compile_init_function<'db>(
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
         throws_type: baml_type::TyTemplate::Never {

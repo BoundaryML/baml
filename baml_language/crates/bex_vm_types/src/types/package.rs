@@ -19,6 +19,9 @@ pub struct LocalName {
 /// Contains lookups for named items defined in the package.
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Package {
+    /// Every source-visible exported declaration name, including aliases that
+    /// have no heap object of their own.
+    pub exported_names: Vec<LocalName>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
@@ -39,6 +42,9 @@ pub struct Package {
     pub interface_blob: Vec<u8>,
     /// Compiler-synthesized test registrar for this package, when it has tests.
     pub test_init: Option<HeapPtr>,
+    /// Exact runtime type values attached by `Package.with_types`.
+    #[borsh(skip)]
+    pub mounted_types: IndexMap<String, HeapPtr>,
     /// Present only for a package produced by `reflect.Package.compile`.
     #[borsh(skip)]
     pub runtime: Option<Box<RuntimePackage>>,
@@ -103,6 +109,7 @@ impl RuntimePackage {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
+    pub exported_names: Vec<LocalName>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
     pub interfaces: IndexMap<LocalName, ObjectIndex>,
@@ -133,6 +140,8 @@ impl ProgramPackage {
     /// The full-compile emit and the incremental linker both apply this so their
     /// `Program`s stay byte-identical.
     pub fn sort_maps(&mut self) {
+        self.exported_names.sort();
+        self.exported_names.dedup();
         self.classes.sort_keys();
         self.enums.sort_keys();
         self.recursive_type_aliases.sort_keys();

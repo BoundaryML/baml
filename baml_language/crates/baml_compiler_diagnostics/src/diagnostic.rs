@@ -379,6 +379,9 @@ pub enum DiagnosticId {
     /// A runtime reflection union constructor received no members. Static
     /// source cannot spell this defect, so BEP-066 reserves a surface code.
     RuntimeEmptyUnion,
+
+    /// An interface-typed occurrence reached an LLM output schema renderer.
+    OpenInterfaceAtRender,
 }
 
 impl DiagnosticId {
@@ -574,6 +577,7 @@ impl DiagnosticId {
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::RuntimeEmptyUnion => "E0160",
+            DiagnosticId::OpenInterfaceAtRender => "E0161",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 

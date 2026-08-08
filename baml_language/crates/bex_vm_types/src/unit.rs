@@ -121,6 +121,8 @@ pub struct ExportTable {
 /// emit order the `IndexMap`s in `ProgramPackage` require.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackageFrag {
+    /// All source-visible declaration names (types, aliases, and values).
+    pub exported_names: Vec<LocalName>,
     /// Local class name to fully-qualified class name (resolved to `ObjectIndex`
     /// at link).
     pub classes: Vec<(LocalName, String)>,

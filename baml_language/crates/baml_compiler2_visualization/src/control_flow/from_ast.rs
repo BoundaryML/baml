@@ -253,6 +253,9 @@ impl<'a> AstGraphBuilder<'a> {
             ast::Stmt::Expr(expr_id) => {
                 self.visit_expr(*expr_id);
             }
+            ast::Stmt::TypeBinding { value, .. } => {
+                self.visit_expr(*value);
+            }
             ast::Stmt::Throw { value } => {
                 self.visit_expr(*value);
             }
@@ -1021,6 +1024,9 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
 fn collect_callee_names_stmt(body: &ast::ExprBody, id: ast::StmtId, names: &mut Vec<String>) {
     match &body.stmts[id] {
         ast::Stmt::Expr(expr) => collect_callee_names_expr(body, *expr, names),
+        ast::Stmt::TypeBinding { value, .. } => {
+            collect_callee_names_expr(body, *value, names);
+        }
         ast::Stmt::Defer { body: defer_body } => {
             collect_callee_names_expr(body, *defer_body, names);
         }

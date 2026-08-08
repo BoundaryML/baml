@@ -187,6 +187,7 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
+                IntrinsicOp::BindType(slot) => return write!(f, "bind_type({slot}, {args:?});"),
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -269,6 +270,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             destination,
             target,
             unwind,
+            ..
         } => {
             write!(f, "{destination} = call ")?;
             write_operand(f, callee)?;
@@ -307,6 +309,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             destination,
             target,
             unwind,
+            ..
         } => {
             write!(f, "{destination} = virtual_call {method} as {iface}")?;
             if *ntypeargs > 0 {
@@ -715,6 +718,7 @@ mod tests {
             callee: local_copy(1),
             args: Vec::new(),
             ntypeargs: 0,
+            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),
@@ -738,6 +742,7 @@ mod tests {
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
+            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),

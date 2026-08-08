@@ -9,3 +9,24 @@ class Type {
   //baml:mut_vm
   function implementors(self) -> type[] throws never { $rust_function }
 }
+
+/// An immutable structural-conformance witness.  Values are created only by
+/// `implementation<I>()`; each `field` call returns a new witness.
+class Implementation {
+  _handle $rust_type
+
+  //baml:mut_vm
+  function field(
+    self,
+    interface_field: string,
+    class_field: string? = null,
+  ) -> Implementation throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
+}
+
+/// Start a structural witness for a static interface.
+//baml:mut_vm
+function implementation<I>() -> Implementation throws baml.reflect.errors.CompilationError {
+  $rust_function
+}

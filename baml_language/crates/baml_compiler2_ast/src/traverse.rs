@@ -170,7 +170,10 @@ impl ExprBody {
     pub fn stmt_children(&self, id: StmtId, out: &mut Vec<BodyNode>) {
         match &self.stmts[id] {
             Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-            Stmt::Expr(expr) | Stmt::Throw { value: expr } | Stmt::Defer { body: expr } => {
+            Stmt::Expr(expr)
+            | Stmt::TypeBinding { value: expr, .. }
+            | Stmt::Throw { value: expr }
+            | Stmt::Defer { body: expr } => {
                 out.push(BodyNode::Expr(*expr));
             }
             Stmt::Return(expr) => out.extend(expr.map(BodyNode::Expr)),

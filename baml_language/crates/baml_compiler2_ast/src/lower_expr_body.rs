@@ -718,6 +718,7 @@ impl LoweringContext {
                 BlockElement::Stmt(node) => {
                     let stmt_id = match node.kind() {
                         SyntaxKind::LET_STMT => self.lower_let_stmt(node),
+                        SyntaxKind::TYPE_BINDING_STMT => self.lower_type_binding_stmt(node),
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
@@ -4651,6 +4652,79 @@ impl LoweringContext {
     fn lower_return_stmt(&mut self, node: &SyntaxNode) -> StmtId {
         let expr = self.lower_optional_return_value(node);
         self.alloc_stmt(Stmt::Return(expr), node.span_range())
+    }
+
+    fn lower_type_binding_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        let name = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+            .map(|token| Name::new(token.text()))
+            .unwrap_or_else(|| Name::new("<missing>"));
+        // The operand may have direct-token path heads and structural postfix
+        // children (`type.of<T>()` has a GENERIC_ARGS sibling before its call),
+        // so selecting the first arbitrary child is not expression-safe.
+        let value = node
+            .children()
+            .find(|child| {
+                matches!(
+                    child.kind(),
+                    SyntaxKind::BINARY_EXPR
+                        | SyntaxKind::IS_EXPR
+                        | SyntaxKind::UNARY_EXPR
+                        | SyntaxKind::CALL_EXPR
+                        | SyntaxKind::IF_EXPR
+                        | SyntaxKind::IF_LET_EXPR
+                        | SyntaxKind::MATCH_EXPR
+                        | SyntaxKind::CATCH_EXPR
+                        | SyntaxKind::THROW_EXPR
+                        | SyntaxKind::RETURN_EXPR
+                        | SyntaxKind::BLOCK_EXPR
+                        | SyntaxKind::PATH_EXPR
+                        | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
+                        | SyntaxKind::ENV_ACCESS_EXPR
+                        | SyntaxKind::INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_CALL_EXPR
+                        | SyntaxKind::TAGGED_TEMPLATE_EXPR
+                        | SyntaxKind::PAREN_EXPR
+                        | SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::BACKTICK_STRING_LITERAL
+                        | SyntaxKind::BYTE_STRING_LITERAL
+                        | SyntaxKind::ARRAY_LITERAL
+                        | SyntaxKind::OBJECT_LITERAL
+                        | SyntaxKind::MAP_LITERAL
+                        | SyntaxKind::LAMBDA_EXPR
+                        | SyntaxKind::SPAWN_EXPR
+                        | SyntaxKind::AWAIT_EXPR
+                )
+            })
+            .map(|child| self.lower_expr(&child))
+            .or_else(|| {
+                let mut inside_operand = false;
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find_map(|token| {
+                        if !inside_operand {
+                            inside_operand = token.text() == "unreflect";
+                            return None;
+                        }
+                        if token.kind().is_trivia()
+                            || matches!(
+                                token.kind(),
+                                SyntaxKind::L_PAREN | SyntaxKind::R_PAREN | SyntaxKind::SEMICOLON
+                            )
+                        {
+                            return None;
+                        }
+                        self.try_lower_bare_token(&token)
+                    })
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
     }
 
     /// Lower the optional value of a `return` node — shared by `RETURN_STMT`

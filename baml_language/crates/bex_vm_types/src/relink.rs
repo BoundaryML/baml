@@ -88,6 +88,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::IsType(..)
             | I::NarrowBind { .. }
             | I::LoadType(..)
+            | I::BindType(..)
             | I::DenseTag(..) => bakes_type_layout = true,
             // ── no cross-function references ─────────────────────────────
             I::LoadConst(..)
@@ -318,6 +319,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
             throws_type: baml_type::TyTemplate::Never {

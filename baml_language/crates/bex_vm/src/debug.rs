@@ -263,7 +263,8 @@ pub(crate) fn display_instruction(
         | Instruction::SendEvent
         | Instruction::ContainerLen
         | Instruction::Spawn
-        | Instruction::LoadType(_) => String::new(),
+        | Instruction::LoadType(_)
+        | Instruction::BindType(_) => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -441,6 +442,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::IsType(_)
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
+        | Instruction::BindType(_)
         | Instruction::ThrowIfPanic => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
@@ -943,6 +945,7 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("load_type {name}")
         }
+        Instruction::BindType(slot) => format!("bind_type {slot}"),
         Instruction::LoadCurrentPackage(const_idx) => {
             let name = meta_str(const_idx);
             format!("load_current_package {name}")
@@ -1360,6 +1363,7 @@ pub fn display_compact_bytecode(
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
+            | OpCode::BindType
             | OpCode::LoadCurrentPackage
             | OpCode::MakeBoundMethod
             | OpCode::LoadDeref

@@ -1091,7 +1091,8 @@ fn merge_package_fragment(
     frag: &ProgramPackageFrag,
     obj_by_name: &HashMap<String, usize>,
 ) -> Result<(), LinkError> {
-    if frag.classes.is_empty()
+    if frag.exported_names.is_empty()
+        && frag.classes.is_empty()
         && frag.enums.is_empty()
         && frag.interfaces.is_empty()
         && frag.functions.is_empty()
@@ -1114,6 +1115,8 @@ fn merge_package_fragment(
             .ok_or_else(|| LinkError::UnresolvedImport(fq.to_string()))
     };
     let pkg = program.packages.entry(package.clone()).or_default();
+    pkg.exported_names
+        .extend(frag.exported_names.iter().cloned());
     for (local, fq) in &frag.classes {
         let abs = resolve(fq)?;
         pkg.classes.insert(local.clone(), abs);
@@ -1218,6 +1221,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
             throws_type: baml_type::TyTemplate::Never {

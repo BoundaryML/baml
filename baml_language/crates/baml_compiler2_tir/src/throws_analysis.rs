@@ -229,7 +229,9 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
     out: &mut BTreeSet<Ty>,
 ) {
     match &body.stmts[stmt_id] {
-        Stmt::Expr(expr_id) => collect_from_expr(context, *expr_id, body, out),
+        Stmt::Expr(expr_id) | Stmt::TypeBinding { value: expr_id, .. } => {
+            collect_from_expr(context, *expr_id, body, out);
+        }
         Stmt::Let {
             initializer,
             else_branch,

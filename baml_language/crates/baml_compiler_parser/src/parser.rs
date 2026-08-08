@@ -384,6 +384,14 @@ impl<'a> Parser<'a> {
         Self::token_is_contextual_kw(self.peek(n), kw)
     }
 
+    /// `type` is contextual in expressions, so only claim statement position
+    /// for the complete binding head `type Name =`.
+    fn at_type_binding_stmt(&self) -> bool {
+        self.at_contextual_kw("type")
+            && self.peek(1).map(|token| token.kind) == Some(TokenKind::Word)
+            && self.peek(2).map(|token| token.kind) == Some(TokenKind::Equals)
+    }
+
     /// Consume the current contextual keyword token, re-labelling it as
     /// `syntax_kind` in the syntax tree. Handles leading trivia just like
     /// [`Self::bump`].
@@ -4631,6 +4639,8 @@ impl<'a> Parser<'a> {
 
         if self.at_binding_intro_stmt() {
             self.parse_let_stmt();
+        } else if self.at_type_binding_stmt() {
+            self.parse_type_binding_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
         } else if self.at(TokenKind::While) {
@@ -4668,6 +4678,27 @@ impl<'a> Parser<'a> {
             // Expression statement
             self.parse_expr_stmt();
         }
+    }
+
+    fn parse_type_binding_stmt(&mut self) {
+        self.with_node(SyntaxKind::TYPE_BINDING_STMT, |p| {
+            p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("type binding name".to_string());
+            }
+            p.expect(TokenKind::Equals);
+            if p.at_contextual_kw("unreflect") {
+                p.bump();
+            } else {
+                p.error_unexpected_token("'unreflect'".to_string());
+            }
+            p.expect(TokenKind::LParen);
+            p.parse_expr();
+            p.expect(TokenKind::RParen);
+            p.eat(TokenKind::Semicolon);
+        });
     }
 
     fn parse_let_stmt(&mut self) {
@@ -8323,12 +8354,28 @@ impl<'a> Parser<'a> {
             // Equals
             p.expect(TokenKind::Equals);
 
-            // Type definition
-            p.parse_type();
+            let runtime_binding = p.at_contextual_kw("unreflect")
+                && p.peek(1).map(|token| token.kind) == Some(TokenKind::LParen);
+            if runtime_binding {
+                p.error_here(
+                    "runtime type bindings are only allowed inside a function, lambda, or block"
+                        .to_string(),
+                );
+                // Consume the runtime operand as an expression so the explicit
+                // placement diagnostic does not cascade into unrelated
+                // top-level parse errors.
+                p.bump();
+                p.expect(TokenKind::LParen);
+                p.parse_expr();
+                p.expect(TokenKind::RParen);
+            } else {
+                // Type definition
+                p.parse_type();
 
-            // Optional attributes (not including those taken by the type)
-            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_at_attribute();
+                // Optional attributes (not including those taken by the type)
+                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                    p.parse_at_attribute();
+                }
             }
 
             // Optional semicolon
@@ -8572,9 +8619,8 @@ mod tests {
 
     /// BEP-066 K-13 (M-9): `type` as an expression path head. `type` is a
     /// contextual keyword, so in expression position `type.of<int>()` /
-    /// `type.of_value(x)` parse as ordinary member-call paths (a `Word` head);
-    /// no dedicated lookahead is needed because the type-alias form only
-    /// dispatches at the top level, where expressions cannot occur.
+    /// `type.of_value(x)` parse as ordinary member-call paths (a `Word` head).
+    /// Block statement dispatch uses the full `type Name =` lookahead.
     #[test]
     fn type_as_expression_path_head_parses() {
         let source = "function main() -> string {\n  let t = type.of<int>();\n  let u = type.of_value(1);\n  type.of<int[]>();\n  t.to_string()\n}\n";
@@ -8609,6 +8655,29 @@ mod tests {
             has_alias,
             "top-level `type X = ...` still parses as an alias"
         );
+    }
+
+    #[test]
+    fn scoped_runtime_type_binding_parses_as_a_statement() {
+        let source =
+            "function main(t: type) -> type {\n  type T = unreflect(t);\n  type.of<T>()\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT)
+        );
+    }
+
+    #[test]
+    fn top_level_runtime_type_binding_has_an_explicit_diagnostic() {
+        let source = "type T = unreflect(type.of<string>())\n";
+        let (_root, errors) = parse_source(source);
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ParseError::InvalidSyntax { message, .. }
+                if message.contains("runtime type bindings are only allowed inside")
+        )));
     }
 
     /// Parsing must stay lossless: the original source — shebang included —

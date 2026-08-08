@@ -107,6 +107,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
     fn alloc_cycle(heap: &Arc<BexHeap>) -> (Tlab, bex_vm_types::HeapPtr, bex_vm_types::HeapPtr) {
         let mut tlab = Tlab::new(Arc::clone(heap));
         let package = Package {
+            exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -115,6 +116,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             recursive_type_aliases: IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
+            mounted_types: IndexMap::new(),
             runtime: Some(Box::new(RuntimePackage {
                 objects: Box::new([]),
                 object_names: IndexMap::new(),

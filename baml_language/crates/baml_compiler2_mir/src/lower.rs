@@ -1576,6 +1576,9 @@ struct LoweringContext<'db> {
     // enclosing top-level function's (and class's) params, never a lambda's.
     lambda_generic_params: Vec<ParamTy>,
 
+    /// Lexical `type T = unreflect(value)` parameters currently visible.
+    runtime_type_binding_params: Vec<ParamTy>,
+
     // Capture map for the current lambda body.
     // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
     // Maps captured binding identity -> index into the closure's captures array.
@@ -2330,6 +2333,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
+            runtime_type_binding_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
@@ -2426,6 +2430,7 @@ impl<'db> LoweringContext<'db> {
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
+            runtime_type_binding_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
@@ -4520,6 +4525,7 @@ impl<'db> LoweringContext<'db> {
             // A lambda carries neither a docstring nor generic parameters.
             docstring: None,
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: sig_display_param_types,
             display_return_type: sig_display_return_type,
             param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),
@@ -5129,6 +5135,7 @@ impl LoweringContext<'_> {
         dest: Place,
     ) {
         let saved_locals = self.locals.clone();
+        let type_binding_scope_start = self.runtime_type_binding_params.len();
         let defer_depth = self.defer_stack.len();
 
         // BEP-042 Stage 2: a defer must also run when an exception propagates
@@ -5290,6 +5297,8 @@ impl LoweringContext<'_> {
 
         self.catch_context = block_incoming_catch;
         self.defer_stack.truncate(defer_depth);
+        self.runtime_type_binding_params
+            .truncate(type_binding_scope_start);
         self.restore_locals_after_scope(saved_locals);
     }
 
@@ -6917,6 +6926,7 @@ impl LoweringContext<'_> {
             method,
             vec![lhs_op, rhs_op],
             /* ntypeargs */ 0,
+            /* runtime_type_check */ false,
             /* runtime_id */ None,
             bool_ty,
             unwind,
@@ -8694,6 +8704,7 @@ impl<'db> LoweringContext<'db> {
             call_type_arg_operands
         };
         let ntypeargs = type_arg_operands.len();
+        let runtime_type_check = self.call_uses_unreflect_type_arg(expr_id);
 
         // Prepend type-arg operands before the value-arg operands.
         // (For regular BAML calls, type args are leading so the callee's frame
@@ -8705,6 +8716,14 @@ impl<'db> LoweringContext<'db> {
         } else {
             arg_operands.clone()
         };
+
+        // Lowering nested argument expressions temporarily installs their
+        // spans. The call terminator itself must always carry the enclosing
+        // call expression so runtime-native diagnostics point at `.field(...)`
+        // rather than at the final nested argument (for example `type.of<int>()`).
+        if let Some(span) = self.span_for_expr(expr_id) {
+            self.builder.current_source_span = Some(span);
+        }
 
         // BEP-034 `baml.future.__await_any(futures)` lowers to a dedicated
         // `Terminator::AwaitAny` suspend point (like `await`), not a call.
@@ -8786,10 +8805,11 @@ impl<'db> LoweringContext<'db> {
             match &dest {
                 Place::Local(_) => {
                     let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
-                    self.builder.call_with_type_args_and_runtime_id(
+                    self.builder.call_with_runtime_type_check(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
+                        runtime_type_check,
                         runtime_id_operand,
                         dest,
                         target,
@@ -8800,10 +8820,11 @@ impl<'db> LoweringContext<'db> {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
                     let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
-                    self.builder.call_with_type_args_and_runtime_id(
+                    self.builder.call_with_runtime_type_check(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
+                        runtime_type_check,
                         runtime_id_operand,
                         Place::local(tmp),
                         target,
@@ -9304,11 +9325,12 @@ impl LoweringContext<'_> {
     /// method calls prepend receiver class args, and interface dispatch seeds
     /// either static guard args or the matched receiver instance's class args.
     fn enclosing_generic_params(&self) -> Vec<ParamTy> {
-        let Some(fl) = self.func_loc else {
-            return Vec::new();
-        };
-        let mut params = baml_compiler2_tir::function_generic_params(self.db, fl);
+        let mut params = self
+            .func_loc
+            .map(|fl| baml_compiler2_tir::function_generic_params(self.db, fl))
+            .unwrap_or_default();
         params.extend(self.lambda_generic_params.iter().cloned());
+        params.extend(self.runtime_type_binding_params.iter().cloned());
         params
     }
 
@@ -9433,6 +9455,16 @@ impl LoweringContext<'_> {
         // `type.of<T>()` under an unknown-typed call still reflects
         // the honest top type.
         self.emit_frame_type_arg_ops(&inferred_type_args)
+    }
+
+    fn call_uses_unreflect_type_arg(&self, call_expr_id: AstExprId) -> bool {
+        matches!(
+            &self.body.exprs[call_expr_id],
+            AstExpr::Call { type_args, .. }
+                if type_args
+                    .iter()
+                    .any(|arg| matches!(arg, AstTypeArg::Unreflect(_)))
+        )
     }
 
     /// Emit `LoadType` rvalue assignments for the explicit type arguments of a
@@ -10674,6 +10706,7 @@ impl<'db> LoweringContext<'db> {
             method.as_str(),
             all_args,
             ntypeargs,
+            self.call_uses_unreflect_type_arg(expr_id),
             runtime_id_operand,
             result_ty,
             unwind,
@@ -10708,6 +10741,7 @@ impl<'db> LoweringContext<'db> {
         method: &str,
         args: Vec<Operand>,
         ntypeargs: usize,
+        runtime_type_check: bool,
         runtime_id: Option<Operand>,
         result_ty: RuntimeTy,
         unwind: Option<BlockId>,
@@ -10721,11 +10755,12 @@ impl<'db> LoweringContext<'db> {
                 (Place::local(tmp), Some(projection))
             }
         };
-        self.builder.virtual_call_with_runtime_id(
+        self.builder.virtual_call_with_runtime_type_check(
             iface,
             method.to_string(),
             args,
             ntypeargs,
+            runtime_type_check,
             runtime_id,
             call_dest.clone(),
             resume,
@@ -11596,6 +11631,23 @@ impl LoweringContext<'_> {
                 let ty = self.expr_ty(expr_id);
                 let temp = self.builder.temp(ty);
                 self.lower_expr(expr_id, Place::local(temp));
+            }
+
+            AstStmt::TypeBinding { name, value } => {
+                // Evaluate first: the new name is not visible in its own RHS.
+                let value = self.lower_to_operand(value);
+                let param = ParamTy::new(0x8000_0000 | stmt_id.into_raw().into_u32(), name);
+                self.runtime_type_binding_params.push(param.clone());
+                let slot = RuntimeGenericLayout::new(&self.enclosing_generic_params())
+                    .slot(&param)
+                    .expect("a just-bound runtime type parameter has a frame slot");
+                self.builder.push_statement(
+                    StatementKind::Intrinsic {
+                        op: IntrinsicOp::BindType(slot as usize),
+                        args: vec![value],
+                    },
+                    self.builder.current_source_span,
+                );
             }
 
             // `let PATTERN = init else { … };` — refutable binding lowered

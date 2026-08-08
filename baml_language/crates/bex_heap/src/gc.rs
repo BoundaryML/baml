@@ -668,6 +668,7 @@ impl BexHeap {
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
                 worklist.extend(package.functions.values().copied());
+                worklist.extend(package.mounted_types.values().copied());
                 worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
                     worklist.push(*interface);
@@ -888,6 +889,7 @@ impl BexHeap {
                     .chain(package.enums.values_mut())
                     .chain(package.interfaces.values_mut())
                     .chain(package.functions.values_mut())
+                    .chain(package.mounted_types.values_mut())
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
                         *ptr = new_ptr;
@@ -1284,6 +1286,7 @@ impl BexHeap {
                     .chain(package.enums.values())
                     .chain(package.interfaces.values())
                     .chain(package.functions.values())
+                    .chain(package.mounted_types.values())
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
                 worklist.extend(
@@ -1722,6 +1725,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
+            runtime_type: None,
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1764,6 +1768,7 @@ mod tests {
                 docstring: None,
                 other: Default::default(),
                 skip: false,
+                runtime_type: None,
             }],
             description: None,
             alias: None,

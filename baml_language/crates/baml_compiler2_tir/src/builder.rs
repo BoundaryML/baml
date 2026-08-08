@@ -972,6 +972,11 @@ pub struct TypeInferenceBuilder<'db> {
     /// params, in declared De Bruijn order. See
     /// `ScopeInference::call_type_instantiations`.
     pub call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    /// Generic parameters supplied by `unreflect(...)` at each call. Their
+    /// binding is the bound occurrence type for static checking (M-5), but the
+    /// actual concrete type is opaque until runtime, so compile-time bound
+    /// validation must defer precisely these slots to the VM gate (M-6).
+    runtime_checked_type_params: FxHashMap<ExprId, FxHashSet<crate::ty::ParamTy>>,
     /// Function adapters required by checked optional-parameter coercions.
     pub function_coercions: FxHashMap<ExprId, crate::inference::FunctionCoercion>,
     /// Metadata produced while checking parameter defaults. Kept separate from
@@ -1240,6 +1245,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             param_types: Vec::new(),
             call_plans: FxHashMap::default(),
             call_type_instantiations: FxHashMap::default(),
+            runtime_checked_type_params: FxHashMap::default(),
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
@@ -1313,7 +1319,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 position,
             )
         } else {
-            let generic_params: Vec<_> = self.type_bindings.keys().cloned().collect();
+            let mut generic_params = self.generic_params.clone();
+            let additional = self
+                .type_bindings
+                .keys()
+                .filter(|param| !generic_params.contains(param))
+                .cloned()
+                .collect::<Vec<_>>();
+            generic_params.extend(additional);
             crate::generics::substitute_ty(
                 &crate::lower_type_expr::lower_type_expr_at(
                     ty_expr,
@@ -2550,6 +2563,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn validate_runtime_type_arg_operand(&mut self, operand: ExprId, body: &ExprBody) {
+        let operand_ty = self.infer_expr(operand, body);
+        let pending_type = matches!(&operand_ty, Ty::Class(name, _, _)
+            if name.package().as_str() == "baml"
+                && name.namespace().iter().map(Name::as_str).eq(["reflect", "class"])
+                && name.name().as_str() == "PendingType");
+        if !pending_type
+            && !matches!(
+                operand_ty,
+                Ty::Type { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
+            )
+        {
+            self.context.report(
+                TirTypeError::TypeMismatch {
+                    expected: Ty::Type {
+                        attr: TyAttr::default(),
+                    },
+                    got: operand_ty,
+                },
+                operand,
+                Vec::new(),
+            );
+        }
+    }
+
     fn resolve_explicit_type_args(
         &mut self,
         callee_id: ExprId,
@@ -2557,7 +2595,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         call_expr_id: ExprId,
         body: &ExprBody,
     ) -> Option<FxHashMap<crate::ty::ParamTy, Ty>> {
-        let (declared_params, callee_name) = self.callee_declared_generic_params(callee_id)?;
+        let (declared_params, declared_bounds, callee_name) =
+            self.callee_declared_generics(callee_id)?;
 
         if type_args.len() != declared_params.len() {
             self.context.report_simple(
@@ -2580,7 +2619,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let self_ty = self.body_self_ty.clone();
         let suppress_diags = self.is_auto_derived_body;
         let extraction_contract = self.is_reflect_package_get_function(callee_id);
-        for (param_name, type_arg) in declared_params.iter().zip(type_args.iter()) {
+        for ((param_name, param_bounds), type_arg) in declared_params
+            .iter()
+            .zip(declared_bounds.iter())
+            .zip(type_args.iter())
+        {
             let mut diags = Vec::new();
             let ty = match type_arg {
                 ast::TypeArg::Static(type_arg_expr) => {
@@ -2603,16 +2646,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
                 ast::TypeArg::Unreflect(operand) => {
-                    self.check_expr(
-                        *operand,
-                        body,
-                        &Ty::Type {
-                            attr: TyAttr::default(),
-                        },
-                    );
-                    Ty::BuiltinUnknown {
+                    self.runtime_checked_type_params
+                        .entry(call_expr_id)
+                        .or_default()
+                        .insert(param_name.clone());
+                    self.infer_expr(*operand, body);
+                    // The runtime operand is deliberately opaque to static
+                    // checking.  A bound is nevertheless a sound occurrence
+                    // type: every runtime type admitted at the call boundary
+                    // has to implement it (the VM repeats that check before
+                    // entering the callee).  This preserves useful member
+                    // access on a result such as `T extends PersonAnchor`
+                    // without pretending to know the minted concrete class.
+                    param_bounds.first().cloned().unwrap_or(Ty::BuiltinUnknown {
                         attr: TyAttr::default(),
-                    }
+                    })
                 }
             };
             // Auto-derived bodies (`to_json` / `from_json` synthesized by
@@ -3881,7 +3929,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         refs: &mut Vec<Name>,
     ) {
         match &body.stmts[stmt_id] {
-            Stmt::Expr(expr) | Stmt::Return(Some(expr)) | Stmt::Throw { value: expr } => {
+            Stmt::Expr(expr)
+            | Stmt::TypeBinding { value: expr, .. }
+            | Stmt::Return(Some(expr))
+            | Stmt::Throw { value: expr } => {
                 Self::collect_default_expr_forward_references(
                     *expr,
                     body,
@@ -4282,6 +4333,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Use the substituted param types (now concrete) for checking.
                     for (param, arg) in &param_arg_pairs {
                         let param_ty = &param.ty;
+                        let runtime_checked = self
+                            .runtime_checked_type_params
+                            .get(&expr_id)
+                            .is_some_and(|params| {
+                                crate::generics::contains_typevar_where(param_ty, &|name| {
+                                    params.contains(name)
+                                })
+                            });
+                        if runtime_checked {
+                            // The marker's concrete type is unavailable here.
+                            // Infer the value so its own errors still surface;
+                            // the VM checks it against the realized parameter
+                            // template before entering the callee (M-5/M-6).
+                            self.infer_expr(*arg, body);
+                            continue;
+                        }
                         let substituted = crate::generics::substitute_ty(param_ty, &bindings);
                         if !crate::generics::contains_typevar(&substituted) {
                             self.check_expr(*arg, body, &substituted);
@@ -4486,6 +4553,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for (param, arg) in &param_arg_pairs {
                     let param_ty = &param.ty;
                     if !crate::generics::contains_typevar(param_ty) {
+                        continue;
+                    }
+                    if self
+                        .runtime_checked_type_params
+                        .get(&expr_id)
+                        .is_some_and(|params| {
+                            crate::generics::contains_typevar_where(param_ty, &|name| {
+                                params.contains(name)
+                            })
+                        })
+                    {
                         continue;
                     }
 
@@ -5057,6 +5135,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Block { stmts, tail_expr } => {
                 let snapshot = self.snapshot_scoped_locals();
+                let generic_scope_start = self.generic_params.len();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -5086,6 +5165,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                         })
                 };
                 self.restore_scoped_locals(&snapshot);
+                let scoped_params = self.generic_params[generic_scope_start..].to_vec();
+                let ty = crate::generics::erase_typevars_matching(&ty, &|param| {
+                    scoped_params.contains(param)
+                });
+                for binding in self.locals.values_mut() {
+                    binding.current_ty =
+                        crate::generics::erase_typevars_matching(&binding.current_ty, &|param| {
+                            scoped_params.contains(param)
+                        });
+                }
+                self.generic_params.truncate(generic_scope_start);
                 ty
             }
             Expr::MemberAccess { base, member } => {
@@ -7292,6 +7382,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Block: check the tail expression against expected type
             Expr::Block { stmts, tail_expr } => {
                 let snapshot = self.snapshot_scoped_locals();
+                let generic_scope_start = self.generic_params.len();
                 let mut diverged_at: Option<(usize, StmtId)> = None;
                 for (i, stmt_id) in stmts.iter().enumerate() {
                     if self.check_stmt_with_early_return_narrowing(*stmt_id, body) {
@@ -7339,6 +7430,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 };
                 self.restore_scoped_locals(&snapshot);
+                let scoped_params = self.generic_params[generic_scope_start..].to_vec();
+                let ty = crate::generics::erase_typevars_matching(&ty, &|param| {
+                    scoped_params.contains(param)
+                });
+                for binding in self.locals.values_mut() {
+                    binding.current_ty =
+                        crate::generics::erase_typevars_matching(&binding.current_ty, &|param| {
+                            scoped_params.contains(param)
+                        });
+                }
+                self.generic_params.truncate(generic_scope_start);
                 self.record_expr_type(expr_id, ty.clone());
                 ty
             }
@@ -7555,13 +7657,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => {
                 for type_arg in type_args {
                     if let ast::TypeArg::Unreflect(operand) = type_arg {
-                        self.check_expr(
-                            *operand,
-                            body,
-                            &Ty::Type {
-                                attr: TyAttr::default(),
-                            },
-                        );
+                        self.validate_runtime_type_arg_operand(*operand, body);
                     }
                 }
                 let ty = self.check_call_expr(expr_id, body, expected, *callee, type_args, args);
@@ -7666,6 +7762,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Expr(expr_id) => {
                 let ty = self.infer_expr(*expr_id, body);
                 matches!(ty, Ty::Never { .. })
+            }
+            Stmt::TypeBinding { name, value } => {
+                self.validate_runtime_type_arg_operand(*value, body);
+                self.generic_params.push(crate::ty::ParamTy::new(
+                    0x8000_0000 | stmt_id.into_raw().into_u32(),
+                    name.clone(),
+                ));
+                false
             }
             Stmt::Let {
                 pattern,
@@ -10168,7 +10272,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         out: &mut BTreeSet<Ty>,
     ) {
         match &body.stmts[stmt_id] {
-            Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
+            Stmt::Expr(expr_id) | Stmt::TypeBinding { value: expr_id, .. } => {
+                self.collect_throw_facts_from_expr(*expr_id, body, out);
+            }
             Stmt::Let {
                 initializer,
                 else_branch,
@@ -14382,6 +14488,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         bindings: &FxHashMap<crate::ty::ParamTy, Ty>,
     ) {
         for (idx, param) in generic_params.iter().enumerate() {
+            if self
+                .runtime_checked_type_params
+                .get(&expr_id)
+                .is_some_and(|runtime_checked| runtime_checked.contains(param))
+            {
+                continue;
+            }
             let Some(actual) = bindings.get(param) else {
                 continue;
             };

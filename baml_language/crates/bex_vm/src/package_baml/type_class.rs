@@ -1,5 +1,5 @@
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{Object, TypeValue, Value};
+use bex_vm_types::types::{DynTypeDefs, Object, TypeValue, Value};
 use indexmap::IndexMap;
 
 use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolve};
@@ -184,6 +184,29 @@ impl BamlClassTypeValue for PackageBamlImpl {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Function)
     }
 
+    fn _validate_renderable(vm: &mut BexVm, self_value: &Value) -> Result<(), VmRustFnError> {
+        let type_value = cloned_type_value(vm, *self_value);
+        let root = match &type_value.ty {
+            baml_type::RealizedTy::Class(name, _, _) => name.display_name().to_string(),
+            _ => "output".to_string(),
+        };
+        let mut visited = std::collections::HashSet::new();
+        let Some((field, open_ty)) =
+            first_open_interface(vm, &type_value.ty, type_value.defs(), &root, &mut visited)
+        else {
+            return Ok(());
+        };
+        let diagnostic = super::type_kinds::compiler_diagnostic(
+            baml_compiler_diagnostics::DiagnosticId::OpenInterfaceAtRender,
+            format!(
+                "field `{field}` has open interface type `{open_ty}`, which cannot be rendered as an LLM output schema"
+            ),
+        );
+        Err(VmRustFnError::Thrown(
+            super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+        ))
+    }
+
     /// Returns the `RealizedTy`'s display name.  Includes namespaces and (for
     /// non-`user` packages) the package prefix, so two distinct types never
     /// collide on this string — package names are unique within a workspace,
@@ -275,6 +298,87 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .into_iter()
             .map(|(ty, _, _)| Value::object(vm.alloc_static_type(ty)))
             .collect()
+    }
+}
+
+fn first_open_interface(
+    vm: &BexVm,
+    ty: &baml_type::RealizedTy,
+    defs: &DynTypeDefs,
+    path: &str,
+    visited: &mut std::collections::HashSet<baml_type::TypeName>,
+) -> Option<(String, String)> {
+    match ty {
+        baml_type::RealizedTy::Interface(..) => Some((path.to_string(), ty.to_string())),
+        baml_type::RealizedTy::Class(name, args, _) => {
+            if !visited.insert(name.clone()) {
+                return None;
+            }
+            let class_ptr = defs
+                .classes
+                .get(name)
+                .copied()
+                .or_else(|| vm.lookup_type(name))?;
+            let Object::Class(class) = vm.get_object(class_ptr) else {
+                return None;
+            };
+            for field in &class.fields {
+                let child_path = format!("{path}.{}", field.name);
+                if let Some(runtime) = &field.runtime_type {
+                    if let Some(found) =
+                        first_open_interface(vm, &runtime.ty, runtime.defs(), &child_path, visited)
+                    {
+                        return Some(found);
+                    }
+                    continue;
+                }
+                let field_ty = field
+                    .field_template
+                    .substitute(args, vm)
+                    .ok()
+                    .or_else(|| baml_type::RealizedTy::try_from(field.field_type.clone()).ok());
+                if let Some(field_ty) = field_ty
+                    && let Some(found) =
+                        first_open_interface(vm, &field_ty, defs, &child_path, visited)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        baml_type::RealizedTy::List(element, _) => {
+            first_open_interface(vm, element, defs, path, visited)
+        }
+        baml_type::RealizedTy::Map { key, value, .. } => {
+            first_open_interface(vm, key, defs, path, visited)
+                .or_else(|| first_open_interface(vm, value, defs, path, visited))
+        }
+        baml_type::RealizedTy::Union(members, _) => members
+            .iter()
+            .find_map(|member| first_open_interface(vm, member, defs, path, visited)),
+        baml_type::RealizedTy::Future(value, error, _) => {
+            first_open_interface(vm, value, defs, path, visited)
+                .or_else(|| first_open_interface(vm, error, defs, path, visited))
+        }
+        baml_type::RealizedTy::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => params
+            .iter()
+            .find_map(|param| first_open_interface(vm, &param.ty, defs, path, visited))
+            .or_else(|| first_open_interface(vm, ret, defs, path, visited))
+            .or_else(|| first_open_interface(vm, throws, defs, path, visited)),
+        baml_type::RealizedTy::TypeAlias(name, _) => {
+            if !visited.insert(name.clone()) {
+                return None;
+            }
+            vm.recursive_type_alias(name)
+                .and_then(|alias| baml_type::RealizedTy::try_from(alias.clone()).ok())
+                .and_then(|alias| first_open_interface(vm, &alias, defs, path, visited))
+        }
+        _ => None,
     }
 }
 

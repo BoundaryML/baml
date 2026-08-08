@@ -42,6 +42,14 @@ use crate::{
     vm::CallableSignature,
 };
 
+fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRustFnError {
+    let diagnostic = super::type_kinds::compiler_diagnostic(id, message);
+    VmRustFnError::Thrown(super::type_kinds::alloc_compilation_error(
+        vm,
+        &[diagnostic],
+    ))
+}
+
 /// Element tag for the `Arg[]` / `map<string, Arg>` containers. The class
 /// instances themselves are built through the generated `copy::` structs.
 const ARG_FQN: &str = "baml.reflect.Arg";
@@ -473,6 +481,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .cloned()
             .unwrap_or_default();
         let package = Package {
+            exported_names: program_package.exported_names.clone(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -481,6 +490,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             recursive_type_aliases: program_package.recursive_type_aliases.clone(),
             interface_blob: artifact.interface_blob,
             test_init: None,
+            mounted_types: IndexMap::new(),
             runtime: Some(Box::new(RuntimePackage {
                 objects: Box::new([]),
                 object_names: IndexMap::new(),
@@ -508,10 +518,32 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 if matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn) {
                     return None;
                 }
-                vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
-                    let (alias, local) = symbol.fq_name.split_once('.')?;
-                    dependency_object(vm, *dependencies.get(alias)?, local)
-                })
+                let qtn = baml_type::QualifiedTypeName::from_dotted_path(&symbol.fq_name);
+                vm.dynamic_dispatch
+                    .class_ptr(&qtn)
+                    .or_else(|| {
+                        dependencies.values().find_map(|package_ptr| {
+                            let Object::Package(package) = vm.get_object(*package_ptr) else {
+                                return None;
+                            };
+                            package.mounted_types.values().find_map(|type_ptr| {
+                                let Object::Type(value) = vm.get_object(*type_ptr) else {
+                                    return None;
+                                };
+                                value
+                                    .defs()
+                                    .classes
+                                    .get(&qtn)
+                                    .or_else(|| value.defs().enums.get(&qtn))
+                                    .copied()
+                            })
+                        })
+                    })
+                    .or_else(|| vm.packages.object_by_name(&symbol.fq_name))
+                    .or_else(|| {
+                        let (alias, local) = symbol.fq_name.split_once('.')?;
+                        dependency_object(vm, *dependencies.get(alias)?, local)
+                    })
             });
             if let Some(ptr) = external {
                 objects.push(ptr);
@@ -725,6 +757,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                     _ => None,
                 })
                 .collect(),
+            witnesses: Vec::new(),
         };
         for class_ptr in classes.values() {
             let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
@@ -794,6 +827,11 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             return None;
         };
         let local = local_name(name.as_str())?;
+        if local.namespace.is_empty()
+            && let Some(type_ptr) = package.mounted_types.get(local.name.as_str()).copied()
+        {
+            return Some(Value::object(type_ptr));
+        }
         let class_ptr = package.classes.get(&local).copied()?;
         let runtime_type = package.runtime.as_ref().and_then(|runtime| {
             let key = local
@@ -806,6 +844,86 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             runtime.class_types.get(&key).copied()
         });
         Some(package_class_type(vm, runtime_type, class_ptr))
+    }
+
+    fn with_types(
+        vm: &mut BexVm,
+        package: &Value,
+        types: &IndexMap<bex_str::BexStr, Value>,
+    ) -> Result<Value, VmRustFnError> {
+        let source_ptr = package_ptr(vm, *package)?;
+        let Object::Package(source) = vm.get_object(source_ptr) else {
+            unreachable!("package_ptr validates Object::Package")
+        };
+        let mut derived = (**source).clone();
+
+        for (export, value) in types {
+            let export = export.to_string();
+            if !super::type_kinds::is_baml_identifier(&export) {
+                return Err(compilation_error(
+                    vm,
+                    DiagnosticId::InvalidSyntax,
+                    format!("invalid exported type name `{export}`"),
+                ));
+            }
+            let local = LocalName {
+                namespace: Vec::new(),
+                name: baml_type::Name::new(&export),
+            };
+            if derived.classes.contains_key(&local)
+                || derived.enums.contains_key(&local)
+                || derived.interfaces.contains_key(&local)
+                || derived.exported_names.contains(&local)
+                || derived.mounted_types.contains_key(&export)
+            {
+                return Err(compilation_error(
+                    vm,
+                    DiagnosticId::DuplicateName,
+                    format!("duplicate exported type name `{export}`"),
+                ));
+            }
+            let Some(type_ptr) = value.as_object_ptr() else {
+                return Err(compilation_error(
+                    vm,
+                    DiagnosticId::TypeMismatch,
+                    format!("with_types value for `{export}` must be a type"),
+                ));
+            };
+            let Object::Type(type_value) = vm.get_object(type_ptr) else {
+                return Err(compilation_error(
+                    vm,
+                    DiagnosticId::TypeMismatch,
+                    format!("with_types value for `{export}` must be a type"),
+                ));
+            };
+            match &type_value.ty {
+                RealizedTy::Class(qtn, _, _) => {
+                    if let Some(class) = type_value
+                        .defs()
+                        .classes
+                        .get(qtn)
+                        .copied()
+                        .or_else(|| vm.dynamic_dispatch.class_ptr(qtn))
+                    {
+                        derived.classes.insert(local.clone(), class);
+                    }
+                }
+                RealizedTy::Enum(qtn, _) => {
+                    if let Some(enm) = type_value.defs().enums.get(qtn).copied() {
+                        derived.enums.insert(local.clone(), enm);
+                    }
+                }
+                _ => {}
+            }
+            derived.mounted_types.insert(export, type_ptr);
+            derived.exported_names.push(local);
+        }
+
+        let derived_ptr = vm.alloc(Object::Package(Box::new(derived)));
+        Ok(copy::reflect::Package {
+            _inner: Value::object(derived_ptr),
+        }
+        .to_value(vm))
     }
 
     fn get_function(
@@ -871,6 +989,11 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .classes
             .iter()
             .map(|(name, &class)| {
+                let mounted_type = name
+                    .namespace
+                    .is_empty()
+                    .then(|| package.mounted_types.get(name.name.as_str()).copied())
+                    .flatten();
                 let runtime_type = package.runtime.as_ref().and_then(|runtime| {
                     let key = name
                         .namespace
@@ -881,7 +1004,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                         .join(".");
                     runtime.class_types.get(&key).copied()
                 });
-                (name.clone(), class, runtime_type)
+                (name.clone(), class, mounted_type.or(runtime_type))
             })
             .collect::<Vec<_>>();
         entries
@@ -1385,6 +1508,7 @@ fn graft_session_submission(
                 _ => None,
             })
             .collect(),
+        witnesses: Vec::new(),
     };
     for pointer in new_classes.values() {
         if let Object::Class(class) = vm.get_object_mut(*pointer)
@@ -1556,6 +1680,7 @@ impl BamlClassReflectSession for PackageBamlImpl {
             dependencies.insert(alias.to_string(), package_ptr(vm, *value)?);
         }
         let package = Package {
+            exported_names: Vec::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -1564,6 +1689,7 @@ impl BamlClassReflectSession for PackageBamlImpl {
             recursive_type_aliases: IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
+            mounted_types: IndexMap::new(),
             runtime: Some(Box::new(RuntimePackage {
                 objects: Box::new([]),
                 object_names: IndexMap::new(),

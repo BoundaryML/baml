@@ -38,6 +38,7 @@ mod ops_math;
 mod random;
 pub(crate) mod reflect;
 mod resolve;
+pub(crate) mod runtime_class_builder;
 pub(crate) use resolve::ImplResolver;
 mod root;
 mod spawn;
@@ -47,7 +48,7 @@ mod sys;
 mod time;
 mod toml;
 mod type_class;
-mod type_kinds;
+pub(crate) mod type_kinds;
 mod uint8array;
 mod yaml;
 
@@ -453,6 +454,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 param_types: function.param_types,
                 param_has_default: function.param_has_default,
                 display_type_params: function.display_type_params,
+                generic_param_bounds: function.generic_param_bounds,
                 display_param_types: function.display_param_types,
                 display_return_type: function.display_return_type,
                 throws_type: function.throws_type,

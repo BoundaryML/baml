@@ -28,8 +28,9 @@ class WithMeta<T> {
   other map<string, string>
 }
 
-/// A source range attached to a compiler diagnostic. Runtime constructor
-/// validation has no source file and therefore reports `span = null`.
+/// A source range attached to a compiler diagnostic. Native validation that
+/// originates at a BAML call carries that call's range; host-side construction
+/// without a BAML source site reports `span = null`.
 class Span {
   file string?
   start int
@@ -112,6 +113,12 @@ class Package {
     $rust_function
   }
 
+  /// Return a derived package view that exports exact runtime type values
+  /// under source-visible names for subsequent Package.compile calls.
+  //baml:mut_vm
+  function with_types(self, types: map<string, type | baml.reflect.TypeView>) -> Package throws baml.reflect.errors.CompilationError {
+    $rust_function
+  }
   /// Extract an exported function through an ordinary function-type contract.
   //baml:mut_vm
   function get_function<F>(self, name: string) -> F? throws baml.reflect.errors.CompilationError {

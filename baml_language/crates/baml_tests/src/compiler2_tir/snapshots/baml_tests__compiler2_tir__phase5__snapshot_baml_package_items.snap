@@ -21,7 +21,7 @@ namespace baml:
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [array, optional, to_baml, kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, meta, _to_string_impl, implements, implemented_by, implementors, to_string] }
+  class TypeValue { methods: [array, optional, to_baml, kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, _validate_renderable, meta, _to_string_impl, implements, implemented_by, implementors, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
@@ -296,7 +296,7 @@ namespace baml.reflect:
   class Diagnostic { methods: [] }
   class InvalidArgumentError { methods: [] }
   class Meta { methods: [] }
-  class Package { methods: [current, compile, _compile, _finish, get_class, get_function, classes, functions, tests, diagnostics] }
+  class Package { methods: [current, compile, _compile, _finish, get_class, with_types, get_function, classes, functions, tests, diagnostics] }
   class Signature { methods: [] }
   class Span { methods: [] }
   type TypeKind
@@ -307,8 +307,12 @@ namespace baml.reflect:
 namespace baml.reflect.array:
   class Type { methods: [element_type, as_type] }
 namespace baml.reflect.class:
+  class Builder { methods: [field, type, build] }
   class Field { methods: [] }
+  class PendingType { methods: [array, optional, union, resolved] }
   class Type { methods: [fields, meta, as_type] }
+  function _new
+  function builder
   function get_field<T>
   function new
 namespace baml.reflect.enum:
@@ -325,7 +329,9 @@ namespace baml.reflect.function:
   class Parameter { methods: [] }
   class Type { methods: [params, return_type, as_type] }
 namespace baml.reflect.interface:
+  class Implementation { methods: [field] }
   class Type { methods: [implemented_by, implementors, as_type] }
+  function implementation<I>
 namespace baml.reflect.literal:
   class Type { methods: [as_type] }
   function new

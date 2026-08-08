@@ -421,6 +421,9 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
+            ast::Stmt::TypeBinding { value, .. } => {
+                self.walk_expr(*value, body, source_map, true);
+            }
             ast::Stmt::Let {
                 pattern,
                 initializer,
