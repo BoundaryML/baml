@@ -667,18 +667,10 @@ pub struct LlmFunctionBody {
 }
 impl FromCST for LlmFunctionBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::LLM_FUNCTION_BODY)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let open_brace = it.expect_parse()?;
-
-        // Fields appear in any order; collect until the close brace. A
-        // duplicate is a hard error, not an overwrite: the parser has no
-        // duplicate check for `type_builder`, and silently printing only the
-        // survivor would DELETE the other block from the user's source. An
-        // errored declaration is left unformatted instead.
+        // A duplicate LLM-body field is a hard error, not an overwrite: the
+        // parser has no duplicate check for `type_builder`, and silently
+        // printing only the survivor would DELETE the other block from the
+        // user's source. An errored declaration is left unformatted instead.
         fn fill<T>(
             slot: &mut Option<T>,
             value: T,
@@ -695,6 +687,15 @@ impl FromCST for LlmFunctionBody {
             *slot = Some(value);
             Ok(())
         }
+
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::LLM_FUNCTION_BODY)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let open_brace = it.expect_parse()?;
+
+        // Fields appear in any order; collect until the close brace.
         let mut client: Option<ClientField> = None;
         let mut tools: Option<ToolsField> = None;
         let mut prompt: Option<PromptField> = None;
