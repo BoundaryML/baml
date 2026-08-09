@@ -80,25 +80,18 @@ function _anthropic_push_tool_result(
     let _ = block.set("tool_use_id", id);
     let _ = block.set("content", content);
     let _ = block.set("is_error", is_error);
-    let last: AnthropicMessage? = if (msgs.length() > 0) {
-        msgs.at(msgs.length() - 1)
-    } else {
-        null
-    };
-    match (last) {
-        let m: AnthropicMessage => {
-            if (m.tool_results) {
-                m.blocks.push(block);
-                null
-            } else {
-                msgs.push(AnthropicMessage { role: "user", tool_results: true, blocks: [block] });
-                null
-            }
-        },
-        null => {
+    // .at returns null on an empty list, covering the no-messages case.
+    if let m: AnthropicMessage = msgs.at(msgs.length() - 1) {
+        if (m.tool_results) {
+            m.blocks.push(block);
+            null
+        } else {
             msgs.push(AnthropicMessage { role: "user", tool_results: true, blocks: [block] });
             null
-        },
+        }
+    } else {
+        msgs.push(AnthropicMessage { role: "user", tool_results: true, blocks: [block] });
+        null
     }
 }
 
@@ -163,11 +156,7 @@ function invoke(
     // message, so the first-turn rule generalizes (as it did for Gemini):
     // whenever the lowered journal does not begin with a user message, the
     // instructions lead as one, and system is omitted.
-    let first_role = if let first: AnthropicMessage = lowered.at(0) {
-        first.role
-    } else {
-        ""
-    };
+    let first_role = lowered.at(0)?.role ?? "";
     if (first_role == "user") {
         let _ = body.set("system", instructions);
         let _ = body.set("messages", _anthropic_render_messages(lowered));

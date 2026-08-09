@@ -62,16 +62,13 @@ test "parse feedback re-asks and the journal records every attempt" {
     assert.is_true(turn.terminal_text() != null);
     // two invocations happened; the second saw the committed feedback
     assert.equal(scripted.received().length(), 2);
-    let second_saw_feedback = if let second: root.ai.ModelTurnInput = scripted.received().at(1) {
-        second.journal.entries().some((e: root.ai.Event) -> {
-            match (e) {
-                let u: root.ai.UserMessage => true,
-                _ => false,
-            }
-        })
-    } else {
-        false
-    };
+    let second_saw_feedback = scripted.received().at(1)?.journal?.entries()?.some((e: root.ai.Event) -> {
+        match (e) {
+            let u: root.ai.UserMessage => true,
+            _ => false,
+        }
+    })
+        ?? false;
     assert.is_true(second_saw_feedback);
     // the journal is the complete record: RunStarted, the failed reply, the feedback
     assert.equal(j.entries().length(), 3)

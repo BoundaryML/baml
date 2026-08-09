@@ -22,11 +22,7 @@ function repaired_first_step_journal() -> root.ai.Journal {
 test "anthropic messages always start with a user role" {
     let lowered = root.anthropic.internal._anthropic_lower_journal(repaired_first_step_journal());
     // the lowered journal opens with an assistant message...
-    let opens_assistant = if let first: root.anthropic.internal.AnthropicMessage = lowered.at(0) {
-        first.role == "assistant"
-    } else {
-        false
-    };
+    let opens_assistant = (lowered.at(0)?.role ?? "") == "assistant";
     assert.is_true(opens_assistant)
     // ...which is exactly why invoke() prepends the instructions as a user
     // message and omits system in that case (asserted structurally above;

@@ -46,16 +46,13 @@ test "scripted client drives the tool loop to a typed result" {
     assert.equal(result.value.flights.length(), 1);
     assert.equal(result.usage.input_tokens, 30);
     // the second invocation's journal must contain the correlated tool result
-    let has_result = if let second: root.ai.ModelTurnInput = scripted.received().at(1) {
-        second.journal.entries().some((e: root.ai.Event) -> {
-            match (e) {
-                let c: root.ai.ToolCompleted => c.id == "call_1",
-                _ => false,
-            }
-        })
-    } else {
-        false
-    };
+    let has_result = scripted.received().at(1)?.journal?.entries()?.some((e: root.ai.Event) -> {
+        match (e) {
+            let c: root.ai.ToolCompleted => c.id == "call_1",
+            _ => false,
+        }
+    })
+        ?? false;
     assert.is_true(has_result)
 }
 

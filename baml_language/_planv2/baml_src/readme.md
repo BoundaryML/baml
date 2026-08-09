@@ -172,7 +172,20 @@ return a typed `Itinerary`.
 ## Language findings (kept in `baml describe`-verifiable form)
 
 - No catch-arm guards; guard inside the arm with an if/else expression.
-- `?.method()` on an interface-typed optional trips a VM error; use if-let.
+- `?.` chaining works on class-typed optionals — fields, methods, and
+  through `.at(0)` (`resp.candidates?.at(0)?.content?.parts`). Two
+  boundaries: `?.method()` on an interface-typed optional trips a VM
+  error (B-1180; use if-let there), and `?? []` needs an annotated
+  binding because the empty literal does not take its element type from
+  the other operand (B-1181). One more rule: `?.` does not narrow the
+  rest of the chain — after one optional link, every later link must
+  also be `?.` even when the member is non-optional
+  (`at(1)?.journal?.entries()?`, not `at(1)?.journal.entries()`;
+  B-1182).
+- `list.at(i)` accepts negative indices JS-style: in range they wrap
+  from the end (`at(-1)` on a non-empty list is the last element), and
+  out of range they return null, so `at(length - 1)` needs no
+  empty-list guard.
 - Lambdas over union-typed arrays need parameter annotations.
 - A lambda calling a throwing function fails to unify with `throws never`
   parameters; wrap in `catch_all` inside the lambda.

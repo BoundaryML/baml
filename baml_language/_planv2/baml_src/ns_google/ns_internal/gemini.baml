@@ -230,60 +230,36 @@ function google_parse(resp: GmResponse, seq: int) -> root.ai.ModelTurn {
     let content: root.ai.ContentBlock[] = [];
     let has_call = false;
     let call_index = 0;
-    let finish = "";
-    if let cands: GmCandidate[] = resp.candidates {
-        if let cand: GmCandidate = cands.at(0) {
-            finish = cand.finishReason ?? "";
-            if let cc: GmContent = cand.content {
-                if let parts: GmPart[] = cc.parts {
-                    for (let p in parts) {
-                        if let fc: GmFunctionCall = p.functionCall {
-                            let args: map<string, unknown> = {};
-                            if let a: map<string, unknown> = fc.args {
-                                args = a;
-                            }
-                            content.push(
-                                root.ai.ToolUse {
-                                    id: `call_${seq}_${call_index}`,
-                                    name: fc.name,
-                                    args: args,
-                                },
-                            );
-                            call_index += 1;
-                            has_call = true;
-                            null
-                        } else {
-                            if let t: string = p.text {
-                                if (p.thought ?? false) {
-                                    content.push(root.ai.Reasoning { summary: t });
-                                    null
-                                } else {
-                                    content.push(root.ai.Text { text: t });
-                                    null
-                                }
-                            } else {
-                                null
-                            }
-                        };
-                    }
+    let cand: GmCandidate? = resp.candidates?.at(0);
+    let finish = cand?.finishReason ?? "";
+    let parts: GmPart[] = cand?.content?.parts ?? [];
+    for (let p in parts) {
+        if let fc: GmFunctionCall = p.functionCall {
+            let args: map<string, unknown> = {};
+            if let a: map<string, unknown> = fc.args {
+                args = a;
+            }
+            content.push(
+                root.ai.ToolUse { id: `call_${seq}_${call_index}`, name: fc.name, args: args },
+            );
+            call_index += 1;
+            has_call = true;
+            null
+        } else {
+            if let t: string = p.text {
+                if (p.thought ?? false) {
+                    content.push(root.ai.Reasoning { summary: t });
                     null
                 } else {
+                    content.push(root.ai.Text { text: t });
                     null
                 }
             } else {
                 null
             }
-        } else {
-            null
-        }
-    } else {
-        null
-    };
-    let blocked = if let pf: GmPromptFeedback = resp.promptFeedback {
-        pf.blockReason != null
-    } else {
-        false
-    };
+        };
+    }
+    let blocked = resp.promptFeedback?.blockReason != null;
     let stop = if (has_call) {
         root.ai.StopReason.ToolUse
     } else if (finish == "MAX_TOKENS") {

@@ -154,33 +154,27 @@ function openai_parse(resp: OaResponse) -> root.ai.ModelTurn {
             );
             null
         } else if (item.type == "message") {
-            if let parts: OaContentPart[] = item.content {
-                for (let part in parts) {
-                    if ((part.type ?? "") == "output_text") {
-                        content.push(root.ai.Text { text: part.text ?? "" });
-                        null
-                    } else {
-                        null
-                    };
-                }
-                null
-            } else {
-                null
+            let parts: OaContentPart[] = item.content ?? [];
+            for (let part in parts) {
+                if ((part.type ?? "") == "output_text") {
+                    content.push(root.ai.Text { text: part.text ?? "" });
+                    null
+                } else {
+                    null
+                };
             }
+            null
         } else if (item.type == "reasoning") {
-            if let parts: OaContentPart[] = item.summary {
-                for (let part in parts) {
-                    if let txt: string = part.text {
-                        content.push(root.ai.Reasoning { summary: txt });
-                        null
-                    } else {
-                        null
-                    };
-                }
-                null
-            } else {
-                null
+            let parts: OaContentPart[] = item.summary ?? [];
+            for (let part in parts) {
+                if let txt: string = part.text {
+                    content.push(root.ai.Reasoning { summary: txt });
+                    null
+                } else {
+                    null
+                };
             }
+            null
         } else {
             null
         };
