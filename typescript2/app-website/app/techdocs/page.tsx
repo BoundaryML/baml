@@ -33,7 +33,7 @@ export default function NoLarpPage() {
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
       <main className="nolarp">
-        <h1>We&rsquo;re writing some solid articles.</h1>
+        <h1>Tech Docs Coming Soon</h1>
         <p>
           We know there are a lot of toy &ldquo;programming languages&rdquo;
           coming out these days. We&rsquo;ve been building BAML for a while. We
