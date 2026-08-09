@@ -159,21 +159,48 @@ class TsMember {
     since: string,
 }
 
+/// A type that holds members: a class, a bare interface, or a namespace object.
 class TsContainer {
     name: string,
+    /// `class`, `interface`, or `namespace`.
     kind: string,
-    /// A namespace object — `JSON`, `Math` — whose members are reached on the
-    /// value itself. It has no prototype, so its members are addressed like
-    /// statics even though the lib declares them on an interface.
+    /// A namespace object — `JSON`, `Math`, `console` — whose members are
+    /// reached on the value itself. It has no prototype, so its members are
+    /// addressed like statics even though the lib declares them on an
+    /// interface.
     singleton: bool?,
+    doc: string?,
+    since: string,
     members: TsMember[],
+}
+
+/// Something reached on a module rather than on a type: a global function, a
+/// module's exported function, or a value like `process.argv`.
+class TsFunction {
+    name: string,
+    signatures: string[],
+    doc: string?,
+    since: string,
+}
+
+/// A top-level group: `(globals)`, `(web)`, or one node module.
+///
+/// Modules group but are not symbols, exactly as BAML namespaces are not. The
+/// things a reader asks about — `Date`, `console`, `node:os.hostname` — are the
+/// containers and functions inside them.
+class TsModule {
+    name: string,
+    /// `globals`, `web`, or `node`.
+    kind: string,
+    containers: TsContainer[],
+    functions: TsFunction[],
 }
 
 class TsSurfaceDoc {
     format_version: int,
     typescript_version: string,
     types_node_version: string?,
-    containers: TsContainer[],
+    modules: TsModule[],
 }
 
 // ── ratchet ─────────────────────────────────────────────────────────────────
@@ -220,4 +247,3 @@ class BaselineComparison {
     improvements: string[],
     neutral: string[],
 }
-

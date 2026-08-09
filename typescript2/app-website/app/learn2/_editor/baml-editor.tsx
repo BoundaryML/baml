@@ -2,8 +2,8 @@
 
 import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react';
 import { useCallback, useRef, useState } from 'react';
-import { useCodeTheme } from '../_lib/code-theme';
 import { registerBaml } from '../_lib/baml-monarch';
+import { useCodeTheme } from '../_lib/code-theme';
 import {
   type CellHandle,
   type LspDiagnostic,
@@ -49,7 +49,7 @@ function extractCellId(projectPath?: string): string | undefined {
   if (!projectPath) return undefined;
   const parts = projectPath.split('/').filter(Boolean);
   const idx = parts.indexOf('workspace');
-  return idx >= 0 ? parts[idx + 1] : parts[parts.length - 1];
+  return idx >= 0 ? parts[idx + 1] : parts.at(-1);
 }
 
 function toStatus(outcome?: string): RunStatus {
@@ -60,7 +60,7 @@ function toStatus(outcome?: string): RunStatus {
 
 /** Parse a run result (testing.TestReport / testing.TestSetReport). */
 function parseReport(result: RunResult): Partial<RunLine> {
-  if (!result.ok) return { status: 'error', error: result.error };
+  if (!result.ok) return { error: result.error, status: 'error' };
   const v = result.value as
     | {
         outcome?: string;
@@ -89,8 +89,8 @@ function parseReport(result: RunResult): Partial<RunLine> {
       (runs.some((r) => r.outcome && r.outcome !== 'pass') ? 'fail' : 'pass'),
   );
   return {
-    status,
     durationMs,
+    status,
     summary: runs.length > 1 ? `${runs.length} runs` : undefined,
   };
 }
@@ -139,9 +139,10 @@ function registerLensProvider(monaco: MonacoNs) {
   monaco.languages.registerCodeLensProvider('baml', {
     provideCodeLenses: async (model: TextModel) => {
       const handle = modelHandles.get(model);
-      if (!handle) return { lenses: [], dispose() {} };
+      if (!handle) return { dispose() {}, lenses: [] };
       const items = await handle.requestCodeLens();
       return {
+        dispose() {},
         lenses: items
           // The runtime emits an "▶ Open 🐑 Playground" lens on every function
           // plus "▶ Run test" / "▶ Run testset" lenses on tests. Inline deck
@@ -149,22 +150,21 @@ function registerLensProvider(monaco: MonacoNs) {
           // runners and drop the Playground lens.
           .filter((l) => l.command && !/playground/i.test(l.command.title))
           .map((l, i) => ({
+            command: {
+              // biome-ignore lint/style/noNonNullAssertion: filtered above
+              arguments: l.command!.arguments,
+              id: RUN_CMD,
+              // biome-ignore lint/style/noNonNullAssertion: filtered above
+              title: l.command!.title,
+            },
+            id: `lens-${i}`,
             range: new monaco.Range(
               l.range.start.line + 1,
               l.range.start.character + 1,
               l.range.end.line + 1,
               l.range.end.character + 1,
             ),
-            id: `lens-${i}`,
-            command: {
-              id: RUN_CMD,
-              // biome-ignore lint/style/noNonNullAssertion: filtered above
-              title: l.command!.title,
-              // biome-ignore lint/style/noNonNullAssertion: filtered above
-              arguments: l.command!.arguments,
-            },
           })),
-        dispose() {},
       };
     },
   });
@@ -200,7 +200,7 @@ function registerLensProvider(monaco: MonacoNs) {
     onDidChangeInlayHints: inlayEmitter.event,
     provideInlayHints: async (
       model: TextModel,
-      range: {
+      _range: {
         startLineNumber: number;
         startColumn: number;
         endLineNumber: number;
@@ -208,37 +208,36 @@ function registerLensProvider(monaco: MonacoNs) {
       },
     ) => {
       const handle = modelHandles.get(model);
-      if (!handle) return { hints: [], dispose() {} };
+      if (!handle) return { dispose() {}, hints: [] };
       // Request the WHOLE document range (not just Monaco's visible range) so
       // range-filtering can't drop hints for small editors.
       const lastLine = model.getLineCount();
       const hints = await handle.inlayHints({
-        start: { line: 0, character: 0 },
         end: {
-          line: lastLine - 1,
           character: model.getLineMaxColumn(lastLine) - 1,
+          line: lastLine - 1,
         },
+        start: { character: 0, line: 0 },
       });
       return {
+        dispose() {},
         hints: hints.map((h) => ({
-          position: {
-            lineNumber: h.position.line + 1,
-            column: h.position.character + 1,
-          },
           label:
             typeof h.label === 'string'
               ? h.label
               : h.label.map((p) => ({ label: p.value ?? p.label ?? '' })),
           paddingLeft: h.paddingLeft,
           paddingRight: h.paddingRight,
+          position: {
+            column: h.position.character + 1,
+            lineNumber: h.position.line + 1,
+          },
         })),
-        dispose() {},
       };
     },
   });
 
   monaco.languages.registerCompletionItemProvider('baml', {
-    triggerCharacters: ['.'],
     provideCompletionItems: async (
       model: TextModel,
       position: { lineNumber: number; column: number },
@@ -251,10 +250,10 @@ function registerLensProvider(monaco: MonacoNs) {
       );
       const word = model.getWordUntilPosition(position);
       const range = {
-        startLineNumber: position.lineNumber,
+        endColumn: word.endColumn,
         endLineNumber: position.lineNumber,
         startColumn: word.startColumn,
-        endColumn: word.endColumn,
+        startLineNumber: position.lineNumber,
       };
       return {
         suggestions: items.map((it) => {
@@ -265,18 +264,19 @@ function registerLensProvider(monaco: MonacoNs) {
               ? it.documentation
               : it.documentation?.value;
           return {
-            label,
-            kind: completionKind(monaco, it.kind),
-            insertText: it.insertText ?? it.textEdit?.newText ?? label,
             detail: it.detail,
             documentation,
-            sortText: it.sortText,
             filterText: it.filterText,
+            insertText: it.insertText ?? it.textEdit?.newText ?? label,
+            kind: completionKind(monaco, it.kind),
+            label,
             range,
+            sortText: it.sortText,
           };
         }),
       };
     },
+    triggerCharacters: ['.'],
   });
 }
 
@@ -347,6 +347,9 @@ export interface BamlEditorProps {
    * on touch). Dismisses the first time the editor is focused or edited.
    */
   editHint?: boolean;
+  /** Show the ▶ Run codelenses (default true). Embeds that defer running to
+   *  an expanded playground pass false. */
+  codeLens?: boolean;
 }
 
 /**
@@ -361,6 +364,7 @@ export function BamlEditor({
   maxHeight = 440,
   highlightLines,
   editHint = false,
+  codeLens = true,
 }: BamlEditorProps) {
   const idRef = useRef<string>('');
   if (!idRef.current) idRef.current = `cell${cellCounter++}`;
@@ -446,12 +450,12 @@ export function BamlEditor({
       model,
       'baml',
       diags.map((d) => ({
-        startLineNumber: d.range.start.line + 1,
-        startColumn: d.range.start.character + 1,
-        endLineNumber: d.range.end.line + 1,
         endColumn: d.range.end.character + 1,
+        endLineNumber: d.range.end.line + 1,
         message: d.message,
         severity: markerSeverity(monaco, d.severity),
+        startColumn: d.range.start.character + 1,
+        startLineNumber: d.range.start.line + 1,
       })),
     );
 
@@ -467,18 +471,18 @@ export function BamlEditor({
           const inline =
             d.message.length > 100 ? `${d.message.slice(0, 100)}…` : d.message;
           return {
-            range: new monaco.Range(line, 1, line, endCol),
             options: {
-              // Whole-line tint marking the errored span, plus the inline
-              // ErrorLens message at the end of the line.
-              className: `l2-el-line-${kind}`,
-              isWholeLine: true,
               after: {
                 content: `    ${inline}`,
                 inlineClassName: `l2-el-msg l2-el-msg-${kind}`,
                 inlineClassNameAffectsLetterSpacing: true,
               },
+              // Whole-line tint marking the errored span, plus the inline
+              // ErrorLens message at the end of the line.
+              className: `l2-el-line-${kind}`,
+              isWholeLine: true,
             },
+            range: new monaco.Range(line, 1, line, endCol),
           };
         }),
       );
@@ -507,16 +511,17 @@ export function BamlEditor({
       handle.onDiagnostics(applyDiagnostics);
       cellHandles.set(idRef.current, handle);
       cellOutput.set(idRef.current, {
-        start(testName) {
-          const id = (runIdRef.current += 1);
-          setRuns((prev) => [...prev, { id, testName, status: 'running' }]);
-          return id;
-        },
         finish(id, result) {
           const parsed = parseReport(result);
           setRuns((prev) =>
             prev.map((r) => (r.id === id ? { ...r, ...parsed } : r)),
           );
+        },
+        start(testName) {
+          runIdRef.current += 1;
+          const id = runIdRef.current;
+          setRuns((prev) => [...prev, { id, status: 'running', testName }]);
+          return id;
         },
       });
       const model = editor.getModel();
@@ -527,8 +532,8 @@ export function BamlEditor({
       if (highlightLines?.length) {
         editor.createDecorationsCollection(
           highlightLines.map((line) => ({
+            options: { className: 'l2-ed-hl', isWholeLine: true },
             range: new monaco.Range(line, 1, line, 1),
-            options: { isWholeLine: true, className: 'l2-ed-hl' },
           })),
         );
       }
@@ -559,13 +564,13 @@ export function BamlEditor({
   return (
     <div className="l2-bamled-wrap nokey">
       {editHint && !hintOff ? (
-        <span className="l2-edit-hint font-mono" aria-hidden>
+        <span aria-hidden className="l2-edit-hint font-mono">
           <span className="l2-edit-hint-emoji">✏️</span>
           try editing me
         </span>
       ) : null}
       <div className="l2-bamled-frame">
-        {filename || hasTests ? (
+        {filename || (hasTests && codeLens) ? (
           <div
             className={`l2-code-head${
               filename?.toLowerCase().endsWith('.baml')
@@ -573,7 +578,7 @@ export function BamlEditor({
                 : ''
             }`}
           >
-            <span className="l2-code-dots" aria-hidden>
+            <span aria-hidden className="l2-code-dots">
               <i />
               <i />
               <i />
@@ -581,12 +586,12 @@ export function BamlEditor({
             {filename ? (
               <span className="l2-code-name font-mono">{filename}</span>
             ) : null}
-            {hasTests ? (
+            {hasTests && codeLens ? (
               <button
-                type="button"
                 className="l2-run-btn font-mono"
-                onClick={runAll}
                 disabled={running}
+                onClick={runAll}
+                type="button"
               >
                 {running ? 'running…' : '▶ Run'}
               </button>
@@ -595,43 +600,44 @@ export function BamlEditor({
         ) : null}
         <div className="l2-bamled" style={{ height: boxHeight }}>
           <Editor
+            beforeMount={beforeMount}
             defaultLanguage="baml"
             defaultValue={initialCode}
-            theme={codeTheme.monaco}
-            beforeMount={beforeMount}
-            onMount={onMount}
-            onChange={onChange}
             height="100%"
+            onChange={onChange}
+            onMount={onMount}
             options={{
-              minimap: { enabled: false },
-              fontSize: 13,
-              fontFamily: 'var(--font-geist-mono), ui-monospace, monospace',
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              renderLineHighlight: 'line',
-              overviewRulerLanes: 0,
-              hideCursorInOverviewRuler: true,
-              scrollbar: {
-                verticalSliderSize: 6,
-                horizontalSliderSize: 6,
-                // On scroll pages, let the wheel pass through to the page
-                // once the editor has nothing left to scroll.
-                alwaysConsumeMouseWheel: false,
-              },
-              padding: { top: 10, bottom: 10 },
-              tabSize: 2,
-              wordWrap: 'on',
               automaticLayout: true,
+              codeLens,
               // Render hover/suggest widgets in a viewport-fixed overlay so
               // they escape the editor's overflow-clipped frame instead of
               // landing under the file header. Safe because no ancestor sets a
               // transform/filter (which would re-anchor the fixed widget).
               fixedOverflowWidgets: true,
+              fontFamily: 'var(--font-geist-mono), ui-monospace, monospace',
+              fontSize: 13,
               guides: { indentation: false },
+              hideCursorInOverviewRuler: true,
               hover: { above: false },
               inlayHints: { enabled: 'on' },
+              lineNumbers: 'on',
+              minimap: { enabled: false },
+              overviewRulerLanes: 0,
+              padding: { bottom: 10, top: 10 },
               readOnly: !!readOnly,
+              renderLineHighlight: 'line',
+              scrollBeyondLastLine: false,
+              scrollbar: {
+                // On scroll pages, let the wheel pass through to the page
+                // once the editor has nothing left to scroll.
+                alwaysConsumeMouseWheel: false,
+                horizontalSliderSize: 6,
+                verticalSliderSize: 6,
+              },
+              tabSize: 2,
+              wordWrap: 'on',
             }}
+            theme={codeTheme.monaco}
           />
         </div>
         {runs.length > 0 ? (
@@ -644,15 +650,15 @@ export function BamlEditor({
                   : `${runs.filter((r) => r.status === 'pass').length}/${runs.length} passed`}
               </span>
               <button
-                type="button"
                 className="l2-runs-clear"
                 onClick={() => setRuns([])}
+                type="button"
               >
                 clear
               </button>
             </div>
             {runs.map((r) => (
-              <div key={r.id} className={`l2-runs-row l2-runs--${r.status}`}>
+              <div className={`l2-runs-row l2-runs--${r.status}`} key={r.id}>
                 <span className="l2-runs-check">{statusIcon(r.status)}</span>
                 <span className="l2-runs-name">{r.testName}</span>
                 {r.status === 'running' ? (

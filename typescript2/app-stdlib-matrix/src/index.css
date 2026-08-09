@@ -1,10 +1,22 @@
 @import "tailwindcss";
 
 /* The two languages' colours. Everything else is Tailwind's palette; these
-   two are data, not decoration, so they get names. */
+   are data, not decoration, so they get names.
+
+   JavaScript yellow rather than TypeScript blue: at equal lightness the blue
+   sat a step away from BAML's purple on the hue wheel, and the striped
+   both-sides swatch — which is the two of them interleaved at 4px — read as one
+   muddy colour rather than as two languages.
+
+   Yellow is light enough that a hollow square outlined in it disappears against
+   white, so the unjudged swatch borrows a darker edge. Its fill is the yellow;
+   only the outline is darkened, which keeps the state legible without
+   introducing a third colour. */
 @theme {
   --color-baml: oklch(0.62 0.19 300);
-  --color-ts: oklch(0.62 0.17 254);
+  --color-ts: oklch(0.89 0.18 101);
+  --color-ts-edge: oklch(0.68 0.14 95);
+  --color-unnecessary: oklch(0.58 0.21 25);
 }
 
 /* Presence swatches encode which side a member exists on. The both-sides case
@@ -42,13 +54,26 @@
   animation: goto-flash 1.4s ease-out;
 }
 
+/* The squares are named for their ink, not for their meaning: the same fill
+   says different things from the two sides, and the component is what maps one
+   to the other.
+
+   A solid square is one language. Which language it names depends on where you
+   are standing — from the TypeScript view a purple square means "this is in
+   BAML too", and a yellow one means "this is TypeScript's alone" — so the
+   viewing side never paints its own colour on a symbol that exists in both. */
 .swatch-baml {
   background: var(--color-baml);
 }
 .swatch-ts {
   background: var(--color-ts);
 }
-.swatch-both {
+
+/* Both languages, interleaved: the same operation reached differently. Stripes
+   rather than a single split, because a split reads as a boundary between two
+   halves and this is not two halves of anything — it is one operation you can
+   reach from either side by different routes. */
+.swatch-striped {
   background: repeating-linear-gradient(
     45deg,
     var(--color-baml) 0 4px,
@@ -56,15 +81,11 @@
   );
 }
 
-/* Present in both, reached differently. One clean split rather than the
-   blended stripes: the two languages are both here, and they are not the same
-   thing. */
-.swatch-divergent {
-  background: linear-gradient(
-    135deg,
-    var(--color-baml) 0 50%,
-    var(--color-ts) 50% 100%
-  );
+/* Neither language's colour, because this is not a fact about either surface:
+   BAML answers the question in the language, so the API does not arise.
+   `Array.isArray` is not missing — `foo is int[]` is how you ask. */
+.swatch-unnecessary {
+  background: var(--color-unnecessary);
 }
 
 /* Nothing has looked at it yet. Hollow rather than pale — an empty square reads
@@ -76,5 +97,30 @@
 }
 .swatch-unjudged-ts {
   background: transparent;
-  border-color: var(--color-ts);
+  border-color: var(--color-ts-edge);
+}
+
+/* Segments of a group's composition bar: the same vocabulary as the swatches,
+   without the border and radius an 8px slice cannot carry. Stripes are finer
+   here than on a swatch, because the slice is half the height. */
+.seg-baml {
+  background: var(--color-baml);
+}
+.seg-ts {
+  background: var(--color-ts);
+}
+.seg-striped {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-baml) 0 3px,
+    var(--color-ts) 3px 6px
+  );
+}
+.seg-unnecessary {
+  background: var(--color-unnecessary);
+}
+/* Unanswered, in neither language's colour: the bar's one neutral, so that a
+   mostly-unjudged module reads as mostly empty at a glance. */
+.seg-unjudged {
+  background: --alpha(var(--color-zinc-500) / 22%);
 }

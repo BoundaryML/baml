@@ -35,7 +35,10 @@ Examples:
     baml describe String.split
 
   Describe a keyword:
-    baml describe match")]
+    baml describe match
+
+  Search for something by what it does:
+    baml describe --search 'run a subprocess'")]
 pub struct DescribeArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
@@ -58,6 +61,25 @@ pub struct DescribeArgs {
     /// Output results as JSON
     #[arg(long, help_heading = "Output options")]
     pub json: bool,
+
+    /// Search names *and* docstrings for NAME, instead of resolving it.
+    ///
+    /// `describe` answers "what is this called"; `--search` answers "what does
+    /// this", which is the question you have when you know the job and not the
+    /// name. `baml describe subprocess` finds nothing — nothing is called that
+    /// — while `baml describe --search subprocess` finds `baml.sys.exec`.
+    /// Matching is on whole words, best first.
+    #[arg(long, help_heading = "Output options")]
+    pub search: bool,
+
+    /// Most results to return from `--search`.
+    #[arg(
+        long,
+        default_value_t = 30,
+        value_name = "N",
+        help_heading = "Output options"
+    )]
+    pub limit: usize,
 
     /// Export a whole package's surface as one versioned JSON document
     /// (NAME must be a package: `baml`, `user`, …). Cross-package references
@@ -315,6 +337,37 @@ impl DescribeArgs {
         }
 
         let name = self.name.as_deref().unwrap_or("");
+
+        // ── --search: names and docstrings, rather than name resolution ─────
+        if self.search {
+            let hits = crate::describe_search::search(&db, name, self.limit);
+            if self.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&hits)
+                        .unwrap_or_else(|_| unreachable!("search hits serialize"))
+                );
+            } else if hits.is_empty() {
+                // Not an error: "nothing does this" is a real answer about the
+                // standard library, and the caller asked a question rather than
+                // named something that should exist. Fall back to the name
+                // suggestions, which are fuzzy where this is literal — a query
+                // for `iterate` matches no docstring, because they all say
+                // "iterator", but it is close enough to a name to be offered.
+                println!("no symbol matches: {name}");
+                print_did_you_mean(&db, name);
+            } else {
+                for hit in &hits {
+                    let summary = hit
+                        .summary
+                        .as_deref()
+                        .map(|s| format!("  // {s}"))
+                        .unwrap_or_default();
+                    println!("{:<16} {:<40} {}{summary}", hit.kind, hit.path, hit.id);
+                }
+            }
+            return Ok(crate::ExitCode::Success);
+        }
 
         // ── --export: the whole-package surface document ────────────────────
         if self.export {

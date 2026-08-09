@@ -1,7 +1,7 @@
 import { createMetadata } from '@/app/_lib/metadata';
 // CONTENT PARITY: keep substantive copy and commands in sync with
 // content/quickstart.md. Update both representations in the same change.
-import { TryBaml } from '@/app/baml-intro/_components/TryBaml';
+import { TryBaml } from '@/app/baml-intro/_components/try-baml';
 import { DiscordCta } from '@/components/discord-cta';
 import { EapCta } from '@/components/eap-cta';
 import { FooterSection } from '@/components/footer-section';
@@ -18,16 +18,18 @@ export const metadata = createMetadata({
 
 const CSS = `
 .qs-wrap { margin: 0 auto; max-width: 720px; padding: 96px 24px 128px; }
-.qs-h1 { font-size: clamp(40px, 6vw, 56px); font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin: 0 0 48px; }
-.qs-wrap h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin: 56px 0 16px; }
+.qs-h1 { font-size: clamp(40px, 6vw, 56px); font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin: 0 0 20px -0.045em; }
+.qs-wrap h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin: 40px 0; }
 .qs-wrap h2:first-of-type { margin-top: 0; }
 .qs-wrap p { color: #2b2b2b; font-size: 16px; line-height: 1.7; margin: 16px 0; }
-.qs-lead { font-size: 19px; font-weight: 600; line-height: 1.55; color: #1a1a1a; margin: 0 0 8px; }
+.qs-lead { font-size: 20px; font-weight: 400; line-height: 1.6; color: #1a1a1a; margin: 0 0 8px; }
 .qs-try { margin-top: 28px; }
+/* the install unit spans the column so it lines up with the cards below */
+.qs-try > div { max-width: none; }
 .qs-ctas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
 .qs-wrap :not(pre) > code { background: rgba(0,0,0,0.06); border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; padding: 2px 5px; }
-.qs-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 8px 0 0; }
+.qs-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 0; }
 .qs-card { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 13px 16px;
   border: 1px solid #e7e2d6; border-radius: 11px; background: #fffdf7; text-decoration: none;
   transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease; }
@@ -50,7 +52,7 @@ a.qs-card:hover::after { color: #6d28d9; transform: translate(1px, -1px); }
 export default function QuickstartPage() {
   return (
     <>
-      {/* eslint-disable-next-line react/no-danger */}
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static page CSS */}
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
       <main className="qs-wrap">

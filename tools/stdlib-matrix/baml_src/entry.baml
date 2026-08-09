@@ -24,22 +24,6 @@ class MatrixResult {
     queued: int,
 }
 
-/// `build_matrix_aligned`'s result: the same artifacts, what each pass
-/// contributed, and what was refused.
-class AlignedMatrixResult {
-    markdown: string,
-    output_file: string,
-    json_file: string,
-    report: SymbolMatrix,
-    carried: int,
-    proposed: int,
-    swept: int,
-    upheld: int,
-    refuted: int,
-    rejected: string[],
-    failures: int,
-}
-
 class CheckResult {
     output_file: string,
     json_file: string,
@@ -141,7 +125,23 @@ function check_matrix(
     }
 }
 
-/// The full pass: name matching, then model alignment over what is left.
+/// `build_matrix_aligned`'s result: the same artifacts, what the sessions
+/// contributed, and what was refused.
+class AlignedMatrixResult {
+    markdown: string,
+    output_file: string,
+    json_file: string,
+    report: SymbolMatrix,
+    carried: int,
+    sessions: int,
+    judged: int,
+    rejected: string[],
+    failures: int,
+}
+
+/// The full pass: the surfaces, then a session per TypeScript container over
+/// everything a previous revision did not already answer.
+///
 /// Reads ANTHROPIC_API_KEY from the environment.
 function build_matrix_aligned(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
@@ -152,10 +152,16 @@ function build_matrix_aligned(
     previous_file: string = "",
     review_all: bool = false,
     concurrency: int = 0,
+    repo_root: string = ".",
+    type_system_file: string = "baml_language/TYPE_SYSTEM.md",
+    skill_cache: string = "tools/stdlib-matrix/data/baml_skill.md",
+    baml_bin: string = "baml",
+    scratch_root: string = "tools/stdlib-matrix/data/scratch",
+    only: string = "",
 ) -> AlignedMatrixResult {
-    // The passes see the previous revision too: a symbol that changed still
-    // arrives with what was concluded about it last time, which is what makes
-    // `bless` an answer the model can give. Read once, used twice.
+    // The sessions see the previous revision too: a symbol that changed still
+    // arrives with what was concluded about it last time, so the model can
+    // repeat a conclusion rather than rediscover it. Read once, used twice.
     let revision: Revision? = if (previous_file.length() > 0) {
         load_revision(previous_file)
     } else {
@@ -170,18 +176,21 @@ function build_matrix_aligned(
         review_all = review_all,
         previous = revision,
     );
-    //# propose, sweep, then verify everything either produced
-    let outcome = align_matrix(base.report, revision, concurrency);
+    // Fetched before anything is spent. A run that loses its documentation
+    // produces worse judgements that look exactly like good ones, so this is
+    // the right place to fail.
+    let skill = load_skill(skill_cache);
+    report_progress(`skill loaded, ${skill.length()} bytes`);
+    let box = build_toolbox(repo_root, type_system_file, baml_bin, skill, scratch_root);
+    let outcome = align_matrix(base.report, box, revision, concurrency, only);
     AlignedMatrixResult {
         markdown: render_matrix_markdown(outcome.matrix),
         output_file: output_file,
         json_file: json_file,
         report: outcome.matrix,
         carried: base.carried,
-        proposed: outcome.proposed,
-        swept: outcome.swept,
-        upheld: outcome.upheld,
-        refuted: outcome.refuted,
+        sessions: outcome.sessions,
+        judged: outcome.judged,
         rejected: outcome.rejected,
         failures: outcome.matrix.failures.length(),
     }
@@ -191,78 +200,99 @@ function main() -> MatrixResult {
     build_matrix()
 }
 
-/// What the passes would be asked, without asking. Inspection only.
-class PoolReport {
-    owners: int,
-    total_candidates: int,
-    dropped: int,
-    empty_owners: int,
-    pools: CandidatePool[],
+/// What the tools answer, without a model.
+///
+/// Inspection only, and the point of it: a tool that answers badly is a session
+/// that wanders, and a session that wanders is paid for. This is how a lookup
+/// is reviewed while it is still free.
+class ToolReport {
+    doc_sections: string[],
+    skill_bytes: int,
+    answers: string[],
 }
 
-function dump_pools(
-    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
-    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
-) -> PoolReport {
-    let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), "inspection");
-    let pools = build_pools(matrix, pending_symbols(matrix));
-    let total = 0;
-    let dropped = 0;
-    let empty = 0;
-    for (let pool in pools) {
-        total += pool.ts_ids.length();
-        dropped += pool.dropped;
-        if (pool.ts_ids.length() == 0) {
-            empty += 1;
-        }
+function dump_tools(
+    repo_root: string = ".",
+    type_system_file: string = "baml_language/TYPE_SYSTEM.md",
+    skill_cache: string = "tools/stdlib-matrix/data/baml_skill.md",
+    baml_bin: string = "baml",
+    scratch_root: string = "tools/stdlib-matrix/data/scratch",
+    tool: string = "",
+    argument: string = "",
+) -> ToolReport {
+    // Loaded once and given to the toolbox, exactly as a real run does. Not
+    // tolerated when it fails: the skill is what a session is told BAML *is*,
+    // and inspecting the tools against a toolbox that never got it would be
+    // inspecting something other than what runs.
+    let skill = load_skill(skill_cache);
+    let box = build_toolbox(repo_root, type_system_file, baml_bin, skill, scratch_root);
+    let answers: string[] = [];
+    if (tool.length() > 0) {
+        answers.push(run_tool(box, tool, argument));
+    } else {
+        // One of each, over questions the old pipeline got wrong: a name that
+        // suggests nothing (`child_process.spawn` → `baml.sys.exec`), a type
+        // whose members are the answer, and a concept with no symbol at all.
+        answers.push(run_tool(box, "search", "run a subprocess"));
+        answers.push(run_tool(box, "describe", "baml.sys.exec"));
+        answers.push(run_tool(box, "describe", "baml.time"));
+        answers.push(run_tool(box, "describe", "spaw"));
+        answers.push(run_tool(box, "examples", "baml.sys.exec"));
+        answers.push(run_tool(box, "docs", "Pattern Matching"));
+        answers.push(run_tool(box, "invented", "anything"));
     }
-    PoolReport {
-        owners: pools.length(),
-        total_candidates: total,
-        dropped: dropped,
-        empty_owners: empty,
-        pools: pools,
-    }
+    ToolReport { doc_sections: box.doc_headings, skill_bytes: box.skill.length(), answers: answers }
 }
 
-/// What the passes would ask, rendered, without asking. Inspection only — this
-/// is how a prompt change is reviewed before it costs anything.
+/// What the sessions would be asked, without asking. Inspection only — this is
+/// how a prompt change is reviewed before it costs anything.
 class PlanReport {
-    propose_calls: int,
-    sweep_calls: int,
-    no_candidate_symbols: int,
-    sample_propose: string,
-    sample_sweep: string,
+    sessions: int,
+    symbols_queued: int,
+    largest: string,
+    /// The whole first turn of one session, rendered exactly as it will be sent.
+    sample: string,
 }
 
 function dump_plan(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
     ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
-    owner: string = "baml.time.Instant",
-    container: string = "node:child_process",
+    subject: string = "(globals).Date",
 ) -> PlanReport {
     let matrix = build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), "inspection");
-    let pools = build_pools(matrix, pending_symbols(matrix));
-    let proposals = propose_requests(matrix, pools, null);
-    let empty = record_empty_pools(matrix, pools);
-    let sweeps = sweep_requests(matrix);
-    let sample_propose = "";
-    for (let request in proposals) {
-        if (request.owner == owner) {
-            sample_propose = render_turns(propose_turns(request));
+    let requests = session_requests(matrix, null);
+    let queued = 0;
+    let largest = "";
+    let most = 0;
+    // The first matching session; a chunked container has several and they
+    // differ only in which symbols they carry.
+    let sample = "";
+    for (let request in requests) {
+        queued += request.ts_lines.length();
+        if (request.ts_lines.length() > most) {
+            most = request.ts_lines.length();
+            largest = `${request.subject} (${request.ts_lines.length()} symbols)`;
         }
-    }
-    let sample_sweep = "";
-    for (let request in sweeps) {
-        if (request.container == container) {
-            sample_sweep = render_turns(sweep_turns(request));
+        // The same rule `--only` uses, so the two select sessions alike. Equality
+        // was wrong for exactly the default: `(globals).Date` chunks into
+        // `(globals).Date (part 1 of 2)` and matched nothing.
+        if (request.subject.to_lower_case().includes(subject.trim().to_lower_case())) {
+            // The skill is fetched at run time and is the same for every
+            // session, so it is left out here: what changes between runs, and
+            // what a review is actually looking at, is the rest.
+            sample
+                = render_turns(
+                    [
+                        Turn { role: "system", text: session_rules() },
+                        Turn { role: "user", text: session_user(request) },
+                    ],
+                );
         }
     }
     PlanReport {
-        propose_calls: proposals.length(),
-        sweep_calls: sweeps.length(),
-        no_candidate_symbols: empty,
-        sample_propose: sample_propose,
-        sample_sweep: sample_sweep,
+        sessions: requests.length(),
+        symbols_queued: queued,
+        largest: largest,
+        sample: sample,
     }
 }
