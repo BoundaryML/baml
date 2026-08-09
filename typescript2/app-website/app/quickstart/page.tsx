@@ -24,10 +24,11 @@ const CSS = `
 .qs-wrap > * { margin: 0; }
 .qs-head { display: flex; flex-direction: column; gap: 18px; }
 .qs-sec { display: flex; flex-direction: column; gap: 14px; }
+.qs-head > *,
 .qs-sec > * { margin: 0; }
-.qs-h1 { font-size: clamp(40px, 6vw, 56px); font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin-left: -0.045em; }
+.qs-h1 { font-size: clamp(40px, 6vw, 56px); font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin: 0 0 0 -0.045em; }
 .qs-wrap h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
-.qs-wrap p { color: #2b2b2b; font-size: 16px; line-height: 1.7; margin: 16px 0; }
+.qs-wrap p { color: #2b2b2b; font-size: 16px; line-height: 1.7; margin: 0; }
 .qs-lead { font-size: 20px; font-weight: 400; line-height: 1.6; color: #1a1a1a; }
 /* the install unit spans the column so it lines up with the cards below */
 .qs-try > div { max-width: none; }
