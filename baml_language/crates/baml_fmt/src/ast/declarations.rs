@@ -603,16 +603,18 @@ impl Printable for FunctionParam {
 /// Any of the valid function bodies in a [`FunctionDecl`].
 #[derive(Debug)]
 pub enum FunctionDeclBody {
-    Llm(LlmFunctionBody),
+    // Boxed: the LLM body (client/tools/prompt fields) dwarfs `BlockExpr`
+    // (clippy::large_enum_variant).
+    Llm(Box<LlmFunctionBody>),
     Block(BlockExpr),
 }
 impl FromCST for FunctionDeclBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
         match node.kind() {
-            SyntaxKind::LLM_FUNCTION_BODY => Ok(FunctionDeclBody::Llm(LlmFunctionBody::from_cst(
-                SyntaxElement::Node(node),
-            )?)),
+            SyntaxKind::LLM_FUNCTION_BODY => Ok(FunctionDeclBody::Llm(Box::new(
+                LlmFunctionBody::from_cst(SyntaxElement::Node(node))?,
+            ))),
             SyntaxKind::EXPR_FUNCTION_BODY => {
                 let mut visitor = SyntaxNodeIter::new(&node);
                 let block: BlockExpr = visitor.expect_parse()?;
