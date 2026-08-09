@@ -372,7 +372,9 @@ fn lower_function(
                 .and_then(|c| c.split_once('/'))
                 .map(|(_, m)| m)
                 .unwrap_or_default();
-            let tools_expr = tools_field.as_ref().and_then(|tf| tf.expr());
+            let tools_expr = tools_field
+                .as_ref()
+                .and_then(baml_compiler_syntax::ast::ToolsField::expr);
             let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
                 lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
