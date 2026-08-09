@@ -16,17 +16,13 @@ function live_mcp_tools() -> string {
     }
     let spec = echo_spec(root.claude_code.ClaudeCodeClient.new(), conn.tools());
     let result = root.ai.Agent<EchoBack>.new(on_event = log_event).run(spec);
-    let completed = result
-        .journal
-        .entries()
-        .filter(
-            (e: root.ai.Event) -> {
-                match (e) {
-                    let c: root.ai.ToolCompleted => true,
-                    _ => false,
-                }
-            },
-        )
+    let completed = result.journal.entries()
+        .filter((e: root.ai.Event) -> {
+            match (e) {
+                let c: root.ai.ToolCompleted => true,
+                _ => false,
+            }
+        })
         .length();
     `reply=${result.value.reply} tool_completed_events=${completed}`
 }

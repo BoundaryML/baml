@@ -25,13 +25,20 @@ baml_src/
 ├── ns_google/                root.google.GoogleClient (generateContent API)
 │   └── ns_internal/
 ├── ns_claude_code/           root.claude_code.ClaudeCodeClient (the CLI as a client)
-│   └── ns_internal/          prompt folding, the outcome envelope, exec + parse
+│   └── ns_internal/          prompt folding, the outcome envelope, MCP flags, exec + parse
+├── ns_mcp/                   root.mcp: MCP servers as ordinary tools — a library
+│                             over start_process + raw_tool, not part of root.ai
 ├── examples/plan_trip.baml   the travel-agent fixture; plan_trip_spec is the
 │                             manual form of PlanTrip@spec until the desugar exists
-├── howto/                    the how-to pages as running code
+├── examples/logging.baml     log_event: every journal event as one log line
+├── howto/                    the how-to pages as running code (parse feedback,
+│                             attach_mcp)
 ├── tests/                    offline: ScriptedClient (test scaffolding,
-│                             root namespace, not part of root.ai) drives everything
-├── live/                     live_openai() / live_anthropic() / live_google()
+│                             root namespace, not part of root.ai) drives
+│                             everything; tests/mcp.baml fakes an MCP server in sh
+├── live/                     live_openai() / live_anthropic() / live_google() /
+│                             live_claude_code() / live_mcp_tools() /
+│                             live_claude_code_dynamic_mcp()
 └── resolve.baml              "prefix/model" -> client value (root, not ns_ai)
 ```
 
@@ -50,6 +57,10 @@ infisical run --env=test -- ../target/debug/baml-cli run -e 'live_openai()'
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_anthropic()'
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_google()'
 ../target/debug/baml-cli run -e 'live_claude_code()'   # uses the CLI's own login
+
+# MCP, both forms (no API key; npx fetches the everything server):
+../target/debug/baml-cli run -e 'live_mcp_tools()'              # root.mcp: journaled tools
+../target/debug/baml-cli run -e 'live_claude_code_dynamic_mcp()' # harness: model attaches mid-run
 
 # the observable demo: every journal event as a log line
 ../target/debug/baml-cli test --logs INFO -i "live::claude code tool loop"
@@ -77,6 +88,15 @@ return a typed `Itinerary`.
 - The Claude Code envelope offers final-result-or-calls with `$defs`
   lifted, and the transcript folding marks successful tool results —
   the live smoke proves BAML tools execute through the harness.
+- The MCP connection speaks the protocol end-to-end against a fake stdio
+  server written in sh (handshake, catalog, call), and MCP calls land in
+  the journal as `ToolRequested`/`ToolCompleted` like any tool. Live:
+  `live_mcp_tools()` echoes through a real server with the Claude Code
+  client; `live_claude_code_dynamic_mcp()` proves the model can attach a
+  server mid-run via the `attach_mcp` tool and use its tools natively on
+  the next turn (verified: `--allowedTools=mcp__<name>` is required, and
+  the equals form matters because the flag is variadic and would swallow
+  the trailing prompt argument).
 
 ## Deviations from the BEP pages (to sync back)
 
@@ -102,13 +122,18 @@ return a typed `Itinerary`.
    deferred.
 7. Model defaults are real models: `gpt-4o-mini`, `claude-haiku-4-5`
    (3-5-haiku is retired), `gemini-2.5-flash`.
-8. `reflect.call_any` itself widens integral JSON numbers into `float` and
-   `float?` parameters (fixed in `bex_vm/package_reflect`; models send `150`
-   for `150.0`, and JSON Schema `number` accepts both). Without it Gemini
-   loops to death on a retried invalid call. The widening is lossless-only:
-   a per-value round-trip check admits integers up to 2^53 and rejects
-   anything f64 cannot represent exactly, so this is not an `i64 <: f64`
-   type-level coercion. The interim BAML-side workaround was removed;
+8. `reflect.call_any` performs a boundary decode on dynamic arguments
+   (`decode_for_param` in `bex_vm/package_reflect`). Integral JSON numbers
+   widen into `float` and `float?` parameters (models send `150` for
+   `150.0`, and JSON Schema `number` accepts both; without it Gemini loops
+   to death on a retried invalid call), and a JSON array rebuilds
+   element-wise into a typed array parameter (`json[]` binds `string[]`;
+   the rule recurses, so integral elements widen inside `float[]`) —
+   B-1174. Every conversion is lossless-only and constructs a fresh value:
+   the float round-trip check admits integers up to 2^53 and rejects
+   anything f64 cannot represent exactly, and a rebuilt array is a new
+   allocation, so neither case is a type-level coercion and arrays stay
+   invariant. The interim BAML-side workaround was removed;
    `tests/float_widening.baml` proves the boundary behavior directly.
 9. The runner accepts a turn when it has tool calls OR parses; the repair
    budget is fixed at 2 re-asks per step (no `max_parse_attempts` knob, per
@@ -153,3 +178,19 @@ return a typed `Itinerary`.
   parameters; wrap in `catch_all` inside the lambda.
 - `string.substring(start, end)`, not `slice`.
 - Struct spread `T { ...base, f: v }` exists and copies.
+- `match` accepts string-literal arms (`"text" => ...`), not only type
+  patterns and enum variants.
+- Template literals trim leading/trailing whitespace, including escape
+  sequences at the edges: `` `${line}\n` `` loses the newline. For
+  protocol framing, append with a quoted string: `[line, "\n"].join("")`
+  (`string` has no `concat`).
+- A closure created in a `for` loop captures the loop variable's slot,
+  not its value: every closure sees the final iteration. Mint the
+  binding through a helper function parameter (see `root.mcp._proxy`).
+- `reflect.call_any` decodes a JSON array into a typed array parameter
+  (B-1174, fixed on this branch): `json[]` binds `string[]`, integral
+  elements widen inside `float[]`, and a lossy element still throws.
+  The decode builds a fresh `T[]` — not a subtyping rule; BAML arrays
+  stay invariant, and covariance is unsound for mutable arrays.
+  `tests/float_widening.baml` proves the boundary behavior. `raw_tool`
+  remains for tools whose schema no signature derives (`root.mcp`).

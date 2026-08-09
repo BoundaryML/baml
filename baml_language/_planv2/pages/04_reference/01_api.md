@@ -193,13 +193,16 @@ class Tool {
     name: string,
     description: string,
     input_schema: json,
-    handler: baml.AnyFunction<Returns = unknown>,
+    handler: baml.AnyFunction?,              // signature-derived dispatch; null for raw tools
+    raw_handler: ((map<string, unknown>) -> string throws unknown)?,
+                                             // dynamic-source dispatch over the raw argument map
     on_error: ToolErrorMode?,                // null: inherit the run's tool_errors mode
 
     function call(self, args: map<string, unknown>) -> string
         throws baml.errors.InvalidArgument | baml.errors.UnknownError
         // the total boundary: validate, dispatch via reflect.call_any,
-        // serialize the result as JSON text
+        // serialize the result as JSON text; a raw tool dispatches its
+        // raw_handler over the argument map instead
 }
 
 class Toolbox {
@@ -215,6 +218,14 @@ function tool(
     description: string? = null,             // default: the docstring
     on_error: ToolErrorMode? = null,         // null: inherit the run's tool_errors mode
 ) -> Tool throws never
+
+function raw_tool(
+    name: string,
+    description: string,
+    input_schema: json,                      // supplied, not signature-derived
+    handler: (map<string, unknown>) -> string throws unknown,
+    on_error: ToolErrorMode? = null,
+) -> Tool throws baml.errors.InvalidArgument // the reserved name
 ```
 
 A `tools:` list accepts functions and `Tool` values; functions

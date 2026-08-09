@@ -216,7 +216,11 @@ function mcp_config_json(c: root.claude_code.ClaudeCodeClient) -> string? {
 // One mcp__<name> entry per attached server: the --allowedTools value that
 // permits every tool the server provides.
 function allowed_mcp_tools(c: root.claude_code.ClaudeCodeClient) -> string {
-    c.mcp_servers.keys().map((n: string) -> { `mcp__${n}` }).join(",")
+    c.mcp_servers.keys()
+        .map((n: string) -> {
+            `mcp__${n}`
+        })
+        .join(",")
 }
 
 // One model turn = one CLI run: assemble the prompt, exec, normalize.

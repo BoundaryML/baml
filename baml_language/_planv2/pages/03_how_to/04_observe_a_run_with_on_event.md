@@ -1,11 +1,15 @@
 # Observe a run with on_event
 
-Set `on_event` on the default runner to react to journal events as they
-append: logging, progress reporting, metrics. The callback receives
-every event in order, on the run's thread, while the run executes. It
-observes; it cannot veto or mutate the run
-(`../02_guides/02_specs_and_runners/02_the_default_runner.md`). This
-page runs the travel agent:
+This page reacts to a run's events while the run executes: logging
+progress, feeding a trace viewer, counting tokens.
+
+Every run appends typed events to its journal
+(`../02_guides/04_the_journal.md`). The default runner's `on_event`
+field is a callback that receives each event at the moment it is
+appended. The callback observes the run; it cannot change it
+(`../02_guides/02_specs_and_runners/02_the_default_runner.md`).
+
+This page runs the travel agent:
 
 ```baml
 function PlanTrip(trip_request: string) -> Itinerary {
@@ -18,8 +22,8 @@ function PlanTrip(trip_request: string) -> Itinerary {
 }
 ```
 
-A callback is a plain function over `Event`. This one logs every event
-kind as one line:
+A callback is a plain function over `Event`. Match the events you care
+about; this one writes one log line per event:
 
 ```baml
 function log_event(e: Event) -> null {
@@ -35,8 +39,8 @@ function log_event(e: Event) -> null {
 }
 ```
 
-Pass it per call with `$on_event`, or set the runner field in the
-explicit form:
+Pass the callback at the call site with `$on_event`, or set the field
+when constructing the runner:
 
 ```baml
 let trip: Itinerary = PlanTrip("2 weeks in Japan", $on_event = log_event);
@@ -46,16 +50,13 @@ let result: RunResult<Itinerary> = ai.Agent<Itinerary>
     .run(PlanTrip@spec(trip_request = "2 weeks in Japan"));
 ```
 
-Events arrive as the runner appends them: a model turn commits as one
-batch, so its `AssistantMessage`, its `ToolRequested` projections, and
-its `Usage` fire together, followed by each tool's `ToolCompleted` or
-`ToolFailed` in completion order (`../04_reference/02_events.md`). The
-callback sees more than the model does, because journal-only events
-such as `ToolRequested` and `Usage` fire even though they lower to
-nothing in the transcript.
+Events arrive in the order the runner appends them. A model turn
+arrives as one batch: the `AssistantMessage`, one `ToolRequested` per
+tool call, and the turn's `Usage`. Each tool's `ToolCompleted` or
+`ToolFailed` follows as that tool finishes. The full catalog of events
+and their fields is `../04_reference/02_events.md`.
 
-Token deltas are not events in this phase
-(`../02_guides/04_the_journal.md`). The Claude Code client additionally
-streams its harness's inner transcript as log lines, which is logging
-rather than events
-(`../02_guides/03_clients/05_the_built_in_clients.md`).
+The callback sees more than the model does. `ToolRequested` and
+`Usage` are never rendered into the model's input, but they still
+fire, so an observer needs no other channel. Streaming token deltas
+are not events in this phase (`../02_guides/04_the_journal.md`).

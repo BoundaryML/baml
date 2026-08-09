@@ -301,7 +301,40 @@ implicit coercion. Events carry serialized JSON rather than
 `ToolCompleted.output` is JSON text — pending a design for
 `json`-typed event fields.
 
-## 21. The journal records repair attempts
+## 21. MCP: journaled tools are canonical; harness attachment is client configuration
+
+MCP support has two forms. The `root.mcp` library speaks the protocol
+itself and projects a server's catalog into ordinary `Tool` values:
+the runner executes the calls, so they are journaled, observable
+through `on_event`, governed by the tool-failure policy, and
+client-neutral. Separately, `ClaudeCodeClient.mcp_servers` exposes the
+harness's own MCP support as client configuration: servers attach to
+the CLI process, and their calls run inside the turn, unrecorded by
+the journal.
+
+Rejected: harness attachment as the only form. It is Claude-Code-only,
+its calls are a side channel of real model interactions the journal
+never records, and when an attached server's tools change state
+outside the run, the client cannot claim `Safe` on a mid-run failure. Rejected: a protocol client
+inside `ai`. The core namespace carries no wire knowledge, and MCP is
+a tool source, so it is a library over `baml.sys.start_process` and
+`raw_tool` — the judgment pi reached as well, whose core refuses MCP
+and whose extension mechanism provides it. Rejected: removing the
+harness form. A multi-call episode completes inside one turn there,
+which the envelope cannot match, and the standing context cost of an
+attached catalog is answered in either form by attaching lazily. The
+cost of keeping both is that a reader must choose; the how-to pages
+state the rule: the journaled form is canonical, the harness form is a
+per-client optimization.
+
+`raw_tool` exists because of this decision. A dynamic tool source
+carries a schema that no BAML signature derives, so `Tool` gained a
+second dispatch path — `input_schema` supplied by the caller, the
+handler receiving the raw argument map — beside the signature-derived
+one. Mid-run attachment by the application, as opposed to by the
+model, is steering and stays deferred to sessions.
+
+## 22. The journal records repair attempts
 
 A failed repair attempt commits its `AssistantMessage`, its `Usage`,
 and the correction `UserMessage` as ordinary events. The journal is

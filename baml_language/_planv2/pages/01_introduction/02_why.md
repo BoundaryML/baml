@@ -34,16 +34,22 @@ finished run, so recording is not an integration to add later.
 ## What you do not get
 
 This BEP does not include long-lived conversations. There is no
-session object, no steering channel, no policy layer, and no
-background job handle. A run starts, loops, and returns. The design
-reserves room for all of these; `../05_appendix/03_future_phases.md`
-records how each returns without breaking this BEP's surface.
+built-in session object, no steering channel, no policy layer, and no
+background job handle. A run starts, loops, and returns. Each of
+these arrives in a later phase without breaking this BEP's surface
+(`../05_appendix/03_future_phases.md`) — and none of them is gated on
+waiting: the loop's primitives are public, so a custom runner can
+hold a journal across turns, append user messages between them, or
+return a handle instead of a value today
+(`../02_guides/02_specs_and_runners/03_writing_a_runner.md`).
 
 There is no graph or state-machine DSL. Control flow between runs is
 ordinary BAML code.
 
 There is no streaming in this phase. `invoke` blocks for one model
-turn; the streaming capability is a later, additive interface.
+turn; the streaming capability is a later, additive interface. A
+custom client that wants deltas sooner can consume its provider's
+stream internally and still return one terminal `ModelTurn`.
 
 ## Relation to other systems
 

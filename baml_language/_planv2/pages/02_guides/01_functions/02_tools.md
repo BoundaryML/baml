@@ -20,6 +20,13 @@ During a run the model may call the listed tools any number of times.
 The run ends when a turn produces the return type instead of tool
 calls.
 
+`tools:` takes an expression producing the tool list — usually a
+literal list of functions and `Tool` values, but any expression works,
+such as an MCP server's catalog
+(`../../03_how_to/06_use_mcp_tools_with_any_client.md`). It is
+evaluated once, when the spec is created; the toolset is fixed for the
+spec's runs.
+
 ## A tool is a function
 
 Any BAML function can be a tool. Its name, docstring, and signature

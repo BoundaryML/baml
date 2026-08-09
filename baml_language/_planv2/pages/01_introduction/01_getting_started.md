@@ -85,7 +85,7 @@ the spec with the default runner, and unwrap the value.
 
 ```baml
 let trip: Itinerary = PlanTrip("2 weeks in Japan");
-// is the same as:
+// executes as:
 let result: RunResult<Itinerary> = ai.Agent<Itinerary>
     .new()
     .run(PlanTrip@spec(trip_request = "2 weeks in Japan"));

@@ -3,9 +3,7 @@
 // uses the server's echo tool natively inside the next turn's process.
 //   ../target/debug/baml-cli run -e 'live_claude_code_dynamic_mcp()'
 
-function dynamic_mcp_spec(
-    c: root.claude_code.ClaudeCodeClient,
-) -> root.ai.FunctionSpec<EchoBack> {
+function dynamic_mcp_spec(c: root.claude_code.ClaudeCodeClient) -> root.ai.FunctionSpec<EchoBack> {
     let args: map<string, unknown> = {};
     root.ai.FunctionSpec {
         spec_name: "DynamicMcpEcho",

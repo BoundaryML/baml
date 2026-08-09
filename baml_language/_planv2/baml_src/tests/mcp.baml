@@ -70,18 +70,20 @@ test "MCP calls are journaled like any tool call" {
     let conn = root.mcp.McpConnection.connect("fake", "sh", ["-c", fake_mcp_script()]);
     let call_args: map<string, unknown> = {};
     let _ = call_args.set("message", "hi");
-    let scripted = ScriptedClient.new([
-        root.ai.ModelTurn {
-            content: [root.ai.ToolUse { id: "m1", name: "echo", args: call_args }],
-            stop_reason: root.ai.StopReason.ToolUse,
-            usage: null,
-        },
-        root.ai.ModelTurn {
-            content: [root.ai.Text { text: `{"reply": "Echo: from-fake"}` }],
-            stop_reason: root.ai.StopReason.Complete,
-            usage: null,
-        },
-    ]);
+    let scripted = ScriptedClient.new(
+        [
+            root.ai.ModelTurn {
+                content: [root.ai.ToolUse { id: "m1", name: "echo", args: call_args }],
+                stop_reason: root.ai.StopReason.ToolUse,
+                usage: null,
+            },
+            root.ai.ModelTurn {
+                content: [root.ai.Text { text: `{"reply": "Echo: from-fake"}` }],
+                stop_reason: root.ai.StopReason.Complete,
+                usage: null,
+            },
+        ],
+    );
     let result = root.ai.Agent<EchoBack>.new().run(echo_spec(scripted, conn.tools()));
     conn.close();
     assert.equal(result.value.reply, "Echo: from-fake");

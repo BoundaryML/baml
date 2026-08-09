@@ -96,6 +96,30 @@ Background execution and batch submission become optional client
 interfaces returning pollable handles, consumed by dedicated runners
 whose `Output` is the handle type.
 
+## Candidates from review
+
+Directions raised in review of this version, recorded for a later
+phase rather than adopted now:
+
+- **Provider-hosted tools.** A `tools:` entry such as Anthropic's
+  `web_search` executes provider-side, so it has no handler. A
+  `ClientTool` value alongside `Tool` — an interface any class can
+  implement, detected by the client and lowered to the wire rather
+  than dispatched — is the candidate shape.
+- **Richer budgets.** `$max_steps` counts model turns only;
+  `$max_time` and `$max_cost` are natural sibling fields on the
+  default runner once wall-clock and price metadata are journaled.
+- **Tool panic policy.** `on_error` governs thrown failures; whether a
+  panicking tool reports or aborts deserves its own knob (`on_panic`)
+  when panics become catchable at that boundary.
+- **A journal serialization format.** `RunResult.journal` is typed in
+  memory; persisting it (and resuming) needs a versioned event format
+  and a migration story. This is the entry ticket for phase 4 and
+  sessions.
+- **`StopReason.Other`.** Wire APIs grow finish reasons; an `Other`
+  variant carrying the raw reason would keep unknown stops
+  representable instead of collapsing them to `Complete`.
+
 ## Sessions
 
 Sessions, steering, and policies return as the sessions draft

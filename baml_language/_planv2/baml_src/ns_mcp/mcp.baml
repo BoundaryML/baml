@@ -162,20 +162,22 @@ class McpConnection {
         let out: root.ai.Tool[] = [];
         for (let t in baml.json.path_or<json[]>(result, ".tools", [])) {
             let tool_name = baml.json.path_or<string>(t, ".name", "");
-            let schema = baml
-                .json
-                .from_json<map<string, unknown>>(baml.json.path_or<json>(t, ".inputSchema", {})) catch_all (e) {
+            let schema = baml.json.from_json<map<string, unknown>>(
+                baml.json.path_or<json>(t, ".inputSchema", {}),
+            ) catch_all (e) {
                 _ => {
                     let empty: map<string, unknown> = {};
                     empty
                 },
             };
-            out.push(root.ai.raw_tool(
-                tool_name,
-                baml.json.path_or<string>(t, ".description", ""),
-                schema,
-                _proxy(self, tool_name),
-            ));
+            out.push(
+                root.ai.raw_tool(
+                    tool_name,
+                    baml.json.path_or<string>(t, ".description", ""),
+                    schema,
+                    _proxy(self, tool_name),
+                ),
+            );
         }
         out
     }

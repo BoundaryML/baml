@@ -34,7 +34,10 @@ _planv2/
     │   ├── readme.md
     │   ├── 01_retry_a_failed_parse_with_feedback.md
     │   ├── 02_test_without_a_network.md
-    │   └── 03_use_a_local_model.md
+    │   ├── 03_use_a_local_model.md
+    │   ├── 04_observe_a_run_with_on_event.md
+    │   ├── 05_attach_mcp_servers_to_claude_code.md
+    │   └── 06_use_mcp_tools_with_any_client.md
     ├── 04_reference/
     │   ├── 01_api.md
     │   ├── 02_events.md
@@ -66,9 +69,9 @@ _planv2/
   loops rewritten per application.
 - The approach — one typed function form; specs, runners, and clients
   as plain values; the journal as the single record.
-- What you do not get — no sessions or steering yet, no policies, no
-  background jobs, no graph DSL; pointer to
-  `../05_appendix/03_future_phases.md`.
+- What you do not get — no built-in sessions, steering, policies,
+  jobs, graph DSL, or streaming yet; each arrives later, and a custom
+  runner can build the run shapes today from public primitives.
 - Relation to other systems — one paragraph each; details in
   `../05_appendix/01_comparisons.md`.
 
@@ -102,8 +105,9 @@ _planv2/
 
 ### 01_functions/02_tools.md
 
-- The `tools:` field — a list of plain functions; no separate agent
-  declaration.
+- The `tools:` field — an expression producing the tool list,
+  evaluated at spec creation; usually a literal list of functions; no
+  separate agent declaration.
 - A tool is a function — schemas from signatures and docstrings via
   reflection; the explicit `tool(...)` constructor.
 - Argument validation — malformed calls become tool errors, not
@@ -298,6 +302,15 @@ entry notes the task.
 - `03_use_a_local_model.md` — register a prefix over the OpenAI codec
   or pass a client value; pointer to the `PromptTools` phase 2
   wrapper.
+- `04_observe_a_run_with_on_event.md` — `$on_event` / the runner
+  field; batch ordering; journal-only events fire too.
+- `05_attach_mcp_servers_to_claude_code.md` — `mcp_servers` renders to
+  `--mcp-config` per invoke; the attach_mcp tool for mid-run
+  attachment; the harness executes the tools, the journal does not
+  record them, and the retry-safety consequence.
+- `06_use_mcp_tools_with_any_client.md` — `root.mcp` turns a server's
+  catalog into ordinary journaled tools that work with any client; the
+  fake-server offline test.
 
 ## Reference
 
@@ -405,6 +418,10 @@ entry notes the task.
   keyword and `default_client`; nullable per-tool `on_error`; Gemini's
   every-turn instructions rule; float widening in argument validation;
   events carrying serialized JSON pending a `json`-typed event design.
+- MCP: journaled tools are canonical; harness attachment is client
+  configuration — `root.mcp` over `raw_tool` versus
+  `ClaudeCodeClient.mcp_servers`; why both exist; `raw_tool` as the
+  forced addition; application-driven attachment is steering.
 - The journal records repair attempts — `Journal.with` removed;
   `append_all` is the write; rendering filters, the record does not.
 
@@ -422,5 +439,8 @@ entry notes the task.
 - Phase 4 — remote state and long-running work: remote conversations
   as an explicit storage mode; background and batch capability
   interfaces.
+- Candidates from review — provider-hosted tools (`ClientTool`),
+  richer budgets, tool panic policy, a journal serialization format,
+  `StopReason.Other`.
 - Sessions — a runner with a durable journal; what from this BEP they
   reuse unchanged.

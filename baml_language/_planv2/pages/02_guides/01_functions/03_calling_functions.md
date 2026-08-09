@@ -20,7 +20,7 @@ built-in `Agent` runner, and unwraps the value:
 
 ```baml
 let trip: Itinerary = PlanTrip("2 weeks in Japan");
-// is the same as:
+// executes as:
 let trip: Itinerary = ai.Agent<Itinerary>
     .new()
     .run(PlanTrip@spec(trip_request = "2 weeks in Japan"))
@@ -46,7 +46,7 @@ function; a `$` name sets the matching field on the default runner:
 
 ```baml
 let trip: Itinerary = PlanTrip("2 weeks in Japan", $max_steps = 20);
-// is the same as:
+// executes as:
 let trip: Itinerary = ai.Agent<Itinerary>
     .new(max_steps = 20)
     .run(PlanTrip@spec(trip_request = "2 weeks in Japan"))

@@ -526,6 +526,23 @@ constrained output is emitted through a harness-internal
 and are configured separately via `harness_tools`; only envelope calls
 dispatch to BAML.
 
+The harness's MCP support is client configuration: the `mcp_servers`
+field maps a server name to that server's launch configuration, in the
+same shape Claude Code users write in an `.mcp.json` file. Every
+invoke renders the map into `--mcp-config`, adds `--strict-mcp-config`
+so only the listed servers attach (never the user's or the project's
+own MCP configuration), and adds `--allowedTools=mcp__<name>` because
+the CLI runs non-interactively and nothing can answer a permission
+prompt during a turn. `--tools` governs only the built-in set, so
+`harness_tools` and MCP attachment are independent. The map is read on
+every invoke and each invoke is a fresh process, so an entry added
+between turns attaches on the next turn
+(`../../03_how_to/05_attach_mcp_servers_to_claude_code.md`). An
+attached server's tools run inside the harness like `harness_tools`,
+and their calls are not recorded in the journal; for MCP tools that
+are journaled and work with every client, use the `root.mcp` library
+(`../../03_how_to/06_use_mcp_tools_with_any_client.md`).
+
 The result JSON carries `structured_output` (decoded directly, no
 repair), `usage` (with `cache_read_input_tokens` mapping to
 `cached_input_tokens`), `is_error`/`subtype` (mapped to `Refused`),
@@ -537,9 +554,10 @@ harness's internal episode is an inside-the-turn capability, like a
 hosted tool. Two consequences follow. `max_steps` counts envelope
 rounds, not the harness's underlying model calls, so one step can be
 long and expensive. And retry safety is honest only while
-`harness_tools` is empty: with the harness's own side-effectful tools
-enabled, a mid-run transport failure cannot claim `Safe`, and the
-client should classify it `Unknown` — not yet implemented.
+`harness_tools` is empty and no attached MCP server's tools change
+state outside the run: with either enabled, a failed turn may have
+failed after such a change, so the client should classify the failure
+`Unknown` rather than `Safe` — not yet implemented.
 
 ## Prompt-mode tools are a wrapper, not a mode
 

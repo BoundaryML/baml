@@ -90,7 +90,8 @@ ai
 ├── tools
 │   ├── Tool                              name, description, input schema, handler, on_error
 │   ├── Toolbox                           the active tool set; render and lookup
-│   └── tool(fn, name =, description =, on_error =)   explicit constructor; schemas come from signatures
+│   ├── tool(fn, name =, description =, on_error =)   explicit constructor; schemas come from signatures
+│   └── raw_tool(name, description, schema, handler)  dynamic tool sources (MCP); the schema is supplied
 ├── clients
 │   ├── register(prefix, factory)         makes "prefix/model" strings resolvable
 │   ├── resolve(shorthand)                "openai/gpt-5.6" -> OpenAiClient { model: "gpt-5.6" }
@@ -161,8 +162,9 @@ guides).
 reliability, the built-in clients' wire mappings), `04_the_journal.md`.
 
 **How-to.** One task per page: retry a failed parse with feedback,
-test without a network, use a local model. The section grows as
-recipes accumulate.
+test without a network, use a local model, observe a run with
+`on_event`, attach MCP servers to Claude Code, use MCP tools with any
+client. The section grows as recipes accumulate.
 
 **Reference.** `01_api` (the tree above, expanded per item),
 `02_events` (the event catalog), `03_errors` (the error catalog).

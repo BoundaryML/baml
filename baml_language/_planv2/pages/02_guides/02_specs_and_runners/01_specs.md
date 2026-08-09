@@ -54,8 +54,11 @@ and cannot be a method name, so the resolved default client is the
 ## Specs are read-only
 
 A spec has getters and nothing else. There is no `with_client`, no
-`with_tools`, and no setter. Every override lives on the runner that
-consumes the spec:
+`with_tools`, and no setter. The getters return the spec's actual
+values, and BAML classes are reference values, so mutating a returned
+value (`spec.tools().list().pop()`) is expressible — it is unsupported,
+and a later revision may return copies or freeze the spec to close the
+gap. Every override lives on the runner that consumes the spec:
 
 ```baml
 let result: RunResult<Itinerary> = ai.Agent<Itinerary>

@@ -7,37 +7,20 @@
 // A tool that attaches an MCP server to the given client. The closure
 // captures the client value; the mutation is visible to the next invoke
 // because objects are reference values and rendering reads the map fresh.
-// Built with raw_tool: the reflect boundary does not yet decode a JSON
-// string array into a string[] parameter, and a raw handler reads the
-// argument map directly.
+// An ordinary signature-derived tool: the schema comes from the closure's
+// parameters, and the boundary decode in reflect.call_any (B-1174) binds
+// the model's JSON string array into the string[] parameter.
 function attach_mcp_tool(c: root.claude_code.ClaudeCodeClient) -> root.ai.Tool {
-    let str_schema: map<string, unknown> = {};
-    let _ = str_schema.set("type", "string");
-    let arr_schema: map<string, unknown> = {};
-    let _ = arr_schema.set("type", "array");
-    let _ = arr_schema.set("items", str_schema);
-    let props: map<string, unknown> = {};
-    let _ = props.set("name", str_schema);
-    let _ = props.set("command", str_schema);
-    let _ = props.set("args", arr_schema);
-    let schema: map<string, unknown> = {};
-    let _ = schema.set("type", "object");
-    let _ = schema.set("properties", props);
-    let _ = schema.set("required", ["name", "command", "args"]);
-    let _ = schema.set("additionalProperties", false);
-    root.ai.raw_tool(
-        "attach_mcp",
-        "Attach an MCP server (a local command) to the harness. Its tools become available on the NEXT turn, not this one.",
-        schema,
-        (raw: map<string, unknown>) -> {
-            let j = baml.json.to_json(raw);
-            let server = baml.json.path_or<string>(j, ".name", "");
+    root.ai.tool(
+        (name: string, command: string, args: string[]) -> string {
             let cfg: map<string, unknown> = {};
-            let _ = cfg.set("command", baml.json.path_or<string>(j, ".command", ""));
-            let _ = cfg.set("args", baml.json.path_or<string[]>(j, ".args", []));
-            let _ = c.mcp_servers.set(server, baml.json.to_json(cfg));
-            `attached MCP server ${server}; its tools are available from the next turn`
+            let _ = cfg.set("command", command);
+            let _ = cfg.set("args", args);
+            let _ = c.mcp_servers.set(name, baml.json.to_json(cfg));
+            `attached MCP server ${name}; its tools are available from the next turn`
         },
+        name = "attach_mcp",
+        description = "Attach an MCP server (a local command) to the harness. Its tools become available on the NEXT turn, not this one.",
     )
 }
 

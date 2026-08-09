@@ -12,3 +12,9 @@ the task needs them, and it never introduces behavior of its own.
   turns.
 - `03_use_a_local_model.md` — point a function at an OpenAI-compatible
   endpoint.
+- `04_observe_a_run_with_on_event.md` — react to journal events as
+  they append.
+- `05_attach_mcp_servers_to_claude_code.md` — attach MCP servers to
+  the Claude Code CLI, at construction or mid-run.
+- `06_use_mcp_tools_with_any_client.md` — turn an MCP server's tools
+  into ordinary journaled tools that work with any client.
