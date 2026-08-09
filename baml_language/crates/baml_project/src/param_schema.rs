@@ -39,10 +39,13 @@ use crate::db::ProjectDatabase;
 /// `CycleDetector`.
 const MAX_DEPTH: usize = 64;
 
-/// The compiler appends this synthetic parameter to every LLM function
-/// (`append_default_client_param`); `client` is a reserved name there, so a
-/// trailing match can only be the injected one. The form must not render it.
-const INJECTED_CLIENT_PARAM: (&str, &str) = ("client", "baml.llm.Client");
+/// The compiler appends a synthetic trailing `client` parameter to every LLM
+/// function — `baml.llm.Client` from `append_default_client_param` on the
+/// legacy path, `ai.Client? = null` from `append_spec_client_param` in BEP
+/// spec mode. `client` is a reserved parameter name on LLM functions
+/// (`reject_reserved_llm_client_params`), so a trailing param with this name
+/// can only be the injected one. The form must not render it.
+const INJECTED_CLIENT_PARAM_NAME: &str = "client";
 
 /// Schema for one function parameter.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -148,12 +151,10 @@ pub(crate) fn function_param_schemas(
     let func = iface.lookup_function(namespace_path, name)?;
     let mut params = func.params.as_slice();
     if is_llm && let Some((last, rest)) = params.split_last() {
-        let (client_name, client_ty) = INJECTED_CLIENT_PARAM;
         let is_injected_client = last
             .name
             .as_ref()
-            .is_some_and(|n| n.as_str() == client_name)
-            && matches!(&last.ty, Ty::Class(qtn, _, _) if qtn.render_dotted(false) == client_ty);
+            .is_some_and(|n| n.as_str() == INJECTED_CLIENT_PARAM_NAME);
         if is_injected_client {
             params = rest;
         }

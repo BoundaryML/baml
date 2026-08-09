@@ -370,6 +370,8 @@ pub(crate) fn synthesize_llm_call_with_prompt(
 ///     spec_name: "Fn",
 ///     args: { "p": p, ... },
 ///     prompt_template: ai.Prompt {
+///         // the parameter's real name is ` __spec_output_format` (leading
+///         // space) so it can never shadow a user identifier
 ///         template: (output_format: string) -> {
 ///             let ctx = ai.internal.SpecCtx { output_format: output_format };
 ///             `...the function's backtick prompt...`
@@ -396,7 +398,7 @@ pub(crate) fn synthesize_llm_spec_body(
     provider_class: &str,
     model: &str,
     out_type: Option<crate::ast::TypeExpr>,
-    tools_expr: Option<&SyntaxNode>,
+    tools_value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
     prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
     span: TextRange,
 ) -> (
@@ -429,16 +431,24 @@ pub(crate) fn synthesize_llm_spec_body(
         .collect();
     let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
 
-    // prompt_template: ai.Prompt { template: (output_format: string) -> { ... } }
+    // prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }
+    //
+    // The lambda parameter carries a leading-space name so it can never
+    // shadow a user identifier: a function parameter named `output_format`
+    // must stay visible to `${output_format}` in the template (the parameter
+    // is only the render_text calling convention; `ctx.output_format` is the
+    // documented way to reach the rendered schema). Mirrors the `__tt_*`
+    // accumulator naming in `elaborate_tagged_body`.
     //
     // Binding references are span-position-checked against their `let`'s
     // visibility window, and the template's `${ctx.…}` interps keep their real
     // source ranges inside the backtick — so the synthesized `let ctx` must
     // sit at an empty range at the backtick's *start*, before every reference
     // (mirrors the accumulator lets in `elaborate_tagged_body`).
+    let of_param_name = Name::new(" __spec_output_format");
     let prompt_lambda_span = prompt_backtick.syntax().span_range();
     let prompt_start = TextRange::empty(prompt_lambda_span.start());
-    let of_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("output_format")]), prompt_start);
+    let of_ref = ctx.alloc_expr(Expr::Path(vec![of_param_name.clone()]), prompt_start);
     let spec_ctx_obj = ctx.alloc_expr(
         Expr::Object {
             type_name: baml_base::TypePath::from_dotted("ai.internal.SpecCtx"),
@@ -475,7 +485,7 @@ pub(crate) fn synthesize_llm_spec_body(
         prompt_lambda_span,
     );
     let of_param = Param {
-        name: Name::new("output_format"),
+        name: of_param_name,
         type_expr: Some((TypeExprKind::String { attrs: vec![] }).at(span)),
         default: None,
         span,
@@ -509,8 +519,8 @@ pub(crate) fn synthesize_llm_spec_body(
     );
 
     // toolbox: ai.Toolbox.new([...])
-    let tool_list = match tools_expr {
-        Some(node) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
+    let tool_list = match tools_value {
+        Some(rowan::NodeOrToken::Node(node)) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
             let mut elements = Vec::new();
             for elem in node.children_with_tokens() {
                 let lowered = match &elem {
@@ -544,7 +554,12 @@ pub(crate) fn synthesize_llm_spec_body(
             ctx.alloc_expr(Expr::Array { elements }, span)
         }
         // A non-list expression must already produce an `ai.Tool[]`.
-        Some(node) => ctx.lower_expr(node),
+        Some(rowan::NodeOrToken::Node(node)) => ctx.lower_expr(node),
+        // A bare dot-free identifier is a token, not a node: a variable
+        // holding the `ai.Tool[]` value.
+        Some(rowan::NodeOrToken::Token(token)) => ctx
+            .try_lower_bare_token(token)
+            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
         None => ctx.alloc_expr(Expr::Array { elements: vec![] }, span),
     };
     let toolbox_callee = ctx.alloc_expr(

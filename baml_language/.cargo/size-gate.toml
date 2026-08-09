@@ -62,7 +62,7 @@ policy.max_delta_pct = 3.0
 max_file_bytes = "14.3 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "18.2 MiB"
+max_file_bytes = "18.3 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
 max_file_bytes = "15.3 MiB"

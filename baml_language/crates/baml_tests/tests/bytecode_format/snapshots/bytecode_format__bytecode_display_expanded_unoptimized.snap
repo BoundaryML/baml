@@ -15,7 +15,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         10    make_cell                                  
         11    store_var 22                               
 
-  188   12    load_deref 1                               
+  191   12    load_deref 1                               
         13    load_field 1                               (client)
         14    store_var_load_var 5                       (_4)
         15    load_const 0                               (null)
@@ -25,55 +25,55 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         19    load_var 5                                 (_4)
         20    store_var 6                                (c)
 
-  190   21    load_var 6                                 (c)
+  193   21    load_var 6                                 (c)
         22    store_var 4                                (selected)
 
-  188   23    jump +5                                    (to 28)
+  191   23    jump +5                                    (to 28)
 
-  189   24    load_deref 2                               
+  192   24    load_deref 2                               
         25    load_field 4                               (default_client)
         26    call_indirect                              
         27    store_var 4                                (selected)
 
-  192   28    load_type 1                                
+  195   28    load_type 1                                
         29    load_deref 2                               
         30    call 811 ntypeargs=1                       (ai.Journal.new)
         31    store_deref 7                              
 
-  193   32    load_type 1                                
+  196   32    load_type 1                                
         33    load_deref 1                               
         34    load_deref 7                               
         35    load_const 2                               (0)
         36    call 844 ntypeargs=1                       (ai.Agent._emit_from)
         37    store_var 8                                (seen)
 
-  194   38    load_const 2                               (0)
+  197   38    load_const 2                               (0)
         39    store_var 9                                (steps)
 
-  195   40    load_const 2                               (0)
+  198   40    load_const 2                               (0)
         41    load_const 2                               (0)
         42    load_const 0                               (null)
         43    load_const 0                               (null)
         44    init_instance 0                            (ai.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens)
         45    store_var 10                               (total)
 
-  202   46    load_type 3                                
+  205   46    load_type 3                                
         47    load_type 4                                
         48    alloc_map 0                                
         49    store_var 11                               (fail_counts)
 
-  203   50    load_var 9                                 (steps)
+  206   50    load_var 9                                 (steps)
         51    load_deref 1                               
         52    load_field 0                               (max_steps)
         53    cmp_int_op <                               
         54    pop_jump_if_false +2                       (to 56)
         55    jump +4                                    (to 59)
 
-  261   56    load_var 9                                 (steps)
+  264   56    load_var 9                                 (steps)
         57    init_instance 1                            (ai.errors.StepBudgetExceeded .steps)
         58    throw                                      
 
-  205   59    load_type 1                                
+  208   59    load_type 1                                
         60    load_deref 1                               
         61    load_var 4                                 (selected)
         62    load_deref 2                               
@@ -83,23 +83,23 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         66    call 843 ntypeargs=1                       (ai.Agent._attempt_turn)
         67    store_var 12                               (turn)
 
-  206   68    load_var 9                                 (steps)
+  209   68    load_var 9                                 (steps)
         69    load_const 6                               (1)
         70    add_int                                    
         71    store_var 9                                (steps)
 
-  207   72    load_type 1                                
+  210   72    load_type 1                                
         73    load_deref 1                               
         74    load_deref 7                               
         75    load_var 8                                 (seen)
         76    call 844 ntypeargs=1                       (ai.Agent._emit_from)
         77    store_var 8                                (seen)
 
-  208   78    load_var 12                                (turn)
+  211   78    load_var 12                                (turn)
         79    call 827 ntypeargs=0                       (ai.ModelTurn.tool_uses)
         80    store_var 13                               (calls)
 
-  209   81    load_var 13                                (calls)
+  212   81    load_var 13                                (calls)
         82    container_len                              
         83    store_var 14                               (_30)
         84    load_var 14                                (_30)
@@ -108,7 +108,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         87    pop_jump_if_false +2                       (to 89)
         88    jump +53                                   (to 141)
 
-  244   89    load_var 12                                (turn)
+  247   89    load_var 12                                (turn)
         90    call 826 ntypeargs=0                       (ai.ModelTurn.terminal_text)
         91    store_var 36                               (_98)
         92    load_var 36                                (_98)
@@ -120,7 +120,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         98    load_const 7                               ("")
         99    store_var 35                               (candidate)
 
-  245   100   load_type 1                                
+  248   100   load_type 1                                
         101   load_var 35                                (candidate)
         102   call 476 ntypeargs=1                       (baml.sap.parse)
         103   store_var 37                               (value)
@@ -128,7 +128,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         105   load_var 38                                (e)
         106   throw_if_panic                             
 
-  247   107   load_var 4                                 (selected)
+  250   107   load_var 4                                 (selected)
         108   load_type 8                                
         109   load_const 9                               ("id")
         110   virtual_call nargs=1 ntypeargs=0           
@@ -137,29 +137,29 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         113   init_instance 2                            (ai.errors.ParseFailed .provider, .raw_output)
         114   throw                                      
 
-  253   115   load_type 1                                
+  256   115   load_type 1                                
         116   load_var 37                                (value)
         117   call 333 ntypeargs=1                       (baml.json.to_json)
         118   call 330 ntypeargs=0                       (baml.json.stringify)
         119   store_var 40                               (_110)
 
-  250   120   load_deref 7                               
+  253   120   load_deref 7                               
 
-  252   121   load_var 40                                (_110)
+  255   121   load_var 40                                (_110)
         122   init_instance 3                            (ai.FinalProduced .value_json)
         123   load_type 10                               
         124   alloc_array 1                              
         125   call 812 ntypeargs=0                       (ai.Journal.append_all)
         126   pop 1                                      
 
-  257   127   load_type 1                                
+  260   127   load_type 1                                
         128   load_deref 1                               
         129   load_deref 7                               
         130   load_var 8                                 (seen)
         131   call 844 ntypeargs=1                       (ai.Agent._emit_from)
         132   store_var 8                                (seen)
 
-  258   133   load_var 37                                (value)
+  261   133   load_var 37                                (value)
         134   load_deref 7                               
         135   load_var 10                                (total)
         136   load_type 1                                
@@ -168,12 +168,12 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         139   load_var 3                                 (_0)
         140   return                                     
 
-  210   141   load_deref 7                               
+  213   141   load_deref 7                               
         142   call 810 ntypeargs=0                       (ai.Journal.entries)
         143   container_len                              
         144   store_var 15                               (before)
 
-  212   145   load_type 11                               
+  215   145   load_type 11                               
         146   load_type 12                               
         147   load_type 13                               
         148   load_var 13                                (calls)
@@ -184,28 +184,28 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         153   call 16 ntypeargs=3                        (baml.Array.map)
         154   store_var 16                               (futures)
 
-  215   155   load_type 14                               
+  218   155   load_type 14                               
         156   load_type 15                               
         157   load_var 16                                (futures)
         158   call 533 ntypeargs=2                       (baml.future.all)
         159   await                                      
         160   pop 1                                      
 
-  216   161   load_type 1                                
+  219   161   load_type 1                                
         162   load_deref 1                               
         163   load_deref 7                               
         164   load_var 8                                 (seen)
         165   call 844 ntypeargs=1                       (ai.Agent._emit_from)
         166   store_var 8                                (seen)
 
-  220   167   load_deref 7                               
+  223   167   load_deref 7                               
         168   call 810 ntypeargs=0                       (ai.Journal.entries)
         169   store_var 17                               (entries)
 
-  221   170   load_var 15                                (before)
+  224   170   load_var 15                                (before)
         171   store_var 18                               (i)
 
-  222   172   load_var 18                                (i)
+  225   172   load_var 18                                (i)
         173   store_var 19                               (_49)
         174   load_var 17                                (entries)
         175   container_len                              
@@ -214,7 +214,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         178   cmp_int_op <                               
         179   pop_jump_if_false -129                     (to 50)
 
-  223   180   load_type 10                               
+  226   180   load_type 10                               
         181   load_var2 17 18                            
         182   call 3 ntypeargs=1                         (baml.Array.at)
         183   store_var 21                               (_54)
@@ -224,7 +224,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         187   load_var 21                                (_54)
         188   store_deref 22                             
 
-  224   189   load_type 11                               
+  227   189   load_type 11                               
         190   load_type 13                               
         191   load_var 13                                (calls)
         192   load_type 1                                
@@ -232,14 +232,14 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         194   make_closure 1729 captures=1 ntypeargs=1   
         195   call 19 ntypeargs=2                        (baml.Array.find)
 
-  227   196   store_var 23                               (_60)
+  230   196   store_var 23                               (_60)
         197   load_var 23                                (_60)
         198   narrow_bind 17 23                          
         199   pop_jump_if_false +47                      (to 246)
         200   load_var 23                                (_60)
         201   store_var 24                               (known)
 
-  228   202   load_type 3                                
+  231   202   load_type 3                                
         203   load_var 24                                (known)
         204   load_field 1                               (name)
         205   call 138 ntypeargs=1                       (baml.String.from)
@@ -256,7 +256,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         216   bin_op +                                   
         217   store_var 25                               (key)
 
-  229   218   load_type 3                                
+  232   218   load_type 3                                
         219   load_type 4                                
         220   load_var2 11 25                            
         221   call 38 ntypeargs=2                        (baml.Map.get)
@@ -274,35 +274,35 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         233   add_int                                    
         234   store_var 28                               (n)
 
-  230   235   load_type 3                                
+  233   235   load_type 3                                
         236   load_type 4                                
         237   load_var2 11 25                            
         238   load_var 28                                (n)
         239   call 37 ntypeargs=2                        (baml.Map.set)
         240   pop 1                                      
 
-  231   241   load_var 28                                (n)
+  234   241   load_var 28                                (n)
         242   load_const 19                              (3)
         243   cmp_int_op >=                              
         244   pop_jump_if_false +2                       (to 246)
         245   jump +6                                    (to 251)
 
-  241   246   load_var 18                                (i)
+  244   246   load_var 18                                (i)
         247   load_const 6                               (1)
         248   add_int                                    
         249   store_var 18                               (i)
 
-  222   250   jump -78                                   (to 172)
+  225   250   jump -78                                   (to 172)
 
-  233   251   load_var 24                                (known)
+  236   251   load_var 24                                (known)
         252   load_field 0                               (id)
         253   store_var 31                               (_85)
 
-  234   254   load_var 24                                (known)
+  237   254   load_var 24                                (known)
         255   load_field 1                               (name)
         256   store_var 32                               (_86)
 
-  235   257   load_type 4                                
+  238   257   load_type 4                                
         258   load_var 28                                (n)
         259   call 138 ntypeargs=1                       (baml.String.from)
         260   store_var 33                               (_90)
@@ -312,9 +312,9 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         264   call 138 ntypeargs=1                       (baml.String.from)
         265   store_var 34                               (_93)
 
-  232   266   load_var2 31 32                            
+  235   266   load_var2 31 32                            
 
-  235   267   load_const 20                              ("the same tool call failed ")
+  238   267   load_const 20                              ("the same tool call failed ")
         268   load_var 33                                (_90)
         269   bin_op +                                   
         270   load_const 21                              (" times; stopping the run: ")
@@ -327,24 +327,24 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
 }
 
 function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.FunctionSpec<#0>, j: ai.Journal, total: ai.Usage, attempts_left: int) -> ai.ModelTurn {
-  114   0     load_type 0                        
+  117   0     load_type 0                        
         1     load_var 3                         (spec)
         2     call 817 ntypeargs=1               (ai.FunctionSpec.prompt)
         3     store_var 8                        (_9)
 
-  116   4     load_type 0                        
+  119   4     load_type 0                        
         5     load_var 3                         (spec)
         6     call 818 ntypeargs=1               (ai.FunctionSpec.tools)
         7     store_var 9                        (_11)
 
-  117   8     load_type 0                        
+  120   8     load_type 0                        
         9     load_var 3                         (spec)
         10    call 816 ntypeargs=1               (ai.FunctionSpec.output_type)
         11    store_var 10                       (_13)
 
-  112   12    load_var2 2 8                      
+  115   12    load_var2 2 8                      
 
-  113   13    load_var2 4 9                      
+  116   13    load_var2 4 9                      
         14    load_var 10                        (_13)
         15    init_instance 0                    (ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type)
         16    load_type 1                        
@@ -352,7 +352,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         18    virtual_call nargs=2 ntypeargs=0   
         19    store_var 7                        (turn)
 
-  120   20    load_var 7                         (turn)
+  123   20    load_var 7                         (turn)
         21    load_field 2                       (usage)
         22    store_var 11                       (_16)
         23    load_var 11                        (_16)
@@ -361,7 +361,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         26    load_var 11                        (_16)
         27    store_var 12                       (u)
 
-  121   28    load_var 5                         (total)
+  124   28    load_var 5                         (total)
         29    copy 0                             
         30    load_field 0                       (input_tokens)
         31    load_var 12                        (u)
@@ -369,7 +369,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         33    bin_op +                           
         34    store_field 0                      (input_tokens)
 
-  122   35    load_var 5                         (total)
+  125   35    load_var 5                         (total)
         36    copy 0                             
         37    load_field 1                       (output_tokens)
         38    load_var 12                        (u)
@@ -377,7 +377,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         40    bin_op +                           
         41    store_field 1                      (output_tokens)
 
-  123   42    load_var 12                        (u)
+  126   42    load_var 12                        (u)
         43    load_field 2                       (cached_input_tokens)
         44    store_var 13                       (_21)
         45    load_var 13                        (_21)
@@ -386,7 +386,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         48    load_var 13                        (_21)
         49    store_var 14                       (ci)
 
-  124   50    load_var 5                         (total)
+  127   50    load_var 5                         (total)
         51    load_field 2                       (cached_input_tokens)
         52    store_var 16                       (_24)
         53    load_var 16                        (_24)
@@ -402,7 +402,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         63    bin_op +                           
         64    store_field 2                      (cached_input_tokens)
 
-  126   65    load_var 12                        (u)
+  129   65    load_var 12                        (u)
         66    load_field 3                       (reasoning_tokens)
         67    store_var 17                       (_28)
         68    load_var 17                        (_28)
@@ -411,7 +411,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         71    load_var 17                        (_28)
         72    store_var 18                       (rt)
 
-  127   73    load_var 5                         (total)
+  130   73    load_var 5                         (total)
         74    load_field 3                       (reasoning_tokens)
         75    store_var 20                       (_31)
         76    load_var 20                        (_31)
@@ -427,7 +427,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         86    bin_op +                           
         87    store_field 3                      (reasoning_tokens)
 
-  131   88    load_var 7                         (turn)
+  134   88    load_var 7                         (turn)
         89    load_field 0                       (content)
         90    store_var 22                       (_36)
         91    load_var 2                         (c)
@@ -441,7 +441,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         99    alloc_array 1                      
         100   store_var 21                       (batch)
 
-  132   101   load_var 7                         (turn)
+  135   101   load_var 7                         (turn)
         102   call 827 ntypeargs=0               (ai.ModelTurn.tool_uses)
         103   load_type 8                        
         104   load_const 9                       ("iter")
@@ -459,7 +459,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         116   load_var 25                        (_40)
         117   store_var 26                       (u)
 
-  133   118   load_var2 21 26                    
+  136   118   load_var2 21 26                    
         119   load_field 0                       (id)
         120   load_var 26                        (u)
         121   load_field 1                       (name)
@@ -470,7 +470,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         126   pop 1                              
         127   jump -20                           (to 107)
 
-  135   128   load_var 7                         (turn)
+  138   128   load_var 7                         (turn)
         129   load_field 2                       (usage)
         130   store_var 27                       (_50)
         131   load_var 27                        (_50)
@@ -479,11 +479,11 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         134   load_var 27                        (_50)
         135   store_var 28                       (u)
 
-  136   136   load_var2 21 28                    
+  139   136   load_var2 21 28                    
         137   call 4 ntypeargs=0                 (baml.Array.push)
         138   pop 1                              
 
-  138   139   load_var 7                         (turn)
+  141   139   load_var 7                         (turn)
         140   call 826 ntypeargs=0               (ai.ModelTurn.terminal_text)
         141   store_var 30                       (_55)
         142   load_var 30                        (_55)
@@ -495,7 +495,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         148   load_const 13                      ("")
         149   store_var 29                       (candidate)
 
-  139   150   load_var 7                         (turn)
+  142   150   load_var 7                         (turn)
         151   call 827 ntypeargs=0               (ai.ModelTurn.tool_uses)
         152   container_len                      
         153   store_var 31                       (_61)
@@ -506,44 +506,44 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         158   jump +7                            (to 165)
         159   pop 1                              
 
-  140   160   load_var 7                         (turn)
+  143   160   load_var 7                         (turn)
         161   load_field 1                       (stop_reason)
         162   load_const 14                      (ai.StopReason.MaxTokens)
         163   alloc_variant 425                  (ai.StopReason)
         164   call 662 ntypeargs=0               (baml.ops.equals_equals)
 
-  139   165   jump_if_false +2                   (to 167)
+  142   165   jump_if_false +2                   (to 167)
         166   jump +7                            (to 173)
         167   pop 1                              
 
-  141   168   load_var 7                         (turn)
+  144   168   load_var 7                         (turn)
         169   load_field 1                       (stop_reason)
         170   load_const 15                      (ai.StopReason.Refused)
         171   alloc_variant 425                  (ai.StopReason)
         172   call 662 ntypeargs=0               (baml.ops.equals_equals)
 
-  139   173   jump_if_false +2                   (to 175)
+  142   173   jump_if_false +2                   (to 175)
         174   jump +5                            (to 179)
         175   pop 1                              
 
-  142   176   load_type 0                        
+  145   176   load_type 0                        
         177   load_var2 1 29                     
         178   call 842 ntypeargs=1               (ai.Agent._parses)
 
-  143   179   pop_jump_if_false +2               (to 181)
+  146   179   pop_jump_if_false +2               (to 181)
         180   jump +33                           (to 213)
 
-  156   181   load_var 6                         (attempts_left)
+  159   181   load_var 6                         (attempts_left)
         182   load_const 16                      (1)
         183   cmp_int_op >                       
         184   pop_jump_if_false +2               (to 186)
         185   jump +12                           (to 197)
 
-  165   186   load_var2 4 21                     
+  168   186   load_var2 4 21                     
         187   call 812 ntypeargs=0               (ai.Journal.append_all)
         188   pop 1                              
 
-  166   189   load_var 2                         (c)
+  169   189   load_var 2                         (c)
         190   load_type 1                        
         191   load_const 17                      ("id")
         192   virtual_call nargs=1 ntypeargs=0   
@@ -552,18 +552,18 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         195   init_instance 3                    (ai.errors.ParseFailed .provider, .raw_output)
         196   throw                              
 
-  157   197   load_var 21                        (batch)
+  160   197   load_var 21                        (batch)
 
-  158   198   load_const 18                      ("The reply did not match the required schema. Answer again with only the corrected value.")
+  161   198   load_const 18                      ("The reply did not match the required schema. Answer again with only the corrected value.")
         199   init_instance 4                    (ai.UserMessage .content)
         200   call 4 ntypeargs=0                 (baml.Array.push)
         201   pop 1                              
 
-  162   202   load_var2 4 21                     
+  165   202   load_var2 4 21                     
         203   call 812 ntypeargs=0               (ai.Journal.append_all)
         204   pop 1                              
 
-  163   205   load_type 0                        
+  166   205   load_type 0                        
         206   load_var2 1 2                      
         207   load_var2 3 4                      
         208   load_var2 5 6                      
@@ -572,11 +572,11 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         211   call 843 ntypeargs=1               (ai.Agent._attempt_turn)
         212   jump +19                           (to 231)
 
-  144   213   load_var2 4 21                     
+  147   213   load_var2 4 21                     
         214   call 812 ntypeargs=0               (ai.Journal.append_all)
         215   pop 1                              
 
-  146   216   load_var 7                         (turn)
+  149   216   load_var 7                         (turn)
         217   load_field 1                       (stop_reason)
         218   discriminant                       
         219   load_const 14                      (StopReason.MaxTokens)
@@ -591,10 +591,10 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         228   pop_jump_if_false +2               (to 230)
         229   jump +3                            (to 232)
 
-  155   230   load_var 7                         (turn)
+  158   230   load_var 7                         (turn)
         231   return                             
 
-  151   232   load_var 2                         (c)
+  154   232   load_var 2                         (c)
         233   load_type 1                        
         234   load_const 19                      ("id")
         235   virtual_call nargs=1 ntypeargs=0   
@@ -605,7 +605,7 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
         240   init_instance 5                    (ai.errors.Refused .provider, .reason, .raw_body)
         241   throw                              
 
-  148   242   load_var 2                         (c)
+  151   242   load_var 2                         (c)
         243   load_type 1                        
         244   load_const 21                      ("id")
         245   virtual_call nargs=1 ntypeargs=0   
@@ -616,14 +616,14 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
 }
 
 function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> int {
-  172   0    load_var 2             (j)
+  175   0    load_var 2             (j)
         1    call 810 ntypeargs=0   (ai.Journal.entries)
         2    store_var 4            (entries)
 
-  173   3    load_var 3             (seen)
+  176   3    load_var 3             (seen)
         4    store_var 5            (i)
 
-  174   5    load_var 5             (i)
+  177   5    load_var 5             (i)
         6    store_var 6            (_7)
         7    load_var 4             (entries)
         8    container_len          
@@ -633,11 +633,11 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
         12   pop_jump_if_false +2   (to 14)
         13   jump +4                (to 17)
 
-  180   14   load_var 4             (entries)
+  183   14   load_var 4             (entries)
         15   container_len          
         16   return                 
 
-  175   17   load_type 0            
+  178   17   load_type 0            
         18   load_var2 4 5          
         19   call 3 ntypeargs=1     (baml.Array.at)
         20   store_var 8            (_12)
@@ -675,21 +675,21 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
         52   load_var 8             (_12)
         53   store_var_load_var 9   (e)
 
-  176   54   load_var 1             (self)
+  179   54   load_var 1             (self)
         55   load_field 3           (on_event)
         56   call_indirect          
         57   pop 1                  
 
-  178   58   load_var 5             (i)
+  181   58   load_var 5             (i)
         59   load_const 9           (1)
         60   add_int                
         61   store_var 5            (i)
 
-  174   62   jump -57               (to 5)
+  177   62   jump -57               (to 5)
 }
 
 function ai.Agent._parses(self: ai.Agent<#0>, candidate: string) -> bool {
-  90   0    load_type 0            
+  93   0    load_type 0            
        1    load_var 2             (candidate)
        2    call 476 ntypeargs=1   (baml.sap.parse)
        3    pop 1                  
@@ -697,15 +697,15 @@ function ai.Agent._parses(self: ai.Agent<#0>, candidate: string) -> bool {
        5    load_var 3             (e)
        6    throw_if_panic         
 
-  92   7    load_const 1           (false)
+  95   7    load_const 1           (false)
        8    jump +2                (to 10)
 
-  95   9    load_const 2           (true)
+  98   9    load_const 2           (true)
        10   return                 
 }
 
 function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.ToolUse, j: ai.Journal) -> null {
-  48   0     load_var2 2 3           
+  51   0     load_var2 2 3           
        1     load_field 1            (name)
        2     call 824 ntypeargs=0    (ai.Toolbox.get)
        3     store_var 5             (_7)
@@ -714,19 +714,19 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.Too
        6     pop_jump_if_false +2    (to 8)
        7     jump +20                (to 27)
 
-  79   8     load_var 3              (call)
+  82   8     load_var 3              (call)
        9     load_field 0            (id)
        10    store_var 21            (_41)
 
-  80   11    load_type 1             
+  83   11    load_type 1             
        12    load_var 3              (call)
        13    load_field 1            (name)
        14    call 138 ntypeargs=1    (baml.String.from)
        15    store_var 22            (_43)
 
-  76   16    load_var2 4 21          
+  79   16    load_var2 4 21          
 
-  80   17    load_const 2            ("tool is not in the active toolbox: ")
+  83   17    load_const 2            ("tool is not in the active toolbox: ")
        18    load_var 22             (_43)
        19    bin_op +                
        20    init_instance 0         (ai.ToolFailed .id, .message)
@@ -735,13 +735,13 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.Too
        23    call 812 ntypeargs=0    (ai.Journal.append_all)
        24    pop 1                   
 
-  84   25    load_const 4            (null)
+  87   25    load_const 4            (null)
 
-  48   26    jump +88                (to 114)
+  51   26    jump +88                (to 114)
        27    load_var 5              (_7)
        28    store_var 6             (t)
 
-  50   29    load_var2 6 3           
+  53   29    load_var2 6 3           
        30    load_field 2            (args)
        31    call 819 ntypeargs=0    (ai.Tool.call)
        32    store_var 7             (outcome)
@@ -749,7 +749,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.Too
        34    load_var 8              (e)
        35    throw_if_panic          
 
-  52   36    load_var 3              (call)
+  55   36    load_var 3              (call)
        37    load_field 0            (id)
        38    store_var 9             (_15)
        39    load_type 5             
@@ -764,7 +764,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.Too
        48    call 812 ntypeargs=0    (ai.Journal.append_all)
        49    pop 1                   
 
-  54   50    load_var 6              (t)
+  57   50    load_var 6              (t)
        51    load_field 5            (on_error)
        52    store_var 12            (_20)
        53    load_var 12             (_20)
@@ -783,48 +783,48 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.Too
        66    pop_jump_if_false +2    (to 68)
        67    jump +4                 (to 71)
 
-  66   68    load_const 4            (null)
+  69   68    load_const 4            (null)
        69    store_var 7             (outcome)
 
-  54   70    jump +28                (to 98)
+  57   70    jump +28                (to 98)
 
-  55   71    load_var 8              (e)
+  58   71    load_var 8              (e)
        72    store_var 14            (_23)
        73    load_var 14             (_23)
        74    narrow_bind 7 14        
        75    pop_jump_if_false +2    (to 77)
        76    jump +4                 (to 80)
 
-  57   77    load_const 4            (null)
+  60   77    load_const 4            (null)
        78    store_var 13            (classified)
 
-  55   79    jump +5                 (to 84)
+  58   79    jump +5                 (to 84)
        80    load_var 14             (_23)
        81    store_var 15            (f)
 
-  56   82    load_var 15             (f)
+  59   82    load_var 15             (f)
        83    store_var 13            (classified)
 
-  60   84    load_var 3              (call)
+  63   84    load_var 3              (call)
        85    load_field 0            (id)
        86    store_var 16            (_26)
 
-  61   87    load_var 3              (call)
+  64   87    load_var 3              (call)
        88    load_field 1            (name)
        89    store_var 17            (_27)
 
-  62   90    load_type 5             
+  65   90    load_type 5             
        91    load_var 8              (e)
        92    call 138 ntypeargs=1    (baml.String.from)
        93    store_var 18            (_28)
 
-  59   94    load_var2 16 17         
+  62   94    load_var2 16 17         
        95    load_var2 18 13         
 
-  63   96    init_instance 2         (ai.errors.ToolFailedError .id, .name, .message, .cause)
+  66   96    init_instance 2         (ai.errors.ToolFailedError .id, .name, .message, .cause)
        97    throw                   
 
-  70   98    load_var 7              (outcome)
+  73   98    load_var 7              (outcome)
        99    store_var 19            (_31)
        100   load_var 19             (_31)
        101   narrow_bind 6 19        
@@ -832,7 +832,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.Too
        103   load_var 19             (_31)
        104   store_var 20            (output)
 
-  71   105   load_var2 4 3           
+  74   105   load_var2 4 3           
        106   load_field 0            (id)
        107   load_var 20             (output)
        108   init_instance 3         (ai.ToolCompleted .id, .output)
@@ -841,7 +841,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.Toolbox, call: ai.Too
        111   call 812 ntypeargs=0    (ai.Journal.append_all)
        112   pop 1                   
 
-  73   113   load_const 4            (null)
+  76   113   load_const 4            (null)
        114   return                  
 }
 
@@ -851,21 +851,21 @@ function ai.Agent.new(max_steps: int, client: ai.Client | null, tool_errors: ai.
        2    cmp_op ==                                  
        3    pop_jump_if_false +3                       (to 6)
 
-  27   4    load_const 1                               (12)
+  30   4    load_const 1                               (12)
        5    store_var 1                                (max_steps)
        6    load_var 2                                 (client)
        7    load_const 0                               (<omitted>)
        8    cmp_op ==                                  
        9    pop_jump_if_false +3                       (to 12)
 
-  28   10   load_const 2                               (null)
+  31   10   load_const 2                               (null)
        11   store_var 2                                (client)
        12   load_var 3                                 (tool_errors)
        13   load_const 0                               (<omitted>)
        14   cmp_op ==                                  
        15   pop_jump_if_false +4                       (to 19)
 
-  29   16   load_const 3                               (ai.ToolErrorMode.Report)
+  32   16   load_const 3                               (ai.ToolErrorMode.Report)
        17   alloc_variant 426                          (ai.ToolErrorMode)
        18   store_var 3                                (tool_errors)
        19   load_var 4                                 (on_event)
@@ -873,21 +873,21 @@ function ai.Agent.new(max_steps: int, client: ai.Client | null, tool_errors: ai.
        21   cmp_op ==                                  
        22   pop_jump_if_false +3                       (to 25)
 
-  30   23   load_const 2                               (null)
+  33   23   load_const 2                               (null)
        24   store_var 4                                (on_event)
 
-  36   25   load_var 4                                 (on_event)
+  39   25   load_var 4                                 (on_event)
        26   store_var 5                                (_9)
        27   load_var 4                                 (on_event)
        28   load_const 2                               (null)
        29   cmp_op ==                                  
        30   pop_jump_if_false +4                       (to 34)
 
-  38   31   load_type 4                                
+  41   31   load_type 4                                
        32   make_closure 1710 captures=0 ntypeargs=1   
        33   store_var 5                                (_9)
 
-  32   34   load_var2 1 2                              
+  35   34   load_var2 1 2                              
        35   load_var2 3 5                              
        36   load_type 4                                
        37   init_instance 0                            (ai.Agent .max_steps, .client, .tool_errors, .on_event)
@@ -1101,32 +1101,32 @@ function ai.Fallback._try(self: ai.Fallback, input: ai.ModelTurnInput, index: in
 }
 
 function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unknown> {
-  32   0   load_var 1     (self)
+  34   0   load_var 1     (self)
        1   load_field 1   (args)
        2   return         
 }
 
 function ai.FunctionSpec.name(self: ai.FunctionSpec<#0>) -> string {
-  28   0   load_var 1     (self)
+  30   0   load_var 1     (self)
        1   load_field 0   (spec_name)
        2   return         
 }
 
 function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> type {
-  36   0   load_type 0   
+  38   0   load_type 0   
        1   store_var 2   (_0)
        2   load_var 2    (_0)
        3   return        
 }
 
 function ai.FunctionSpec.prompt(self: ai.FunctionSpec<#0>) -> ai.Prompt {
-  40   0   load_var 1     (self)
+  42   0   load_var 1     (self)
        1   load_field 2   (prompt_template)
        2   return         
 }
 
 function ai.FunctionSpec.tools(self: ai.FunctionSpec<#0>) -> ai.Toolbox {
-  44   0   load_var 1     (self)
+  46   0   load_var 1     (self)
        1   load_field 3   (toolbox)
        2   return         
 }

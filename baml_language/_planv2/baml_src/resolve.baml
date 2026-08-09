@@ -1,6 +1,7 @@
-// Model-string resolution: "prefix/model" -> a client value. Lives in root
-// rather than ns_ai so the core namespace never depends on the providers;
-// the registry's register() needs process-global state and is deferred.
+// Model-string resolution: "prefix/model" -> a client value. Lives in user
+// land rather than the builtin `ai` package so the core package never
+// depends on the providers; the registry's register() needs process-global
+// state and is deferred.
 
 function resolve(shorthand: string) -> ai.Client {
     let slash = shorthand.index_of("/");

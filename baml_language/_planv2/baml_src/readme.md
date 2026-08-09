@@ -11,14 +11,18 @@ claude_code,mcp}`), reachable from any project as `ai.*`, `openai.*`,
 prefix and no files to copy. This tree keeps only the fixtures, tests,
 how-tos, and live smokes, all written against those builtins.
 
-The `@spec` desugar is implemented in the compiler: an LLM function with
-a backtick prompt and a `"provider/model"` client string gets a
-compiler-generated `<Fn>$spec` companion, and `Fn@spec(args)` builds the
-bound, unrun `ai.FunctionSpec<Out>` (see `examples/plan_trip.baml`). A
-`tools: [fn, ...]` field additionally switches the function's direct
-call to the ai runner: `PlanTrip(...)` desugars to
+The `@spec` desugar is implemented in the compiler. A `tools` field on
+an LLM function with a backtick prompt and a `"provider/model"` client
+string switches the function to spec mode (an empty `tools []` opts a
+tool-less function in): it gets a compiler-generated `<Fn>$spec`
+companion — `Fn@spec(args)` builds the bound, unrun
+`ai.FunctionSpec<Out>` (see `examples/plan_trip.baml`) — and its direct
+call desugars to
 `ai.Agent<Out>.new(client = client).run(PlanTrip@spec(...)).value`, with
-`client` a compiler-injected `ai.Client? = null` override parameter. The
+`client` a compiler-injected `ai.Client? = null` override parameter.
+Functions without `tools` keep the legacy `baml.llm` path untouched
+(their prompts may use `${role(...)}` and the full `ctx: Context`
+surface, which the spec template deliberately does not model). The
 spec's default client resolves lazily (a thunk), so building a spec
 never touches credentials.
 
@@ -58,7 +62,7 @@ infisical run --env=test -- ../target/debug/baml-cli run -e 'live_google()'
 ../target/debug/baml-cli run -e 'live_claude_code()'   # uses the CLI's own login
 
 # MCP, both forms (no API key; npx fetches the everything server):
-../target/debug/baml-cli run -e 'live_mcp_tools()'              # root.mcp: journaled tools
+../target/debug/baml-cli run -e 'live_mcp_tools()'              # mcp: journaled tools
 ../target/debug/baml-cli run -e 'live_claude_code_dynamic_mcp()' # harness: model attaches mid-run
 
 # the observable demo: every journal event as a log line
@@ -153,8 +157,9 @@ return a typed `Itinerary`.
     text and `cause` stays null.
 13. `Retry` implements the documented `Backoff` (exponential with a cap,
     `retry_after_ms` hint override, `baml.sys.sleep`).
-14. The failure taxonomy is its own namespace: `ai.errors` (ns_ai/ns_errors/),
-    mirroring `baml.errors` — `root.ai.errors.Failure`, `classify_http`, and
+14. The failure taxonomy is its own namespace: `ai.errors`
+    (baml_std/ai/ns_errors/), mirroring `baml.errors` — `ai.errors.Failure`,
+    `classify_http`, and
     the classified classes.
 15. `ClaudeCodeClient` is a harness client over `baml.sys.start_process`
     (ported from the old repo; streams the CLI's full stream-json event
@@ -202,11 +207,11 @@ return a typed `Itinerary`.
   (`string` has no `concat`).
 - A closure created in a `for` loop captures the loop variable's slot,
   not its value: every closure sees the final iteration. Mint the
-  binding through a helper function parameter (see `root.mcp._proxy`).
+  binding through a helper function parameter (see `mcp._proxy`).
 - `reflect.call_any` decodes a JSON array into a typed array parameter
   (B-1174, fixed on this branch): `json[]` binds `string[]`, integral
   elements widen inside `float[]`, and a lossy element still throws.
   The decode builds a fresh `T[]` — not a subtyping rule; BAML arrays
   stay invariant, and covariance is unsound for mutable arrays.
   `tests/float_widening.baml` proves the boundary behavior. `raw_tool`
-  remains for tools whose schema no signature derives (`root.mcp`).
+  remains for tools whose schema no signature derives (`mcp`).

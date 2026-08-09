@@ -110,12 +110,24 @@ pub(crate) const JAVA_KEYWORDS: &[&str] = &[
     "_",
 ];
 
-/// Methods of `java.lang.Object` that are `final` (or, for `wait`'s
-/// overloads, effectively unoverridable): a generated method with one of
-/// these names cannot compile — `wait() in Process cannot override wait()
-/// in Object` — and a `static` one cannot hide the instance method either.
+/// Method names a generated Java method must not use:
+/// * `java.lang.Object`'s final methods (`wait`/`notify`/`notifyAll`/
+///   `getClass`) — an override cannot compile (`wait() in Process cannot
+///   override wait() in Object`) and a `static` one cannot hide them;
+/// * `equals`/`hashCode`/`toString` — every generated class already declares
+///   them (deep-equality + display), so a user method with the same name
+///   either collides outright or overloads them confusingly.
+///
 /// Escaped in method position with the same `$` suffix as keywords.
-pub(crate) const JAVA_OBJECT_FINAL_METHODS: &[&str] = &["wait", "notify", "notifyAll", "getClass"];
+pub(crate) const JAVA_OBJECT_FINAL_METHODS: &[&str] = &[
+    "wait",
+    "notify",
+    "notifyAll",
+    "getClass",
+    "equals",
+    "hashCode",
+    "toString",
+];
 
 /// Sanitize a *method* name: the keyword escape plus the
 /// `java.lang.Object` final-method escape (`wait` → `wait$`). The runtime

@@ -15,8 +15,10 @@ class Prompt {
 }
 
 // One unit of model work, bound and unrun. Immutable; getters only.
-// `MyFunc@spec(args)` desugars to a constructor like this; until the
-// desugar exists, each function writes its `my_function_spec()` by hand.
+// `MyFunc@spec(args)` desugars to a constructor like this: the compiler
+// synthesizes a `MyFunc$spec` companion for every spec-mode LLM function
+// (backtick prompt, "provider/model" client string, and a `tools` field —
+// `tools []` opts a tool-less function in).
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,

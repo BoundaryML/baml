@@ -16,7 +16,10 @@ class RunResult<Out> {
     usage: Usage,
 }
 
-// The default runner. `$` parameters at a call site set these fields.
+// The default runner. A spec-mode LLM function's direct call runs
+// `Agent<Out>.new(client = client).run(Fn@spec(...)).value`; construct it
+// yourself to set the other fields (`$` call-site parameters are a future
+// phase).
 class Agent<Out> {
     max_steps: int,
     client: Client?,

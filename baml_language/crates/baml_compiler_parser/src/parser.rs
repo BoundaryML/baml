@@ -4280,6 +4280,7 @@ impl<'a> Parser<'a> {
             let mut has_client = false;
             let mut has_prompt = false;
             let mut has_tools = false;
+            let mut has_type_builder = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
@@ -4322,6 +4323,10 @@ impl<'a> Parser<'a> {
                     has_tools = true;
                     p.parse_tools_field();
                 } else if p.at(TokenKind::TypeBuilder) {
+                    if has_type_builder {
+                        p.error_unexpected_token("Duplicate 'type_builder' block".to_string());
+                    }
+                    has_type_builder = true;
                     // Parse type_builder block - HIR will emit proper error for non-test context
                     p.parse_type_builder_block();
                 } else if p.at(TokenKind::Comma) || p.at(TokenKind::Semicolon) {

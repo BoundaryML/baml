@@ -331,11 +331,16 @@ fn lower_function(
         let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
         let tools_field = llm.tools_field();
 
-        // BEP `@spec` desugar eligibility: a backtick prompt plus a
-        // "provider/model" client string with a known prefix. Eligible
-        // functions get a `<Fn>$spec` companion; a `tools` field additionally
-        // switches the direct-call body to the ai-package `Agent` loop
-        // (spec mode), replacing the legacy `baml.llm` machinery entirely.
+        // BEP `@spec` desugar: a `tools` field (even an empty `tools []`) on
+        // a function with a backtick prompt and a "provider/model" client
+        // string with a known prefix switches the function to spec mode — it
+        // gets a `<Fn>$spec` companion and its direct-call body runs the
+        // ai-package `Agent` loop, replacing the legacy `baml.llm` machinery
+        // entirely. Functions WITHOUT `tools` are untouched: their prompts
+        // lower through the `baml.llm.prompt` tag, whose `role`/`ctx: Context`
+        // bindings the spec companion's plain-text template cannot honor, so
+        // synthesizing `$spec` for them would break `${role(...)}` /
+        // `${ctx.output_format_with(...)}` prompts that compile today.
         let spec_provider = client_name
             .as_deref()
             .and_then(spec_client_provider)
@@ -365,16 +370,23 @@ fn lower_function(
             .collect();
 
         // Build and stash the `$spec` companion body while the CST backtick is
-        // in hand (read back by `companions::llm_spec`).
-        if let (Some((spec_pkg, spec_class)), Some(backtick)) = (spec_provider, &prompt_backtick) {
+        // in hand (read back by `companions::llm_spec`). Spec mode only.
+        if spec_mode {
+            let (spec_pkg, spec_class) = spec_provider.expect("spec_mode implies a known provider");
+            let backtick = prompt_backtick
+                .as_ref()
+                .expect("spec_mode implies a backtick prompt");
             let model = client_name
                 .as_deref()
                 .and_then(|c| c.split_once('/'))
                 .map(|(_, m)| m)
                 .unwrap_or_default();
-            let tools_expr = tools_field
+            // The tools value may be a child node (list literal, call, path)
+            // or a bare identifier token — the parser wraps single dot-free
+            // identifiers in no node.
+            let tools_value = tools_field
                 .as_ref()
-                .and_then(baml_compiler_syntax::ast::ToolsField::expr);
+                .and_then(baml_compiler_syntax::ast::ToolsField::value_element);
             let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
                 lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
@@ -383,18 +395,15 @@ fn lower_function(
                     spec_class,
                     model,
                     return_type.clone(),
-                    tools_expr.as_ref(),
+                    tools_value.as_ref(),
                     backtick,
                     llm_body_def.span,
                 );
-            if spec_mode {
-                // In spec mode the direct body is the Agent call and carries no
-                // prompt, so the spec companion's prompt diagnostics / `env.X`
-                // refs are the authoritative ones. (Outside spec mode they
-                // duplicate the oneshot body's and are dropped.)
-                diags.append(&mut spec_diags);
-                env_var_refs.append(&mut spec_env_refs);
-            }
+            // The direct body is the Agent call and carries no prompt, so the
+            // spec companion's prompt diagnostics / `env.X` refs are the
+            // authoritative ones.
+            diags.append(&mut spec_diags);
+            env_var_refs.append(&mut spec_env_refs);
             llm_body_def
                 .companion_bodies
                 .push(("spec".to_string(), (spec_body, spec_sm)));

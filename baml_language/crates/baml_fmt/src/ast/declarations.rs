@@ -674,20 +674,60 @@ impl FromCST for LlmFunctionBody {
 
         let open_brace = it.expect_parse()?;
 
-        // Fields appear in any order; collect until the close brace.
+        // Fields appear in any order; collect until the close brace. A
+        // duplicate is a hard error, not an overwrite: the parser has no
+        // duplicate check for `type_builder`, and silently printing only the
+        // survivor would DELETE the other block from the user's source. An
+        // errored declaration is left unformatted instead.
+        fn fill<T>(
+            slot: &mut Option<T>,
+            value: T,
+            kind: SyntaxKind,
+            parent_range: TextRange,
+        ) -> Result<(), StrongAstError> {
+            if slot.is_some() {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "at most one field of each kind in an LLM function body".into(),
+                    found: kind,
+                    at: parent_range,
+                });
+            }
+            *slot = Some(value);
+            Ok(())
+        }
         let mut client: Option<ClientField> = None;
         let mut tools: Option<ToolsField> = None;
         let mut prompt: Option<PromptField> = None;
         let mut type_builder: Option<TypeBuilderBlock> = None;
         loop {
             if let Some(n) = it.next_if_kind(SyntaxKind::CLIENT_FIELD) {
-                client = Some(ClientField::from_cst(n)?);
+                fill(
+                    &mut client,
+                    ClientField::from_cst(n)?,
+                    SyntaxKind::CLIENT_FIELD,
+                    node.text_range(),
+                )?;
             } else if let Some(n) = it.next_if_kind(SyntaxKind::TOOLS_FIELD) {
-                tools = Some(ToolsField::from_cst(n)?);
+                fill(
+                    &mut tools,
+                    ToolsField::from_cst(n)?,
+                    SyntaxKind::TOOLS_FIELD,
+                    node.text_range(),
+                )?;
             } else if let Some(n) = it.next_if_kind(SyntaxKind::PROMPT_FIELD) {
-                prompt = Some(PromptField::from_cst(n)?);
+                fill(
+                    &mut prompt,
+                    PromptField::from_cst(n)?,
+                    SyntaxKind::PROMPT_FIELD,
+                    node.text_range(),
+                )?;
             } else if let Some(n) = it.next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK) {
-                type_builder = Some(TypeBuilderBlock::from_cst(n)?);
+                fill(
+                    &mut type_builder,
+                    TypeBuilderBlock::from_cst(n)?,
+                    SyntaxKind::TYPE_BUILDER_BLOCK,
+                    node.text_range(),
+                )?;
             } else {
                 break;
             }
@@ -737,6 +777,11 @@ impl Printable for LlmFunctionBody {
         self.client.print(inner_shape, printer);
         printer.print_trivia_trailing(client_trailing);
         printer.print_newline();
+
+        if let Some(tools) = &self.tools {
+            printer.print_standalone_with_trivia(tools, inner_indent);
+            printer.print_newline();
+        }
 
         printer.print_standalone_with_trivia(&self.prompt, inner_indent);
         printer.print_newline();

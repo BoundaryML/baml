@@ -1007,6 +1007,32 @@ impl ToolsField {
     pub fn expr(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
     }
+
+    /// The tools value as a node-or-token element. A bare dot-free
+    /// identifier (`tools my_tools`) is emitted by the parser as a WORD
+    /// token with no wrapping node, so [`Self::expr`] alone would miss it
+    /// and the field would silently lower to an empty toolbox.
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_keyword = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia() || t.kind() == SyntaxKind::COLON {
+                        continue;
+                    }
+                    // The leading `tools` keyword lexes as a WORD; everything
+                    // after it (and the optional colon) is the value.
+                    if !seen_keyword && t.kind() == SyntaxKind::WORD && t.text() == "tools" {
+                        seen_keyword = true;
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl SpecExpr {
@@ -1040,19 +1066,25 @@ impl ClientField {
     /// provider prefix alone.
     pub fn value(&self) -> Option<String> {
         // Try token form first: concatenate every non-trivia value token after
-        // the `client` keyword and optional colon. A single WORD yields the
-        // plain identifier; a multi-token run reproduces the unquoted
-        // shorthand (its source has no interior whitespace).
-        let value: String = self
+        // the `client` keyword and one optional leading colon. Only the FIRST
+        // colon is field syntax — later ones belong to the value (model ids
+        // like `ollama/llama3:8b`). A single WORD yields the plain identifier;
+        // a multi-token run reproduces the unquoted shorthand (its source has
+        // no interior whitespace).
+        let mut value = String::new();
+        let mut leading_colon_eaten = false;
+        for token in self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                !token.kind().is_trivia()
-                    && !matches!(token.kind(), SyntaxKind::KW_CLIENT | SyntaxKind::COLON)
-            })
-            .map(|token| token.text().to_string())
-            .collect();
+            .filter(|t| !t.kind().is_trivia() && t.kind() != SyntaxKind::KW_CLIENT)
+        {
+            if token.kind() == SyntaxKind::COLON && value.is_empty() && !leading_colon_eaten {
+                leading_colon_eaten = true;
+                continue;
+            }
+            value.push_str(token.text());
+        }
         if !value.is_empty() {
             return Some(value);
         }

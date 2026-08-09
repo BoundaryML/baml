@@ -1,0 +1,66 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Answer {
+  text: string
+}
+function user.double_it(n: int) -> int throws never {
+  { : int
+    n * 2 : int
+  }
+}
+function user.more_tools() -> ai.Tool[] throws never {
+  { : ai.Tool[]
+    [ai.tool(double_it, name = "double_named")] : ai.Tool[]
+  }
+}
+function user.LegacyChat(q: string, client: baml.llm.Client = ...) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`) : string
+}
+function user.LegacyChat$render_prompt(q: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
+}
+function user.LegacyChat$build_request(q: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
+}
+function user.LegacyChat$build_request_stream(q: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
+}
+function user.SpecAgent(q: string, client: ai.Client | null = null) -> user.Answer throws never {
+  ai.Agent.new<Answer>(client = client).run(SpecAgent$spec(q)).value : user.Answer
+}
+function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<user.Answer> throws never {
+  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new([ai.tool(double_it)]), default_client: () -> { ... } } : ai.FunctionSpec<user.Answer>
+}
+lambda user.SpecAgent$spec {
+}
+lambda user.SpecAgent$spec {
+}
+function user.NamedTools(q: string, client: ai.Client | null = null) -> user.Answer throws never {
+  ai.Agent.new<Answer>(client = client).run(NamedTools$spec(q)).value : user.Answer
+}
+function user.NamedTools$spec(q: string) -> ai.FunctionSpec<user.Answer> throws never {
+  ai.FunctionSpec { spec_name: "NamedTools", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new(more_tools()), default_client: () -> { ... } } : ai.FunctionSpec<user.Answer>
+}
+lambda user.NamedTools$spec {
+}
+lambda user.NamedTools$spec {
+}
+function user.build_spec(q: string) -> ai.FunctionSpec<user.Answer> throws never {
+  { : ai.FunctionSpec<user.Answer>
+    SpecAgent$spec(q = q) : ai.FunctionSpec<user.Answer>
+  }
+}
+class user.Answer$stream {
+  text: string | null
+}
+function user.LegacyChat$stream(q: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
+}
+function user.LegacyChat$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
+}
+function user.LegacyChat$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
+  baml.llm.parse<TFinal>(json) : string
+}
