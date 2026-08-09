@@ -653,9 +653,11 @@ impl Printable for FunctionDeclBody {
 #[derive(Debug)]
 pub struct LlmFunctionBody {
     pub open_brace: t::LBrace,
-    /// Not guaranteed that client is before prompt in the input.
+    /// Fields may appear in any order in the input; printing canonicalizes to
+    /// client, tools, prompt.
     pub client: ClientField,
-    /// Not guaranteed that client is before prompt in the input.
+    /// Optional `tools [a, b]` list (BEP spec mode).
+    pub tools: Option<ToolsField>,
     pub prompt: PromptField,
     /// Optional `type_builder { ... }` block for inline schema overrides.
     pub type_builder: Option<TypeBuilderBlock>,
@@ -670,31 +672,32 @@ impl FromCST for LlmFunctionBody {
 
         let open_brace = it.expect_parse()?;
 
-        let first = it.expect_node("CLIENT_FIELD or PROMPT_FIELD")?;
-        let (client, prompt) = match first.kind() {
-            SyntaxKind::CLIENT_FIELD => {
-                let client = ClientField::from_cst(SyntaxElement::Node(first))?;
-                let prompt: PromptField = it.expect_parse()?;
-                (client, prompt)
+        // Fields appear in any order; collect until the close brace.
+        let mut client: Option<ClientField> = None;
+        let mut tools: Option<ToolsField> = None;
+        let mut prompt: Option<PromptField> = None;
+        let mut type_builder: Option<TypeBuilderBlock> = None;
+        loop {
+            if let Some(n) = it.next_if_kind(SyntaxKind::CLIENT_FIELD) {
+                client = Some(ClientField::from_cst(n)?);
+            } else if let Some(n) = it.next_if_kind(SyntaxKind::TOOLS_FIELD) {
+                tools = Some(ToolsField::from_cst(n)?);
+            } else if let Some(n) = it.next_if_kind(SyntaxKind::PROMPT_FIELD) {
+                prompt = Some(PromptField::from_cst(n)?);
+            } else if let Some(n) = it.next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK) {
+                type_builder = Some(TypeBuilderBlock::from_cst(n)?);
+            } else {
+                break;
             }
-            SyntaxKind::PROMPT_FIELD => {
-                let prompt = PromptField::from_cst(SyntaxElement::Node(first))?;
-                let client: ClientField = it.expect_parse()?;
-                (client, prompt)
-            }
-            found => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "CLIENT_FIELD or PROMPT_FIELD".into(),
-                    found,
-                    at: first.text_range(),
-                });
-            }
-        };
-
-        let type_builder = it
-            .next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK)
-            .map(TypeBuilderBlock::from_cst)
-            .transpose()?;
+        }
+        let client = client.ok_or(StrongAstError::MissingExpectedElement {
+            expected: SyntaxKind::CLIENT_FIELD,
+            parent: node.text_range(),
+        })?;
+        let prompt = prompt.ok_or(StrongAstError::MissingExpectedElement {
+            expected: SyntaxKind::PROMPT_FIELD,
+            parent: node.text_range(),
+        })?;
 
         let close_brace = it.expect_parse()?;
 
@@ -703,6 +706,7 @@ impl FromCST for LlmFunctionBody {
         Ok(LlmFunctionBody {
             open_brace,
             client,
+            tools,
             prompt,
             type_builder,
             close_brace,
@@ -932,6 +936,72 @@ impl Printable for PromptField {
     }
     fn rightmost_token(&self) -> TextRange {
         self.string.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TOOLS_FIELD`] node: `tools [a, b]` in an
+/// LLM function body (BEP spec mode). The value is an arbitrary expression
+/// producing the tool list.
+#[derive(Debug)]
+pub struct ToolsField {
+    pub keyword: t::Word,
+    pub colon: Option<t::Colon>,
+    pub value: Expression,
+}
+
+impl FromCST for ToolsField {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TOOLS_FIELD)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // It's a word; we are only in a TOOLS_FIELD context if it is `tools`.
+        let keyword = it.expect_parse()?;
+
+        let colon = it
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
+            .transpose()?;
+
+        let value = Expression::from_cst(it.expect_next("a tools expression")?)?;
+
+        it.expect_end()?;
+
+        Ok(ToolsField {
+            keyword,
+            colon,
+            value,
+        })
+    }
+}
+
+impl KnownKind for ToolsField {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TOOLS_FIELD
+    }
+}
+
+impl Printable for ToolsField {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        let colon_trailing = if let Some(colon) = &self.colon {
+            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+            colon_trailing
+        } else {
+            &[][..]
+        };
+        printer.print_str(": ");
+        printer.print_trivia_squished(colon_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        printer.print_trivia_squished(value_leading);
+        printer.print(&self.value, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.value.rightmost_token()
     }
 }
 

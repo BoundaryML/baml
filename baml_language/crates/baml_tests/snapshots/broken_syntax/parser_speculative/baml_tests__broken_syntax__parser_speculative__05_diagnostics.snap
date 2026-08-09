@@ -49,7 +49,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[ambiguous_function.baml:9:3]
  9 │   clent GPT4  // Typo in "client"
    ·   ──┬──
-   ·     ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
+   ·     ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
    ╰────
 
   [parse] E0010
@@ -58,7 +58,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[ambiguous_function.baml:9:9]
  9 │   clent GPT4  // Typo in "client"
    ·         ──┬─
-   ·           ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
+   ·           ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
    ╰────
 
   [parse] E0010

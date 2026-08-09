@@ -277,6 +277,24 @@ function prompt_tag_runtime.PtRenderPerson$render_prompt(client: baml.llm.Client
     return
 }
 
+function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_runtime.Person> {
+    load_type ai.Tool
+    alloc_array 0
+    call ai.Toolbox.new
+    store_var _4
+    load_const "PtRenderPerson"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(PtRenderPerson$spec, 0)>, 0
+    init_instance ai.Prompt .template
+    load_var _4
+    make_closure .<lambda(PtRenderPerson$spec, 1)>, 0
+    load_type prompt_tag_runtime.Person
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
 function prompt_tag_runtime.PtRenderPerson$stream(client: baml.llm.Client) -> baml.llm.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
     load_var client
     load_const <omitted>
