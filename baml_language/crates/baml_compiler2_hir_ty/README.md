@@ -382,3 +382,62 @@ pointed at the error channel:
   it exercises generics, interfaces, associated types, and effects at scale.
 - Incrementality claims are proven in `baml_tests::incremental` scenarios
   (exact salsa WillExecute counts), not asserted in prose.
+
+## S15.5 - Principledness audit (2026-08-08)
+
+Three-reviewer sweep + verification pass over the crate; every remaining
+conflict in the S15 ledger was already ruled, so this list is internal
+quality, not differential state. Fix order: A (bugs, pin-first) -> B
+(union/freshness pass) -> C (consolidations).
+
+### A - verified bugs (pinned in fixtures/pending/)
+- A1 `remove_null` (infer.rs) matches Null/Union on `resolve_completely`
+  alone: aliased nullables break every `?.` link, `??`, and null flow
+  facts. Fix: `structurally_resolve` at entry; peel-after-resolve at the
+  chain links.
+- A2 lambda expectation deduction uses `shallow_resolve`: an alias-typed
+  function annotation gives params `!error`. Fix: structurally_resolve
+  the expectation.
+- A3 `dispatch_operator`/`operand_members` never expand aliases; also
+  await (false mismatch on aliased Future), spawn body/SpawnParams
+  (silent wrong future value), obligation subjects (alias -> permanent
+  stall), `sub()` decomposition arms (alias skips invariant arms),
+  upcast targets, `expectation_shape` (bounded vars don't adopt).
+- A4 scrutinee forcing: `infer_match` forces occurring vars; `if let`,
+  `while let`, `is`, let-destructure, and `Is`-facts do not (latent -
+  probed, no observable divergence yet; fix for consistency).
+- A5 (downgraded to B after probing): plain-union operands dispatch
+  fine; the poison-to-top in `dispatch_operator`/`field_access` union
+  arms stays theoretical. Alias-typed obligation subjects stall
+  UNOBSERVABLY today (bounds silently unchecked - surfaces at S17).
+
+### B - inconsistencies (one pass over the union/freshness layer)
+- `union_of` syntactic fallback does not collapse singletons
+  (`Union([?0])` can never unify - unify's union arm is positional).
+- Freshness: `remove_null`/`?.`-boundary use `union_of` (erases
+  freshness) where the control-flow rule wants `join`; `join`'s remark
+  upgrades RIGID literals to fresh (contradicts the non-widening-witness
+  policy); `subtract_narrow` strips overlay freshness.
+- `register_call_bounds` fires on 4 of 10 instantiation sites; 3 sites
+  bypass `fresh_generic_arg` (benign today - class/impl frames carry no
+  effect params - but a footgun).
+- And/Or is the only fold arm that skips `resolve_completely`.
+- `finalize_ty` skips union re-canonicalization whenever the type
+  carries any error (poison-to-top of the canonicalization pass);
+  `finish()`'s throws bypass finalize entirely on the declared arm.
+- `constant_equality` fold hardcodes Fresh (TIR parity - document).
+
+### C - centralization debt
+- Interface-representation triangle: ~30 conversion sites between
+  InterfaceRef/InterfaceTarget/plain Interface (byte-identical `as_ref`
+  closure twice in lower.rs; bindings-substitution block x5). One
+  From/TryFrom set + `InterfaceTarget::{as_ref, existential, realized}`.
+- Callee ladder has two spellings (Path vs MemberAccess) sharing three
+  drifted roads; "real static outranks from_json" enforced by two
+  orderings in two functions.
+- Requires-closure head-match: 5 sites, 4 equivalence relations; the
+  closure's root-exclusion is name-only (drops same-name different-args
+  requires); every caller re-prepends the root the helper excludes.
+- Dead: `exhaustiveness::check_irrefutable` (zero callers). Redundant:
+  `member_callee`'s expand_alias_ty after structurally_resolve. Dupes:
+  function-local INT_MIN/INT_MAX x2; `format_float` re-formats.
