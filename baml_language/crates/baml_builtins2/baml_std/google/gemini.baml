@@ -1,6 +1,8 @@
 class GoogleClient {
     model: string,
-    api_key: string,
+    // null resolves from the environment at request time; construction
+    // never touches env, so declaring/constructing a client is always safe.
+    api_key: string?,
     base_url: string?,
 
     function new(
@@ -10,7 +12,7 @@ class GoogleClient {
     ) -> GoogleClient {
         GoogleClient {
             model: model,
-            api_key: api_key ?? baml.env.get_or_panic("GOOGLE_API_KEY"),
+            api_key: api_key,
             base_url: base_url,
         }
     }

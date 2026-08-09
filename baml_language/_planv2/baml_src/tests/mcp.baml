@@ -23,15 +23,15 @@ done`
 test "rpc_line frames requests and notifications" {
     let params: map<string, unknown> = {};
     let _ = params.set("a", 1);
-    let req = mcp.rpc_line(7, "tools/list", params);
+    let req = ai.mcp.rpc_line(7, "tools/list", params);
     assert.contains(req, `"id":7`);
     assert.contains(req, `"method":"tools/list"`);
-    let note = mcp.rpc_line(null, "notifications/initialized", null);
+    let note = ai.mcp.rpc_line(null, "notifications/initialized", null);
     assert.is_true(!note.includes(`"id"`))
 }
 
 test "the connection speaks MCP against a fake stdio server" {
-    let conn = mcp.McpConnection.connect("fake", "sh", ["-c", fake_mcp_script()]);
+    let conn = ai.mcp.McpConnection.connect("fake", "sh", ["-c", fake_mcp_script()]);
     let tools = conn.tools();
     assert.equal(tools.length(), 1);
     if let t: ai.Tool = tools.at(0) {
@@ -62,14 +62,12 @@ function echo_spec(c: ai.Client, tools: ai.Tool[]) -> ai.FunctionSpec<EchoBack> 
             },
         },
         toolbox: ai.Toolbox.new(tools),
-        default_client: () -> {
-            c
-        },
+        default_client: c,
     }
 }
 
 test "MCP calls are journaled like any tool call" {
-    let conn = mcp.McpConnection.connect("fake", "sh", ["-c", fake_mcp_script()]);
+    let conn = ai.mcp.McpConnection.connect("fake", "sh", ["-c", fake_mcp_script()]);
     let call_args: map<string, unknown> = {};
     let _ = call_args.set("message", "hi");
     let scripted = ScriptedClient.new(

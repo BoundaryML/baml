@@ -188,10 +188,7 @@ class Agent<Out> {
         type Error = root.errors.Failure | baml.errors.UnknownError
 
         function run(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
-            let selected = match (self.client) {
-                null => spec.default_client(),
-                let c: Client => c,
-            };
+            let selected = self.client ?? spec.default_client;
             let j = Journal.new(spec);
             let seen = self._emit_from(j, 0);
             let steps = 0;

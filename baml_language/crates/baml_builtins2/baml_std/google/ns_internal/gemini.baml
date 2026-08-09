@@ -218,7 +218,10 @@ function google_render(
     baml.http.Request {
         method: "POST",
         url: `${c.base_url ?? "https://generativelanguage.googleapis.com/v1beta"}/models/${c.model}:generateContent`,
-        headers: { "x-goog-api-key": c.api_key, "content-type": "application/json" },
+        headers: {
+            "x-goog-api-key": c.api_key ?? baml.env.get_or_panic("GOOGLE_API_KEY"),
+            "content-type": "application/json",
+        },
         body: baml.json.stringify(baml.json.to_json(body)),
     }
 }

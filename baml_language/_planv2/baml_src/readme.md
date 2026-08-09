@@ -106,10 +106,10 @@ return a typed `Itinerary`.
 1. `client` is a keyword: `spec.client()` cannot exist; the impl exposes the
    `default_client` field. The `Agent.client` FIELD works everywhere,
    including `baml fmt` (the formatter crash is fixed on canary).
-   `default_client` is a thunk (`() -> Client throws unknown`), not an
-   eager `Client`: the `@spec` desugar must not read credentials or hit
-   `env.*` panics when building a spec that an `Agent { client: ... }`
-   override will never resolve.
+   `default_client` is an eager `Client` value: provider construction is
+   pure (credentials resolve from the environment at request time, inside
+   `invoke`), so building a spec — or declaring a client — never reads
+   env and never panics on a missing key.
 2. `Tool.on_error` is `ToolErrorMode?` where null inherits the run's
    `tool_errors`; this is what makes "per-tool wins" coherent.
 3. `ToolUse.args` is `map<string, unknown>` and `ToolCompleted.output` /

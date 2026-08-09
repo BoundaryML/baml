@@ -5,7 +5,7 @@
 //   ../target/debug/baml-cli run -e 'live_mcp_tools()'
 
 function live_mcp_tools() -> string {
-    let conn = mcp.McpConnection.connect(
+    let conn = ai.mcp.McpConnection.connect(
         "everything",
         "npx",
         ["-y", "@modelcontextprotocol/server-everything"],

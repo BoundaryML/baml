@@ -404,7 +404,7 @@ pub fn package_dependencies<'db>(
         ],
         // Provider client packages implement the `ai.Client` interface; the
         // claude_code harness client also logs its own event stream.
-        "openai" | "anthropic" | "google" | "claude_code" | "mcp" => vec![
+        "openai" | "anthropic" | "google" | "claude_code" => vec![
             PackageId::new(db, Name::new("baml")),
             PackageId::new(db, Name::new("reflect")),
             PackageId::new(db, Name::new("log")),
@@ -423,7 +423,6 @@ pub fn package_dependencies<'db>(
             PackageId::new(db, Name::new("anthropic")),
             PackageId::new(db, Name::new("google")),
             PackageId::new(db, Name::new("claude_code")),
-            PackageId::new(db, Name::new("mcp")),
         ],
     }
 }

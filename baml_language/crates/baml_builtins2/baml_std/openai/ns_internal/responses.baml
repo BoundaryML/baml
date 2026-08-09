@@ -133,7 +133,10 @@ function openai_render(
     baml.http.Request {
         method: "POST",
         url: `${c.base_url ?? "https://api.openai.com/v1"}/responses`,
-        headers: { "authorization": `Bearer ${c.api_key}`, "content-type": "application/json" },
+        headers: {
+            "authorization": `Bearer ${c.api_key ?? baml.env.get_or_panic("OPENAI_API_KEY")}`,
+            "content-type": "application/json",
+        },
         body: baml.json.stringify(baml.json.to_json(body)),
     }
 }

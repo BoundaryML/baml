@@ -22,9 +22,7 @@ function dynamic_mcp_spec(c: claude_code.ClaudeCodeClient) -> ai.FunctionSpec<Ec
             },
         },
         toolbox: ai.Toolbox.new([attach_mcp_tool(c)]),
-        default_client: () -> {
-            c
-        },
+        default_client: c,
     }
 }
 

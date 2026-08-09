@@ -1065,7 +1065,6 @@ fn is_builtin_function_name(name: &str) -> bool {
                 | "anthropic"
                 | "google"
                 | "claude_code"
-                | "mcp"
         )
     )
 }

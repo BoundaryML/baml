@@ -1,6 +1,8 @@
 class AnthropicClient {
     model: string,
-    api_key: string,
+    // null resolves from the environment at request time; construction
+    // never touches env, so declaring/constructing a client is always safe.
+    api_key: string?,
     base_url: string?,
     max_tokens: int,
 
@@ -15,7 +17,7 @@ class AnthropicClient {
     ) -> AnthropicClient {
         AnthropicClient {
             model: model,
-            api_key: api_key ?? baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+            api_key: api_key,
             base_url: base_url,
             max_tokens: max_tokens,
         }

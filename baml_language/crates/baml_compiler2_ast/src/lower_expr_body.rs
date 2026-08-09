@@ -378,15 +378,15 @@ pub(crate) fn synthesize_llm_call_with_prompt(
 ///         },
 ///     },
 ///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
-///     default_client: () -> { openai.OpenAiClient.new(model = "gpt-4o-mini") },
+///     default_client: openai.OpenAiClient.new(model = "gpt-4o-mini"),
 /// }
 /// ```
 ///
 /// The prompt closure re-lowers the backtick as an ordinary template string
 /// with `ctx` bound to an `ai.internal.SpecCtx`, so `${ctx.output_format}`
 /// resolves to the closure's parameter and every other interpolation captures
-/// the enclosing function's parameters. The default client is a thunk so
-/// building a spec never touches credentials.
+/// the enclosing function's parameters. Provider construction is pure, so the
+/// eager default client never touches credentials.
 ///
 /// In the `tools` list, a bare function reference is wrapped in `ai.tool(...)`;
 /// any other element expression must already produce an `ai.Tool`.
@@ -579,7 +579,9 @@ pub(crate) fn synthesize_llm_spec_body(
         span,
     );
 
-    // default_client: () -> { <pkg>.<Class>.new(model = "<model>") }
+    // default_client: <pkg>.<Class>.new(model = "<model>") — an eager value.
+    // Provider construction is pure (credentials resolve from the environment
+    // at request time), so building the spec never touches env.
     let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.to_string())), span);
     let ctor_callee = ctx.alloc_expr(
         Expr::Path(vec![
@@ -597,25 +599,6 @@ pub(crate) fn synthesize_llm_spec_body(
         },
         span,
     );
-    let client_body = ctx.alloc_expr(
-        Expr::Block {
-            stmts: vec![],
-            tail_expr: Some(ctor_call),
-        },
-        span,
-    );
-    let client_lambda = ctx.alloc_expr(
-        Expr::Lambda(Box::new(LambdaDef {
-            kind: LambdaKind::Anonymous,
-            params: vec![],
-            defaults: FunctionDefaults::empty(),
-            return_type: None,
-            throws: None,
-            body: Some(client_body),
-            span,
-        })),
-        span,
-    );
 
     let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
     let spec_obj = ctx.alloc_expr(
@@ -627,7 +610,7 @@ pub(crate) fn synthesize_llm_spec_body(
                 (Name::new("args"), args_map),
                 (Name::new("prompt_template"), prompt_obj),
                 (Name::new("toolbox"), toolbox),
-                (Name::new("default_client"), client_lambda),
+                (Name::new("default_client"), ctor_call),
             ],
             spreads: vec![],
         },

@@ -170,8 +170,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("google", "ns_internal/gemini.baml"),
     builtin!("claude_code", "cli.baml"),
     builtin!("claude_code", "ns_internal/cli.baml"),
-    // --- mcp package (MCP servers as ordinary ai tools) ---
-    builtin!("mcp", "mcp.baml"),
+    // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
+    builtin!("ai", "ns_mcp/mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the

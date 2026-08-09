@@ -101,6 +101,43 @@ class Retry {
     }
 }
 
+// Rotates invocations across members. Replaces the legacy round-robin
+// provider: distribution is a client-boundary concern, exactly like Retry
+// and Fallback. The counter mutates on the shared value, so every call
+// site holding this client participates in one rotation.
+class RoundRobin {
+    members: Client[],
+    counter: int,
+
+    function new(members: Client[]) -> RoundRobin {
+        if (members.length() == 0) {
+            throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+        }
+        RoundRobin { members: members, counter: 0 }
+    }
+
+    implements Client {
+        function id(self) -> string {
+            if let c: Client = self.members.at(0) {
+                c.id()
+            } else {
+                "round-robin"
+            }
+        }
+
+        function invoke(self, input: ModelTurnInput) -> ModelTurn {
+            let index = self.counter % self.members.length();
+            self.counter = self.counter + 1;
+            match (self.members.at(index)) {
+                let c: Client => c.invoke(input),
+                null => {
+                    throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                },
+            }
+        }
+    }
+}
+
 class Fallback {
     members: Client[],
 

@@ -194,7 +194,7 @@ function invoke(
         method: "POST",
         url: `${base}/v1/messages`,
         headers: {
-            "x-api-key": c.api_key,
+            "x-api-key": c.api_key ?? baml.env.get_or_panic("ANTHROPIC_API_KEY"),
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         },

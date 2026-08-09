@@ -75,3 +75,17 @@ test "Fallback advances past a failing member" {
     let result = ai.Agent<Itinerary>.new(client = resilient).run(spec);
     assert.equal(result.value.total_cost_usd, 1.0)
 }
+
+test "RoundRobin rotates members across invokes" {
+    let a = final_turn_only();
+    let b = final_turn_only();
+    let rr = ai.RoundRobin.new([a, b]);
+    let spec = PlanTrip@spec(trip_request = "anywhere");
+    let first = ai.Agent<Itinerary>.new(client = rr).run(spec);
+    let second = ai.Agent<Itinerary>.new(client = rr).run(spec);
+    assert.equal(first.value.total_cost_usd, 1.0);
+    assert.equal(second.value.total_cost_usd, 1.0);
+    // one invoke landed on each member, in rotation
+    assert.equal(a.received().length(), 1);
+    assert.equal(b.received().length(), 1)
+}
