@@ -4209,15 +4209,28 @@ impl<'a> Parser<'a> {
                     if text == "const" {
                         return false;
                     }
+                    // `tools` is deliberately NOT a trigger: every LLM function
+                    // must also declare `client` and `prompt`, and raw string
+                    // contents lex as ordinary tokens in this scan, so a body
+                    // containing e.g. "tools/list" would misclassify.
                     if text == "client" || text == "prompt" {
                         // An LLM field is `client <value>` / `prompt <template>`.
-                        // A following `=`, `,`, or `)` means a named call arg
-                        // or plain identifier use, so this is an expression body.
+                        // A following `=`, `,`, `)`, or `.` means a named call
+                        // arg, plain identifier use, or a member access, and a
+                        // following `(` is a call (e.g. `spec.prompt()`), so
+                        // those are expression bodies — a field value never
+                        // starts with any of them.
                         let j = self.skip_trivia_and_comments_from(i + 1);
                         let next = self.tokens.get(j).map(|t| t.kind);
                         if !matches!(
                             next,
-                            Some(TokenKind::Equals | TokenKind::Comma | TokenKind::RParen)
+                            Some(
+                                TokenKind::Equals
+                                    | TokenKind::Comma
+                                    | TokenKind::RParen
+                                    | TokenKind::Dot
+                                    | TokenKind::LParen
+                            )
                         ) {
                             return true;
                         }
@@ -4266,6 +4279,7 @@ impl<'a> Parser<'a> {
 
             let mut has_client = false;
             let mut has_prompt = false;
+            let mut has_tools = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
@@ -4299,6 +4313,14 @@ impl<'a> Parser<'a> {
                     }
                     has_prompt = true;
                     p.parse_prompt_field();
+                } else if p.at(TokenKind::Word)
+                    && p.current().map(|t| t.text == "tools").unwrap_or(false)
+                {
+                    if has_tools {
+                        p.error_unexpected_token("Duplicate 'tools' field".to_string());
+                    }
+                    has_tools = true;
+                    p.parse_tools_field();
                 } else if p.at(TokenKind::TypeBuilder) {
                     // Parse type_builder block - HIR will emit proper error for non-test context
                     p.parse_type_builder_block();
@@ -4315,7 +4337,7 @@ impl<'a> Parser<'a> {
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
-                        "Only 'client' and 'prompt' allowed in LLM function, found '{}'",
+                        "Only 'client', 'tools' and 'prompt' allowed in LLM function, found '{}'",
                         p.current().map(|t| t.text.as_str()).unwrap_or("EOF")
                     ));
                     p.bump();
@@ -4388,14 +4410,37 @@ impl<'a> Parser<'a> {
     }
 
     /// True when the parser is positioned at the start of an LLM-block field
-    /// (`client`, `prompt`, or `type_builder`). The unquoted client-value scan
-    /// uses this to stop at the next field so that fields written on a single
-    /// line (with no separating newline) are not merged into the client value.
+    /// (`client`, `prompt`, `tools`, or `type_builder`). The unquoted
+    /// client-value scan uses this to stop at the next field so that fields
+    /// written on a single line (with no separating newline) are not merged
+    /// into the client value.
     fn at_llm_field_start(&self) -> bool {
         self.at(TokenKind::Client)
             || self.at(TokenKind::TypeBuilder)
             || (self.at(TokenKind::Word)
-                && self.current().map(|t| t.text == "prompt").unwrap_or(false))
+                && self
+                    .current()
+                    .map(|t| t.text == "prompt" || t.text == "tools")
+                    .unwrap_or(false))
+    }
+
+    /// Parse the `tools` field of an LLM function body: `tools [a, b]` or
+    /// `tools: [a, b]`. The value is an arbitrary expression producing the
+    /// tool list (usually an array literal of function references).
+    fn parse_tools_field(&mut self) {
+        self.with_node(SyntaxKind::TOOLS_FIELD, |p| {
+            // 'tools' keyword (as Word token)
+            if p.at(TokenKind::Word) && p.current().map(|t| t.text == "tools").unwrap_or(false) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("'tools' keyword".to_string());
+            }
+
+            // Optional colon
+            p.eat(TokenKind::Colon);
+
+            p.parse_expr();
+        });
     }
 
     fn parse_prompt_field(&mut self) {
@@ -6106,6 +6151,22 @@ impl<'a> Parser<'a> {
                     }
                     self.finish_node();
                 }
+            } else if op == TokenKind::At
+                && !self.has_newline_ahead()
+                && self
+                    .peek(1)
+                    .is_some_and(|t| t.kind == TokenKind::Word && t.text == "spec")
+            {
+                // Postfix `@spec` on an LLM function reference: `MyFunc@spec(...)`.
+                // Wraps the base expression in a SPEC_EXPR; AST lowering renames
+                // the path's last segment to the `<name>$spec` companion. The
+                // no-newline guard mirrors the tagged-template rule so an
+                // attribute at the start of the next line is never absorbed.
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
+                self.bump(); // @
+                self.bump(); // spec
+                self.finish_node();
             } else if op == TokenKind::Dot && self.looks_like_as_projection() {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);

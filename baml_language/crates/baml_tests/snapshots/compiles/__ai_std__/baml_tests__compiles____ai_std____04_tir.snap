@@ -1,0 +1,812 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2484
+---
+=== TIR2 ===
+
+=== TIR2 (package ai) ===
+
+--- <builtin>/ai/journal.baml ---
+class ai.Text {
+  text: string
+}
+class ai.Reasoning {
+  summary: string
+}
+class ai.ToolUse {
+  id: string
+  name: string
+  args: map<string, unknown>
+}
+type ai.ContentBlock = ai.Text | ai.Reasoning | ai.ToolUse
+enum ai.StopReason
+class ai.RunStarted {
+  spec_name: string
+  arguments: map<string, unknown>
+}
+class ai.UserMessage {
+  content: string
+}
+class ai.AssistantMessage {
+  content: ai.ContentBlock[]
+  client_id: string
+}
+class ai.ToolRequested {
+  id: string
+  name: string
+  args: map<string, unknown>
+}
+class ai.ToolCompleted {
+  id: string
+  output: string
+}
+class ai.ToolFailed {
+  id: string
+  message: string
+}
+class ai.Usage {
+  input_tokens: int
+  output_tokens: int
+  cached_input_tokens: int | null
+  reasoning_tokens: int | null
+}
+class ai.FinalProduced {
+  value_json: string
+}
+type ai.Event = ai.RunStarted | ai.UserMessage | ai.AssistantMessage | ai.ToolRequested | ai.ToolCompleted | ai.ToolFailed | ai.Usage | ai.FinalProduced
+class ai.Journal {
+  log: ai.Event[]
+}
+function ai.Journal.entries(self: ai.Journal) -> ai.Event[] throws never {
+  { : ai.Event[]
+    self.log : ai.Event[]
+  }
+}
+function ai.Journal.new<Out>(spec: ai.FunctionSpec<Out>) -> ai.Journal throws never {
+  { : ai.Journal
+    Journal { log: [RunStarted { spec_name: spec.name(), arguments: spec.arguments() }] } : ai.Journal
+  }
+}
+function ai.Journal.append_all(self: ai.Journal, events: ai.Event[]) -> void throws never {
+  { : void
+    for e in events
+      { : void
+        self.log.push(e) : int
+      }
+  }
+}
+class ai.Text$stream {
+  text: string | null
+}
+class ai.Reasoning$stream {
+  summary: string | null
+}
+class ai.ToolUse$stream {
+  id: string | null
+  name: string | null
+  args: map<string, unknown>
+}
+type ai.ContentBlock$stream = ai.Text$stream | ai.Reasoning$stream | ai.ToolUse$stream
+class ai.RunStarted$stream {
+  spec_name: string | null
+  arguments: map<string, unknown>
+}
+class ai.UserMessage$stream {
+  content: string | null
+}
+class ai.AssistantMessage$stream {
+  content: ai.ContentBlock$stream[]
+  client_id: string | null
+}
+class ai.ToolRequested$stream {
+  id: string | null
+  name: string | null
+  args: map<string, unknown>
+}
+class ai.ToolCompleted$stream {
+  id: string | null
+  output: string | null
+}
+class ai.ToolFailed$stream {
+  id: string | null
+  message: string | null
+}
+class ai.Usage$stream {
+  input_tokens: int | null
+  output_tokens: int | null
+  cached_input_tokens: int | null
+  reasoning_tokens: int | null
+}
+class ai.FinalProduced$stream {
+  value_json: string | null
+}
+type ai.Event$stream = ai.RunStarted$stream | ai.UserMessage$stream | ai.AssistantMessage$stream | ai.ToolRequested$stream | ai.ToolCompleted$stream | ai.ToolFailed$stream | ai.Usage$stream | ai.FinalProduced$stream
+class ai.Journal$stream {
+  log: ai.Event$stream[]
+}
+
+--- <builtin>/ai/ns_errors/errors.baml ---
+enum ai.errors.RetrySafety
+class ai.errors.RateLimited {
+  provider: string
+  retry_after_ms: int | null
+  raw_body: string | null
+}
+function ai.errors.RateLimited.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety throws never {
+  { : ai.errors.RetrySafety.Safe
+    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  }
+}
+class ai.errors.NetworkFailure {
+  provider: string
+  detail: string
+  raw_body: string | null
+}
+function ai.errors.NetworkFailure.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety throws never {
+  { : ai.errors.RetrySafety.Safe
+    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  }
+}
+class ai.errors.InvalidRequest {
+  provider: string
+  status_code: int | null
+  detail: string
+  raw_body: string | null
+}
+function ai.errors.InvalidRequest.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety throws never {
+  { : ai.errors.RetrySafety.Safe
+    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  }
+}
+class ai.errors.Refused {
+  provider: string
+  reason: string
+  raw_body: string | null
+}
+function ai.errors.Refused.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety throws never {
+  { : ai.errors.RetrySafety.Safe
+    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  }
+}
+class ai.errors.ParseFailed {
+  provider: string
+  raw_output: string
+}
+function ai.errors.ParseFailed.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety throws never {
+  { : ai.errors.RetrySafety.Safe
+    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  }
+}
+class ai.errors.StepBudgetExceeded {
+  steps: int
+}
+function ai.errors.StepBudgetExceeded.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety throws never {
+  { : ai.errors.RetrySafety.Safe
+    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  }
+}
+class ai.errors.ToolFailedError {
+  id: string
+  name: string
+  message: string
+  cause: ai.errors.Failure | null
+}
+function ai.errors.ToolFailedError.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety throws never {
+  { : ai.errors.RetrySafety.Safe
+    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  }
+}
+function ai.errors.classify_http(provider: string, status_code: int, body: string) -> ai.errors.Failure throws never {
+  { : ai.errors.RateLimited | ai.errors.NetworkFailure | ai.errors.InvalidRequest
+    if (status_code == 429 : bool) : ai.errors.RateLimited | ai.errors.NetworkFailure | ai.errors.InvalidRequest
+      { : ai.errors.RateLimited
+        RateLimited { provider: provider, retry_after_ms: null, raw_body: body } : ai.errors.RateLimited
+      }
+    else
+      if (status_code == 408 || status_code >= 500 : bool) : ai.errors.NetworkFailure | ai.errors.InvalidRequest
+        { : ai.errors.NetworkFailure
+          NetworkFailure { provider: provider, detail: `...`, raw_body: body } : ai.errors.NetworkFailure
+        }
+      else
+        { : ai.errors.InvalidRequest
+          InvalidRequest { provider: provider, status_code: status_code, detail: `...`, raw_body: body } : ai.errors.InvalidRequest
+        }
+  }
+}
+class ai.errors.RateLimited$stream {
+  provider: string | null
+  retry_after_ms: int | null
+  raw_body: string | null
+}
+class ai.errors.NetworkFailure$stream {
+  provider: string | null
+  detail: string | null
+  raw_body: string | null
+}
+class ai.errors.InvalidRequest$stream {
+  provider: string | null
+  status_code: int | null
+  detail: string | null
+  raw_body: string | null
+}
+class ai.errors.Refused$stream {
+  provider: string | null
+  reason: string | null
+  raw_body: string | null
+}
+class ai.errors.ParseFailed$stream {
+  provider: string | null
+  raw_output: string | null
+}
+class ai.errors.StepBudgetExceeded$stream {
+  steps: int | null
+}
+class ai.errors.ToolFailedError$stream {
+  id: string | null
+  name: string | null
+  message: string | null
+  cause: ai.errors.Failure | null
+}
+
+--- <builtin>/ai/ns_internal/helpers.baml ---
+function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> throws never {
+  { : map<string, unknown>
+    let sig = reflect.signature(handler) : reflect.Signature
+    let props: map<string, unknown> = map {  } : map<string, unknown>
+    let required: string[] = [] : string[]
+    for a in sig.args
+      { : void
+        let _ = props.set(a.name, baml.schema.json_schema(a.type)) : unknown | null
+        required.push(a.name) : int
+      }
+    let schema: map<string, unknown> = map {  } : map<string, unknown>
+    let _ = schema.set("type", "object") : unknown | null
+    let _ = schema.set("properties", props) : unknown | null
+    let _ = schema.set("required", required) : unknown | null
+    let _ = schema.set("additionalProperties", false) : unknown | null
+    schema : map<string, unknown>
+  }
+}
+class ai.internal.SpecCtx {
+  output_format: string
+}
+class ai.internal.SpecCtx$stream {
+  output_format: string | null
+}
+
+--- <builtin>/ai/runner.baml ---
+class ai.RunResult {
+  value: Out
+  journal: ai.Journal
+  usage: ai.Usage
+}
+class ai.Agent {
+  max_steps: int
+  client: ai.Client | null
+  tool_errors: ai.ToolErrorMode
+  on_event: (ai.Event) -> null throws never
+}
+function ai.Agent.new(max_steps: int = 12, client: ai.Client | null = null, tool_errors: ai.ToolErrorMode = ToolErrorMode.Report, on_event: ((ai.Event) -> null throws never) | null = null) -> ai.Agent<Out> throws never {
+  { : ai.Agent<Out>
+    Agent { max_steps: max_steps, client: client, tool_errors: tool_errors, on_event: on_event ?? (e: Event) -> { ... } } : ai.Agent<Out>
+  }
+}
+lambda ai.Agent.new {
+}
+function ai.Agent._run_one_tool(self: ai.Agent<Out>, tb: ai.Toolbox, call: ai.ToolUse, j: ai.Journal) -> null throws never {
+  { : null
+    match (tb.get(call.name) : ai.Tool | null) : null
+      t: Tool =>
+        { : null
+          let outcome: string? = : string | null
+            catch (t.call(call.args) : string) : string | null
+              catch_all (e)
+                _ =>
+                  { : null
+                    j.append_all([ToolFailed { id: call.id, message: e.to_string() }]) : void
+                    if (t.on_error ?? self.tool_errors == ToolErrorMode.Raise : bool) : null
+                      { : never
+                        let classified = : ai.errors.Failure | null
+                          match (e : baml.errors.InvalidArgument | baml.json.JsonSerializationError | unknown) : ai.errors.Failure | null
+                            f: root.errors.Failure =>
+                              f : ai.errors.Failure
+                            _ =>
+                              null : null
+                        throw root.errors.ToolFailedError { id: call.id, name: call.name, message: e.to_string(), cause: classified } : ai.errors.ToolFailedError
+                      }
+                    else
+                      { : null
+                        null : null
+                      }
+                  }
+          if let <pat> = outcome { 1 stmts } : void
+          null : null
+        }
+      null =>
+        { : null
+          j.append_all([ToolFailed { id: call.id, message: `...` }]) : void
+          null : null
+        }
+  }
+}
+function ai.Agent._parses(self: ai.Agent<Out>, candidate: string) -> bool throws never {
+  { : true
+    let _ = : Out
+      catch (baml.sap.parse<T>(candidate) : Out) : Out
+        catch_all (e)
+          _ =>
+            { : never
+              return false : false
+            }
+    true : true
+  }
+}
+function ai.Agent._attempt_turn(self: ai.Agent<Out>, c: ai.Client, spec: ai.FunctionSpec<Out>, j: ai.Journal, total: ai.Usage, attempts_left: int) -> ai.ModelTurn throws never {
+  { : ai.ModelTurn
+    let turn = c.invoke(ModelTurnInput { prompt: spec.prompt(), journal: j, toolbox: spec.tools(), output_type: spec.output_type() }) : ai.ModelTurn
+    if let <pat> = turn.usage { 3 stmts + tail } : void
+    let batch: Event[] = [AssistantMessage { content: turn.content, client_id: c.id() }] : ai.Event[]
+    for u in turn.tool_uses()
+      { : void
+        batch.push(ToolRequested { id: u.id, name: u.name, args: u.args }) : int
+      }
+    if let <pat> = turn.usage { 1 stmts } : void
+    let candidate = turn.terminal_text() ?? "" : string
+    let accepted = turn.tool_uses().length() > 0 || turn.stop_reason == StopReason.MaxTokens || turn.stop_reason == StopReason.Refused || self._parses(candidate) : bool
+    if (accepted : bool) : ai.ModelTurn
+      { : ai.ModelTurn
+        j.append_all(batch) : void
+        match (turn.stop_reason : ai.StopReason) : null
+          StopReason.MaxTokens =>
+            { : never
+              throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } : ai.errors.ParseFailed
+            }
+          StopReason.Refused =>
+            { : never
+              throw root.errors.Refused { provider: c.id(), reason: "the model decline...", raw_body: null } : ai.errors.Refused
+            }
+          _ =>
+            null : null
+        turn : ai.ModelTurn
+      }
+    else
+      if (attempts_left > 1 : bool) : ai.ModelTurn
+        { : ai.ModelTurn
+          batch.push(UserMessage { content: "The reply did not..." }) : int
+          j.append_all(batch) : void
+          self._attempt_turn(c, spec, j, total, attempts_left - 1) : ai.ModelTurn
+        }
+      else
+        { : never
+          j.append_all(batch) : void
+          throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } : ai.errors.ParseFailed
+        }
+  }
+}
+function ai.Agent._emit_from(self: ai.Agent<Out>, j: ai.Journal, seen: int) -> int throws never {
+  { : int
+    let entries = j.entries() : ai.Event[]
+    let i = seen : int
+    while i < entries.length()
+      { : void
+        if let <pat> = entries.at(i) { 1 stmts } : void
+        i = i + 1 : int
+      }
+    entries.length() : int
+  }
+}
+function ai.Agent.run(self: ai.Agent<Out>, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out> throws never {
+  { : never
+    let selected = : ai.Client
+      match (self.client : ai.Client | null) : ai.Client
+        null =>
+          spec.default_client() : ai.Client
+        c: Client =>
+          c : ai.Client
+    let j = Journal.new(spec) : ai.Journal
+    let seen = self._emit_from(j, 0) : int
+    let steps = 0 : 0 -> int
+    let total = Usage { input_tokens: 0, output_tokens: 0, cached_input_tokens: null, reasoning_tokens: null } : ai.Usage
+    let fail_counts: map<string, int> = map {  } : map<string, int>
+    while steps < self.max_steps
+      { : void
+        let turn = self._attempt_turn(selected, spec, j, total, 2) : ai.ModelTurn
+        steps = steps + 1 : int
+        seen = self._emit_from(j, seen) : int
+        let calls = turn.tool_uses() : ai.ToolUse[]
+        if (calls.length() > 0 : bool) : void
+          { : void
+            let before = j.entries().length() : int
+            let futures = calls.map<U, E>((call) -> { ... }) : Future<null, ai.errors.ToolFailedError>[]
+            let _ = await baml.future.all(futures) : null[]
+            seen = self._emit_from(j, seen) : int
+            let entries = j.entries() : ai.Event[]
+            let i = before : int
+            while i < entries.length()
+              { : void
+                if let <pat> = entries.at(i) { 1 stmts + tail } : void
+                i = i + 1 : int
+              }
+          }
+        else
+          { : never
+            let candidate = turn.terminal_text() ?? "" : string
+            let value = : Out
+              catch (baml.sap.parse<T>(candidate) : Out) : Out
+                catch_all (e)
+                  _ =>
+                    { : never
+                      throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } : ai.errors.ParseFailed
+                    }
+            j.append_all([FinalProduced { value_json: baml.json.stringify(baml.json.to_json(value)) }]) : void
+            seen = self._emit_from(j, seen) : int
+            return RunResult { value: value, journal: j, usage: total } : ai.RunResult<Out>
+          }
+      }
+    throw root.errors.StepBudgetExceeded { steps: steps } : ai.errors.StepBudgetExceeded
+  }
+}
+lambda ai.Agent.run {
+}
+lambda ai.Agent.run {
+}
+lambda ai.Agent.run {
+}
+class ai.RunResult$stream {
+  value: Out | null
+  journal: ai.Journal$stream | null
+  usage: ai.Usage$stream | null
+}
+class ai.Agent$stream {
+  max_steps: int | null
+  client: ai.Client | null
+  tool_errors: ai.ToolErrorMode | null
+  on_event: unknown
+}
+
+--- <builtin>/ai/spec.baml ---
+class ai.Prompt {
+  template: (string) -> string throws never
+}
+function ai.Prompt.render_text(self: ai.Prompt, output_format: string) -> string throws never {
+  { : string
+    self.template(output_format) : string
+  }
+}
+class ai.FunctionSpec {
+  spec_name: string
+  args: map<string, unknown>
+  prompt_template: ai.Prompt
+  toolbox: ai.Toolbox
+  default_client: () -> ai.Client throws unknown
+}
+function ai.FunctionSpec.name(self: ai.FunctionSpec<Out>) -> string throws never {
+  { : string
+    self.spec_name : string
+  }
+}
+function ai.FunctionSpec.arguments(self: ai.FunctionSpec<Out>) -> map<string, unknown> throws never {
+  { : map<string, unknown>
+    self.args : map<string, unknown>
+  }
+}
+function ai.FunctionSpec.output_type(self: ai.FunctionSpec<Out>) -> type throws never {
+  { : type
+    reflect.type_of() : type
+  }
+}
+function ai.FunctionSpec.prompt(self: ai.FunctionSpec<Out>) -> ai.Prompt throws never {
+  { : ai.Prompt
+    self.prompt_template : ai.Prompt
+  }
+}
+function ai.FunctionSpec.tools(self: ai.FunctionSpec<Out>) -> ai.Toolbox throws never {
+  { : ai.Toolbox
+    self.toolbox : ai.Toolbox
+  }
+}
+class ai.Prompt$stream {
+  template: unknown
+}
+class ai.FunctionSpec$stream {
+  spec_name: string | null
+  args: map<string, unknown>
+  prompt_template: ai.Prompt$stream | null
+  toolbox: ai.Toolbox$stream | null
+  default_client: unknown
+}
+
+--- <builtin>/ai/tools.baml ---
+enum ai.ToolErrorMode
+class ai.Tool {
+  name: string
+  description: string
+  input_schema: map<string, unknown>
+  handler: baml.AnyFunction<Returns = unknown, Throws = unknown> | null
+  raw_handler: ((map<string, unknown>) -> string throws unknown) | null
+  on_error: ai.ToolErrorMode | null
+}
+function ai.Tool.call(self: ai.Tool, args: map<string, unknown>) -> string throws never {
+  { : string
+    if let <pat> = self.raw_handler { 1 stmts } : void
+    if let <pat> = self.handler { 1 stmts + tail } else { 1 stmts } : string
+  }
+}
+function ai.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>, name: string | null = null, description: string | null = null, on_error: ai.ToolErrorMode | null = null) -> ai.Tool throws never {
+  { : ai.Tool
+    let sig = reflect.signature(handler) : reflect.Signature
+    let resolved_name = name ?? sig.name : string | null
+    if let <pat> = resolved_name { 1 stmts + tail } else { 1 stmts } : ai.Tool
+  }
+}
+function ai.raw_tool(name: string, description: string, input_schema: map<string, unknown>, handler: (map<string, unknown>) -> string throws unknown, on_error: ai.ToolErrorMode | null = null) -> ai.Tool throws never {
+  { : ai.Tool
+    if (name == "__baml_return_output" : bool) : void
+      { : never
+        throw baml.errors.InvalidArgument { message: "the tool name __b..." } : baml.errors.InvalidArgument
+      }
+    Tool { name: name, description: description, input_schema: input_schema, handler: null, raw_handler: handler, on_error: on_error } : ai.Tool
+  }
+}
+class ai.Toolbox {
+  entries: ai.Tool[]
+}
+function ai.Toolbox.new(tools: ai.Tool[]) -> ai.Toolbox throws never {
+  { : ai.Toolbox
+    let names: string[] = [] : string[]
+    for t in tools
+      { : void
+        if (names.includes(t.name) : bool) : void
+          { : never
+            throw baml.errors.InvalidArgument { message: `...` } : baml.errors.InvalidArgument
+          }
+        names.push(t.name) : int
+      }
+    Toolbox { entries: tools } : ai.Toolbox
+  }
+}
+function ai.Toolbox.list(self: ai.Toolbox) -> ai.Tool[] throws never {
+  { : ai.Tool[]
+    self.entries : ai.Tool[]
+  }
+}
+function ai.Toolbox.get(self: ai.Toolbox, name: string) -> ai.Tool | null throws never {
+  { : ai.Tool | null
+    self.entries.find<E>((t) -> { ... }) : ai.Tool | null
+      (t) -> { ... } : (t: ai.Tool) -> bool throws E
+        {
+          t.name == name
+        }
+  }
+}
+lambda ai.Toolbox.get {
+}
+function ai.Toolbox.is_empty(self: ai.Toolbox) -> bool throws never {
+  { : bool
+    self.entries.length() == 0 : bool
+  }
+}
+class ai.Tool$stream {
+  name: string | null
+  description: string | null
+  input_schema: map<string, unknown>
+  handler: baml.AnyFunction<Returns = unknown, Throws = unknown> | null
+  raw_handler: unknown | null
+  on_error: ai.ToolErrorMode | null
+}
+class ai.Toolbox$stream {
+  entries: ai.Tool$stream[]
+}
+
+--- <builtin>/ai/turn.baml ---
+class ai.ModelTurnInput {
+  prompt: ai.Prompt
+  journal: ai.Journal
+  toolbox: ai.Toolbox
+  output_type: type
+}
+class ai.ModelTurn {
+  content: ai.ContentBlock[]
+  stop_reason: ai.StopReason
+  usage: ai.Usage | null
+}
+function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null throws never {
+  { : string
+    let out: string? = null : null -> string | null
+    for b in self.content
+      { : void
+        if let <pat> = b { 1 stmts } : void
+      }
+    out : string
+  }
+}
+function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.ToolUse[] throws never {
+  { : ai.ToolUse[]
+    let out: ToolUse[] = [] : ai.ToolUse[]
+    for b in self.content
+      { : void
+        if let <pat> = b { 1 stmts } : void
+      }
+    out : ai.ToolUse[]
+  }
+}
+class ai.ModelTurnInput$stream {
+  prompt: ai.Prompt$stream | null
+  journal: ai.Journal$stream | null
+  toolbox: ai.Toolbox$stream | null
+  output_type: unknown
+}
+class ai.ModelTurn$stream {
+  content: ai.ContentBlock$stream[]
+  stop_reason: ai.StopReason | null
+  usage: ai.Usage$stream | null
+}
+
+--- <builtin>/ai/wire.baml ---
+function ai.send_as<T>(req: baml.http.Request, provider: string) -> T throws never {
+  { : T
+    let resp = : baml.http.Response
+      catch (baml.http.send(req) : baml.http.Response) : baml.http.Response
+        catch_all (e)
+          _ =>
+            { : never
+              throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } : ai.errors.NetworkFailure
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch_all (e)
+          _ =>
+            { : never
+              throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } : ai.errors.NetworkFailure
+            }
+    if (Not resp.ok() : bool) : void
+      { : never
+        throw root.errors.classify_http(provider, resp.status_code, text) : ai.errors.Failure
+      }
+    catch (baml.json.from_string<T>(text) : T) : T
+      catch_all (e)
+        _ =>
+          throw root.errors.ParseFailed { provider: provider, raw_output: text } : never
+  }
+}
+function ai.render_output_format(t: type) -> string throws never {
+  { : string
+    baml.llm.render_output_format(t) : string
+  }
+}
+
+--- <builtin>/ai/wrappers.baml ---
+function ai.default_retry_judgment(f: ai.errors.Failure) -> bool throws never {
+  { : false | true
+    match (f : ai.errors.Failure) : false | true
+      r: root.errors.Refused =>
+        false : false
+      i: root.errors.InvalidRequest =>
+        false : false
+      p: root.errors.ParseFailed =>
+        false : false
+      _ =>
+        true : true
+  }
+}
+class ai.Backoff {
+  initial_ms: int
+  multiplier: int
+  max_ms: int
+}
+function ai.Backoff.new(initial_ms: int = 250, multiplier: int = 2, max_ms: int = 10000) -> ai.Backoff throws never {
+  { : ai.Backoff
+    Backoff { initial_ms: initial_ms, multiplier: multiplier, max_ms: max_ms } : ai.Backoff
+  }
+}
+function ai.Backoff.delay_ms(self: ai.Backoff, attempt: int, f: ai.errors.Failure) -> int throws never {
+  { : int
+    let hinted = : int | null
+      match (f : ai.errors.Failure) : int | null
+        r: root.errors.RateLimited =>
+          r.retry_after_ms : int | null
+        _ =>
+          null : null
+    if let <pat> = hinted { 0 stmts + tail } else { 3 stmts + tail } : int
+  }
+}
+class ai.Retry {
+  inner: ai.Client
+  max_attempts: int
+  retry_if: (ai.errors.Failure) -> bool throws never
+  backoff: ai.Backoff
+}
+function ai.Retry.new(inner: ai.Client, max_attempts: int = 3, retry_if: ((ai.errors.Failure) -> bool throws never) | null = null, backoff: ai.Backoff | null = null) -> ai.Retry throws never {
+  { : ai.Retry
+    Retry { inner: inner, max_attempts: max_attempts, retry_if: retry_if ?? default_retry_judgment, backoff: backoff ?? Backoff.new() } : ai.Retry
+  }
+}
+function ai.Retry._attempt(self: ai.Retry, input: ai.ModelTurnInput, remaining: int) -> ai.ModelTurn throws never {
+  { : ai.ModelTurn
+    catch (self.inner.invoke(input) : ai.ModelTurn) : ai.ModelTurn
+      catch_all (e)
+        f: root.errors.Failure =>
+          { : ai.ModelTurn
+            if (remaining > 1 && f.retry_safety() == root.errors.RetrySafety.Safe && self.retry_if(f) : bool) : ai.ModelTurn
+              { : ai.ModelTurn
+                let attempt = self.max_attempts - remaining + 1 : int
+                let _ = : null
+                  catch (baml.sys.sleep(baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f))) : null) : null
+                    catch_all (se)
+                      _ =>
+                        null : null
+                self._attempt(input, remaining - 1) : ai.ModelTurn
+              }
+            else
+              { : never
+                throw e : unknown
+              }
+          }
+        _ =>
+          throw e : never
+  }
+}
+function ai.Retry.id(self: ai.Retry) -> string throws never {
+  { : string
+    self.inner.id() : string
+  }
+}
+function ai.Retry.invoke(self: ai.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn throws never {
+  { : ai.ModelTurn
+    self._attempt(input, self.max_attempts) : ai.ModelTurn
+  }
+}
+class ai.Fallback {
+  members: ai.Client[]
+}
+function ai.Fallback._try(self: ai.Fallback, input: ai.ModelTurnInput, index: int) -> ai.ModelTurn throws never {
+  { : ai.ModelTurn
+    match (self.members.at(index) : ai.Client | null) : ai.ModelTurn
+      c: Client =>
+        { : ai.ModelTurn
+          catch (c.invoke(input) : ai.ModelTurn) : ai.ModelTurn
+            catch_all (e)
+              f: root.errors.Failure =>
+                { : ai.ModelTurn
+                  if (index + 1 < self.members.length() && f.retry_safety() == root.errors.RetrySafety.Safe : bool) : ai.ModelTurn
+                    { : ai.ModelTurn
+                      self._try(input, index + 1) : ai.ModelTurn
+                    }
+                  else
+                    { : never
+                      throw e : unknown
+                    }
+                }
+              _ =>
+                throw e : never
+        }
+      null =>
+        { : never
+          throw baml.errors.InvalidArgument { message: "Fallback needs at..." } : baml.errors.InvalidArgument
+        }
+  }
+}
+function ai.Fallback.id(self: ai.Fallback) -> string throws never {
+  { : string | "fallback"
+    if let <pat> = self.members.at(0) { 0 stmts + tail } else { 0 stmts + tail } : string | "fallback"
+  }
+}
+function ai.Fallback.invoke(self: ai.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn throws never {
+  { : ai.ModelTurn
+    self._try(input, 0) : ai.ModelTurn
+  }
+}
+class ai.Backoff$stream {
+  initial_ms: int | null
+  multiplier: int | null
+  max_ms: int | null
+}
+class ai.Retry$stream {
+  inner: ai.Client | null
+  max_attempts: int | null
+  retry_if: unknown
+  backoff: ai.Backoff$stream | null
+}
+class ai.Fallback$stream {
+  members: ai.Client[]
+}

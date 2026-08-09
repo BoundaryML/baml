@@ -4,13 +4,13 @@
 // Mirrors _planv2/pages/03_how_to/01_retry_a_failed_parse_with_feedback.md.
 
 function turn_with_feedback<Out>(
-    c: root.ai.Client,
-    spec: root.ai.FunctionSpec<Out>,
-    j: root.ai.Journal,
+    c: ai.Client,
+    spec: ai.FunctionSpec<Out>,
+    j: ai.Journal,
     attempts: int,
-) -> root.ai.ModelTurn {
+) -> ai.ModelTurn {
     let turn = c.invoke(
-        root.ai.ModelTurnInput {
+        ai.ModelTurnInput {
             prompt: spec.prompt(),
             journal: j,
             toolbox: spec.tools(),
@@ -24,8 +24,8 @@ function turn_with_feedback<Out>(
                 // commit the failed reply and the correction request, then ask again
                 j.append_all(
                     [
-                        root.ai.AssistantMessage { content: turn.content, client_id: c.id() },
-                        root.ai.UserMessage {
+                        ai.AssistantMessage { content: turn.content, client_id: c.id() },
+                        ai.UserMessage {
                             content: "The reply did not match the required schema. Answer again with only the corrected value.",
                         },
                     ],
@@ -43,28 +43,28 @@ test "parse feedback re-asks and the journal records every attempt" {
     let scripted = ScriptedClient.new(
         [
             // attempt 1: garbage that cannot parse as Itinerary
-            root.ai.ModelTurn {
-                content: [root.ai.Text { text: "sorry, here is prose instead of JSON" }],
-                stop_reason: root.ai.StopReason.Complete,
+            ai.ModelTurn {
+                content: [ai.Text { text: "sorry, here is prose instead of JSON" }],
+                stop_reason: ai.StopReason.Complete,
                 usage: null,
             },
             // attempt 2: a valid final answer
-            root.ai.ModelTurn {
-                content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
-                stop_reason: root.ai.StopReason.Complete,
+            ai.ModelTurn {
+                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
+                stop_reason: ai.StopReason.Complete,
                 usage: null,
             },
         ],
     );
-    let spec = plan_trip_spec("anywhere", scripted);
-    let j = root.ai.Journal.new(spec);
+    let spec = PlanTrip@spec(trip_request = "anywhere");
+    let j = ai.Journal.new(spec);
     let turn = turn_with_feedback<Itinerary>(scripted, spec, j, 3);
     assert.is_true(turn.terminal_text() != null);
     // two invocations happened; the second saw the committed feedback
     assert.equal(scripted.received().length(), 2);
-    let second_saw_feedback = scripted.received().at(1)?.journal?.entries()?.some((e: root.ai.Event) -> {
+    let second_saw_feedback = scripted.received().at(1)?.journal?.entries()?.some((e: ai.Event) -> {
         match (e) {
-            let u: root.ai.UserMessage => true,
+            let u: ai.UserMessage => true,
             _ => false,
         }
     })

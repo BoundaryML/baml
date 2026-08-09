@@ -1,4 +1,4 @@
-// root.google.GoogleClient — one model turn against the Gemini generateContent API.
+// root.GoogleClient — one model turn against the Gemini generateContent API.
 // Phase 1: SAP output mode (schema text in the prompt), native function
 // calling. Mirrors _planv2/pages/02_guides/03_clients/05_the_built_in_clients.md.
 
@@ -68,15 +68,15 @@ function _gm_function_response(
 }
 
 // Gemini correlates tool results by NAME, not id: find the tool name for a
-// result id by scanning the root.ai.AssistantMessage root.ai.ToolUse blocks in the journal.
-function _gm_tool_name_for(j: root.ai.Journal, id: string) -> string {
+// result id by scanning the ai.AssistantMessage ai.ToolUse blocks in the journal.
+function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
     let name = "";
     for (let e in j.entries()) {
         match (e) {
-            let a: root.ai.AssistantMessage => {
+            let a: ai.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let u: root.ai.ToolUse => {
+                        let u: ai.ToolUse => {
                             if (u.id == id) {
                                 name = u.name;
                                 null
@@ -95,16 +95,16 @@ function _gm_tool_name_for(j: root.ai.Journal, id: string) -> string {
     name
 }
 
-// root.ai.Journal -> generateContent `contents`. Only promptable events lower;
-// root.ai.RunStarted, root.ai.ToolRequested, root.ai.Usage, and root.ai.FinalProduced are journal-only.
+// ai.Journal -> generateContent `contents`. Only promptable events lower;
+// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
 // Consecutive tool results merge into ONE user content of functionResponse
 // parts, matching how Gemini expects results for a multi-call turn.
-function google_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
+function google_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
     let contents: map<string, unknown>[] = [];
     let pending: map<string, unknown>[] = []; // functionResponse parts awaiting flush
     for (let e in j.entries()) {
         match (e) {
-            let u: root.ai.UserMessage => {
+            let u: ai.UserMessage => {
                 if (pending.length() > 0) {
                     contents.push(_gm_content("user", pending));
                     pending = [];
@@ -115,7 +115,7 @@ function google_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
                 contents.push(_gm_content("user", [_gm_text_part(u.content)]));
                 null
             },
-            let a: root.ai.AssistantMessage => {
+            let a: ai.AssistantMessage => {
                 if (pending.length() > 0) {
                     contents.push(_gm_content("user", pending));
                     pending = [];
@@ -126,11 +126,11 @@ function google_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
                 let parts: map<string, unknown>[] = [];
                 for (let b in a.content) {
                     match (b) {
-                        let t: root.ai.Text => {
+                        let t: ai.Text => {
                             parts.push(_gm_text_part(t.text));
                             null
                         },
-                        let use: root.ai.ToolUse => {
+                        let use: ai.ToolUse => {
                             let fc: map<string, unknown> = {};
                             let _ = fc.set("name", use.name);
                             let _ = fc.set("args", use.args);
@@ -139,7 +139,7 @@ function google_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
                             parts.push(part);
                             null
                         },
-                        // root.ai.Reasoning lowers to nothing in this phase.
+                        // ai.Reasoning lowers to nothing in this phase.
                         _ => null,
                     };
                 }
@@ -151,13 +151,13 @@ function google_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
                 };
                 null
             },
-            let c: root.ai.ToolCompleted => {
+            let c: ai.ToolCompleted => {
                 let response: map<string, unknown> = {};
                 let _ = response.set("result", c.output);
                 pending.push(_gm_function_response(_gm_tool_name_for(j, c.id), response));
                 null
             },
-            let f: root.ai.ToolFailed => {
+            let f: ai.ToolFailed => {
                 let response: map<string, unknown> = {};
                 let _ = response.set("error", f.message);
                 pending.push(_gm_function_response(_gm_tool_name_for(j, f.id), response));
@@ -175,12 +175,12 @@ function google_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
     contents
 }
 
-// root.ai.ModelTurnInput -> one generateContent request.
+// ai.ModelTurnInput -> one generateContent request.
 function google_render(
-    c: root.google.GoogleClient,
-    input: root.ai.ModelTurnInput,
+    c: root.GoogleClient,
+    input: ai.ModelTurnInput,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(root.ai.render_output_format(input.output_type));
+    let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
     let lowered = google_lower_journal(input.journal);
     let body: map<string, unknown> = {};
     // DEVIATION from the wire page: the instructions travel as the leading
@@ -226,8 +226,8 @@ function google_render(
 // One decoded response -> canonical content blocks and a stop reason.
 // Gemini sends no call ids; synthesize `call_<seq>_<i>` from the journal
 // position and the call's index within the turn.
-function google_parse(resp: GmResponse, seq: int) -> root.ai.ModelTurn {
-    let content: root.ai.ContentBlock[] = [];
+function google_parse(resp: GmResponse, seq: int) -> ai.ModelTurn {
+    let content: ai.ContentBlock[] = [];
     let has_call = false;
     let call_index = 0;
     let cand: GmCandidate? = resp.candidates?.at(0);
@@ -240,7 +240,7 @@ function google_parse(resp: GmResponse, seq: int) -> root.ai.ModelTurn {
                 args = a;
             }
             content.push(
-                root.ai.ToolUse { id: `call_${seq}_${call_index}`, name: fc.name, args: args },
+                ai.ToolUse { id: `call_${seq}_${call_index}`, name: fc.name, args: args },
             );
             call_index += 1;
             has_call = true;
@@ -248,10 +248,10 @@ function google_parse(resp: GmResponse, seq: int) -> root.ai.ModelTurn {
         } else {
             if let t: string = p.text {
                 if (p.thought ?? false) {
-                    content.push(root.ai.Reasoning { summary: t });
+                    content.push(ai.Reasoning { summary: t });
                     null
                 } else {
-                    content.push(root.ai.Text { text: t });
+                    content.push(ai.Text { text: t });
                     null
                 }
             } else {
@@ -261,16 +261,16 @@ function google_parse(resp: GmResponse, seq: int) -> root.ai.ModelTurn {
     }
     let blocked = resp.promptFeedback?.blockReason != null;
     let stop = if (has_call) {
-        root.ai.StopReason.ToolUse
+        ai.StopReason.ToolUse
     } else if (finish == "MAX_TOKENS") {
-        root.ai.StopReason.MaxTokens
+        ai.StopReason.MaxTokens
     } else if (blocked || finish == "SAFETY" || finish == "RECITATION" || finish == "PROHIBITED_CONTENT") {
-        root.ai.StopReason.Refused
+        ai.StopReason.Refused
     } else {
-        root.ai.StopReason.Complete
+        ai.StopReason.Complete
     };
-    let usage: root.ai.Usage? = if let um: GmUsageMetadata = resp.usageMetadata {
-        root.ai.Usage {
+    let usage: ai.Usage? = if let um: GmUsageMetadata = resp.usageMetadata {
+        ai.Usage {
             input_tokens: um.promptTokenCount ?? 0,
             output_tokens: um.candidatesTokenCount ?? 0,
             cached_input_tokens: null,
@@ -279,16 +279,16 @@ function google_parse(resp: GmResponse, seq: int) -> root.ai.ModelTurn {
     } else {
         null
     };
-    root.ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
 }
 
 // The one internal entry point: render, send, normalize — one model turn.
-function invoke(c: root.google.GoogleClient, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
-    // root.ai.Journal position before this turn commits; the root.ai.AssistantMessage
+function invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
+    // ai.Journal position before this turn commits; the ai.AssistantMessage
     // the runner appends will land at this index, so ids synthesized
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
     let req = google_render(c, input);
-    let resp = root.ai.send_as<GmResponse>(req, "google");
+    let resp = ai.send_as<GmResponse>(req, "google");
     google_parse(resp, seq)
 }

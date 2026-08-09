@@ -368,9 +368,13 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
             }
             ast::Item::Function(func) => {
-                // Only LLM functions get $parse_stream companions.
-                if !matches!(&func.declarative_meta, Some(ast::DeclarativeMeta::Llm(_))) {
-                    continue;
+                // Only LLM functions get $parse_stream companions. BEP
+                // spec-mode functions (a `tools` field) opt out of the whole
+                // legacy `baml.llm` companion set — their only companion is
+                // the AST-level `$spec`.
+                match &func.declarative_meta {
+                    Some(ast::DeclarativeMeta::Llm(llm)) if !llm.spec_mode => {}
+                    _ => continue,
                 }
                 // Skip companions (contain $) to avoid recursive generation.
                 if func.name.contains('$') {

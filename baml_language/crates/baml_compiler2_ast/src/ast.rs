@@ -1642,6 +1642,13 @@ pub struct LlmBodyDef {
     /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
     /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
+    /// BEP spec mode: the function declared a `tools` field (with a backtick
+    /// prompt and a `"provider/model"` client string), so its direct-call body
+    /// runs the ai-package `Agent` loop over the `<Fn>$spec` companion instead
+    /// of `baml.llm.call_llm_function`, and none of the legacy baml.llm
+    /// companions (`$render_prompt`, `$build_request*`, `$stream`, `$parse*`)
+    /// are generated for it.
+    pub spec_mode: bool,
     pub span: TextRange,
 }
 

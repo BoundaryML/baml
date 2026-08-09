@@ -27,6 +27,7 @@ const COMPANIONS: &[CompanionExpander] = &[
     llm_render_prompt,
     llm_build_request,
     llm_build_request_stream,
+    llm_spec,
 ];
 
 /// Run all companion expanders on the given function.
@@ -38,11 +39,19 @@ pub(crate) fn expand_companions(func: &FunctionDef) -> Vec<FunctionDef> {
         .collect()
 }
 
-fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
-    // Only LLM functions get render_prompt / build_request companions.
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
-        return None;
+/// The parent's LLM metadata when the legacy `baml.llm` companions apply —
+/// `None` for non-LLM functions and for BEP spec-mode functions (whose only
+/// companion is `$spec`).
+fn legacy_llm_meta(parent: &FunctionDef) -> Option<&crate::ast::LlmBodyDef> {
+    match &parent.declarative_meta {
+        Some(DeclarativeMeta::Llm(llm)) if !llm.spec_mode => Some(llm),
+        _ => None,
     }
+}
+
+fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
+    // Only legacy LLM functions get render_prompt / build_request companions.
+    legacy_llm_meta(parent)?;
     Some(make_llm_companion(
         parent,
         "render_prompt",
@@ -51,10 +60,8 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
-    // Only LLM functions get render_prompt / build_request companions.
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
-        return None;
-    }
+    // Only legacy LLM functions get render_prompt / build_request companions.
+    legacy_llm_meta(parent)?;
     Some(make_llm_companion(
         parent,
         "build_request",
@@ -63,14 +70,62 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
-        return None;
-    }
+    legacy_llm_meta(parent)?;
     Some(make_llm_companion(
         parent,
         "build_request_stream",
         &["baml", "http", "Request"],
     ))
+}
+
+/// Build the `<Fn>$spec` companion for a BEP spec-eligible LLM function: the
+/// function's parameters in, an `ai.FunctionSpec<Out>` out. The body was
+/// pre-lowered in `lower_cst` (the CST backtick is unreachable here) and
+/// stashed under the `"spec"` key.
+fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
+    let Some(DeclarativeMeta::Llm(llm)) = &parent.declarative_meta else {
+        return None;
+    };
+    let (body, source_map) = llm
+        .companion_bodies
+        .iter()
+        .find(|(t, _)| t == "spec")
+        .map(|(_, b)| b.clone())?;
+    let out = parent.return_type.clone()?;
+
+    let name = Name::new(format!("{}$spec", parent.name));
+    let return_type = (TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("FunctionSpec")],
+        generic_args: vec![out],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(parent.span);
+    // The spec binds the function's own parameters; the injected `client`
+    // override belongs to the runner, not the spec.
+    let params: Vec<Param> = parent
+        .params
+        .iter()
+        .filter(|p| p.name.as_str() != "client")
+        .cloned()
+        .collect();
+
+    Some(FunctionDef {
+        name,
+        generic_params: parent.generic_params.clone(),
+        params,
+        defaults: parent.defaults.clone(),
+        return_type: Some(return_type),
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        metadata: crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion),
+        attributes: vec![],
+        docstring: parent.docstring.clone(),
+        is_tagged_template_tag: parent.is_tagged_template_tag,
+        span: parent.span,
+        name_span: parent.name_span,
+    })
 }
 
 /// Build the `$parse` companion for an LLM function.
@@ -82,10 +137,8 @@ fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
 /// only computable with PPIR context (package items, block attrs, alias
 /// bodies) — hence the extra `type_args` parameter.
 pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<FunctionDef> {
-    // Only LLM functions get a parse companion.
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
-        return None;
-    }
+    // Only legacy LLM functions get a parse companion.
+    legacy_llm_meta(parent)?;
 
     let name = Name::new(format!("{}$parse", parent.name));
 

@@ -2,15 +2,16 @@
 // outcome envelope. Uses the CLI's own authentication; no API key.
 
 function live_claude_code() -> string {
-    let spec = plan_trip_spec(
-        "2 weeks in Japan, mid-range budget, flying from SFO in October. Use the tools to look up flights and hotels before answering. Do not ask questions.",
-        root.claude_code.ClaudeCodeClient.new(),
+    let spec = PlanTrip@spec(
+        trip_request = "2 weeks in Japan, mid-range budget, flying from SFO in October. Use the tools to look up flights and hotels before answering. Do not ask questions.",
     );
-    let result = root.ai.Agent<Itinerary>.new(on_event = log_event).run(spec);
+    let result = ai.Agent<Itinerary>
+        .new(client = claude_code.ClaudeCodeClient.new(), on_event = log_event)
+        .run(spec);
     let tool_events = result.journal.entries()
-        .filter((e: root.ai.Event) -> {
+        .filter((e: ai.Event) -> {
             match (e) {
-                let c: root.ai.ToolCompleted => true,
+                let c: ai.ToolCompleted => true,
                 _ => false,
             }
         })
@@ -24,21 +25,20 @@ function live_claude_code() -> string {
 // is delivered as its kind plus a structural json payload, which hosts
 // receive as plain values (`any` in Go).
 function live_claude_code_observed(on_event: (string, json) -> null throws never) -> string {
-    let spec = plan_trip_spec(
-        "2 weeks in Japan, mid-range budget, flying from SFO in October. Use the tools to look up flights and hotels before answering. Do not ask questions.",
-        root.claude_code.ClaudeCodeClient.new(),
+    let spec = PlanTrip@spec(
+        trip_request = "2 weeks in Japan, mid-range budget, flying from SFO in October. Use the tools to look up flights and hotels before answering. Do not ask questions.",
     );
-    let result = root.ai.Agent<Itinerary>
-        .new(on_event = (e: root.ai.Event) -> {
+    let result = ai.Agent<Itinerary>
+        .new(client = claude_code.ClaudeCodeClient.new(), on_event = (e: ai.Event) -> {
             let kind = match (e) {
-                let x: root.ai.RunStarted => "RunStarted",
-                let x: root.ai.UserMessage => "UserMessage",
-                let x: root.ai.AssistantMessage => "AssistantMessage",
-                let x: root.ai.ToolRequested => "ToolRequested",
-                let x: root.ai.ToolCompleted => "ToolCompleted",
-                let x: root.ai.ToolFailed => "ToolFailed",
-                let x: root.ai.Usage => "Usage",
-                let x: root.ai.FinalProduced => "FinalProduced",
+                let x: ai.RunStarted => "RunStarted",
+                let x: ai.UserMessage => "UserMessage",
+                let x: ai.AssistantMessage => "AssistantMessage",
+                let x: ai.ToolRequested => "ToolRequested",
+                let x: ai.ToolCompleted => "ToolCompleted",
+                let x: ai.ToolFailed => "ToolFailed",
+                let x: ai.Usage => "Usage",
+                let x: ai.FinalProduced => "FinalProduced",
             };
             let payload = baml.json.to_json(e) catch_all (err) {
                 _ => null,
@@ -47,9 +47,9 @@ function live_claude_code_observed(on_event: (string, json) -> null throws never
         })
         .run(spec);
     let tool_events = result.journal.entries()
-        .filter((e: root.ai.Event) -> {
+        .filter((e: ai.Event) -> {
             match (e) {
-                let c: root.ai.ToolCompleted => true,
+                let c: ai.ToolCompleted => true,
                 _ => false,
             }
         })

@@ -1,4 +1,4 @@
-// A harness client: the authenticated Claude Code CLI as a root.ai.Client.
+// A harness client: the authenticated Claude Code CLI as a ai.Client.
 // The transport is a local process, not HTTP; the output contract travels
 // natively via --json-schema; BAML tools ride the `outcome` envelope.
 
@@ -35,13 +35,13 @@ class ClaudeCodeClient {
         }
     }
 
-    implements root.ai.Client {
+    implements ai.Client {
         function id(self) -> string {
             `claude-code/${self.model}`
         }
 
-        function invoke(self, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
-            root.claude_code.internal.invoke(self, input)
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            root.internal.invoke(self, input)
         }
     }
 }

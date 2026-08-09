@@ -4012,18 +4012,19 @@ impl<'db> LoweringContext<'db> {
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
             let lambda_span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
-            // Find the Lambda scope containing this span by searching for it.
-            // We look for a Lambda-kind scope whose range matches the lambda span.
-            let mut found = None;
-            for (i, scope) in index.scopes.iter().enumerate() {
-                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Lambda
-                    && scope.range == lambda_span
-                {
-                    found = Some(FileScopeId::new(i as u32));
-                    break;
-                }
-            }
-            found.unwrap_or(self.current_scope)
+            // Two functions can carry a lambda at the *same* source span — an
+            // LLM function and its synthesized companions all share the parent's
+            // ranges (e.g. the `$spec` companion's prompt closure vs the
+            // parent's prompt-tag closure). A bare range match would pick
+            // whichever lambda scope appears first in the file, binding this
+            // lambda to the *other* function's captures. Disambiguate by
+            // preferring the lambda scope nested within the function currently
+            // being lowered; fall back to the first range match (mirrors
+            // `build_tagged_body_closure`).
+            index
+                .lambda_scope_for_within(self.current_scope, lambda_span)
+                .or_else(|| index.lambda_scope_for(lambda_span))
+                .unwrap_or(self.current_scope)
         } else {
             self.current_scope
         };

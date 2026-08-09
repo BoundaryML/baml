@@ -21,13 +21,13 @@ class AnthropicClient {
         }
     }
 
-    implements root.ai.Client {
+    implements ai.Client {
         function id(self) -> string {
             `anthropic/${self.model}`
         }
 
-        function invoke(self, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
-            root.anthropic.internal.invoke(self, input)
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            root.internal.invoke(self, input)
         }
     }
 }

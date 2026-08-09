@@ -1,10 +1,10 @@
-// root.mcp — MCP servers as ordinary BAML tools. A library over public
-// primitives (baml.sys.start_process, root.ai.raw_tool), not part of
-// root.ai: the core namespace carries no protocol knowledge.
+// mcp — MCP servers as ordinary BAML tools. A library over public
+// primitives (baml.sys.start_process, ai.raw_tool), not part of
+// ai: the core namespace carries no protocol knowledge.
 //
 // One McpConnection is one server child process speaking JSON-RPC 2.0 over
 // stdio, one message per line. tools() projects the server's catalog into
-// root.ai.Tool values whose handlers proxy tools/call, so MCP calls are
+// ai.Tool values whose handlers proxy tools/call, so MCP calls are
 // executed by the runner, journaled as ToolRequested/ToolCompleted, and
 // visible to on_event — with any client.
 // Mirrors _planv2/pages/03_how_to/06_use_mcp_tools_with_any_client.md.
@@ -61,7 +61,7 @@ class McpConnection {
             },
         ) catch_all (e) {
             _ => {
-                throw root.ai.errors.NetworkFailure {
+                throw ai.errors.NetworkFailure {
                     provider: `mcp/${name}`,
                     detail: `the MCP server could not start: ${e.to_string()}`,
                     raw_body: null,
@@ -89,7 +89,7 @@ class McpConnection {
         let framed = [line, "\n"].join("");
         let _ = self.p.write_stdin(framed) catch_all (e) {
             _ => {
-                throw root.ai.errors.NetworkFailure {
+                throw ai.errors.NetworkFailure {
                     provider: `mcp/${self.server_name}`,
                     detail: `writing to the MCP server failed: ${e.to_string()}`,
                     raw_body: null,
@@ -108,7 +108,7 @@ class McpConnection {
         while (true) {
             let next = self.p.stdout.next() catch_all (e) {
                 _ => {
-                    throw root.ai.errors.NetworkFailure {
+                    throw ai.errors.NetworkFailure {
                         provider: `mcp/${self.server_name}`,
                         detail: `reading from the MCP server failed: ${e.to_string()}`,
                         raw_body: null,
@@ -126,7 +126,7 @@ class McpConnection {
                         if (baml.json.path_or<int>(msg, ".id", -1) == id) {
                             let err = baml.json.path_or<json>(msg, ".error", null);
                             if (err != null) {
-                                throw root.ai.errors.InvalidRequest {
+                                throw ai.errors.InvalidRequest {
                                     provider: `mcp/${self.server_name}`,
                                     status_code: baml.json.path_or<int?>(err, ".code", null),
                                     detail: baml.json.path_or<string>(err, ".message", "MCP error"),
@@ -138,7 +138,7 @@ class McpConnection {
                     }
                 },
                 _ => {
-                    throw root.ai.errors.NetworkFailure {
+                    throw ai.errors.NetworkFailure {
                         provider: `mcp/${self.server_name}`,
                         detail: `the MCP server stream ended before answering ${method}`,
                         raw_body: null,
@@ -147,7 +147,7 @@ class McpConnection {
             };
         }
         // unreachable: the loop returns on a matching id or throws at EOF
-        throw root.ai.errors.NetworkFailure {
+        throw ai.errors.NetworkFailure {
             provider: `mcp/${self.server_name}`,
             detail: `no response for ${method}`,
             raw_body: null,
@@ -157,9 +157,9 @@ class McpConnection {
     // The server's catalog as ordinary tools. Each tool's inputSchema is
     // already JSON Schema, so it carries into Tool.input_schema unchanged;
     // the handler proxies tools/call over this connection.
-    function tools(self) -> root.ai.Tool[] {
+    function tools(self) -> ai.Tool[] {
         let result = self._request("tools/list", {});
-        let out: root.ai.Tool[] = [];
+        let out: ai.Tool[] = [];
         for (let t in baml.json.path_or<json[]>(result, ".tools", [])) {
             let tool_name = baml.json.path_or<string>(t, ".name", "");
             let schema = baml.json.from_json<map<string, unknown>>(
@@ -171,7 +171,7 @@ class McpConnection {
                 },
             };
             out.push(
-                root.ai.raw_tool(
+                ai.raw_tool(
                     tool_name,
                     baml.json.path_or<string>(t, ".description", ""),
                     schema,

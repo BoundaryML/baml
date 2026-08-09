@@ -53,10 +53,10 @@ class Agent<Out> {
                         // the per-tool setting wins; null inherits the run's mode
                         if ((t.on_error ?? self.tool_errors) == ToolErrorMode.Raise) {
                             let classified = match (e) {
-                                let f: root.ai.errors.Failure => f,
+                                let f: root.errors.Failure => f,
                                 _ => null,
                             };
-                            throw root.ai.errors.ToolFailedError {
+                            throw root.errors.ToolFailedError {
                                 id: call.id,
                                 name: call.name,
                                 message: e.to_string(),
@@ -145,10 +145,10 @@ class Agent<Out> {
             // terminal wire outcomes are thrown here, with the turn on the record
             match (turn.stop_reason) {
                 StopReason.MaxTokens => {
-                    throw root.ai.errors.ParseFailed { provider: c.id(), raw_output: candidate }
+                    throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
                 },
                 StopReason.Refused => {
-                    throw root.ai.errors.Refused { provider: c.id(), reason: "the model declined to answer", raw_body: null }
+                    throw root.errors.Refused { provider: c.id(), reason: "the model declined to answer", raw_body: null }
                 },
                 _ => null,
             };
@@ -163,7 +163,7 @@ class Agent<Out> {
             self._attempt_turn(c, spec, j, total, attempts_left - 1)
         } else {
             j.append_all(batch);
-            throw root.ai.errors.ParseFailed { provider: c.id(), raw_output: candidate }
+            throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
         }
     }
 
@@ -182,10 +182,13 @@ class Agent<Out> {
 
     implements Runner<Out> {
         type Output = RunResult<Out>
-        type Error = root.ai.errors.Failure | baml.errors.UnknownError
+        type Error = root.errors.Failure | baml.errors.UnknownError
 
         function run(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
-            let selected = self.client ?? spec.default_client;
+            let selected = match (self.client) {
+                null => spec.default_client(),
+                let c: Client => c,
+            };
             let j = Journal.new(spec);
             let seen = self._emit_from(j, 0);
             let steps = 0;
@@ -226,7 +229,7 @@ class Agent<Out> {
                                 let n = (fail_counts.get(key) ?? 0) + 1;
                                 let _ = fail_counts.set(key, n);
                                 if (n >= 3) {
-                                    throw root.ai.errors.ToolFailedError {
+                                    throw root.errors.ToolFailedError {
                                         id: known.id,
                                         name: known.name,
                                         message: `the same tool call failed ${n} times; stopping the run: ${f.message}`,
@@ -241,7 +244,7 @@ class Agent<Out> {
                     let candidate = turn.terminal_text() ?? "";
                     let value = baml.sap.parse<Out>(candidate) catch_all (e) {
                         _ => {
-                            throw root.ai.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                            throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
                         },
                     };
                     j.append_all(
@@ -255,7 +258,7 @@ class Agent<Out> {
                     return RunResult { value: value, journal: j, usage: total };
                 }
             }
-            throw root.ai.errors.StepBudgetExceeded { steps: steps }
+            throw root.errors.StepBudgetExceeded { steps: steps }
         }
     }
 }

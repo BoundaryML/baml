@@ -3,20 +3,20 @@
 
 // The journal as labeled text. Claude Code's -p mode takes one prompt, so
 // the conversation folds into it; the CLI's own session state is unused.
-function transcript_text(j: root.ai.Journal) -> string {
+function transcript_text(j: ai.Journal) -> string {
     let lines: string[] = [];
     for (let e in j.entries()) {
         match (e) {
-            let u: root.ai.UserMessage => {
+            let u: ai.UserMessage => {
                 lines.push(`user: ${u.content}`);
             },
-            let a: root.ai.AssistantMessage => {
+            let a: ai.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let t: root.ai.Text => {
+                        let t: ai.Text => {
                             lines.push(`assistant: ${t.text}`);
                         },
-                        let c: root.ai.ToolUse => {
+                        let c: ai.ToolUse => {
                             lines.push(
                                 `assistant tool_call: {"id": "${c.id}", "name": "${c.name}", "args": ${baml.json.stringify(baml.json.to_json(c.args))}}`,
                             );
@@ -27,10 +27,10 @@ function transcript_text(j: root.ai.Journal) -> string {
                     };
                 }
             },
-            let done: root.ai.ToolCompleted => {
+            let done: ai.ToolCompleted => {
                 lines.push(`tool result id=${done.id} is_error=false: ${done.output}`);
             },
-            let failed: root.ai.ToolFailed => {
+            let failed: ai.ToolFailed => {
                 lines.push(`tool result id=${failed.id} is_error=true: ${failed.message}`);
             },
             _ => {
@@ -95,7 +95,7 @@ function _type_schema(t: string) -> map<string, unknown> {
 // The guidance about never repeating a successful call is load-bearing:
 // each invoke is a fresh CLI process, and the conversation text is the only
 // memory it has.
-function tool_protocol(tb: root.ai.Toolbox) -> string {
+function tool_protocol(tb: ai.Toolbox) -> string {
     let catalog: string[] = [];
     for (let t in tb.list()) {
         catalog.push(
@@ -130,7 +130,7 @@ function _read_result(p: baml.sys.Process) -> json {
         if (trimmed.length() > 0) {
             let raw = baml.json.parse(trimmed) catch_all (e) {
                 _ => {
-                    throw root.ai.errors.ParseFailed { provider: "claude-code", raw_output: trimmed }
+                    throw ai.errors.ParseFailed { provider: "claude-code", raw_output: trimmed }
                 },
             };
             _log_cc_event(raw);
@@ -142,7 +142,7 @@ function _read_result(p: baml.sys.Process) -> json {
         };
     }
     if (result == null) {
-        throw root.ai.errors.ParseFailed {
+        throw ai.errors.ParseFailed {
             provider: "claude-code",
             raw_output: "the Claude Code CLI stream ended without a result event",
         }
@@ -203,7 +203,7 @@ function _log_cc_event(raw: json) -> null {
 // The client's mcp_servers as one --mcp-config JSON string, or null when no
 // server is attached. The map is read here, at render time, so a server
 // added between turns rides the next turn's process.
-function mcp_config_json(c: root.claude_code.ClaudeCodeClient) -> string? {
+function mcp_config_json(c: root.ClaudeCodeClient) -> string? {
     if (c.mcp_servers.length() == 0) {
         null
     } else {
@@ -215,7 +215,7 @@ function mcp_config_json(c: root.claude_code.ClaudeCodeClient) -> string? {
 
 // One mcp__<name> entry per attached server: the --allowedTools value that
 // permits every tool the server provides.
-function allowed_mcp_tools(c: root.claude_code.ClaudeCodeClient) -> string {
+function allowed_mcp_tools(c: root.ClaudeCodeClient) -> string {
     c.mcp_servers.keys()
         .map((n: string) -> {
             `mcp__${n}`
@@ -225,9 +225,9 @@ function allowed_mcp_tools(c: root.claude_code.ClaudeCodeClient) -> string {
 
 // One model turn = one CLI run: assemble the prompt, exec, normalize.
 function invoke(
-    c: root.claude_code.ClaudeCodeClient,
-    input: root.ai.ModelTurnInput,
-) -> root.ai.ModelTurn {
+    c: root.ClaudeCodeClient,
+    input: ai.ModelTurnInput,
+) -> ai.ModelTurn {
     // the contract travels via --json-schema, so the prompt's schema slot
     // renders empty
     let instructions = input.prompt.render_text("");
@@ -280,7 +280,7 @@ function invoke(
         baml.sys.ProcessOptions { cwd: c.cwd, env: null, timeout_ms: c.timeout_ms, stdin: null },
     ) catch_all (e) {
         _ => {
-            throw root.ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure {
                 provider: "claude-code",
                 detail: `the Claude Code CLI could not start: ${e.to_string()}`,
                 raw_body: null,
@@ -299,7 +299,7 @@ function invoke(
     let result = _read_result(p);
     let exit = p.wait() catch_all (e) {
         _ => {
-            throw root.ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure {
                 provider: "claude-code",
                 detail: `the Claude Code CLI did not terminate cleanly: ${e.to_string()}`,
                 raw_body: null,
@@ -307,7 +307,7 @@ function invoke(
         },
     };
     if (!exit.ok()) {
-        throw root.ai.errors.InvalidRequest {
+        throw ai.errors.InvalidRequest {
             provider: "claude-code",
             status_code: null,
             detail: `the Claude Code CLI exited with code ${exit.exit_code}`,
@@ -316,7 +316,7 @@ function invoke(
     }
 
     if (baml.json.path_or<bool>(result, ".is_error", false)) {
-        throw root.ai.errors.Refused {
+        throw ai.errors.Refused {
             provider: "claude-code",
             reason: baml.json.path_or<string>(result, ".subtype", "error"),
             raw_body: baml.json.stringify(result),
@@ -329,7 +329,7 @@ function invoke(
         _ => {
             baml.json.parse(baml.json.path_or<string>(result, ".result", "")) catch_all (inner) {
                 _ => {
-                    throw root.ai.errors.ParseFailed {
+                    throw ai.errors.ParseFailed {
                         provider: "claude-code",
                         raw_output: baml.json.stringify(result),
                     }
@@ -338,15 +338,15 @@ function invoke(
         }
     };
 
-    let usage = root.ai.Usage {
+    let usage = ai.Usage {
         input_tokens: baml.json.path_or<int>(result, ".usage.input_tokens", 0),
         output_tokens: baml.json.path_or<int>(result, ".usage.output_tokens", 0),
         cached_input_tokens: baml.json.path_or<int?>(result, ".usage.cache_read_input_tokens", null),
         reasoning_tokens: null,
     };
 
-    let content: root.ai.ContentBlock[] = [];
-    let stop: root.ai.StopReason = root.ai.StopReason.Complete;
+    let content: ai.ContentBlock[] = [];
+    let stop: ai.StopReason = ai.StopReason.Complete;
     if (has_tools) {
         let outcome = baml.json.path_or<json>(result, ".structured_output.outcome", structured);
         let calls = baml.json.path_or<json[]?>(outcome, ".calls", null);
@@ -367,15 +367,15 @@ function invoke(
                         empty
                     },
                 };
-                content.push(root.ai.ToolUse { id: id, name: name, args: call_args });
+                content.push(ai.ToolUse { id: id, name: name, args: call_args });
                 i = i + 1;
             }
-            stop = root.ai.StopReason.ToolUse;
+            stop = ai.StopReason.ToolUse;
         } else {
-            content.push(root.ai.Text { text: baml.json.stringify(outcome) });
+            content.push(ai.Text { text: baml.json.stringify(outcome) });
         }
     } else {
-        content.push(root.ai.Text { text: baml.json.stringify(structured) });
+        content.push(ai.Text { text: baml.json.stringify(structured) });
     }
-    root.ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
 }

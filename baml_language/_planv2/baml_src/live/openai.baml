@@ -2,13 +2,15 @@
 // `baml-cli run -e 'live_openai()'` and OPENAI_API_KEY in the environment.
 
 function live_openai() -> string {
-    let result = root.ai.Agent<Itinerary>.new().run(
-        plan_trip_spec("2 weeks in Japan, mid-range budget", root.openai.OpenAiClient.new()),
+    // No client override: this exercises the spec's lazily-resolved default
+    // client from the function's `client "openai/gpt-4o-mini"` string.
+    let result = ai.Agent<Itinerary>.new().run(
+        PlanTrip@spec(trip_request = "2 weeks in Japan, mid-range budget"),
     );
     let completed = 0;
     for (let e in result.journal.entries()) {
         match (e) {
-            let c: root.ai.ToolCompleted => {
+            let c: ai.ToolCompleted => {
                 completed += 1;
                 null
             },

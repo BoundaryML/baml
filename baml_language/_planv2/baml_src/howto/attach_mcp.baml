@@ -10,8 +10,8 @@
 // An ordinary signature-derived tool: the schema comes from the closure's
 // parameters, and the boundary decode in reflect.call_any (B-1174) binds
 // the model's JSON string array into the string[] parameter.
-function attach_mcp_tool(c: root.claude_code.ClaudeCodeClient) -> root.ai.Tool {
-    root.ai.tool(
+function attach_mcp_tool(c: claude_code.ClaudeCodeClient) -> ai.Tool {
+    ai.tool(
         (name: string, command: string, args: string[]) -> string {
             let cfg: map<string, unknown> = {};
             let _ = cfg.set("command", command);
@@ -25,12 +25,12 @@ function attach_mcp_tool(c: root.claude_code.ClaudeCodeClient) -> root.ai.Tool {
 }
 
 test "a fresh client renders no mcp config" {
-    let c = root.claude_code.ClaudeCodeClient.new();
-    assert.is_true(root.claude_code.internal.mcp_config_json(c) == null)
+    let c = claude_code.ClaudeCodeClient.new();
+    assert.is_true(claude_code.internal.mcp_config_json(c) == null)
 }
 
 test "attach_mcp mutates the client and the next render sees the server" {
-    let c = root.claude_code.ClaudeCodeClient.new();
+    let c = claude_code.ClaudeCodeClient.new();
     // the runner would dispatch this through Tool.call on the model's args
     let call_args: map<string, unknown> = {};
     let _ = call_args.set("name", "filesystem");
@@ -38,12 +38,12 @@ test "attach_mcp mutates the client and the next render sees the server" {
     let _ = call_args.set("args", ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]);
     let out = attach_mcp_tool(c).call(call_args);
     assert.contains(out, "next turn");
-    let rendered = root.claude_code.internal.mcp_config_json(c) ?? "";
+    let rendered = claude_code.internal.mcp_config_json(c) ?? "";
     assert.contains(rendered, "mcpServers");
     assert.contains(rendered, "filesystem");
     assert.contains(rendered, "server-filesystem");
     // the server's tools are allowed, or -p mode would deny every call
-    assert.equal(root.claude_code.internal.allowed_mcp_tools(c), "mcp__filesystem")
+    assert.equal(claude_code.internal.allowed_mcp_tools(c), "mcp__filesystem")
 }
 
 test "static attachment via the constructor renders the same config" {
@@ -52,8 +52,8 @@ test "static attachment via the constructor renders the same config" {
     let _ = cfg.set("args", ["--stdio"]);
     let servers: map<string, json> = {};
     let _ = servers.set("search", baml.json.to_json(cfg));
-    let c = root.claude_code.ClaudeCodeClient.new(mcp_servers = servers);
-    let rendered = root.claude_code.internal.mcp_config_json(c) ?? "";
+    let c = claude_code.ClaudeCodeClient.new(mcp_servers = servers);
+    let rendered = claude_code.internal.mcp_config_json(c) ?? "";
     assert.contains(rendered, "search");
     assert.contains(rendered, "my-mcp")
 }

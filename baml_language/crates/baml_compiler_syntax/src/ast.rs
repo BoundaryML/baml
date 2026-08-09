@@ -154,6 +154,8 @@ ast_node!(ConfigItem, CONFIG_ITEM);
 ast_node!(ConfigValue, CONFIG_VALUE);
 ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
+ast_node!(ToolsField, TOOLS_FIELD);
+ast_node!(SpecExpr, SPEC_EXPR);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
@@ -988,6 +990,30 @@ impl LlmFunctionBody {
     /// For `function Foo() -> string { ... prompt #"..."# }`, returns the `prompt #"..."#` field.
     pub fn prompt_field(&self) -> Option<PromptField> {
         self.syntax.children().find_map(PromptField::cast)
+    }
+
+    /// Get the tools field if present.
+    ///
+    /// For `function Foo() -> T { ... tools: [a, b] ... }`, returns the
+    /// `tools: [a, b]` field.
+    pub fn tools_field(&self) -> Option<ToolsField> {
+        self.syntax.children().find_map(ToolsField::cast)
+    }
+}
+
+impl ToolsField {
+    /// The tools value expression — the first child node after the `tools`
+    /// keyword and optional colon (usually an `ARRAY_LITERAL`).
+    pub fn expr(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+}
+
+impl SpecExpr {
+    /// The base expression the postfix `@spec` was applied to (a `PATH_EXPR`
+    /// naming an LLM function).
+    pub fn base(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
     }
 }
 
@@ -2542,6 +2568,7 @@ impl BlockExpr {
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
                         | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::SPEC_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR

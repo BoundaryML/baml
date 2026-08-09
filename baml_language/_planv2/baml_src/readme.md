@@ -4,42 +4,41 @@ This tree implements the BEP in `../pages/` with code that actually runs:
 the loop, the clients, and the how-tos are executable, and every design
 claim listed below is covered by an offline test or a live smoke run.
 
+The core library now ships as builtin stdlib packages compiled into the
+toolchain (`crates/baml_builtins2/baml_std/{ai,openai,anthropic,google,
+claude_code,mcp}`), reachable from any project as `ai.*`, `openai.*`,
+`anthropic.*`, `google.*`, `claude_code.*`, and `mcp.*` — no `root.`
+prefix and no files to copy. This tree keeps only the fixtures, tests,
+how-tos, and live smokes, all written against those builtins.
+
+The `@spec` desugar is implemented in the compiler: an LLM function with
+a backtick prompt and a `"provider/model"` client string gets a
+compiler-generated `<Fn>$spec` companion, and `Fn@spec(args)` builds the
+bound, unrun `ai.FunctionSpec<Out>` (see `examples/plan_trip.baml`). A
+`tools: [fn, ...]` field additionally switches the function's direct
+call to the ai runner: `PlanTrip(...)` desugars to
+`ai.Agent<Out>.new(client = client).run(PlanTrip@spec(...)).value`, with
+`client` a compiler-injected `ai.Client? = null` override parameter. The
+spec's default client resolves lazily (a thunk), so building a spec
+never touches credentials.
+
 ## Layout
 
 ```
 baml_src/
-├── ns_ai/                    the public surface: baml describe root.ai
-│   ├── ns_errors/            ai.errors: RetrySafety, Failure, the classes, classify_http
-│   ├── journal.baml          content blocks, events, Journal (Journal.new)
-│   ├── spec.baml             Prompt, FunctionSpec
-│   ├── tools.baml            ToolErrorMode, Tool (Tool.call), tool(), Toolbox
-│   ├── turn.baml             ModelTurnInput, ModelTurn (terminal_text, tool_uses), Client
-│   ├── wire.baml             send_as<T>, render_output_format
-│   ├── runner.baml           Runner, RunResult, Agent
-│   ├── clients/              Retry and Fallback wrappers
-│   └── ns_internal/          helpers; not part of the public surface
-├── ns_openai/                root.openai.OpenAiClient (Responses API)
-│   └── ns_internal/          envelope classes, render/lower/parse
-├── ns_anthropic/             root.anthropic.AnthropicClient (Messages API)
-│   └── ns_internal/
-├── ns_google/                root.google.GoogleClient (generateContent API)
-│   └── ns_internal/
-├── ns_claude_code/           root.claude_code.ClaudeCodeClient (the CLI as a client)
-│   └── ns_internal/          prompt folding, the outcome envelope, MCP flags, exec + parse
-├── ns_mcp/                   root.mcp: MCP servers as ordinary tools — a library
-│                             over start_process + raw_tool, not part of root.ai
-├── examples/plan_trip.baml   the travel-agent fixture; plan_trip_spec is the
-│                             manual form of PlanTrip@spec until the desugar exists
+├── examples/plan_trip.baml   the travel-agent fixture: PlanTrip is a real
+│                             LLM function (client/tools/prompt); tests use
+│                             PlanTrip@spec(...)
 ├── examples/logging.baml     log_event: every journal event as one log line
 ├── howto/                    the how-to pages as running code (parse feedback,
 │                             attach_mcp)
 ├── tests/                    offline: ScriptedClient (test scaffolding,
-│                             root namespace, not part of root.ai) drives
+│                             root namespace, not part of ai.*) drives
 │                             everything; tests/mcp.baml fakes an MCP server in sh
 ├── live/                     live_openai() / live_anthropic() / live_google() /
 │                             live_claude_code() / live_mcp_tools() /
 │                             live_claude_code_dynamic_mcp()
-└── resolve.baml              "prefix/model" -> client value (root, not ns_ai)
+└── resolve.baml              "prefix/model" -> client value (root, not ai)
 ```
 
 ## Running
@@ -103,6 +102,10 @@ return a typed `Itinerary`.
 1. `client` is a keyword: `spec.client()` cannot exist; the impl exposes the
    `default_client` field. The `Agent.client` FIELD works everywhere,
    including `baml fmt` (the formatter crash is fixed on canary).
+   `default_client` is a thunk (`() -> Client throws unknown`), not an
+   eager `Client`: the `@spec` desugar must not read credentials or hit
+   `env.*` panics when building a spec that an `Agent { client: ... }`
+   override will never resolve.
 2. `Tool.on_error` is `ToolErrorMode?` where null inherits the run's
    `tool_errors`; this is what makes "per-tool wins" coherent.
 3. `ToolUse.args` is `map<string, unknown>` and `ToolCompleted.output` /

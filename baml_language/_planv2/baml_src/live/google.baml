@@ -2,13 +2,13 @@
 // `baml-cli run -e 'live_google()'` and GOOGLE_API_KEY in the environment.
 
 function live_google() -> string {
-    let result = root.ai.Agent<Itinerary>.new().run(
-        plan_trip_spec("2 weeks in Japan, mid-range budget", root.google.GoogleClient.new()),
+    let result = ai.Agent<Itinerary>.new(client = google.GoogleClient.new()).run(
+        PlanTrip@spec(trip_request = "2 weeks in Japan, mid-range budget"),
     );
     let completed = 0;
     for (let e in result.journal.entries()) {
         match (e) {
-            let c: root.ai.ToolCompleted => {
+            let c: ai.ToolCompleted => {
                 completed += 1;
                 null
             },

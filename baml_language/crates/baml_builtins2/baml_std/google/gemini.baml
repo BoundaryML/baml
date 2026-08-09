@@ -15,13 +15,13 @@ class GoogleClient {
         }
     }
 
-    implements root.ai.Client {
+    implements ai.Client {
         function id(self) -> string {
             `google/${self.model}`
         }
 
-        function invoke(self, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
-            root.google.internal.invoke(self, input)
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            root.internal.invoke(self, input)
         }
     }
 }

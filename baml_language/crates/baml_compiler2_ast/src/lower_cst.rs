@@ -328,70 +328,134 @@ fn lower_function(
         let mut llm_body_def = lower_llm_body(&llm);
         reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
-        if let Some(client_name) = client_name.as_deref() {
-            append_default_client_param(&mut params, &mut defaults, client_name, llm_body_def.span);
+        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
+        let tools_field = llm.tools_field();
+
+        // BEP `@spec` desugar eligibility: a backtick prompt plus a
+        // "provider/model" client string with a known prefix. Eligible
+        // functions get a `<Fn>$spec` companion; a `tools` field additionally
+        // switches the direct-call body to the ai-package `Agent` loop
+        // (spec mode), replacing the legacy `baml.llm` machinery entirely.
+        let spec_provider = client_name
+            .as_deref()
+            .and_then(spec_client_provider)
+            .filter(|_| prompt_backtick.is_some());
+        let spec_mode = tools_field.is_some() && spec_provider.is_some();
+        if tools_field.is_some() && spec_provider.is_none() {
+            let reason = if prompt_backtick.is_none() {
+                "the prompt must be a backtick template"
+            } else {
+                "the client must be a \"provider/model\" string with a known provider \
+                 (openai, anthropic, google, claude-code)"
+            };
+            diags.push(LoweringDiagnostic::InvalidLlmToolsField {
+                function_name: name.as_str().to_string(),
+                reason,
+                span: llm_body_def.span,
+            });
         }
+        llm_body_def.spec_mode = spec_mode;
+
+        // The function's real parameters — the injected `client` override is
+        // added below and is never part of the spec's bound arguments.
         let param_names: Vec<Name> = params
             .iter()
             .filter(|p| p.name.as_str() != "client")
             .map(|p| p.name.clone())
             .collect();
-        let client_arg_name = client_name.as_ref().map(|_| "client");
-        // Pass the LLM function's declared return type as the explicit `<T>`
-        // type argument to `baml.llm.call_llm_function<T>`. This is required
-        // for the runtime type-arg threading: without it, `T` falls back to
-        // inferred-only and resolves to BuiltinUnknown inside the stdlib's
-        // `primitive.parse<T>(body)` call, surfacing as a "Non-parsable type:
-        // BuiltinUnknown" error from the LLM client.
-        let call_type_args: Vec<crate::ast::TypeExpr> = return_type
-            .as_ref()
-            .map(|rt| vec![rt.clone()])
-            .unwrap_or_default();
-        // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
-        // closure passed as the 4th arg to `call_llm_function`; the orchestrator
-        // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
-        // path (the closure defaults to `null`, so the Jinja render runs).
-        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
-        let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
-            let (body, sm, mut closure_diags, mut closure_env_refs) =
-                lower_expr_body::synthesize_llm_call_with_prompt(
-                    "call_llm_function",
+
+        // Build and stash the `$spec` companion body while the CST backtick is
+        // in hand (read back by `companions::llm_spec`).
+        if let (Some((spec_pkg, spec_class)), Some(backtick)) = (spec_provider, &prompt_backtick) {
+            let model = client_name
+                .as_deref()
+                .and_then(|c| c.split_once('/'))
+                .map(|(_, m)| m)
+                .unwrap_or_default();
+            let tools_expr = tools_field.as_ref().and_then(|tf| tf.expr());
+            let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
+                lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
                     &param_names,
-                    client_arg_name,
-                    call_type_args,
+                    spec_pkg,
+                    spec_class,
+                    model,
+                    return_type.clone(),
+                    tools_expr.as_ref(),
                     backtick,
                     llm_body_def.span,
                 );
-            diags.append(&mut closure_diags);
-            env_var_refs.append(&mut closure_env_refs);
-            // BEP-049 M5e: pre-build the streaming companion's body from the
-            // same backtick now, while the CST is in hand, and stash it for
-            // PPIR (which materializes the `$stream` companion but no longer has
-            // the CST). The closure captures this function's params, so it's a
-            // separate arena from the oneshot body above. Its prompt diagnostics
-            // / `env.X` refs duplicate the oneshot body's — drop them.
-            let (stream_body, stream_sm, _diags, _env_refs) =
-                lower_expr_body::synthesize_llm_call_with_prompt(
-                    "stream_llm_function",
-                    name.as_str(),
-                    &param_names,
-                    client_arg_name,
-                    Vec::new(),
-                    backtick,
+            if spec_mode {
+                // In spec mode the direct body is the Agent call and carries no
+                // prompt, so the spec companion's prompt diagnostics / `env.X`
+                // refs are the authoritative ones. (Outside spec mode they
+                // duplicate the oneshot body's and are dropped.)
+                diags.append(&mut spec_diags);
+                env_var_refs.append(&mut spec_env_refs);
+            }
+            llm_body_def
+                .companion_bodies
+                .push(("spec".to_string(), (spec_body, spec_sm)));
+        }
+
+        if spec_mode {
+            append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
+            let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
+                name.as_str(),
+                &param_names,
+                return_type.clone(),
+                llm_body_def.span,
+            );
+            (
+                Some(FunctionBodyDef::Expr(expr_body, source_map)),
+                Some(DeclarativeMeta::Llm(llm_body_def)),
+            )
+        } else {
+            if let Some(client_name) = client_name.as_deref() {
+                append_default_client_param(
+                    &mut params,
+                    &mut defaults,
+                    client_name,
                     llm_body_def.span,
                 );
-            llm_body_def.stream_body = Some((stream_body, stream_sm));
-            // BEP-049 M5: pre-build the render_prompt / build_request /
-            // build_request_stream companion bodies from the same backtick, each
-            // carrying the prompt closure, so the playground preview/cURL render
-            // through the closure exactly like execution. Built here while the CST
-            // is in hand; read back by `make_llm_companion`. Their prompt diags /
-            // `env.X` refs duplicate the oneshot body's — drop them.
-            for target in ["render_prompt", "build_request", "build_request_stream"] {
-                let (c_body, c_sm, _diags, _env_refs) =
+            }
+            let client_arg_name = client_name.as_ref().map(|_| "client");
+            // Pass the LLM function's declared return type as the explicit `<T>`
+            // type argument to `baml.llm.call_llm_function<T>`. This is required
+            // for the runtime type-arg threading: without it, `T` falls back to
+            // inferred-only and resolves to BuiltinUnknown inside the stdlib's
+            // `primitive.parse<T>(body)` call, surfacing as a "Non-parsable type:
+            // BuiltinUnknown" error from the LLM client.
+            let call_type_args: Vec<crate::ast::TypeExpr> = return_type
+                .as_ref()
+                .map(|rt| vec![rt.clone()])
+                .unwrap_or_default();
+            // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
+            // closure passed as the 4th arg to `call_llm_function`; the orchestrator
+            // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
+            // path (the closure defaults to `null`, so the Jinja render runs).
+            let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
+                let (body, sm, mut closure_diags, mut closure_env_refs) =
                     lower_expr_body::synthesize_llm_call_with_prompt(
-                        target,
+                        "call_llm_function",
+                        name.as_str(),
+                        &param_names,
+                        client_arg_name,
+                        call_type_args,
+                        backtick,
+                        llm_body_def.span,
+                    );
+                diags.append(&mut closure_diags);
+                env_var_refs.append(&mut closure_env_refs);
+                // BEP-049 M5e: pre-build the streaming companion's body from the
+                // same backtick now, while the CST is in hand, and stash it for
+                // PPIR (which materializes the `$stream` companion but no longer has
+                // the CST). The closure captures this function's params, so it's a
+                // separate arena from the oneshot body above. Its prompt diagnostics
+                // / `env.X` refs duplicate the oneshot body's — drop them.
+                let (stream_body, stream_sm, _diags, _env_refs) =
+                    lower_expr_body::synthesize_llm_call_with_prompt(
+                        "stream_llm_function",
                         name.as_str(),
                         &param_names,
                         client_arg_name,
@@ -399,25 +463,44 @@ fn lower_function(
                         backtick,
                         llm_body_def.span,
                     );
-                llm_body_def
-                    .companion_bodies
-                    .push((target.to_string(), (c_body, c_sm)));
-            }
-            (body, sm)
-        } else {
-            synthesize_llm_builtin_call(
-                "call_llm_function",
-                name.as_str(),
-                &param_names,
-                client_arg_name,
-                call_type_args,
-                llm_body_def.span,
+                llm_body_def.stream_body = Some((stream_body, stream_sm));
+                // BEP-049 M5: pre-build the render_prompt / build_request /
+                // build_request_stream companion bodies from the same backtick, each
+                // carrying the prompt closure, so the playground preview/cURL render
+                // through the closure exactly like execution. Built here while the CST
+                // is in hand; read back by `make_llm_companion`. Their prompt diags /
+                // `env.X` refs duplicate the oneshot body's — drop them.
+                for target in ["render_prompt", "build_request", "build_request_stream"] {
+                    let (c_body, c_sm, _diags, _env_refs) =
+                        lower_expr_body::synthesize_llm_call_with_prompt(
+                            target,
+                            name.as_str(),
+                            &param_names,
+                            client_arg_name,
+                            Vec::new(),
+                            backtick,
+                            llm_body_def.span,
+                        );
+                    llm_body_def
+                        .companion_bodies
+                        .push((target.to_string(), (c_body, c_sm)));
+                }
+                (body, sm)
+            } else {
+                synthesize_llm_builtin_call(
+                    "call_llm_function",
+                    name.as_str(),
+                    &param_names,
+                    client_arg_name,
+                    call_type_args,
+                    llm_body_def.span,
+                )
+            };
+            (
+                Some(FunctionBodyDef::Expr(expr_body, source_map)),
+                Some(DeclarativeMeta::Llm(llm_body_def)),
             )
-        };
-        (
-            Some(FunctionBodyDef::Expr(expr_body, source_map)),
-            Some(DeclarativeMeta::Llm(llm_body_def)),
-        )
+        }
     } else if let Some(expr) = func.expr_body() {
         // Check if the body is `$rust_function` or `$rust_io_function` before lowering
         if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
@@ -627,6 +710,42 @@ pub(crate) fn append_default_client_param(
     });
 }
 
+/// Append the spec-mode client override parameter: `client: ai.Client? = null`.
+///
+/// The spec-mode direct-call body passes it to `ai.Agent.new(client = client)`;
+/// a null override makes the runner fall back to the spec's default client.
+pub(crate) fn append_spec_client_param(
+    params: &mut Vec<Param>,
+    defaults: &mut FunctionDefaults,
+    span: text_size::TextRange,
+) {
+    let null_default = {
+        let id = defaults.exprs.exprs.alloc(Expr::Null);
+        defaults.source_map.expr_spans.alloc(span);
+        id
+    };
+    let client_ty = TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("Client")],
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    }
+    .at(span);
+    params.push(Param {
+        name: Name::new("client"),
+        type_expr: Some(
+            TypeExprKind::Optional {
+                inner: Box::new(client_ty),
+                attrs: vec![],
+            }
+            .at(span),
+        ),
+        default: Some(crate::ast::DefaultExprId::new(null_default)),
+        span,
+        name_span: span,
+    });
+}
+
 fn reject_reserved_llm_client_params(
     params: &mut Vec<Param>,
     function_name: &str,
@@ -724,7 +843,24 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         // Filled in by the LLM-function branch once param names are known.
         stream_body: None,
         companion_bodies: Vec::new(),
+        spec_mode: false,
         span,
+    }
+}
+
+/// The provider package + client class the `@spec` desugar constructs for a
+/// `"prefix/model"` client string, or `None` for an unknown prefix.
+///
+/// Kept in sync with the builtin provider packages (`baml_std/openai` etc.)
+/// and the user-land `resolve()` convention.
+pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
+    let (prefix, _model) = client.split_once('/')?;
+    match prefix {
+        "openai" => Some(("openai", "OpenAiClient")),
+        "anthropic" => Some(("anthropic", "AnthropicClient")),
+        "google" => Some(("google", "GoogleClient")),
+        "claude-code" => Some(("claude_code", "ClaudeCodeClient")),
+        _ => None,
     }
 }
 

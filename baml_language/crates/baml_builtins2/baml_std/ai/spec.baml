@@ -22,7 +22,7 @@ class FunctionSpec<Out> {
     args: map<string, unknown>,
     prompt_template: Prompt,
     toolbox: Toolbox,
-    default_client: Client,
+    default_client: () -> Client throws unknown,
 
     function name(self) -> string {
         self.spec_name
@@ -44,6 +44,7 @@ class FunctionSpec<Out> {
         self.toolbox
     }
 
-    // NOTE: `client` is a keyword, so the resolved default client is read as
-    // the `default_client` field rather than a `client()` getter.
+    // NOTE: `client` is a keyword, so the default client is read as the
+    // `default_client` field rather than a `client()` getter. The field is a
+    // lazy thunk, so building a spec never touches credentials or env.
 }

@@ -4,7 +4,7 @@
 
 enum ToolErrorMode {
     Report, // the failure becomes the call's result; the model adapts
-    Raise, // the failure is journaled, then the run throws root.ai.errors.ToolFailedError
+    Raise, // the failure is journaled, then the run throws root.errors.ToolFailedError
 }
 
 class Tool {
@@ -55,7 +55,7 @@ function tool(
         Tool {
             name: n,
             description: description ?? sig.docstring ?? "",
-            input_schema: root.ai.internal._schema_for_signature(handler),
+            input_schema: root.internal._schema_for_signature(handler),
             handler: handler,
             raw_handler: null,
             on_error: on_error,

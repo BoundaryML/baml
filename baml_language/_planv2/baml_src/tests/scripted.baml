@@ -2,29 +2,29 @@
 // input it received. Drives the loop in tests with no network.
 
 class ScriptedClient {
-    turns: root.ai.ModelTurn[],
+    turns: ai.ModelTurn[],
     cursor: int,
-    inputs: root.ai.ModelTurnInput[],
+    inputs: ai.ModelTurnInput[],
 
-    function new(turns: root.ai.ModelTurn[]) -> ScriptedClient {
+    function new(turns: ai.ModelTurn[]) -> ScriptedClient {
         ScriptedClient { turns: turns, cursor: 0, inputs: [] }
     }
 
-    function received(self) -> root.ai.ModelTurnInput[] {
+    function received(self) -> ai.ModelTurnInput[] {
         self.inputs
     }
 
-    implements root.ai.Client {
+    implements ai.Client {
         function id(self) -> string {
             "scripted"
         }
 
-        function invoke(self, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             self.inputs.push(input);
             let turn = self.turns.at(self.cursor);
             self.cursor += 1;
             match (turn) {
-                let t: root.ai.ModelTurn => t,
+                let t: ai.ModelTurn => t,
                 null => {
                     throw baml.errors.InvalidArgument { message: "ScriptedClient ran out of turns" }
                 },

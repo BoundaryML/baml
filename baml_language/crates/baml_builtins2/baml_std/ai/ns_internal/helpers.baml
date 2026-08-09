@@ -1,4 +1,4 @@
-// Internal helpers. Nothing here is part of the public root.ai surface.
+// Internal helpers. Nothing here is part of the public ai surface.
 
 // One JSON Schema object for a function's parameters, derived from the
 // signature: every parameter typed via baml.schema.json_schema.
@@ -16,4 +16,10 @@ function _schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown
     let _ = schema.set("required", required);
     let _ = schema.set("additionalProperties", false);
     schema
+}
+
+// Bound as `ctx` inside a compiler-desugared `@spec` prompt template.
+// `output_format` is the one placeholder the BEP allows.
+class SpecCtx {
+    output_format: string,
 }

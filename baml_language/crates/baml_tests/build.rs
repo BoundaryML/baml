@@ -417,12 +417,15 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let is_stdlib = project.name == "__baml_std__";
     let is_testing_std = project.name == "__testing_std__";
     let is_assert_std = project.name == "__assert_std__";
+    let is_ai_std = project.name == "__ai_std__";
     let stdlib_package_filter: Option<&str> = if is_stdlib {
         Some("baml")
     } else if is_testing_std {
         Some("testing")
     } else if is_assert_std {
         Some("assert")
+    } else if is_ai_std {
+        Some("ai")
     } else {
         None
     };

@@ -362,6 +362,355 @@ pub(crate) fn synthesize_llm_call_with_prompt(
     ctx.finish(Some(call))
 }
 
+/// BEP `@spec`: synthesize the body of the `<Fn>$spec` companion — an
+/// `ai.FunctionSpec<Out>` literal binding the function's arguments:
+///
+/// ```baml
+/// ai.FunctionSpec<Out> {
+///     spec_name: "Fn",
+///     args: { "p": p, ... },
+///     prompt_template: ai.Prompt {
+///         template: (output_format: string) -> {
+///             let ctx = ai.internal.SpecCtx { output_format: output_format };
+///             `...the function's backtick prompt...`
+///         },
+///     },
+///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
+///     default_client: () -> { openai.OpenAiClient.new(model = "gpt-4o-mini") },
+/// }
+/// ```
+///
+/// The prompt closure re-lowers the backtick as an ordinary template string
+/// with `ctx` bound to an `ai.internal.SpecCtx`, so `${ctx.output_format}`
+/// resolves to the closure's parameter and every other interpolation captures
+/// the enclosing function's parameters. The default client is a thunk so
+/// building a spec never touches credentials.
+///
+/// In the `tools` list, a bare function reference is wrapped in `ai.tool(...)`;
+/// any other element expression must already produce an `ai.Tool`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn synthesize_llm_spec_body(
+    function_name: &str,
+    param_names: &[Name],
+    provider_pkg: &str,
+    provider_class: &str,
+    model: &str,
+    out_type: Option<crate::ast::TypeExpr>,
+    tools_expr: Option<&SyntaxNode>,
+    prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
+    span: TextRange,
+) -> (
+    ExprBody,
+    AstSourceMap,
+    Vec<LoweringDiagnostic>,
+    Vec<EnvVarRef>,
+) {
+    use crate::ast::{CallArg, Literal};
+
+    let mut ctx = LoweringContext::new();
+
+    // spec_name: "Fn"
+    let name_lit = ctx.alloc_expr(
+        Expr::Literal(Literal::String(function_name.to_string())),
+        span,
+    );
+
+    // args: { "p": p, ... }
+    let entries: Vec<(ExprId, ExprId)> = param_names
+        .iter()
+        .map(|name| {
+            let key = ctx.alloc_expr(
+                Expr::Literal(Literal::String(name.as_str().to_string())),
+                span,
+            );
+            let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
+            (key, value)
+        })
+        .collect();
+    let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
+
+    // prompt_template: ai.Prompt { template: (output_format: string) -> { ... } }
+    //
+    // Binding references are span-position-checked against their `let`'s
+    // visibility window, and the template's `${ctx.…}` interps keep their real
+    // source ranges inside the backtick — so the synthesized `let ctx` must
+    // sit at an empty range at the backtick's *start*, before every reference
+    // (mirrors the accumulator lets in `elaborate_tagged_body`).
+    let prompt_lambda_span = prompt_backtick.syntax().span_range();
+    let prompt_start = TextRange::empty(prompt_lambda_span.start());
+    let of_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("output_format")]), prompt_start);
+    let spec_ctx_obj = ctx.alloc_expr(
+        Expr::Object {
+            type_name: baml_base::TypePath::from_dotted("ai.internal.SpecCtx"),
+            type_args: vec![],
+            fields: vec![(Name::new("output_format"), of_ref)],
+            spreads: vec![],
+        },
+        prompt_start,
+    );
+    let ctx_pat = ctx.alloc_pattern(
+        Pattern::Bind {
+            name: Name::new("ctx"),
+            subpat: None,
+        },
+        prompt_start,
+    );
+    let let_ctx = ctx.alloc_stmt(
+        Stmt::Let {
+            pattern: ctx_pat,
+            initializer: Some(spec_ctx_obj),
+            origin: LetOrigin::Source,
+            else_branch: None,
+        },
+        prompt_start,
+    );
+    // The template itself keeps its real source spans so `${…}` diagnostics
+    // point at the user's prompt.
+    let template_expr = ctx.lower_backtick_string_literal(prompt_backtick.syntax());
+    let lambda_body = ctx.alloc_expr(
+        Expr::Block {
+            stmts: vec![let_ctx],
+            tail_expr: Some(template_expr),
+        },
+        prompt_lambda_span,
+    );
+    let of_param = Param {
+        name: Name::new("output_format"),
+        type_expr: Some((TypeExprKind::String { attrs: vec![] }).at(span)),
+        default: None,
+        span,
+        name_span: span,
+    };
+    // The prompt lambda carries the backtick's own range: lambda scopes are
+    // located by exact span within their owner (semantic index
+    // `lambda_scope_for_within`), so the two lambdas synthesized into this
+    // body must not share a range — the default-client thunk keeps the block
+    // span.
+    let prompt_lambda = ctx.alloc_expr(
+        Expr::Lambda(Box::new(LambdaDef {
+            kind: LambdaKind::Anonymous,
+            params: vec![of_param],
+            defaults: FunctionDefaults::empty(),
+            return_type: None,
+            throws: None,
+            body: Some(lambda_body),
+            span: prompt_lambda_span,
+        })),
+        prompt_lambda_span,
+    );
+    let prompt_obj = ctx.alloc_expr(
+        Expr::Object {
+            type_name: baml_base::TypePath::from_dotted("ai.Prompt"),
+            type_args: vec![],
+            fields: vec![(Name::new("template"), prompt_lambda)],
+            spreads: vec![],
+        },
+        span,
+    );
+
+    // toolbox: ai.Toolbox.new([...])
+    let tool_list = match tools_expr {
+        Some(node) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
+            let mut elements = Vec::new();
+            for elem in node.children_with_tokens() {
+                let lowered = match &elem {
+                    rowan::NodeOrToken::Node(child) => {
+                        Some((child.kind() == SyntaxKind::PATH_EXPR, ctx.lower_expr(child)))
+                    }
+                    rowan::NodeOrToken::Token(token) => {
+                        let is_bare_ref = is_ident_token(token.kind());
+                        ctx.try_lower_bare_token(token).map(|id| (is_bare_ref, id))
+                    }
+                };
+                if let Some((is_bare_ref, id)) = lowered {
+                    let id = if is_bare_ref {
+                        // A bare function reference: normalize through ai.tool().
+                        let tool_callee = ctx
+                            .alloc_expr(Expr::Path(vec![Name::new("ai"), Name::new("tool")]), span);
+                        ctx.alloc_expr(
+                            Expr::Call {
+                                callee: tool_callee,
+                                type_args: vec![],
+                                args: vec![CallArg::positional(id)],
+                            },
+                            span,
+                        )
+                    } else {
+                        id
+                    };
+                    elements.push(id);
+                }
+            }
+            ctx.alloc_expr(Expr::Array { elements }, span)
+        }
+        // A non-list expression must already produce an `ai.Tool[]`.
+        Some(node) => ctx.lower_expr(node),
+        None => ctx.alloc_expr(Expr::Array { elements: vec![] }, span),
+    };
+    let toolbox_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("Toolbox"),
+            Name::new("new"),
+        ]),
+        span,
+    );
+    let toolbox = ctx.alloc_expr(
+        Expr::Call {
+            callee: toolbox_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(tool_list)],
+        },
+        span,
+    );
+
+    // default_client: () -> { <pkg>.<Class>.new(model = "<model>") }
+    let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.to_string())), span);
+    let ctor_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new(provider_pkg),
+            Name::new(provider_class),
+            Name::new("new"),
+        ]),
+        span,
+    );
+    let ctor_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: ctor_callee,
+            type_args: vec![],
+            args: vec![CallArg::named("model", model_lit)],
+        },
+        span,
+    );
+    let client_body = ctx.alloc_expr(
+        Expr::Block {
+            stmts: vec![],
+            tail_expr: Some(ctor_call),
+        },
+        span,
+    );
+    let client_lambda = ctx.alloc_expr(
+        Expr::Lambda(Box::new(LambdaDef {
+            kind: LambdaKind::Anonymous,
+            params: vec![],
+            defaults: FunctionDefaults::empty(),
+            return_type: None,
+            throws: None,
+            body: Some(client_body),
+            span,
+        })),
+        span,
+    );
+
+    let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
+    let spec_obj = ctx.alloc_expr(
+        Expr::Object {
+            type_name: baml_base::TypePath::from_dotted("ai.FunctionSpec"),
+            type_args,
+            fields: vec![
+                (Name::new("spec_name"), name_lit),
+                (Name::new("args"), args_map),
+                (Name::new("prompt_template"), prompt_obj),
+                (Name::new("toolbox"), toolbox),
+                (Name::new("default_client"), client_lambda),
+            ],
+            spreads: vec![],
+        },
+        span,
+    );
+
+    ctx.finish(Some(spec_obj))
+}
+
+/// BEP `@spec` spec mode: synthesize the direct-call body of a `tools`-bearing
+/// LLM function — run the default ai runner over the function's own spec and
+/// unwrap the value:
+///
+/// ```baml
+/// ai.Agent<Out>.new(client = client).run(Fn$spec(p1, p2)).value
+/// ```
+///
+/// `client` is the compiler-injected `ai.Client? = null` override parameter;
+/// `Agent.run` falls back to the spec's default client when it is null.
+pub(crate) fn synthesize_spec_agent_run_body(
+    function_name: &str,
+    param_names: &[Name],
+    out_type: Option<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+
+    // Fn$spec(p1, p2, ...)
+    let spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
+        span,
+    );
+    let spec_args: Vec<CallArg> = param_names
+        .iter()
+        .map(|n| {
+            let id = ctx.alloc_expr(Expr::Path(vec![n.clone()]), span);
+            CallArg::positional(id)
+        })
+        .collect();
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: vec![],
+            args: spec_args,
+        },
+        span,
+    );
+
+    // ai.Agent<Out>.new(client = client)
+    let agent_path = ctx.alloc_expr(Expr::Path(vec![Name::new("ai"), Name::new("Agent")]), span);
+    let new_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: agent_path,
+            member: Name::new("new"),
+        },
+        span,
+    );
+    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
+    let new_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: new_callee,
+            type_args,
+            args: vec![CallArg::named("client", client_ref)],
+        },
+        span,
+    );
+
+    // .run(spec).value
+    let run_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: new_call,
+            member: Name::new("run"),
+        },
+        span,
+    );
+    let run_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: run_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(spec_call)],
+        },
+        span,
+    );
+    let value = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: run_call,
+            member: Name::new("value"),
+        },
+        span,
+    );
+
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(value));
+    (body, source_map)
+}
+
 struct LoweringContext {
     exprs: Arena<Expr>,
     stmts: Arena<Stmt>,
@@ -816,6 +1165,7 @@ impl LoweringContext {
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
             SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
+            SyntaxKind::SPEC_EXPR => self.lower_spec_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
@@ -2697,6 +3047,48 @@ impl LoweringContext {
         // `foo<int>` in value position: the GENERIC_ARGS is a direct child of
         // this PATH_EXPR. Wrap unless an enclosing call already consumed it.
         self.wrap_generic_apply(node, id, node.span_range())
+    }
+
+    /// Lower `MyFunc@spec` (BEP `@spec` postfix) by renaming the base path's
+    /// last segment to the `<name>$spec` companion function — resolution then
+    /// proceeds exactly as if the companion had been named directly. The base
+    /// must be a plain path (an LLM function reference); anything else lowers
+    /// to `Missing` with a diagnostic-friendly span.
+    fn lower_spec_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let span = node.span_range();
+        // The base is either a PATH_EXPR child or a bare WORD token (single
+        // identifiers are tokens, not nodes, in postfix wrappers).
+        let mut segments: Vec<Name> = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) if child.kind() == SyntaxKind::PATH_EXPR => {
+                    for t in child
+                        .children_with_tokens()
+                        .filter_map(rowan::NodeOrToken::into_token)
+                    {
+                        if is_ident_token(t.kind()) {
+                            segments.push(Name::new(t.text()));
+                        }
+                    }
+                }
+                // Everything before the `@` is the base; the trailing
+                // `spec` word after it is the operator, not a segment.
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::AT => break,
+                rowan::NodeOrToken::Token(t) if is_ident_token(t.kind()) => {
+                    segments.push(Name::new(t.text()));
+                }
+                _ => {}
+            }
+        }
+        let Some(last) = segments.pop() else {
+            self.diags.push(LoweringDiagnostic::UnparseableType {
+                context: "`@spec` target (expected an LLM function reference)".to_string(),
+                span,
+            });
+            return self.alloc_expr(Expr::Missing, span);
+        };
+        segments.push(Name::new(format!("{}$spec", last.as_str())));
+        self.alloc_expr(Expr::Path(segments), span)
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {

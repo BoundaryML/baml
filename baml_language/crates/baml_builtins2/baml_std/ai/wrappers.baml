@@ -3,11 +3,11 @@
 
 // The default judgment: a request the provider rejected does not become
 // valid by resending.
-function default_retry_judgment(f: root.ai.errors.Failure) -> bool {
+function default_retry_judgment(f: root.errors.Failure) -> bool {
     match (f) {
-        let r: root.ai.errors.Refused => false,
-        let i: root.ai.errors.InvalidRequest => false,
-        let p: root.ai.errors.ParseFailed => false,
+        let r: root.errors.Refused => false,
+        let i: root.errors.InvalidRequest => false,
+        let p: root.errors.ParseFailed => false,
         _ => true,
     }
 }
@@ -22,10 +22,10 @@ class Backoff {
     }
 
     // The delay before attempt N (first retry is attempt 1). A
-    // root.ai.errors.RateLimited.retry_after_ms hint overrides the computed value.
-    function delay_ms(self, attempt: int, f: root.ai.errors.Failure) -> int {
+    // root.errors.RateLimited.retry_after_ms hint overrides the computed value.
+    function delay_ms(self, attempt: int, f: root.errors.Failure) -> int {
         let hinted = match (f) {
-            let r: root.ai.errors.RateLimited => r.retry_after_ms,
+            let r: root.errors.RateLimited => r.retry_after_ms,
             _ => null,
         };
         if let h: int = hinted {
@@ -49,13 +49,13 @@ class Backoff {
 class Retry {
     inner: Client,
     max_attempts: int,
-    retry_if: (root.ai.errors.Failure) -> bool throws never,
+    retry_if: (root.errors.Failure) -> bool throws never,
     backoff: Backoff,
 
     function new(
         inner: Client,
         max_attempts: int = 3,
-        retry_if: ((root.ai.errors.Failure) -> bool throws never)? = null,
+        retry_if: ((root.errors.Failure) -> bool throws never)? = null,
         backoff: Backoff? = null,
     ) -> Retry {
         Retry {
@@ -68,11 +68,11 @@ class Retry {
 
     function _attempt(self, input: ModelTurnInput, remaining: int) -> ModelTurn {
         self.inner.invoke(input) catch_all (e) {
-            let f: root.ai.errors.Failure => {
+            let f: root.errors.Failure => {
                 // the safety gate is not overridable; the judgment is
                 if (
                     remaining > 1
-                        && f.retry_safety() == root.ai.errors.RetrySafety.Safe
+                        && f.retry_safety() == root.errors.RetrySafety.Safe
                         && self.retry_if(f)
                 ) {
                     let attempt = self.max_attempts - remaining + 1;
@@ -108,10 +108,10 @@ class Fallback {
         match (self.members.at(index)) {
             let c: Client => {
                 c.invoke(input) catch_all (e) {
-                    let f: root.ai.errors.Failure => {
+                    let f: root.errors.Failure => {
                         if (
                             index + 1 < self.members.length()
-                                && f.retry_safety() == root.ai.errors.RetrySafety.Safe
+                                && f.retry_safety() == root.errors.RetrySafety.Safe
                         ) {
                             self._try(input, index + 1)
                         } else {

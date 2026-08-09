@@ -151,6 +151,27 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("assert", "assert.baml"),
     // --- log package ---
     builtin!("log", "log.baml"),
+    // --- ai package (specs, journal, runner, client interface) ---
+    builtin!("ai", "journal.baml"),
+    builtin!("ai", "spec.baml"),
+    builtin!("ai", "tools.baml"),
+    builtin!("ai", "turn.baml"),
+    builtin!("ai", "wire.baml"),
+    builtin!("ai", "wrappers.baml"),
+    builtin!("ai", "runner.baml"),
+    builtin!("ai", "ns_errors/errors.baml"),
+    builtin!("ai", "ns_internal/helpers.baml"),
+    // --- provider client packages ---
+    builtin!("openai", "responses.baml"),
+    builtin!("openai", "ns_internal/responses.baml"),
+    builtin!("anthropic", "messages.baml"),
+    builtin!("anthropic", "ns_internal/messages.baml"),
+    builtin!("google", "gemini.baml"),
+    builtin!("google", "ns_internal/gemini.baml"),
+    builtin!("claude_code", "cli.baml"),
+    builtin!("claude_code", "ns_internal/cli.baml"),
+    // --- mcp package (MCP servers as ordinary ai tools) ---
+    builtin!("mcp", "mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the

@@ -1,4 +1,4 @@
-// root.openai.OpenAiClient — one model turn against the OpenAI Responses API.
+// root.OpenAiClient — one model turn against the OpenAI Responses API.
 // Phase 1: SAP output mode (schema text in the prompt), native function
 // calling. Mirrors _planv2/pages/02_guides/03_clients/05_the_built_in_clients.md.
 
@@ -29,30 +29,30 @@ class OaResponse {
     usage: OaUsage?,
 }
 
-// root.ai.Journal -> Responses API input items. Only promptable events lower;
-// root.ai.RunStarted, root.ai.ToolRequested, root.ai.Usage, and root.ai.FinalProduced are journal-only.
-function openai_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
+// ai.Journal -> Responses API input items. Only promptable events lower;
+// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
+function openai_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
     let items: map<string, unknown>[] = [];
     for (let e in j.entries()) {
         match (e) {
-            let u: root.ai.UserMessage => {
+            let u: ai.UserMessage => {
                 let m: map<string, unknown> = {};
                 let _ = m.set("role", "user");
                 let _ = m.set("content", u.content);
                 items.push(m);
                 null
             },
-            let a: root.ai.AssistantMessage => {
+            let a: ai.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let t: root.ai.Text => {
+                        let t: ai.Text => {
                             let m: map<string, unknown> = {};
                             let _ = m.set("role", "assistant");
                             let _ = m.set("content", t.text);
                             items.push(m);
                             null
                         },
-                        let use: root.ai.ToolUse => {
+                        let use: ai.ToolUse => {
                             let m: map<string, unknown> = {};
                             let _ = m.set("type", "function_call");
                             let _ = m.set("call_id", use.id);
@@ -61,13 +61,13 @@ function openai_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
                             items.push(m);
                             null
                         },
-                        // root.ai.Reasoning lowers to nothing in this phase.
+                        // ai.Reasoning lowers to nothing in this phase.
                         _ => null,
                     };
                 }
                 null
             },
-            let c: root.ai.ToolCompleted => {
+            let c: ai.ToolCompleted => {
                 let m: map<string, unknown> = {};
                 let _ = m.set("type", "function_call_output");
                 let _ = m.set("call_id", c.id);
@@ -75,7 +75,7 @@ function openai_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
                 items.push(m);
                 null
             },
-            let f: root.ai.ToolFailed => {
+            let f: ai.ToolFailed => {
                 let err: map<string, unknown> = {};
                 let _ = err.set("error", f.message);
                 let m: map<string, unknown> = {};
@@ -91,12 +91,12 @@ function openai_lower_journal(j: root.ai.Journal) -> map<string, unknown>[] {
     items
 }
 
-// root.ai.ModelTurnInput -> one Responses API request.
+// ai.ModelTurnInput -> one Responses API request.
 function openai_render(
-    c: root.openai.OpenAiClient,
-    input: root.ai.ModelTurnInput,
+    c: root.OpenAiClient,
+    input: ai.ModelTurnInput,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(root.ai.render_output_format(input.output_type));
+    let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
     let items = openai_lower_journal(input.journal);
     let body: map<string, unknown> = {};
     let _ = body.set("model", c.model);
@@ -139,8 +139,8 @@ function openai_render(
 }
 
 // One decoded response -> canonical content blocks and a stop reason.
-function openai_parse(resp: OaResponse) -> root.ai.ModelTurn {
-    let content: root.ai.ContentBlock[] = [];
+function openai_parse(resp: OaResponse) -> ai.ModelTurn {
+    let content: ai.ContentBlock[] = [];
     let has_call = false;
     for (let item in resp.output) {
         if (item.type == "function_call") {
@@ -150,14 +150,14 @@ function openai_parse(resp: OaResponse) -> root.ai.ModelTurn {
                 args = baml.json.from_string<map<string, unknown>>(s);
             }
             content.push(
-                root.ai.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
+                ai.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
             );
             null
         } else if (item.type == "message") {
             let parts: OaContentPart[] = item.content ?? [];
             for (let part in parts) {
                 if ((part.type ?? "") == "output_text") {
-                    content.push(root.ai.Text { text: part.text ?? "" });
+                    content.push(ai.Text { text: part.text ?? "" });
                     null
                 } else {
                     null
@@ -168,7 +168,7 @@ function openai_parse(resp: OaResponse) -> root.ai.ModelTurn {
             let parts: OaContentPart[] = item.summary ?? [];
             for (let part in parts) {
                 if let txt: string = part.text {
-                    content.push(root.ai.Reasoning { summary: txt });
+                    content.push(ai.Reasoning { summary: txt });
                     null
                 } else {
                     null
@@ -180,14 +180,14 @@ function openai_parse(resp: OaResponse) -> root.ai.ModelTurn {
         };
     }
     let stop = if (has_call) {
-        root.ai.StopReason.ToolUse
+        ai.StopReason.ToolUse
     } else if ((resp.status ?? "") == "incomplete") {
-        root.ai.StopReason.MaxTokens
+        ai.StopReason.MaxTokens
     } else {
-        root.ai.StopReason.Complete
+        ai.StopReason.Complete
     };
-    let usage: root.ai.Usage? = if let u: OaUsage = resp.usage {
-        root.ai.Usage {
+    let usage: ai.Usage? = if let u: OaUsage = resp.usage {
+        ai.Usage {
             input_tokens: u.input_tokens,
             output_tokens: u.output_tokens,
             cached_input_tokens: null,
@@ -196,12 +196,12 @@ function openai_parse(resp: OaResponse) -> root.ai.ModelTurn {
     } else {
         null
     };
-    root.ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
 }
 
 // The one internal entry point: render, send, normalize — one model turn.
-function invoke(c: root.openai.OpenAiClient, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
+function invoke(c: root.OpenAiClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = openai_render(c, input);
-    let resp = root.ai.send_as<OaResponse>(req, "openai");
+    let resp = ai.send_as<OaResponse>(req, "openai");
     openai_parse(resp)
 }

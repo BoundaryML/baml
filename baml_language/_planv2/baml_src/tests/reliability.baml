@@ -1,20 +1,20 @@
 // Offline tests for the wrapper clients. FlakyClient is also the smallest
-// possible custom client: any value implementing root.ai.Client works.
+// possible custom client: any value implementing ai.Client works.
 
 class FlakyClient {
     fail_first: int,
     calls: int,
-    inner: root.ai.Client,
+    inner: ai.Client,
 
-    implements root.ai.Client {
+    implements ai.Client {
         function id(self) -> string {
             "flaky"
         }
 
-        function invoke(self, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             self.calls += 1;
             if (self.calls <= self.fail_first) {
-                throw root.ai.errors.NetworkFailure { provider: "flaky", detail: "socket dropped", raw_body: null }
+                throw ai.errors.NetworkFailure { provider: "flaky", detail: "socket dropped", raw_body: null }
             } else {
                 self.inner.invoke(input)
             }
@@ -23,13 +23,13 @@ class FlakyClient {
 }
 
 class AlwaysInvalid {
-    implements root.ai.Client {
+    implements ai.Client {
         function id(self) -> string {
             "invalid"
         }
 
-        function invoke(self, input: root.ai.ModelTurnInput) -> root.ai.ModelTurn {
-            throw root.ai.errors.InvalidRequest { provider: "invalid", status_code: 400, detail: "bad request", raw_body: null }
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            throw ai.errors.InvalidRequest { provider: "invalid", status_code: 400, detail: "bad request", raw_body: null }
         }
     }
 }
@@ -37,9 +37,9 @@ class AlwaysInvalid {
 function final_turn_only() -> ScriptedClient {
     ScriptedClient.new(
         [
-            root.ai.ModelTurn {
-                content: [root.ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 1.0}` }],
-                stop_reason: root.ai.StopReason.Complete,
+            ai.ModelTurn {
+                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 1.0}` }],
+                stop_reason: ai.StopReason.Complete,
                 usage: null,
             },
         ],
@@ -48,30 +48,30 @@ function final_turn_only() -> ScriptedClient {
 
 test "Retry replays Safe network failures and succeeds" {
     let flaky = FlakyClient { fail_first: 2, calls: 0, inner: final_turn_only() };
-    let reliable = root.ai.Retry.new(
+    let reliable = ai.Retry.new(
         flaky,
         max_attempts = 3,
-        backoff = root.ai.Backoff.new(initial_ms = 1, multiplier = 1, max_ms = 1),
+        backoff = ai.Backoff.new(initial_ms = 1, multiplier = 1, max_ms = 1),
     );
-    let spec = plan_trip_spec("anywhere", reliable);
-    let result = root.ai.Agent<Itinerary>.new().run(spec);
+    let spec = PlanTrip@spec(trip_request = "anywhere");
+    let result = ai.Agent<Itinerary>.new(client = reliable).run(spec);
     assert.equal(result.value.total_cost_usd, 1.0);
     assert.equal(flaky.calls, 3)
 }
 
 test "Retry never resends a rejected request" {
-    let reliable = root.ai.Retry.new(AlwaysInvalid {  }, max_attempts = 3);
-    let spec = plan_trip_spec("anywhere", reliable);
-    let outcome = root.ai.Agent<Itinerary>.new().run(spec) catch_all (e) {
-        let f: root.ai.errors.InvalidRequest => "rejected",
+    let reliable = ai.Retry.new(AlwaysInvalid {  }, max_attempts = 3);
+    let spec = PlanTrip@spec(trip_request = "anywhere");
+    let outcome = ai.Agent<Itinerary>.new(client = reliable).run(spec) catch_all (e) {
+        let f: ai.errors.InvalidRequest => "rejected",
         _ => "other",
     };
     assert.equal(outcome, "rejected")
 }
 
 test "Fallback advances past a failing member" {
-    let resilient = root.ai.Fallback { members: [AlwaysInvalid {  }, final_turn_only()] };
-    let spec = plan_trip_spec("anywhere", resilient);
-    let result = root.ai.Agent<Itinerary>.new().run(spec);
+    let resilient = ai.Fallback { members: [AlwaysInvalid {  }, final_turn_only()] };
+    let spec = PlanTrip@spec(trip_request = "anywhere");
+    let result = ai.Agent<Itinerary>.new(client = resilient).run(spec);
     assert.equal(result.value.total_cost_usd, 1.0)
 }

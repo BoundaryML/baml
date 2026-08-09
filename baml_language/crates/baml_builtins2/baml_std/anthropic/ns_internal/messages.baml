@@ -28,7 +28,7 @@ class AnthropicResponse {
 }
 
 // ---------------------------------------------------------------------------
-// root.ai.Journal lowering. Anthropic requires strict user/assistant alternation and
+// ai.Journal lowering. Anthropic requires strict user/assistant alternation and
 // tool_result blocks in a user message immediately after the assistant
 // tool_use message, so consecutive tool results group into ONE user message.
 
@@ -40,11 +40,11 @@ class AnthropicMessage {
     blocks: map<string, unknown>[],
 }
 
-function _anthropic_assistant_blocks(content: root.ai.ContentBlock[]) -> map<string, unknown>[] {
+function _anthropic_assistant_blocks(content: ai.ContentBlock[]) -> map<string, unknown>[] {
     let out: map<string, unknown>[] = [];
     for (let b in content) {
         match (b) {
-            let t: root.ai.Text => {
+            let t: ai.Text => {
                 let bb: map<string, unknown> = {};
                 let _ = bb.set("type", "text");
                 let _ = bb.set("text", t.text);
@@ -53,8 +53,8 @@ function _anthropic_assistant_blocks(content: root.ai.ContentBlock[]) -> map<str
             },
             // Dropped: replaying thinking without its signature is rejected
             // by the API; readable-projection replay is a phase 2 capability.
-            let r: root.ai.Reasoning => null,
-            let u: root.ai.ToolUse => {
+            let r: ai.Reasoning => null,
+            let u: ai.ToolUse => {
                 let bb: map<string, unknown> = {};
                 let _ = bb.set("type", "tool_use");
                 let _ = bb.set("id", u.id);
@@ -95,20 +95,20 @@ function _anthropic_push_tool_result(
     }
 }
 
-// root.ai.RunStarted/root.ai.ToolRequested/root.ai.Usage/root.ai.FinalProduced are not promptable and skip;
+// ai.RunStarted/ai.ToolRequested/ai.Usage/ai.FinalProduced are not promptable and skip;
 // skipped events never close an open tool_result group.
-function _anthropic_lower_journal(j: root.ai.Journal) -> AnthropicMessage[] {
+function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
     let msgs: AnthropicMessage[] = [];
     for (let e in j.entries()) {
         match (e) {
-            let m: root.ai.UserMessage => {
+            let m: ai.UserMessage => {
                 let block: map<string, unknown> = {};
                 let _ = block.set("type", "text");
                 let _ = block.set("text", m.content);
                 msgs.push(AnthropicMessage { role: "user", tool_results: false, blocks: [block] });
                 null
             },
-            let m: root.ai.AssistantMessage => {
+            let m: ai.AssistantMessage => {
                 msgs.push(
                     AnthropicMessage {
                         role: "assistant",
@@ -118,8 +118,8 @@ function _anthropic_lower_journal(j: root.ai.Journal) -> AnthropicMessage[] {
                 );
                 null
             },
-            let c: root.ai.ToolCompleted => _anthropic_push_tool_result(msgs, c.id, c.output, false),
-            let f: root.ai.ToolFailed => _anthropic_push_tool_result(msgs, f.id, f.message, true),
+            let c: ai.ToolCompleted => _anthropic_push_tool_result(msgs, c.id, c.output, false),
+            let f: ai.ToolFailed => _anthropic_push_tool_result(msgs, f.id, f.message, true),
             _ => null,
         };
     }
@@ -142,10 +142,10 @@ function _anthropic_render_messages(msgs: AnthropicMessage[]) -> map<string, unk
 
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(
-    c: root.anthropic.AnthropicClient,
-    input: root.ai.ModelTurnInput,
-) -> root.ai.ModelTurn {
-    let instructions = input.prompt.render_text(root.ai.render_output_format(input.output_type));
+    c: root.AnthropicClient,
+    input: ai.ModelTurnInput,
+) -> ai.ModelTurn {
+    let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
     let lowered = _anthropic_lower_journal(input.journal);
 
     let body: map<string, unknown> = {};
@@ -200,20 +200,20 @@ function invoke(
         },
         body: baml.json.stringify(baml.json.to_json(body)),
     };
-    let resp = root.ai.send_as<AnthropicResponse>(req, "anthropic");
+    let resp = ai.send_as<AnthropicResponse>(req, "anthropic");
 
-    let content: root.ai.ContentBlock[] = [];
+    let content: ai.ContentBlock[] = [];
     for (let b in resp.content) {
         if (b.type == "text") {
-            content.push(root.ai.Text { text: b.text ?? "" });
+            content.push(ai.Text { text: b.text ?? "" });
             null
         } else if (b.type == "thinking") {
-            content.push(root.ai.Reasoning { summary: b.thinking ?? "" });
+            content.push(ai.Reasoning { summary: b.thinking ?? "" });
             null
         } else if (b.type == "tool_use") {
             let empty_args: map<string, unknown> = {};
             content.push(
-                root.ai.ToolUse { id: b.id ?? "", name: b.name ?? "", args: b.input ?? empty_args },
+                ai.ToolUse { id: b.id ?? "", name: b.name ?? "", args: b.input ?? empty_args },
             );
             null
         } else {
@@ -222,23 +222,23 @@ function invoke(
     }
 
     let stop = match (resp.stop_reason) {
-        null => root.ai.StopReason.Complete,
+        null => ai.StopReason.Complete,
         let s: string => {
             if (s == "tool_use") {
-                root.ai.StopReason.ToolUse
+                ai.StopReason.ToolUse
             } else if (s == "max_tokens") {
-                root.ai.StopReason.MaxTokens
+                ai.StopReason.MaxTokens
             } else if (s == "refusal") {
-                root.ai.StopReason.Refused
+                ai.StopReason.Refused
             } else {
-                root.ai.StopReason.Complete
+                ai.StopReason.Complete
             }
         },
     };
 
-    let usage: root.ai.Usage? = match (resp.usage) {
+    let usage: ai.Usage? = match (resp.usage) {
         let u: AnthropicUsage => {
-            root.ai.Usage {
+            ai.Usage {
                 input_tokens: u.input_tokens,
                 output_tokens: u.output_tokens,
                 cached_input_tokens: null,
@@ -248,5 +248,5 @@ function invoke(
         null => null,
     };
 
-    root.ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
 }
