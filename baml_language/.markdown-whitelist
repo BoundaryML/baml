@@ -29,6 +29,12 @@ TYPE_SYSTEM.md
 # Speedtest workload definitions
 tools/speedtest/workloads/**/*.md
 
+# BEP planning trees (design pages + working-reference notes)
+_plan/*.md
+_plan/**/*.md
+_planv2/*.md
+_planv2/**/*.md
+
 # BEX event identity & program metadata: cross-team contract docs for the
 # paulo/bex-event-identity-metadata work (design ticket, review, response,
 # post-implementation notes) — REVIEW.md §7.8 asks for these to ship with

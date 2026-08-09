@@ -50,7 +50,7 @@ use std::collections::BTreeSet;
 use baml_codegen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
 
 use crate::{
-    routing::java_identifier,
+    routing::{java_identifier, java_method_identifier},
     translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
 };
 
@@ -478,7 +478,7 @@ pub(crate) fn render_class(
         .static_methods
         .iter()
         .chain(&class.instance_methods)
-        .map(|m| java_identifier(m.name.as_str()))
+        .map(|m| java_method_identifier(m.name.as_str()))
         .collect();
 
     // Static and instance method bindings. Static methods (like free
@@ -783,7 +783,7 @@ fn render_callable_pair(
     } else {
         None
     };
-    let ident = java_identifier(function.name.as_str());
+    let ident = java_method_identifier(function.name.as_str());
     // The `_async` sibling name, escaped past a user callable that already
     // claims `{ident}_async` (see [`async_sibling_ident`]).
     let async_ident = async_sibling_ident(&ident, sibling_idents);
