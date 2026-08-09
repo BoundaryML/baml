@@ -79,7 +79,7 @@ extend this BEP without breaking it as long as these two laws hold
 format. A rendering, not a stored object.
 - **client** — the value that performs model turns. Not "provider",
 except in the phrase "provider wire API" and as a registry prefix.
-- **spec** — a `FunctionSpec` value. 
+- **spec** — a `FunctionSpec` value.
 - **runner** — a value implementing `Runner` that consumes a spec.
 - **run** — one `Runner.run` call, from spec to result.
 - **turn** — one `Client.invoke` call within a run.
