@@ -4373,43 +4373,24 @@ impl<'a> Parser<'a> {
             // Optional colon
             p.eat(TokenKind::Colon);
 
-            // Client name can be:
-            // - A simple identifier: MyClient
-            // - A quoted string: "openai/gpt-4o"
-            // - An unquoted shorthand: openai/gpt-4o-mini (contains slashes)
+            // The client value is either:
+            // - A quoted "provider/model" string: client "openai/gpt-4o"
+            // - An expression evaluating to an ai.Client: a declared client
+            //   name (`client Fast`), a constructor call
+            //   (`client openai.OpenAiClient.new(...)`), a wrapper
+            //   (`client ai.Retry.new(Fast)`), etc.
+            //
+            // The unquoted `client openai/gpt-4o` shorthand of the legacy
+            // world is no longer special-cased: as an expression it would be
+            // a division of two unresolved names, so lowering rejects a
+            // division-shaped client value with a "quote the model string"
+            // migration error rather than letting E0003 cascade.
             if p.at(TokenKind::Quote) {
                 p.parse_string();
-            } else if p.at(TokenKind::Word) {
-                // Parse unquoted client value - consume tokens until newline, brace,
-                // a field separator, or the start of the next LLM-block field. This
-                // handles multi-token shorthands like `openai/gpt-4o-mini` while still
-                // terminating the scan on a single-line body such as
-                // `{ client: Fast prompt: `...` }`, where the value must not swallow
-                // `prompt` and then misreport it as missing (B-621). Stopping at `,`/`;`
-                // keeps them out of the client value so they surface an accurate
-                // block-level diagnostic instead.
-                //
-                // The field-start boundary only applies once a value token has been
-                // consumed: a bare `client` whose value is absent (with the next field
-                // on the following line) must stop immediately via the newline check
-                // rather than absorbing that field, and a client whose name happens to
-                // be `prompt` is still read as the value.
-                let mut consumed_value = false;
-                while !p.at_end() {
-                    if p.at(TokenKind::RBrace)
-                        || p.at(TokenKind::LBrace)
-                        || p.at(TokenKind::Comma)
-                        || p.at(TokenKind::Semicolon)
-                        || p.has_newline_ahead()
-                        || (consumed_value && p.at_llm_field_start())
-                    {
-                        break;
-                    }
-                    p.bump();
-                    consumed_value = true;
-                }
+            } else if p.at(TokenKind::RBrace) || p.has_newline_ahead() || p.at_end() {
+                p.error_unexpected_token("client value".to_string());
             } else {
-                p.error_unexpected_token("client name".to_string());
+                p.parse_expr();
             }
         });
     }
@@ -7555,8 +7536,25 @@ impl<'a> Parser<'a> {
 
     // ============ Client Parsing ============
 
-    /// Parse a client declaration
+    /// Parse a client declaration.
+    ///
+    /// Two forms: `client Name = <expr>;` (a named client value — the
+    /// single-path world) and the legacy `client<llm> Name { ... }` config
+    /// block, which still parses so lowering can emit a targeted migration
+    /// error instead of a parse cascade.
     pub(crate) fn parse_client(&mut self) {
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Word)
+            && self.peek(2).map(|t| t.kind) == Some(TokenKind::Equals)
+        {
+            self.with_node(SyntaxKind::CLIENT_VALUE_DEF, |p| {
+                p.expect(TokenKind::Client);
+                p.bump(); // name
+                p.bump(); // =
+                p.parse_expr();
+                p.eat(TokenKind::Semicolon);
+            });
+            return;
+        }
         self.with_node(SyntaxKind::CLIENT_DEF, |p| {
             // 'client' keyword
             p.expect(TokenKind::Client);

@@ -156,6 +156,7 @@ ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(ToolsField, TOOLS_FIELD);
 ast_node!(SpecExpr, SPEC_EXPR);
+ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
@@ -1001,6 +1002,41 @@ impl LlmFunctionBody {
     }
 }
 
+impl ClientValueDef {
+    /// The declared client name (`Fast` in `client Fast = <expr>;`).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+    }
+
+    /// The initializer — the first element after the `=` (a node, or a bare
+    /// identifier/literal token).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_equals = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) if seen_equals => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind() == SyntaxKind::EQUALS {
+                        seen_equals = true;
+                        continue;
+                    }
+                    if seen_equals
+                        && !t.kind().is_trivia()
+                        && t.kind() != SyntaxKind::SEMICOLON
+                    {
+                        return Some(el);
+                    }
+                }
+                rowan::NodeOrToken::Node(_) => {}
+            }
+        }
+        None
+    }
+}
+
 impl ToolsField {
     /// The tools value expression — the first child node after the `tools`
     /// keyword and optional colon (usually an `ARRAY_LITERAL`).
@@ -1094,6 +1130,26 @@ impl ClientField {
             return Some(string_node.value());
         }
 
+        None
+    }
+
+    /// The client value as a node-or-token element: a `STRING_LITERAL` node
+    /// for the `"provider/model"` form, any other node for an expression
+    /// (`client my_client()`), or a bare identifier token (`client Fast`).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia()
+                        || matches!(t.kind(), SyntaxKind::KW_CLIENT | SyntaxKind::COLON)
+                    {
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
         None
     }
 }

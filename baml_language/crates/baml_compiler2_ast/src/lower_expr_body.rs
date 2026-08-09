@@ -362,6 +362,28 @@ pub(crate) fn synthesize_llm_call_with_prompt(
     ctx.finish(Some(call))
 }
 
+/// Lower a `client Name = <expr>;` initializer into its own `ExprBody`.
+/// The value may be a node or a bare identifier/literal token.
+pub(crate) fn lower_client_initializer(
+    value: Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> (ExprBody, AstSourceMap) {
+    let mut ctx = LoweringContext::new();
+    let root = match &value {
+        Some(rowan::NodeOrToken::Node(node)) => ctx.lower_expr(node),
+        Some(rowan::NodeOrToken::Token(token)) => ctx
+            .try_lower_bare_token(token)
+            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+        None => ctx.alloc_expr(Expr::Missing, span),
+    };
+    let (body, source_map, ctx_diags, ctx_env_refs) = ctx.finish(Some(root));
+    diags.extend(ctx_diags);
+    env_var_refs.extend(ctx_env_refs);
+    (body, source_map)
+}
+
 /// BEP `@spec`: synthesize the body of the `<Fn>$spec` companion — an
 /// `ai.FunctionSpec<Out>` literal binding the function's arguments:
 ///
@@ -394,9 +416,7 @@ pub(crate) fn synthesize_llm_call_with_prompt(
 pub(crate) fn synthesize_llm_spec_body(
     function_name: &str,
     param_names: &[Name],
-    provider_pkg: &str,
-    provider_class: &str,
-    model: &str,
+    client_spec: &crate::lower_cst::LlmClientSpec,
     out_type: Option<crate::ast::TypeExpr>,
     tools_value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
     prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
@@ -579,26 +599,61 @@ pub(crate) fn synthesize_llm_spec_body(
         span,
     );
 
-    // default_client: <pkg>.<Class>.new(model = "<model>") — an eager value.
-    // Provider construction is pure (credentials resolve from the environment
-    // at request time), so building the spec never touches env.
-    let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.to_string())), span);
-    let ctor_callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new(provider_pkg),
-            Name::new(provider_class),
-            Name::new("new"),
-        ]),
-        span,
-    );
-    let ctor_call = ctx.alloc_expr(
-        Expr::Call {
-            callee: ctor_callee,
-            type_args: vec![],
-            args: vec![CallArg::named("model", model_lit)],
-        },
-        span,
-    );
+    // default_client — an eager value; provider construction is pure
+    // (credentials resolve from the environment at request time), so
+    // building the spec never touches env. Either the compile-time-mapped
+    // provider constructor for a "provider/model" string, or the user's own
+    // client expression lowered in place.
+    let default_client = match client_spec {
+        crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
+            let model_lit =
+                ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
+            let ctor_callee = ctx.alloc_expr(
+                Expr::Path(vec![Name::new(*pkg), Name::new(*class), Name::new("new")]),
+                span,
+            );
+            ctx.alloc_expr(
+                Expr::Call {
+                    callee: ctor_callee,
+                    type_args: vec![],
+                    args: vec![CallArg::named("model", model_lit)],
+                },
+                span,
+            )
+        }
+        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Node(node)) => {
+            ctx.lower_expr(node)
+        }
+        crate::lower_cst::LlmClientSpec::Expr(rowan::NodeOrToken::Token(token)) => ctx
+            .try_lower_bare_token(token)
+            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+    };
+
+    // `${role(...)}` markers cannot exist in the instructions-only prompt;
+    // catch the call shape anywhere in the lowered template and emit the
+    // migration error instead of letting `role` cascade as an unresolved
+    // name. Scanning the whole arena is safe: at this point it only holds
+    // the spec body's own expressions, where a bare `role` call is always
+    // the removed marker.
+    let role_spans: Vec<TextRange> = ctx
+        .exprs
+        .iter()
+        .filter_map(|(id, expr)| {
+            if let Expr::Call { callee, .. } = expr {
+                if matches!(&ctx.exprs[*callee], Expr::Path(p) if p.len() == 1 && p[0].as_str() == "role")
+                {
+                    return Some(ctx.source_map.expr_span(id));
+                }
+            }
+            None
+        })
+        .collect();
+    for role_span in role_spans {
+        ctx.diags.push(LoweringDiagnostic::LlmRoleMarkerRemoved {
+            function_name: function_name.to_string(),
+            span: role_span,
+        });
+    }
 
     let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
     let spec_obj = ctx.alloc_expr(
@@ -610,7 +665,7 @@ pub(crate) fn synthesize_llm_spec_body(
                 (Name::new("args"), args_map),
                 (Name::new("prompt_template"), prompt_obj),
                 (Name::new("toolbox"), toolbox),
-                (Name::new("default_client"), ctor_call),
+                (Name::new("default_client"), default_client),
             ],
             spreads: vec![],
         },
@@ -618,6 +673,125 @@ pub(crate) fn synthesize_llm_spec_body(
     );
 
     ctx.finish(Some(spec_obj))
+}
+
+/// Synthesize the `$render_prompt` companion body: render the spec's prompt
+/// with the return type's output-format text —
+/// `Fn$spec(p...).prompt().render_text(ai.render_output_format(reflect.type_of<Out>()))`.
+pub(crate) fn synthesize_spec_render_prompt_body(
+    function_name: &str,
+    param_names: &[Name],
+    out_type: Option<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+
+    let spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
+        span,
+    );
+    let spec_args: Vec<CallArg> = param_names
+        .iter()
+        .map(|n| CallArg::positional(ctx.alloc_expr(Expr::Path(vec![n.clone()]), span)))
+        .collect();
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: vec![],
+            args: spec_args,
+        },
+        span,
+    );
+    let prompt_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: spec_call,
+            member: Name::new("prompt"),
+        },
+        span,
+    );
+    let prompt_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: prompt_callee,
+            type_args: vec![],
+            args: vec![],
+        },
+        span,
+    );
+    let type_of_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new("reflect"), Name::new("type_of")]),
+        span,
+    );
+    let type_of_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: type_of_callee,
+            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
+            args: vec![],
+        },
+        span,
+    );
+    let rof_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new("ai"), Name::new("render_output_format")]),
+        span,
+    );
+    let rof_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: rof_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(type_of_call)],
+        },
+        span,
+    );
+    let render_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: prompt_call,
+            member: Name::new("render_text"),
+        },
+        span,
+    );
+    let render_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: render_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(rof_call)],
+        },
+        span,
+    );
+
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(render_call));
+    (body, source_map)
+}
+
+/// Synthesize the `$parse` companion body: a network-free parse of an
+/// existing JSON/SAP string into the function's return type —
+/// `baml.sap.parse<Out>(json)`.
+pub(crate) fn synthesize_spec_parse_body(
+    out_type: Option<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+    let json_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("json")]), span);
+    let callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("sap"),
+            Name::new("parse"),
+        ]),
+        span,
+    );
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee,
+            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
+            args: vec![CallArg::positional(json_ref)],
+        },
+        span,
+    );
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
+    (body, source_map)
 }
 
 /// BEP `@spec` spec mode: synthesize the direct-call body of a `tools`-bearing
