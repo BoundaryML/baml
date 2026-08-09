@@ -69,15 +69,4 @@ function ExtractName(text: string) -> string {
 
 //----
 //- diagnostics
-// E0003
-//
-//   × unresolved name: `openai`
-//     ╭─[functions_v2_shorthand_clients.baml:62:46]
-//  62 │ ╭─▶ function ExtractName(text: string) -> string {
-//  63 │ │     client openai/gpt-4o-mini
-//  64 │ │     prompt #"
-//  65 │ │       Extract the person's name from this text: {{ text }}
-//  66 │ │       Return only the name, nothing else.
-//  67 │ │     "#
-//  68 │ ╰─▶ }
-//     ╰────
+// <no-diagnostics-expected>

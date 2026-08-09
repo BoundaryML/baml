@@ -1029,14 +1029,32 @@ impl ClientField {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the client value as a string, whether it's an identifier or a string literal.
+    /// Get the client value as a string, whether it's an identifier, an
+    /// unquoted shorthand, or a string literal.
     ///
     /// For `client GPT4`, returns "GPT4".
     /// For `client "openai/gpt-4o"`, returns "openai/gpt-4o".
+    /// For `client openai/gpt-4o` (unquoted shorthand), returns
+    /// "openai/gpt-4o" — the parser consumes the whole shorthand as value
+    /// tokens, and truncating to the first WORD would silently resolve the
+    /// provider prefix alone.
     pub fn value(&self) -> Option<String> {
-        // First try to get it as a simple identifier (WORD token)
-        if let Some(token) = self.name() {
-            return Some(token.text().to_string());
+        // Try token form first: concatenate every non-trivia value token after
+        // the `client` keyword and optional colon. A single WORD yields the
+        // plain identifier; a multi-token run reproduces the unquoted
+        // shorthand (its source has no interior whitespace).
+        let value: String = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                !token.kind().is_trivia()
+                    && !matches!(token.kind(), SyntaxKind::KW_CLIENT | SyntaxKind::COLON)
+            })
+            .map(|token| token.text().to_string())
+            .collect();
+        if !value.is_empty() {
+            return Some(value);
         }
 
         // Otherwise, try to get it as a string literal
