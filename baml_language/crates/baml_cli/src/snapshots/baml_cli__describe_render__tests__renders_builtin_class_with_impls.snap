@@ -28,11 +28,17 @@ methods:
 
 static methods:
   function from_nanoseconds(ns: int | bigint) -> baml.time.Duration
+      Creates a new duration of `ns` nanoseconds.
   function from_microseconds(us: int | bigint) -> baml.time.Duration
+      Creates a new duration of `us` microseconds.
   function from_milliseconds(ms: int | bigint) -> baml.time.Duration
+      Creates a new duration of `ms` milliseconds.
   function from_seconds(s: int | bigint) -> baml.time.Duration
+      Creates a new duration of `s` seconds.
   function from_minutes(m: int | bigint) -> baml.time.Duration
+      Creates a new duration of `m` minutes.
   function from_hours(h: int | bigint) -> baml.time.Duration
+      Creates a new duration of `h` hours.
 
 blanket implementations:
   baml.Concrete   (<builtin>/baml/core.baml:19)

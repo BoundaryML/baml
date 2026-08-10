@@ -22,6 +22,9 @@ class Instant {
     /// due to measurement overhead, it is not recommended to use this
     /// for high-precision measurements.
     ///
+    /// ## Panics
+    /// If the system clock is not available, this function will panic.
+    ///
     /// ## Examples
     /// ```baml
     /// let start = Instant.now();
@@ -44,31 +47,32 @@ class Instant {
     /// Every accepted format carries a UTC offset, which is applied to produce
     /// the absolute instant.
     ///
+    /// Throws `root.errors.ParseError` if `s` matches none of the formats above.
+    ///
     /// ## Examples
     /// ```baml
     /// let t = baml.time.Instant.parse("2026-05-27T12:00:00Z");
     /// ```
-    ///
-    /// Throws `root.errors.ParseError` if `s` matches none of the formats above.
     //baml:mut_vm
     function parse(s: string) -> Instant throws root.errors.ParseError {
         $rust_function
     }
-    /// Serializes `self` to a standard [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
-    /// and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)-compatible timestamp string.
-    /// Will always be in UTC.
-    ///
-    /// Sub-second precision is supported, but trailing subsecond zeros may be truncated.
-    ///
-    /// ## Examples
-    /// ```baml
-    /// let t = baml.time.Instant.epoch();
-    /// assert.equal(t.to_string(), "1970-01-01T00:00:00Z")
-    /// ```
-    ///
-    /// ## Panics
-    /// - If the year would be more than 4 digits (outside the RFC 3339 range).
+
     implements baml.ToString {
+        /// Serializes `self` to a standard [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
+        /// and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)-compatible timestamp string.
+        /// Will always be in UTC.
+        ///
+        /// Sub-second precision is supported, but trailing subsecond zeros may be truncated.
+        ///
+        /// ## Panics
+        /// - If the year would be more than 4 digits (outside the RFC 3339 range).
+        ///
+        /// ## Examples
+        /// ```baml
+        /// let t = baml.time.Instant.epoch();
+        /// assert.equal(t.to_string(), "1970-01-01T00:00:00Z")
+        /// ```
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (_) {
                 root.errors.InvalidArgument { message } => root.sys.panic("Instant.to_string: " + message),

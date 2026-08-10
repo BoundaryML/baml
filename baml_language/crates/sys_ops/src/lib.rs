@@ -662,11 +662,11 @@ impl<T> io::IoClassLlmPromptAst for T {
 }
 
 // ============================================================================
-// `baml.schema` — provider-neutral JSON Schema lowering
+// `baml.json.schema` — provider-neutral JSON Schema lowering
 // ============================================================================
 
-impl<T> io::IoNamespaceSchema for T {
-    fn json_schema(
+impl<T> io::IoNamespaceJson for T {
+    fn schema(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,

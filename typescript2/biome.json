@@ -21,6 +21,7 @@
       "!**/.next/**",
       "!**/.react-email/**",
       "!**/baml_client/**",
+      "!app-website/lib/baml-docs/stdlib.json",
       "!app-beps/**",
       "!**/.turbo/**",
       "!**/*.min.*",

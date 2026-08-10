@@ -5,7 +5,7 @@ expression: output
 namespace baml:
   type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
-  class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, parse, random] }
+  class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, to_int, parse, random] }
   class Bool { methods: [] }
   type Comparable
   type Concrete
@@ -191,6 +191,7 @@ namespace baml.json:
   function parse
   function path<T>
   function path_or<T>
+  function schema
   function serialize<T>
   function stringify
   function stringify_pretty
@@ -293,8 +294,6 @@ namespace baml.random:
 namespace baml.sap:
   function parse<T>
   function parse_type
-namespace baml.schema:
-  function json_schema
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
   class SpawnParams<T, E> { methods: [] }
@@ -310,7 +309,6 @@ namespace baml.sys:
   function collect_garbage
   function exec
   function exit
-  function now_ms
   function panic
   function shell
   function sleep
