@@ -2544,7 +2544,7 @@ function Workflow(input: string) -> string {
             r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 "##,
         );
@@ -2689,7 +2689,7 @@ function GuessingGame() -> string {
             r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 
 function Workflow(input: string) -> string {
@@ -3027,7 +3027,7 @@ test "renders workflow" {
         let source = r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 "##;
         db.add_or_update_file(path, source);

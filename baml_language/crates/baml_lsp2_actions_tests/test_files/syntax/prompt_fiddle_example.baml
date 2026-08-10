@@ -1,4 +1,4 @@
-// This is a BAML file, which extends the Jinja2 templating language to write LLM functions.
+// This is a BAML file for writing LLM functions.
 // Run a test to see how it works!
 
 // https://docs.boundaryml.com
@@ -63,7 +63,7 @@ test StarbucksTextReceiptTest {
   }
 }
 
-// This is a BAML config file, which extends the Jinja2 templating language to write LLM functions.
+// This is a BAML config file for writing LLM functions.
 
 class Resume {
   name string
@@ -81,7 +81,7 @@ function ExtractResume(resume_text: string) -> Resume {
   // see clients.baml
   client GPT4o
 
-  // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
+  // The prompt uses backtick interpolation. Change the models or this text and watch the prompt preview change!
   prompt `
     Parse the following resume and return a structured representation of the data in the schema below.
 
@@ -472,7 +472,7 @@ function ExtractResumeUsingOllama(resume_text: string) -> OResume {
   // client Gemma2
   // client Phi3
 
-  // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
+  // The prompt uses backtick interpolation. Change the models or this text and watch the prompt preview change!
   prompt `
     Parse the following resume and return a structured representation of the data in the schema below.
 
@@ -812,7 +812,7 @@ class UserMessage {
   role string
 }
 
-// prompt strings and template strings use Jinja2 syntax: https://jinja.palletsprojects.com/en/3.1.x/templates/
+// prompt strings and template strings use backticks with `${...}` interpolation.
 template_string PrintMessages(messages: UserMessage[]) `
   ${for (let m in messages)}
     ${role(m.role)}

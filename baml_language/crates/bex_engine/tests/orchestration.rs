@@ -101,7 +101,7 @@ client<llm> A {
 
 function F(x: string) -> string {
     client A
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -135,7 +135,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -174,7 +174,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -209,7 +209,7 @@ client<llm> RR {
 
 function F(x: string) -> string {
     client RR
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -247,7 +247,7 @@ client<llm> RR {
 
 function F(x: string) -> string {
     client RR
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -285,7 +285,7 @@ client<llm> RR {
 
 function F(x: string) -> string {
     client RR
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan_side_effects() -> int {
@@ -326,7 +326,7 @@ client<llm> A {
 
 function F(x: string) -> string {
     client A
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -370,7 +370,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -410,7 +410,7 @@ client<llm> A {
 
 function F(x: string) -> string {
     client A
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -446,7 +446,7 @@ client<llm> A {
 
 function F(x: string) -> string {
     client A
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -490,7 +490,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -532,7 +532,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -580,7 +580,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -626,7 +626,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -665,7 +665,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -694,7 +694,7 @@ client<llm> A {
 
 function F(x: string) -> string {
     client A
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -741,7 +741,7 @@ client<llm> RR {
 
 function F(x: string) -> string {
     client RR
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -802,7 +802,7 @@ client<llm> FB {
 
 function F(x: string) -> string {
     client FB
-    prompt #"{{ x }}"#
+    prompt `${x}`
 }
 
 function check_plan() -> baml.llm.OrchestrationStep[] {
@@ -879,7 +879,7 @@ client<llm> C {
 
 function f(x: string) -> string {
     client C
-    prompt #"hi {{ x }} {{ ctx.output_format }}"#
+    prompt `hi ${x} ${ctx.output_format}`
 }
 
 // Plain wrapper so the test can drive `f` with its default client bound (the
@@ -909,7 +909,7 @@ client<llm> C {
 
 function f(x: string) -> string {
     client C
-    prompt #"hi {{ x }} {{ ctx.output_format }}"#
+    prompt `hi ${x} ${ctx.output_format}`
 }
 
 // Plain wrapper so the test can drive `f` with its default client bound (the
@@ -938,7 +938,7 @@ client<llm> C {
 
 function f(x: string) -> string {
     client C
-    prompt #"hi {{ x }} {{ ctx.output_format }}"#
+    prompt `hi ${x} ${ctx.output_format}`
 }
 
 // Plain wrapper so the test can drive `f` with its default client bound (the

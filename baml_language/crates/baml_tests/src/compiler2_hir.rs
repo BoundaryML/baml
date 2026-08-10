@@ -83,7 +83,7 @@ mod tests {
         let _file_a = db.add_file("a.baml", "class Foo { name string }");
         let _file_b = db.add_file(
             "b.baml",
-            "function bar(x: string) -> string { client GPT4\nprompt #\"hi\"# }",
+            "function bar(x: string) -> string { client GPT4\nprompt `hi` }",
         );
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
@@ -136,7 +136,7 @@ mod tests {
         let mut db = make_db();
         let _f = db.add_file(
             "methods.baml",
-            "class MyClass {\n  name string\n  function helper(x: string) -> string { client C\nprompt #\"hi\"# }\n}",
+            "class MyClass {\n  name string\n  function helper(x: string) -> string { client C\nprompt `hi` }\n}",
         );
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
@@ -237,7 +237,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "fn.baml",
-            "function greet(name: string) -> string { client C\nprompt #\"hi\"# }",
+            "function greet(name: string) -> string { client C\nprompt `hi` }",
         );
 
         // Find the function via the firewall.
@@ -482,7 +482,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "bindings.baml",
-            "function add(a: int, b: int) -> int { client C\nprompt #\"hi\"# }",
+            "function add(a: int, b: int) -> int { client C\nprompt `hi` }",
         );
 
         let index = file_semantic_index(&db, file);
@@ -564,15 +564,15 @@ mod tests {
         let mut db = make_db();
         let _file_a = db.add_file(
             "a.baml",
-            "function greet(x: string) -> string { client C\nprompt #\"hi\"# }",
+            "function greet(x: string) -> string { client C\nprompt `hi` }",
         );
         let _file_b = db.add_file(
             "b.baml",
-            "function greet(y: int) -> int { client C\nprompt #\"hey\"# }",
+            "function greet(y: int) -> int { client C\nprompt `hey` }",
         );
         let _file_c = db.add_file(
             "c.baml",
-            "function greet(z: bool) -> bool { client C\nprompt #\"yo\"# }",
+            "function greet(z: bool) -> bool { client C\nprompt `yo` }",
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
@@ -794,7 +794,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "dup_method.baml",
-            "class Foo {\n  name string\n  function Bar(self) -> string { client C\nprompt #\"hi\"# }\n  function Bar(self) -> string { client C\nprompt #\"bye\"# }\n}",
+            "class Foo {\n  name string\n  function Bar(self) -> string { client C\nprompt `hi` }\n  function Bar(self) -> string { client C\nprompt `bye` }\n}",
         );
 
         let index = file_semantic_index(&db, file);
@@ -1517,7 +1517,7 @@ function foo(user: User) -> string {
         let mut db = make_db();
         let file = db.add_file(
             "cross_kind.baml",
-            "class Foo {\n  bar string\n  function bar(self) -> string { client C\nprompt #\"hi\"# }\n}",
+            "class Foo {\n  bar string\n  function bar(self) -> string { client C\nprompt `hi` }\n}",
         );
 
         let index = file_semantic_index(&db, file);
@@ -2100,7 +2100,7 @@ implements MyIface for MyClass {
   function m(self) -> int { 1 }
 }
 
-template_string MyTemplate(x: string) #"{{ x }}"#
+template_string MyTemplate(x: string) `${x}`
 
 client<llm> MyClient {
   provider openai

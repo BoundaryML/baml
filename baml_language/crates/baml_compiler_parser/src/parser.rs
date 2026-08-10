@@ -1972,7 +1972,12 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        // before starting the RAW_STRING_LITERAL node, handle all leading trivia
+        self.error_here(
+            "Hash-delimited strings and Jinja templates are no longer supported. Use backtick strings with `${...}` interpolation instead. For example, `#\"Hello {{ name }}\"#` becomes `` `Hello ${name}` ``."
+                .to_string(),
+        );
+
+        // Before starting the RAW_STRING_LITERAL node, handle all leading trivia
         while self.eat_trivia() {}
 
         self.with_node(SyntaxKind::RAW_STRING_LITERAL, |p| {
@@ -9237,7 +9242,15 @@ function Demo() -> string {{
             );
 
             let (root, errors) = parse_source(&source);
-            assert_no_errors(&errors);
+            assert_eq!(errors.len(), 1, "expected one unsupported hash-string diagnostic");
+            assert!(
+                matches!(
+                    &errors[0],
+                    ParseError::InvalidSyntax { message, .. }
+                        if message.contains("Hash-delimited strings and Jinja templates are no longer supported")
+                ),
+                "unexpected diagnostic: {errors:#?}"
+            );
 
             let raw_string = root
                 .descendants()
@@ -9440,7 +9453,7 @@ function Foo() -> {
         // B-621 regression guard: a bare `client` with no value on its line must
         // NOT absorb the `prompt` field that starts on the following line into the
         // client value. The client value stays empty and the PROMPT_FIELD is parsed.
-        let source = "function F(raw: string) -> C {\n  client\n  prompt #\"hi\"#\n}\n";
+        let source = "function F(raw: string) -> C {\n  client\n  prompt `hi`\n}\n";
 
         let (root, _errors) = parse_source(source);
         let llm_body = root
@@ -9594,9 +9607,8 @@ function Demo(x "hello") -> int {
     }
 
     #[test]
-    fn accepts_parameter_raw_string_type_without_colon() {
-        // BEP-019: colons are optional in function parameters.
-        // `x #"hello"#` is valid syntax.
+    fn rejects_parameter_hash_string_type_without_colon() {
+        // Preserve the parameter node for recovery while reporting the unsupported syntax.
         let source = r##"
 function Demo(x #"hello"#) -> int {
   1
@@ -9605,17 +9617,21 @@ function Demo(x #"hello"#) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert_no_errors(&errors);
+        assert_eq!(errors.len(), 1, "expected one unsupported hash-string diagnostic");
+        assert!(
+            matches!(
+                &errors[0],
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("Hash-delimited strings and Jinja templates are no longer supported")
+            ),
+            "unexpected diagnostic: {errors:#?}"
+        );
 
         let param = root
             .descendants()
             .find(|n| n.kind() == SyntaxKind::PARAMETER)
             .expect("expected PARAMETER node");
-        let param_text = param.text().to_string();
-        assert!(
-            param_text.contains("hello"),
-            "parameter should contain parsed type, got: {param_text:?}"
-        );
+        assert!(param.text().to_string().contains("hello"));
     }
 
     #[test]

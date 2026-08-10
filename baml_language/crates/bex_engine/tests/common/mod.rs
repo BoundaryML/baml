@@ -196,10 +196,10 @@ client TestClient {{
 
 function TestFunc(input: string) -> {return_type} {{
     client TestClient
-    prompt #"
-        {{{{ input }}}}
-        {{{{ {output_format_call} }}}}
-    "#
+    prompt `
+        ${{{ input}}}
+        ${{{ {output_format_call}}}}
+    `
 }}
 
 function get_prompt() -> baml.llm.PromptAst {{

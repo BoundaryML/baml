@@ -161,7 +161,7 @@ fn llm_companions_remain_visible_to_describe() {
         r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 "##,
     );

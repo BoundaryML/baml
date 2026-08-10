@@ -1586,7 +1586,7 @@ fn completions_for_top_level() -> Vec<Completion> {
             .with_sort("06_retry_policy"),
         Completion::new("template_string", CompletionKind::Keyword)
             .with_detail("template string declaration")
-            .with_snippet("template_string ${1:Name}(${2}) #\"\n  $0\n\"#")
+            .with_snippet("template_string ${1:Name}(${2}) `\n  $0\n`")
             .with_sort("07_template_string"),
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")

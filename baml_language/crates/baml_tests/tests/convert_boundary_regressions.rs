@@ -69,7 +69,7 @@ fn throw_of_non_literal_expression_compiles() {
 fn generic_llm_function_with_generic_return_compiles() {
     let db = db_with(
         "class Box<T> { value T }\n\
-         function Extract<T>(text: string) -> Box<T> { client GPT4\nprompt #\"x\"# }\n",
+         function Extract<T>(text: string) -> Box<T> { client GPT4\nprompt `x` }\n",
     );
     assert!(bytecode_ok(&db).is_ok());
 }

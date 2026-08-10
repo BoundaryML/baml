@@ -985,7 +985,7 @@ impl LlmFunctionBody {
 
     /// Get the prompt field if present.
     ///
-    /// For `function Foo() -> string { ... prompt #"..."# }`, returns the `prompt #"..."#` field.
+    /// For `function Foo() -> string { ... prompt `...` }`, returns the `prompt `...`` field.
     pub fn prompt_field(&self) -> Option<PromptField> {
         self.syntax.children().find_map(PromptField::cast)
     }
@@ -1025,7 +1025,7 @@ impl ClientField {
 impl PromptField {
     /// Get the raw string literal node containing the prompt.
     ///
-    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node
+    /// For `prompt `Hello ${name}``, returns the `#"Hello {{ name }}"#` node
     /// (the legacy Jinja form). Returns `None` for a new-mode backtick prompt.
     pub fn raw_string(&self) -> Option<RawStringLiteral> {
         self.syntax.children().find_map(RawStringLiteral::cast)

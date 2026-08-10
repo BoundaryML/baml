@@ -2217,11 +2217,11 @@ class GuessResponse {
 
 function TakeGuess(user_guess: string, famous_person_name: string) -> GuessResponse {
   client GPT4o
-  prompt #"
-    {{ famouse_person_name | lower }}
+  prompt `
+    ${famouse_person_name | lower}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 <[CURSOR]"##,
         );
@@ -2252,15 +2252,15 @@ function TakeGuess(user_guess: string, famous_person_name: string) -> GuessRespo
   }
 }
 
-template_string GuessHeader(name: string) #"
-  Guess the person: {{ name }}
-"#
+template_string GuessHeader(name: string) `
+  Guess the person: ${name}
+`
 
 function TakeGuess(famous_person_name: string) -> string {
   client GPT4o
-  prompt #"
-    {{ GuessHeader(famous_person_name) }}
-  "#
+  prompt `
+    ${GuessHeader(famous_person_name)}
+  `
 }
 <[CURSOR]"##,
         );
@@ -2285,15 +2285,15 @@ function TakeGuess(famous_person_name: string) -> string {
   }
 }
 
-template_string GuessHeader(name: string) #"
-  Guess the person: {{ name }}
-"#
+template_string GuessHeader(name: string) `
+  Guess the person: ${name}
+`
 
 function TakeGuess(famous_person_name: string) -> string {
   client GPT4o
-  prompt #"
-    {{ GuessHeader(famouse_person_name) }}
-  "#
+  prompt `
+    ${GuessHeader(famouse_person_name)}
+  `
 }
 <[CURSOR]"##,
         );
@@ -2316,17 +2316,17 @@ function TakeGuess(famous_person_name: string) -> string {
     #[test]
     fn check_file_reports_template_string_call_errors() {
         let test = CursorTest::new(
-            r##"template_string WithParams(a: int) #"
+            r##"template_string WithParams(a: int) `
   ...
-"#
+`
 
-template_string BadCall1() #"
-  {{ WithParams(a=2, b=2) }}
-"#
+template_string BadCall1() `
+  ${WithParams(a=2, b=2)}
+`
 
-template_string BadCall2() #"
-  {{ WithParams("a") }}
-"#
+template_string BadCall2() `
+  ${WithParams("a")}
+`
 <[CURSOR]"##,
         );
 
@@ -2356,9 +2356,9 @@ template_string BadCall2() #"
   name string
 }
 
-template_string PersonHeader(person: Person) #"
-  {{ person.name }}
-"#
+template_string PersonHeader(person: Person) `
+  ${person.name}
+`
 "##,
         );
         builder.source(
@@ -2373,9 +2373,9 @@ template_string PersonHeader(person: Person) #"
 
 function TakeGuess(person: Person) -> string {
   client GPT4o
-  prompt #"
-    {{ PersonHeader(person) }}
-  "#
+  prompt `
+    ${PersonHeader(person)}
+  `
 }
 <[CURSOR]"##,
         );

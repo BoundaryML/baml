@@ -276,9 +276,9 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 // Test wrapper that calls render_prompt and returns something we can check
@@ -326,9 +326,9 @@ async fn test_render_prompt_with_inline_client_shorthand() {
     let source = r##"
 function Greet(name: string) -> string {
     client "openai/gpt-4o-mini"
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -382,10 +382,10 @@ client Fast {
 
 function Extract(raw: string) -> C {
     client Fast
-    prompt #"
-        Extract from {{ raw }}.
-        {{ ctx.output_format }}
-    "#
+    prompt `
+        Extract from ${raw}.
+        ${ctx.output_format}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -443,10 +443,10 @@ client Fast {
 
 function Extract(raw: string) -> C {
     client Fast
-    prompt #"
-        Extract from {{ raw }}.
-        {{ ctx.output_format }}
-    "#
+    prompt `
+        Extract from ${raw}.
+        ${ctx.output_format}
+    `
 }
 
 function get_request() -> int {
@@ -496,9 +496,9 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 // Function that returns the PromptAst type - this should work since
@@ -577,9 +577,9 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function test_build_request() -> int {
@@ -621,9 +621,9 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function test_call_llm() -> unknown {
@@ -664,9 +664,9 @@ async fn test_call_llm_function_inline_client_shorthand_gets_past_constructor_lo
     let source = r##"
 function Greet(name: string) -> string {
     client "openai/gpt-4o-mini"
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 "##;
 
@@ -708,9 +708,9 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function test_call_llm() -> string {
@@ -757,9 +757,9 @@ client TestClient {
 
 function Greet(name: string) -> map<string, int> {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function test_call_llm() -> unknown {
@@ -831,13 +831,13 @@ client TestClient {
     }
 }
 
-template_string Greet(name: string) #"Hello, {{ name }}!"#
+template_string Greet(name: string) `Hello, ${name}!`
 
 function TestFunc(name: string) -> string {
     client TestClient
-    prompt #"
-        {{ Greet(name) }}
-    "#
+    prompt `
+        ${Greet(name)}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -878,12 +878,12 @@ client TestClient {
     }
 }
 
-template_string Inner() #"INNER"#
-template_string Outer() #"before {{ Inner() }} after"#
+template_string Inner() `INNER`
+template_string Outer() `before ${Inner()} after`
 
 function TestFunc() -> string {
     client TestClient
-    prompt #"{{ Outer() }}"#
+    prompt `${Outer()}`
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -929,13 +929,13 @@ class Person {
     age int
 }
 
-template_string Describe(label: string, person: Person) #"{{ label }}: {{ person.name }} (age {{ person.age }})"#
+template_string Describe(label: string, person: Person) `${label}: ${person.name} (age ${person.age})`
 
 function TestFunc(label: string, person: Person) -> string {
     client TestClient
-    prompt #"
-        {{ Describe(label, person) }}
-    "#
+    prompt `
+        ${Describe(label, person)}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -976,12 +976,12 @@ client TestClient {
     }
 }
 
-template_string Header() #"=== HEADER ==="#
+template_string Header() `=== HEADER ===`
 
 function TestFunc() -> string {
     client TestClient
-    prompt #"{{ Header() }}
-Content here"#
+    prompt `${Header()}
+Content here`
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -1015,7 +1015,7 @@ function get_prompt() -> baml.llm.PromptAst {
 // Phase 3: json alias LLM-path sentinel
 // ============================================================================
 
-/// Verify that `function F() -> json { ... prompt #"{{ ctx.output_format }}"# }`
+/// Verify that `function F() -> json { ... prompt `${ctx.output_format}` }`
 /// renders a prompt containing "Respond with valid JSON." — the static literal
 /// required by BEP-038 Phase 3 — and does NOT contain the union-arm enumeration
 /// (`null or bool or int ...`).
@@ -1034,11 +1034,11 @@ client TestClient {
 
 function ExtractAny() -> json {
     client TestClient
-    prompt #"
+    prompt `
         Return whatever JSON you like.
 
-        {{ ctx.output_format }}
-    "#
+        ${ctx.output_format}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {

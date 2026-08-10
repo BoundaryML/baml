@@ -29,10 +29,6 @@ function json_body() -> string {
   "{\"input\":\"hello\\nworld\",\"model\":\"m\"}"
 }
 
-// Raw strings must NOT unescape — they should round-trip byte-for-byte.
-function raw_keeps_backslash_n() -> string { #"a\nb"# }
-function raw_keeps_quote() -> string { ##"""##  }
-
 // Escaped backslash at string boundary — the minimal repro for the \\-before-closing-quote bug.
 function lone_backslash() -> string { "\\" }
 function lone_backslash_length() -> int { "\\".length() }
@@ -42,9 +38,6 @@ function trailing_double_backslash() -> string { "a\\\\" }
 function trailing_double_backslash_length() -> int { "a\\\\".length() }
 function replace_backslash() -> string { "a\\b\\c".replace_all("\\", "/") }
 
-// Raw strings with backslash sequences — must preserve them verbatim.
-function raw_double_backslash() -> string { #"\\"# }
-function raw_quad_backslash() -> string { #"\\\\"# }
 "####;
 
     macro_rules! run_str {
@@ -99,14 +92,6 @@ function raw_quad_backslash() -> string { #"\\\\"# }
         assert_eq!(parsed["model"], "m");
     }
 
-    #[tokio::test]
-    async fn raw_strings_do_not_decode_escapes() {
-        // Raw strings are the documented workaround; they must keep
-        // backslashes and quotes verbatim or the workaround breaks too.
-        assert_eq!(run_str!("raw_keeps_backslash_n").as_str(), "a\\nb");
-        assert_eq!(run_str!("raw_keeps_quote").as_str(), "\"");
-    }
-
     // ── Escaped backslash at string boundary ────────────────────────────
 
     #[tokio::test]
@@ -130,16 +115,6 @@ function raw_quad_backslash() -> string { #"\\\\"# }
     async fn replace_all_with_backslash_arguments() {
         // replace_all("\\", "/") should replace each backslash with a forward slash.
         assert_eq!(run_str!("replace_backslash").as_str(), "a/b/c");
-    }
-
-    // ── Raw strings preserve backslash sequences verbatim ───────────────
-
-    #[tokio::test]
-    async fn raw_strings_preserve_backslash_sequences() {
-        // #"\\"# contains two literal characters: \ and \
-        assert_eq!(run_str!("raw_double_backslash").as_str(), "\\\\");
-        // #"\\\\"# contains four literal characters: \ \ \ \
-        assert_eq!(run_str!("raw_quad_backslash").as_str(), "\\\\\\\\");
     }
 
     // ── Negative tests: invalid strings must still produce errors ───────

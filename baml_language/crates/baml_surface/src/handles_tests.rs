@@ -40,7 +40,7 @@ type Id = string
 
 function greet(name: string) -> string { name }
 
-template_string Prompt(x: string) #"{{ x }}"#
+template_string Prompt(x: string) `${x}`
 
 client<llm> Fast {
   provider openai

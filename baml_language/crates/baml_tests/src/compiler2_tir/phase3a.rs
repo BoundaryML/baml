@@ -646,7 +646,7 @@ client<llm> OverrideClient {
 
 function Ask(input: string) -> string {
   client DefaultClient
-  prompt #"{{ input }}"#
+  prompt `${input}`
 }
 
 function call_overrides() -> string {
