@@ -148,9 +148,9 @@ function _openai_request(
     };
     baml.http.Request {
         method: "POST",
-        url: `${c.base_url ?? "https://api.openai.com/v1"}/responses`,
+        url: `${c.resolved_base_url() ?? "https://api.openai.com/v1"}/responses`,
         headers: {
-            "authorization": `Bearer ${c.api_key ?? baml.env.get_or_panic("OPENAI_API_KEY")}`,
+            "authorization": `Bearer ${c.resolved_api_key()}`,
             "content-type": "application/json",
         },
         body: baml.json.stringify(baml.json.to_json(body)),

@@ -3,16 +3,16 @@
 // request time, so declaring the client never touches env.
 client Stub = openai.OpenAiClient.new(model = "gpt-4o-mini");
 
-// The streaming client. `baml.env.get` is the SOFT read (returns null when
-// unset), which matters because a client declaration is evaluated at program
-// start: a hard `env.X` would panic in keyless runs. Both values stay null in
-// the default case, so ONE client serves the keyless replay harness (env vars
-// point at the in-process replay server) and the key-gated live e2e (real
-// endpoint + key) — see customizable/conftest.py.
+// The streaming client. A `client Name = ...` declaration is evaluated during
+// `$init`, which cannot run io sysops — so it names the env vars instead of
+// reading them, and the provider resolves them at request time. ONE client
+// therefore serves the keyless replay harness (the vars point at the
+// in-process replay server) and the key-gated live e2e (real endpoint + key)
+// — see customizable/conftest.py.
 client StreamStub = openai.OpenAiClient.new(
     model = "gpt-5.4-nano",
-    api_key = baml.env.get("BAML_REPLAY_API_KEY"),
-    base_url = baml.env.get("BAML_REPLAY_BASE_URL"),
+    api_key_env = "BAML_REPLAY_API_KEY",
+    base_url_env = "BAML_REPLAY_BASE_URL",
 );
 
 // `extract_resume() -> Resume` from 09a. Companions (`$render_prompt`,
