@@ -346,9 +346,27 @@ function skill_url() -> string {
 /// fetch, fall back to the cache and say so, and fail if there is neither.
 /// Failing is the right outcome — the alternative is paying for a whole run to
 /// get answers nobody can tell are degraded.
+/// Whether a fetched body is plausibly the skill rather than something a
+/// network handed back with a 200.
+///
+/// A captive portal, a proxy interstitial or a CDN error page all return 200
+/// with HTML, and `response.ok()` is true for every one of them. Without this
+/// the run told two hundred sessions that BAML *is* that HTML — and, worse,
+/// wrote it over the cached copy, so the next run had no fallback either.
+function looks_like_skill(text: string) -> bool {
+    let body = text.trim();
+    // The real document is 22KB of markdown that opens with front matter and
+    // names the language repeatedly. An interstitial satisfies none of that.
+    body.length() > 2000 && !body.to_lower_case().starts_with("<!doctype") && !body.to_lower_case().starts_with("<html") && body.to_lower_case().includes("baml")
+}
+
 function load_skill(cache_file: string) -> string {
     let fetched = fetch_skill();
-    if (fetched.length() > 0) {
+    if (fetched.length() > 0 && !looks_like_skill(fetched)) {
+        // Fetched something, but not the skill. Fall through to the cache
+        // rather than trusting it, and leave the cache alone.
+        report_progress(`the skill URL returned ${fetched.length()} bytes that do not look like the skill`);
+    } else if (fetched.length() > 0) {
         let _ = baml.fs.write(cache_file, fetched) catch_all (_) {
             _ => null,
         };

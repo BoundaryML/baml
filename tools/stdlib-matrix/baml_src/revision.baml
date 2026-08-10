@@ -62,6 +62,20 @@ class Revision {
     judgements: map<string, Judgement[]>,
 }
 
+/// What separates the fields of a comparison key.
+///
+/// A vertical tab, because it cannot occur in a docstring or a printed
+/// signature and so keeps the key unambiguous — two symbols differing only in
+/// where a field boundary falls must not compare equal.
+///
+/// Not `\u{1f}`, which is what this was: BAML does not support that escape, so
+/// the separator was the six printable characters `\u{1f}` — ordinary text
+/// that content can contain, defeating the whole point. `\v` and `\f` are the
+/// control escapes the lexer does accept.
+function field_separator() -> string {
+    "\v"
+}
+
 /// The text a declaration is compared by.
 ///
 /// Everything that could change what a symbol *is*, and nothing that could not:
@@ -89,7 +103,7 @@ function declaration_text(
         signature,
         doc ?? "",
     ]
-    .join("\u{1f}")
+        .join(field_separator())
 }
 
 function baml_symbol_text(symbol: BamlSymbol) -> string {
@@ -124,7 +138,9 @@ function prior_symbol_text(symbol: PriorSymbol) -> string {
 /// TypeScript declares no error contract and its signature is printed text, so
 /// there is less to compare — but the shape of the question is the same.
 function ts_symbol_text(symbol: TsSymbol) -> string {
-    [symbol.origin, symbol.display, symbol.signature, symbol.doc ?? "", symbol.since].join("\u{1f}")
+    [symbol.origin, symbol.display, symbol.signature, symbol.doc ?? "", symbol.since].join(
+        field_separator(),
+    )
 }
 
 /// Reads a previous report. A file that cannot be decoded is an error, never a
@@ -257,9 +273,9 @@ function baml_surface_grew(matrix: SymbolMatrix, before: Revision) -> bool {
 
 /// Whether a judgement may be carried, given what has changed.
 ///
-/// A pairing survives when every BAML symbol it names reads as it did. A judged
-/// *absence* is a claim about the whole BAML surface rather than about any one
-/// symbol — "nothing in BAML does this job" — so it survives only while that
+/// A pairing survives when every BAML symbol it names — and everything each of
+/// those names in turn — reads as it did. A judged *absence* is a claim about
+/// the whole BAML surface rather than about any one symbol — "nothing in BAML does this job" — so it survives only while that
 /// surface could not have gained the thing it says is missing.
 ///
 /// `baml_grew` is that test, and it is deliberately a test for *additions*
@@ -279,20 +295,39 @@ function judgement_carries(
     now: map<string, string>,
     before: Revision,
     baml_grew: bool,
+    references: map<string, string[]>,
 ) -> bool {
-    // The counterpart list, not the verdict, decides which question to ask:
-    // it is what says whether there is anything to re-check.
-    if (judgement.baml.length() == 0) {
-        !baml_grew
-    } else {
-        let carries = true;
-        for (let id in judgement.baml) {
-            if (!before.texts.has(id) || before.texts.get(id) != now.get(id)) {
-                carries = false;
-            }
-        }
-        carries
+    // The verdict, not the counterpart list. A `match` that named nothing is
+    // still a pairing claim, and asking the absence question about it would
+    // cache it against "did BAML gain anything" — a rule written for a
+    // different claim entirely.
+    if (!judgement_pairs(judgement) && judgement.verdict != "unnecessary") {
+        return !baml_grew;
     }
+    let no_references: string[] = [];
+    let carries = true;
+    for (let id in judgement.baml) {
+        // `is_fresh`, not a bare text comparison: a judgement is only as stable
+        // as what the symbols it names are built from. This is the check the
+        // module header describes with `read(path) -> baml.fs.DirEntry[]`, and
+        // it ran on the TypeScript side alone — so retyping a field of
+        // `DirEntry` left every judgement about reading a directory carried,
+        // shipping reasoning written against the old type.
+        if (!is_fresh(id, references.get(id) ?? no_references, now, before)) {
+            carries = false;
+        }
+    }
+    carries
+}
+
+/// Every BAML symbol's references, by id — what `judgement_carries` needs in
+/// order to look one step past the symbols a judgement names.
+function baml_references(matrix: SymbolMatrix) -> map<string, string[]> {
+    let references: map<string, string[]> = {};
+    for (let symbol in matrix.baml) {
+        let _ = references.set(symbol.id, symbol.references);
+    }
+    references
 }
 
 /// Folds a previous revision into a fresh matrix.
@@ -303,6 +338,7 @@ function judgement_carries(
 function apply_revision(matrix: SymbolMatrix, before: Revision) -> CarryOutcome {
     let now = current_texts(matrix);
     let grew = baml_surface_grew(matrix, before);
+    let references = baml_references(matrix);
     let carried: Judgement[] = [];
     let carried_for: map<string, bool> = {};
     let queued = 0;
@@ -315,7 +351,7 @@ function apply_revision(matrix: SymbolMatrix, before: Revision) -> CarryOutcome 
         }
         let all_carry = true;
         for (let judgement in prior) {
-            if (!judgement_carries(judgement, now, before, grew)) {
+            if (!judgement_carries(judgement, now, before, grew, references)) {
                 all_carry = false;
             }
         }

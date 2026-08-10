@@ -196,10 +196,6 @@ function build_matrix_aligned(
     }
 }
 
-function main() -> MatrixResult {
-    build_matrix()
-}
-
 /// What the tools answer, without a model.
 ///
 /// Inspection only, and the point of it: a tool that answers badly is a session

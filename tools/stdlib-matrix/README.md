@@ -24,6 +24,19 @@ why.
 
 `--llm` needs `ANTHROPIC_API_KEY`; locally, `infisical run -- tools/stdlib-matrix/run --llm`.
 
+To check a key before spending a run on it — or before putting it in a CI
+environment — `check_client` makes one trial call and nothing else:
+
+```sh
+cd tools/stdlib-matrix && baml run check_client
+```
+
+It uses `AlignerProbe`, which is `Aligner` without the retry policy, because the
+orchestrator discards each attempt's error and reports only that all of them
+failed. Unretried, the provider's own message comes through: `invalid x-api-key`
+reads very differently from a model this account may not use, and a `--llm` run
+calls this first so it fails in seconds rather than at the end of a session.
+
 ## How it judges
 
 One session per TypeScript container — `(globals).Date`, `node:fs` — answering

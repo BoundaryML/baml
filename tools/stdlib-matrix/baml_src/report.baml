@@ -142,7 +142,13 @@ class SymbolMatrix {
 /// A judgement that pairs this symbol with something, as opposed to one that
 /// records an absence.
 function judgement_pairs(judgement: Judgement) -> bool {
-    judgement.verdict == "match" || judgement.verdict == "divergent"
+    judgement_pairs_verdict(judgement.verdict)
+}
+
+/// The same test, on a verdict alone — for a finding, which is not yet a
+/// judgement.
+function judgement_pairs_verdict(verdict: string) -> bool {
+    verdict == "match" || verdict == "divergent"
 }
 
 /// The strongest thing said about a symbol, when more than one judgement speaks
@@ -284,18 +290,4 @@ function build_symbol_matrix(
     };
     matrix.counts = recount(matrix);
     matrix
-}
-
-/// Build the symbol matrix from the generated data files.
-function build_matrix_v2(
-    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
-    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
-    baml_surface_sha256: string = "",
-) -> SymbolMatrix {
-    if (baml_surface_sha256.length() == 0) {
-        throw baml.errors.InvalidArgument {
-            message: "baml_surface_sha256 is required — the run wrapper computes it",
-        };
-    }
-    build_symbol_matrix(load_baml_surface(baml_surface_file), load_ts_surface(ts_surface_file), baml_surface_sha256)
 }

@@ -7,8 +7,14 @@
 //! and not what it is *called* has nothing to type.
 //!
 //! This searches docstrings as well as names, which is where that knowledge
-//! lives: `baml.sys.exec` never says "subprocess", but it does say "Runs
-//! `program` with the given `args`".
+//! often lives: `baml.fs.read` is findable by "read a file" because its
+//! documentation says so.
+//!
+//! It is lexical, not semantic, and the limit is worth stating plainly: a query
+//! only finds a symbol that shares a *word* with its name or its prose.
+//! `subprocess` finds nothing, because no symbol and no docstring in the
+//! standard library uses that word — `baml.sys.exec` says "Runs `program`".
+//! Reaching that needs an index this is not.
 //!
 //! Matching is on whole words, not substrings. Substrings are how a search
 //! becomes noise — `run` is inside `trunc`, so a substring search for "run a
@@ -30,13 +36,28 @@ pub struct Hit {
     pub score: u32,
 }
 
-/// The words a query is looking for: lowercased, and long enough to mean
-/// something. One- and two-character tokens match nearly everything.
+/// Words so common that scoring them is noise rather than signal.
+const STOP_WORDS: &[&str] = &[
+    "the", "and", "for", "from", "into", "with", "that", "this", "there", "then", "when", "how",
+    "does", "using", "use", "get", "set", "all", "any", "not",
+];
+
+/// The words a query is looking for.
+///
+/// Tokenized through `haystack`, the same way the text being searched is. They
+/// used to diverge: the haystack split camelCase and lowercased with full
+/// Unicode, while the query did neither. So `ZonedDateTime` became the single
+/// token `zoneddatetime` and could not match ` zoned date time ` — every
+/// PascalCase type in the standard library was unfindable by typing its own
+/// name — and `CAFÉ` lowercased to `cafÉ` on one side and `café` on the other.
+///
+/// One- and two-character tokens, and the stop words above, match nearly
+/// everything and are dropped.
 fn query_tokens(query: &str) -> Vec<String> {
-    query
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|t| t.chars().count() > 2)
-        .map(str::to_ascii_lowercase)
+    haystack(query)
+        .split_whitespace()
+        .filter(|token| token.chars().count() > 2 && !STOP_WORDS.contains(token))
+        .map(str::to_string)
         .take(8)
         .collect()
 }
@@ -218,6 +239,15 @@ fn candidates(export: &PackageExport) -> Vec<Candidate> {
     // search for "sort an array" could not reach `T[].sort`.
     for block in &export.impls {
         for method in &block.methods {
+            // An inherited default is re-listed by every implementor — 13 impls
+            // inherit `baml.iter.Iterator.chain`, and 198 of 324 impl entries
+            // are re-listings. The declaration itself is already a candidate,
+            // through the interface's `default_methods`, so keeping these spent
+            // half a result page on one method. An override is a distinct
+            // declaration and stays.
+            if method.from_default {
+                continue;
+            }
             out.push(Candidate {
                 id: method.id.clone(),
                 kind: "method",
@@ -242,7 +272,11 @@ pub fn search(db: &ProjectDatabase, query: &str, limit: usize) -> Vec<Hit> {
     let mut names: Vec<String> = baml_lsp2_actions::non_user_package_names(db)
         .into_iter()
         .collect();
-    names.push("user".to_string());
+    // `root`, not `user`: `resolve` maps `root` to the user package and treats a
+    // bare `user` as an item *named* `user` inside it, which is nothing. So this
+    // resolved to `None`, the `let … else` swallowed it, and the one package the
+    // reader actually wrote was the only one never searched.
+    names.push("root".to_string());
     // A stable walk order, so equal-scoring hits from different packages come
     // out the same way on every run.
     names.sort();
@@ -281,7 +315,15 @@ pub fn search(db: &ProjectDatabase, query: &str, limit: usize) -> Vec<Hit> {
 
     // Best first, then by path, so equal scores come out in a stable order
     // rather than in whichever order the packages were walked.
-    hits.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.path.cmp(&b.path)));
+    // Best first, then path, then id: two impl blocks can provide the same
+    // method name for the same receiver display, so path alone is not a total
+    // order and the tie would fall to the walk order.
+    hits.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then_with(|| a.path.cmp(&b.path))
+            .then_with(|| a.id.cmp(&b.id))
+    });
     hits.truncate(limit);
     hits
 }
@@ -351,6 +393,38 @@ mod tests {
     }
 
     #[test]
+    fn a_pascal_case_name_finds_itself() {
+        // The haystack split camelCase and the query did not, so every
+        // PascalCase type in the standard library was unfindable by typing its
+        // own name. Both sides go through `haystack` now.
+        for name in ["ZonedDateTime", "CsvReader", "ShellOutput", "TaskGroup"] {
+            let tokens = query_tokens(name);
+            let scored = score(&haystack(name), &haystack(""), &haystack(""), &tokens);
+            assert!(scored > 0, "{name} scored {scored} against itself");
+        }
+    }
+
+    #[test]
+    fn case_folding_agrees_on_both_sides() {
+        // The query lowercased with `to_ascii_lowercase` and the haystack with
+        // full Unicode, so any non-ASCII uppercase letter missed its own word.
+        for word in ["CAFÉ", "NAÏVE", "RÉSUMÉ"] {
+            let tokens = query_tokens(word);
+            let scored = score(&haystack(word), &haystack(""), &haystack(""), &tokens);
+            assert!(scored > 0, "{word} scored {scored} against itself");
+        }
+    }
+
+    #[test]
+    fn stop_words_are_dropped() {
+        // `the` scores against essentially every docstring in the library.
+        assert_eq!(
+            query_tokens("read the file from disk"),
+            ["read", "file", "disk"]
+        );
+    }
+
+    #[test]
     fn camel_case_splits_into_words() {
         // A query typed in snake_case has to find a name written in camelCase,
         // which is the whole reason names are split rather than compared.
@@ -361,8 +435,10 @@ mod tests {
 
     #[test]
     fn short_tokens_are_dropped() {
-        // `a` and `of` match nearly every docstring in the standard library.
-        assert_eq!(query_tokens("a list of the"), ["list", "the"]);
+        // `a` and `of` match nearly every docstring in the standard library —
+        // and so did `the`, which this test used to assert *survives*.
+        assert_eq!(query_tokens("a list of the"), ["list"]);
         assert!(query_tokens("").is_empty());
+        assert!(query_tokens("the and for").is_empty());
     }
 }
