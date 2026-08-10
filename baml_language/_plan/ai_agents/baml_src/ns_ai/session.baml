@@ -64,10 +64,19 @@ class Session<T, X> {
                 self.toolbox.entries.push(t);
             }
         }
+        // The registry holds known-but-UNMOUNTED tools, so a tool leaves it on
+        // mount. Leaving it behind would let the same name mount twice.
+        self.registry = self.registry.filter((r) -> { !names.includes(r.name) });
         self.journal.append(ToolsChanged { names: self.toolbox.names() });
     }
 
     function unmount(self, names: string[]) -> void {
+        // Symmetrically, an unmounted tool returns to the registry. Dropping it
+        // here instead would lose it for good and make MountTools unable to
+        // ever bring it back.
+        for (let t in self.toolbox.entries.filter((t) -> { names.includes(t.name) })) {
+            self.registry.push(t);
+        }
         self.toolbox.entries = self.toolbox.entries.filter((t) -> { !names.includes(t.name) });
         self.journal.append(ToolsChanged { names: self.toolbox.names() });
     }
