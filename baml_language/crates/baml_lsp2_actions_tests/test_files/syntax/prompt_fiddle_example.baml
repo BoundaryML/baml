@@ -159,7 +159,7 @@ client GPT4 = openai.OpenAiClient.new(
 );
 
 // A client wrapped with a retry policy.
-client GPT4o = ai.Retry.new(
+client GPT4o = ai.clients.Retry.new(
   inner = openai.OpenAiClient.new(model = "gpt-4o", api_key = env.OPENAI_API_KEY),
   max_attempts = 3,
 );
@@ -179,7 +179,7 @@ client Gemini = google.GoogleClient.new(
 // A fallback will attempt to use the first client, and if it fails, it will
 // try the second client, and so on.
 // https://docs.boundaryml.com/docs/snippets/clients/fallback
-client SuperDuperClient = ai.Fallback {
+client SuperDuperClient = ai.clients.Fallback {
   members: [
     GPT4,
     GPT4o,
@@ -189,7 +189,7 @@ client SuperDuperClient = ai.Fallback {
 
 // An example of a BAML client with a retry policy
 // https://docs.boundaryml.com/docs/snippets/clients/retry
-client MyClient = ai.Retry.new(
+client MyClient = ai.clients.Retry.new(
   inner = anthropic.AnthropicClient.new(
     model = "claude-3-sonnet-20240229",
     api_key = env.ANTHROPIC_API_KEY,
@@ -199,7 +199,7 @@ client MyClient = ai.Retry.new(
 
 // Round robin distributes requests across multiple clients. After each call,
 // the next client in the list will be used.
-client MyRoundRobinClient = ai.RoundRobin.new([
+client MyRoundRobinClient = ai.clients.RoundRobin.new([
   GPT4o,
   Gemini,
 ]);

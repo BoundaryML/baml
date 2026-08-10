@@ -10,7 +10,7 @@ client CustomGPT5 = openai.OpenAiClient.new(
 );
 
 // Retries compose by wrapping the inner client value.
-client CustomGPT5Mini = ai.Retry.new(
+client CustomGPT5Mini = ai.clients.Retry.new(
     inner = openai.OpenAiClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
     max_attempts = 2,
 );
@@ -44,10 +44,10 @@ client CustomHaiku = anthropic.AnthropicClient.new(
 // );
 
 // This will alternate between the two clients
-client CustomFast = ai.RoundRobin.new([CustomGPT5Mini, CustomHaiku]);
+client CustomFast = ai.clients.RoundRobin.new([CustomGPT5Mini, CustomHaiku]);
 
 // This will try the clients in order until one succeeds
-client OpenaiFallback = ai.Fallback { members: [CustomGPT5Mini, CustomGPT5] };
+client OpenaiFallback = ai.clients.Fallback { members: [CustomGPT5Mini, CustomGPT5] };
 
 function will_double(x: int) -> int {
     x * 2
@@ -90,8 +90,10 @@ function double() -> void {
 // ns_game_clients.baml:13:23 (operator) len=1 "="
 // ns_game_clients.baml:13:25 (namespace) [defaultLibrary] len=2 "ai"
 // ns_game_clients.baml:13:27 (namespace) [defaultLibrary] len=1 "."
-// ns_game_clients.baml:13:28 (class) [defaultLibrary] len=5 "Retry"
-// ns_game_clients.baml:13:34 (method) len=3 "new"
+// ns_game_clients.baml:13:28 (namespace) [defaultLibrary] len=7 "clients"
+// ns_game_clients.baml:13:35 (namespace) [defaultLibrary] len=1 "."
+// ns_game_clients.baml:13:36 (class) [defaultLibrary] len=5 "Retry"
+// ns_game_clients.baml:13:42 (method) len=3 "new"
 // ns_game_clients.baml:14:5 (parameter) len=5 "inner"
 // ns_game_clients.baml:14:11 (operator) len=1 "="
 // ns_game_clients.baml:14:13 (namespace) [defaultLibrary] len=6 "openai"
@@ -162,18 +164,21 @@ function double() -> void {
 // ns_game_clients.baml:47:19 (operator) len=1 "="
 // ns_game_clients.baml:47:21 (namespace) [defaultLibrary] len=2 "ai"
 // ns_game_clients.baml:47:23 (namespace) [defaultLibrary] len=1 "."
-// ns_game_clients.baml:47:24 (class) [defaultLibrary] len=10 "RoundRobin"
-// ns_game_clients.baml:47:35 (method) len=3 "new"
-// ns_game_clients.baml:47:40 (variable) len=14 "CustomGPT5Mini"
-// ns_game_clients.baml:47:56 (variable) len=11 "CustomHaiku"
+// ns_game_clients.baml:47:24 (namespace) [defaultLibrary] len=7 "clients"
+// ns_game_clients.baml:47:31 (namespace) [defaultLibrary] len=1 "."
+// ns_game_clients.baml:47:32 (class) [defaultLibrary] len=10 "RoundRobin"
+// ns_game_clients.baml:47:43 (method) len=3 "new"
+// ns_game_clients.baml:47:48 (variable) len=14 "CustomGPT5Mini"
+// ns_game_clients.baml:47:64 (variable) len=11 "CustomHaiku"
 // ns_game_clients.baml:49:1 (comment) len=56 "// This will try the clients in order until one succeeds"
 // ns_game_clients.baml:50:1 (keyword) len=6 "client"
 // ns_game_clients.baml:50:23 (operator) len=1 "="
 // ns_game_clients.baml:50:25 (class) len=2 "ai"
 // ns_game_clients.baml:50:27 (namespace) [defaultLibrary] len=1 "."
-// ns_game_clients.baml:50:39 (property) len=7 "members"
-// ns_game_clients.baml:50:49 (variable) len=14 "CustomGPT5Mini"
-// ns_game_clients.baml:50:65 (variable) len=10 "CustomGPT5"
+// ns_game_clients.baml:50:35 (namespace) [defaultLibrary] len=1 "."
+// ns_game_clients.baml:50:47 (property) len=7 "members"
+// ns_game_clients.baml:50:57 (variable) len=14 "CustomGPT5Mini"
+// ns_game_clients.baml:50:73 (variable) len=10 "CustomGPT5"
 // ns_game_clients.baml:52:1 (keyword) len=8 "function"
 // ns_game_clients.baml:52:10 (function) [declaration] len=11 "will_double"
 // ns_game_clients.baml:52:22 (parameter) [declaration] len=1 "x"

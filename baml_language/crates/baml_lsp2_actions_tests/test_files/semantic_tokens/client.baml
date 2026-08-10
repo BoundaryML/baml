@@ -3,7 +3,7 @@ client MyClient = openai.OpenAiClient.new(
 );
 
 // Reliability composes with wrapper client values now (retry_policy blocks are gone).
-client RetryClient = ai.Retry.new(
+client RetryClient = ai.clients.Retry.new(
   inner = anthropic.AnthropicClient.new(model = "claude-opus-4-1-20250805"),
   max_attempts = 3,
 );
@@ -27,8 +27,10 @@ client RetryClient = ai.Retry.new(
 // client.baml:6:20 (operator) len=1 "="
 // client.baml:6:22 (namespace) [defaultLibrary] len=2 "ai"
 // client.baml:6:24 (namespace) [defaultLibrary] len=1 "."
-// client.baml:6:25 (class) [defaultLibrary] len=5 "Retry"
-// client.baml:6:31 (method) len=3 "new"
+// client.baml:6:25 (namespace) [defaultLibrary] len=7 "clients"
+// client.baml:6:32 (namespace) [defaultLibrary] len=1 "."
+// client.baml:6:33 (class) [defaultLibrary] len=5 "Retry"
+// client.baml:6:39 (method) len=3 "new"
 // client.baml:7:3 (parameter) len=5 "inner"
 // client.baml:7:9 (operator) len=1 "="
 // client.baml:7:11 (namespace) [defaultLibrary] len=9 "anthropic"

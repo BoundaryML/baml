@@ -9,7 +9,7 @@ client ValidStreamingClient = anthropic.AnthropicClient.new(model = "claude-3");
 client InfiniteTimeoutClient = openai.OpenAiClient.new(model = "gpt-4");
 
 // Composite reliability client built from the two above
-client ValidFallbackClient = ai.Fallback { members: [ValidHttpClient, ValidStreamingClient] };
+client ValidFallbackClient = ai.clients.Fallback { members: [ValidHttpClient, ValidStreamingClient] };
 
 //----
 //- diagnostics
@@ -52,6 +52,7 @@ client ValidFallbackClient = ai.Fallback { members: [ValidHttpClient, ValidStrea
 // http_config.baml:12:28 (operator) len=1 "="
 // http_config.baml:12:30 (class) len=2 "ai"
 // http_config.baml:12:32 (namespace) [defaultLibrary] len=1 "."
-// http_config.baml:12:44 (property) len=7 "members"
-// http_config.baml:12:54 (variable) len=15 "ValidHttpClient"
-// http_config.baml:12:71 (variable) len=20 "ValidStreamingClient"
+// http_config.baml:12:40 (namespace) [defaultLibrary] len=1 "."
+// http_config.baml:12:52 (property) len=7 "members"
+// http_config.baml:12:62 (variable) len=15 "ValidHttpClient"
+// http_config.baml:12:79 (variable) len=20 "ValidStreamingClient"

@@ -6,7 +6,7 @@ client CustomGPT5 = openai.OpenAiClient.new(
 );
 
 // Retries compose by wrapping the inner client value.
-client CustomGPT5Mini = ai.Retry.new(
+client CustomGPT5Mini = ai.clients.Retry.new(
   inner = openai.OpenAiClient.new(model = "gpt-5-mini", api_key = env.OPENAI_API_KEY),
   max_attempts = 2,
 );
@@ -28,7 +28,7 @@ client CustomSonnet4 = anthropic.AnthropicClient.new(
   api_key = env.ANTHROPIC_API_KEY,
 );
 
-client CustomHaiku = ai.Retry.new(
+client CustomHaiku = ai.clients.Retry.new(
   inner = anthropic.AnthropicClient.new(
     model = "claude-haiku-4-5",
     api_key = env.ANTHROPIC_API_KEY,
@@ -44,11 +44,11 @@ client CustomHaiku = ai.Retry.new(
 
 // https://docs.boundaryml.com/docs/snippets/clients/round-robin
 // This will alternate between the two clients
-client CustomFast = ai.RoundRobin.new([CustomGPT5Mini, CustomHaiku]);
+client CustomFast = ai.clients.RoundRobin.new([CustomGPT5Mini, CustomHaiku]);
 
 // https://docs.boundaryml.com/docs/snippets/clients/fallback
 // This will try the clients in order until one succeeds
-client OpenaiFallback = ai.Fallback { members: [CustomGPT5Mini, CustomGPT5] };
+client OpenaiFallback = ai.clients.Fallback { members: [CustomGPT5Mini, CustomGPT5] };
 
 // Defining a data model.
 class Resume {
