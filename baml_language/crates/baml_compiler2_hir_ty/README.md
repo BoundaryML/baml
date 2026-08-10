@@ -387,8 +387,11 @@ pointed at the error channel:
 
 Three-reviewer sweep + verification pass over the crate; every remaining
 conflict in the S15 ledger was already ruled, so this list is internal
-quality, not differential state. Fix order: A (bugs, pin-first) -> B
-(union/freshness pass) -> C (consolidations).
+quality, not differential state. STATUS 2026-08-08: ALL TIERS CLOSED
+(A bugs fixed pin-first; B inconsistencies fixed or evidence-reverted;
+C consolidations landed through 49ecc19d3). Remaining S16 rides: the
+shared algebra's Error compat-vs-identity split; the requires-cycle
+diagnostic (S17).
 
 ### A - verified bugs (pinned in fixtures/pending/)
 - A1 `remove_null` (infer.rs) matches Null/Union on `resolve_completely`
