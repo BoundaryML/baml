@@ -157,9 +157,9 @@ class McpConnection {
     // The server's catalog as ordinary tools. Each tool's inputSchema is
     // already JSON Schema, so it carries into Tool.input_schema unchanged;
     // the handler proxies tools/call over this connection.
-    function tools(self) -> root.Tool[] {
+    function tools(self) -> root.tools.Tool[] {
         let result = self._request("tools/list", {});
-        let out: root.Tool[] = [];
+        let out: root.tools.Tool[] = [];
         for (let t in baml.json.path_or<json[]>(result, ".tools", [])) {
             let tool_name = baml.json.path_or<string>(t, ".name", "");
             let schema = baml.json.from_json<map<string, unknown>>(
@@ -171,7 +171,7 @@ class McpConnection {
                 },
             };
             out.push(
-                root.raw_tool(
+                root.tools.raw_tool(
                     tool_name,
                     baml.json.path_or<string>(t, ".description", ""),
                     schema,

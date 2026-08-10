@@ -157,7 +157,7 @@ function prompt_tag_runtime.PtRenderPerson$render_prompt() -> string {
     call ai.FunctionSpec.prompt
     store_var _1
     load_type prompt_tag_runtime.Person
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _4
     load_var2 1 3
     call ai.Prompt.render_text
@@ -165,9 +165,9 @@ function prompt_tag_runtime.PtRenderPerson$render_prompt() -> string {
 }
 
 function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_runtime.Person> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
     load_const <omitted>
@@ -188,7 +188,7 @@ function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
+function prompt_tag_runtime.PtRenderPerson$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -202,7 +202,7 @@ function prompt_tag_runtime.PtRenderPerson$stream(client: ai.StreamingClient | n
     load_type prompt_tag_runtime.Person$stream | null
     load_type prompt_tag_runtime.Person
     load_var2 2 1
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 

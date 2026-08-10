@@ -8,7 +8,7 @@ function live_google() -> string {
     let completed = 0;
     for (let e in result.journal.entries()) {
         match (e) {
-            let c: ai.ToolCompleted => {
+            let c: ai.events.ToolCompleted => {
                 completed += 1;
                 null
             },

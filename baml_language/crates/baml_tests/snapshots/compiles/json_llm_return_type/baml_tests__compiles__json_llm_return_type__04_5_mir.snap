@@ -85,7 +85,7 @@ fn user.ExtractAny$render_prompt() -> string {
     }
 
     bb3: {
-        _4 = call const fn ai.render_output_format(copy _5) -> [bb4];
+        _4 = call const fn ai.wire.render_output_format(copy _5) -> [bb4];
     }
 
     bb4: {
@@ -103,15 +103,15 @@ fn user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
     let _1: map<string, unknown>
     let _2: ai.Prompt
     let _3: (string) -> string throws never
-    let _4: ai.Toolbox
-    let _5: ai.Tool[]
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
 
     bb0: {
         _1 = {  }: map<string, unknown>;
         _3 = make_closure lambda[0]();
         _2 = ai.Prompt { copy _3 };
-        _5 = []: ai.Tool[];
-        _4 = call const fn ai.Toolbox.new(copy _5) -> [bb1];
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
     bb1: {
@@ -151,10 +151,10 @@ fn .<lambda(ExtractAny$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.ExtractAny$stream(client: null | ai.StreamingClient) -> baml.llm.Stream<baml.json.json, baml.json.json> {
+fn user.ExtractAny$stream(client: null | ai.stream.StreamingClient) -> baml.llm.Stream<baml.json.json, baml.json.json> {
     // Locals:
     let _0: baml.llm.Stream<baml.json.json, baml.json.json> // _0 // return
-    let _1: null | ai.StreamingClient // client // param
+    let _1: null | ai.stream.StreamingClient // client // param
     let _2: bool
     let _3: ai.FunctionSpec<baml.json.json>
     let _4: type
@@ -177,7 +177,7 @@ fn user.ExtractAny$stream(client: null | ai.StreamingClient) -> baml.llm.Stream<
     bb3: {
         _4 = load_type(baml.json.json$stream | null);
         _5 = load_type(baml.json.json);
-        _0 = call const fn ai.stream_spec<copy _4, copy _5>(copy _3, copy _1) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _4, copy _5>(copy _3, copy _1) -> [bb4];
     }
 
     bb4: {

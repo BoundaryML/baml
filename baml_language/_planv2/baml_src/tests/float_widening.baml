@@ -9,7 +9,7 @@ test "an int argument widens into a float tool parameter" {
     let args: map<string, unknown> = {};
     let _ = args.set("city", "Kyoto");
     let _ = args.set("max_nightly_usd", 150);
-    let out = ai.tool(search_hotels).call(args);
+    let out = ai.tools.tool(search_hotels).call(args);
     assert.is_true(out.includes("Sakura Inn"))
 }
 
@@ -23,7 +23,7 @@ test "a json string array decodes into a string[] tool parameter" {
     // json, not string
     let raw = baml.json.parse(`{"words": ["hello", "world"]}`);
     let args = baml.json.from_json<map<string, unknown>>(raw);
-    let out = ai.tool(join_words).call(args);
+    let out = ai.tools.tool(join_words).call(args);
     assert.contains(out, "hello world")
 }
 
@@ -39,7 +39,7 @@ function sum_prices(prices: float[]) -> float {
 test "integral elements widen inside a float[] tool parameter" {
     let raw = baml.json.parse(`{"prices": [150, 200.5]}`);
     let args = baml.json.from_json<map<string, unknown>>(raw);
-    let out = ai.tool(sum_prices).call(args);
+    let out = ai.tools.tool(sum_prices).call(args);
     assert.contains(out, "350.5")
 }
 
@@ -49,7 +49,7 @@ test "a lossy array element still fails validation" {
     let raw = baml.json.parse(`{"prices": [150, "cheap"]}`);
     let args = baml.json.from_json<map<string, unknown>>(raw);
     let failed = (
-        ai.tool(sum_prices).call(args) catch_all (e) {
+        ai.tools.tool(sum_prices).call(args) catch_all (e) {
             _ => null,
         }
     )

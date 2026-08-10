@@ -6,16 +6,16 @@ function user.UseRetryClient(input: string, client: ai.Client | null = null) -> 
   ai.Agent.new<string>(client = client).run(UseRetryClient$spec(input)).value : string
 }
 function user.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "UseRetryClient", args: map { "input": input }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new([]), default_client: MyClient } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "UseRetryClient", args: map { "input": input }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: MyClient } : ai.FunctionSpec<string>
 }
 lambda user.UseRetryClient$spec {
 }
 function user.UseRetryClient$render_prompt(input: string) -> string throws never {
-  UseRetryClient$spec(input).prompt().render_text(ai.render_output_format(reflect.type_of<string>())) : string
+  UseRetryClient$spec(input).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
 }
 function user.UseRetryClient$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.UseRetryClient$stream(input: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream_spec(UseRetryClient$spec(input), client = client) : baml.llm.Stream<string | null, string>
+function user.UseRetryClient$stream(input: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream.from_spec(UseRetryClient$spec(input), client = client) : baml.llm.Stream<string | null, string>
 }

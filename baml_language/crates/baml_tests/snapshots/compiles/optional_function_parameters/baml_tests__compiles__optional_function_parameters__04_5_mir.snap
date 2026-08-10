@@ -321,7 +321,7 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -
     }
 
     bb3: {
-        _7 = call const fn ai.render_output_format(copy _8) -> [bb4];
+        _7 = call const fn ai.wire.render_output_format(copy _8) -> [bb4];
     }
 
     bb4: {
@@ -342,15 +342,15 @@ fn user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.Func
     let _4: map<string, unknown>
     let _5: ai.Prompt
     let _6: (string) -> string throws never
-    let _7: ai.Toolbox
-    let _8: ai.Tool[]
+    let _7: ai.tools.Toolbox
+    let _8: ai.tools.Tool[]
 
     bb0: {
         _4 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
         _6 = make_closure lambda[0](copy _1, copy _2, copy _3);
         _5 = ai.Prompt { copy _6 };
-        _8 = []: ai.Tool[];
-        _7 = call const fn ai.Toolbox.new(copy _8) -> [bb1];
+        _8 = []: ai.tools.Tool[];
+        _7 = call const fn ai.tools.Toolbox.new(copy _8) -> [bb1];
     }
 
     bb1: {
@@ -412,13 +412,13 @@ fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
+fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
     let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
-    let _4: null | ai.StreamingClient // client // param
+    let _4: null | ai.stream.StreamingClient // client // param
     let _5: bool
     let _6: ai.FunctionSpec<string>
     let _7: type
@@ -441,7 +441,7 @@ fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: 
     bb3: {
         _7 = load_type(string | null);
         _8 = load_type(string);
-        _0 = call const fn ai.stream_spec<copy _7, copy _8>(copy _6, copy _4) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _4) -> [bb4];
     }
 
     bb4: {

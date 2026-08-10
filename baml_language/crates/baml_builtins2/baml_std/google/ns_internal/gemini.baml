@@ -73,10 +73,10 @@ function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
     let name = "";
     for (let e in j.entries()) {
         match (e) {
-            let a: ai.AssistantMessage => {
+            let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let u: ai.ToolUse => {
+                        let u: ai.content.ToolUse => {
                             if (u.id == id) {
                                 name = u.name;
                                 null
@@ -104,7 +104,7 @@ function google_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
     let pending: map<string, unknown>[] = []; // functionResponse parts awaiting flush
     for (let e in j.entries()) {
         match (e) {
-            let u: ai.UserMessage => {
+            let u: ai.events.UserMessage => {
                 if (pending.length() > 0) {
                     contents.push(_gm_content("user", pending));
                     pending = [];
@@ -115,7 +115,7 @@ function google_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
                 contents.push(_gm_content("user", [_gm_text_part(u.content)]));
                 null
             },
-            let a: ai.AssistantMessage => {
+            let a: ai.events.AssistantMessage => {
                 if (pending.length() > 0) {
                     contents.push(_gm_content("user", pending));
                     pending = [];
@@ -126,11 +126,11 @@ function google_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
                 let parts: map<string, unknown>[] = [];
                 for (let b in a.content) {
                     match (b) {
-                        let t: ai.Text => {
+                        let t: ai.content.Text => {
                             parts.push(_gm_text_part(t.text));
                             null
                         },
-                        let use: ai.ToolUse => {
+                        let use: ai.content.ToolUse => {
                             let fc: map<string, unknown> = {};
                             let _ = fc.set("name", use.name);
                             let _ = fc.set("args", use.args);
@@ -151,13 +151,13 @@ function google_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
                 };
                 null
             },
-            let c: ai.ToolCompleted => {
+            let c: ai.events.ToolCompleted => {
                 let response: map<string, unknown> = {};
                 let _ = response.set("result", c.output);
                 pending.push(_gm_function_response(_gm_tool_name_for(j, c.id), response));
                 null
             },
-            let f: ai.ToolFailed => {
+            let f: ai.events.ToolFailed => {
                 let response: map<string, unknown> = {};
                 let _ = response.set("error", f.message);
                 pending.push(_gm_function_response(_gm_tool_name_for(j, f.id), response));
@@ -190,7 +190,7 @@ function _google_request(
     input: ai.ModelTurnInput,
     stream: bool,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
+    let instructions = input.prompt.render_text(ai.wire.render_output_format(input.output_type));
     let lowered = google_lower_journal(input.journal);
     let body: map<string, unknown> = {};
     // DEVIATION from the wire page: the instructions travel as the leading
@@ -245,7 +245,7 @@ function _google_request(
 // Gemini sends no call ids; synthesize `call_<seq>_<i>` from the journal
 // position and the call's index within the turn.
 function google_parse(resp: GmResponse, seq: int) -> ai.ModelTurn {
-    let content: ai.ContentBlock[] = [];
+    let content: ai.content.Block[] = [];
     let has_call = false;
     let call_index = 0;
     let cand: GmCandidate? = resp.candidates?.at(0);
@@ -258,7 +258,7 @@ function google_parse(resp: GmResponse, seq: int) -> ai.ModelTurn {
                 args = a;
             }
             content.push(
-                ai.ToolUse { id: `call_${seq}_${call_index}`, name: fc.name, args: args },
+                ai.content.ToolUse { id: `call_${seq}_${call_index}`, name: fc.name, args: args },
             );
             call_index += 1;
             has_call = true;
@@ -266,10 +266,10 @@ function google_parse(resp: GmResponse, seq: int) -> ai.ModelTurn {
         } else {
             if let t: string = p.text {
                 if (p.thought ?? false) {
-                    content.push(ai.Reasoning { summary: t });
+                    content.push(ai.content.Reasoning { summary: t });
                     null
                 } else {
-                    content.push(ai.Text { text: t });
+                    content.push(ai.content.Text { text: t });
                     null
                 }
             } else {
@@ -279,16 +279,16 @@ function google_parse(resp: GmResponse, seq: int) -> ai.ModelTurn {
     }
     let blocked = resp.promptFeedback?.blockReason != null;
     let stop = if (has_call) {
-        ai.StopReason.ToolUse
+        ai.content.StopReason.ToolUse
     } else if (finish == "MAX_TOKENS") {
-        ai.StopReason.MaxTokens
+        ai.content.StopReason.MaxTokens
     } else if (blocked || finish == "SAFETY" || finish == "RECITATION" || finish == "PROHIBITED_CONTENT") {
-        ai.StopReason.Refused
+        ai.content.StopReason.Refused
     } else {
-        ai.StopReason.Complete
+        ai.content.StopReason.Complete
     };
-    let usage: ai.Usage? = if let um: GmUsageMetadata = resp.usageMetadata {
-        ai.Usage {
+    let usage: ai.events.Usage? = if let um: GmUsageMetadata = resp.usageMetadata {
+        ai.events.Usage {
             input_tokens: um.promptTokenCount ?? 0,
             output_tokens: um.candidatesTokenCount ?? 0,
             cached_input_tokens: null,
@@ -307,7 +307,7 @@ function invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.ModelTurn 
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
     let req = google_render(c, input);
-    let resp = ai.send_as<GmResponse>(req, "google");
+    let resp = ai.wire.send_as<GmResponse>(req, "google");
     google_parse(resp, seq)
 }
 
@@ -320,9 +320,9 @@ function invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.ModelTurn 
 // There is no explicit terminal event: the stream simply closes.
 
 // One SseStream batch -> provider-agnostic stream events.
-function _google_decode_batch(batch: string) -> ai.StreamEvent[] {
-    let out: ai.StreamEvent[] = [];
-    for (let raw in ai.decode_sse_batch(batch)) {
+function _google_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
+    let out: ai.stream.StreamEvent[] = [];
+    for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
             let chunk: GmResponse? = baml.json.from_string<GmResponse>(data) catch_all (e) {
                 _ => null,
@@ -335,7 +335,7 @@ function _google_decode_batch(batch: string) -> ai.StreamEvent[] {
                         if (p.thought ?? false) {
                             null
                         } else {
-                            out.push(ai.TextDelta { text: t });
+                            out.push(ai.stream.TextDelta { text: t });
                             null
                         }
                     } else {
@@ -344,19 +344,19 @@ function _google_decode_batch(batch: string) -> ai.StreamEvent[] {
                 }
                 let finish = cand?.finishReason ?? "";
                 let blocked = resp.promptFeedback?.blockReason != null;
-                let stop: ai.StopReason? = if (finish == "MAX_TOKENS") {
-                    ai.StopReason.MaxTokens
+                let stop: ai.content.StopReason? = if (finish == "MAX_TOKENS") {
+                    ai.content.StopReason.MaxTokens
                 } else if (blocked || finish == "SAFETY" || finish == "RECITATION" || finish == "PROHIBITED_CONTENT") {
-                    ai.StopReason.Refused
+                    ai.content.StopReason.Refused
                 } else if (finish != "") {
-                    ai.StopReason.Complete
+                    ai.content.StopReason.Complete
                 } else {
                     null
                 };
                 let usage: GmUsageMetadata? = resp.usageMetadata;
                 if (stop != null || usage != null) {
                     out.push(
-                        ai.TurnMeta {
+                        ai.stream.TurnMeta {
                             stop_reason: stop,
                             input_tokens: usage?.promptTokenCount,
                             output_tokens: usage?.candidatesTokenCount,
@@ -380,7 +380,7 @@ function _google_decode_batch(batch: string) -> ai.StreamEvent[] {
 
 // The streaming entry point: the same request body as `invoke` against the
 // `:streamGenerateContent?alt=sse` method, wrapped in an ai.TurnStream.
-function invoke_stream(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.TurnStream {
+function invoke_stream(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _google_request(c, input, true);
     let sse = baml.http.fetch_sse(req) catch_all (e) {
         _ => {
@@ -391,5 +391,5 @@ function invoke_stream(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.Tur
             }
         },
     };
-    ai.TurnStream.from_sse(sse, _google_decode_batch)
+    ai.stream.TurnStream.from_sse(sse, _google_decode_batch)
 }

@@ -19,13 +19,13 @@ function user.AskDocs$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> string  [expr] {
-  AskDocs$spec(query, max_results, filter).prompt().render_text(ai.render_output_format(reflect.type_of()))
+  AskDocs$spec(query, max_results, filter).prompt().render_text(ai.wire.render_output_format(reflect.type_of()))
 }
 function user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "AskDocs", args: map { "query": query, "max_results": max_results, "filter": filter }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: TestClient }
+  ai.FunctionSpec { spec_name: "AskDocs", args: map { "query": query, "max_results": max_results, "filter": filter }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
 }
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
-  ai.stream_spec(AskDocs$spec(query, max_results, filter), client = client)
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(AskDocs$spec(query, max_results, filter), client = client)
 }
 function user.DefaultFilter() -> string  [expr] {
   {  } "none"

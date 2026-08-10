@@ -6,20 +6,20 @@
 class ModelTurnInput {
     prompt: Prompt,
     journal: Journal,
-    toolbox: Toolbox,
+    toolbox: root.tools.Toolbox,
     output_type: type,
 }
 
 class ModelTurn {
-    content: ContentBlock[],
-    stop_reason: StopReason,
-    usage: Usage?,
+    content: root.content.Block[],
+    stop_reason: root.content.StopReason,
+    usage: root.events.Usage?,
 
     // The terminal Text block — the final candidate the runner parses.
     function terminal_text(self) -> string? {
         let out: string? = null;
         for (let b in self.content) {
-            if let t: Text = b {
+            if let t: root.content.Text = b {
                 out = t.text;
             }
         }
@@ -27,10 +27,10 @@ class ModelTurn {
     }
 
     // The ToolUse blocks of the turn, in order.
-    function tool_uses(self) -> ToolUse[] {
-        let out: ToolUse[] = [];
+    function tool_uses(self) -> root.content.ToolUse[] {
+        let out: root.content.ToolUse[] = [];
         for (let b in self.content) {
-            if let u: ToolUse = b {
+            if let u: root.content.ToolUse = b {
                 out.push(u);
             }
         }

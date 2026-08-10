@@ -40,10 +40,16 @@ the reserved-tool fallback when tools are present. The interface
 already carries the output type as a runtime value, so these are
 field values, not interface changes.
 
-**Streaming.** A `StreamingClient` interface adds an invoke variant
-that feeds deltas to an ephemeral sink and returns the same terminal
-`ModelTurn`. The journal records final turns only, so a streamed run
-and a blocking run produce identical journals.
+**Streaming.** *Shipped in phase 1 — see the `ai.stream` namespace in
+`../../readme.md`.* It landed close to the sketch here: `StreamingClient`
+is an optional interface a client implements, and the journal records
+final turns only, so a streamed run and a blocking run produce identical
+journals. It differs in one respect. Rather than feeding an ephemeral
+sink, `invoke_stream` returns a `TurnStream` the caller pulls, folded
+from provider `StreamEvent`s; the host-facing surface is `f@stream(...)`,
+which returns `baml.llm.Stream` so every SDK sees its own language's
+stream type. `ai.stream.from_spec` is the explicit form for driving a spec
+without the companion.
 
 **The `PromptTools` wrapper.** One wrapper client provides prompt-mode
 tool calling for models with unreliable native tool support and for

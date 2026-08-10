@@ -73,7 +73,7 @@ function user.ClassifySentiment$render_prompt(text: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type Sentiment
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -84,9 +84,9 @@ function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment>
     load_var ?1
     make_cell
     store_var ?1
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "ClassifySentiment"
     load_deref ?1
@@ -104,7 +104,7 @@ function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<Sentiment>
     return
 }
 
-function user.ClassifySentiment$stream(text: string, client: ai.StreamingClient | null) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
+function user.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -119,7 +119,7 @@ function user.ClassifySentiment$stream(text: string, client: ai.StreamingClient 
     load_type Sentiment$stream | null
     load_type Sentiment
     load_var2 3 2
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 
@@ -168,7 +168,7 @@ function user.ClassifySentiment2$render_prompt(text: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type string
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -179,9 +179,9 @@ function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "ClassifySentiment2"
     load_deref ?1
@@ -199,7 +199,7 @@ function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
     return
 }
 
-function user.ClassifySentiment2$stream(text: string, client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -214,7 +214,7 @@ function user.ClassifySentiment2$stream(text: string, client: ai.StreamingClient
     load_type string | null
     load_type string
     load_var2 3 2
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 
@@ -292,7 +292,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _3
     load_type string[]
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _6
     load_var2 3 5
     call ai.Prompt.render_text
@@ -306,9 +306,9 @@ function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<s
     load_var ?2
     make_cell
     store_var ?2
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _6
     load_const "GenerateTests"
     load_deref ?1
@@ -328,7 +328,7 @@ function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<s
     return
 }
 
-function user.GenerateTests$stream(count: int, topic: string, client: ai.StreamingClient | null) -> baml.llm.Stream<string[], string[]> {
+function user.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string[], string[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -343,6 +343,6 @@ function user.GenerateTests$stream(count: int, topic: string, client: ai.Streami
     load_type string[]
     load_type string[]
     load_var2 4 3
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }

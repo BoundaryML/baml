@@ -6,16 +6,16 @@ function user.TestFunc(input: string, client: ai.Client | null = null) -> string
   ai.Agent.new<string>(client = client).run(TestFunc$spec(input)).value : string
 }
 function user.TestFunc$spec(input: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "TestFunc", args: map { "input": input }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "TestFunc", args: map { "input": input }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
 }
 lambda user.TestFunc$spec {
 }
 function user.TestFunc$render_prompt(input: string) -> string throws never {
-  TestFunc$spec(input).prompt().render_text(ai.render_output_format(reflect.type_of<string>())) : string
+  TestFunc$spec(input).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
 }
 function user.TestFunc$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.TestFunc$stream(input: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream_spec(TestFunc$spec(input), client = client) : baml.llm.Stream<string | null, string>
+function user.TestFunc$stream(input: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream.from_spec(TestFunc$spec(input), client = client) : baml.llm.Stream<string | null, string>
 }

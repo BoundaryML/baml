@@ -51,7 +51,7 @@ function user.CommentAfterArrow$render_prompt() -> string {
     call ai.FunctionSpec.prompt
     store_var _1
     load_type string
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _4
     load_var2 1 3
     call ai.Prompt.render_text
@@ -59,9 +59,9 @@ function user.CommentAfterArrow$render_prompt() -> string {
 }
 
 function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _4
     load_const "CommentAfterArrow"
     load_type string
@@ -76,7 +76,7 @@ function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function user.CommentAfterArrow$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.CommentAfterArrow$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -90,7 +90,7 @@ function user.CommentAfterArrow$stream(client: ai.StreamingClient | null) -> bam
     load_type string | null
     load_type string
     load_var2 2 1
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 
@@ -139,7 +139,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> string {
     call ai.FunctionSpec.prompt
     store_var _3
     load_type string
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _6
     load_var2 3 5
     call ai.Prompt.render_text
@@ -147,9 +147,9 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> string {
 }
 
 function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _6
     load_const "FunctionWithComments"
     load_var2 1 2
@@ -167,7 +167,7 @@ function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<st
     return
 }
 
-function user.FunctionWithComments$stream(a: string, b: int, client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -182,6 +182,6 @@ function user.FunctionWithComments$stream(a: string, b: int, client: ai.Streamin
     load_type string | null
     load_type string
     load_var2 4 3
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }

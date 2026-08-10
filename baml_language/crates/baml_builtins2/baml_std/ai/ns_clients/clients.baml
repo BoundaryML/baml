@@ -47,13 +47,13 @@ class Backoff {
 }
 
 class Retry {
-    inner: Client,
+    inner: root.Client,
     max_attempts: int,
     retry_if: (root.errors.Failure) -> bool throws never,
     backoff: Backoff,
 
     function new(
-        inner: Client,
+        inner: root.Client,
         max_attempts: int = 3,
         retry_if: ((root.errors.Failure) -> bool throws never)? = null,
         backoff: Backoff? = null,
@@ -66,7 +66,7 @@ class Retry {
         }
     }
 
-    function _attempt(self, input: ModelTurnInput, remaining: int) -> ModelTurn {
+    function _attempt(self, input: root.ModelTurnInput, remaining: int) -> root.ModelTurn {
         self.inner.invoke(input) catch_all (e) {
             let f: root.errors.Failure => {
                 // the safety gate is not overridable; the judgment is
@@ -90,12 +90,12 @@ class Retry {
         }
     }
 
-    implements Client {
+    implements root.Client {
         function id(self) -> string {
             self.inner.id()
         }
 
-        function invoke(self, input: ModelTurnInput) -> ModelTurn {
+        function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
             self._attempt(input, self.max_attempts)
         }
     }
@@ -106,30 +106,30 @@ class Retry {
 // and Fallback. The counter mutates on the shared value, so every call
 // site holding this client participates in one rotation.
 class RoundRobin {
-    members: Client[],
+    members: root.Client[],
     counter: int,
 
-    function new(members: Client[]) -> RoundRobin {
+    function new(members: root.Client[]) -> RoundRobin {
         if (members.length() == 0) {
             throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
         }
         RoundRobin { members: members, counter: 0 }
     }
 
-    implements Client {
+    implements root.Client {
         function id(self) -> string {
-            if let c: Client = self.members.at(0) {
+            if let c: root.Client = self.members.at(0) {
                 c.id()
             } else {
                 "round-robin"
             }
         }
 
-        function invoke(self, input: ModelTurnInput) -> ModelTurn {
+        function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
             let index = self.counter % self.members.length();
             self.counter = self.counter + 1;
             match (self.members.at(index)) {
-                let c: Client => c.invoke(input),
+                let c: root.Client => c.invoke(input),
                 null => {
                     throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
                 },
@@ -139,11 +139,11 @@ class RoundRobin {
 }
 
 class Fallback {
-    members: Client[],
+    members: root.Client[],
 
-    function _try(self, input: ModelTurnInput, index: int) -> ModelTurn {
+    function _try(self, input: root.ModelTurnInput, index: int) -> root.ModelTurn {
         match (self.members.at(index)) {
-            let c: Client => {
+            let c: root.Client => {
                 c.invoke(input) catch_all (e) {
                     let f: root.errors.Failure => {
                         if (
@@ -164,18 +164,18 @@ class Fallback {
         }
     }
 
-    implements Client {
+    implements root.Client {
         function id(self) -> string {
             // NOTE: `?.method()` on an interface-typed optional trips a VM bug;
             // if-let is the reliable form.
-            if let c: Client = self.members.at(0) {
+            if let c: root.Client = self.members.at(0) {
                 c.id()
             } else {
                 "fallback"
             }
         }
 
-        function invoke(self, input: ModelTurnInput) -> ModelTurn {
+        function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
             self._try(input, 0)
         }
     }

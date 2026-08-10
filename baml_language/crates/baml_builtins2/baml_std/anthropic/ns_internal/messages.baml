@@ -40,11 +40,11 @@ class AnthropicMessage {
     blocks: map<string, unknown>[],
 }
 
-function _anthropic_assistant_blocks(content: ai.ContentBlock[]) -> map<string, unknown>[] {
+function _anthropic_assistant_blocks(content: ai.content.Block[]) -> map<string, unknown>[] {
     let out: map<string, unknown>[] = [];
     for (let b in content) {
         match (b) {
-            let t: ai.Text => {
+            let t: ai.content.Text => {
                 let bb: map<string, unknown> = {};
                 let _ = bb.set("type", "text");
                 let _ = bb.set("text", t.text);
@@ -53,8 +53,8 @@ function _anthropic_assistant_blocks(content: ai.ContentBlock[]) -> map<string, 
             },
             // Dropped: replaying thinking without its signature is rejected
             // by the API; readable-projection replay is a phase 2 capability.
-            let r: ai.Reasoning => null,
-            let u: ai.ToolUse => {
+            let r: ai.content.Reasoning => null,
+            let u: ai.content.ToolUse => {
                 let bb: map<string, unknown> = {};
                 let _ = bb.set("type", "tool_use");
                 let _ = bb.set("id", u.id);
@@ -101,14 +101,14 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
     let msgs: AnthropicMessage[] = [];
     for (let e in j.entries()) {
         match (e) {
-            let m: ai.UserMessage => {
+            let m: ai.events.UserMessage => {
                 let block: map<string, unknown> = {};
                 let _ = block.set("type", "text");
                 let _ = block.set("text", m.content);
                 msgs.push(AnthropicMessage { role: "user", tool_results: false, blocks: [block] });
                 null
             },
-            let m: ai.AssistantMessage => {
+            let m: ai.events.AssistantMessage => {
                 msgs.push(
                     AnthropicMessage {
                         role: "assistant",
@@ -118,8 +118,8 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
                 );
                 null
             },
-            let c: ai.ToolCompleted => _anthropic_push_tool_result(msgs, c.id, c.output, false),
-            let f: ai.ToolFailed => _anthropic_push_tool_result(msgs, f.id, f.message, true),
+            let c: ai.events.ToolCompleted => _anthropic_push_tool_result(msgs, c.id, c.output, false),
+            let f: ai.events.ToolFailed => _anthropic_push_tool_result(msgs, f.id, f.message, true),
             _ => null,
         };
     }
@@ -147,7 +147,7 @@ function _anthropic_request(
     input: ai.ModelTurnInput,
     stream: bool,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
+    let instructions = input.prompt.render_text(ai.wire.render_output_format(input.output_type));
     let lowered = _anthropic_lower_journal(input.journal);
 
     let body: map<string, unknown> = {};
@@ -212,15 +212,15 @@ function _anthropic_request(
 }
 
 // One wire stop_reason string -> the canonical stop reason.
-function _anthropic_stop_reason(s: string) -> ai.StopReason {
+function _anthropic_stop_reason(s: string) -> ai.content.StopReason {
     if (s == "tool_use") {
-        ai.StopReason.ToolUse
+        ai.content.StopReason.ToolUse
     } else if (s == "max_tokens") {
-        ai.StopReason.MaxTokens
+        ai.content.StopReason.MaxTokens
     } else if (s == "refusal") {
-        ai.StopReason.Refused
+        ai.content.StopReason.Refused
     } else {
-        ai.StopReason.Complete
+        ai.content.StopReason.Complete
     }
 }
 
@@ -230,20 +230,20 @@ function invoke(
     input: ai.ModelTurnInput,
 ) -> ai.ModelTurn {
     let req = _anthropic_request(c, input, false);
-    let resp = ai.send_as<AnthropicResponse>(req, "anthropic");
+    let resp = ai.wire.send_as<AnthropicResponse>(req, "anthropic");
 
-    let content: ai.ContentBlock[] = [];
+    let content: ai.content.Block[] = [];
     for (let b in resp.content) {
         if (b.type == "text") {
-            content.push(ai.Text { text: b.text ?? "" });
+            content.push(ai.content.Text { text: b.text ?? "" });
             null
         } else if (b.type == "thinking") {
-            content.push(ai.Reasoning { summary: b.thinking ?? "" });
+            content.push(ai.content.Reasoning { summary: b.thinking ?? "" });
             null
         } else if (b.type == "tool_use") {
             let empty_args: map<string, unknown> = {};
             content.push(
-                ai.ToolUse { id: b.id ?? "", name: b.name ?? "", args: b.input ?? empty_args },
+                ai.content.ToolUse { id: b.id ?? "", name: b.name ?? "", args: b.input ?? empty_args },
             );
             null
         } else {
@@ -252,13 +252,13 @@ function invoke(
     }
 
     let stop = match (resp.stop_reason) {
-        null => ai.StopReason.Complete,
+        null => ai.content.StopReason.Complete,
         let s: string => _anthropic_stop_reason(s),
     };
 
-    let usage: ai.Usage? = match (resp.usage) {
+    let usage: ai.events.Usage? = match (resp.usage) {
         let u: AnthropicUsage => {
-            ai.Usage {
+            ai.events.Usage {
                 input_tokens: u.input_tokens,
                 output_tokens: u.output_tokens,
                 cached_input_tokens: null,
@@ -306,9 +306,9 @@ class AnthStreamEvent {
 }
 
 // One SseStream batch -> provider-agnostic stream events.
-function _anthropic_decode_batch(batch: string) -> ai.StreamEvent[] {
-    let out: ai.StreamEvent[] = [];
-    for (let raw in ai.decode_sse_batch(batch)) {
+function _anthropic_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
+    let out: ai.stream.StreamEvent[] = [];
+    for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
             let ev: AnthStreamEvent? = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
                 _ => null,
@@ -319,7 +319,7 @@ function _anthropic_decode_batch(batch: string) -> ai.StreamEvent[] {
                     if let d: AnthStreamDelta = event.delta {
                         if ((d.type ?? "") == "text_delta") {
                             if let text: string = d.text {
-                                out.push(ai.TextDelta { text: text });
+                                out.push(ai.stream.TextDelta { text: text });
                                 null
                             } else {
                                 null
@@ -333,7 +333,7 @@ function _anthropic_decode_batch(batch: string) -> ai.StreamEvent[] {
                     null
                 } else if (t == "message_start") {
                     out.push(
-                        ai.TurnMeta {
+                        ai.stream.TurnMeta {
                             stop_reason: null,
                             input_tokens: event.message?.usage?.input_tokens,
                             output_tokens: event.message?.usage?.output_tokens,
@@ -341,12 +341,12 @@ function _anthropic_decode_batch(batch: string) -> ai.StreamEvent[] {
                     );
                     null
                 } else if (t == "message_delta") {
-                    let stop: ai.StopReason? = match (event.delta?.stop_reason) {
+                    let stop: ai.content.StopReason? = match (event.delta?.stop_reason) {
                         null => null,
                         let s: string => _anthropic_stop_reason(s),
                     };
                     out.push(
-                        ai.TurnMeta {
+                        ai.stream.TurnMeta {
                             stop_reason: stop,
                             input_tokens: event.usage?.input_tokens,
                             output_tokens: event.usage?.output_tokens,
@@ -354,7 +354,7 @@ function _anthropic_decode_batch(batch: string) -> ai.StreamEvent[] {
                     );
                     null
                 } else if (t == "message_stop") {
-                    out.push(ai.TurnDone {});
+                    out.push(ai.stream.TurnDone {});
                     null
                 } else {
                     null
@@ -376,7 +376,7 @@ function _anthropic_decode_batch(batch: string) -> ai.StreamEvent[] {
 function invoke_stream(
     c: root.AnthropicClient,
     input: ai.ModelTurnInput,
-) -> ai.TurnStream {
+) -> ai.stream.TurnStream {
     let req = _anthropic_request(c, input, true);
     let sse = baml.http.fetch_sse(req) catch_all (e) {
         _ => {
@@ -387,5 +387,5 @@ function invoke_stream(
             }
         },
     };
-    ai.TurnStream.from_sse(sse, _anthropic_decode_batch)
+    ai.stream.TurnStream.from_sse(sse, _anthropic_decode_batch)
 }

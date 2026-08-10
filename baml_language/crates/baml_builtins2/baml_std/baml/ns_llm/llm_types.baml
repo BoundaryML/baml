@@ -538,7 +538,7 @@ class StreamCache<TStream, TFinal> {
 /// called. Provider-agnostic by construction — the only thing it knows how to
 /// do is ask for the next chunk of text. `_next_text` is supplied by whoever
 /// builds the stream (the `ai` package's provider clients, via
-/// `ai.stream_spec`) and returns `null` when the wire is exhausted.
+/// `ai.from_spec`) and returns `null` when the wire is exhausted.
 ///
 /// This type lives in `baml.llm` rather than `ai` because every SDK generator
 /// matches a stream companion's return type by its exact name — host

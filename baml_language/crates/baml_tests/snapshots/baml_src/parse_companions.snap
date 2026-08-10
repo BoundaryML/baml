@@ -63,7 +63,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> st
     call ai.FunctionSpec.prompt
     store_var _1
     load_type parse_companions.ParseCompanionsAliasPayload
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _4
     load_var2 1 3
     call ai.Prompt.render_text
@@ -71,9 +71,9 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> st
 }
 
 function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsAliasPayload> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _4
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
@@ -88,7 +88,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.Function
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
+function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -102,7 +102,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.Str
     load_type parse_companions.ParseCompanionsAliasPayload$stream | null
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var2 2 1
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 
@@ -149,7 +149,7 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> stri
     call ai.FunctionSpec.prompt
     store_var _1
     load_type parse_companions.ParseCompanionsOptPayload
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _4
     load_var2 1 3
     call ai.Prompt.render_text
@@ -157,9 +157,9 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> stri
 }
 
 function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsOptPayload> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _4
     load_const "ParseCompanionsParseOptPayload"
     load_type string
@@ -174,7 +174,7 @@ function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSp
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
+function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -188,7 +188,7 @@ function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.Strea
     load_type parse_companions.ParseCompanionsOptPayload$stream | null
     load_type parse_companions.ParseCompanionsOptPayload
     load_var2 2 1
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 

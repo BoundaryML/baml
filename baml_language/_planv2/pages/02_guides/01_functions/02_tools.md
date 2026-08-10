@@ -111,7 +111,7 @@ Or for every tool in a run, at the call site:
 let trip: Itinerary = PlanTrip(request, $tool_errors = Raise);
 ```
 
-The `on_error` parameter is `ToolErrorMode?` and defaults to null. A
+The `on_error` parameter is `ErrorMode?` and defaults to null. A
 null value inherits the run's `$tool_errors` mode, and an explicitly
 set per-tool value wins over the run-wide one. The journal records
 the failure before the exception propagates, so the trace shows what

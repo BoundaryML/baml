@@ -34,10 +34,10 @@ test "the connection speaks MCP against a fake stdio server" {
     let conn = ai.mcp.McpConnection.connect("fake", "sh", ["-c", fake_mcp_script()]);
     let tools = conn.tools();
     assert.equal(tools.length(), 1);
-    if let t: ai.Tool = tools.at(0) {
+    if let t: ai.tools.Tool = tools.at(0) {
         assert.equal(t.name, "echo");
         assert.contains(baml.json.stringify(baml.json.to_json(t.input_schema)), "message");
-        // dispatch through the ai.Tool boundary, exactly as the runner would
+        // dispatch through the ai.tools.Tool boundary, exactly as the runner would
         let args: map<string, unknown> = {};
         let _ = args.set("message", "hi");
         assert.contains(t.call(args), "Echo: from-fake")
@@ -51,7 +51,7 @@ class EchoBack {
     reply: string,
 }
 
-function echo_spec(c: ai.Client, tools: ai.Tool[]) -> ai.FunctionSpec<EchoBack> {
+function echo_spec(c: ai.Client, tools: ai.tools.Tool[]) -> ai.FunctionSpec<EchoBack> {
     let args: map<string, unknown> = {};
     ai.FunctionSpec {
         spec_name: "EchoBack",
@@ -61,7 +61,7 @@ function echo_spec(c: ai.Client, tools: ai.Tool[]) -> ai.FunctionSpec<EchoBack> 
                 `Call the echo tool with the message 'baml-mcp-ok', then return its exact reply. ${output_format}`
             },
         },
-        toolbox: ai.Toolbox.new(tools),
+        toolbox: ai.tools.Toolbox.new(tools),
         default_client: c,
     }
 }
@@ -73,13 +73,13 @@ test "MCP calls are journaled like any tool call" {
     let scripted = ScriptedClient.new(
         [
             ai.ModelTurn {
-                content: [ai.ToolUse { id: "m1", name: "echo", args: call_args }],
-                stop_reason: ai.StopReason.ToolUse,
+                content: [ai.content.ToolUse { id: "m1", name: "echo", args: call_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
                 usage: null,
             },
             ai.ModelTurn {
-                content: [ai.Text { text: `{"reply": "Echo: from-fake"}` }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: `{"reply": "Echo: from-fake"}` }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
         ],
@@ -88,9 +88,9 @@ test "MCP calls are journaled like any tool call" {
     conn.close();
     assert.equal(result.value.reply, "Echo: from-fake");
     // the MCP call is on the record: ToolRequested and a correlated result
-    let completed = result.journal.entries().some((e: ai.Event) -> {
+    let completed = result.journal.entries().some((e: ai.events.Event) -> {
         match (e) {
-            let c: ai.ToolCompleted => c.id == "m1" && c.output.includes("Echo: from-fake"),
+            let c: ai.events.ToolCompleted => c.id == "m1" && c.output.includes("Echo: from-fake"),
             _ => false,
         }
     });

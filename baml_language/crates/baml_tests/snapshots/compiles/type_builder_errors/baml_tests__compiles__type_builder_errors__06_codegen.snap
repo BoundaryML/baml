@@ -46,7 +46,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type Resume
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -54,9 +54,9 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> string {
 }
 
 function user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<Resume> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "gpt-4o-mini"
     load_const <omitted>
@@ -79,7 +79,7 @@ function user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<Resume> {
     return
 }
 
-function user.TypeBuilderFn$stream(from_text: string, client: ai.StreamingClient | null) -> baml.llm.Stream<Resume$stream | null, Resume> {
+function user.TypeBuilderFn$stream(from_text: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<Resume$stream | null, Resume> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -94,6 +94,6 @@ function user.TypeBuilderFn$stream(from_text: string, client: ai.StreamingClient
     load_type Resume$stream | null
     load_type Resume
     load_var2 3 2
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }

@@ -23,7 +23,7 @@ class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
     prompt_template: Prompt,
-    toolbox: Toolbox,
+    toolbox: root.tools.Toolbox,
     default_client: Client,
 
     function name(self) -> string {
@@ -42,7 +42,7 @@ class FunctionSpec<Out> {
         self.prompt_template
     }
 
-    function tools(self) -> Toolbox {
+    function tools(self) -> root.tools.Toolbox {
         self.toolbox
     }
 

@@ -96,7 +96,7 @@ class ToolFailedError {
 }
 
 // The selected client cannot stream: it does not implement
-// ai.StreamingClient. Thrown by ai.stream_spec when the spec's default
+// ai.StreamingClient. Thrown by ai.from_spec when the spec's default
 // client lacks the capability (an explicit override is caught at the call
 // site by its StreamingClient type).
 class StreamingUnsupported {

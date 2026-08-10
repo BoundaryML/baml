@@ -10,8 +10,8 @@ test "identical repeated tool failures stop the run early" {
     while (i < 6) {
         turns.push(
             ai.ModelTurn {
-                content: [ai.ToolUse { id: `c${i}`, name: "search_flights", args: bad_args }],
-                stop_reason: ai.StopReason.ToolUse,
+                content: [ai.content.ToolUse { id: `c${i}`, name: "search_flights", args: bad_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
                 usage: null,
             },
         );
@@ -39,18 +39,18 @@ test "a model that changes its failing call is not stopped" {
         [
             // fails once, adapts, finishes: no breaker
             ai.ModelTurn {
-                content: [ai.ToolUse { id: "c1", name: "search_flights", args: bad_args }],
-                stop_reason: ai.StopReason.ToolUse,
+                content: [ai.content.ToolUse { id: "c1", name: "search_flights", args: bad_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
                 usage: null,
             },
             ai.ModelTurn {
-                content: [ai.ToolUse { id: "c2", name: "search_flights", args: good_args }],
-                stop_reason: ai.StopReason.ToolUse,
+                content: [ai.content.ToolUse { id: "c2", name: "search_flights", args: good_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
                 usage: null,
             },
             ai.ModelTurn {
-                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
         ],

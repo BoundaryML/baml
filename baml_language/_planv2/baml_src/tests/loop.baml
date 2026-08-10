@@ -10,9 +10,9 @@ function scripted_two_turn() -> ScriptedClient {
         [
             // turn 1: "the model" calls a tool
             ai.ModelTurn {
-                content: [ai.ToolUse { id: "call_1", name: "search_flights", args: call_args }],
-                stop_reason: ai.StopReason.ToolUse,
-                usage: ai.Usage {
+                content: [ai.content.ToolUse { id: "call_1", name: "search_flights", args: call_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
+                usage: ai.events.Usage {
                     input_tokens: 10,
                     output_tokens: 5,
                     cached_input_tokens: null,
@@ -22,12 +22,12 @@ function scripted_two_turn() -> ScriptedClient {
             // turn 2: the final answer; the runner parses this as Itinerary
             ai.ModelTurn {
                 content: [
-                    ai.Text {
+                    ai.content.Text {
                         text: `{"flights": [{"airline": "ANA", "price_usd": 950.0}], "hotels": [], "total_cost_usd": 950.0}`,
                     },
                 ],
-                stop_reason: ai.StopReason.Complete,
-                usage: ai.Usage {
+                stop_reason: ai.content.StopReason.Complete,
+                usage: ai.events.Usage {
                     input_tokens: 20,
                     output_tokens: 15,
                     cached_input_tokens: null,
@@ -46,9 +46,9 @@ test "scripted client drives the tool loop to a typed result" {
     assert.equal(result.value.flights.length(), 1);
     assert.equal(result.usage.input_tokens, 30);
     // the second invocation's journal must contain the correlated tool result
-    let has_result = scripted.received().at(1)?.journal?.entries()?.some((e: ai.Event) -> {
+    let has_result = scripted.received().at(1)?.journal?.entries()?.some((e: ai.events.Event) -> {
         match (e) {
-            let c: ai.ToolCompleted => c.id == "call_1",
+            let c: ai.events.ToolCompleted => c.id == "call_1",
             _ => false,
         }
     })
@@ -75,13 +75,13 @@ test "tool errors report to the model by default" {
     let scripted = ScriptedClient.new(
         [
             ai.ModelTurn {
-                content: [ai.ToolUse { id: "c1", name: "search_flights", args: bad_args }],
-                stop_reason: ai.StopReason.ToolUse,
+                content: [ai.content.ToolUse { id: "c1", name: "search_flights", args: bad_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
                 usage: null,
             },
             ai.ModelTurn {
-                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
         ],
@@ -89,9 +89,9 @@ test "tool errors report to the model by default" {
     let spec = PlanTrip@spec(trip_request = "anywhere");
     let result = ai.Agent<Itinerary>.new(client = scripted).run(spec);
     // the run completed, and the journal shows the failure the model saw
-    let failed = result.journal.entries().some((e: ai.Event) -> {
+    let failed = result.journal.entries().some((e: ai.events.Event) -> {
         match (e) {
-            let f: ai.ToolFailed => f.id == "c1",
+            let f: ai.events.ToolFailed => f.id == "c1",
             _ => false,
         }
     });
@@ -107,13 +107,13 @@ test "step budget throws typed" {
     let scripted = ScriptedClient.new(
         [
             ai.ModelTurn {
-                content: [ai.ToolUse { id: "c1", name: "search_flights", args: call_args }],
-                stop_reason: ai.StopReason.ToolUse,
+                content: [ai.content.ToolUse { id: "c1", name: "search_flights", args: call_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
                 usage: null,
             },
             ai.ModelTurn {
-                content: [ai.ToolUse { id: "c2", name: "search_flights", args: call_args }],
-                stop_reason: ai.StopReason.ToolUse,
+                content: [ai.content.ToolUse { id: "c2", name: "search_flights", args: call_args }],
+                stop_reason: ai.content.StopReason.ToolUse,
                 usage: null,
             },
         ],

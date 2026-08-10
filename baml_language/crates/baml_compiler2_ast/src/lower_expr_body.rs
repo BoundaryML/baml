@@ -446,8 +446,14 @@ pub(crate) fn synthesize_llm_spec_body(
                 if let Some((is_bare_ref, id)) = lowered {
                     let id = if is_bare_ref {
                         // A bare function reference: normalize through ai.tool().
-                        let tool_callee = ctx
-                            .alloc_expr(Expr::Path(vec![Name::new("ai"), Name::new("tool")]), span);
+                        let tool_callee = ctx.alloc_expr(
+                            Expr::Path(vec![
+                                Name::new("ai"),
+                                Name::new("tools"),
+                                Name::new("tool"),
+                            ]),
+                            span,
+                        );
                         ctx.alloc_expr(
                             Expr::Call {
                                 callee: tool_callee,
@@ -476,6 +482,7 @@ pub(crate) fn synthesize_llm_spec_body(
     let toolbox_callee = ctx.alloc_expr(
         Expr::Path(vec![
             Name::new("ai"),
+            Name::new("tools"),
             Name::new("Toolbox"),
             Name::new("new"),
         ]),
@@ -622,7 +629,11 @@ pub(crate) fn synthesize_spec_render_prompt_body(
         span,
     );
     let rof_callee = ctx.alloc_expr(
-        Expr::Path(vec![Name::new("ai"), Name::new("render_output_format")]),
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("wire"),
+            Name::new("render_output_format"),
+        ]),
         span,
     );
     let rof_call = ctx.alloc_expr(
@@ -778,13 +789,13 @@ pub(crate) fn synthesize_spec_agent_run_body(
 /// function's own spec:
 ///
 /// ```baml
-/// ai.stream_spec<Out$stream, Out>(Fn$spec(p1, p2), client = client)
+/// ai.from_spec<Out$stream, Out>(Fn$spec(p1, p2), client = client)
 /// ```
 ///
 /// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
 /// stdlib reifies both types from its own frame via `reflect.type_of`.
 /// `client` is the companion's injected `ai.StreamingClient? = null`
-/// override; `stream_spec` falls back to the spec's default client when it
+/// override; `from_spec` falls back to the spec's default client when it
 /// is null.
 pub fn synthesize_spec_stream_body(
     function_name: &str,
@@ -817,9 +828,13 @@ pub fn synthesize_spec_stream_body(
         span,
     );
 
-    // ai.stream_spec<TS, TF>(spec, client = client)
+    // ai.from_spec<TS, TF>(spec, client = client)
     let stream_spec_callee = ctx.alloc_expr(
-        Expr::Path(vec![Name::new("ai"), Name::new("stream_spec")]),
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("stream"),
+            Name::new("from_spec"),
+        ]),
         span,
     );
     let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);

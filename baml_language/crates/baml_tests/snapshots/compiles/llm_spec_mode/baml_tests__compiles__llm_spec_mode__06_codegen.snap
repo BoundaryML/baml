@@ -46,7 +46,7 @@ function user.NamedTools$render_prompt(q: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type Answer
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -58,7 +58,7 @@ function user.NamedTools$spec(q: string) -> ai.FunctionSpec<Answer> {
     make_cell
     store_var ?1
     call user.more_tools
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "claude-haiku-4-5"
     load_const <omitted>
@@ -126,7 +126,7 @@ function user.PlainChat$render_prompt(q: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type string
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -137,9 +137,9 @@ function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "gpt-4o-mini"
     load_const <omitted>
@@ -163,7 +163,7 @@ function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     return
 }
 
-function user.PlainChat$stream(q: string, client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.PlainChat$stream(q: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -178,7 +178,7 @@ function user.PlainChat$stream(q: string, client: ai.StreamingClient | null) -> 
     load_type string | null
     load_type string
     load_var2 3 2
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 
@@ -227,7 +227,7 @@ function user.SpecAgent$render_prompt(q: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type Answer
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -242,10 +242,10 @@ function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<Answer> {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call ai.tool
-    load_type ai.Tool
+    call ai.tools.tool
+    load_type ai.tools.Tool
     alloc_array 1
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "gpt-4o-mini"
     load_const <omitted>
@@ -282,13 +282,13 @@ function user.double_it(n: int) -> int {
     return
 }
 
-function user.more_tools() -> ai.Tool[] {
+function user.more_tools() -> ai.tools.Tool[] {
     load_const user.double_it
     load_const "double_named"
     load_const <omitted>
     load_const <omitted>
-    call ai.tool
-    load_type ai.Tool
+    call ai.tools.tool
+    load_type ai.tools.Tool
     alloc_array 1
     return
 }

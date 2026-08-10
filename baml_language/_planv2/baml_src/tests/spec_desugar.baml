@@ -2,9 +2,9 @@
 // FunctionSpec contains, and the edge cases the desugar must not mangle.
 
 // A shared toolbox produced by an expression (not a list literal) — the
-// `tools` value is an arbitrary expression producing `ai.Tool[]`.
-function shared_tools() -> ai.Tool[] {
-    [ai.tool(search_flights)]
+// `tools` value is an arbitrary expression producing `ai.tools.Tool[]`.
+function shared_tools() -> ai.tools.Tool[] {
+    [ai.tools.tool(search_flights)]
 }
 
 // A parameter named `output_format` must stay visible to the template: the
@@ -43,7 +43,7 @@ test "empty tools opts a one-turn function into spec mode" {
     assert.is_true(spec.tools().is_empty())
 }
 
-test "tools accepts a named ai.Tool[] expression" {
+test "tools accepts a named ai.tools.Tool[] expression" {
     let spec = NamedToolbox@spec(q = "find flights");
     assert.equal(spec.tools().list().length(), 1);
     let t = spec.tools().get("search_flights");

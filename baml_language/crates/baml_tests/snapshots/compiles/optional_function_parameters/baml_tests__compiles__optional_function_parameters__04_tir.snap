@@ -56,12 +56,12 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: a
   ai.Agent.new<string>(client = client).run(AskDocs$spec(query, max_results, filter)).value : string
 }
 function user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "AskDocs", args: map { "query": query, "max_results": max_results, "filter": filter }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "AskDocs", args: map { "query": query, "max_results": max_results, "filter": filter }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
 }
 lambda user.AskDocs$spec {
 }
 function user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> string throws never {
-  AskDocs$spec(query, max_results, filter).prompt().render_text(ai.render_output_format(reflect.type_of<string>())) : string
+  AskDocs$spec(query, max_results, filter).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
 }
 function user.AskDocs$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -81,8 +81,8 @@ function user.SearchService.Docs(self: user.SearchService, query: string, filter
 }
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream_spec(AskDocs$spec(query, max_results, filter), client = client) : baml.llm.Stream<string | null, string>
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream.from_spec(AskDocs$spec(query, max_results, filter), client = client) : baml.llm.Stream<string | null, string>
 }
 class user.SearchService$stream {
   base: string | null

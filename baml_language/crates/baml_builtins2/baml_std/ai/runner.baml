@@ -13,7 +13,7 @@ interface Runner<Out> {
 class RunResult<Out> {
     value: Out,
     journal: Journal,
-    usage: Usage,
+    usage: root.events.Usage,
 }
 
 // The default runner. A spec-mode LLM function's direct call runs
@@ -23,14 +23,14 @@ class RunResult<Out> {
 class Agent<Out> {
     max_steps: int,
     client: Client?,
-    tool_errors: ToolErrorMode,
-    on_event: (Event) -> null throws never,
+    tool_errors: root.tools.ErrorMode,
+    on_event: (root.events.Event) -> null throws never,
 
     function new(
         max_steps: int = 12,
         client: Client? = null,
-        tool_errors: ToolErrorMode = ToolErrorMode.Report,
-        on_event: ((Event) -> null throws never)? = null,
+        tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report,
+        on_event: ((root.events.Event) -> null throws never)? = null,
     ) -> Agent<Out> {
         Agent {
             max_steps: max_steps,
@@ -38,7 +38,7 @@ class Agent<Out> {
             tool_errors: tool_errors,
             on_event: on_event
                 ?? (
-                    (e: Event) -> {
+                    (e: root.events.Event) -> {
                         null
                     }
                 ),
@@ -47,14 +47,14 @@ class Agent<Out> {
 
     // Execute one call: validate, dispatch, append the correlated result.
     // A Raise-mode failure throws ToolFailedError after ToolFailed lands.
-    function _run_one_tool(self, tb: Toolbox, call: ToolUse, j: Journal) -> null {
+    function _run_one_tool(self, tb: root.tools.Toolbox, call: root.content.ToolUse, j: Journal) -> null {
         match (tb.get(call.name)) {
-            let t: Tool => {
+            let t: root.tools.Tool => {
                 let outcome: string? = t.call(call.args) catch_all (e) {
                     _ => {
-                        j.append_all([ToolFailed { id: call.id, message: e.to_string() }]);
+                        j.append_all([root.events.ToolFailed { id: call.id, message: e.to_string() }]);
                         // the per-tool setting wins; null inherits the run's mode
-                        if ((t.on_error ?? self.tool_errors) == ToolErrorMode.Raise) {
+                        if ((t.on_error ?? self.tool_errors) == root.tools.ErrorMode.Raise) {
                             let classified = match (e) {
                                 let f: root.errors.Failure => f,
                                 _ => null,
@@ -71,14 +71,14 @@ class Agent<Out> {
                     },
                 };
                 if let output: string = outcome {
-                    j.append_all([ToolCompleted { id: call.id, output: output }]);
+                    j.append_all([root.events.ToolCompleted { id: call.id, output: output }]);
                 }
                 null
             },
             null => {
                 j.append_all(
                     [
-                        ToolFailed {
+                        root.events.ToolFailed {
                             id: call.id,
                             message: `tool is not in the active toolbox: ${call.name}`,
                         },
@@ -109,7 +109,7 @@ class Agent<Out> {
         c: Client,
         spec: FunctionSpec<Out>,
         j: Journal,
-        total: Usage,
+        total: root.events.Usage,
         attempts_left: int,
     ) -> ModelTurn {
         let turn = c.invoke(
@@ -120,7 +120,7 @@ class Agent<Out> {
                 output_type: spec.output_type(),
             },
         );
-        if let u: Usage = turn.usage {
+        if let u: root.events.Usage = turn.usage {
             total.input_tokens += u.input_tokens;
             total.output_tokens += u.output_tokens;
             if let ci: int = u.cached_input_tokens {
@@ -131,26 +131,26 @@ class Agent<Out> {
             }
         }
         // every attempt commits: the journal is the complete record
-        let batch: Event[] = [AssistantMessage { content: turn.content, client_id: c.id() }];
+        let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }];
         for (let u in turn.tool_uses()) {
-            batch.push(ToolRequested { id: u.id, name: u.name, args: u.args });
+            batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args });
         }
-        if let u: Usage = turn.usage {
+        if let u: root.events.Usage = turn.usage {
             batch.push(u);
         }
         let candidate = turn.terminal_text() ?? "";
         let accepted = turn.tool_uses().length() > 0
-            || turn.stop_reason == StopReason.MaxTokens
-            || turn.stop_reason == StopReason.Refused
+            || turn.stop_reason == root.content.StopReason.MaxTokens
+            || turn.stop_reason == root.content.StopReason.Refused
             || self._parses(candidate);
         if (accepted) {
             j.append_all(batch);
             // terminal wire outcomes are thrown here, with the turn on the record
             match (turn.stop_reason) {
-                StopReason.MaxTokens => {
+                root.content.StopReason.MaxTokens => {
                     throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
                 },
-                StopReason.Refused => {
+                root.content.StopReason.Refused => {
                     throw root.errors.Refused { provider: c.id(), reason: "the model declined to answer", raw_body: null }
                 },
                 _ => null,
@@ -158,7 +158,7 @@ class Agent<Out> {
             turn
         } else if (attempts_left > 1) {
             batch.push(
-                UserMessage {
+                root.events.UserMessage {
                     content: "The reply did not match the required schema. Answer again with only the corrected value.",
                 },
             );
@@ -175,7 +175,7 @@ class Agent<Out> {
         let entries = j.entries();
         let i = seen;
         while (i < entries.length()) {
-            if let e: Event = entries.at(i) {
+            if let e: root.events.Event = entries.at(i) {
                 let _ = self.on_event(e);
             }
             i = i + 1;
@@ -192,7 +192,7 @@ class Agent<Out> {
             let j = Journal.new(spec);
             let seen = self._emit_from(j, 0);
             let steps = 0;
-            let total = Usage {
+            let total = root.events.Usage {
                 input_tokens: 0,
                 output_tokens: 0,
                 cached_input_tokens: null,
@@ -220,11 +220,11 @@ class Agent<Out> {
                     let entries = j.entries();
                     let i = before;
                     while (i < entries.length()) {
-                        if let f: ToolFailed = entries.at(i) {
-                            let failed_call = calls.find((one: ToolUse) -> {
+                        if let f: root.events.ToolFailed = entries.at(i) {
+                            let failed_call = calls.find((one: root.content.ToolUse) -> {
                                 one.id == f.id
                             });
-                            if let known: ToolUse = failed_call {
+                            if let known: root.content.ToolUse = failed_call {
                                 let key = `${known.name}|${f.message}`;
                                 let n = (fail_counts.get(key) ?? 0) + 1;
                                 let _ = fail_counts.set(key, n);
@@ -249,7 +249,7 @@ class Agent<Out> {
                     };
                     j.append_all(
                         [
-                            FinalProduced {
+                            root.events.FinalProduced {
                                 value_json: baml.json.stringify(baml.json.to_json(value)),
                             },
                         ],

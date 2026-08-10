@@ -9,11 +9,11 @@ function user.ExtractAny$parse(json: string) -> baml.json.json  [expr] {
   baml.sap.parse(json)
 }
 function user.ExtractAny$render_prompt() -> string  [expr] {
-  ExtractAny$spec().prompt().render_text(ai.render_output_format(reflect.type_of()))
+  ExtractAny$spec().prompt().render_text(ai.wire.render_output_format(reflect.type_of()))
 }
 function user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json>  [expr] {
-  ai.FunctionSpec { spec_name: "ExtractAny", args: map {  }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: TestClient }
+  ai.FunctionSpec { spec_name: "ExtractAny", args: map {  }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
 }
-function user.ExtractAny$stream(client: ai.StreamingClient? = null) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json>  [expr] {
-  ai.stream_spec(ExtractAny$spec(), client = client)
+function user.ExtractAny$stream(client: ai.stream.StreamingClient? = null) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json>  [expr] {
+  ai.stream.from_spec(ExtractAny$spec(), client = client)
 }

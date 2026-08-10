@@ -82,29 +82,33 @@ ai
 │   └── render_text(output_format)        all-text convenience; throws when a media argument is present
 ├── ModelTurn                             content, stop_reason, usage
 ├── content
-│   ├── Text / Reasoning / ToolUse / Media   canonical assistant content blocks
+│   ├── Text / Reasoning / ToolUse        canonical assistant content blocks
+│   ├── Block                             the union of the above
 │   └── StopReason                        Complete | ToolUse | MaxTokens | Refused
 ├── Journal                               append-only typed record of one run
 ├── events                                RunStarted, UserMessage, AssistantMessage, ToolRequested,
-│                                         ToolCompleted, ToolFailed, Usage, FinalProduced
+│                                         ToolCompleted, ToolFailed, Usage, FinalProduced; Event unions them
 ├── tools
 │   ├── Tool                              name, description, input schema, handler, on_error
 │   ├── Toolbox                           the active tool set; render and lookup
+│   ├── ErrorMode                         Report (default) or Raise, per tool
 │   ├── tool(fn, name =, description =, on_error =)   explicit constructor; schemas come from signatures
 │   └── raw_tool(name, description, schema, handler)  dynamic tool sources (MCP); the schema is supplied
-├── clients
-│   ├── register(prefix, factory)         makes "prefix/model" strings resolvable
-│   ├── resolve(shorthand)                "openai/gpt-5.6" -> OpenAiClient { model: "gpt-5.6" }
-│   ├── OpenAiClient                      the OpenAI Responses wire API
-│   ├── AnthropicClient                   the Anthropic Messages wire API
-│   ├── GoogleClient                      the Gemini generateContent wire API
-│   ├── ClaudeCodeClient                  the Claude Code CLI as a client; tools via the outcome envelope
-│   ├── Retry                             wrapper client; retries replay-safe failures
-│   └── Fallback                          wrapper client; advances to the next member
+├── clients                               the wrapper clients: a Client that composes other Clients
+│   ├── Retry                             retries replay-safe failures
+│   ├── Fallback                          advances to the next member
+│   ├── RoundRobin                        rotates across members on each invoke
+│   ├── Backoff                           the delay schedule Retry follows
+│   └── default_retry_judgment            the judgment Retry uses unless given another
+├── stream                                streaming; a client opts in by implementing StreamingClient
+│   ├── StreamingClient                   interface: invoke_stream(ModelTurnInput) -> TurnStream
+│   ├── TurnStream                        one streamed model turn, folded from provider events
+│   ├── StreamEvent                       TextDelta | TurnMeta | TurnDone | StreamDone
+│   ├── SseEvent / decode_sse_batch       the SSE framing clients decode against
+│   └── from_spec(spec, client)           drive a spec directly, returning baml.llm.Stream
 ├── wire                                  shared helpers for client authors
 │   ├── send_as<T>(req, provider)         send, classify the status, decode the body as T
-│   ├── render_output_format(type)        the ctx.output_format text in the standard dialect
-│   └── closed_schema / strict_schema     per-API schema rewrites
+│   └── render_output_format(type)        the ctx.output_format text in the standard dialect
 └── errors                                the ai.errors namespace, mirroring baml.errors
     ├── Failure                           interface: retry_safety() -> RetrySafety
     ├── RetrySafety                       Safe | Unknown | Unsafe
@@ -116,18 +120,34 @@ ai
     └── (baml.errors.UnknownError)        the untyped catch-all channel; wraps foreign throws
 ```
 
+The built-in provider clients are not under `ai`. Each is its own
+root-level package, so a user names the vendor directly:
+
+```
+openai       └── OpenAiClient              the OpenAI Responses wire API
+anthropic    └── AnthropicClient           the Anthropic Messages wire API
+google       └── GoogleClient              the Gemini generateContent wire API
+claude_code  └── ClaudeCodeClient          the Claude Code CLI as a client
+```
+
+`ai.clients` holds only the wrapper clients — the ones that compose
+other clients rather than speak a wire API. A model string resolves to a
+provider class through a compile-time map in the desugar, so there is no
+runtime `register` / `resolve` pair: `"openai/gpt-5.6"` becomes
+`openai.OpenAiClient { model: "gpt-5.6" }` during lowering, and an
+unknown prefix is a compile error rather than a runtime failure.
+
 The `wire` helpers are conveniences over existing standard library
 primitives. Client and runner authors also use those primitives
 directly:
 
 ```
-baml.schema
-└── json_schema(t)                        BAML type -> JSON Schema; $defs/$ref for recursive classes
 baml.sap
 └── parse<T>(text)                        schema-aligned parse with repair; the runner's final parse
 baml.json
 ├── parse(text) / stringify(j)            string <-> json
-└── from_json<T>(j) / from_string<T>(s)   json or string -> typed value
+├── from_json<T>(j) / from_string<T>(s)   json or string -> typed value
+└── schema(t)                             BAML type -> JSON Schema; $defs/$ref for recursive classes
 baml.http
 ├── Request / Response                    method, url, headers, body; text(), ok()
 ├── send(request, timeout =)              one blocking call

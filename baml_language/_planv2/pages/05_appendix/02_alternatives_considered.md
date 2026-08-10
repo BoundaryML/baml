@@ -102,7 +102,7 @@ structured-output modes as client options with no interface change.
 
 ## 8. Structured content blocks versus string plus `raw_json`
 
-An assistant turn is `ContentBlock[]`.
+An assistant turn is `Block[]`.
 
 Rejected: `content: string` plus the raw response body, as in the
 sessions draft's provisional design. A string cannot represent
@@ -284,7 +284,7 @@ surface they build on is already stable
 Building the working reference changed five details of the designed
 surface. `client` is a keyword and cannot be a method name, so the
 spec exposes the resolved default client as the `default_client` field
-rather than a `client()` getter. `Tool.on_error` is `ToolErrorMode?`
+rather than a `client()` getter. `Tool.on_error` is `ErrorMode?`
 defaulting to null, where null inherits the run's `tool_errors` mode,
 which is what makes the per-tool-wins rule coherent. The Gemini API
 rejects a request whose lowered journal opens with a function-call

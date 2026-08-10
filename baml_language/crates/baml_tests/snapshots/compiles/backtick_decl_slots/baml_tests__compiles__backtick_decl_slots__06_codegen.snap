@@ -53,7 +53,7 @@ function user.Greet$render_prompt(name: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type string
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -64,9 +64,9 @@ function user.Greet$spec(name: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "Greet"
     load_deref ?1
@@ -84,7 +84,7 @@ function user.Greet$spec(name: string) -> ai.FunctionSpec<string> {
     return
 }
 
-function user.Greet$stream(name: string, client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.Greet$stream(name: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -99,6 +99,6 @@ function user.Greet$stream(name: string, client: ai.StreamingClient | null) -> b
     load_type string | null
     load_type string
     load_var2 3 2
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }

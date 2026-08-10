@@ -375,7 +375,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
             // need the stream-expanded return type, which only PPIR can
             // compute. Tools-bearing functions get no `$stream`: streaming
             // does not run the tool loop yet (`LlmBodyDef::has_tools` is the
-            // conservative compile-time signal; `ai.stream_spec` re-checks
+            // conservative compile-time signal; `ai.from_spec` re-checks
             // the toolbox at runtime for the dynamic cases).
             ast::Item::Function(func) => {
                 let Some(ast::DeclarativeMeta::Llm(llm)) = &func.declarative_meta else {
@@ -414,7 +414,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // The `<STREAM_EXPANDED, ORIGINAL>` pair: the return type
                 // `ai.Stream<TS, TF>` and the body's explicit call-site type
-                // args on `ai.stream_spec`, so the stdlib reifies both types
+                // args on `ai.from_spec`, so the stdlib reifies both types
                 // from its own frame (`reflect.type_of<TStream/TFinal>()`).
                 let companion_type_args = vec![stream_type_expr, return_type_spanned.clone()];
                 let return_type = ast::TypeExprKind::Path {
@@ -440,7 +440,11 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     .map(|mut p| {
                         if p.name.as_str() == "client" {
                             let capability = ast::TypeExprKind::Path {
-                                segments: vec![Name::new("ai"), Name::new("StreamingClient")],
+                                segments: vec![
+                                    Name::new("ai"),
+                                    Name::new("stream"),
+                                    Name::new("StreamingClient"),
+                                ],
                                 generic_args: vec![],
                                 associated_type_bindings: vec![],
                                 attrs: vec![],

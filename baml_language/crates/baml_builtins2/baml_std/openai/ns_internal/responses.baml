@@ -35,24 +35,24 @@ function openai_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
     let items: map<string, unknown>[] = [];
     for (let e in j.entries()) {
         match (e) {
-            let u: ai.UserMessage => {
+            let u: ai.events.UserMessage => {
                 let m: map<string, unknown> = {};
                 let _ = m.set("role", "user");
                 let _ = m.set("content", u.content);
                 items.push(m);
                 null
             },
-            let a: ai.AssistantMessage => {
+            let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let t: ai.Text => {
+                        let t: ai.content.Text => {
                             let m: map<string, unknown> = {};
                             let _ = m.set("role", "assistant");
                             let _ = m.set("content", t.text);
                             items.push(m);
                             null
                         },
-                        let use: ai.ToolUse => {
+                        let use: ai.content.ToolUse => {
                             let m: map<string, unknown> = {};
                             let _ = m.set("type", "function_call");
                             let _ = m.set("call_id", use.id);
@@ -67,7 +67,7 @@ function openai_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
                 }
                 null
             },
-            let c: ai.ToolCompleted => {
+            let c: ai.events.ToolCompleted => {
                 let m: map<string, unknown> = {};
                 let _ = m.set("type", "function_call_output");
                 let _ = m.set("call_id", c.id);
@@ -75,7 +75,7 @@ function openai_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
                 items.push(m);
                 null
             },
-            let f: ai.ToolFailed => {
+            let f: ai.events.ToolFailed => {
                 let err: map<string, unknown> = {};
                 let _ = err.set("error", f.message);
                 let m: map<string, unknown> = {};
@@ -106,7 +106,7 @@ function _openai_request(
     input: ai.ModelTurnInput,
     stream: bool,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
+    let instructions = input.prompt.render_text(ai.wire.render_output_format(input.output_type));
     let items = openai_lower_journal(input.journal);
     let body: map<string, unknown> = {};
     let _ = body.set("model", c.model);
@@ -159,7 +159,7 @@ function _openai_request(
 
 // One decoded response -> canonical content blocks and a stop reason.
 function openai_parse(resp: OaResponse) -> ai.ModelTurn {
-    let content: ai.ContentBlock[] = [];
+    let content: ai.content.Block[] = [];
     let has_call = false;
     for (let item in resp.output) {
         if (item.type == "function_call") {
@@ -169,14 +169,14 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
                 args = baml.json.from_string<map<string, unknown>>(s);
             }
             content.push(
-                ai.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
+                ai.content.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
             );
             null
         } else if (item.type == "message") {
             let parts: OaContentPart[] = item.content ?? [];
             for (let part in parts) {
                 if ((part.type ?? "") == "output_text") {
-                    content.push(ai.Text { text: part.text ?? "" });
+                    content.push(ai.content.Text { text: part.text ?? "" });
                     null
                 } else {
                     null
@@ -187,7 +187,7 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
             let parts: OaContentPart[] = item.summary ?? [];
             for (let part in parts) {
                 if let txt: string = part.text {
-                    content.push(ai.Reasoning { summary: txt });
+                    content.push(ai.content.Reasoning { summary: txt });
                     null
                 } else {
                     null
@@ -199,14 +199,14 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
         };
     }
     let stop = if (has_call) {
-        ai.StopReason.ToolUse
+        ai.content.StopReason.ToolUse
     } else if ((resp.status ?? "") == "incomplete") {
-        ai.StopReason.MaxTokens
+        ai.content.StopReason.MaxTokens
     } else {
-        ai.StopReason.Complete
+        ai.content.StopReason.Complete
     };
-    let usage: ai.Usage? = if let u: OaUsage = resp.usage {
-        ai.Usage {
+    let usage: ai.events.Usage? = if let u: OaUsage = resp.usage {
+        ai.events.Usage {
             input_tokens: u.input_tokens,
             output_tokens: u.output_tokens,
             cached_input_tokens: null,
@@ -221,7 +221,7 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.OpenAiClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = openai_render(c, input);
-    let resp = ai.send_as<OaResponse>(req, "openai");
+    let resp = ai.wire.send_as<OaResponse>(req, "openai");
     openai_parse(resp)
 }
 
@@ -242,9 +242,9 @@ class OaStreamEvent {
 }
 
 // One SseStream batch -> provider-agnostic stream events.
-function _openai_decode_batch(batch: string) -> ai.StreamEvent[] {
-    let out: ai.StreamEvent[] = [];
-    for (let raw in ai.decode_sse_batch(batch)) {
+function _openai_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
+    let out: ai.stream.StreamEvent[] = [];
+    for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
             let ev: OaStreamEvent? = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
                 _ => null,
@@ -253,7 +253,7 @@ function _openai_decode_batch(batch: string) -> ai.StreamEvent[] {
                 let t = event.type ?? raw.event ?? "";
                 if (t == "response.output_text.delta") {
                     if let d: string = event.delta {
-                        out.push(ai.TextDelta { text: d });
+                        out.push(ai.stream.TextDelta { text: d });
                         null
                     } else {
                         null
@@ -263,7 +263,7 @@ function _openai_decode_batch(batch: string) -> ai.StreamEvent[] {
                     if let r: OaResponse = event.response {
                         let turn = openai_parse(r);
                         out.push(
-                            ai.TurnMeta {
+                            ai.stream.TurnMeta {
                                 stop_reason: turn.stop_reason,
                                 input_tokens: turn.usage?.input_tokens,
                                 output_tokens: turn.usage?.output_tokens,
@@ -273,7 +273,7 @@ function _openai_decode_batch(batch: string) -> ai.StreamEvent[] {
                     } else {
                         null
                     };
-                    out.push(ai.TurnDone {});
+                    out.push(ai.stream.TurnDone {});
                     null
                 } else {
                     null
@@ -292,7 +292,7 @@ function _openai_decode_batch(batch: string) -> ai.StreamEvent[] {
 
 // The streaming entry point: the same request as `invoke` with
 // `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
-function invoke_stream(c: root.OpenAiClient, input: ai.ModelTurnInput) -> ai.TurnStream {
+function invoke_stream(c: root.OpenAiClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _openai_request(c, input, true);
     let sse = baml.http.fetch_sse(req) catch_all (e) {
         _ => {
@@ -303,5 +303,5 @@ function invoke_stream(c: root.OpenAiClient, input: ai.ModelTurnInput) -> ai.Tur
             }
         },
     };
-    ai.TurnStream.from_sse(sse, _openai_decode_batch)
+    ai.stream.TurnStream.from_sse(sse, _openai_decode_batch)
 }

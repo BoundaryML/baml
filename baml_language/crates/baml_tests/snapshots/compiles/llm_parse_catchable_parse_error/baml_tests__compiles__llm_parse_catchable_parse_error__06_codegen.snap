@@ -53,7 +53,7 @@ function user.ExtractInvoice$render_prompt(text: string) -> string {
     call ai.FunctionSpec.prompt
     store_var _2
     load_type Invoice
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _5
     load_var2 2 4
     call ai.Prompt.render_text
@@ -64,9 +64,9 @@ function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     load_var ?1
     make_cell
     store_var ?1
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _5
     load_const "ExtractInvoice"
     load_deref ?1
@@ -84,7 +84,7 @@ function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<Invoice> {
     return
 }
 
-function user.ExtractInvoice$stream(text: string, client: ai.StreamingClient | null) -> baml.llm.Stream<Invoice$stream | null, Invoice> {
+function user.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<Invoice$stream | null, Invoice> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -99,7 +99,7 @@ function user.ExtractInvoice$stream(text: string, client: ai.StreamingClient | n
     load_type Invoice$stream | null
     load_type Invoice
     load_var2 3 2
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 

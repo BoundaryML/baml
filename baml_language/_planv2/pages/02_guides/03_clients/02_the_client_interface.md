@@ -76,7 +76,7 @@ are `05_the_built_in_clients.md`.
 ## `ModelTurn` and content blocks
 
 ```baml
-type ContentBlock = Text | Reasoning | ToolUse | Media
+type Block = Text | Reasoning | ToolUse | Media
 
 class Text      { text: string }
 class Reasoning { summary: string }                   // the readable projection only
@@ -86,7 +86,7 @@ class Media     { value: image | audio }              // inline model output, no
 enum StopReason { Complete, ToolUse, MaxTokens, Refused }
 
 class ModelTurn {
-    content: ContentBlock[],
+    content: Block[],
     stop_reason: StopReason,
     usage: Usage?,
 }

@@ -87,7 +87,7 @@ fn user.GenerateImage$render_prompt(prompt: string) -> string {
     }
 
     bb3: {
-        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb4];
     }
 
     bb4: {
@@ -106,15 +106,15 @@ fn user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     let _2: map<string, unknown>
     let _3: ai.Prompt
     let _4: (string) -> string throws never
-    let _5: ai.Toolbox
-    let _6: ai.Tool[]
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
 
     bb0: {
         _2 = { const "prompt": copy _1 }: map<string, unknown>;
         _4 = make_closure lambda[0](copy _1);
         _3 = ai.Prompt { copy _4 };
-        _6 = []: ai.Tool[];
-        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
@@ -167,11 +167,11 @@ fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.GenerateImage$stream(prompt: string, client: null | ai.StreamingClient) -> baml.llm.Stream<image, image> {
+fn user.GenerateImage$stream(prompt: string, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<image, image> {
     // Locals:
     let _0: baml.llm.Stream<image, image> // _0 // return
     let _1: string // prompt // param
-    let _2: null | ai.StreamingClient // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<image>
     let _5: type
@@ -194,7 +194,7 @@ fn user.GenerateImage$stream(prompt: string, client: null | ai.StreamingClient) 
     bb3: {
         _5 = load_type(image);
         _6 = load_type(image);
-        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
     bb4: {
@@ -287,7 +287,7 @@ fn user.GenerateImageSet$render_prompt(prompt: string) -> string {
     }
 
     bb3: {
-        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb4];
     }
 
     bb4: {
@@ -306,15 +306,15 @@ fn user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
     let _2: map<string, unknown>
     let _3: ai.Prompt
     let _4: (string) -> string throws never
-    let _5: ai.Toolbox
-    let _6: ai.Tool[]
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
 
     bb0: {
         _2 = { const "prompt": copy _1 }: map<string, unknown>;
         _4 = make_closure lambda[0](copy _1);
         _3 = ai.Prompt { copy _4 };
-        _6 = []: ai.Tool[];
-        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
@@ -367,11 +367,11 @@ fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: string) -> string 
     }
 }
 
-fn user.GenerateImageSet$stream(prompt: string, client: null | ai.StreamingClient) -> baml.llm.Stream<image[], image[]> {
+fn user.GenerateImageSet$stream(prompt: string, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<image[], image[]> {
     // Locals:
     let _0: baml.llm.Stream<image[], image[]> // _0 // return
     let _1: string // prompt // param
-    let _2: null | ai.StreamingClient // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<image[]>
     let _5: type
@@ -394,7 +394,7 @@ fn user.GenerateImageSet$stream(prompt: string, client: null | ai.StreamingClien
     bb3: {
         _5 = load_type(image[]);
         _6 = load_type(image[]);
-        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
     bb4: {
@@ -487,7 +487,7 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> string {
     }
 
     bb3: {
-        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb4];
     }
 
     bb4: {
@@ -506,15 +506,15 @@ fn user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(str
     let _2: map<string, unknown>
     let _3: ai.Prompt
     let _4: (string) -> string throws never
-    let _5: ai.Toolbox
-    let _6: ai.Tool[]
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
 
     bb0: {
         _2 = { const "prompt": copy _1 }: map<string, unknown>;
         _4 = make_closure lambda[0](copy _1);
         _3 = ai.Prompt { copy _4 };
-        _6 = []: ai.Tool[];
-        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
@@ -567,11 +567,11 @@ fn .<lambda(GenerateMixedImageNarrative$spec, 0)>( __spec_output_format: string)
     }
 }
 
-fn user.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.StreamingClient) -> baml.llm.Stream<(string | image)[], (string | image)[]> {
+fn user.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<(string | image)[], (string | image)[]> {
     // Locals:
     let _0: baml.llm.Stream<(string | image)[], (string | image)[]> // _0 // return
     let _1: string // prompt // param
-    let _2: null | ai.StreamingClient // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<(string | image)[]>
     let _5: type
@@ -594,7 +594,7 @@ fn user.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.Str
     bb3: {
         _5 = load_type((image | string)[]);
         _6 = load_type((image | string)[]);
-        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
     bb4: {

@@ -51,7 +51,7 @@ function user.ExtractAny$render_prompt() -> string {
     call ai.FunctionSpec.prompt
     store_var _1
     load_type baml.json.json
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _4
     load_var2 1 3
     call ai.Prompt.render_text
@@ -59,9 +59,9 @@ function user.ExtractAny$render_prompt() -> string {
 }
 
 function user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _4
     load_const "ExtractAny"
     load_type string
@@ -76,7 +76,7 @@ function user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
     return
 }
 
-function user.ExtractAny$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
+function user.ExtractAny$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -90,6 +90,6 @@ function user.ExtractAny$stream(client: ai.StreamingClient | null) -> baml.llm.S
     load_type baml.json.json$stream | null
     load_type baml.json.json
     load_var2 2 1
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }

@@ -27,7 +27,7 @@ filter the transcript the same way
 |---|---|---|
 | `RunStarted` | `spec_name`, `arguments` | once, before the first turn |
 | `UserMessage` | `content` | by custom runners; parse repair uses it ephemerally |
-| `AssistantMessage` | `content: ContentBlock[]`, `client_id` | one per model turn |
+| `AssistantMessage` | `content: Block[]`, `client_id` | one per model turn |
 | `ToolRequested` | `id`, `name`, `args` | one per `ToolUse` block, with its turn |
 | `ToolCompleted` | `id`, `output` | when the tool returns |
 | `ToolFailed` | `id`, `message` | when the tool throws or validation fails |

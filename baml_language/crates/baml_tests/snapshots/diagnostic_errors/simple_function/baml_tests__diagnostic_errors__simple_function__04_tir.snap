@@ -6,13 +6,13 @@ function user.HelloWorld(name: string, client: ai.Client | null = null) -> strin
   ai.Agent.new<string>(client = client).run(HelloWorld$spec(name)).value : string
 }
 function user.HelloWorld$spec(name: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "HelloWorld", args: map { "name": name }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "HelloWorld", args: map { "name": name }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
   !! 55..59: unresolved name: GPT4
 }
 lambda user.HelloWorld$spec {
 }
 function user.HelloWorld$render_prompt(name: string) -> string throws never {
-  HelloWorld$spec(name).prompt().render_text(ai.render_output_format(reflect.type_of<string>())) : string
+  HelloWorld$spec(name).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
 }
 function user.HelloWorld$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -21,8 +21,8 @@ class user.User {
   name: string
   age: int
 }
-function user.HelloWorld$stream(name: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream_spec(HelloWorld$spec(name), client = client) : baml.llm.Stream<string | null, string>
+function user.HelloWorld$stream(name: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream.from_spec(HelloWorld$spec(name), client = client) : baml.llm.Stream<string | null, string>
 }
 class user.User$stream {
   name: string | null

@@ -18,13 +18,13 @@ function user.LlmFunction$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmFunction$render_prompt(input: string) -> string  [expr] {
-  LlmFunction$spec(input).prompt().render_text(ai.render_output_format(reflect.type_of()))
+  LlmFunction$spec(input).prompt().render_text(ai.wire.render_output_format(reflect.type_of()))
 }
 function user.LlmFunction$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "LlmFunction", args: map { "input": input }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: TestClient }
+  ai.FunctionSpec { spec_name: "LlmFunction", args: map { "input": input }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
 }
-function user.LlmFunction$stream(input: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
-  ai.stream_spec(LlmFunction$spec(input), client = client)
+function user.LlmFunction$stream(input: string, client: ai.stream.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LlmFunction$spec(input), client = client)
 }
 function user.MatchExpression(x: int) -> string  [expr] {
   {  } match (x) { 1 => { // [1] One } "one", 2 => { // [1] Two } "two", _ => { // [1] Default } "other" }

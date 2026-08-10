@@ -1,15 +1,15 @@
 // Streaming: the raw text-delta stream of one model turn (TurnStream), the
 // typed partial-value stream (Stream), and the one-turn streaming runner
-// (stream_spec). Streaming is a client capability: a client that can stream
-// implements StreamingClient; `Fn$stream` companions call stream_spec.
+// (from_spec). Streaming is a client capability: a client that can stream
+// implements StreamingClient; `Fn$stream` companions call from_spec.
 //
 // Phase 1 scope: one model turn, no tool loop. A spec whose toolbox is not
 // empty is rejected with baml.errors.InvalidArgument.
 
 // A client that can render the same request as `invoke` but streamed.
 // Implementors must also implement Client (`requires`).
-interface StreamingClient requires Client {
-    function invoke_stream(self, input: ModelTurnInput) -> TurnStream throws unknown
+interface StreamingClient requires root.Client {
+    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws unknown
 }
 
 // One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:
@@ -38,7 +38,7 @@ class TextDelta {
 // token counts on different events; each TurnMeta carries what its event had
 // and TurnStream folds non-null fields together (last write wins).
 class TurnMeta {
-    stop_reason: StopReason?,
+    stop_reason: root.content.StopReason?,
     input_tokens: int?,
     output_tokens: int?,
 }
@@ -73,7 +73,7 @@ class TurnStream {
     _pcursor: int,
     // folded state.
     _text: string,
-    _stop_reason: StopReason?,
+    _stop_reason: root.content.StopReason?,
     _input_tokens: int?,
     _output_tokens: int?,
     _done: bool,
@@ -146,7 +146,7 @@ class TurnStream {
                         return d.text;
                     },
                     let m: TurnMeta => {
-                        if let s: StopReason = m.stop_reason {
+                        if let s: root.content.StopReason = m.stop_reason {
                             self._stop_reason = s;
                         }
                         if let i: int = m.input_tokens {
@@ -207,7 +207,7 @@ class TurnStream {
 
     // Drain the stream and return the completed turn. Safe to call at any
     // point (including after StreamDone); calling twice returns an equal turn.
-    function final_turn(self) -> ModelTurn {
+    function final_turn(self) -> root.ModelTurn {
         while (true) {
             match (self.next()) {
                 let d: StreamDone => {
@@ -216,8 +216,8 @@ class TurnStream {
                 _ => null,
             };
         }
-        let usage: Usage? = if (self._input_tokens != null || self._output_tokens != null) {
-            Usage {
+        let usage: root.events.Usage? = if (self._input_tokens != null || self._output_tokens != null) {
+            root.events.Usage {
                 input_tokens: self._input_tokens ?? 0,
                 output_tokens: self._output_tokens ?? 0,
                 cached_input_tokens: null,
@@ -226,9 +226,9 @@ class TurnStream {
         } else {
             null
         };
-        ModelTurn {
-            content: [Text { text: self._text }],
-            stop_reason: self._stop_reason ?? StopReason.Complete,
+        root.ModelTurn {
+            content: [root.content.Text { text: self._text }],
+            stop_reason: self._stop_reason ?? root.content.StopReason.Complete,
             usage: usage,
         }
     }
@@ -237,15 +237,15 @@ class TurnStream {
 // One-turn streaming over a spec: render the spec's prompt exactly as the
 // default runner's first turn would, require a streaming-capable client, and
 // return the typed partial stream. `Fn$stream(...)` desugars to
-// `ai.stream_spec<Out$stream, Out>(Fn$spec(...), client)`.
+// `ai.stream.from_spec<Out$stream, Out>(Fn$spec(...), client)`.
 //
 // Streaming does not run the tool loop yet: a spec with a non-empty toolbox
 // is rejected. The client override is typed as the capability, so passing a
 // non-streaming client fails at the call site; the spec's DEFAULT client is
 // only checked at runtime (root.errors.StreamingUnsupported when it cannot
 // stream).
-function stream_spec<TStream, TFinal>(
-    spec: FunctionSpec<TFinal>,
+function from_spec<TStream, TFinal>(
+    spec: root.FunctionSpec<TFinal>,
     client: StreamingClient? = null,
 ) -> baml.llm.Stream<TStream, TFinal> {
     if (!spec.tools().is_empty()) {
@@ -268,12 +268,12 @@ function stream_spec<TStream, TFinal>(
     };
     // StreamingClient requires Client, so the downcast always succeeds.
     let provider = match (selected) {
-        let c: Client => c.id(),
+        let c: root.Client => c.id(),
     };
     let turns = selected.invoke_stream(
-        ModelTurnInput {
+        root.ModelTurnInput {
             prompt: spec.prompt(),
-            journal: Journal.new(spec),
+            journal: root.Journal.new(spec),
             toolbox: spec.tools(),
             output_type: spec.output_type(),
         },

@@ -19,8 +19,8 @@ function double_it(n: int) -> int {
     n * 2
 }
 
-function more_tools() -> ai.Tool[] {
-    [ai.tool(double_it, name = "double_named")]
+function more_tools() -> ai.tools.Tool[] {
+    [ai.tools.tool(double_it, name = "double_named")]
 }
 
 function PlainChat(q: string) -> string {

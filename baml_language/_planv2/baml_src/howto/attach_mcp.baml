@@ -10,8 +10,8 @@
 // An ordinary signature-derived tool: the schema comes from the closure's
 // parameters, and the boundary decode in reflect.call_any (B-1174) binds
 // the model's JSON string array into the string[] parameter.
-function attach_mcp_tool(c: claude_code.ClaudeCodeClient) -> ai.Tool {
-    ai.tool(
+function attach_mcp_tool(c: claude_code.ClaudeCodeClient) -> ai.tools.Tool {
+    ai.tools.tool(
         (name: string, command: string, args: string[]) -> string {
             let cfg: map<string, unknown> = {};
             let _ = cfg.set("command", command);

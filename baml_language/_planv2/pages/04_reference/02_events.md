@@ -8,7 +8,7 @@ Only the runner produces events. All classes live under `ai`.
 |---|---|---|
 | `RunStarted` | `spec_name: string`, `arguments: map<string, unknown>` | once, when the journal is created |
 | `UserMessage` | `content: string` | by the runner: the repair loop's correction requests, and custom runners' injected input |
-| `AssistantMessage` | `content: ContentBlock[]`, `client_id: string` | in the turn batch, after a successful `invoke` |
+| `AssistantMessage` | `content: Block[]`, `client_id: string` | in the turn batch, after a successful `invoke` |
 | `ToolRequested` | `id: string`, `name: string`, `args: map<string, unknown>` | in the turn batch, one per `ToolUse` block, in block order |
 | `ToolCompleted` | `id: string`, `output: string` | when the correlated tool returns |
 | `ToolFailed` | `id: string`, `message: string` | when the correlated tool throws or its arguments fail validation |

@@ -63,8 +63,8 @@ class OpenAiClient {
         }
     }
 
-    implements ai.StreamingClient {
-        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.TurnStream {
+    implements ai.stream.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
             root.internal.invoke_stream(self, input)
         }
     }

@@ -38,8 +38,8 @@ function final_turn_only() -> ScriptedClient {
     ScriptedClient.new(
         [
             ai.ModelTurn {
-                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 1.0}` }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 1.0}` }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
         ],
@@ -48,10 +48,10 @@ function final_turn_only() -> ScriptedClient {
 
 test "Retry replays Safe network failures and succeeds" {
     let flaky = FlakyClient { fail_first: 2, calls: 0, inner: final_turn_only() };
-    let reliable = ai.Retry.new(
+    let reliable = ai.clients.Retry.new(
         flaky,
         max_attempts = 3,
-        backoff = ai.Backoff.new(initial_ms = 1, multiplier = 1, max_ms = 1),
+        backoff = ai.clients.Backoff.new(initial_ms = 1, multiplier = 1, max_ms = 1),
     );
     let spec = PlanTrip@spec(trip_request = "anywhere");
     let result = ai.Agent<Itinerary>.new(client = reliable).run(spec);
@@ -60,7 +60,7 @@ test "Retry replays Safe network failures and succeeds" {
 }
 
 test "Retry never resends a rejected request" {
-    let reliable = ai.Retry.new(AlwaysInvalid {  }, max_attempts = 3);
+    let reliable = ai.clients.Retry.new(AlwaysInvalid {  }, max_attempts = 3);
     let spec = PlanTrip@spec(trip_request = "anywhere");
     let outcome = ai.Agent<Itinerary>.new(client = reliable).run(spec) catch_all (e) {
         let f: ai.errors.InvalidRequest => "rejected",
@@ -70,7 +70,7 @@ test "Retry never resends a rejected request" {
 }
 
 test "Fallback advances past a failing member" {
-    let resilient = ai.Fallback { members: [AlwaysInvalid {  }, final_turn_only()] };
+    let resilient = ai.clients.Fallback { members: [AlwaysInvalid {  }, final_turn_only()] };
     let spec = PlanTrip@spec(trip_request = "anywhere");
     let result = ai.Agent<Itinerary>.new(client = resilient).run(spec);
     assert.equal(result.value.total_cost_usd, 1.0)
@@ -79,7 +79,7 @@ test "Fallback advances past a failing member" {
 test "RoundRobin rotates members across invokes" {
     let a = final_turn_only();
     let b = final_turn_only();
-    let rr = ai.RoundRobin.new([a, b]);
+    let rr = ai.clients.RoundRobin.new([a, b]);
     let spec = PlanTrip@spec(trip_request = "anywhere");
     let first = ai.Agent<Itinerary>.new(client = rr).run(spec);
     let second = ai.Agent<Itinerary>.new(client = rr).run(spec);

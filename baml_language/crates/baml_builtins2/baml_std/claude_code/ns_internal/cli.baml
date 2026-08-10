@@ -7,16 +7,16 @@ function transcript_text(j: ai.Journal) -> string {
     let lines: string[] = [];
     for (let e in j.entries()) {
         match (e) {
-            let u: ai.UserMessage => {
+            let u: ai.events.UserMessage => {
                 lines.push(`user: ${u.content}`);
             },
-            let a: ai.AssistantMessage => {
+            let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let t: ai.Text => {
+                        let t: ai.content.Text => {
                             lines.push(`assistant: ${t.text}`);
                         },
-                        let c: ai.ToolUse => {
+                        let c: ai.content.ToolUse => {
                             lines.push(
                                 `assistant tool_call: {"id": "${c.id}", "name": "${c.name}", "args": ${baml.json.stringify(baml.json.to_json(c.args))}}`,
                             );
@@ -27,10 +27,10 @@ function transcript_text(j: ai.Journal) -> string {
                     };
                 }
             },
-            let done: ai.ToolCompleted => {
+            let done: ai.events.ToolCompleted => {
                 lines.push(`tool result id=${done.id} is_error=false: ${done.output}`);
             },
-            let failed: ai.ToolFailed => {
+            let failed: ai.events.ToolFailed => {
                 lines.push(`tool result id=${failed.id} is_error=true: ${failed.message}`);
             },
             _ => {
@@ -95,7 +95,7 @@ function _type_schema(t: string) -> map<string, unknown> {
 // The guidance about never repeating a successful call is load-bearing:
 // each invoke is a fresh CLI process, and the conversation text is the only
 // memory it has.
-function tool_protocol(tb: ai.Toolbox) -> string {
+function tool_protocol(tb: ai.tools.Toolbox) -> string {
     let catalog: string[] = [];
     for (let t in tb.list()) {
         catalog.push(
@@ -338,15 +338,15 @@ function invoke(
         }
     };
 
-    let usage = ai.Usage {
+    let usage = ai.events.Usage {
         input_tokens: baml.json.path_or<int>(result, ".usage.input_tokens", 0),
         output_tokens: baml.json.path_or<int>(result, ".usage.output_tokens", 0),
         cached_input_tokens: baml.json.path_or<int?>(result, ".usage.cache_read_input_tokens", null),
         reasoning_tokens: null,
     };
 
-    let content: ai.ContentBlock[] = [];
-    let stop: ai.StopReason = ai.StopReason.Complete;
+    let content: ai.content.Block[] = [];
+    let stop: ai.content.StopReason = ai.content.StopReason.Complete;
     if (has_tools) {
         let outcome = baml.json.path_or<json>(result, ".structured_output.outcome", structured);
         let calls = baml.json.path_or<json[]?>(outcome, ".calls", null);
@@ -367,15 +367,15 @@ function invoke(
                         empty
                     },
                 };
-                content.push(ai.ToolUse { id: id, name: name, args: call_args });
+                content.push(ai.content.ToolUse { id: id, name: name, args: call_args });
                 i = i + 1;
             }
-            stop = ai.StopReason.ToolUse;
+            stop = ai.content.StopReason.ToolUse;
         } else {
-            content.push(ai.Text { text: baml.json.stringify(outcome) });
+            content.push(ai.content.Text { text: baml.json.stringify(outcome) });
         }
     } else {
-        content.push(ai.Text { text: baml.json.stringify(structured) });
+        content.push(ai.content.Text { text: baml.json.stringify(structured) });
     }
     ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
 }

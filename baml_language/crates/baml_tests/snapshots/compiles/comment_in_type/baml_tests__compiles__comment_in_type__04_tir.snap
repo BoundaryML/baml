@@ -6,12 +6,12 @@ function user.FunctionWithComments(a: string, b: int, client: ai.Client | null =
   ai.Agent.new<string>(client = client).run(FunctionWithComments$spec(a, b)).value : string
 }
 function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
 }
 lambda user.FunctionWithComments$spec {
 }
 function user.FunctionWithComments$render_prompt(a: string, b: int) -> string throws never {
-  FunctionWithComments$spec(a, b).prompt().render_text(ai.render_output_format(reflect.type_of<string>())) : string
+  FunctionWithComments$spec(a, b).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
 }
 function user.FunctionWithComments$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -20,19 +20,19 @@ function user.CommentAfterArrow(client: ai.Client | null = null) -> string throw
   ai.Agent.new<string>(client = client).run(CommentAfterArrow$spec()).value : string
 }
 function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
 }
 lambda user.CommentAfterArrow$spec {
 }
 function user.CommentAfterArrow$render_prompt() -> string throws never {
-  CommentAfterArrow$spec().prompt().render_text(ai.render_output_format(reflect.type_of<string>())) : string
+  CommentAfterArrow$spec().prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
 }
 function user.CommentAfterArrow$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.FunctionWithComments$stream(a: string, b: int, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream_spec(FunctionWithComments$spec(a, b), client = client) : baml.llm.Stream<string | null, string>
+function user.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream.from_spec(FunctionWithComments$spec(a, b), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.CommentAfterArrow$stream(client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream_spec(CommentAfterArrow$spec(), client = client) : baml.llm.Stream<string | null, string>
+function user.CommentAfterArrow$stream(client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream.from_spec(CommentAfterArrow$spec(), client = client) : baml.llm.Stream<string | null, string>
 }

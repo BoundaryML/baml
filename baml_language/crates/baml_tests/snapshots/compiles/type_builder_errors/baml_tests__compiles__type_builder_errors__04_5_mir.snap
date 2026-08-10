@@ -87,7 +87,7 @@ fn user.TypeBuilderFn$render_prompt(from_text: string) -> string {
     }
 
     bb3: {
-        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb4];
     }
 
     bb4: {
@@ -106,16 +106,16 @@ fn user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<Resume> {
     let _2: map<string, unknown>
     let _3: ai.Prompt
     let _4: (string) -> string throws never
-    let _5: ai.Toolbox
-    let _6: ai.Tool[]
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
     let _7: openai.OpenAiClient
 
     bb0: {
         _2 = { const "from_text": copy _1 }: map<string, unknown>;
         _4 = make_closure lambda[0]();
         _3 = ai.Prompt { copy _4 };
-        _6 = []: ai.Tool[];
-        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
@@ -148,11 +148,11 @@ fn .<lambda(TypeBuilderFn$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.TypeBuilderFn$stream(from_text: string, client: null | ai.StreamingClient) -> baml.llm.Stream<null | Resume$stream, Resume> {
+fn user.TypeBuilderFn$stream(from_text: string, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<null | Resume$stream, Resume> {
     // Locals:
     let _0: baml.llm.Stream<null | Resume$stream, Resume> // _0 // return
     let _1: string // from_text // param
-    let _2: null | ai.StreamingClient // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<Resume>
     let _5: type
@@ -175,7 +175,7 @@ fn user.TypeBuilderFn$stream(from_text: string, client: null | ai.StreamingClien
     bb3: {
         _5 = load_type(Resume$stream | null);
         _6 = load_type(Resume);
-        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
     bb4: {

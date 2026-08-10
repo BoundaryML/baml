@@ -17,9 +17,9 @@ function live_mcp_tools() -> string {
     let spec = echo_spec(claude_code.ClaudeCodeClient.new(), conn.tools());
     let result = ai.Agent<EchoBack>.new(on_event = log_event).run(spec);
     let completed = result.journal.entries()
-        .filter((e: ai.Event) -> {
+        .filter((e: ai.events.Event) -> {
             match (e) {
-                let c: ai.ToolCompleted => true,
+                let c: ai.events.ToolCompleted => true,
                 _ => false,
             }
         })

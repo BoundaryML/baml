@@ -6,9 +6,9 @@ test "the runner re-asks within the step and records every attempt" {
         [
             // attempt 1: the model chats instead of answering
             ai.ModelTurn {
-                content: [ai.Text { text: "Could you tell me your budget first?" }],
-                stop_reason: ai.StopReason.Complete,
-                usage: ai.Usage {
+                content: [ai.content.Text { text: "Could you tell me your budget first?" }],
+                stop_reason: ai.content.StopReason.Complete,
+                usage: ai.events.Usage {
                     input_tokens: 7,
                     output_tokens: 3,
                     cached_input_tokens: null,
@@ -17,9 +17,9 @@ test "the runner re-asks within the step and records every attempt" {
             },
             // attempt 2 (ephemeral re-ask): a valid final answer
             ai.ModelTurn {
-                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
-                stop_reason: ai.StopReason.Complete,
-                usage: ai.Usage {
+                content: [ai.content.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
+                stop_reason: ai.content.StopReason.Complete,
+                usage: ai.events.Usage {
                     input_tokens: 9,
                     output_tokens: 4,
                     cached_input_tokens: null,
@@ -36,12 +36,12 @@ test "the runner re-asks within the step and records every attempt" {
     assert.equal(result.usage.input_tokens, 16);
     // the journal is the complete record: the failed attempt AND the
     // correction request are events, alongside the accepted turn
-    let chatty = result.journal.entries().some((e: ai.Event) -> {
+    let chatty = result.journal.entries().some((e: ai.events.Event) -> {
         match (e) {
-            let a: ai.AssistantMessage => {
-                a.content.some((b: ai.ContentBlock) -> {
+            let a: ai.events.AssistantMessage => {
+                a.content.some((b: ai.content.Block) -> {
                     match (b) {
-                        let t: ai.Text => t.text.includes("budget"),
+                        let t: ai.content.Text => t.text.includes("budget"),
                         _ => false,
                     }
                 })
@@ -50,9 +50,9 @@ test "the runner re-asks within the step and records every attempt" {
         }
     });
     assert.is_true(chatty);
-    let feedback = result.journal.entries().some((e: ai.Event) -> {
+    let feedback = result.journal.entries().some((e: ai.events.Event) -> {
         match (e) {
-            let u: ai.UserMessage => true,
+            let u: ai.events.UserMessage => true,
             _ => false,
         }
     });
@@ -68,13 +68,13 @@ function scripted_two_repair() -> ScriptedClient {
     ScriptedClient.new(
         [
             ai.ModelTurn {
-                content: [ai.Text { text: "let me think about that" }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: "let me think about that" }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
             ai.ModelTurn {
-                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 5.0}` }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
         ],

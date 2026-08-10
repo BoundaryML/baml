@@ -24,8 +24,8 @@ function turn_with_feedback<Out>(
                 // commit the failed reply and the correction request, then ask again
                 j.append_all(
                     [
-                        ai.AssistantMessage { content: turn.content, client_id: c.id() },
-                        ai.UserMessage {
+                        ai.events.AssistantMessage { content: turn.content, client_id: c.id() },
+                        ai.events.UserMessage {
                             content: "The reply did not match the required schema. Answer again with only the corrected value.",
                         },
                     ],
@@ -44,14 +44,14 @@ test "parse feedback re-asks and the journal records every attempt" {
         [
             // attempt 1: garbage that cannot parse as Itinerary
             ai.ModelTurn {
-                content: [ai.Text { text: "sorry, here is prose instead of JSON" }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: "sorry, here is prose instead of JSON" }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
             // attempt 2: a valid final answer
             ai.ModelTurn {
-                content: [ai.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: `{"flights": [], "hotels": [], "total_cost_usd": 0.0}` }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             },
         ],
@@ -62,9 +62,9 @@ test "parse feedback re-asks and the journal records every attempt" {
     assert.is_true(turn.terminal_text() != null);
     // two invocations happened; the second saw the committed feedback
     assert.equal(scripted.received().length(), 2);
-    let second_saw_feedback = scripted.received().at(1)?.journal?.entries()?.some((e: ai.Event) -> {
+    let second_saw_feedback = scripted.received().at(1)?.journal?.entries()?.some((e: ai.events.Event) -> {
         match (e) {
-            let u: ai.UserMessage => true,
+            let u: ai.events.UserMessage => true,
             _ => false,
         }
     })

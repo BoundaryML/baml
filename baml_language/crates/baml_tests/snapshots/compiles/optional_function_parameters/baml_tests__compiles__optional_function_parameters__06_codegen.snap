@@ -55,7 +55,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     call ai.FunctionSpec.prompt
     store_var _4
     load_type string
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _7
     load_var2 4 6
     call ai.Prompt.render_text
@@ -72,9 +72,9 @@ function user.AskDocs$spec(query: string, max_results: int, filter: string) -> a
     load_var ?3
     make_cell
     store_var ?3
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _7
     load_const "AskDocs"
     load_deref ?1
@@ -97,7 +97,7 @@ function user.AskDocs$spec(query: string, max_results: int, filter: string) -> a
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -113,7 +113,7 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string, cl
     load_type string | null
     load_type string
     load_var2 5 4
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }
 

@@ -22,13 +22,13 @@ function user.ClassifySentiment$parse(json: string) -> user.Sentiment  [expr] {
   baml.sap.parse(json)
 }
 function user.ClassifySentiment$render_prompt(text: string) -> string  [expr] {
-  ClassifySentiment$spec(text).prompt().render_text(ai.render_output_format(reflect.type_of()))
+  ClassifySentiment$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of()))
 }
 function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<user.Sentiment>  [expr] {
-  ai.FunctionSpec { spec_name: "ClassifySentiment", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4o }
+  ai.FunctionSpec { spec_name: "ClassifySentiment", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o }
 }
-function user.ClassifySentiment$stream(text: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>  [expr] {
-  ai.stream_spec(ClassifySentiment$spec(text), client = client)
+function user.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient? = null) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>  [expr] {
+  ai.stream.from_spec(ClassifySentiment$spec(text), client = client)
 }
 function user.ClassifySentiment2(text: string, client: ai.Client? = null) -> string  [llm] {
   ai.Agent.new(client = client).run(ClassifySentiment2$spec(text)).value
@@ -37,13 +37,13 @@ function user.ClassifySentiment2$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.ClassifySentiment2$render_prompt(text: string) -> string  [expr] {
-  ClassifySentiment2$spec(text).prompt().render_text(ai.render_output_format(reflect.type_of()))
+  ClassifySentiment2$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of()))
 }
 function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "ClassifySentiment2", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4o }
+  ai.FunctionSpec { spec_name: "ClassifySentiment2", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o }
 }
-function user.ClassifySentiment2$stream(text: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
-  ai.stream_spec(ClassifySentiment2$spec(text), client = client)
+function user.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ClassifySentiment2$spec(text), client = client)
 }
 function user.Foo() -> string | image  [expr] {
   { let x = "foo"; let y = 2; { let i = 0; while i Lt y { x = "hi:  " Add x } } } x
@@ -55,13 +55,13 @@ function user.GenerateTests$parse(json: string) -> string[]  [expr] {
   baml.sap.parse(json)
 }
 function user.GenerateTests$render_prompt(count: int, topic: string) -> string  [expr] {
-  GenerateTests$spec(count, topic).prompt().render_text(ai.render_output_format(reflect.type_of()))
+  GenerateTests$spec(count, topic).prompt().render_text(ai.wire.render_output_format(reflect.type_of()))
 }
 function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]>  [expr] {
-  ai.FunctionSpec { spec_name: "GenerateTests", args: map { "count": count, "topic": topic }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4o }
+  ai.FunctionSpec { spec_name: "GenerateTests", args: map { "count": count, "topic": topic }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o }
 }
-function user.GenerateTests$stream(count: int, topic: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string[], string[]>  [expr] {
-  ai.stream_spec(GenerateTests$spec(count, topic), client = client)
+function user.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient? = null) -> baml.llm.Stream<string[], string[]>  [expr] {
+  ai.stream.from_spec(GenerateTests$spec(count, topic), client = client)
 }
 
 --- captures ---

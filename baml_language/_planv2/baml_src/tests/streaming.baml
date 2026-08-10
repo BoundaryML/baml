@@ -23,16 +23,16 @@ class ScriptedStreamingClient {
                 joined = `${joined}${c}`;
             }
             ai.ModelTurn {
-                content: [ai.Text { text: joined }],
-                stop_reason: ai.StopReason.Complete,
+                content: [ai.content.Text { text: joined }],
+                stop_reason: ai.content.StopReason.Complete,
                 usage: null,
             }
         }
     }
 
-    implements ai.StreamingClient {
-        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.TurnStream {
-            ai.TurnStream.from_chunks(self.chunks)
+    implements ai.stream.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+            ai.stream.TurnStream.from_chunks(self.chunks)
         }
     }
 }
@@ -63,7 +63,7 @@ function NonStreamingDefault(q: string) -> string {
 }
 
 test "a scripted TurnStream yields deltas then a completed turn" {
-    let ts = ai.TurnStream.from_chunks(["hel", "lo"]);
+    let ts = ai.stream.TurnStream.from_chunks(["hel", "lo"]);
     let first = ts.next();
     match (first) {
         let s: string => assert.equal(s, "hel"),
@@ -71,7 +71,7 @@ test "a scripted TurnStream yields deltas then a completed turn" {
     };
     let turn = ts.final_turn();
     assert.equal(turn.terminal_text() ?? "", "hello");
-    assert.is_true(turn.stop_reason == ai.StopReason.Complete)
+    assert.is_true(turn.stop_reason == ai.content.StopReason.Complete)
 }
 
 test "$stream yields progressive partials and a typed final value" {
@@ -108,11 +108,11 @@ test "$stream yields progressive partials and a typed final value" {
     assert.equal(value.email, "ada@example.com")
 }
 
-test "stream_spec drives a spec directly through a streaming client" {
+test "from_spec drives a spec directly through a streaming client" {
     let scripted = ScriptedStreamingClient.new(
         [`{"name": "Grace Hopper", "email": `, `"grace@navy.mil"}`],
     );
-    let stream = ai.stream_spec<Contact$stream, Contact>(
+    let stream = ai.stream.from_spec<Contact$stream, Contact>(
         ExtractContact@spec(text = "Grace Hopper <grace@navy.mil>"),
         client = scripted,
     );
@@ -133,9 +133,9 @@ test "stream_spec drives a spec directly through a streaming client" {
 
 test "streaming rejects a tools-bearing spec" {
     // NamedToolbox (tests/spec_desugar.baml) carries a non-empty toolbox;
-    // streaming does not run the tool loop, so stream_spec throws typed.
+    // streaming does not run the tool loop, so from_spec throws typed.
     let scripted = ScriptedStreamingClient.new([]);
-    let outcome = ai.stream_spec<string, string>(
+    let outcome = ai.stream.from_spec<string, string>(
         NamedToolbox@spec(q = "find flights"),
         client = scripted,
     ) catch_all (e) {
@@ -147,8 +147,8 @@ test "streaming rejects a tools-bearing spec" {
 
 test "a non-streaming default client fails typed" {
     // No override: the spec's default client (claude_code) does not implement
-    // ai.StreamingClient, so the runtime downcast throws StreamingUnsupported.
-    let outcome = ai.stream_spec<string, string>(
+    // ai.stream.StreamingClient, so the runtime downcast throws StreamingUnsupported.
+    let outcome = ai.stream.from_spec<string, string>(
         NonStreamingDefault@spec(q = "hello"),
     ) catch_all (e) {
         let un: ai.errors.StreamingUnsupported => null,

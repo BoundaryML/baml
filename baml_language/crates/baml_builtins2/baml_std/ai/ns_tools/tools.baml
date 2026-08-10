@@ -2,7 +2,7 @@
 // reflect.call_any inside the runner, never inside a client.
 // Mirrors _planv2/pages/02_guides/01_functions/02_tools.md.
 
-enum ToolErrorMode {
+enum ErrorMode {
     Report, // the failure becomes the call's result; the model adapts
     Raise, // the failure is journaled, then the run throws root.errors.ToolFailedError
 }
@@ -16,7 +16,7 @@ class Tool {
     // argument map as one value. Set by raw_tool() when the schema does not
     // derive from a BAML signature (MCP servers, OpenAPI specs).
     raw_handler: ((map<string, unknown>) -> string throws unknown)?,
-    on_error: ToolErrorMode?, // null: inherit the run's tool_errors mode
+    on_error: ErrorMode?, // null: inherit the run's tool_errors mode
 
     // The total boundary around one call: validate, dispatch through
     // reflection, serialize. A throw here is the tool's failure, not the
@@ -44,7 +44,7 @@ function tool(
     handler: baml.AnyFunction,
     name: string? = null,
     description: string? = null,
-    on_error: ToolErrorMode? = null,
+    on_error: ErrorMode? = null,
 ) -> Tool {
     let sig = reflect.signature(handler);
     let resolved_name = name ?? sig.name;
@@ -74,7 +74,7 @@ function raw_tool(
     description: string,
     input_schema: map<string, unknown>,
     handler: (map<string, unknown>) -> string throws unknown,
-    on_error: ToolErrorMode? = null,
+    on_error: ErrorMode? = null,
 ) -> Tool {
     if (name == "__baml_return_output") {
         throw baml.errors.InvalidArgument { message: "the tool name __baml_return_output is reserved" }

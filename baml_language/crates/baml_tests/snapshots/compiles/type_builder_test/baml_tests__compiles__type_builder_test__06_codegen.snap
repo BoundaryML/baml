@@ -44,7 +44,7 @@ function user.Fn$render_prompt() -> string {
     call ai.FunctionSpec.prompt
     store_var _1
     load_type string
-    call ai.render_output_format
+    call ai.wire.render_output_format
     store_var _4
     load_var2 1 3
     call ai.Prompt.render_text
@@ -52,9 +52,9 @@ function user.Fn$render_prompt() -> string {
 }
 
 function user.Fn$spec() -> ai.FunctionSpec<string> {
-    load_type ai.Tool
+    load_type ai.tools.Tool
     alloc_array 0
-    call ai.Toolbox.new
+    call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o"
     load_const <omitted>
@@ -75,7 +75,7 @@ function user.Fn$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function user.Fn$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.Fn$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -89,6 +89,6 @@ function user.Fn$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<st
     load_type string | null
     load_type string
     load_var2 2 1
-    call ai.stream_spec
+    call ai.stream.from_spec
     return
 }

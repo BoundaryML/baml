@@ -18,13 +18,13 @@ function user.ExtractInvoice$parse(json: string) -> user.Invoice  [expr] {
   baml.sap.parse(json)
 }
 function user.ExtractInvoice$render_prompt(text: string) -> string  [expr] {
-  ExtractInvoice$spec(text).prompt().render_text(ai.render_output_format(reflect.type_of()))
+  ExtractInvoice$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of()))
 }
 function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<user.Invoice>  [expr] {
-  ai.FunctionSpec { spec_name: "ExtractInvoice", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4o }
+  ai.FunctionSpec { spec_name: "ExtractInvoice", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o }
 }
-function user.ExtractInvoice$stream(text: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice>  [expr] {
-  ai.stream_spec(ExtractInvoice$spec(text), client = client)
+function user.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient? = null) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice>  [expr] {
+  ai.stream.from_spec(ExtractInvoice$spec(text), client = client)
 }
 function user.TryExtract(json: string) -> user.Invoice?  [expr] {
   {  } ExtractInvoice$parse(json) catch (_) { baml.errors.ParseError { message: message } => null }

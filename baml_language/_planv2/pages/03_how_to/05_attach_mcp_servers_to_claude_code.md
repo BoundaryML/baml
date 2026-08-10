@@ -50,7 +50,7 @@ added. A BAML tool can therefore let the model attach servers itself:
 
 ```baml
 function attach_mcp_tool(c: ClaudeCodeClient) -> Tool {
-    ai.tool(
+    ai.tools.tool(
         (name: string, command: string, args: string[]) -> string {
             let cfg: map<string, unknown> = {};
             let _ = cfg.set("command", command);

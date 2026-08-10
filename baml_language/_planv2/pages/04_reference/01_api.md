@@ -16,7 +16,7 @@ ai
 ├── Prompt                                the template surface a client renders
 ├── content                               Text / Reasoning / ToolUse; StopReason
 ├── Journal / events                      the run record; RunStarted ... FinalProduced
-├── tools                                 Tool, Toolbox, tool(), ToolErrorMode
+├── tools                                 Tool, Toolbox, tool(), ErrorMode
 ├── clients                               register/resolve; built-ins; Retry, Fallback
 ├── wire                                  send_as<T>, render_output_format, schema rewrites
 └── errors                                the ai.errors namespace: Failure, RetrySafety, the classes, classify_http
@@ -52,18 +52,18 @@ interface Runner<Out> {
     function run(self, spec: FunctionSpec<Out>) -> Self.Output throws Self.Error
 }
 
-enum ToolErrorMode { Report, Raise }
+enum ErrorMode { Report, Raise }
 
 class Agent<Out> {
     max_steps: int,                                  // default 12
     client: Client?,                                 // default null: use spec.default_client
-    tool_errors: ToolErrorMode,                      // default Report
+    tool_errors: ErrorMode,                      // default Report
     on_event: ((Event) -> null throws never)?,       // default null
 
     function new(
         max_steps: int = 12,
         client: Client? = null,
-        tool_errors: ToolErrorMode = ToolErrorMode.Report,
+        tool_errors: ErrorMode = ErrorMode.Report,
         on_event: ((Event) -> null throws never)? = null,
     ) -> Agent<Out> throws never
 
@@ -117,7 +117,7 @@ class ModelTurnInput {
 }
 
 class ModelTurn {
-    content: ContentBlock[],
+    content: Block[],
     stop_reason: StopReason,
     usage: Usage?,
 
@@ -135,7 +135,7 @@ built from `input` alone. A throw means no turn was produced.
 ## Content blocks and `StopReason`
 
 ```baml
-type ContentBlock = Text | Reasoning | ToolUse | Media
+type Block = Text | Reasoning | ToolUse | Media
 
 class Text      { text: string }
 class Reasoning { summary: string }
@@ -196,7 +196,7 @@ class Tool {
     handler: baml.AnyFunction?,              // signature-derived dispatch; null for raw tools
     raw_handler: ((map<string, unknown>) -> string throws unknown)?,
                                              // dynamic-source dispatch over the raw argument map
-    on_error: ToolErrorMode?,                // null: inherit the run's tool_errors mode
+    on_error: ErrorMode?,                // null: inherit the run's tool_errors mode
 
     function call(self, args: map<string, unknown>) -> string
         throws baml.errors.InvalidArgument | baml.errors.UnknownError
@@ -216,7 +216,7 @@ function tool(
     handler: baml.AnyFunction<Returns = unknown>,
     name: string? = null,                    // default: the function's name
     description: string? = null,             // default: the docstring
-    on_error: ToolErrorMode? = null,         // null: inherit the run's tool_errors mode
+    on_error: ErrorMode? = null,         // null: inherit the run's tool_errors mode
 ) -> Tool throws never
 
 function raw_tool(
@@ -224,7 +224,7 @@ function raw_tool(
     description: string,
     input_schema: json,                      // supplied, not signature-derived
     handler: (map<string, unknown>) -> string throws unknown,
-    on_error: ToolErrorMode? = null,
+    on_error: ErrorMode? = null,
 ) -> Tool throws baml.errors.InvalidArgument // the reserved name
 ```
 

@@ -10,13 +10,13 @@ the run's configuration, and `$` parameters at a call site set them
 class Agent<Out> {
     max_steps: int,                                  // model-turn budget
     client: Client?,                                 // overrides the spec's client when set
-    tool_errors: ToolErrorMode,                      // Report or Raise
+    tool_errors: ErrorMode,                      // Report or Raise
     on_event: ((Event) -> null throws never)?,       // observes events as they append
 
     function new(
         max_steps: int = 12,
         client: Client? = null,
-        tool_errors: ToolErrorMode = ToolErrorMode.Report,
+        tool_errors: ErrorMode = ErrorMode.Report,
         on_event: ((Event) -> null throws never)? = null,
     ) -> Agent<Out> throws never
 

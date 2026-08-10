@@ -151,14 +151,16 @@ pub const ALL: &[BuiltinFile] = &[
     // --- log package ---
     builtin!("log", "log.baml"),
     // --- ai package (specs, journal, runner, client interface) ---
+    builtin!("ai", "ns_content/content.baml"),
+    builtin!("ai", "ns_events/events.baml"),
     builtin!("ai", "journal.baml"),
     builtin!("ai", "spec.baml"),
-    builtin!("ai", "tools.baml"),
+    builtin!("ai", "ns_tools/tools.baml"),
     builtin!("ai", "turn.baml"),
-    builtin!("ai", "wire.baml"),
-    builtin!("ai", "wrappers.baml"),
+    builtin!("ai", "ns_wire/wire.baml"),
+    builtin!("ai", "ns_clients/clients.baml"),
     builtin!("ai", "runner.baml"),
-    builtin!("ai", "streaming.baml"),
+    builtin!("ai", "ns_stream/stream.baml"),
     builtin!("ai", "ns_errors/errors.baml"),
     builtin!("ai", "ns_internal/helpers.baml"),
     // --- provider client packages ---

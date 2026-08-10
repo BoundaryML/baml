@@ -4,16 +4,16 @@
 function repaired_first_step_journal() -> ai.Journal {
     let args: map<string, unknown> = {};
     // no spec needed here: a Journal literal is ordinary construction
-    let j = ai.Journal { log: [ai.RunStarted { spec_name: "PlanTrip", arguments: args }] };
+    let j = ai.Journal { log: [ai.events.RunStarted { spec_name: "PlanTrip", arguments: args }] };
     // a repaired first step: the model chatted, the runner committed the
     // failure and the correction request
     j.append_all(
         [
-            ai.AssistantMessage {
-                content: [ai.Text { text: "what is your budget?" }],
+            ai.events.AssistantMessage {
+                content: [ai.content.Text { text: "what is your budget?" }],
                 client_id: "anthropic/test",
             },
-            ai.UserMessage { content: "Answer again with only the corrected value." },
+            ai.events.UserMessage { content: "Answer again with only the corrected value." },
         ],
     );
     j
@@ -41,14 +41,14 @@ test "claude code envelope offers final result or tool calls" {
 
 test "claude code transcript marks successful tool results" {
     let args: map<string, unknown> = {};
-    let j = ai.Journal { log: [ai.RunStarted { spec_name: "PlanTrip", arguments: args }] };
+    let j = ai.Journal { log: [ai.events.RunStarted { spec_name: "PlanTrip", arguments: args }] };
     j.append_all(
         [
-            ai.AssistantMessage {
-                content: [ai.ToolUse { id: "c1", name: "search_flights", args: args }],
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "c1", name: "search_flights", args: args }],
                 client_id: "claude-code/haiku",
             },
-            ai.ToolCompleted { id: "c1", output: `[{"airline":"ANA"}]` },
+            ai.events.ToolCompleted { id: "c1", output: `[{"airline":"ANA"}]` },
         ],
     );
     let text = claude_code.internal.transcript_text(j);

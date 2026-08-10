@@ -9,9 +9,9 @@ function live_claude_code() -> string {
         .new(client = claude_code.ClaudeCodeClient.new(), on_event = log_event)
         .run(spec);
     let tool_events = result.journal.entries()
-        .filter((e: ai.Event) -> {
+        .filter((e: ai.events.Event) -> {
             match (e) {
-                let c: ai.ToolCompleted => true,
+                let c: ai.events.ToolCompleted => true,
                 _ => false,
             }
         })
@@ -29,16 +29,16 @@ function live_claude_code_observed(on_event: (string, json) -> null throws never
         trip_request = "2 weeks in Japan, mid-range budget, flying from SFO in October. Use the tools to look up flights and hotels before answering. Do not ask questions.",
     );
     let result = ai.Agent<Itinerary>
-        .new(client = claude_code.ClaudeCodeClient.new(), on_event = (e: ai.Event) -> {
+        .new(client = claude_code.ClaudeCodeClient.new(), on_event = (e: ai.events.Event) -> {
             let kind = match (e) {
-                let x: ai.RunStarted => "RunStarted",
-                let x: ai.UserMessage => "UserMessage",
-                let x: ai.AssistantMessage => "AssistantMessage",
-                let x: ai.ToolRequested => "ToolRequested",
-                let x: ai.ToolCompleted => "ToolCompleted",
-                let x: ai.ToolFailed => "ToolFailed",
-                let x: ai.Usage => "Usage",
-                let x: ai.FinalProduced => "FinalProduced",
+                let x: ai.events.RunStarted => "RunStarted",
+                let x: ai.events.UserMessage => "UserMessage",
+                let x: ai.events.AssistantMessage => "AssistantMessage",
+                let x: ai.events.ToolRequested => "ToolRequested",
+                let x: ai.events.ToolCompleted => "ToolCompleted",
+                let x: ai.events.ToolFailed => "ToolFailed",
+                let x: ai.events.Usage => "Usage",
+                let x: ai.events.FinalProduced => "FinalProduced",
             };
             let payload = baml.json.to_json(e) catch_all (err) {
                 _ => null,
@@ -47,9 +47,9 @@ function live_claude_code_observed(on_event: (string, json) -> null throws never
         })
         .run(spec);
     let tool_events = result.journal.entries()
-        .filter((e: ai.Event) -> {
+        .filter((e: ai.events.Event) -> {
             match (e) {
-                let c: ai.ToolCompleted => true,
+                let c: ai.events.ToolCompleted => true,
                 _ => false,
             }
         })

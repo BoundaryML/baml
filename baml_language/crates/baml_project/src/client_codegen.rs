@@ -493,8 +493,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // the function's declared default client.
             let param_count = sig.params.len();
             // ...and on the `$stream` companion, where the same override is
-            // typed `ai.StreamingClient?` (companions carry no LLM metadata of
-            // their own, hence the name check).
+            // typed `ai.stream.StreamingClient?` (companions carry no LLM
+            // metadata of their own, hence the name check).
             let drop_injected_client = sig
                 .params
                 .last()

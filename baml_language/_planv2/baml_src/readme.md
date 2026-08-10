@@ -113,7 +113,7 @@ return a typed `Itinerary`.
    pure (credentials resolve from the environment at request time, inside
    `invoke`), so building a spec — or declaring a client — never reads
    env and never panics on a missing key.
-2. `Tool.on_error` is `ToolErrorMode?` where null inherits the run's
+2. `Tool.on_error` is `ErrorMode?` where null inherits the run's
    `tool_errors`; this is what makes "per-tool wins" coherent.
 3. `ToolUse.args` is `map<string, unknown>` and `ToolCompleted.output` /
    `FinalProduced.value_json` are JSON strings — not `json`-typed fields.

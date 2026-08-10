@@ -7,7 +7,7 @@ client BaseClient = openai.OpenAiClient.new(
     base_url = "http://localhost:1234",
 );
 
-client MyClient = ai.Retry.new(BaseClient, max_attempts = 3);
+client MyClient = ai.clients.Retry.new(BaseClient, max_attempts = 3);
 
 function UseRetryClient(input: string) -> string {
     client MyClient

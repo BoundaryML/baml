@@ -89,7 +89,7 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int) -> string {
     }
 
     bb3: {
-        _6 = call const fn ai.render_output_format(copy _7) -> [bb4];
+        _6 = call const fn ai.wire.render_output_format(copy _7) -> [bb4];
     }
 
     bb4: {
@@ -109,15 +109,15 @@ fn user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> 
     let _3: map<string, unknown>
     let _4: ai.Prompt
     let _5: (string) -> string throws never
-    let _6: ai.Toolbox
-    let _7: ai.Tool[]
+    let _6: ai.tools.Toolbox
+    let _7: ai.tools.Tool[]
 
     bb0: {
         _3 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
         _5 = make_closure lambda[0]();
         _4 = ai.Prompt { copy _5 };
-        _7 = []: ai.Tool[];
-        _6 = call const fn ai.Toolbox.new(copy _7) -> [bb1];
+        _7 = []: ai.tools.Tool[];
+        _6 = call const fn ai.tools.Toolbox.new(copy _7) -> [bb1];
     }
 
     bb1: {
@@ -146,12 +146,12 @@ fn .<lambda(FunctionWithComments$spec, 0)>( __spec_output_format: string) -> str
     }
 }
 
-fn user.FunctionWithComments$stream(a: string, b: int, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
+fn user.FunctionWithComments$stream(a: string, b: int, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
     let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // a // param
     let _2: int // b // param
-    let _3: null | ai.StreamingClient // client // param
+    let _3: null | ai.stream.StreamingClient // client // param
     let _4: bool
     let _5: ai.FunctionSpec<string>
     let _6: type
@@ -174,7 +174,7 @@ fn user.FunctionWithComments$stream(a: string, b: int, client: null | ai.Streami
     bb3: {
         _6 = load_type(string | null);
         _7 = load_type(string);
-        _0 = call const fn ai.stream_spec<copy _6, copy _7>(copy _5, copy _3) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _6, copy _7>(copy _5, copy _3) -> [bb4];
     }
 
     bb4: {
@@ -265,7 +265,7 @@ fn user.CommentAfterArrow$render_prompt() -> string {
     }
 
     bb3: {
-        _4 = call const fn ai.render_output_format(copy _5) -> [bb4];
+        _4 = call const fn ai.wire.render_output_format(copy _5) -> [bb4];
     }
 
     bb4: {
@@ -283,15 +283,15 @@ fn user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
     let _1: map<string, unknown>
     let _2: ai.Prompt
     let _3: (string) -> string throws never
-    let _4: ai.Toolbox
-    let _5: ai.Tool[]
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
 
     bb0: {
         _1 = {  }: map<string, unknown>;
         _3 = make_closure lambda[0]();
         _2 = ai.Prompt { copy _3 };
-        _5 = []: ai.Tool[];
-        _4 = call const fn ai.Toolbox.new(copy _5) -> [bb1];
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
     bb1: {
@@ -320,10 +320,10 @@ fn .<lambda(CommentAfterArrow$spec, 0)>( __spec_output_format: string) -> string
     }
 }
 
-fn user.CommentAfterArrow$stream(client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
+fn user.CommentAfterArrow$stream(client: null | ai.stream.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
     let _0: baml.llm.Stream<string | null, string> // _0 // return
-    let _1: null | ai.StreamingClient // client // param
+    let _1: null | ai.stream.StreamingClient // client // param
     let _2: bool
     let _3: ai.FunctionSpec<string>
     let _4: type
@@ -346,7 +346,7 @@ fn user.CommentAfterArrow$stream(client: null | ai.StreamingClient) -> baml.llm.
     bb3: {
         _4 = load_type(string | null);
         _5 = load_type(string);
-        _0 = call const fn ai.stream_spec<copy _4, copy _5>(copy _3, copy _1) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _4, copy _5>(copy _3, copy _1) -> [bb4];
     }
 
     bb4: {

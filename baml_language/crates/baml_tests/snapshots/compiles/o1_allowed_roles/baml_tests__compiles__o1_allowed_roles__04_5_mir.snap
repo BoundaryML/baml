@@ -87,7 +87,7 @@ fn user.AskO1$render_prompt(question: string) -> string {
     }
 
     bb3: {
-        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb4];
     }
 
     bb4: {
@@ -106,15 +106,15 @@ fn user.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
     let _2: map<string, unknown>
     let _3: ai.Prompt
     let _4: (string) -> string throws never
-    let _5: ai.Toolbox
-    let _6: ai.Tool[]
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
 
     bb0: {
         _2 = { const "question": copy _1 }: map<string, unknown>;
         _4 = make_closure lambda[0](copy _1);
         _3 = ai.Prompt { copy _4 };
-        _6 = []: ai.Tool[];
-        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
@@ -146,11 +146,11 @@ fn .<lambda(AskO1$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.AskO1$stream(question: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
+fn user.AskO1$stream(question: string, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
     let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // question // param
-    let _2: null | ai.StreamingClient // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
     let _5: type
@@ -173,7 +173,7 @@ fn user.AskO1$stream(question: string, client: null | ai.StreamingClient) -> bam
     bb3: {
         _5 = load_type(string | null);
         _6 = load_type(string);
-        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
     bb4: {
@@ -266,7 +266,7 @@ fn user.AskGpt4o$render_prompt(question: string) -> string {
     }
 
     bb3: {
-        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb4];
     }
 
     bb4: {
@@ -285,15 +285,15 @@ fn user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
     let _2: map<string, unknown>
     let _3: ai.Prompt
     let _4: (string) -> string throws never
-    let _5: ai.Toolbox
-    let _6: ai.Tool[]
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
 
     bb0: {
         _2 = { const "question": copy _1 }: map<string, unknown>;
         _4 = make_closure lambda[0](copy _1);
         _3 = ai.Prompt { copy _4 };
-        _6 = []: ai.Tool[];
-        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
@@ -325,11 +325,11 @@ fn .<lambda(AskGpt4o$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.AskGpt4o$stream(question: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
+fn user.AskGpt4o$stream(question: string, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
     let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // question // param
-    let _2: null | ai.StreamingClient // client // param
+    let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
     let _5: type
@@ -352,7 +352,7 @@ fn user.AskGpt4o$stream(question: string, client: null | ai.StreamingClient) -> 
     bb3: {
         _5 = load_type(string | null);
         _6 = load_type(string);
-        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
     bb4: {
