@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+136..140 'show': hir_ty=[<missing>] tir=[throws never]
+238..246 'abv_take': throws never
+292..301 '{\n    0\n}': 0
+298..299 '0': 0
+311..319 'abv_main': throws never
+353..461 '{\n   ...  r\n}': int
+359..364 'let r': int
+367..375 'abv_take': hir_ty=[(v: user.AbvAlias) -> int throws never] tir=[(v: T) -> int throws never]
+367..378 'abv_take(u)': int
+376..377 'u': user.AbvAlias
+458..459 'r': int
+367..378 'abv_take(u)': [mismatch] expected user.AbvShow, got user.AbvAlias

@@ -1837,20 +1837,38 @@ impl<'db> InferenceContext<'db> {
     /// `1 | 2`, widening to `int` at a binding - while `true | false`
     /// collapses to `bool` here, where freshness no longer matters).
     fn join(&mut self, members: &[Ty]) -> Ty {
-        let fresh: Vec<Literal> = members
-            .iter()
-            .filter_map(|member| match member.kind() {
-                TyKind::Literal(lit, Freshness::Fresh, _) => Some(lit.clone()),
-                _ => None,
-            })
-            .collect();
+        // Collect literal witnesses by freshness (top-level members and
+        // one union layer - the shapes arm joins produce). A value with
+        // a RIGID witness stays rigid: TS's union-widening rule (a
+        // union widens only when ALL constituents are widening
+        // literals), and the same non-widening-witness preference
+        // `try_solve_bounded_var` applies - one merge policy, two
+        // sites.
+        let mut fresh: Vec<Literal> = Vec::new();
+        let mut regular: Vec<Literal> = Vec::new();
+        let mut collect = |ty: &Ty| {
+            if let TyKind::Literal(lit, freshness, _) = ty.kind() {
+                match freshness {
+                    Freshness::Fresh => fresh.push(lit.clone()),
+                    Freshness::Regular => regular.push(lit.clone()),
+                }
+            }
+        };
+        for member in members {
+            match member.kind() {
+                TyKind::Union(inner, _) => inner.iter().for_each(&mut collect),
+                _ => collect(member),
+            }
+        }
         let joined = self.union_of(members);
         if fresh.is_empty() {
             return joined;
         }
         let remark = |ty: &Ty| -> Ty {
             match ty.kind() {
-                TyKind::Literal(lit, Freshness::Regular, attr) if fresh.contains(lit) => {
+                TyKind::Literal(lit, Freshness::Regular, attr)
+                    if fresh.contains(lit) && !regular.contains(lit) =>
+                {
                     Ty::intern(TyKind::Literal(lit.clone(), Freshness::Fresh, attr.clone()))
                 }
                 _ => ty.clone(),
