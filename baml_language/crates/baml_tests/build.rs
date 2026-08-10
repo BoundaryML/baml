@@ -949,7 +949,21 @@ fn generate_codegen_test(
         let pkg_prefix_lit = syn::LitStr::new(&pkg_prefix, proc_macro2::Span::call_site());
         quote! { |name: &&String| name.starts_with(#pkg_prefix_lit) }
     } else {
-        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") && !name.starts_with("testing.") && !name.starts_with("assert.") && !name.starts_with("log.") }
+        // A user project's snapshot shows USER code only. The stdlib package
+        // list is derived from `baml_builtins2::ALL`, so adding a builtin
+        // package never again balloons every project's snapshot — the
+        // per-package `__*_std__` projects are what cover stdlib bytecode.
+        quote! { |name: &&String| {
+            let is_stdlib = baml_builtins2::stdlib_package_names()
+                .iter()
+                .any(|pkg| {
+                    let pkg: &str = pkg;
+                    name.len() > pkg.len()
+                        && name.as_bytes()[pkg.len()] == b'.'
+                        && name.starts_with(pkg)
+                });
+            !is_stdlib && !name.starts_with("env.")
+        } }
     };
 
     quote! {

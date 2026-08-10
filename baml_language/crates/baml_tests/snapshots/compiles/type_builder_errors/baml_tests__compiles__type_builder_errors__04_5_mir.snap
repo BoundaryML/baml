@@ -119,7 +119,7 @@ fn user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<Resume> {
     }
 
     bb1: {
-        _7 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>) -> [bb2];
+        _7 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {

@@ -8018,7 +8018,7 @@ function openai.OpenAiClient.ai.StreamingClient.invoke_stream(self: openai.OpenA
     return
 }
 
-function openai.OpenAiClient.new(model: string, api_key: string | null, base_url: string | null) -> openai.OpenAiClient {
+function openai.OpenAiClient.new(model: string, api_key: string | null, base_url: string | null, api_key_env: string | null, base_url_env: string | null) -> openai.OpenAiClient {
     load_var model
     load_const <omitted>
     cmp_op ==
@@ -8043,9 +8043,100 @@ function openai.OpenAiClient.new(model: string, api_key: string | null, base_url
     store_var base_url
 
   L2:
+    load_var api_key_env
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const null
+    store_var api_key_env
+
+  L3:
+    load_var base_url_env
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const null
+    store_var base_url_env
+
+  L4:
     load_var2 1 2
-    load_var base_url
-    init_instance openai.OpenAiClient .model, .api_key, .base_url
+    load_var2 3 4
+    load_var base_url_env
+    init_instance openai.OpenAiClient .model, .api_key, .base_url, .api_key_env, .base_url_env
+    return
+}
+
+function openai.OpenAiClient.resolved_api_key(self: openai.OpenAiClient) -> string {
+    load_var self
+    load_field .api_key
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var self
+    load_field .api_key_env
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=3
+    pop_jump_if_false L1
+    load_var _6
+    sys_op baml.env.get
+    store_var _10
+    load_var _10
+    narrow_bind string, slot=4
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "OPENAI_API_KEY"
+    call baml.env.get_or_panic
+    jump L4
+
+  L2:
+    load_var _10
+    jump L4
+
+  L3:
+    load_var _3
+
+  L4:
+    return
+}
+
+function openai.OpenAiClient.resolved_base_url(self: openai.OpenAiClient) -> string | null {
+    load_var self
+    load_field .base_url
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=2
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var self
+    load_field .base_url_env
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    jump L4
+
+  L2:
+    load_var _6
+    sys_op baml.env.get
+    jump L4
+
+  L3:
+    load_var _3
+
+  L4:
     return
 }
 
@@ -8426,7 +8517,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
 
   L7:
     load_var c
-    load_field .base_url
+    call openai.OpenAiClient.resolved_base_url
     store_var _86
     load_var _86
     store_var _85
@@ -8443,19 +8534,8 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
     call baml.String.from
     store_var _84
     load_var c
-    load_field .api_key
-    store_var _93
-    load_var _93
+    call openai.OpenAiClient.resolved_api_key
     store_var _92
-    load_var _93
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L9
-    load_const "OPENAI_API_KEY"
-    call baml.env.get_or_panic
-    store_var _92
-
-  L9:
     load_type string
     load_var _92
     call baml.String.from
@@ -8464,7 +8544,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
     load_var body
     call baml.json.to_json
     call baml.json.stringify
-    store_var _96
+    store_var _94
     load_const "POST"
     load_var _84
     load_const "/responses"
@@ -8478,7 +8558,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
     load_type string
     load_type string
     alloc_map 2
-    load_var _96
+    load_var _94
     init_instance baml.http.Request .method, .url, .headers, .body
     return
 }

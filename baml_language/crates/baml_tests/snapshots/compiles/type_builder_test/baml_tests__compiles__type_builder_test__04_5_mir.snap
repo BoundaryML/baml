@@ -116,7 +116,7 @@ fn user.Fn$spec() -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _6 = call const fn openai.OpenAiClient.new(const "gpt-4o", const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.OpenAiClient.new(const "gpt-4o", const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {

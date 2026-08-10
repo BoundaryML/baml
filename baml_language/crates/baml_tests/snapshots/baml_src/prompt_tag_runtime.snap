@@ -172,6 +172,8 @@ function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_
     load_const "gpt-4o-mini"
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
     call openai.OpenAiClient.new
     store_var _6
     load_const "PtRenderPerson"

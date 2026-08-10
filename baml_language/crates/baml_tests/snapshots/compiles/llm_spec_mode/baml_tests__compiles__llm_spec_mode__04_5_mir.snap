@@ -153,7 +153,7 @@ fn user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
     }
 
     bb1: {
-        _7 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>) -> [bb2];
+        _7 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -363,7 +363,7 @@ fn user.SpecAgent$spec(q: string) -> ai.FunctionSpec<Answer> {
     }
 
     bb2: {
-        _8 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>) -> [bb3];
+        _8 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
