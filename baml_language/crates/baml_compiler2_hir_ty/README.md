@@ -435,9 +435,12 @@ quality, not differential state. Fix order: A (bugs, pin-first) -> B
 - Callee ladder has two spellings (Path vs MemberAccess) sharing three
   drifted roads; "real static outranks from_json" enforced by two
   orderings in two functions.
-- Requires-closure head-match: 5 sites, 4 equivalence relations; the
-  closure's root-exclusion is name-only (drops same-name different-args
-  requires); every caller re-prepends the root the helper excludes.
+- Requires-closure head-match: 5 sites, 4 equivalence relations; every
+  caller re-prepends the root the helper excludes. (The name-only root
+  filter is NOT a bug: `requires` cycles are rejected BY NAME upstream
+  - TIR: "interface requires cycle: RsnFeed -> RsnFeed" - so same-name
+  different-args requires are illegal programs. hir_ty accepts them
+  today for lack of the diagnostic: an S17 item.)
 - Dead: `exhaustiveness::check_irrefutable` (zero callers). Redundant:
   `member_callee`'s expand_alias_ty after structurally_resolve. Dupes:
   function-local INT_MIN/INT_MAX x2; `format_float` re-formats.
