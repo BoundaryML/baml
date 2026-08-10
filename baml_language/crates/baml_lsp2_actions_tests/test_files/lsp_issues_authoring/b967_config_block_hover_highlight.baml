@@ -20,6 +20,8 @@ client OtherClient = openai.OpenAiCl<[CURSOR]ient.n<[CURSOR]ew(model = "gpt-4o")
 //     model: string,
 //     api_key: string | null,
 //     base_url: string | null,
+//     api_key_env: string | null,
+//     base_url_env: string | null,
 //     implements ai.Client {}
 //     implements ai.StreamingClient {}
 // }
