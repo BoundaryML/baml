@@ -15,7 +15,7 @@ class ReplayHandler {
       self.stop.cancel();
       baml.http.Response.new(200, { }, "shutting down".to_utf8())
     } else if (req.method == "POST") {
-      // The openai provider posts to {base_url}/chat/completions; serve the
+      // The openai provider posts to {base_url}/responses; serve the
       // recording for any POST so other providers' paths also work.
       //
       // Stream the body one SSE event at a time with a small inter-event delay,
