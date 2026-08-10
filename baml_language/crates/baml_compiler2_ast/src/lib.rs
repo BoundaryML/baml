@@ -12,7 +12,6 @@ pub mod cleanup_guard;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;
-pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;

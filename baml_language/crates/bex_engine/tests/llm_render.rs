@@ -8,7 +8,7 @@
 //! Removed with the legacy LLM path (see git history): the
 //! `baml.llm.render_prompt`/`build_request`/`call_llm_function` builtin flow
 //! over declared `client<llm>` blocks and Jinja prompts, and the
-//! `template_string`-in-prompt expansion tests (template_string calls do not
+//! `template_string`-in-prompt expansion tests (`template_string` calls do not
 //! bind inside ai-world backtick prompts).
 
 use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
@@ -264,7 +264,7 @@ class Person {
 /// The `$render_prompt` companion renders the prompt offline as a plain
 /// string. Provider construction is pure in the ai world (credentials
 /// resolve from the environment at request time), so rendering never needs
-/// an api_key env var — the B-626 guarantee, now structural.
+/// an `api_key` env var — the B-626 guarantee, now structural.
 #[tokio::test]
 async fn test_render_prompt_offline_without_api_key_env() {
     use bex_engine::BexEngine;

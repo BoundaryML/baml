@@ -253,125 +253,16 @@ impl InitTestContext {
     }
 }
 
-/// BEP-049 §10 (M5f). Synthesize a NEW-MODE (backtick) LLM function body:
-/// `baml.llm.<builtin>(<client>, "Fn", {params}, <prompt-tag closure>)`.
-/// Identical to `lower_cst::synthesize_llm_builtin_call` except it appends the
-/// synthesized prompt-tag closure as a 4th argument (the orchestrator invokes it
-/// per attempt; legacy Jinja prompts pass 3 args and a `null` closure). Built in one
-/// `LoweringContext` so the closure shares the call's arena; the closure's
-/// `${…}` interps keep their real source spans, so interp diagnostics point at
-/// the user's prompt. Lowering diagnostics / `env.X` refs from the prompt are
-/// returned for the caller to merge.
-pub(crate) fn synthesize_llm_call_with_prompt(
-    builtin_name: &str,
-    function_name: &str,
-    param_names: &[Name],
-    client_name: Option<&str>,
-    type_args: Vec<crate::ast::TypeExpr>,
-    prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
-    span: TextRange,
-) -> (
-    ExprBody,
-    AstSourceMap,
-    Vec<LoweringDiagnostic>,
-    Vec<EnvVarRef>,
-) {
-    use crate::ast::{CallArg, Literal};
-
-    let mut ctx = LoweringContext::new();
-
-    let fn_name_expr = ctx.alloc_expr(
-        Expr::Literal(Literal::String(function_name.to_string())),
-        span,
-    );
-
-    let entries: Vec<(ExprId, ExprId)> = param_names
-        .iter()
-        .map(|name| {
-            let key = ctx.alloc_expr(
-                Expr::Literal(Literal::String(name.as_str().to_string())),
-                span,
-            );
-            let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
-            (key, value)
-        })
-        .collect();
-    let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
-
-    let callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("llm"),
-            Name::new(builtin_name),
-        ]),
-        span,
-    );
-
-    let client_arg = match client_name {
-        Some(name) if name.contains('/') => {
-            let name_lit = ctx.alloc_expr(Expr::Literal(Literal::String(name.to_string())), span);
-            let ct_variant = ctx.alloc_expr(
-                Expr::Path(vec![
-                    Name::new("baml"),
-                    Name::new("llm"),
-                    Name::new("ClientType"),
-                    Name::new("Primitive"),
-                ]),
-                span,
-            );
-            let sub = ctx.alloc_expr(Expr::Array { elements: vec![] }, span);
-            let retry = ctx.alloc_expr(Expr::Null, span);
-            let counter = ctx.alloc_expr(Expr::Literal(Literal::Int(0)), span);
-            ctx.alloc_expr(
-                Expr::Object {
-                    type_name: baml_base::TypePath::from_dotted("baml.llm.Client"),
-                    type_args: vec![],
-                    fields: vec![
-                        (Name::new("name"), name_lit),
-                        (Name::new("client_type"), ct_variant),
-                        (Name::new("sub_clients"), sub),
-                        (Name::new("retry"), retry),
-                        (Name::new("counter"), counter),
-                    ],
-                    spreads: vec![],
-                },
-                span,
-            )
-        }
-        Some(name) => ctx.alloc_expr(Expr::Path(vec![Name::new(name)]), span),
-        None => ctx.alloc_expr(Expr::Null, span),
-    };
-
-    let prompt_closure = ctx.build_prompt_tag_closure(prompt_backtick, span);
-
-    let call = ctx.alloc_expr(
-        Expr::Call {
-            callee,
-            type_args,
-            args: vec![
-                CallArg::positional(client_arg),
-                CallArg::positional(fn_name_expr),
-                CallArg::positional(args_map),
-                // `prompt_closure` is a defaulted param → must be passed by name.
-                CallArg::named("prompt_closure", prompt_closure),
-            ],
-        },
-        span,
-    );
-
-    ctx.finish(Some(call))
-}
-
 /// Lower a `client Name = <expr>;` initializer into its own `ExprBody`.
 /// The value may be a node or a bare identifier/literal token.
 pub(crate) fn lower_client_initializer(
-    value: Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
+    value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
     span: TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<EnvVarRef>,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
-    let root = match &value {
+    let root = match value {
         Some(rowan::NodeOrToken::Node(node)) => ctx.lower_expr(node),
         Some(rowan::NodeOrToken::Token(token)) => ctx
             .try_lower_bare_token(token)
@@ -4112,41 +4003,6 @@ impl LoweringContext {
         let body = self.elaborate_tagged_body(&segments, span);
         self.synthesizing = prev_synth;
 
-        self.alloc_expr(
-            Expr::Template {
-                tag: TemplateTag::Custom { tag, body },
-                segments,
-            },
-            span,
-        )
-    }
-
-    /// BEP-049 §10 (M5f). Build a `baml.llm.prompt`-tagged closure over the
-    /// segments for a new-mode LLM prompt — a *bare* backtick literal (no written tag), so the
-    /// `baml.llm.prompt` tag is synthesized here. Mirrors `lower_tagged_template_expr`
-    /// but with the synthetic tag; the segment interps keep their real source
-    /// spans (so `${…}` diagnostics point at the user's prompt). The result is a
-    /// `(Context) -> PromptAst`-producing expression the orchestrator invokes.
-    pub(crate) fn build_prompt_tag_closure(
-        &mut self,
-        backtick: &baml_compiler_syntax::BacktickStringLiteral,
-        span: TextRange,
-    ) -> ExprId {
-        let tag = self.alloc_expr(
-            Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("llm"),
-                Name::new("prompt"),
-            ]),
-            span,
-        );
-        let segments = self.lower_template_segments_checked(backtick);
-        // The desugared closure body is entirely compiler-generated — mark its
-        // nodes synthetic, mirroring the untagged path. The segments were lowered
-        // above as real user code and keep their non-synthetic ids.
-        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
-        let body = self.elaborate_tagged_body(&segments, span);
-        self.synthesizing = prev_synth;
         self.alloc_expr(
             Expr::Template {
                 tag: TemplateTag::Custom { tag, body },

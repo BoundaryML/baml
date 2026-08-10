@@ -217,7 +217,7 @@ ${{render_ctx.output_format_with({kwargs})}}`;
 
 /// Run `get_prompt()` from `source` 3 times end-to-end (compile -> engine ->
 /// render) and assert the rendered output is stable across independent engine
-/// instances (i.e. deterministic — a HashMap where an IndexMap belongs would
+/// instances (i.e. deterministic — a `HashMap` where an `IndexMap` belongs would
 /// flake here).
 async fn render_stable(source: &str) -> String {
     let mut first_result: Option<String> = None;

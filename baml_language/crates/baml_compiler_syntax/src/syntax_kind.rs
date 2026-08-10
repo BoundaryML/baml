@@ -206,8 +206,8 @@ pub enum SyntaxKind {
     CLIENT_TYPE, // <llm> part
     /// `client Name = <expr>;` — a named client value declaration (the
     /// single-path replacement for `client<llm>` config blocks). Children:
-    /// KW_CLIENT, WORD (name), EQUALS, one expression node/token, optional
-    /// SEMICOLON.
+    /// `KW_CLIENT`, `WORD` (name), `EQUALS`, one expression node/token,
+    /// optional `SEMICOLON`.
     CLIENT_VALUE_DEF,
     CONFIG_BLOCK,
     CONFIG_ITEM,

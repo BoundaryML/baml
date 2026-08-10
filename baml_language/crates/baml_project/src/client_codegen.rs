@@ -420,6 +420,20 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 continue;
             }
 
+            // The `$spec` companion returns `ai.FunctionSpec<Out>` — a BAML-side
+            // recipe value for custom runners, not something a host language can
+            // use (and not something every generator can even classify: the C#
+            // generator hard-errors on it rather than skipping). The useful
+            // companions — `$render_prompt`, `$parse`, `$stream` — stay.
+            // TODO(host-streaming): `$stream` returns `ai.Stream<TPartial,
+            // TFinal>`, but every SDK generator hardcodes the legacy
+            // `baml.llm.Stream` (the C# one hard-errors rather than skipping).
+            // Host-language streaming returns once the generators learn the ai
+            // type; BAML-side streaming is fully supported today.
+            if func.name.as_str().ends_with("$spec") || func.name.as_str().ends_with("$stream") {
+                continue;
+            }
+
             if matches!(
                 baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
                 baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
@@ -840,16 +854,16 @@ mod tests {
         db.set_project_root(root);
         db.add_or_update_file(
             root.join("main.baml").as_path(),
-            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client \"openai/gpt-4o\"\n    prompt #\"Extract resume from {{resume}}\"#\n}\n",
+            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client \"openai/gpt-4o\"\n    prompt `Extract resume from ${resume} ${ctx.output_format}`\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
 
-        // The parent and each companion must be present as their own
-        // `Symbol::Function` entry, keyed on the suffixed name.
+        // The parent and each host-facing companion must be present as their
+        // own `Symbol::Function` entry, keyed on the suffixed name. `$spec` is
+        // deliberately absent — it returns a BAML-side `ai.FunctionSpec`.
         for expected in [
             "ExtractResume",
-            "ExtractResume$build_request",
             "ExtractResume$render_prompt",
             "ExtractResume$parse",
         ] {
@@ -865,67 +879,40 @@ mod tests {
     }
 
     #[test]
-    fn test_llm_functions_and_companions_get_default_client_argument() {
+    fn test_llm_functions_hide_the_injected_client_argument() {
         let root = Path::new("/tmp/llm_default_client_arg");
         let mut db = ProjectDatabase::new();
         db.set_project_root(root);
         db.add_or_update_file(
             root.join("main.baml").as_path(),
             r##"
-client<llm> GPT4 {
-  provider "openai"
-  options {
-    model "gpt-4o"
-    api_key "test"
-  }
-}
-
 class Resume { name string }
 
 function ExtractResume(resume: string) -> Resume {
-  client GPT4
-  prompt #"Extract resume from {{resume}}"#
+  client "openai/gpt-4o"
+  prompt `Extract resume from ${resume} ${ctx.output_format}`
 }
 "##,
         );
 
         let pool = build_symbol_pool(&db);
 
-        for (bare, expected_prefix) in [
+        // The compiler injects a trailing `client: ai.Client? = null` override
+        // onto the LLM function. `ai.Client` is an interface, which no target
+        // language can represent — leaving it in the pool made every generator
+        // classify the function as unsupported and drop it entirely. The pool
+        // must expose the user's own parameters only.
+        for (bare, expected) in [
             ("ExtractResume", &["resume"][..]),
             ("ExtractResume$render_prompt", &["resume"][..]),
-            ("ExtractResume$build_request", &["resume"][..]),
-            ("ExtractResume$build_request_stream", &["resume"][..]),
-            ("ExtractResume$stream", &["resume"][..]),
             ("ExtractResume$parse", &["json"][..]),
-            ("ExtractResume$parse_stream", &["sse"][..]),
         ] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
                 panic!("missing function {bare}");
             };
-
             let arg_names: Vec<&str> = func.arguments.iter().map(|a| a.name.as_str()).collect();
-            let mut expected_names = expected_prefix.to_vec();
-            expected_names.push("client");
-            assert_eq!(arg_names, expected_names, "arguments for {bare}");
-
-            let client_arg = func.arguments.last().expect("client argument");
-            assert_eq!(client_arg.name.as_str(), "client");
-            assert_eq!(
-                client_arg.default,
-                Some(cg::FunctionArgumentDefault::Expression {
-                    source: Some("GPT4".to_string()),
-                }),
-                "client default for {bare}",
-            );
-            match &client_arg.ty {
-                cg::Ty::Class(name, args, _) => {
-                    assert_eq!(name.to_string(), "baml.llm.Client");
-                    assert!(args.is_empty());
-                }
-                other => panic!("client type for {bare} should be baml.llm.Client, got {other:?}"),
-            }
+            assert_eq!(arg_names, expected, "arguments for {bare}");
         }
     }
 

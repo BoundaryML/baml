@@ -4395,21 +4395,6 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// True when the parser is positioned at the start of an LLM-block field
-    /// (`client`, `prompt`, `tools`, or `type_builder`). The unquoted
-    /// client-value scan uses this to stop at the next field so that fields
-    /// written on a single line (with no separating newline) are not merged
-    /// into the client value.
-    fn at_llm_field_start(&self) -> bool {
-        self.at(TokenKind::Client)
-            || self.at(TokenKind::TypeBuilder)
-            || (self.at(TokenKind::Word)
-                && self
-                    .current()
-                    .map(|t| t.text == "prompt" || t.text == "tools")
-                    .unwrap_or(false))
-    }
-
     /// Parse the `tools` field of an LLM function body: `tools [a, b]` or
     /// `tools: [a, b]`. The value is an arbitrary expression producing the
     /// tool list (usually an array literal of function references).

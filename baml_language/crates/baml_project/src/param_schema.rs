@@ -813,17 +813,11 @@ mod tests {
     }
 
     const LLM_FIXTURE: &str = r##"
-client<llm> GPT4 {
-  provider "openai"
-  options {
-    model "gpt-4o"
-    api_key "test"
-  }
-}
+client GPT4 = openai.OpenAiClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
   client GPT4
-  prompt #"{{ text }}"#
+  prompt `${text} ${ctx.output_format}`
 }
 
 function Plain(x: int) -> int { x }
