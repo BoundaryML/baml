@@ -34,7 +34,6 @@ use baml_type::{
 };
 
 use super::InferenceContext;
-use crate::impls::InterfaceTarget;
 
 /// One registered obligation.
 pub(super) enum Obligation {
@@ -97,7 +96,7 @@ impl<'db> InferenceContext<'db> {
                 }
                 if !ty.has_infer() && !interface_has_infer(&interface) {
                     if !self.implements_holds(&ty, &interface) {
-                        let expected = interface_as_existential(&interface);
+                        let expected = interface.existential();
                         self.result
                             .type_mismatches
                             .insert(*at, (expected, ty.clone()));
@@ -166,7 +165,7 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let Some(facts) = applicable else {
-            let expected = interface_as_existential(interface);
+            let expected = interface.existential();
             self.result
                 .type_mismatches
                 .insert(at, (expected, goal.clone()));
@@ -189,13 +188,13 @@ impl<'db> InferenceContext<'db> {
         let TyKind::Interface(name, args, pins, _) = subject.kind() else {
             return Attempt::Stalled;
         };
-        let subject_target = InterfaceTarget {
-            name: name.clone(),
-            args: args.to_vec(),
-            pins: pins.to_vec(),
-        };
+        let subject_target = InterfaceRef::new(
+                name.clone(),
+                (args.to_vec()).into(),
+                pins.to_vec(),
+            );
         let heads = crate::impls::requires_heads(self.db, &subject_target, subject, 8);
-        let goal_target = target_of(goal);
+        let goal_target = goal.clone();
         let mut applicable = None;
         for head in &heads {
             let snapshot = self.table.snapshot();
@@ -209,7 +208,7 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let Some(head) = applicable else {
-            let expected = interface_as_existential(goal);
+            let expected = goal.existential();
             self.result
                 .type_mismatches
                 .insert(at, (expected, subject.clone()));
@@ -224,17 +223,17 @@ impl<'db> InferenceContext<'db> {
     /// pairwise, and every goal pin unifies with the head's realization
     /// of that member (the head may pin MORE; a member the head does not
     /// realize cannot prove a pinned requirement).
-    fn confirm_object(&mut self, head: &InterfaceTarget, goal: &InterfaceTarget) -> bool {
-        if head.name != goal.name || head.args.len() != goal.args.len() {
+    fn confirm_object(&mut self, head: &InterfaceRef, goal: &InterfaceRef) -> bool {
+        if head.name != goal.name || head.generics.len() != goal.generics.len() {
             return false;
         }
-        for (have, want) in head.args.iter().zip(&goal.args) {
+        for (have, want) in head.generics.iter().zip(&goal.generics) {
             if self.table.unify(have, want).is_err() {
                 return false;
             }
         }
-        for (name, want_pin) in &goal.pins {
-            let Some((_, have_pin)) = head.pins.iter().find(|(have_name, _)| have_name == name)
+        for (name, want_pin) in &goal.associated_types {
+            let Some((_, have_pin)) = head.associated_types.iter().find(|(have_name, _)| have_name == name)
             else {
                 return false;
             };
@@ -263,13 +262,13 @@ impl<'db> InferenceContext<'db> {
                 let interface = InterfaceRef::new(
                     bound.name.clone(),
                     bound
-                        .args
+                        .generics
                         .iter()
                         .map(|ty| crate::impls::substitute_bindings(ty, instantiation))
                         .collect::<Vec<_>>()
                         .into_boxed_slice(),
                     bound
-                        .pins
+                        .associated_types
                         .iter()
                         .map(|(name, ty)| {
                             (
@@ -301,11 +300,11 @@ impl<'db> InferenceContext<'db> {
         interface: &InterfaceRef,
         facts: &crate::impls::ImplFacts<'_>,
     ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
-        if facts.interface.args.len() != interface.generics.len() {
+        if facts.interface.generics.len() != interface.generics.len() {
             return None;
         }
         let instantiation = self.confirm_impl_subject(goal, facts)?;
-        for (pattern, requested) in facts.interface.args.iter().zip(interface.generics.iter()) {
+        for (pattern, requested) in facts.interface.generics.iter().zip(interface.generics.iter()) {
             let pattern = crate::impls::substitute_bindings(pattern, &instantiation);
             self.table.unify(requested, &pattern).ok()?;
         }
@@ -316,17 +315,18 @@ impl<'db> InferenceContext<'db> {
                 .find(|(declared, _)| declared == name)
                 .map(|(_, ty)| crate::impls::substitute_bindings(ty, &instantiation))
                 .or_else(|| {
-                    let implemented = InterfaceTarget {
-                        name: facts.interface.name.clone(),
-                        args: facts
+                    let implemented = InterfaceRef::new(
+                facts.interface.name.clone(),
+                facts
+                    .interface
+                    .generics
+                    .iter()
+                    .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                facts
                             .interface
-                            .args
-                            .iter()
-                            .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
-                            .collect(),
-                        pins: facts
-                            .interface
-                            .pins
+                            .associated_types
                             .iter()
                             .map(|(pin, ty)| {
                                 (
@@ -335,7 +335,7 @@ impl<'db> InferenceContext<'db> {
                                 )
                             })
                             .collect(),
-                    };
+            );
                     crate::impls::realized_assoc_default(self.db, &implemented, goal, name)
                 })?;
             // Normalize-then-unify (the `sub` entry's discipline): a
@@ -452,7 +452,7 @@ impl<'db> InferenceContext<'db> {
         // oracle refuses (it is var-carrying by construction here).
         let mut pins: Vec<(baml_type::Name, Ty)> = facts
             .interface
-            .pins
+            .associated_types
             .iter()
             .chain(facts.associated_types.iter())
             .map(|(pin, ty)| {
@@ -463,16 +463,17 @@ impl<'db> InferenceContext<'db> {
             })
             .collect();
         pins.dedup_by(|(a, _), (b, _)| a == b);
-        let implemented = InterfaceTarget {
-            name: facts.interface.name.clone(),
-            args: facts
+        let implemented = InterfaceRef::new(
+            facts.interface.name.clone(),
+            facts
                 .interface
-                .args
+                .generics
                 .iter()
                 .map(|arg| crate::impls::substitute_bindings(arg, &instantiation))
-                .collect(),
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             pins,
-        };
+        );
         let member = crate::method_resolution::member_on_interface(
             self.db,
             &self.facts,
@@ -491,24 +492,24 @@ impl<'db> InferenceContext<'db> {
     /// construction: a union reaches the registry and no impl subject is
     /// a union, so it fails - never "passes as a subtype".
     fn implements_holds(&mut self, ty: &Ty, interface: &InterfaceRef) -> bool {
-        let target = target_of(interface);
+        let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {
             TyKind::TypeVar(param, _) => {
                 let carried =
                     baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
                 carried.iter().any(|have| {
-                    let have = InterfaceTarget::from_constraint(have);
+                    let have = InterfaceRef::from_constraint(have);
                     carried_satisfies(&have, &target, &eq)
                         || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
                 })
             }
             TyKind::Interface(name, args, pins, _) => {
-                let have = InterfaceTarget {
-                    name: name.clone(),
-                    args: args.to_vec(),
-                    pins: pins.to_vec(),
-                };
+                let have = InterfaceRef::new(
+                name.clone(),
+                (args.to_vec()).into(),
+                pins.to_vec(),
+            );
                 carried_satisfies(&have, &target, &eq)
                     || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
             }
@@ -518,7 +519,7 @@ impl<'db> InferenceContext<'db> {
             // projection-subtype rule (`associated_type_bound`).
             // Fail-closed - TIR's vacuous rule retired with I5.
             TyKind::AssociatedTypeProjection { .. } => {
-                let existential = interface_as_existential(interface);
+                let existential = interface.existential();
                 self.sub(ty, &existential)
             }
             _ => crate::impls::implements_interface(self.db, ty, &target),
@@ -550,29 +551,13 @@ fn interface_has_infer(interface: &InterfaceRef) -> bool {
             .any(|(_, ty)| ty.has_infer())
 }
 
-fn target_of(interface: &InterfaceRef) -> InterfaceTarget {
-    InterfaceTarget {
-        name: interface.name.clone(),
-        args: interface.generics.to_vec(),
-        pins: interface.associated_types.to_vec(),
-    }
-}
-
-fn interface_as_existential(interface: &InterfaceRef) -> Ty {
-    Ty::intern(TyKind::Interface(
-        interface.name.clone(),
-        interface.generics.to_vec().into(),
-        interface.associated_types.to_vec().into(),
-        baml_type::TyAttr::default(),
-    ))
-}
 
 /// `have` satisfies `want` when heads and args agree and `have` pins
 /// everything `want` pins to the same type (it may pin MORE; a bare
 /// `have` does not satisfy a pinned requirement).
 fn carried_satisfies(
-    have: &InterfaceTarget,
-    want: &InterfaceTarget,
+    have: &InterfaceRef,
+    want: &InterfaceRef,
     eq: &crate::impls::AliasOnlyFacts<'_>,
 ) -> bool {
     use baml_type::normalize::equivalent_interned;
@@ -581,8 +566,8 @@ fn carried_satisfies(
     // requirement). Args and pins compare under the alias oracle -
     // the `==` drift an alias-spelled bound used to trip is gone.
     crate::impls::head_matches(have, want, eq)
-        && want.pins.iter().all(|(name, want_pin)| {
-            have.pins.iter().any(|(have_name, have_pin)| {
+        && want.associated_types.iter().all(|(name, want_pin)| {
+            have.associated_types.iter().any(|(have_name, have_pin)| {
                 have_name == name && equivalent_interned(have_pin, want_pin, eq)
             })
         })

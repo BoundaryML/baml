@@ -12,6 +12,7 @@
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{
     Interface, Name, ParamTy, QualifiedTypeName, Ty,
+    interned::InterfaceRef,
     normalize::{ProjectionStep, TypeContext},
 };
 
@@ -72,7 +73,7 @@ impl TypeContext for Facts<'_> {
 
     fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
         let concrete = crate::impls::interned_ty(concrete);
-        let target = crate::impls::InterfaceTarget::from_constraint(interface);
+        let target = InterfaceRef::from_constraint(interface);
         crate::impls::implements_interface(self.db, &concrete, &target)
     }
 
@@ -81,15 +82,15 @@ impl TypeContext for Facts<'_> {
     }
 
     fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {
-        let sub = crate::impls::InterfaceTarget::from_constraint(sub);
+        let sub = InterfaceRef::from_constraint(sub);
         // No better subject at this fact boundary: `Self` in `sub`'s
         // requires targets realizes as the existential itself (rustc's
         // `dyn A: B` elaboration).
-        let subject = crate::impls::target_existential(&sub);
+        let subject = sub.existential();
         crate::impls::interface_requires(
             self.db,
             &sub,
-            &crate::impls::InterfaceTarget::from_constraint(sup),
+            &InterfaceRef::from_constraint(sup),
             &subject,
             8,
         )
@@ -100,7 +101,7 @@ impl TypeContext for Facts<'_> {
         // args with `Self` left symbolic (the trait's contract: the oracle
         // is a function of the reference, not an implementor) - rustc's
         // `explicit_item_bounds` instantiated.
-        let target = crate::impls::InterfaceTarget::from_constraint(interface);
+        let target = InterfaceRef::from_constraint(interface);
         let symbolic_self = baml_type::interned::Ty::intern(baml_type::interned::TyKind::TypeVar(
             ParamTy::new(0, Name::new("Self")),
             baml_type::TyAttr::default(),
@@ -138,19 +139,19 @@ impl TypeContext for Facts<'_> {
         {
             return ProjectionStep::Reduced(pin.clone());
         }
-        let target = crate::impls::InterfaceTarget::from_constraint(interface);
+        let target = InterfaceRef::from_constraint(interface);
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         if let Ty::TypeVar(param, _) = base {
             let base_interned = crate::impls::interned_ty(base);
             let mut candidates: Vec<baml_type::interned::Ty> = Vec::new();
             for bound in self.type_var_bound(param) {
-                let have = crate::impls::InterfaceTarget::from_constraint(&bound);
+                let have = InterfaceRef::from_constraint(&bound);
                 for head in crate::impls::requires_heads(self.db, &have, &base_interned, 8) {
                     if !crate::impls::head_matches(&head, &target, &eq) {
                         continue;
                     }
                     let value = head
-                        .pins
+                        .associated_types
                         .iter()
                         .find(|(name, _)| name == member)
                         .map(|(_, ty)| ty.clone())
@@ -184,14 +185,16 @@ impl TypeContext for Facts<'_> {
             // An existential fixes an omitted defaulted member to the
             // default, with `Self` = the base itself (so a
             // Self-referencing default resolves against the base's pins).
-            let base_target = crate::impls::InterfaceTarget {
-                name: name.clone(),
-                args: args.iter().map(crate::impls::interned_ty).collect(),
-                pins: pins
-                    .iter()
+            let base_target = InterfaceRef::new(
+                name.clone(),
+                args.iter()
+                    .map(crate::impls::interned_ty)
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                pins.iter()
                     .map(|(pin_name, ty)| (pin_name.clone(), crate::impls::interned_ty(ty)))
                     .collect(),
-            };
+            );
             let base_interned = crate::impls::interned_ty(base);
             if let Some(default) = crate::impls::realized_assoc_default(
                 self.db,

@@ -401,6 +401,49 @@ impl InterfaceRef {
             associated_types: associated_types.into_boxed_slice(),
         }
     }
+
+    /// The interface reference an existential type carries, when `ty`
+    /// is one - the single extraction every consumer shares (rustc has
+    /// exactly one `TraitRef`; nobody hand-builds a parallel copy).
+    pub fn of_ty(ty: &Ty) -> Option<InterfaceRef> {
+        match ty.kind() {
+            TyKind::Interface(name, args, pins, _) => Some(InterfaceRef::new(
+                name.clone(),
+                args.to_vec().into_boxed_slice(),
+                pins.to_vec(),
+            )),
+            _ => None,
+        }
+    }
+
+    /// From the plain algebra's constraint satellite (the `TypeContext`
+    /// boundary).
+    pub fn from_constraint(interface: &crate::Interface) -> InterfaceRef {
+        InterfaceRef::new(
+            interface.name.clone(),
+            interface
+                .generics
+                .iter()
+                .map(Ty::from_plain)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            interface
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                .collect(),
+        )
+    }
+
+    /// The existential type this reference denotes (`dyn`-style view).
+    pub fn existential(&self) -> Ty {
+        Ty::intern(TyKind::Interface(
+            self.name.clone(),
+            self.generics.to_vec().into(),
+            self.associated_types.to_vec().into(),
+            TyAttr::default(),
+        ))
+    }
 }
 
 // -- Flag computation ---------------------------------------------------------

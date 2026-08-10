@@ -24,7 +24,7 @@
 use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
 use baml_type::{
     Freshness, TyAttr,
-    interned::{Ty, TyKind},
+    interned::{InterfaceRef, Ty, TyKind},
     normalize::{TypeContext as _, is_subtype_interned, normalize_interned},
 };
 
@@ -381,11 +381,7 @@ impl<'db> InferenceContext<'db> {
             pins.clone().into_boxed_slice(),
             attr(),
         ));
-        let target = crate::impls::InterfaceTarget {
-            name: qtn.clone(),
-            args,
-            pins,
-        };
+        let target = InterfaceRef::new(qtn.clone(), args.into_boxed_slice(), pins);
 
         let declared: Vec<baml_type::Name> = data
             .fields
@@ -1097,14 +1093,16 @@ impl PatCtx for HirPatCtx<'_, '_> {
             return Vec::new();
         };
         let head = Ty::from_plain(iface_ty);
-        let target = crate::impls::InterfaceTarget {
-            name: qtn.clone(),
-            args: args.iter().map(Ty::from_plain).collect(),
-            pins: pins
-                .iter()
+        let target = InterfaceRef::new(
+            qtn.clone(),
+            args.iter()
+                .map(Ty::from_plain)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            pins.iter()
                 .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
                 .collect(),
-        };
+        );
         baml_compiler2_ppir::item_data::interface_data(self.infer.db, interface)
             .fields
             .iter()

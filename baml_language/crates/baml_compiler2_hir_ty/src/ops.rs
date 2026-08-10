@@ -6,9 +6,9 @@
 //! every other interface fact. Rewriting primitive cases to single
 //! instructions is MIR's job at lowering, invisible to inference.
 
-use baml_type::{Name, TypeName, interned::Ty};
+use baml_type::{Name, TypeName, interned::{InterfaceRef, Ty}};
 
-use crate::impls::{InterfaceTarget, resolve_impl, resolved_pin};
+use crate::impls::{resolve_impl, resolved_pin};
 
 /// The `Output` of the unique impl matching `baml.ops.<interface><rhs>`
 /// for `lhs`, or `None` when the operands do not support the operator.
@@ -19,15 +19,15 @@ pub fn operator_output(
     lhs: &Ty,
     rhs: Option<&Ty>,
 ) -> Option<Ty> {
-    let target = InterfaceTarget {
-        name: TypeName::new(
+    let target = InterfaceRef::new(
+        TypeName::new(
             Name::new("baml"),
             vec![Name::new("ops")],
             Name::new(interface),
         ),
-        args: rhs.cloned().into_iter().collect(),
-        pins: Vec::new(),
-    };
+        rhs.cloned().into_iter().collect::<Vec<_>>().into_boxed_slice(),
+        Vec::new(),
+    );
     let resolved = resolve_impl(db, lhs, &target)?;
     // Binding-else-default through the shared `leaf_def` read, so an
     // operator interface with a defaulted `Output` resolves like any

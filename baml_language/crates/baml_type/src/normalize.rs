@@ -2103,3 +2103,4 @@ pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &
     .canonicalize(ctx, &mut HashSet::new());
     interned::Ty::from_plain(&normal.into_ty())
 }
+

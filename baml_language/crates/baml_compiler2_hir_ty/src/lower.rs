@@ -281,11 +281,7 @@ impl<'db> LowerCtx<'db> {
                 member: prev_member,
                 ..
             } => {
-                let target = crate::impls::InterfaceTarget {
-                    name: interface.name.clone(),
-                    args: interface.generics.to_vec(),
-                    pins: interface.associated_types.to_vec(),
-                };
+                let target = interface.clone();
                 let bound =
                     crate::impls::realized_assoc_bound(self.db, &target, prev_base, prev_member)?;
                 match bound.kind() {

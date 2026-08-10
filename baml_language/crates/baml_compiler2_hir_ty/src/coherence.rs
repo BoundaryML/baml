@@ -39,7 +39,9 @@ use baml_type::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::impls::{ImplFacts, InterfaceTarget, impl_facts, package_impl_locs};
+use baml_type::interned::InterfaceRef;
+
+use crate::impls::{ImplFacts, impl_facts, package_impl_locs};
 
 /// The unifier's substitution: unification-variable -> bound type.
 pub type TypeBindings = FxHashMap<ParamTy, Ty>;
@@ -1290,7 +1292,7 @@ fn bounds_hold_at_common_instance(
                 && crate::impls::resolve_impl(
                     db,
                     &crate::impls::interned_ty(witness),
-                    &InterfaceTarget::from_constraint(&bound),
+                    &InterfaceRef::from_constraint(&bound),
                 )
                 .is_none()
             {
@@ -1302,12 +1304,12 @@ fn bounds_hold_at_common_instance(
 }
 
 /// An interned bound target as a plain constraint.
-fn plain_bound(target: &InterfaceTarget) -> Interface {
+fn plain_bound(target: &InterfaceRef) -> Interface {
     Interface::new(
         target.name.clone(),
-        target.args.iter().map(baml_type::interned::Ty::to_plain).collect(),
+        target.generics.iter().map(baml_type::interned::Ty::to_plain).collect(),
         target
-            .pins
+            .associated_types
             .iter()
             .map(|(name, ty)| (name.clone(), ty.to_plain()))
             .collect(),
@@ -1348,7 +1350,7 @@ fn renamed_subject(
     );
     let args = rule
         .interface
-        .args
+        .generics
         .iter()
         .map(|arg| nf(&substitute_plain(&arg.to_plain(), &rename), enum_variants))
         .collect();
@@ -1403,7 +1405,7 @@ pub fn package_orphan_violations<'db>(
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
         let for_ty = facts.for_ty_pattern.to_plain();
-        let args: Vec<Ty> = facts.interface.args.iter().map(baml_type::interned::Ty::to_plain).collect();
+        let args: Vec<Ty> = facts.interface.generics.iter().map(baml_type::interned::Ty::to_plain).collect();
         match orphan_check(&current_package, &facts.interface.name, &for_ty, &args) {
             OrphanOutcome::Ok => {}
             OrphanOutcome::UncoveredParam(name) => violations.push(OrphanViolation {

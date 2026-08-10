@@ -35,7 +35,7 @@ use baml_compiler2_hir::loc::ImplLoc;
 use baml_compiler2_hir::package::PackageId;
 use baml_type::{
     Name, ParamTy, TypeName,
-    interned::{Ty, TyKind},
+    interned::{InterfaceRef, Ty, TyKind},
     normalize::{TypeContext, equivalent_interned},
 };
 use rustc_hash::FxHashMap;
@@ -45,44 +45,21 @@ use rustc_hash::FxHashMap;
 /// the resolver.
 const BLANKET_IMPL_BOUND_DEPTH: u32 = 16;
 
-/// An interface reference in this crate's vocabulary: the requested or
-/// implemented head, its generic args, and any associated-type pins.
-#[derive(Debug, Clone, PartialEq)]
-pub struct InterfaceTarget {
-    pub name: TypeName,
-    pub args: Vec<Ty>,
-    pub pins: Vec<(Name, Ty)>,
-}
 
 /// The plain-to-interned conversion at the `TypeContext` boundary.
 pub(crate) fn interned_ty(ty: &baml_type::Ty) -> Ty {
     Ty::from_plain(ty)
 }
 
-impl InterfaceTarget {
-    /// From the shared algebra's plain constraint (the `TypeContext`
-    /// boundary).
-    pub fn from_constraint(interface: &baml_type::Interface) -> InterfaceTarget {
-        InterfaceTarget {
-            name: interface.name.clone(),
-            args: interface.generics.iter().map(Ty::from_plain).collect(),
-            pins: interface
-                .associated_types
-                .iter()
-                .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
-                .collect(),
-        }
-    }
-}
 
 /// One impl's resolution-relevant facts, normalized to the free shape.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplFacts<'db> {
-    pub interface: InterfaceTarget,
+    pub interface: InterfaceRef,
     pub for_ty_pattern: Ty,
     /// The impl's own generic params with their CONJUNCTIVE bounds (each
     /// bound an interface reference).
-    pub generic_params: Vec<(ParamTy, Vec<InterfaceTarget>)>,
+    pub generic_params: Vec<(ParamTy, Vec<InterfaceRef>)>,
     pub associated_types: Vec<(Name, Ty)>,
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
 }
@@ -116,7 +93,7 @@ pub fn impl_facts<'db>(
     let file = block.file(db);
 
     // The generic frame and for-target, normalized to the free shape.
-    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<InterfaceTarget>>, _) =
+    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<InterfaceRef>>, _) =
         match &data.subject {
             ImplSubjectData::InClass { class, .. } => {
                 let frame = crate::lower::class_generic_frame(db, *class);
@@ -128,7 +105,7 @@ pub fn impl_facts<'db>(
                     .map(|bound| {
                         bound
                             .and_then(|type_ref| {
-                                interface_target_of(
+                                InterfaceRef::of_ty(
                                     &ctx.lower_type_ref(&class_data.type_refs, type_ref),
                                 )
                             })
@@ -160,7 +137,7 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                interface_target_of(&ctx.lower_type_ref(&data.type_refs, type_ref))
+                                InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, type_ref))
                             })
                             .collect()
                     })
@@ -181,13 +158,7 @@ pub fn impl_facts<'db>(
                 param,
                 bounds
                     .iter()
-                    .map(|target| {
-                        baml_type::interned::InterfaceRef::new(
-                            target.name.clone(),
-                            target.args.clone().into_boxed_slice(),
-                            target.pins.clone(),
-                        )
-                    })
+                    .map(|target| target.clone())
                     .collect(),
             )
         })
@@ -195,7 +166,7 @@ pub fn impl_facts<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map);
-    let interface = interface_target_of(&ctx.lower_type_ref(&data.type_refs, data.interface_target))?;
+    let interface = InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, data.interface_target))?;
     let associated_types = data
         .associated_type_bindings
         .iter()
@@ -216,17 +187,6 @@ pub fn impl_facts<'db>(
 }
 
 /// An interface-existential lowering read back as a target reference.
-fn interface_target_of(ty: &Ty) -> Option<InterfaceTarget> {
-    match ty.kind() {
-        TyKind::Interface(name, args, pins, _) => Some(InterfaceTarget {
-            name: name.clone(),
-            args: args.to_vec(),
-            pins: pins.to_vec(),
-        }),
-        _ => None,
-    }
-}
-
 /// Every impl block a package declares, in source order (coherence
 /// guarantees at most one match; stable order keeps a coherence-violating
 /// program from resolving arbitrarily).
@@ -332,24 +292,8 @@ pub struct ResolvedImpl<'db> {
 impl ResolvedImpl<'_> {
     /// The interface this impl provides, realized through the match's
     /// bindings.
-    pub fn implemented(&self) -> InterfaceTarget {
-        InterfaceTarget {
-            name: self.facts.interface.name.clone(),
-            args: self
-                .facts
-                .interface
-                .args
-                .iter()
-                .map(|arg| substitute_bindings(arg, &self.bindings))
-                .collect(),
-            pins: self
-                .facts
-                .interface
-                .pins
-                .iter()
-                .map(|(name, ty)| (name.clone(), substitute_bindings(ty, &self.bindings)))
-                .collect(),
-        }
+    pub fn implemented(&self) -> InterfaceRef {
+        realized(&self.facts.interface, &self.bindings)
     }
 }
 
@@ -385,7 +329,7 @@ pub(crate) fn resolved_pin(
 /// BAML the written reference itself fixes omitted defaulted members.
 pub(crate) fn realized_assoc_default(
     db: &dyn baml_compiler2_ppir::Db,
-    target: &InterfaceTarget,
+    target: &InterfaceRef,
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
@@ -402,7 +346,7 @@ pub(crate) fn realized_assoc_default(
 /// still-symbolic projection is provable against.
 pub(crate) fn realized_assoc_bound(
     db: &dyn baml_compiler2_ppir::Db,
-    target: &InterfaceTarget,
+    target: &InterfaceRef,
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
@@ -419,7 +363,7 @@ pub(crate) fn realized_assoc_bound(
 /// diagnostic is S17's).
 fn assoc_realization_env<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    target: &InterfaceTarget,
+    target: &InterfaceRef,
 ) -> Option<(
     baml_compiler2_hir::loc::InterfaceLoc<'db>,
     &'db baml_compiler2_ppir::item_data::InterfaceData<'db>,
@@ -431,7 +375,7 @@ fn assoc_realization_env<'db>(
         return None;
     };
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    if data.generic_params.len() != target.args.len() {
+    if data.generic_params.len() != target.generics.len() {
         return None;
     }
     Some((interface, data))
@@ -495,8 +439,12 @@ pub fn impls_for_type<'db>(
             // never trip it even when their `ParamTy` identity shadows
             // an impl param's.
             let undetermined = |ty: &Ty| !pattern_fully_bound(ty, &params, &bindings);
-            if facts.interface.args.iter().any(|arg| undetermined(arg))
-                || facts.interface.pins.iter().any(|(_, ty)| undetermined(ty))
+            if facts.interface.generics.iter().any(|arg| undetermined(arg))
+                || facts
+                    .interface
+                    .associated_types
+                    .iter()
+                    .any(|(_, ty)| undetermined(ty))
             {
                 continue;
             }
@@ -579,7 +527,7 @@ pub(crate) fn all_impl_facts<'db>(
 pub fn implements_interface(
     db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceTarget,
+    interface: &InterfaceRef,
 ) -> bool {
     resolve_impl(db, concrete, interface).is_some()
 }
@@ -589,7 +537,7 @@ pub fn implements_interface(
 pub fn resolve_impl<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceTarget,
+    interface: &InterfaceRef,
 ) -> Option<ResolvedImpl<'db>> {
     // RIGID vars (skolems) are legal in goals: rustc proves
     // `Arr<T>: Iter<T>` inside a generic body by matching impls with
@@ -598,7 +546,7 @@ pub fn resolve_impl<'db>(
     // impl var, never with ground structure. Only unresolved inference
     // vars and error sentinels stay out.
     let admissible = |ty: &Ty| !ty.has_infer() && !ty.has_error();
-    if !admissible(concrete) || !interface.args.iter().all(admissible) {
+    if !admissible(concrete) || !interface.generics.iter().all(admissible) {
         return None;
     }
     // A literal-typed value implements what its base primitive does
@@ -624,9 +572,9 @@ fn is_realized(ty: &Ty) -> bool {
 fn resolve_within_depth<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceTarget,
+    interface: &InterfaceRef,
     depth: u32,
-    in_progress: &mut Vec<(Ty, InterfaceTarget)>,
+    in_progress: &mut Vec<(Ty, InterfaceRef)>,
 ) -> Option<ResolvedImpl<'db>> {
     // CYCLE DETECTION (rustc's obligation-stack shape): a goal already
     // being resolved on this path has no finite proof - inductive
@@ -671,11 +619,11 @@ fn resolve_within_depth<'db>(
 fn search_roots<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceTarget,
+    interface: &InterfaceRef,
 ) -> Vec<PackageId<'db>> {
     let mut names: Vec<Name> = vec![interface.name.package().clone()];
     collect_packages(concrete, &mut names);
-    for arg in &interface.args {
+    for arg in &interface.generics {
         collect_packages(arg, &mut names);
     }
     names.sort();
@@ -727,11 +675,11 @@ fn match_impl_head(
     db: &dyn baml_compiler2_ppir::Db,
     facts: &ImplFacts<'_>,
     concrete: &Ty,
-    interface: &InterfaceTarget,
+    interface: &InterfaceRef,
     eq: &AliasOnlyFacts<'_>,
 ) -> Option<FxHashMap<ParamTy, Ty>> {
     if facts.interface.name != interface.name
-        || facts.interface.args.len() != interface.args.len()
+        || facts.interface.generics.len() != interface.generics.len()
     {
         return None;
     }
@@ -752,7 +700,7 @@ fn match_impl_head(
     if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, eq) {
         return None;
     }
-    for (pattern, target) in facts.interface.args.iter().zip(&interface.args) {
+    for (pattern, target) in facts.interface.generics.iter().zip(&interface.generics) {
         if !match_pattern(pattern, target, &params, &mut bindings, eq) {
             return None;
         }
@@ -762,7 +710,7 @@ fn match_impl_head(
     // else the interface DEFAULT realized at this impl (rustc's
     // `leaf_def`). A member the interface neither binds nor defaults
     // fails closed - the request pins something this impl cannot supply.
-    for (name, requested) in &interface.pins {
+    for (name, requested) in &interface.associated_types {
         let supplied = match facts
             .associated_types
             .iter()
@@ -770,23 +718,7 @@ fn match_impl_head(
         {
             Some((_, declared)) => Some(substitute_bindings(declared, &bindings)),
             None => {
-                let implemented = InterfaceTarget {
-                    name: facts.interface.name.clone(),
-                    args: facts
-                        .interface
-                        .args
-                        .iter()
-                        .map(|arg| substitute_bindings(arg, &bindings))
-                        .collect(),
-                    pins: facts
-                        .interface
-                        .pins
-                        .iter()
-                        .map(|(pin_name, ty)| {
-                            (pin_name.clone(), substitute_bindings(ty, &bindings))
-                        })
-                        .collect(),
-                };
+                let implemented = realized(&facts.interface, &bindings);
                 realized_assoc_default(db, &implemented, concrete, name)
             }
         };
@@ -1046,6 +978,29 @@ fn pattern_fully_bound(
     all_bound
 }
 
+/// An interface reference REALIZED through impl-param bindings: name
+/// kept, generics and pins substituted - the one spelling of the
+/// five hand-copied blocks this replaces.
+pub(crate) fn realized(
+    reference: &InterfaceRef,
+    bindings: &FxHashMap<ParamTy, Ty>,
+) -> InterfaceRef {
+    InterfaceRef::new(
+        reference.name.clone(),
+        reference
+            .generics
+            .iter()
+            .map(|arg| substitute_bindings(arg, bindings))
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+        reference
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), substitute_bindings(ty, bindings)))
+            .collect(),
+    )
+}
+
 /// Substitutes impl-param bindings into a type by PARAM IDENTITY (the
 /// registry's frame is not positional at use sites, unlike signature
 /// instantiation).
@@ -1069,27 +1024,15 @@ fn bounds_hold(
     facts: &ImplFacts<'_>,
     bindings: &FxHashMap<ParamTy, Ty>,
     depth: u32,
-    in_progress: &mut Vec<(Ty, InterfaceTarget)>,
+    in_progress: &mut Vec<(Ty, InterfaceRef)>,
 ) -> bool {
     for (param, bounds) in &facts.generic_params {
         let Some(actual) = bindings.get(param) else {
             continue;
         };
         for bound in bounds {
-            let bound = InterfaceTarget {
-                name: bound.name.clone(),
-                args: bound
-                    .args
-                    .iter()
-                    .map(|arg| substitute_bindings(arg, bindings))
-                    .collect(),
-                pins: bound
-                    .pins
-                    .iter()
-                    .map(|(name, ty)| (name.clone(), substitute_bindings(ty, bindings)))
-                    .collect(),
-            };
-            if !is_realized(actual) || !bound.args.iter().all(is_realized) {
+            let bound = realized(bound, bindings);
+            if !is_realized(actual) || !bound.generics.iter().all(is_realized) {
                 continue;
             }
             if depth == 0
@@ -1108,10 +1051,10 @@ fn bounds_hold(
 /// re-prepended it; spelled once here.
 pub(crate) fn requires_heads(
     db: &dyn baml_compiler2_ppir::Db,
-    root: &InterfaceTarget,
+    root: &InterfaceRef,
     self_ty: &Ty,
     fuel: u32,
-) -> Vec<InterfaceTarget> {
+) -> Vec<InterfaceRef> {
     let mut heads = vec![root.clone()];
     heads.extend(direct_requires_closure(db, root, self_ty, fuel));
     heads
@@ -1126,17 +1069,17 @@ pub(crate) fn requires_heads(
 /// replaces (unification stays only in obligation CONFIRMATION, which
 /// commits variables).
 pub(crate) fn head_matches(
-    have: &InterfaceTarget,
-    want: &InterfaceTarget,
+    have: &InterfaceRef,
+    want: &InterfaceRef,
     eq: &AliasOnlyFacts<'_>,
 ) -> bool {
     use baml_type::normalize::equivalent_interned;
     have.name == want.name
-        && have.args.len() == want.args.len()
+        && have.generics.len() == want.generics.len()
         && have
-            .args
+            .generics
             .iter()
-            .zip(&want.args)
+            .zip(&want.generics)
             .all(|(a, b)| equivalent_interned(a, b, eq))
 }
 
@@ -1152,10 +1095,10 @@ pub(crate) fn head_matches(
 /// root implements every required interface (the requires contract).
 pub fn direct_requires_closure(
     db: &dyn baml_compiler2_ppir::Db,
-    root: &InterfaceTarget,
+    root: &InterfaceRef,
     self_ty: &Ty,
     fuel: u32,
-) -> Vec<InterfaceTarget> {
+) -> Vec<InterfaceRef> {
     let mut out = Vec::new();
     let mut queue = vec![root.clone()];
     let mut budget = fuel;
@@ -1180,9 +1123,9 @@ pub fn direct_requires_closure(
 /// instantiation.
 fn direct_requires(
     db: &dyn baml_compiler2_ppir::Db,
-    of: &InterfaceTarget,
+    of: &InterfaceRef,
     self_ty: &Ty,
-) -> Vec<InterfaceTarget> {
+) -> Vec<InterfaceRef> {
     let Some((interface, data)) = assoc_realization_env(db, of) else {
         return Vec::new();
     };
@@ -1193,22 +1136,23 @@ fn direct_requires(
     data.requires
         .iter()
         .filter_map(|&required| {
-            let target = interface_target_of(&ctx.lower_type_ref(&data.type_refs, required))?;
-            Some(InterfaceTarget {
-                name: target.name.clone(),
-                args: target
-                    .args
+            let target = InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, required))?;
+            Some(InterfaceRef::new(
+                target.name.clone(),
+                target
+                    .generics
                     .iter()
                     .map(|arg| crate::lower::substitute_params(arg, &instantiation))
-                    .collect(),
-                pins: target
-                    .pins
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                target
+                    .associated_types
                     .iter()
                     .map(|(name, ty)| {
                         (name.clone(), crate::lower::substitute_params(ty, &instantiation))
                     })
                     .collect(),
-            })
+            ))
         })
         .collect()
 }
@@ -1218,8 +1162,8 @@ fn direct_requires(
 /// by name + args; pins are outputs, not part of the relation).
 pub fn interface_requires(
     db: &dyn baml_compiler2_ppir::Db,
-    sub: &InterfaceTarget,
-    sup: &InterfaceTarget,
+    sub: &InterfaceRef,
+    sup: &InterfaceRef,
     self_ty: &Ty,
     fuel: u32,
 ) -> bool {
@@ -1228,11 +1172,11 @@ pub fn interface_requires(
 
 fn interface_requires_inner(
     db: &dyn baml_compiler2_ppir::Db,
-    sub: &InterfaceTarget,
-    sup: &InterfaceTarget,
+    sub: &InterfaceRef,
+    sup: &InterfaceRef,
     self_ty: &Ty,
     fuel: u32,
-    visited: &mut Vec<InterfaceTarget>,
+    visited: &mut Vec<InterfaceRef>,
 ) -> bool {
     if fuel == 0 {
         return false;
@@ -1261,14 +1205,3 @@ fn interface_requires_inner(
     holds
 }
 
-/// The interface existential a target denotes - the default SUBJECT for
-/// a requires walk with no better one (rustc's `dyn A: B` elaboration
-/// takes `Self` = the existential itself).
-pub fn target_existential(target: &InterfaceTarget) -> Ty {
-    Ty::intern(TyKind::Interface(
-        target.name.clone(),
-        target.args.clone().into(),
-        target.pins.clone().into(),
-        baml_type::TyAttr::default(),
-    ))
-}

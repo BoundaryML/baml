@@ -20,12 +20,11 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
-    interned::{Ty, TyKind},
+    interned::{InterfaceRef, Ty, TyKind},
     normalize::TypeContext as _,
 };
 
 use crate::facts::Facts;
-use crate::impls::InterfaceTarget;
 
 /// One resolved method: the function plus the receiver-driven
 /// instantiation of its owning class's generic params (the frame prefix
@@ -162,19 +161,19 @@ pub fn lookup_interface_member<'db>(
     receiver: &Ty,
     name: &Name,
 ) -> Option<InterfaceMember<'db>> {
-    let (roots, existential): (Vec<InterfaceTarget>, bool) = match receiver.kind() {
+    let (roots, existential): (Vec<InterfaceRef>, bool) = match receiver.kind() {
         TyKind::Interface(qtn, args, pins, _) => (
-            vec![InterfaceTarget {
-                name: qtn.clone(),
-                args: args.to_vec(),
-                pins: pins.to_vec(),
-            }],
+            vec![InterfaceRef::new(
+                qtn.clone(),
+                (args.to_vec()).into(),
+                pins.to_vec(),
+            )],
             true,
         ),
         TyKind::TypeVar(param, _) => (
             baml_type::normalize::TypeContext::type_var_bound(facts, param)
                 .iter()
-                .map(InterfaceTarget::from_constraint)
+                .map(InterfaceRef::from_constraint)
                 .collect(),
             false,
         ),
@@ -199,7 +198,7 @@ pub fn lookup_interface_member<'db>(
         }
         // Then the requires closure, deduped by realized identity;
         // distinct declarers are ambiguous.
-        let mut found: Option<(InterfaceTarget, InterfaceMember<'db>)> = None;
+        let mut found: Option<(InterfaceRef, InterfaceMember<'db>)> = None;
         for required in crate::impls::direct_requires_closure(db, root, receiver, 8) {
             if let Some(member) =
                 member_on_interface(db, facts, &required, receiver, name, existential)
@@ -236,7 +235,7 @@ fn lookup_impl_member<'db>(
     receiver: &Ty,
     name: &Name,
 ) -> Option<InterfaceMember<'db>> {
-    let mut providers: Vec<(InterfaceTarget, InterfaceMember<'db>)> = Vec::new();
+    let mut providers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
     for resolved in crate::impls::impls_for_type(db, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {
             continue;
@@ -249,7 +248,7 @@ fn lookup_impl_member<'db>(
         }
     }
     if providers.len() > 1 {
-        let heads: Vec<InterfaceTarget> = providers.iter().map(|(target, _)| target.clone()).collect();
+        let heads: Vec<InterfaceRef> = providers.iter().map(|(target, _)| target.clone()).collect();
         providers.retain(|(target, _)| {
             !heads.iter().any(|other| {
                 other.name != target.name
@@ -274,7 +273,7 @@ fn assoc_bound_roots<'db>(
     base: &Ty,
     interface_ref: &baml_type::interned::InterfaceRef,
     member: &Name,
-) -> Vec<InterfaceTarget> {
+) -> Vec<InterfaceRef> {
     let Some(Definition::Interface(interface)) = facts.definition_of(&interface_ref.name) else {
         return Vec::new();
     };
@@ -289,18 +288,18 @@ fn assoc_bound_roots<'db>(
         .with_frame(interface_frame(interface, db))
         .with_bounds(crate::lower::interface_scope_bounds(db, interface));
     let bound_ty = ctx.lower_type_ref(&data.type_refs, bound);
-    let target = InterfaceTarget {
-        name: interface_ref.name.clone(),
-        args: interface_ref.generics.to_vec(),
-        pins: interface_ref.associated_types.to_vec(),
-    };
+    let target = InterfaceRef::new(
+                interface_ref.name.clone(),
+                (interface_ref.generics.to_vec()).into(),
+                interface_ref.associated_types.to_vec(),
+            );
     let instantiation = interface_instantiation(base, &target, data);
     match crate::lower::substitute_params(&bound_ty, &instantiation).kind() {
-        TyKind::Interface(name, args, pins, _) => vec![InterfaceTarget {
-            name: name.clone(),
-            args: args.to_vec(),
-            pins: pins.to_vec(),
-        }],
+        TyKind::Interface(name, args, pins, _) => vec![InterfaceRef::new(
+                name.clone(),
+                (args.to_vec()).into(),
+                pins.to_vec(),
+            )],
         _ => Vec::new(),
     }
 }
@@ -322,16 +321,17 @@ fn env_discharges_rigid_bounds<'db>(
             continue;
         }
         for bound in bounds {
-            let goal = InterfaceTarget {
-                name: bound.name.clone(),
-                args: bound
-                    .args
+            // Pins are outputs, not part of the relation.
+            let goal = InterfaceRef::new(
+                bound.name.clone(),
+                bound
+                    .generics
                     .iter()
                     .map(|arg| crate::impls::substitute_bindings(arg, &resolved.bindings))
-                    .collect(),
-                // Pins are outputs, not part of the relation.
-                pins: Vec::new(),
-            };
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                Vec::new(),
+            );
             if !env_proves(db, facts, actual, &goal) {
                 return false;
             }
@@ -349,14 +349,14 @@ fn env_proves<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     actual: &Ty,
-    goal: &InterfaceTarget,
+    goal: &InterfaceRef,
 ) -> bool {
     let TyKind::TypeVar(param, _) = actual.kind() else {
         return crate::impls::resolve_impl(db, actual, goal).is_some();
     };
     let eq = crate::impls::AliasOnlyFacts::new(db);
     for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
-        let root = InterfaceTarget::from_constraint(&bound);
+        let root = InterfaceRef::from_constraint(&bound);
         let heads = crate::impls::requires_heads(db, &root, actual, 8);
         if heads
             .iter()
@@ -372,7 +372,7 @@ fn env_proves<'db>(
 pub(crate) fn member_on_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
-    target: &InterfaceTarget,
+    target: &InterfaceRef,
     receiver: &Ty,
     name: &Name,
     existential: bool,
@@ -432,21 +432,17 @@ pub(crate) fn member_on_interface<'db>(
 /// when the facts determine it).
 pub(crate) fn interface_instantiation(
     receiver: &Ty,
-    target: &InterfaceTarget,
+    target: &InterfaceRef,
     data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
 ) -> Vec<Ty> {
     let mut out = vec![receiver.clone()];
     for (index, _) in data.generic_params.iter().enumerate() {
-        out.push(target.args.get(index).cloned().unwrap_or_else(Ty::error));
+        out.push(target.generics.get(index).cloned().unwrap_or_else(Ty::error));
     }
-    let interface_ref = baml_type::interned::InterfaceRef::new(
-        target.name.clone(),
-        target.args.clone().into_boxed_slice(),
-        target.pins.clone(),
-    );
+    let interface_ref = target.clone();
     for assoc in &data.associated_types {
         let slot = target
-            .pins
+            .associated_types
             .iter()
             .find(|(name, _)| *name == assoc.name)
             .map(|(_, ty)| ty.clone())

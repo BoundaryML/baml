@@ -37,7 +37,7 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     Freshness, Literal, TyAttr,
-    interned::{Ty, TyKind},
+    interned::{InterfaceRef, Ty, TyKind},
     normalize::{canonical_union_interned, equivalent_interned, is_subtype_interned},
 };
 use rustc_hash::FxHashMap;
@@ -2925,7 +2925,7 @@ impl<'db> InferenceContext<'db> {
     /// `Self` - the class's self type, or a free impl's for-target.
     /// `None` anywhere else; the caller falls back to ordinary
     /// resolution.
-    fn default_receiver_target(&mut self) -> Option<(crate::impls::InterfaceTarget, Ty)> {
+    fn default_receiver_target(&mut self) -> Option<(InterfaceRef, Ty)> {
         let function = self.body_owner?;
         let target =
             baml_compiler2_ppir::item_data::method_interface_target(self.db, function)
@@ -2954,11 +2954,11 @@ impl<'db> InferenceContext<'db> {
             _ => return None,
         };
         Some((
-            crate::impls::InterfaceTarget {
-                name: name.clone(),
-                args: args.to_vec(),
-                pins: pins.to_vec(),
-            },
+            InterfaceRef::new(
+                name.clone(),
+                (args.to_vec()).into(),
+                pins.to_vec(),
+            ),
             self_ty,
         ))
     }
