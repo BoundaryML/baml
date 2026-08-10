@@ -23,7 +23,7 @@ client OtherClient = openai.OpenAiCl<[CURSOR]ient.n<[CURSOR]ew(model = "gpt-4o")
 //     api_key_env: string | null,
 //     base_url_env: string | null,
 //     implements ai.Client {}
-//     implements ai.StreamingClient {}
+//     implements ai.stream.StreamingClient {}
 // }
 // ```
 // Run `baml describe openai.OpenAiClient` for methods and details.

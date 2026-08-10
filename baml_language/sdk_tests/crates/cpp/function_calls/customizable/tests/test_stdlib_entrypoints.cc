@@ -49,10 +49,18 @@ BAML_TEST(
       "baml_sdk/include/baml_sdk.h",
       "baml_sdk/src/bindings.cc",
   };
+  // The entry-point registration strings are the precise signal, and they are
+  // what the other language probes assert on (python/java/ts scope the check to
+  // the generated `baml/events/` path). `namespace log {` is kept as a
+  // structural backstop because no non-intrinsic `log` package is generated.
+  //
+  // `namespace events {` is NOT a valid probe: `ai.events` is an ordinary
+  // stdlib namespace (the journal event catalog), so it generates a legitimate
+  // `namespace events {` that has nothing to do with the `baml.events`
+  // intrinsic this test guards against.
   const char* forbidden[] = {
-      "\"log.info\"",       "\"log.debug\"",        "\"log.warn\"",
-      "\"log.error\"",      "\"baml.events.send\"", "namespace log {",
-      "namespace events {",
+      "\"log.info\"",  "\"log.debug\"",        "\"log.warn\"",
+      "\"log.error\"", "\"baml.events.send\"", "namespace log {",
   };
   bool saw_any_file = false;
   for (const char* file : files) {
