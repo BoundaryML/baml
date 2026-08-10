@@ -1,6 +1,12 @@
 //! Streaming replay-harness recorder
 //! (thoughts/sam-projects/bridge-generics/streaming/02).
 //!
+//! TODO(stream-migration): the recorder drives the removed legacy
+//! `$build_request_stream` companion and the parked `stream_e2e_*` fixture
+//! functions (see fixtures/llm_functions/baml_src/ns_lorem/functions.baml).
+//! The snapshot tests are `#[ignore]`d until the ai-world `$stream`
+//! machinery lands.
+//!
 //! For each recording this owns an insta **binary** snapshot under
 //! `sdk_tests/fixtures/llm_functions/recordings/`:
 //!
@@ -272,6 +278,7 @@ fn openai_api_key_available_when_recording() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "awaiting ai $stream"]
 async fn sse_snapshot_string() {
     let bytes = obtain_sse("replay_extract_string", "lorem.stream_e2e_extract").await;
     validate_sse(&bytes);
@@ -279,6 +286,7 @@ async fn sse_snapshot_string() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "awaiting ai $stream"]
 async fn sse_snapshot_doc() {
     let bytes = obtain_sse("replay_extract_doc", "lorem.stream_e2e_extract_doc").await;
     validate_sse(&bytes);

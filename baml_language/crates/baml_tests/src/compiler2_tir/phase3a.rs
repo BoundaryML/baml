@@ -158,22 +158,17 @@ function main(id: boundary.LocalId) -> string {
 }
 
 #[test]
-fn backtick_llm_function_compiles_to_prompt_closure() {
-    // BEP-049 M5f: a backtick prompt in an LLM function compiles to a
-    // `call_llm_function(client, "Fn", args, prompt`…`)` body — the 4th arg is
-    // the synthesized `(Context) -> PromptAst` closure (legacy Jinja prompts
-    // keep the 3-arg form). The `${name}` interp captures the function param.
+fn backtick_llm_function_compiles_to_agent_loop() {
+    // Single-path world: a backtick prompt in an LLM function desugars to the
+    // ai Agent loop — the direct-call body runs
+    // `ai.Agent<Out>.new(client = client).run(Greet@spec(...))` and the
+    // `Greet$spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
+    // interp captures the function param inside the spec's prompt closure.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
         r#"
-client<llm> MyClient {
-  provider "openai"
-  options {
-    model "gpt-4o-mini"
-    api_key "k"
-  }
-}
+client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "k");
 
 function Greet(name: string) -> string {
   client MyClient
@@ -187,8 +182,8 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("call_llm_function") && tir.contains("prompt`"),
-        "body should call call_llm_function with a `prompt`…`` closure, got:\n{tir}"
+        tir.contains("Greet$spec") && tir.contains("FunctionSpec"),
+        "the spec companion should build an ai.FunctionSpec, got:\n{tir}"
     );
 }
 
@@ -211,19 +206,21 @@ fn new_mode_failures_have_good_diagnostics() {
             "prompt `Hi ${nobody}!`",
             "unresolved name: nobody",
         ),
+        // `${role(...)}` markers are removed wholesale — the full diagnostics
+        // pipeline adds the LlmRoleMarkerRemoved migration error (a lowering
+        // diagnostic, not rendered by `render_tir`); at TIR level the marker
+        // surfaces as an unresolved name at the user's span.
         (
-            "role_bad_arg",
+            "role_marker_removed",
             "client C",
             "prompt `${role(5)}hi`",
-            "expected string, got 5",
+            "unresolved name: role",
         ),
-        // The member error must name the *user-facing* `baml.llm.Context`, not
-        // an internal closure/accumulator type — proves nothing leaks.
         (
             "ctx_bad_field",
             "client C",
             "prompt `${ctx.nope}`",
-            "`baml.llm.Context` has no member `nope`",
+            "has no member `nope`",
         ),
         (
             "arith_type_err",
@@ -231,11 +228,13 @@ fn new_mode_failures_have_good_diagnostics() {
             r#"prompt `${1 + "a"}`"#,
             "operator `+`",
         ),
+        // `ctx.output_format_with` is removed surface: only `output_format`
+        // exists on the spec ctx, so this is a member error now.
         (
-            "undef_ctx_method",
+            "removed_ctx_method",
             "client C",
             "prompt `${ctx.output_format_with(5)}`",
-            "expected string | null, got 5",
+            "has no member `output_format_with`",
         ),
         (
             "bad_client",
@@ -243,7 +242,7 @@ fn new_mode_failures_have_good_diagnostics() {
             "prompt `Hi ${name}!`",
             "unresolved name: Nope",
         ),
-        // Block-tag interps (`${for}`, `${role}`) must also report at the user's
+        // Block-tag interps (`${for}`) must also report at the user's
         // source. (A non-bool `${if}` condition is intentionally NOT an error —
         // it matches plain `if`/`while`, which BAML does not bool-check.)
         (
@@ -259,16 +258,16 @@ fn new_mode_failures_have_good_diagnostics() {
             "operator `+`",
         ),
         (
-            "role_wrong_arity",
+            "role_marker_removed_no_args",
             "client C",
             "prompt `${role()}hi`",
-            "expected 1 argument(s), got 0",
+            "unresolved name: role",
         ),
     ];
     for (label, client, body, expect_substr) in cases {
         let mut db = make_db();
         let src = format!(
-            "client<llm> C {{\n  provider \"openai\"\n  options {{ model \"m\" api_key \"k\" }}\n}}\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
+            "client C = openai.OpenAiClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
         let file = db.add_file("test.baml", &src);
         let tir = render_tir(&db, file);
@@ -623,57 +622,37 @@ function f() -> string {
 }
 
 #[test]
-fn llm_client_override_argument_is_callable_on_function_and_build_request() {
+fn llm_client_override_argument_is_callable_on_function() {
+    // The compiler injects a `client: ai.Client? = null` override parameter on
+    // every LLM function; a call site can pass any ai.Client value for it.
+    // (The legacy `$build_request` companion — which shared the override — is
+    // gone with the legacy LLM path.)
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
         r##"
-client<llm> DefaultClient {
-  provider "openai"
-  options {
-    model "gpt-4o-mini"
-    api_key "default-key"
-  }
-}
-
-client<llm> OverrideClient {
-  provider "openai"
-  options {
-    model "gpt-4o-mini"
-    api_key "override-key"
-  }
-}
+client DefaultClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "default-key");
+client OverrideClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "override-key");
 
 function Ask(input: string) -> string {
   client DefaultClient
-  prompt #"{{ input }}"#
+  prompt `${input}`
 }
 
 function call_overrides() -> string {
   let answer = Ask("hello", client = OverrideClient)
-  let request_url = Ask$build_request("hello", client = OverrideClient).url
-  answer + request_url
+  answer
 }
 "##,
     );
     let tir = render_tir(&db, file);
 
     assert!(
-        tir.contains("function user.Ask(input: string, client: baml.llm.Client = DefaultClient)"),
-        "{tir}"
-    );
-    assert!(
-        tir.contains(
-            "function user.Ask$build_request(input: string, client: baml.llm.Client = DefaultClient) -> baml.http.Request"
-        ),
+        tir.contains("function user.Ask(input: string, client: ai.Client | null = null)"),
         "{tir}"
     );
     assert!(
         tir.contains(r#"Ask("hello", client = OverrideClient) : string"#),
-        "{tir}"
-    );
-    assert!(
-        tir.contains(r#"Ask$build_request("hello", client = OverrideClient).url : string"#),
         "{tir}"
     );
     assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");

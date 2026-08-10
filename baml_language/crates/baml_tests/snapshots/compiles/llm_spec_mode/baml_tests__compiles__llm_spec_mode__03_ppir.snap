@@ -8,38 +8,44 @@ class user.Answer {
 class user.Answer$stream {
   text: string | null
 }
-function user.LegacyChat(q: string, client: baml.llm.Client = ...) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`)
-}
-function user.LegacyChat$build_request(q: string, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`)
-}
-function user.LegacyChat$build_request_stream(q: string, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`)
-}
-function user.LegacyChat$parse(json: string, client: baml.llm.Client = ...) -> string  [expr] {
-  baml.llm.parse(json)
-}
-function user.LegacyChat$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string>  [expr] {
-  client.__make_stream(sse)
-}
-function user.LegacyChat$render_prompt(q: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`)
-}
-function user.LegacyChat$stream(q: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "LegacyChat", map { "q": q }, prompt_closure = baml.llm.prompt`...`)
-}
 function user.NamedTools(q: string, client: ai.Client? = null) -> user.Answer  [llm] {
   ai.Agent.new(client = client).run(NamedTools$spec(q)).value
 }
+function user.NamedTools$parse(json: string) -> user.Answer  [expr] {
+  baml.sap.parse(json)
+}
+function user.NamedTools$render_prompt(q: string) -> string  [expr] {
+  NamedTools$spec(q).prompt().render_text(ai.render_output_format(reflect.type_of()))
+}
 function user.NamedTools$spec(q: string) -> ai.FunctionSpec<user.Answer>  [expr] {
-  ai.FunctionSpec { spec_name: "NamedTools", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new(more_tools()), default_client: () -> { {  } anthropic.AnthropicClient.new(model = "claude-haiku-4-5") } }
+  ai.FunctionSpec { spec_name: "NamedTools", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new(more_tools()), default_client: anthropic.AnthropicClient.new(model = "claude-haiku-4-5") }
+}
+function user.PlainChat(q: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(PlainChat$spec(q)).value
+}
+function user.PlainChat$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.PlainChat$render_prompt(q: string) -> string  [expr] {
+  PlainChat$spec(q).prompt().render_text(ai.render_output_format(reflect.type_of()))
+}
+function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") }
+}
+function user.PlainChat$stream(q: string, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+  ai.stream_spec(PlainChat$spec(q), client = client)
 }
 function user.SpecAgent(q: string, client: ai.Client? = null) -> user.Answer  [llm] {
   ai.Agent.new(client = client).run(SpecAgent$spec(q)).value
 }
+function user.SpecAgent$parse(json: string) -> user.Answer  [expr] {
+  baml.sap.parse(json)
+}
+function user.SpecAgent$render_prompt(q: string) -> string  [expr] {
+  SpecAgent$spec(q).prompt().render_text(ai.render_output_format(reflect.type_of()))
+}
 function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<user.Answer>  [expr] {
-  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([ai.tool(double_it)]), default_client: () -> { {  } openai.OpenAiClient.new(model = "gpt-4o-mini") } }
+  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([ai.tool(double_it)]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") }
 }
 function user.build_spec(q: string) -> ai.FunctionSpec<user.Answer>  [expr] {
   {  } SpecAgent$spec(q = q)
@@ -52,9 +58,6 @@ function user.more_tools() -> ai.Tool[]  [expr] {
 }
 
 --- captures ---
-lambda () in LegacyChat: captures [q]
-lambda () in LegacyChat$render_prompt: captures [q]
-lambda () in LegacyChat$build_request: captures [q]
-lambda () in LegacyChat$build_request_stream: captures [q]
+lambda ( __spec_output_format) in PlainChat$spec: captures [q]
 lambda ( __spec_output_format) in SpecAgent$spec: captures [q]
 lambda ( __spec_output_format) in NamedTools$spec: captures [q]

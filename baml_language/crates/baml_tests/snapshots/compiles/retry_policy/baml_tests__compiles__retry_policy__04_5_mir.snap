@@ -2,25 +2,187 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.MyClient$new(lenient: bool) -> null {
+fn user.UseRetryClient(input: string, client: null | ai.Client) -> string {
     // Locals:
-    let _0: null // _0 // return
-    let _1: bool // lenient // param
-    let _2: baml.llm.PrimitiveClientOptions
-    let _3: map<string, string>
-    let _4: map<string, string>
-    let _5: map<string, unknown>
+    let _0: string // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.RunResult<string>
+    let _5: ai.Agent<string>
+    let _6: type
+    let _7: ai.FunctionSpec<string>
 
     bb0: {
-        _3 = {  }: map<string, string>;
-        _4 = {  }: map<string, string>;
-        _5 = {  }: map<string, unknown>;
-        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _3, copy _4, copy _5 };
-        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _2 };
-        goto -> bb1;
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = load_type(string);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _7 = call const fn user.UseRetryClient$spec(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.UseRetryClient$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.UseRetryClient$render_prompt(input: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // input // param
+    let _2: ai.Prompt
+    let _3: ai.FunctionSpec<string>
+    let _4: type
+    let _5: string
+    let _6: type
+
+    bb0: {
+        _3 = call const fn user.UseRetryClient$spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn ai.FunctionSpec.prompt<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = load_type(string);
+        goto -> bb3;
+    }
+
+    bb3: {
+        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = call const fn ai.Prompt.render_text(copy _2, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // input // param [captured]
+    let _2: map<string, unknown>
+    let _3: ai.Prompt
+    let _4: (string) -> string throws never
+    let _5: ai.Toolbox
+    let _6: ai.Tool[]
+
+    bb0: {
+        _2 = { const "input": copy _1 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _3 = ai.Prompt { copy _4 };
+        _6 = []: ai.Tool[];
+        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+    }
+
+    bb1: {
+        _0 = ai.FunctionSpec<string> { const "UseRetryClient", copy _2, copy _3, copy _5, const item user.MyClient };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(UseRetryClient$spec, 0)>( __spec_output_format: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: string
+    let _3: string
+    let _4: type
+
+    bb0: {
+        _3 = copy capture[0];
+        _4 = load_type(string);
+        _2 = call const fn baml.String.from<copy _4>(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const "echo " + copy _2;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.UseRetryClient$stream(input: string, client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+    // Locals:
+    let _0: ai.Stream<string | null, string> // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.StreamingClient // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: type
+    let _6: type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.UseRetryClient$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string | null);
+        _6 = load_type(string);
+        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

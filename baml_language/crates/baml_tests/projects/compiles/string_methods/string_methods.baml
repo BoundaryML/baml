@@ -1,17 +1,11 @@
-// Test: string method calls should produce no diagnostics
+// Test: string method calls inside backtick template holes produce no
+// diagnostics. (Jinja template_string bodies went away with the legacy LLM
+// path; templates are backticks with `${...}` holes now.)
 
-template_string Sep(n: int) #"
-  {{- "{:,}".format(n) -}}
-"#
+template_string Upper(s: string) `${s.to_upper_case()}`
 
-template_string Upper(s: string) #"
-  {{ s.upper() }}
-"#
+template_string StartsWith(s: string) `${s.starts_with("hello")}`
 
-template_string StartsWith(s: string) #"
-  {% if s.startswith("hello") %}yes{% endif %}
-"#
+template_string SplitCount(s: string) `${s.split(",").length()}`
 
-template_string Split(s: string) #"
-  {% for part in s.split(",") %}{{ part }}{% endfor %}
-"#
+template_string Trimmed(s: string) `${s.trim()}`

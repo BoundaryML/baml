@@ -1,0 +1,612 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> baml.json.json {
+    load_var self
+    load_field .next_id
+    store_var id
+    load_var self
+    copy 0
+    load_field .next_id
+    load_const 1
+    bin_op +
+    store_field .next_id
+    load_var2 4 2
+    load_var params
+    call ai.mcp.rpc_line
+    store_var _6
+    load_var2 1 5
+    call ai.mcp.McpConnection._send
+    pop 1
+
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type string
+    load_var self
+    load_field .server_name
+    call baml.String.from
+    store_var _66
+    load_type string
+    load_var method
+    call baml.String.from
+    store_var _70
+    load_const "mcp/"
+    load_var _66
+    bin_op +
+    load_const "no response for "
+    load_var _70
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L2:
+    load_var self
+    load_field .p
+    load_field .stdout
+    load_type baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var next
+    jump L3
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var self
+    load_field .server_name
+    call baml.String.from
+    store_var _13
+    load_type baml.errors.Io | baml.errors.Timeout
+    load_var e
+    call baml.String.from
+    store_var _18
+    load_type string
+    load_var _18
+    call baml.String.from
+    store_var _17
+    load_const "mcp/"
+    load_var _13
+    bin_op +
+    load_const "reading from the MCP server failed: "
+    load_var _17
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L3:
+    load_var next
+    store_var _21
+    load_var _21
+    narrow_bind string, slot=11
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type string
+    load_var self
+    load_field .server_name
+    call baml.String.from
+    store_var _58
+    load_type string
+    load_var method
+    call baml.String.from
+    store_var _62
+    load_const "mcp/"
+    load_var _58
+    bin_op +
+    load_const "the MCP server stream ended before answering "
+    load_var _62
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L5:
+    load_var _21
+    call baml.String.trim
+    store_var trimmed
+    load_var trimmed
+    call baml.String.length
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    load_var trimmed
+    call baml.json.parse
+    store_var msg
+    jump L6
+    load_var e
+    throw_if_panic
+    load_const null
+    store_var msg
+
+  L6:
+    load_type int
+    load_var msg
+    load_const ".id"
+    load_const 1
+    unary_op -
+    call baml.json.path_or
+    load_var id
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_type baml.json.json
+    load_var msg
+    load_const ".error"
+    load_const null
+    call baml.json.path_or
+    store_var err
+    load_var err
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_type baml.json.json
+    load_var msg
+    load_const ".result"
+    load_const null
+    call baml.json.path_or
+    return
+
+  L8:
+    load_type string
+    load_var self
+    load_field .server_name
+    call baml.String.from
+    store_var _43
+    load_type int | null
+    load_var err
+    load_const ".code"
+    load_const null
+    call baml.json.path_or
+    store_var _46
+    load_type string
+    load_var err
+    load_const ".message"
+    load_const "MCP error"
+    call baml.json.path_or
+    store_var _49
+    load_var err
+    call baml.json.stringify
+    store_var _52
+    load_const "mcp/"
+    load_var _43
+    bin_op +
+    load_var2 17 18
+    load_var _52
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+}
+
+function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> null {
+    load_type string
+    load_var line
+    load_const "\n"
+    load_type string
+    alloc_array 2
+    load_const ""
+    call baml.Array.join
+    store_var framed
+    load_var self
+    load_field .p
+    load_var framed
+    sys_op baml.sys.Process.write_stdin
+    pop 1
+    jump L0
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var self
+    load_field .server_name
+    call baml.String.from
+    store_var _12
+    load_type baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _17
+    load_type string
+    load_var _17
+    call baml.String.from
+    store_var _16
+    load_const "mcp/"
+    load_var _12
+    bin_op +
+    load_const "writing to the MCP server failed: "
+    load_var _16
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L0:
+    load_const null
+    return
+}
+
+function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args: map<string, unknown>) -> string {
+    load_type string
+    load_type unknown
+    alloc_map 0
+    store_var params
+    load_type string
+    load_type unknown
+    load_var params
+    load_const "name"
+    load_var name
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type unknown
+    load_var params
+    load_const "arguments"
+    load_var args
+    call baml.Map.set
+    pop 1
+    load_var self
+    load_const "tools/call"
+    load_var params
+    call ai.mcp.McpConnection._request
+    store_var result
+    load_type string
+    alloc_array 0
+    store_var texts
+    load_type baml.json.json[]
+    load_var result
+    load_const ".content"
+    load_type baml.json.json
+    alloc_array 0
+    call baml.json.path_or
+    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _18
+
+  L0:
+    load_var _18
+    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _19
+    load_var _19
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _19
+    store_var item
+    load_type string
+    load_var item
+    load_const ".type"
+    load_const ""
+    call baml.json.path_or
+    load_const "text"
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_var item
+    load_const ".text"
+    load_const ""
+    call baml.json.path_or
+    store_var _28
+    load_var2 6 10
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    load_var texts
+    load_const "\n"
+    call baml.Array.join
+    store_var joined
+    load_type bool
+    load_var result
+    load_const ".isError"
+    load_const false
+    call baml.json.path_or
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var joined
+    return
+
+  L4:
+    load_type string
+    load_var name
+    call baml.String.from
+    store_var _40
+    load_type string
+    load_var joined
+    call baml.String.from
+    store_var _42
+    load_const "mcp tool "
+    load_var _40
+    bin_op +
+    load_const " failed: "
+    bin_op +
+    load_var _42
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+}
+
+function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> null {
+    load_var self
+    load_field .p
+    sys_op baml.sys.Process.close
+    return
+}
+
+function ai.mcp.McpConnection.connect(name: string, command: string, args: string[], timeout_ms: int) -> ai.mcp.McpConnection {
+    load_var timeout_ms
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 30000
+    store_var timeout_ms
+
+  L0:
+    load_var2 2 3
+    load_const null
+    load_const null
+    load_var timeout_ms
+    load_const null
+    load_const true
+    init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin, .keep_stdin_open
+    sys_op baml.sys.start_process
+    store_var p
+    jump L1
+    load_var e
+    throw_if_panic
+    load_type string
+    load_var name
+    call baml.String.from
+    store_var _11
+    load_type baml.errors.Io
+    load_var e
+    call baml.String.from
+    store_var _15
+    load_type string
+    load_var _15
+    call baml.String.from
+    store_var _14
+    load_const "mcp/"
+    load_var _11
+    bin_op +
+    load_const "the MCP server could not start: "
+    load_var _14
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L1:
+    load_var2 1 5
+    load_const 1
+    init_instance ai.mcp.McpConnection .server_name, .p, .next_id
+    store_var conn
+    load_type string
+    load_type unknown
+    alloc_map 0
+    store_var init
+    load_type string
+    load_type unknown
+    load_var init
+    load_const "protocolVersion"
+    load_const "2025-06-18"
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type unknown
+    load_var init
+    load_const "capabilities"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type unknown
+    alloc_map 0
+    store_var info
+    load_type string
+    load_type unknown
+    load_var info
+    load_const "name"
+    load_const "baml-mcp"
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type unknown
+    load_var info
+    load_const "version"
+    load_const "0.1"
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type unknown
+    load_var init
+    load_const "clientInfo"
+    load_var info
+    call baml.Map.set
+    pop 1
+    load_var conn
+    load_const "initialize"
+    load_var init
+    call ai.mcp.McpConnection._request
+    pop 1
+    load_const null
+    load_const "notifications/initialized"
+    load_const null
+    call ai.mcp.rpc_line
+    store_var _43
+    load_var2 10 13
+    call ai.mcp.McpConnection._send
+    pop 1
+    load_var conn
+    return
+}
+
+function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.Tool[] {
+    load_var self
+    load_const "tools/list"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    call ai.mcp.McpConnection._request
+    store_var result
+    load_type ai.Tool
+    alloc_array 0
+    store_var out
+    load_type baml.json.json[]
+    load_var result
+    load_const ".tools"
+    load_type baml.json.json
+    alloc_array 0
+    call baml.json.path_or
+    load_type baml.iter.Iterable<Error = never, Item = baml.json.json>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+
+  L0:
+    load_var _9
+    load_type baml.iter.Iterator<Error = never, Item = baml.json.json>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+    load_var _10
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var _10
+    store_var t
+    load_type string
+    load_var t
+    load_const ".name"
+    load_const ""
+    call baml.json.path_or
+    store_var tool_name
+    load_type baml.json.json
+    load_var t
+    load_const ".inputSchema"
+    load_type string
+    load_type baml.json.json
+    alloc_map 0
+    call baml.json.path_or
+    store_var _19
+    load_type map<string, unknown>
+    load_var _19
+    call baml.json.from_json
+    store_var schema
+    jump L2
+    load_var e
+    throw_if_panic
+    load_type string
+    load_type unknown
+    alloc_map 0
+    store_var schema
+
+  L2:
+    load_type string
+    load_var t
+    load_const ".description"
+    load_const ""
+    call baml.json.path_or
+    store_var _28
+    load_var schema
+    store_var _31
+    load_var2 1 7
+    call ai.mcp._proxy
+    store_var _32
+    load_var2 7 12
+    load_var2 13 14
+    load_const <omitted>
+    call ai.raw_tool
+    store_var _26
+    load_var2 3 11
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
+    load_var out
+    return
+}
+
+function ai.mcp._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string, unknown>) -> string throws unknown {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var2 1 2
+    make_closure .<lambda(_proxy, 0)>, 2
+    return
+}
+
+function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unknown> | null) -> string {
+    load_type string
+    load_type unknown
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type unknown
+    load_var m
+    load_const "jsonrpc"
+    load_const "2.0"
+    call baml.Map.set
+    pop 1
+    load_var id
+    store_var _8
+    load_var _8
+    narrow_bind int, slot=5
+    pop_jump_if_false L0
+    load_type string
+    load_type unknown
+    load_var m
+    load_const "id"
+    load_var _8
+    call baml.Map.set
+    pop 1
+
+  L0:
+    load_type string
+    load_type unknown
+    load_var m
+    load_const "method"
+    load_var method
+    call baml.Map.set
+    pop 1
+    load_var params
+    store_var _17
+    load_var _17
+    narrow_bind map<string, unknown>, slot=6
+    pop_jump_if_false L1
+    load_type string
+    load_type unknown
+    load_var m
+    load_const "params"
+    load_var _17
+    call baml.Map.set
+    pop 1
+
+  L1:
+    load_type map<string, unknown>
+    load_var m
+    call baml.json.to_json
+    call baml.json.stringify
+    return
+}

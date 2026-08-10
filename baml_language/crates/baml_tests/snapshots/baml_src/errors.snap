@@ -37,6 +37,12 @@ function ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepB
     return
 }
 
+function ai.errors.StreamingUnsupported.Failure.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
+    load_const ai.errors.RetrySafety.Safe
+    alloc_variant ai.errors.RetrySafety
+    return
+}
+
 function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety

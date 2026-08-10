@@ -15,7 +15,6 @@ import (
 // client override remains an optional named argument.
 var (
 	_ func(context.Context, string, ...baml_sdk.LoremExtractResumeParseOption) (baml_sdk.LoremResume, error)        = baml_sdk.LoremExtractResumeParse
-	_ func(baml.LlmClient) baml_sdk.LoremExtractResumeParseOption                                                   = baml_sdk.WithLoremExtractResumeParseClient
 	_ func(context.Context, string, ...baml_sdk.IpsumClassifySentimentParseOption) (baml_sdk.IpsumSentiment, error) = baml_sdk.IpsumClassifySentimentParse
 )
 
@@ -40,27 +39,6 @@ func Test_parse_companion_returns_closed_enum(t *testing.T) {
 	}
 	if got != baml_sdk.IpsumSentimentPOSITIVE {
 		t.Fatalf("parsed sentiment = %q, want POSITIVE", got)
-	}
-}
-
-func Test_parse_companion_accepts_explicit_client_option(t *testing.T) {
-	withoutProviderCredentials(t)
-	client := baml.LlmClient{
-		Name:       "anthropic/claude-3-5-sonnet-latest",
-		ClientType: baml.LlmClientTypePrimitive,
-		SubClients: []baml.LlmClient{},
-	}
-
-	got, err := baml_sdk.LoremExtractResumeParse(
-		context.Background(),
-		`{"name":"Grace","email":"grace@example.com"}`,
-		baml_sdk.WithLoremExtractResumeParseClient(client),
-	)
-	if err != nil {
-		t.Fatalf("parse resume with client override: %v", err)
-	}
-	if got.Name != "Grace" || got.Email == nil || *got.Email != "grace@example.com" {
-		t.Fatalf("parsed resume with client override = %#v", got)
 	}
 }
 

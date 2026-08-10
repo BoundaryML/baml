@@ -2,15 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
+fn user.TypeBuilderFn(from_text: string, client: null | ai.Client) -> Resume {
     // Locals:
     let _0: Resume // _0 // return
     let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
+    let _2: null | ai.Client // client // param
     let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: map<string, unknown>
+    let _4: ai.RunResult<Resume>
+    let _5: ai.Agent<Resume>
     let _6: type
+    let _7: ai.FunctionSpec<Resume>
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -18,89 +19,142 @@ fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     }
 
     bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _5 = { const "from_text": copy _1 }: map<string, unknown>;
         _6 = load_type(Resume);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
+        _7 = call const fn user.TypeBuilderFn$spec(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<Resume, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<Resume>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: map<string, unknown>
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: map<string, unknown>
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resume {
+fn user.TypeBuilderFn$parse(json: string) -> Resume {
     // Locals:
     let _0: Resume // _0 // return
     let _1: string // json // param
-    let _2: baml.llm.Client // client // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Resume);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TypeBuilderFn$render_prompt(from_text: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // from_text // param
+    let _2: ai.Prompt
+    let _3: ai.FunctionSpec<Resume>
+    let _4: type
+    let _5: string
+    let _6: type
+
+    bb0: {
+        _3 = call const fn user.TypeBuilderFn$spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(Resume);
+        _2 = call const fn ai.FunctionSpec.prompt<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = load_type(Resume);
+        goto -> bb3;
+    }
+
+    bb3: {
+        _5 = call const fn ai.render_output_format(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = call const fn ai.Prompt.render_text(copy _2, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<Resume> {
+    // Locals:
+    let _0: ai.FunctionSpec<Resume> // _0 // return
+    let _1: string // from_text // param
+    let _2: map<string, unknown>
+    let _3: ai.Prompt
+    let _4: (string) -> string throws never
+    let _5: ai.Toolbox
+    let _6: ai.Tool[]
+    let _7: openai.OpenAiClient
+
+    bb0: {
+        _2 = { const "from_text": copy _1 }: map<string, unknown>;
+        _4 = make_closure lambda[0]();
+        _3 = ai.Prompt { copy _4 };
+        _6 = []: ai.Tool[];
+        _5 = call const fn ai.Toolbox.new(copy _6) -> [bb1];
+    }
+
+    bb1: {
+        _7 = call const fn openai.OpenAiClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<Resume> { const "TypeBuilderFn", copy _2, copy _3, copy _5, copy _7 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(TypeBuilderFn$spec, 0)>( __spec_output_format: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string //  __spec_output_format // param
+
+    bb0: {
+        _0 = const "Hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TypeBuilderFn$stream(from_text: string, client: null | ai.StreamingClient) -> ai.Stream<null | Resume$stream, Resume> {
+    // Locals:
+    let _0: ai.Stream<null | Resume$stream, Resume> // _0 // return
+    let _1: string // from_text // param
+    let _2: null | ai.StreamingClient // client // param
     let _3: bool
-    let _4: baml.llm.Client[]
+    let _4: ai.FunctionSpec<Resume>
     let _5: type
     let _6: type
 
@@ -110,114 +164,21 @@ fn user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resume {
     }
 
     bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
+        _4 = call const fn user.TypeBuilderFn$spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
         _5 = load_type(Resume$stream | null);
         _6 = load_type(Resume);
-        _0 = call const fn baml.llm.parse<copy _5, copy _6>(copy _1) -> [bb3];
+        _0 = call const fn ai.stream_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
     }
 
-    bb3: {
-        return;
-    }
-}
-
-fn user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | Resume$stream, Resume> {
-    // Locals:
-    let _0: baml.llm.Stream<null | Resume$stream, Resume> // _0 // return
-    let _1: baml.http.SseStream // sse // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: type
-    let _6: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = load_type(Resume$stream | null);
-        _6 = load_type(Resume);
-        _0 = call const fn baml.llm.Client.__make_stream<copy _5, copy _6>(copy _2, copy _1) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: map<string, unknown>
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -> baml.llm.Stream<null | Resume$stream, Resume> {
-    // Locals:
-    let _0: baml.llm.Stream<null | Resume$stream, Resume> // _0 // return
-    let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: map<string, unknown>
-    let _6: type
-    let _7: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _6 = load_type(Resume$stream | null);
-        _7 = load_type(Resume);
-        _0 = call const fn baml.llm.stream_llm_function<copy _6, copy _7>(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
+    bb4: {
         return;
     }
 }

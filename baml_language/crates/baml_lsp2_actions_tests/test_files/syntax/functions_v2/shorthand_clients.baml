@@ -1,11 +1,11 @@
 function InputNone() -> int {
   client "openai/gpt-4o"
-  prompt #"fa"#
+  prompt `fa`
 }
 
 function InputSimple(a: string, b: int | bool) -> int {
   client "openai/gpt-4o"
-  prompt #"fa"#
+  prompt `fa`
 }
 
 class Email {
@@ -15,7 +15,7 @@ class Email {
 
 function InputObject(email: Email) -> string {
   client "openai/gpt-4o"
-  prompt #" subject line {{ email.subject }} "#
+  prompt ` subject line ${email.subject} `
 }
 
 enum Color {
@@ -26,7 +26,7 @@ enum Color {
 
 function InputEnum(color: Color) -> string {
   client "openai/gpt-4o"
-  prompt #" color {{ color }} "#
+  prompt ` color ${color} `
 }
 
 // Try it with wierd spacing and comments
@@ -49,22 +49,22 @@ string
 // Or else
 {
   client "openai/gpt-4o"
-  prompt #" color {{ color }} "#
+  prompt ` color ${color} `
 }
 
 
 function InputImage(img: image) -> string {
   client "openai/gpt-4o"
-  prompt #" image {{ img }} "#
+  prompt ` image ${img} `
 }
 
-// Test unquoted client string (no quotes around the client name)
+// Shorthand client strings must be quoted now
 function ExtractName(text: string) -> string {
-  client openai/gpt-4o-mini
-  prompt #"
-    Extract the person's name from this text: {{ text }}
+  client "openai/gpt-4o-mini"
+  prompt `
+    Extract the person's name from this text: ${text}
     Return only the name, nothing else.
-  "#
+  `
 }
 
 //----

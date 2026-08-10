@@ -7,6 +7,12 @@
 //! These tests perform HTTP fetches inside the stdlib against the client's
 //! compile-time `base_url`. The wiremock URI must be interpolated into the
 //! BAML source at compile time — not expressible from a corpus test block.
+//!
+//! TODO(stream-migration): every test in this file drives the removed legacy
+//! streaming surface (`baml.llm.stream_llm_function`, the `$stream`
+//! companion). They are `#[ignore]`d until the ai-world `$stream` machinery
+//! lands; the inline BAML sources still use the removed `client<llm>`/Jinja
+//! forms and must be migrated when restored.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -60,6 +66,7 @@ fn streaming_llm_source(base_url: &str) -> String {
 /// name-keyed registry fallback anymore; a propagation gap surfaces as a
 /// "Non-parsable type: ..." crash from `StreamCache.new`.
 #[tokio::test]
+#[ignore = "awaiting ai $stream"]
 async fn stream_string_final_value() {
     let server = MockServer::start().await;
     let sse_body = openai_sse_body(&["Hello", ", ", "world", "!"], "stop");
@@ -112,6 +119,7 @@ async fn stream_string_final_value() {
 /// thoughts/sam-projects/bridge-generics/streaming/00 + 01 and the
 /// live-OpenAI coverage in `sdk_tests/.../test_streaming_class_e2e.py`.
 #[tokio::test]
+#[ignore = "awaiting ai $stream"]
 async fn stream_class_in_namespace_final_value() {
     let server = MockServer::start().await;
     // Two chunks splitting mid-string so the partial parser sees an
@@ -180,6 +188,7 @@ async fn stream_class_in_namespace_final_value() {
 }
 
 #[tokio::test]
+#[ignore = "awaiting ai $stream"]
 async fn stream_server_error_propagates() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

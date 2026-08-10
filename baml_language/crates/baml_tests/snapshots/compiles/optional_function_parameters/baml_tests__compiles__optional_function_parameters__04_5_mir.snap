@@ -2,29 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.TestClient$new(lenient: bool) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: bool // lenient // param
-    let _2: baml.llm.PrimitiveClientOptions
-    let _3: map<string, string>
-    let _4: map<string, string>
-    let _5: map<string, unknown>
-
-    bb0: {
-        _3 = {  }: map<string, string>;
-        _4 = {  }: map<string, string>;
-        _5 = {  }: map<string, unknown>;
-        _2 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _3, copy _4, copy _5 };
-        _0 = baml.llm.PrimitiveClient { const "TestClient", const "openai", copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.DefaultFilter() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -255,323 +232,219 @@ fn user.HostEntry(query: string, max_results: int, filter: string | null) -> int
     }
 }
 
-fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
+fn user.AskDocs(query: string, max_results: int, filter: string, client: null | ai.Client) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
+    let _4: null | ai.Client // client // param
     let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: map<string, unknown>
-    let _9: type
+    let _6: ai.RunResult<string>
+    let _7: ai.Agent<string>
+    let _8: type
+    let _9: ai.FunctionSpec<string>
 
     bb0: {
-        _5 = copy _2 == const <omitted>;
+        _5 = copy _4 == const <omitted>;
         branch copy _5 -> [bb1, bb2];
     }
 
     bb1: {
-        _2 = const 10_i64;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = copy _3 == const <omitted>;
-        branch copy _6 -> [bb3, bb4];
+        _8 = load_type(string);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, copy _4, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _3 = call const fn user.DefaultFilter() -> [bb4];
+        _9 = call const fn user.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb4];
     }
 
     bb4: {
-        _7 = copy _4 == const <omitted>;
-        branch copy _7 -> [bb5, bb6];
+        _6 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
     }
 
     bb5: {
-        _4 = const item user.TestClient;
+        _0 = copy _6.0;
         goto -> bb6;
     }
 
     bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _9 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
-    }
-
-    bb7: {
         return;
     }
 }
 
-fn user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: map<string, unknown>
-
-    bb0: {
-        _5 = copy _2 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const 10_i64;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = copy _3 == const <omitted>;
-        branch copy _6 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _3 = call const fn user.DefaultFilter() -> [bb4];
-    }
-
-    bb4: {
-        _7 = copy _4 == const <omitted>;
-        branch copy _7 -> [bb5, bb6];
-    }
-
-    bb5: {
-        _4 = const item user.TestClient;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: map<string, unknown>
-
-    bb0: {
-        _5 = copy _2 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const 10_i64;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = copy _3 == const <omitted>;
-        branch copy _6 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _3 = call const fn user.DefaultFilter() -> [bb4];
-    }
-
-    bb4: {
-        _7 = copy _4 == const <omitted>;
-        branch copy _7 -> [bb5, bb6];
-    }
-
-    bb5: {
-        _4 = const item user.TestClient;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
+fn user.AskDocs$parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
+    let _2: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _2 = const item user.TestClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(string | null);
-        _5 = load_type(string);
-        _0 = call const fn baml.llm.parse<copy _4, copy _5>(copy _1) -> [bb3];
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> string {
     // Locals:
-    let _0: baml.llm.Stream<string | null, string> // _0 // return
-    let _1: baml.http.SseStream // sse // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.TestClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(string | null);
-        _5 = load_type(string);
-        _0 = call const fn baml.llm.Client.__make_stream<copy _4, copy _5>(copy _2, copy _1) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
+    let _0: string // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: map<string, unknown>
+    let _4: ai.Prompt
+    let _5: ai.FunctionSpec<string>
+    let _6: type
+    let _7: string
+    let _8: type
 
     bb0: {
-        _5 = copy _2 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _5 = call const fn user.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb1];
     }
 
     bb1: {
-        _2 = const 10_i64;
-        goto -> bb2;
+        _6 = load_type(string);
+        _4 = call const fn ai.FunctionSpec.prompt<copy _6>(copy _5) -> [bb2];
     }
 
     bb2: {
-        _6 = copy _3 == const <omitted>;
-        branch copy _6 -> [bb3, bb4];
+        _8 = load_type(string);
+        goto -> bb3;
     }
 
     bb3: {
-        _3 = call const fn user.DefaultFilter() -> [bb4];
+        _7 = call const fn ai.render_output_format(copy _8) -> [bb4];
     }
 
     bb4: {
-        _7 = copy _4 == const <omitted>;
-        branch copy _7 -> [bb5, bb6];
+        _0 = call const fn ai.Prompt.render_text(copy _4, copy _7) -> [bb5];
     }
 
     bb5: {
-        _4 = const item user.TestClient;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
-    }
-
-    bb7: {
         return;
     }
 }
 
-fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+fn user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string> {
     // Locals:
-    let _0: baml.llm.Stream<string | null, string> // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: map<string, unknown>
-    let _9: type
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // query // param [captured]
+    let _2: int // max_results // param [captured]
+    let _3: string // filter // param [captured]
+    let _4: map<string, unknown>
+    let _5: ai.Prompt
+    let _6: (string) -> string throws never
+    let _7: ai.Toolbox
+    let _8: ai.Tool[]
+
+    bb0: {
+        _4 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
+        _6 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _5 = ai.Prompt { copy _6 };
+        _8 = []: ai.Tool[];
+        _7 = call const fn ai.Toolbox.new(copy _8) -> [bb1];
+    }
+
+    bb1: {
+        _0 = ai.FunctionSpec<string> { const "AskDocs", copy _4, copy _5, copy _7, const item user.TestClient };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: string
+    let _3: string
+    let _4: string
+    let _5: string
+    let _6: string
+    let _7: type
+    let _8: string
+    let _9: int
     let _10: type
+    let _11: string
+    let _12: string
+    let _13: type
 
     bb0: {
-        _5 = copy _2 == const <omitted>;
+        _6 = copy capture[0];
+        _7 = load_type(string);
+        _5 = call const fn baml.String.from<copy _7>(copy _6) -> [bb1];
+    }
+
+    bb1: {
+        _4 = copy _5 + const " ";
+        _9 = copy capture[1];
+        _10 = load_type(int);
+        _8 = call const fn baml.String.from<copy _10>(copy _9) -> [bb2];
+    }
+
+    bb2: {
+        _3 = copy _4 + copy _8;
+        _2 = copy _3 + const " ";
+        _12 = copy capture[2];
+        _13 = load_type(string);
+        _11 = call const fn baml.String.from<copy _13>(copy _12) -> [bb3];
+    }
+
+    bb3: {
+        _0 = copy _2 + copy _11;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+    // Locals:
+    let _0: ai.Stream<string | null, string> // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: null | ai.StreamingClient // client // param
+    let _5: bool
+    let _6: ai.FunctionSpec<string>
+    let _7: type
+    let _8: type
+
+    bb0: {
+        _5 = copy _4 == const <omitted>;
         branch copy _5 -> [bb1, bb2];
     }
 
     bb1: {
-        _2 = const 10_i64;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = copy _3 == const <omitted>;
-        branch copy _6 -> [bb3, bb4];
+        _6 = call const fn user.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb3];
     }
 
     bb3: {
-        _3 = call const fn user.DefaultFilter() -> [bb4];
+        _7 = load_type(string | null);
+        _8 = load_type(string);
+        _0 = call const fn ai.stream_spec<copy _7, copy _8>(copy _6, copy _4) -> [bb4];
     }
 
     bb4: {
-        _7 = copy _4 == const <omitted>;
-        branch copy _7 -> [bb5, bb6];
-    }
-
-    bb5: {
-        _4 = const item user.TestClient;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _9 = load_type(string | null);
-        _10 = load_type(string);
-        _0 = call const fn baml.llm.stream_llm_function<copy _9, copy _10>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
-    }
-
-    bb7: {
         return;
     }
 }

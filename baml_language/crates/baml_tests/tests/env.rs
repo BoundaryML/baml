@@ -95,35 +95,12 @@ fn result_headers(
     }
 }
 
-#[tokio::test]
-async fn declared_openai_client_defaults_api_key_from_env() {
-    unsafe { std::env::set_var("OPENAI_API_KEY", "sk-from-env") };
-    let output = baml_test!(
-        r#"
-            client<llm> EnvClient {
-                provider openai
-                options {
-                    model "gpt-4o"
-                }
-            }
-
-            function Greet(name: string) -> string {
-                client EnvClient
-                prompt `Hello ${name}!`
-            }
-
-            function main() -> map<string, string> {
-                Greet$build_request("World").headers
-            }
-        "#
-    );
-    let headers = result_headers(output.result);
-    assert_eq!(
-        headers.get("authorization"),
-        Some(&BexExternalValue::String("Bearer sk-from-env".into())),
-        "a declared client<llm> with no api_key defaults it from OPENAI_API_KEY"
-    );
-}
+// Note: the former `declared_openai_client_defaults_api_key_from_env` test was
+// deleted with the legacy LLM path: `client<llm>` blocks and the
+// `$build_request` companion no longer exist, and the new-world provider
+// clients resolve api_key from env inside `invoke` (request time), which has
+// no offline observation point. The library-level env defaulting below
+// (`baml.llm.PrimitiveClient.build_request`) still pins the behavior.
 
 #[tokio::test]
 async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
@@ -159,20 +136,7 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
     unsafe { std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-from-env") };
     let output = baml_test!(
         r#"
-            client<llm> EnvClient {
-                provider anthropic
-                options {
-                    model "claude-sonnet-4-20250514"
-                }
-            }
-
-            function Greet(name: string) -> string {
-                client EnvClient
-                prompt `Hello ${name}!`
-            }
-
             function main() -> map<string, string> {
-                let declared = Greet$build_request("World").headers.get("x-api-key") ?? "missing";
                 let runtime_client = baml.llm.PrimitiveClient {
                     name: "runtime-anthropic",
                     provider: "anthropic",
@@ -185,12 +149,11 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
                 };
                 let prompt = baml.llm.assemble_prompt_ast(["Say hi"], []);
                 let runtime = runtime_client.build_request(prompt, reflect.type_of<string>()).headers.get("x-api-key") ?? "missing";
-                { "declared": declared, "runtime": runtime }
+                { "runtime": runtime }
             }
         "#
     );
     let headers = result_headers(output.result);
     let expected = BexExternalValue::String("sk-ant-from-env".into());
-    assert_eq!(headers.get("declared"), Some(&expected));
     assert_eq!(headers.get("runtime"), Some(&expected));
 }

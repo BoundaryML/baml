@@ -1,18 +1,18 @@
 function MakePoem(length: int) -> string {
     client GPT4o
-    prompt #"Write a poem {{ length }} lines long."#
+    prompt `Write a poem ${length} lines long.`
 }
 
 function CombinePoems(poem1: string, poem2: string) -> string {
     client GPT4o
-    prompt #"Combine the following two poems into one poem.
+    prompt `Combine the following two poems into one poem.
 
     Poem 1:
-    {{ poem1 }}
+    ${poem1}
 
     Poem 2:
-    {{ poem2 }}
-    "#
+    ${poem2}
+    `
 }
 
 let poem = MakePoem(10);
@@ -56,13 +56,10 @@ test OuterPyramid() {
   args { }
 }
 
-client<llm> GPT4o {
-  provider openai
-  options {
-    model gpt-4o
-    api_key env.OPENAI_API_KEY
-  }
-}
+client GPT4o = openai.OpenAiClient.new(
+    model = "gpt-4o",
+    api_key = env.OPENAI_API_KEY,
+);
 
 test TestMakePoem() {
     functions [MakePoem]
@@ -144,29 +141,29 @@ test TestMakePoem() {
 // E0003
 //
 //   × unresolved name: `TestMakePoem`
-//     ╭─[expr_expr_full.baml:67:6]
-//  67 │ test TestMakePoem() {
+//     ╭─[expr_expr_full.baml:64:6]
+//  64 │ test TestMakePoem() {
 //     ·      ────────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:68:5]
-//  68 │     functions [MakePoem]
+//     ╭─[expr_expr_full.baml:65:5]
+//  65 │     functions [MakePoem]
 //     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:69:5]
-//  69 │     args { length 4 }
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     args { length 4 }
 //     ·     ────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:69:12]
-//  69 │     args { length 4 }
+//     ╭─[expr_expr_full.baml:66:12]
+//  66 │     args { length 4 }
 //     ·            ──────
 //     ╰────
 // E0003
@@ -214,21 +211,21 @@ test TestMakePoem() {
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:68:5]
-//  68 │     functions [MakePoem]
+//     ╭─[expr_expr_full.baml:65:5]
+//  65 │     functions [MakePoem]
 //     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:69:5]
-//  69 │     args { length 4 }
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     args { length 4 }
 //     ·     ────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:69:12]
-//  69 │     args { length 4 }
+//     ╭─[expr_expr_full.baml:66:12]
+//  66 │     args { length 4 }
 //     ·            ──────
 //     ╰────

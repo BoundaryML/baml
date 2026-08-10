@@ -2,13 +2,77 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] E0101
+  [hir] E0010
 
-  × azure-openai requires either base_url or both resource_name and deployment_id (missing: resource_name and deployment_id)
-    ╭─[client_option_types.baml:54:5]
- 54 │ ╭─▶     options {
- 55 │ │           api_version "2024-02-15-preview"
- 56 │ │           model "gpt-4o"
- 57 │ ├─▶     }
-    · ╰──── missing options
+  × `client<llm>` config blocks are removed; declare a client value instead: `client LegacyOpenAI = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[client_option_types.baml:9:1]
+  9 │ ╭─▶ client<llm> LegacyOpenAI {
+ 10 │ │       provider openai
+ 11 │ │       options {
+ 12 │ │           model "gpt-4"
+ 13 │ │           max_tokens 100
+ 14 │ │           temperature 0.7
+ 15 │ │           base_url "https://api.openai.com/v1"
+ 16 │ │       }
+ 17 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`LegacyRetry` has no effect)
+    ╭─[client_option_types.baml:20:1]
+ 20 │ ╭─▶ retry_policy LegacyRetry {
+ 21 │ │       max_retries 3
+ 22 │ ├─▶ }
+    · ╰──── retry composes at the client boundary now
+    ╰────
+
+  [hir] E0010
+
+  × LLM function `LegacyJinjaPrompt` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
+    ╭─[client_option_types.baml:25:53]
+ 25 │ ╭─▶ function LegacyJinjaPrompt(input: string) -> string {
+ 26 │ │       client ValidClient
+ 27 │ │       prompt #"Echo: {{ input }}"#
+ 28 │ ├─▶ }
+    · ╰──── migrate to a backtick prompt
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `never`, but this function may also throw `unknown`
+    ╭─[client_option_types.baml:33:12]
+ 33 │     prompt `${role("system")}Be terse. ${input}`
+    ·            ─────────────────────────────────────
+    ╰────
+
+  [hir] E0010
+
+  × `${role(...)}` markers are removed; the prompt of `LegacyRoleMarker` is instructions-only — the conversation lives in the journal, and message roles are the client's wire concern
+    ╭─[client_option_types.baml:33:15]
+ 33 │     prompt `${role("system")}Be terse. ${input}`
+    ·               ───────┬──────
+    ·                      ╰── delete the role marker; write plain instructions
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `role`
+    ╭─[client_option_types.baml:33:15]
+ 33 │     prompt `${role("system")}Be terse. ${input}`
+    ·               ────
+    ╰────
+
+  [hir] E0010
+
+  × LLM function `UnknownProviderPrefix` has an unusable `client`: no builtin provider for prefix "aws-bedrock"; construct a client value instead (OpenAI-compatible endpoints:
+  │ openai.OpenAiClient.new(base_url = ..., model = "anthropic.claude-3-haiku"))
+    ╭─[client_option_types.baml:37:57]
+ 37 │ ╭─▶ function UnknownProviderPrefix(input: string) -> string {
+ 38 │ │       client "aws-bedrock/anthropic.claude-3-haiku"
+ 39 │ │       prompt `${input}`
+ 40 │ ├─▶ }
+    · ╰──── use a "provider/model" string or an expression evaluating to ai.Client
     ╰────

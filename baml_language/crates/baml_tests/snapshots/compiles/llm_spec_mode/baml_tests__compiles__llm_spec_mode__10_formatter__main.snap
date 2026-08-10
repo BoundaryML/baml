@@ -1,13 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-// BEP spec mode next to legacy new-mode prompts.
+// BEP spec mode: LLM functions with and without a `tools` field.
 //
-// LegacyChat has NO tools field: its backtick prompt lowers through the
-// baml.llm.prompt tag, so ${role(...)} and the full `ctx: Context` surface
-// (output_format_with) must keep compiling — the spec desugar must not
-// synthesize a $spec companion for it (the companion's plain-text template
-// cannot bind `role`/Context members).
+// PlainChat has NO tools field: an instructions-only backtick prompt with the
+// `${ctx.output_format}` hole.
 //
 // SpecAgent has a tools field: it gets the SpecAgent$spec companion, its
 // direct call runs the ai Agent loop, and `tools` accepts both a literal
@@ -26,9 +23,13 @@ function more_tools() -> ai.Tool[] {
     [ai.tool(double_it, name = "double_named")]
 }
 
-function LegacyChat(q: string) -> string {
+function PlainChat(q: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${role("system")}Be terse. ${ctx.output_format_with(prefix = "Schema:")}${role("user")}${q}`
+    prompt: `
+        Be terse.
+        ${q}
+        ${ctx.output_format}
+    `
 }
 
 function SpecAgent(q: string) -> Answer {

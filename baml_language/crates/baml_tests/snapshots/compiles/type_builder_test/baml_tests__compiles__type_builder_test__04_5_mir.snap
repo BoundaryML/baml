@@ -2,14 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Fn(client: baml.llm.Client) -> string {
+fn user.Fn(client: null | ai.Client) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.llm.Client // client // param
+    let _1: null | ai.Client // client // param
     let _2: bool
-    let _3: baml.llm.Client[]
-    let _4: map<string, unknown>
+    let _3: ai.RunResult<string>
+    let _4: ai.Agent<string>
     let _5: type
+    let _6: ai.FunctionSpec<string>
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -17,105 +18,110 @@ fn user.Fn(client: baml.llm.Client) -> string {
     }
 
     bb1: {
-        _3 = []: baml.llm.Client[];
-        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
+        _1 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = {  }: map<string, unknown>;
         _5 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn ai.Agent.new<copy _5>(const <omitted>, copy _1, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
+        _6 = call const fn user.Fn$spec() -> [bb4];
+    }
+
+    bb4: {
+        _3 = virtual_call run as ai.Runner<string, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _3.0;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: bool
-    let _3: baml.llm.Client[]
-    let _4: map<string, unknown>
-
-    bb0: {
-        _2 = copy _1 == const <omitted>;
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = []: baml.llm.Client[];
-        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: bool
-    let _3: baml.llm.Client[]
-    let _4: map<string, unknown>
-
-    bb0: {
-        _2 = copy _1 == const <omitted>;
-        branch copy _2 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = []: baml.llm.Client[];
-        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.Fn$parse(json: string, client: baml.llm.Client) -> string {
+fn user.Fn$parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: type
-    let _6: type
+    let _2: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
+        return;
+    }
+}
+
+fn user.Fn$render_prompt() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: ai.Prompt
+    let _2: ai.FunctionSpec<string>
+    let _3: type
+    let _4: string
+    let _5: type
+
+    bb0: {
+        _2 = call const fn user.Fn$spec() -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(string);
+        _1 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _5 = load_type(string | null);
-        _6 = load_type(string);
-        _0 = call const fn baml.llm.parse<copy _5, copy _6>(copy _1) -> [bb3];
+        _5 = load_type(string);
+        goto -> bb3;
+    }
+
+    bb3: {
+        _4 = call const fn ai.render_output_format(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        _0 = call const fn ai.Prompt.render_text(copy _1, copy _4) -> [bb5];
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.Fn$spec() -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: map<string, unknown>
+    let _2: ai.Prompt
+    let _3: (string) -> string throws never
+    let _4: ai.Toolbox
+    let _5: ai.Tool[]
+    let _6: openai.OpenAiClient
+
+    bb0: {
+        _1 = {  }: map<string, unknown>;
+        _3 = make_closure lambda[0]();
+        _2 = ai.Prompt { copy _3 };
+        _5 = []: ai.Tool[];
+        _4 = call const fn ai.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _6 = call const fn openai.OpenAiClient.new(const "gpt-4o", const <omitted>, const <omitted>) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<string> { const "Fn", copy _1, copy _2, copy _4, copy _6 };
+        goto -> bb3;
     }
 
     bb3: {
@@ -123,45 +129,30 @@ fn user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     }
 }
 
-fn user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+// lambda[0]
+fn .<lambda(Fn$spec, 0)>( __spec_output_format: string) -> string {
     // Locals:
-    let _0: baml.llm.Stream<string | null, string> // _0 // return
-    let _1: baml.http.SseStream // sse // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: type
-    let _6: type
+    let _0: string // _0 // return
+    let _1: string //  __spec_output_format // param
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _0 = const "Hi";
+        goto -> bb1;
     }
 
     bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = load_type(string | null);
-        _6 = load_type(string);
-        _0 = call const fn baml.llm.Client.__make_stream<copy _5, copy _6>(copy _2, copy _1) -> [bb3];
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.Fn$stream(client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
     // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: baml.llm.Client // client // param
+    let _0: ai.Stream<string | null, string> // _0 // return
+    let _1: null | ai.StreamingClient // client // param
     let _2: bool
-    let _3: baml.llm.Client[]
-    let _4: map<string, unknown>
+    let _3: ai.FunctionSpec<string>
+    let _4: type
+    let _5: type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -169,50 +160,21 @@ fn user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     }
 
     bb1: {
-        _3 = []: baml.llm.Client[];
-        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
+        _1 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
+        _3 = call const fn user.Fn$spec() -> [bb3];
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    // Locals:
-    let _0: baml.llm.Stream<string | null, string> // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: bool
-    let _3: baml.llm.Client[]
-    let _4: map<string, unknown>
-    let _5: type
-    let _6: type
-
-    bb0: {
-        _2 = copy _1 == const <omitted>;
-        branch copy _2 -> [bb1, bb2];
+        _4 = load_type(string | null);
+        _5 = load_type(string);
+        _0 = call const fn ai.stream_spec<copy _4, copy _5>(copy _3, copy _1) -> [bb4];
     }
 
-    bb1: {
-        _3 = []: baml.llm.Client[];
-        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = {  }: map<string, unknown>;
-        _5 = load_type(string | null);
-        _6 = load_type(string);
-        _0 = call const fn baml.llm.stream_llm_function<copy _5, copy _6>(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
+    bb4: {
         return;
     }
 }

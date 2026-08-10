@@ -261,7 +261,8 @@ function PtRenderPerson() -> Person {
 }
 
 function pt_render_prompt_companion_output_format_fn() -> string {
-    PtRenderPerson$render_prompt().text()
+    // `$render_prompt` returns the rendered prompt as a plain string.
+    PtRenderPerson$render_prompt()
 }
 
 test "render_prompt_companion_interpolates_ctx_output_format" {

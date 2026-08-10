@@ -474,9 +474,29 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
             };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+            // The compiler injects a trailing `client: ai.Client? = null`
+            // override onto every LLM function (and its companions). It is a
+            // BAML-side concern typed as an INTERFACE, which no target
+            // language can represent — leaving it in makes the whole function
+            // "unsupported" and the generator drops it, so the SDK would
+            // expose no LLM functions at all. Strip it here (the same rule
+            // `param_schema` applies for the playground form): SDK callers get
+            // the function's declared default client.
+            let param_count = sig.params.len();
+            let drop_injected_client = sig
+                .params
+                .last()
+                .is_some_and(|p| p.name.as_str() == "client")
+                && baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some();
+            let visible_params = if drop_injected_client {
+                param_count - 1
+            } else {
+                param_count
+            };
             let arguments: Vec<cg::FunctionArgument> = sig
                 .params
                 .iter()
+                .take(visible_params)
                 .enumerate()
                 .map(|(index, param)| cg::FunctionArgument {
                     name: param.name.clone(),

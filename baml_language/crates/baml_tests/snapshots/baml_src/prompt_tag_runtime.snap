@@ -114,197 +114,93 @@ function prompt_tag_runtime.Labeled.baml.ToString.to_string(self: prompt_tag_run
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson(client: baml.llm.Client) -> prompt_tag_runtime.Person {
+function prompt_tag_runtime.PtRenderPerson(client: ai.Client | null) -> prompt_tag_runtime.Person {
     load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_const "openai/gpt-4o-mini"
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    load_type baml.llm.Client
-    alloc_array 0
     load_const null
-    load_const 0
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     store_var client
 
   L0:
-    make_closure .<tagged(PtRenderPerson, 0)>, 0
-    call baml.llm.prompt
-    store_var _5
     load_type prompt_tag_runtime.Person
+    load_const <omitted>
     load_var client
-    load_const "PtRenderPerson"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_var _5
-    call baml.llm.call_llm_function
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.prompt_tag_runtime.PtRenderPerson$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<prompt_tag_runtime.Person, Error = ai.errors.Failure | baml.errors.UnknownError, Output = ai.RunResult<prompt_tag_runtime.Person>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$build_request(client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const "openai/gpt-4o-mini"
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    load_type baml.llm.Client
-    alloc_array 0
-    load_const null
-    load_const 0
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    store_var client
-
-  L0:
-    make_closure .<tagged(PtRenderPerson$build_request, 0)>, 0
-    call baml.llm.prompt
-    store_var _5
-    load_var client
-    load_const "PtRenderPerson"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_var _5
-    call baml.llm.build_request
-    return
-}
-
-function prompt_tag_runtime.PtRenderPerson$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const "openai/gpt-4o-mini"
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    load_type baml.llm.Client
-    alloc_array 0
-    load_const null
-    load_const 0
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    store_var client
-
-  L0:
-    make_closure .<tagged(PtRenderPerson$build_request_stream, 0)>, 0
-    call baml.llm.prompt
-    store_var _5
-    load_var client
-    load_const "PtRenderPerson"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_var _5
-    call baml.llm.build_request_stream
-    return
-}
-
-function prompt_tag_runtime.PtRenderPerson$parse(json: string, client: baml.llm.Client) -> prompt_tag_runtime.Person {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const "openai/gpt-4o-mini"
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    load_type baml.llm.Client
-    alloc_array 0
-    load_const null
-    load_const 0
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    store_var client
-
-  L0:
-    load_type prompt_tag_runtime.Person$stream | null
+function prompt_tag_runtime.PtRenderPerson$parse(json: string) -> prompt_tag_runtime.Person {
     load_type prompt_tag_runtime.Person
     load_var json
-    call baml.llm.parse
+    call baml.sap.parse
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
+function prompt_tag_runtime.PtRenderPerson$render_prompt() -> string {
+    call user.prompt_tag_runtime.PtRenderPerson$spec
+    store_var _2
+    load_type prompt_tag_runtime.Person
+    load_var _2
+    call ai.FunctionSpec.prompt
+    store_var _1
+    load_type prompt_tag_runtime.Person
+    call ai.render_output_format
+    store_var _4
+    load_var2 1 3
+    call ai.Prompt.render_text
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_runtime.Person> {
+    load_type ai.Tool
+    alloc_array 0
+    call ai.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    call openai.OpenAiClient.new
+    store_var _6
+    load_const "PtRenderPerson"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(PtRenderPerson$spec, 0)>, 0
+    init_instance ai.Prompt .template
+    load_var2 1 2
+    load_type prompt_tag_runtime.Person
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function prompt_tag_runtime.PtRenderPerson$stream(client: ai.StreamingClient | null) -> ai.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
     load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_const "openai/gpt-4o-mini"
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    load_type baml.llm.Client
-    alloc_array 0
     load_const null
-    load_const 0
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     store_var client
 
   L0:
+    call user.prompt_tag_runtime.PtRenderPerson$spec
+    store_var _3
     load_type prompt_tag_runtime.Person$stream | null
     load_type prompt_tag_runtime.Person
     load_var2 2 1
-    call baml.llm.Client.__make_stream
-    return
-}
-
-function prompt_tag_runtime.PtRenderPerson$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const "openai/gpt-4o-mini"
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    load_type baml.llm.Client
-    alloc_array 0
-    load_const null
-    load_const 0
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    store_var client
-
-  L0:
-    make_closure .<tagged(PtRenderPerson$render_prompt, 0)>, 0
-    call baml.llm.prompt
-    store_var _5
-    load_var client
-    load_const "PtRenderPerson"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_var _5
-    call baml.llm.render_prompt
-    return
-}
-
-function prompt_tag_runtime.PtRenderPerson$stream(client: baml.llm.Client) -> baml.llm.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const "openai/gpt-4o-mini"
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    load_type baml.llm.Client
-    alloc_array 0
-    load_const null
-    load_const 0
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    store_var client
-
-  L0:
-    make_closure .<tagged(PtRenderPerson$stream, 0)>, 0
-    call baml.llm.prompt
-    store_var _5
-    load_type prompt_tag_runtime.Person$stream | null
-    load_type prompt_tag_runtime.Person
-    load_var client
-    load_const "PtRenderPerson"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_var _5
-    call baml.llm.stream_llm_function
+    call ai.stream_spec
     return
 }
 
@@ -653,9 +549,7 @@ function prompt_tag_runtime.pt_parent_tostring_owns_media_fn() -> string {
 }
 
 function prompt_tag_runtime.pt_render_prompt_companion_output_format_fn() -> string {
-    load_const <omitted>
     call user.prompt_tag_runtime.PtRenderPerson$render_prompt
-    sys_op baml.llm.PromptAst.text
     return
 }
 

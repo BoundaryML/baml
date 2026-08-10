@@ -8,14 +8,11 @@
 // against literal instances. Locals go through top-level helper functions
 // (test-block local-boxing VM bug).
 
-client<llm> ParseCompanionsTestClient {
-    provider openai
-    options {
-        model "gpt-4o-mini"
-        api_key "test-key"
-        base_url "http://localhost:1234"
-    }
-}
+client ParseCompanionsTestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
 // ─── missing optional class field (`string?`) ────────────────────────────────
 
@@ -25,7 +22,7 @@ class ParseCompanionsOptPayload {
 
 function ParseCompanionsParseOptPayload() -> ParseCompanionsOptPayload {
     client ParseCompanionsTestClient
-    prompt #"{{ ctx.output_format }}"#
+    prompt `${ctx.output_format}`
 }
 
 function parse_companions_missing_optional_fn() -> bool {
@@ -51,7 +48,7 @@ class ParseCompanionsAliasPayload {
 
 function ParseCompanionsParseAliasPayload() -> ParseCompanionsAliasPayload {
     client ParseCompanionsTestClient
-    prompt #"{{ ctx.output_format }}"#
+    prompt `${ctx.output_format}`
 }
 
 function parse_companions_missing_alias_fn() -> bool {

@@ -1,6 +1,6 @@
 function Fn() -> string {
   client "openai/gpt-4o"
-  prompt #"Hi"#
+  prompt `Hi`
 }
 
 class TopLevelClass {

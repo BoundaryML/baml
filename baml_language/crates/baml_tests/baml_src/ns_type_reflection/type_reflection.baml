@@ -3,33 +3,30 @@
 // Converted from crates/baml_tests/tests/type_reflection.rs.
 //
 // `baml.llm.get_return_type(name)` is a pure static lookup — it does NOT
-// make an actual LLM network call. The client block is required by the
+// make an actual LLM network call. The client declaration is required by the
 // compiler (LLM functions must declare a client) but no request is sent.
 //
 // Each test body is lifted into a top-level helper function to avoid the
 // test-block local-boxing VM bug (locals holding `type` values misbehave
 // when compared inside a test block).
 
-client<llm> TestClient {
-    provider openai
-    options {
-        model "gpt-4o-mini"
-        api_key "test-key"
-        base_url "http://localhost:1234"
-    }
-}
+client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
 class Foo { x int }
 class Bar { y string }
 
 function GetFoo() -> Foo {
     client TestClient
-    prompt #"hi"#
+    prompt `hi`
 }
 
 function GetBar() -> Bar {
     client TestClient
-    prompt #"hi"#
+    prompt `hi`
 }
 
 // ─── Equality / inequality tests ─────────────────────────────────────────────
