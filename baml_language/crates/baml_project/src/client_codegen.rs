@@ -425,12 +425,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // use (and not something every generator can even classify: the C#
             // generator hard-errors on it rather than skipping). The useful
             // companions — `$render_prompt`, `$parse`, `$stream` — stay.
-            // TODO(host-streaming): `$stream` returns `ai.Stream<TPartial,
-            // TFinal>`, but every SDK generator hardcodes the legacy
-            // `baml.llm.Stream` (the C# one hard-errors rather than skipping).
-            // Host-language streaming returns once the generators learn the ai
-            // type; BAML-side streaming is fully supported today.
-            if func.name.as_str().ends_with("$spec") || func.name.as_str().ends_with("$stream") {
+            if func.name.as_str().ends_with("$spec") {
                 continue;
             }
 
@@ -497,11 +492,15 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // `param_schema` applies for the playground form): SDK callers get
             // the function's declared default client.
             let param_count = sig.params.len();
+            // ...and on the `$stream` companion, where the same override is
+            // typed `ai.StreamingClient?` (companions carry no LLM metadata of
+            // their own, hence the name check).
             let drop_injected_client = sig
                 .params
                 .last()
                 .is_some_and(|p| p.name.as_str() == "client")
-                && baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some();
+                && (baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
+                    || func.name.as_str().ends_with("$stream"));
             let visible_params = if drop_injected_client {
                 param_count - 1
             } else {

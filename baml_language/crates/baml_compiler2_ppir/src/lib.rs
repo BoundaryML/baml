@@ -419,7 +419,14 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 let companion_type_args =
                     vec![stream_type_expr, return_type_spanned.clone()];
                 let return_type = ast::TypeExprKind::Path {
-                    segments: vec![Name::new("ai"), Name::new("Stream")],
+                    // `baml.llm.Stream`, not `ai.Stream`: every SDK generator
+                    // matches a stream companion's return type by this exact
+                    // name, which is what makes host-language streaming work.
+                    segments: vec![
+                        Name::new("baml"),
+                        Name::new("llm"),
+                        Name::new("Stream"),
+                    ],
                     generic_args: companion_type_args.clone(),
                     associated_type_bindings: vec![],
                     attrs: vec![],

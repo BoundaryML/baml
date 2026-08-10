@@ -234,71 +234,6 @@ class TurnStream {
     }
 }
 
-// The typed partial-value stream a `Fn$stream` companion returns.
-//
-// Pull-based, mirroring the legacy `baml.llm.Stream` semantics: `next()`
-// returns the next partial value (SAP-parsing the accumulated text, skipping
-// no-yield ticks) or `baml.stream.StreamFinished` when the turn is over;
-// after StreamFinished, call `final()` for the final typed value. `final()`
-// drains any remaining stream first, so it is valid at any point.
-class Stream<TStream, TFinal> {
-    _turns: TurnStream,
-    _cache: baml.llm.StreamCache<TStream, TFinal>,
-    _provider: string,
-    _text: string,
-    _finished: bool,
-
-    // The next partial value, or StreamFinished when the stream is done.
-    // Only returns partials: use final() for the final value.
-    function next(self) -> TStream | baml.stream.StreamFinished {
-        while (true) {
-            if (self._finished) {
-                return baml.stream.StreamFinished {};
-            }
-            match (self._turns.next()) {
-                let d: StreamDone => {
-                    self._finished = true;
-                    return baml.stream.StreamFinished {};
-                },
-                let s: string => {
-                    self._text = `${self._text}${s}`;
-                    let parsed: TStream | baml.stream.StreamNoYield = baml.llm.__sap_parse_partial<TStream, TFinal>(self._text, self._cache);
-                    match (parsed) {
-                        baml.stream.StreamNoYield => null,
-                        let p: TStream => {
-                            return p;
-                        },
-                    };
-                    null
-                },
-            };
-        }
-        baml.sys.panic("unreachable")
-    }
-
-    // The final typed value. Blocks until the stream is done; calling twice
-    // returns the same value.
-    function final(self) -> TFinal {
-        let turn = self._turns.final_turn();
-        self._finished = true;
-        let candidate = turn.terminal_text() ?? "";
-        match (turn.stop_reason) {
-            StopReason.MaxTokens => {
-                throw root.errors.ParseFailed { provider: self._provider, raw_output: candidate }
-            },
-            StopReason.Refused => {
-                throw root.errors.Refused {
-                    provider: self._provider,
-                    reason: "the model declined to answer",
-                    raw_body: null,
-                }
-            },
-            _ => null,
-        };
-        baml.llm.__sap_parse_final<TStream, TFinal>(candidate, self._cache)
-    }
-}
-
 // One-turn streaming over a spec: render the spec's prompt exactly as the
 // default runner's first turn would, require a streaming-capable client, and
 // return the typed partial stream. `Fn$stream(...)` desugars to
@@ -312,7 +247,7 @@ class Stream<TStream, TFinal> {
 function stream_spec<TStream, TFinal>(
     spec: FunctionSpec<TFinal>,
     client: StreamingClient? = null,
-) -> Stream<TStream, TFinal> {
+) -> baml.llm.Stream<TStream, TFinal> {
     if (!spec.tools().is_empty()) {
         throw baml.errors.InvalidArgument {
             message: `streaming does not run the tool loop yet: ${spec.name()} has a non-empty toolbox`,
@@ -343,10 +278,21 @@ function stream_spec<TStream, TFinal>(
             output_type: spec.output_type(),
         },
     );
-    Stream {
-        _turns: turns,
+    // The host-facing stream is `baml.llm.Stream` — every SDK generator
+    // matches a stream companion's return type by that exact name, so this is
+    // what makes streaming work from Python/TS/Go/Java/C#/Swift/Rust as well
+    // as from BAML. It is provider-agnostic: all it needs is a way to pull the
+    // next chunk of text, which this closure takes from the provider's
+    // TurnStream.
+    let _ = provider;
+    baml.llm.Stream {
+        _next_text: () -> {
+            match (turns.next()) {
+                let d: StreamDone => null,
+                let s: string => s,
+            }
+        },
         _cache: baml.llm.__new_stream_cache<TStream, TFinal>(),
-        _provider: provider,
         _text: "",
         _finished: false,
     }

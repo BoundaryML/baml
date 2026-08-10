@@ -263,121 +263,6 @@ class Client {
     }
   }
 
-  function execute_stream<TStream, TFinal>(
-    self,
-    context: ExecutionContext,
-    inherited_delay_ms: int,
-  ) -> Stream<TStream, TFinal> {
-    match (self.retry) {
-      let r: RetryPolicy => {
-        let current_delay = r.initial_delay_or_default()
-
-        for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
-          let attempt_delay = inherited_delay_ms
-          if (attempt > 0) {
-            attempt_delay = root._trunc_to_int(current_delay)
-            let next = current_delay * r.multiplier_or_default()
-            if (next > r.max_delay_or_default()) {
-              current_delay = r.max_delay_or_default()
-            } else {
-              current_delay = next
-            }
-          }
-
-          if (attempt == r.max_retries) {
-            attempt_delay = inherited_delay_ms
-          }
-
-          let result2: Stream<TStream, TFinal> = self.execute_once_stream<TStream, TFinal>(
-            context,
-            attempt_delay,
-          ) catch (e) {
-            _ => { continue; }
-          };
-
-          return result2;
-        }
-
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-      null => {
-        let result: Stream<TStream, TFinal> = self.execute_once_stream<TStream, TFinal>(
-          context,
-          inherited_delay_ms,
-        );
-        return result;
-      },
-    }
-  }
-
-  function execute_once_stream<TStream, TFinal>(
-    self,
-    context: ExecutionContext,
-    active_delay_ms: int,
-  ) -> Stream<TStream, TFinal> {
-    match (self.client_type) {
-      ClientType.Primitive => {
-        let primitive = self.to_primitive_client();
-        // On the stream path `reflect.type_of<TFinal>()` is `BuiltinUnknown`:
-        // the `$stream` companion calls this without explicit type-args and
-        // inferred type-args don't reach MIR (see `__make_stream`'s registry
-        // fallback). Resolve the real return type from the registry by name and
-        // use it for the whole attempt — the Jinja template may render
-        // `{{ ctx.output_format }}`, the closure's `${ctx.output_format}` needs
-        // it, and `build_request_stream` keys provider config off it. (The
-        // oneshot path instead uses `reflect.type_of<T>()`, which DOES reach
-        // MIR there.) Caveat: for a *generic* streaming function the registry
-        // holds the unspecialized return type, so `${ctx.output_format}` renders
-        // the generic schema — the oneshot path renders the specialized one.
-        let return_type = get_return_type(context.function_name);
-
-        // Render + specialize via the shared `render_specialized_prompt` (same
-        // path as oneshot and the static `build_request_stream` companion).
-        let specialized = primitive.render_specialized_prompt(
-          context.jinja_string, context.args, return_type, context.prompt_closure);
-
-        let http_request = primitive.build_request_stream(specialized, return_type);
-        let sse = root.http.fetch_sse(http_request);
-        let stream: Stream<TStream, TFinal> = self.__make_stream<TStream, TFinal>(sse);
-        return stream;
-      }
-
-      ClientType.Fallback => {
-        for (let sub in self.sub_clients) {
-          let result2: Stream<TStream, TFinal> = sub.execute_stream<TStream, TFinal>(
-            context,
-            active_delay_ms,
-          ) catch (e) {
-            _ => { continue; }
-          };
-          return result2;
-        }
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-
-      ClientType.RoundRobin => {
-        if (self.sub_clients.length() == 0) {
-          throw root.errors.DevOther { message: "RoundRobin client has no sub-clients" };
-        }
-        let idx = self.counter % self.sub_clients.length()
-        self.counter += 1
-        let result3: Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream<TStream, TFinal>(
-          context,
-          active_delay_ms,
-        );
-        return result3;
-      }
-    }
-  }
-
-  /// DO NOT CALL FROM USER CODE
-  function __make_stream<TStream, TFinal>(self, sse: root.http.SseStream) -> Stream<TStream, TFinal> {
-    let primitive = self.to_primitive_client()
-    let acc = primitive.new_stream_accumulator()
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>())
-    Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
-  }
-
   function execute_oneshot<T>(
     self,
     context: ExecutionContext,
@@ -647,75 +532,67 @@ class StreamCache<TStream, TFinal> {
   }
 }
 
-/// `Stream` provides a streaming interface for LLM calls.
+/// The typed partial-value stream a `<LLM function>$stream` companion returns.
 ///
-/// It is a pull-based interface: the sse stream is only flushed into the accumulator
-/// and the value is only parsed when `next()` or `final()` is called.
+/// Pull-based: nothing is read from the wire until `next()` / `final()` is
+/// called. Provider-agnostic by construction — the only thing it knows how to
+/// do is ask for the next chunk of text. `_next_text` is supplied by whoever
+/// builds the stream (the `ai` package's provider clients, via
+/// `ai.stream_spec`) and returns `null` when the wire is exhausted.
 ///
-/// Created by `<LLM function>$stream` companion functions,
-/// internally using `baml.llm.stream_llm_function`.
+/// This type lives in `baml.llm` rather than `ai` because every SDK generator
+/// matches a stream companion's return type by its exact name — host
+/// languages get their streaming wrappers from `baml.llm.Stream<TPartial,
+/// TFinal>`.
 class Stream<TStream, TFinal> {
-  _client: PrimitiveClient
-  _acc: StreamAccumulator
-  _sse: root.http.SseStream
+  _next_text: () -> string? throws unknown
   _cache: StreamCache<TStream, TFinal>
+  _text: string
+  _finished: bool
 
-  /// Return the next partial value, or a `StreamFinished` value if the stream is done.
-  /// Will only return partial values: if the stream is done, use `final()` to get the final value.
-  /// Blocks until a partial value is available.
+  /// The next partial value, or `StreamFinished` once the wire is exhausted.
+  /// Only yields partials — call `final()` for the final value. Ticks that
+  /// parse to nothing new are skipped rather than yielded.
   function next(self) -> TStream | root.stream.StreamFinished {
     while (true) {
-      let next = match (self._sse.next()) {
+      if (self._finished) {
+        return root.stream.StreamFinished {};
+      }
+      match (self._next_text()) {
         null => {
+          self._finished = true;
           return root.stream.StreamFinished {};
         }
-        let next: string => next,
-      };
-      self._acc.add_events(next);
-      if (self._acc.is_done()) {
-        self._sse.close();
-        return root.stream.StreamFinished {}; // user should call final() to get the final value
-      }
-
-      let content = self._acc.content();
-      let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial<TStream, TFinal>(content, self._cache);
-      match (parsed) {
-        root.stream.StreamNoYield => {
-          continue;
-        }
-        let parsed: TStream => {
-          return parsed;
+        let s: string => {
+          self._text = self._text + s;
+          let parsed: TStream | root.stream.StreamNoYield =
+            __sap_parse_partial<TStream, TFinal>(self._text, self._cache);
+          match (parsed) {
+            root.stream.StreamNoYield => {}
+            let p: TStream => {
+              return p;
+            }
+          }
         }
       }
     }
-    root.sys.panic("Unreachable")
+    root.sys.panic("unreachable")
   }
-  /// Return the final value of the stream.
-  /// If the final value is not yet available, this will block until the stream is done.
-  /// Calling this twice will return the same value.
+
+  /// The final typed value: drains whatever is left on the wire, then parses
+  /// the accumulated text. Calling it twice returns the same value.
   function final(self) -> TFinal {
-    while (!self._acc.is_done()) {
-      let next = match (self._sse.next()) {
+    while (!self._finished) {
+      match (self._next_text()) {
         null => {
-          break;
+          self._finished = true;
         }
-        let next: string => next,
-      };
-      self._acc.add_events(next);
-      if (self._acc.is_done()) {
-        self._sse.close();
-        break;
+        let s: string => {
+          self._text = self._text + s;
+        }
       }
     }
-    match (self._acc.finish_reason()) {
-      null => {
-        throw root.errors.LlmClient { message: "Streaming finished without finish_reason" };
-      },
-      let reason: string => self._client.validate_finish_reason(reason),
-    }
-
-    let content = self._acc.content();
-    __sap_parse_final<TStream, TFinal>(content, self._cache)
+    __sap_parse_final<TStream, TFinal>(self._text, self._cache)
   }
 }
 

@@ -16,7 +16,7 @@ function StreamAnswer(question: string) -> string {
 // Drain the partial stream, then take the final value; asserts the stream
 // really streamed (more than one next() yield) and produced a final value.
 // The stream-expanded partial type of `string` is `string?`.
-function _drain(s: ai.Stream<string?, string>) -> string {
+function _drain(s: baml.llm.Stream<string?, string>) -> string {
     let yields = 0;
     let last_len = 0;
     while (true) {
