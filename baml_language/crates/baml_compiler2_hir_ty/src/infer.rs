@@ -877,8 +877,7 @@ impl<'db> InferenceContext<'db> {
                 // RESIDUAL (consumes-gated, B-1069's rule); branch join
                 // and the divergence-aware merge follow the If arm.
                 let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
-                let resolved = self.table.resolve_completely(&scrut_ty);
-                let scrut = self.matrix_scrut(&resolved);
+                let scrut = self.scrutinee_demand(&scrut_ty);
                 let outcome = self.lower_pattern(body, *pattern, &scrut);
                 let condition_diverges = self.diverges;
                 let branch_expectation = expected.adjust_for_branches(&mut self.table);
@@ -1256,8 +1255,7 @@ impl<'db> InferenceContext<'db> {
                     self.flow.remove(&binding);
                 }
                 let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
-                let resolved = self.table.resolve_completely(&scrut_ty);
-                let scrut = self.matrix_scrut(&resolved);
+                let scrut = self.scrutinee_demand(&scrut_ty);
                 let outcome = self.lower_pattern(body, *pattern, &scrut);
                 let entry_flow = self.flow.clone();
                 if let Some(binding) = self.narrowable_binding(body, *scrutinee) {
@@ -1921,6 +1919,8 @@ impl<'db> InferenceContext<'db> {
             BinaryOp::And | BinaryOp::Or => {
                 let lhs_ty = self.check_expr(body, lhs, &Ty::bool());
                 let rhs_ty = self.check_expr(body, rhs, &Ty::bool());
+                let lhs_ty = self.table.resolve_completely(&lhs_ty);
+                let rhs_ty = self.table.resolve_completely(&rhs_ty);
                 const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
             }
             BinaryOp::Eq | BinaryOp::Ne => {
@@ -2698,7 +2698,10 @@ impl<'db> InferenceContext<'db> {
                     let class_count = crate::lower::class_generic_frame(self.db, class).len();
                     let mut instantiation: Vec<Ty> = match pinned {
                         Some(args) => args,
-                        None => (0..class_count).map(|_| self.table.new_var_ty()).collect(),
+                        None => crate::lower::class_generic_frame(self.db, class)
+                            .iter()
+                            .map(|param| self.fresh_generic_arg(param))
+                            .collect(),
                     };
                     let own_params = signature.generic_params[class_count..].to_vec();
                     instantiation.extend(self.instantiation_args(call, &own_params));
@@ -3226,7 +3229,7 @@ impl<'db> InferenceContext<'db> {
                 let signature = function_signature(self.db, method);
                 let mut instantiation: Vec<Ty> = match pinned.clone() {
                     Some(args) => args,
-                    None => (0..frame.len()).map(|_| self.table.new_var_ty()).collect(),
+                    None => frame.iter().map(|param| self.fresh_generic_arg(param)).collect(),
                 };
                 let own_params = signature.generic_params[frame.len()..].to_vec();
                 instantiation.extend(self.instantiation_args(call, &own_params));
@@ -4401,8 +4404,11 @@ impl<'db> InferenceContext<'db> {
                 && let Some((first, rest)) = deferred_lowers.split_first()
                 && rest.iter().all(|lower| lower == first)
             {
-                let widened = self.widen_fresh(first);
-                if self.table.unify(&Ty::infer_var(var), &widened).is_ok() {
+                // No widening here: this tier is occurs-guarded
+                // ALIASING, not a meet, and a deferred (var-carrying)
+                // lower can never be a top-level fresh literal anyway.
+                let alias = first.clone();
+                if self.table.unify(&Ty::infer_var(var), &alias).is_ok() {
                     return true;
                 }
             }

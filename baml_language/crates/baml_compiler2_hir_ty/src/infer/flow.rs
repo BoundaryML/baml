@@ -94,8 +94,7 @@ impl InferenceContext<'_> {
                     return CondFacts::default();
                 };
                 let scrut = self.binding_flow_ty(binding);
-                let resolved = self.table.resolve_completely(&scrut);
-                let scrut = self.matrix_scrut(&resolved);
+                let scrut = self.scrutinee_demand(&scrut);
                 let outcome = self.lower_pattern(body, *pattern, &scrut);
                 let mut facts = CondFacts::default();
                 facts.when_true.insert(binding, outcome.matched_ty.clone());

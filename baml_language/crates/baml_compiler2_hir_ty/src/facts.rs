@@ -145,22 +145,8 @@ impl TypeContext for Facts<'_> {
             let mut candidates: Vec<baml_type::interned::Ty> = Vec::new();
             for bound in self.type_var_bound(param) {
                 let have = crate::impls::InterfaceTarget::from_constraint(&bound);
-                let mut heads = vec![have.clone()];
-                heads.extend(crate::impls::direct_requires_closure(
-                    self.db,
-                    &have,
-                    &base_interned,
-                    8,
-                ));
-                for head in heads {
-                    let head_matches = head.name == target.name
-                        && head.args.len() == target.args.len()
-                        && head
-                            .args
-                            .iter()
-                            .zip(&target.args)
-                            .all(|(a, b)| equivalent_interned(a, b, &eq));
-                    if !head_matches {
+                for head in crate::impls::requires_heads(self.db, &have, &base_interned, 8) {
+                    if !crate::impls::head_matches(&head, &target, &eq) {
                         continue;
                     }
                     let value = head

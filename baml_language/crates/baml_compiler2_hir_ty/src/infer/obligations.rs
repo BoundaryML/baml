@@ -194,13 +194,7 @@ impl<'db> InferenceContext<'db> {
             args: args.to_vec(),
             pins: pins.to_vec(),
         };
-        let mut heads = vec![subject_target.clone()];
-        heads.extend(crate::impls::direct_requires_closure(
-            self.db,
-            &subject_target,
-            subject,
-            8,
-        ));
+        let heads = crate::impls::requires_heads(self.db, &subject_target, subject, 8);
         let goal_target = target_of(goal);
         let mut applicable = None;
         for head in &heads {
@@ -387,7 +381,7 @@ impl<'db> InferenceContext<'db> {
         let instantiation: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> = facts
             .generic_params
             .iter()
-            .map(|(param, _)| (param.clone(), self.table.new_var_ty()))
+            .map(|(param, _)| (param.clone(), self.fresh_generic_arg(param)))
             .collect();
         let for_ty = crate::impls::substitute_bindings(&facts.for_ty_pattern, &instantiation);
         self.table.unify(goal, &for_ty).ok()?;
@@ -498,13 +492,14 @@ impl<'db> InferenceContext<'db> {
     /// a union, so it fails - never "passes as a subtype".
     fn implements_holds(&mut self, ty: &Ty, interface: &InterfaceRef) -> bool {
         let target = target_of(interface);
+        let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {
             TyKind::TypeVar(param, _) => {
                 let carried =
                     baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
                 carried.iter().any(|have| {
                     let have = InterfaceTarget::from_constraint(have);
-                    carried_satisfies(&have, &target)
+                    carried_satisfies(&have, &target, &eq)
                         || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
                 })
             }
@@ -514,7 +509,7 @@ impl<'db> InferenceContext<'db> {
                     args: args.to_vec(),
                     pins: pins.to_vec(),
                 };
-                carried_satisfies(&have, &target)
+                carried_satisfies(&have, &target, &eq)
                     || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
             }
             // A projection: a reducible one reduces inside the canonical
@@ -575,13 +570,20 @@ fn interface_as_existential(interface: &InterfaceRef) -> Ty {
 /// `have` satisfies `want` when heads and args agree and `have` pins
 /// everything `want` pins to the same type (it may pin MORE; a bare
 /// `have` does not satisfy a pinned requirement).
-fn carried_satisfies(have: &InterfaceTarget, want: &InterfaceTarget) -> bool {
-    have.name == want.name
-        && have.args.len() == want.args.len()
-        && have.args.iter().zip(&want.args).all(|(a, b)| a == b)
+fn carried_satisfies(
+    have: &InterfaceTarget,
+    want: &InterfaceTarget,
+    eq: &crate::impls::AliasOnlyFacts<'_>,
+) -> bool {
+    use baml_type::normalize::equivalent_interned;
+    // The shared head relation, plus the pin-superset this consumer
+    // layers on (a bare carried bound does not satisfy a pinned
+    // requirement). Args and pins compare under the alias oracle -
+    // the `==` drift an alias-spelled bound used to trip is gone.
+    crate::impls::head_matches(have, want, eq)
         && want.pins.iter().all(|(name, want_pin)| {
-            have.pins
-                .iter()
-                .any(|(have_name, have_pin)| have_name == name && have_pin == want_pin)
+            have.pins.iter().any(|(have_name, have_pin)| {
+                have_name == name && equivalent_interned(have_pin, want_pin, eq)
+            })
         })
 }

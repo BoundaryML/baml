@@ -1102,6 +1102,44 @@ fn bounds_hold(
     true
 }
 
+/// The root PLUS its transitive `requires` closure - the candidate
+/// head set every consumer walks. The closure itself excludes the
+/// root (the language's requires-cycle-by-name rule), so each caller
+/// re-prepended it; spelled once here.
+pub(crate) fn requires_heads(
+    db: &dyn baml_compiler2_ppir::Db,
+    root: &InterfaceTarget,
+    self_ty: &Ty,
+    fuel: u32,
+) -> Vec<InterfaceTarget> {
+    let mut heads = vec![root.clone()];
+    heads.extend(direct_requires_closure(db, root, self_ty, fuel));
+    heads
+}
+
+/// Whether a carried or closure HEAD answers for `want`: same
+/// interface, same arity, args equivalent under the fact-poor alias
+/// oracle. Pins are outputs, not part of the relation
+/// (`interface_requires`' rule) - callers with pin obligations layer
+/// them separately. The ONE head-match relation; the drift between
+/// `==`, `equivalent_interned`, and unification per site is what this
+/// replaces (unification stays only in obligation CONFIRMATION, which
+/// commits variables).
+pub(crate) fn head_matches(
+    have: &InterfaceTarget,
+    want: &InterfaceTarget,
+    eq: &AliasOnlyFacts<'_>,
+) -> bool {
+    use baml_type::normalize::equivalent_interned;
+    have.name == want.name
+        && have.args.len() == want.args.len()
+        && have
+            .args
+            .iter()
+            .zip(&want.args)
+            .all(|(a, b)| equivalent_interned(a, b, eq))
+}
+
 /// The realized DIRECT-plus-transitive `requires` closure of an
 /// interface reference (excluding itself), fuel-bounded. `self_ty` is
 /// the SUBJECT the closure is elaborated for (the rigid var, the
@@ -1209,13 +1247,7 @@ fn interface_requires_inner(
     let eq = AliasOnlyFacts::new(db);
     let mut holds = false;
     for required in direct_requires(db, sub, self_ty) {
-        if required.name == sup.name
-            && required.args.len() == sup.args.len()
-            && required
-                .args
-                .iter()
-                .zip(&sup.args)
-                .all(|(a, b)| equivalent_interned(a, b, &eq))
+        if head_matches(&required, sup, &eq)
         {
             holds = true;
             break;

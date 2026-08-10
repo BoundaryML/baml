@@ -357,17 +357,11 @@ fn env_proves<'db>(
     let eq = crate::impls::AliasOnlyFacts::new(db);
     for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
         let root = InterfaceTarget::from_constraint(&bound);
-        let mut heads = vec![root.clone()];
-        heads.extend(crate::impls::direct_requires_closure(db, &root, actual, 8));
-        if heads.iter().any(|head| {
-            head.name == goal.name
-                && head.args.len() == goal.args.len()
-                && head
-                    .args
-                    .iter()
-                    .zip(&goal.args)
-                    .all(|(a, b)| baml_type::normalize::equivalent_interned(a, b, &eq))
-        }) {
+        let heads = crate::impls::requires_heads(db, &root, actual, 8);
+        if heads
+            .iter()
+            .any(|head| crate::impls::head_matches(head, goal, &eq))
+        {
             return true;
         }
     }

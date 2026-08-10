@@ -65,18 +65,7 @@ impl<'db> InferenceContext<'db> {
         expected: &Expectation,
     ) -> Ty {
         let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
-        let resolved = self.table.resolve_completely(&scrut_ty);
-        // The match is exhaustiveness's STRUCTURE demand and cannot
-        // defer (rustc runs usefulness after inference; the one-pass
-        // walk commits here instead): a var still riding the scrutinee
-        // - `?T | Done` from a not-yet-grounded receiver chain -
-        // forces from its bounds before the arms lower.
-        let resolved = if resolved.has_infer() {
-            self.force_occurring_vars(&resolved)
-        } else {
-            resolved
-        };
-        let scrut_resolved = self.matrix_scrut(&resolved);
+        let scrut_resolved = self.scrutinee_demand(&scrut_ty);
         let scrut_binding = self.narrowable_binding(body, scrutinee);
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
 
@@ -138,13 +127,26 @@ impl<'db> InferenceContext<'db> {
         self.join(&arm_tys)
     }
 
+    /// The scrutinee demand every pattern site shares (the
+    /// `infer_match` rule applied uniformly): resolve, force occurring
+    /// vars - exhaustiveness and narrowing cannot defer, so the
+    /// one-pass walk commits here - then matrix-normalize.
+    pub(super) fn scrutinee_demand(&mut self, ty: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        let resolved = if resolved.has_infer() {
+            self.force_occurring_vars(&resolved)
+        } else {
+            resolved
+        };
+        self.matrix_scrut(&resolved)
+    }
+
     /// `expr is pattern`: the pattern lowers against the operand (no
     /// subtype gate - a never-matching test is legal and just false); the
     /// result is always bool. S10b reads the outcome for narrowing.
     pub(super) fn infer_is(&mut self, body: &ExprBody, scrutinee: ExprId, pattern: PatId) -> Ty {
         let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
-        let resolved = self.table.resolve_completely(&scrut_ty);
-        let scrut_resolved = self.matrix_scrut(&resolved);
+        let scrut_resolved = self.scrutinee_demand(&scrut_ty);
         self.lower_pattern(body, pattern, &scrut_resolved);
         Ty::bool()
     }
@@ -166,8 +168,7 @@ impl<'db> InferenceContext<'db> {
             }
             None => Ty::error(),
         };
-        let resolved = self.table.resolve_completely(&init_ty);
-        let resolved = self.matrix_scrut(&resolved);
+        let resolved = self.scrutinee_demand(&init_ty);
         self.lower_pattern(body, pattern, &resolved);
     }
 
