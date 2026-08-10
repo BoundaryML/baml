@@ -1689,11 +1689,11 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 /// past that replay runs the defer body once on the way out and a second time
 /// in the unwind landing pad.
 ///
-/// Only arithmetic can fail. `/` and `%` reject a zero divisor for `int` and
-/// `float` alike. Add/sub/mul/shift and negation are range-checked on `int`
-/// only — `float` saturates to infinity, `bigint` grows, and `string + string`
-/// is concatenation — so those ask [`operand_could_be_int`]. Bitwise and/or/xor
-/// and the comparisons stay in range for every operand type.
+/// Only arithmetic can fail, and only `/` fails for every operand type. The
+/// rest are `int`-only failures — `float` saturates to infinity or NaN,
+/// `bigint` grows, and `string + string` is concatenation — so they ask
+/// [`operand_could_be_int`]. Bitwise and/or/xor and the comparisons stay in
+/// range whatever the operands are.
 ///
 /// Matched exhaustively on purpose. This is a soundness predicate, and a
 /// wrong `false` miscompiles silently — so a new `Rvalue` variant must fail to
@@ -1701,8 +1701,12 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
     match rvalue {
         Rvalue::BinaryOp { op, left, right } => match op {
-            BinOp::Div | BinOp::Mod => true,
-            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Shl | BinOp::Shr => {
+            // `/` rejects a zero divisor on both numeric paths — BAML throws
+            // rather than yielding IEEE infinity (`OpCode::DivFloat`), so this
+            // holds whatever the operands are.
+            BinOp::Div => true,
+            // `%` is guarded on the `int` path only; the float path yields NaN.
+            BinOp::Mod | BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Shl | BinOp::Shr => {
                 operand_could_be_int(body, left) && operand_could_be_int(body, right)
             }
             BinOp::Eq
