@@ -10236,8 +10236,6 @@ fn baml.TypeValue.implements = builtin(vm)
 
 fn baml.TypeValue.implemented_by = builtin(vm)
 
-fn baml.TypeValue.implementors = builtin(vm)
-
 fn baml.Uint8Array.length = builtin(vm)
 
 fn baml.Uint8Array.at = builtin(vm)

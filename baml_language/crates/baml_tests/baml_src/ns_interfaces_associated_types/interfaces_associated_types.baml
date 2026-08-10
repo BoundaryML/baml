@@ -633,52 +633,12 @@ test "reflection_implements_respects_associated_type_bindings" {
     assert.equal(rfi_main(), 101)
 }
 
-// ─── reflection_implementors_respects_associated_type_bindings ───────────────
-
-interface RfmSource {
-    type Item
-}
-
-class RfmIntSource {
-    implements RfmSource {
-        type Item = int
-    }
-}
-
-class RfmStringSource {
-    implements RfmSource {
-        type Item = string
-    }
-}
-
-function rfm_main() -> int {
-    let int_impls = reflect.type_of<RfmSource<Item = int>>().implementors()
-    let string_impls = reflect.type_of<RfmSource<Item = string>>().implementors()
-    let score = 0
-    score = score + int_impls.length()
-    if int_impls.length() > 0 && int_impls[0] == reflect.type_of<RfmIntSource>() {
-        score = score + 10
-    }
-    score = score + (string_impls.length() * 100)
-    if string_impls.length() > 0 && string_impls[0] == reflect.type_of<RfmStringSource>() {
-        score = score + 1000
-    }
-    return score
-}
-
-test "reflection_implementors_respects_associated_type_bindings" {
-    assert.equal(rfm_main(), 1111)
-}
-
 // ─── reflection_resolves_generic_class_associated_type_binding ───────────────
 //
 // A generic class's `type Item = T` binding resolves precisely at the
 // instantiation: `RfgBox<int>` *is* `RfgSource<Item = int>` (consistent with
 // runtime dispatch and with how Rust resolves the projection), but it is
-// *not* `RfgSource<Item = string>`. `implementors()`, however, cannot
-// enumerate generic instantiations, so it lists the generic base `RfgBox`
-// for *any* specific `RfgSource<Item = …>` request (it can't pin the
-// instantiation).
+// *not* `RfgSource<Item = string>`.
 
 interface RfgSource {
     type Item
@@ -707,18 +667,13 @@ function rfg_main() -> int {
     if string_source.implemented_by(box_int) {
         score = score + 100
     }
-    if string_source.implementors().length() > 0 {
-        score = score + 1000
-    }
     return score
 }
 
 // `RfgBox<int>.implements(RfgSource<Item = int>)` holds (+1); the two
-// `Item = string` membership checks are correctly false; and `implementors()`
-// lists the generic base `RfgBox` for the `RfgSource<Item = string>` request
-// (+1000) since it can't pin the instantiation.
+// `Item = string` membership checks are correctly false.
 test "reflection_resolves_generic_class_associated_type_binding" {
-    assert.equal(rfg_main(), 1001)
+    assert.equal(rfg_main(), 1)
 }
 
 // ─── reflection_respects_generic_interface_impl_bound ────────────────────────

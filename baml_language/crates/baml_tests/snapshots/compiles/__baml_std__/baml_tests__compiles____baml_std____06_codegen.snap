@@ -929,9 +929,6 @@ function baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string 
 function baml.TypeValue.implemented_by(self: baml.TypeValue, other: type) -> bool {
 }
 
-function baml.TypeValue.implementors(self: baml.TypeValue) -> type[] {
-}
-
 function baml.TypeValue.implements(self: baml.TypeValue, other: type) -> bool {
 }
 

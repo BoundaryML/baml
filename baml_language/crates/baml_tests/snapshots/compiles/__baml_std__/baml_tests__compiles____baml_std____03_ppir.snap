@@ -2320,7 +2320,6 @@ class baml.TypeValue$stream {
 }
 function baml._to_string_impl(self: ?) -> string  [builtin]
 function baml.implemented_by(self: ?, other: type) -> bool  [builtin]
-function baml.implementors(self: ?) -> type[]  [builtin]
 function baml.implements(self: ?, other: type) -> bool  [builtin]
 function baml.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl()
