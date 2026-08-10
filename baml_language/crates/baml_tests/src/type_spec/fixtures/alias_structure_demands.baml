@@ -1,4 +1,6 @@
-// pending: weak aliases resolve at every structure demand
+// weak aliases resolve at every structure demand
+// tir: fails
+// (aliased Future await: TIR records a false mismatch and types unknown)
 type AsdMaybe = string | null
 type AsdHandler = (int) -> string
 type AsdInt = int

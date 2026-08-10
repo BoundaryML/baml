@@ -898,6 +898,9 @@ impl<'db> InferenceContext<'db> {
                     .copied()
                     .map(|target_ref| self.lower_body_annotation(target_ref))
                     .unwrap_or_else(Ty::error);
+                // The interface-view gate is a STRUCTURE demand: an
+                // alias naming an interface answers as the interface.
+                let target = self.expand_alias_ty(&target);
                 if target.has_error() || !matches!(target.kind(), TyKind::Interface(..)) {
                     Ty::error()
                 } else {
@@ -1987,7 +1990,7 @@ impl<'db> InferenceContext<'db> {
             self.infer_expr(body, name_id, &Expectation::None);
         }
         let lambda_ty = self.infer_expr(body, spawn_body, &Expectation::None);
-        let resolved = self.table.resolve_completely(&lambda_ty);
+        let resolved = self.structurally_resolve(&lambda_ty);
         let (value, error) = match resolved.kind() {
             TyKind::Function { ret, throws, .. } => (ret.clone(), throws.clone()),
             _ => (resolved.clone(), Ty::never()),
@@ -2015,11 +2018,12 @@ impl<'db> InferenceContext<'db> {
                 throws: unknown(),
                 attr: TyAttr::default(),
             });
-            let got = self.infer_expr(body, with_id, &Expectation::has_type(expected.clone()));
-            let got = self.table.resolve_completely(&got);
+                let got = self.infer_expr(body, with_id, &Expectation::has_type(expected.clone()));
+            let got = self.structurally_resolve(&got);
             let link = match got.kind() {
                 TyKind::Function { params, ret, .. } => {
-                    let ret = self.table.resolve_completely(ret);
+                    let ret = ret.clone();
+                    let ret = self.structurally_resolve(&ret);
                     match ret.kind() {
                         TyKind::Class(qn, args, _)
                             if is_spawn_params_qtn(qn) && args.len() == 2 =>
@@ -2075,7 +2079,7 @@ impl<'db> InferenceContext<'db> {
     /// `Future<unknown, unknown>` (TIR's expected render).
     fn infer_await(&mut self, body: &ExprBody, expr: ExprId, future: ExprId) -> Ty {
         let fut = self.infer_expr(body, future, &Expectation::None);
-        let resolved = self.table.resolve_completely(&fut);
+        let resolved = self.structurally_resolve(&fut);
         match resolved.kind() {
             TyKind::Future(value, error, _) => {
                 let (value, error) = (value.clone(), error.clone());
@@ -2312,24 +2316,14 @@ impl<'db> InferenceContext<'db> {
     /// sentinel. Also the discharge rule for operator obligations.
     pub(super) fn dispatch_operator(&mut self, interface: &str, lhs: &Ty, rhs: Option<&Ty>) -> Ty {
         // Normalize-then-dispatch (rustc normalizes obligations before
-        // selection): a ground projection operand reduces before the
-        // operator interface is consulted - `(T as Source).Item + ":"`
-        // dispatches Add on `string`.
-        let lhs_reduced;
-        let mut lhs = lhs;
-        if lhs.has_projection() && !lhs.has_infer() {
-            lhs_reduced = self.reduce_projections(lhs, PROJECTION_FINALIZE_FUEL);
-            lhs = &lhs_reduced;
-        }
-        let rhs_reduced;
-        let mut rhs = rhs;
-        if let Some(rhs_ty) = rhs
-            && rhs_ty.has_projection()
-            && !rhs_ty.has_infer()
-        {
-            rhs_reduced = self.reduce_projections(rhs_ty, PROJECTION_FINALIZE_FUEL);
-            rhs = Some(&rhs_reduced);
-        }
+        // selection): operands resolve through the ONE structure demand
+        // - ground projections reduce (`(T as Source).Item + ":"`
+        // dispatches Add on `string`) and weak aliases expand (a union
+        // alias splits pairwise like the union it names).
+        let lhs_resolved = self.structurally_resolve(lhs);
+        let lhs = &lhs_resolved;
+        let rhs_resolved = rhs.map(|rhs_ty| self.structurally_resolve(rhs_ty));
+        let rhs = rhs_resolved.as_ref();
         let lhs = self.table.resolve_completely(lhs);
         let rhs = rhs.map(|ty| self.table.resolve_completely(ty));
         if matches!(lhs.kind(), TyKind::Never { .. })
@@ -2430,7 +2424,9 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn remove_null(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.table.resolve_completely(ty);
+        // Null-peeling is a STRUCTURE demand (r-a resolves before every
+        // such match): an aliased nullable answers as its union.
+        let resolved = self.structurally_resolve(ty);
         match resolved.kind() {
             TyKind::Null { .. } => Ty::never(),
             TyKind::Union(members, _) => {
@@ -2735,10 +2731,9 @@ impl<'db> InferenceContext<'db> {
         // Callee position on a UNION: every member must yield the
         // member as a callable with IDENTICAL parameters and boundness
         // (the forced case; differing signatures are S17's ambiguity) -
-        // returns JOIN, throws union. Aliases expand as in
-        // `field_access`.
-        let expanded = self.expand_alias_ty(&resolved);
-        if let TyKind::Union(union_members, _) = expanded.kind() {
+        // returns JOIN, throws union. `structurally_resolve` already
+        // expanded weak aliases.
+        if let TyKind::Union(union_members, _) = resolved.kind() {
             let union_members = union_members.to_vec();
             if let Some(joined) = self.union_member_callee(call, &union_members, member) {
                 return joined;
@@ -3305,7 +3300,8 @@ impl<'db> InferenceContext<'db> {
         let signature = self.type_refs.lambda_signatures.get(&expr).cloned();
         let expected_fn = expected
             .only_has_type()
-            .map(|ty| self.table.shallow_resolve(ty))
+            .cloned()
+            .map(|ty| self.structurally_resolve(&ty))
             .and_then(|ty| match ty.kind() {
                 TyKind::Function { params, ret, .. } => Some((params.clone(), ret.clone())),
                 _ => None,
@@ -3646,9 +3642,8 @@ impl<'db> InferenceContext<'db> {
     /// aliases expanded through the oracle (fuel-bounded), so the
     /// recursive `baml.json.json` union answers structurally.
     fn expectation_shape(&mut self, expected: &Expectation) -> Option<Ty> {
-        let ty = expected.only_has_type()?;
-        let resolved = self.table.shallow_resolve(ty);
-        Some(self.expand_alias_ty(&resolved))
+        let ty = expected.only_has_type()?.clone();
+        Some(self.structurally_resolve(&ty))
     }
 
     /// Nominal aliases expanded through the oracle (fuel-bounded), for

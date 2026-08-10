@@ -838,6 +838,12 @@ impl<'db> InferenceContext<'db> {
             Some(ascribed) if !ascribed.has_error() => self.narrow_to(scrut, ascribed),
             _ => scrut.clone(),
         };
+        // The element extraction below is a STRUCTURE demand - r-a's
+        // `infer_slice_pat` structurally resolves the expected type
+        // before the Array/Slice match, so an ascription naming a weak
+        // alias (or a reducible projection, or a bounded var) answers
+        // as its structure.
+        let effective = self.structurally_resolve(&effective);
         // Union scrutinee: claim the list member the pattern
         // DISCRIMINATES - the class arm's agreeing-instantiation rule
         // applied to the list constructor. A single list member claims

@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+301..310 'asd_chain': throws never
+344..396 '{\n   ...  n\n}': int
+350..355 'let n': int
+358..359 'm': user.AsdMaybe
+358..367 'm?.length': hir_ty=[(self: baml.String) -> int throws never] tir=[((self: baml.String) -> int throws never) | null]
+358..369 'm?.length()': hir_ty=[int / int | null] tir=[int | null]
+358..374 'm?.len...) ?? 0': int
+373..374 '0': 0
+393..394 'n': int
+406..416 'asd_lambda': throws never
+442..524 '{\n   ...  r\n}': string
+448..465 'let f:...andler': hir_ty=[user.AsdHandler] tir=[(int) -> string throws never]
+455..465 'AsdHandler': hir_ty=[user.AsdHandler] tir=[(int) -> string throws never]
+468..482 '(x) -> { "v" }': (x: int) -> string throws never
+475..482 '{ "v" }': "v"
+477..480 '"v"': "v"
+487..492 'let r': string
+495..496 'f': hir_ty=[user.AsdHandler] tir=[(int) -> string throws never]
+495..499 'f(1)': string
+497..498 '1': 1
+521..522 'r': string
+534..546 'asd_operator': throws never
+589..630 '{\n   ...  r\n}': int
+595..600 'let r': int
+603..604 'a': user.AsdInt
+603..608 'a + b': int
+607..608 'b': user.AsdInt
+627..628 'r': int
+640..657 'asd_un...perand': throws never
+698..747 '{\n   ...  r\n}': int | float
+704..709 'let r': int | float
+712..713 'a': user.AsdNums
+712..717 'a + a': int | float
+716..717 'a': user.AsdNums
+744..745 'r': int | float
+757..766 'asd_await': throws never
+798..841 '{\n   ...  v\n}': hir_ty=[int] tir=[unknown]
+804..809 'let v': hir_ty=[int] tir=[unknown]
+812..819 'await j': hir_ty=[int] tir=[unknown]
+818..819 'j': user.AsdJob
+838..839 'v': hir_ty=[int] tir=[unknown]

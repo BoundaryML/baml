@@ -1350,7 +1350,7 @@ panics: 0
 [2x] hir_ty=[(self: baml.errors.ErrorContext) -> string throws never] tir=[() -> string throws never]
     at ns_errorcontext/errorcontext.baml:9766..9779 `ctx.to_string`
     at ns_errorcontext/errorcontext.baml:13074..13087 `ctx.to_string`
-[2x] hir_ty=[(self: baml.iter.ArrayIterator<int>, predicate: (int) -> bool throws never) -> bool throws never] tir=[(predicate: (int) -> bool throws E2) -> bool throws E2]
+[2x] hir_ty=[(self: baml.iter.ArrayIterator<int>, predicate: (int) -> bool throws unknown) -> bool throws unknown] tir=[(predicate: (int) -> bool throws E2) -> bool throws E2]
     at ns_iter/iter.baml:973..1016 `baml.iter....2, 3]).some`
     at ns_iter/iter.baml:1066..1110 `baml.iter...., 3]).every`
 [2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>) -> int throws never] tir=[() -> int throws never]
@@ -1362,7 +1362,7 @@ panics: 0
 [2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, fn: (int) -> int | null throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(fn: (int) -> R | null throws E2) -> baml.iter.Iterator<Item = R, Error = E2> throws never]
     at ns_iter/iter.baml:7870..7900 `[1, 2, 3, ....filter_map`
     at ns_iter/iter.baml:12348..12361 `it.filter_map`
-[2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, fn: (int, int) -> int throws never, initial: int) -> int throws never] tir=[(fn: (A, int) -> A throws E2, initial: A) -> A throws E2]
+[2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, fn: (int, int) -> int throws unknown, initial: int) -> int throws unknown] tir=[(fn: (A, int) -> A throws E2, initial: A) -> A throws E2]
     at ns_iter/iter.baml:573..582 `it.reduce`
     at ns_iter/iter.baml:6716..6806 `baml.iter....  }).reduce`
 [2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, other: baml.iter.Iterable<Error = never, Item = int>) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(other: baml.iter.Iterable<Item = int, Error = E2>) -> baml.iter.Iterator<Item = int, Error = E2> throws never]
@@ -2344,7 +2344,7 @@ panics: 0
     at ns_iter/iter.baml:10940..10982 `baml.iter.... 2, 3]).map`
 [1x] hir_ty=[(self: baml.iter.ArrayIterator<int>, fn: (int) -> int | null throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(fn: (int) -> R | null throws E2) -> baml.iter.Iterator<Item = R, Error = E2> throws never]
     at ns_iter/iter.baml:12627..12679 `baml.iter.....filter_map`
-[1x] hir_ty=[(self: baml.iter.ArrayIterator<int>, predicate: (int) -> bool throws never) -> int | null throws never] tir=[(predicate: (int) -> bool throws E2) -> int | null throws E2]
+[1x] hir_ty=[(self: baml.iter.ArrayIterator<int>, predicate: (int) -> bool throws unknown) -> int | null throws unknown] tir=[(predicate: (int) -> bool throws E2) -> int | null throws E2]
     at ns_iter/iter.baml:1154..1200 `baml.iter....3, 4]).find`
 [1x] hir_ty=[(self: baml.iter.Iterable<Error = never, Item = int>) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[() -> baml.iter.Iterator<Item = int, Error = never> throws never]
     at ns_iter/iter.baml:8951..8958 `xs.iter`
@@ -2356,7 +2356,7 @@ panics: 0
     at ns_iter/iter.baml:5804..5819 `xs.iter().count`
 [1x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>) -> baml.iter.Peekable<int, never> throws never] tir=[() -> baml.iter.Peekable<int, never> throws never]
     at ns_iter/iter.baml:8411..8433 `[8, 9].iter().peekable`
-[1x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, fn: (int) -> void throws never) -> void throws never] tir=[(fn: (int) -> void throws E2) -> void throws E2]
+[1x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, fn: (int) -> void throws unknown) -> void throws unknown] tir=[(fn: (int) -> void throws E2) -> void throws E2]
     at ns_iter/iter.baml:6886..6975 `baml.iter....}).for_each`
 [1x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, n: int) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(n: int) -> baml.iter.Iterator<Item = int, Error = never> throws never]
     at ns_iter/iter.baml:7574..7675 `baml.iter.... }).step_by`
