@@ -1122,7 +1122,7 @@ impl<'db> InferenceContext<'db> {
             } => self.infer_object(body, expr, type_name, fields, spreads),
             Expr::MemberAccess { base, member } => {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
-                self.field_access(&base_ty, member)
+                self.field_access(expr, &base_ty, member)
             }
             // TS short-circuit chains: the boundary owns the `| null`.
             Expr::OptionalChain { expr: inner } => {
@@ -1138,7 +1138,7 @@ impl<'db> InferenceContext<'db> {
             Expr::OptionalMemberAccess { base, member } => {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 let nonnull = self.peel_chain_null(&base_ty);
-                self.field_access(&nonnull, member)
+                self.field_access(expr, &nonnull, member)
             }
             Expr::OptionalCall { callee, args } => {
                 let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
@@ -2702,6 +2702,10 @@ impl<'db> InferenceContext<'db> {
                     };
                     let own_params = signature.generic_params[class_count..].to_vec();
                     instantiation.extend(self.instantiation_args(call, &own_params));
+                    // r-a registers required obligations at EVERY value
+                    // instantiation (add_required_obligations_for_value
+                    // _path), whatever the spelling.
+                    self.register_call_bounds(method, &instantiation, call);
                     let fn_ty = function_value_ty(signature, &instantiation);
                     self.result.type_of_expr.insert(callee, fn_ty.clone());
                     return (fn_ty, false);
@@ -2769,7 +2773,7 @@ impl<'db> InferenceContext<'db> {
                 };
                 let receiver = segments[1..segments.len() - 1]
                     .iter()
-                    .fold(root, |ty, segment| self.field_access(&ty, segment));
+                    .fold(root, |ty, segment| self.field_access(callee, &ty, segment));
                 let member = segments.last().expect("checked len");
                 let (ty, bound) = self.member_callee(call, &receiver, member);
                 self.result.type_of_expr.insert(callee, ty.clone());
@@ -2824,7 +2828,7 @@ impl<'db> InferenceContext<'db> {
             if let Some(interface_member) = interface_member {
                 return self.interface_member_callee(interface_member, call);
             }
-            let field = self.field_access(&resolved, member);
+            let field = self.field_access(call, &resolved, member);
             // `recv.to_json()` is language sugar for `baml.json.from(recv)`
             // (universal serialization; TIR's builder lowers the call the
             // same way). It is a FALLBACK tier: an `implements baml.ToJson`
@@ -3084,7 +3088,7 @@ impl<'db> InferenceContext<'db> {
             return segments
                 .iter()
                 .skip(1)
-                .fold(root_ty, |ty, segment| self.field_access(&ty, segment));
+                .fold(root_ty, |ty, segment| self.field_access(expr, &ty, segment));
         }
         // Tagged-template body params (`prompt`'s `role`/`ctx`): the
         // semantic index cannot register them (the tag is a cross-file
@@ -3097,7 +3101,7 @@ impl<'db> InferenceContext<'db> {
             return segments
                 .iter()
                 .skip(1)
-                .fold(root_ty, |ty, segment| self.field_access(&ty, segment));
+                .fold(root_ty, |ty, segment| self.field_access(expr, &ty, segment));
         }
         if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
             self.lower.resolve_value(segments)
@@ -3226,6 +3230,7 @@ impl<'db> InferenceContext<'db> {
                 };
                 let own_params = signature.generic_params[frame.len()..].to_vec();
                 instantiation.extend(self.instantiation_args(call, &own_params));
+                self.register_call_bounds(method, &instantiation, call);
                 return Some(function_value_ty(signature, &instantiation));
             }
         }
@@ -3623,7 +3628,7 @@ impl<'db> InferenceContext<'db> {
     /// as full signatures (self included) with the receiver pinning the
     /// class generics and fresh variables for the method's own - value
     /// position has no turbofish.
-    fn field_access(&mut self, base_ty: &Ty, member: &baml_type::Name) -> Ty {
+    fn field_access(&mut self, at: ExprId, base_ty: &Ty, member: &baml_type::Name) -> Ty {
         // `structurally_resolve` expands weak aliases, so `json`
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
@@ -3636,7 +3641,7 @@ impl<'db> InferenceContext<'db> {
             let members = members.to_vec();
             let mut tys = Vec::new();
             for member_ty in &members {
-                let ty = self.field_access(member_ty, member);
+                let ty = self.field_access(at, member_ty, member);
                 if ty.has_error() {
                     return Ty::error();
                 }
@@ -3663,6 +3668,11 @@ impl<'db> InferenceContext<'db> {
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
             instantiation.extend(own);
+            // r-a registers required obligations at EVERY value
+            // instantiation, whatever the spelling - a method read as a
+            // VALUE obligates its own generics' bounds exactly as a
+            // call would (add_required_obligations_for_value_path).
+            self.register_call_bounds(candidate.method, &instantiation, at);
             return bind_receiver(function_value_ty(signature, &instantiation));
         }
         if let Some(interface_member) =
@@ -4134,7 +4144,11 @@ impl<'db> InferenceContext<'db> {
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
         let throws = match self.declared_throws.clone() {
-            // A closed clause IS the surface (declared wins, rule 1).
+            // A closed clause IS the surface (declared wins, rule 1),
+            // VERBATIM - the written member order is render fidelity
+            // (ruling 3's record-what-the-user-wrote), so no finalize
+            // pass here; the sweep proved canonical reordering breaks
+            // agreement on the written surface.
             Some(declared) if !self.declared_throws_open => declared,
             // Open or omitted: the inferred set, with an open clause's
             // named part joining the union (spec rule 3 - callers see
@@ -4180,7 +4194,11 @@ impl<'db> InferenceContext<'db> {
         let resolved = self.table.resolve_completely(ty);
         let erased = erase_infer(&resolved);
         if erased.has_error() {
-            return erased;
+            // Errors stay LOCAL, but the cleanup pass still runs: the
+            // union constructor above is identity-safe on error
+            // members, so one erased var no longer leaves the whole
+            // tree's unions syntactic.
+            return self.canonicalize_unions(&erased);
         }
         let reduced = self.reduce_projections(&erased, PROJECTION_FINALIZE_FUEL);
         self.canonicalize_unions(&reduced)
@@ -4294,6 +4312,20 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|member| self.canonicalize_unions(member))
                     .collect();
+                // Error-carrying unions clean up STRUCTURALLY only:
+                // the canonical algebra's equivalence treats the Error
+                // sentinel as bidirectionally compatible (checking's
+                // cascade suppression), so a container member like
+                // `!error[]` would MERGE into `int[]` and vanish.
+                // rustc's discipline is the opposite for identity -
+                // `TyKind::Error` equals only itself in canonical
+                // forms; compat lives in the relate layer alone.
+                // Until the shared algebra splits those roles (S16,
+                // when TIR stops consuming it), flatten/dedup/collapse
+                // here and skip absorption.
+                if members.iter().any(Ty::has_error) {
+                    return syntactic_union(&members);
+                }
                 let joined = canonical_union_interned(&members, &self.facts);
                 match joined.kind() {
                     TyKind::Union(members, attr) => {

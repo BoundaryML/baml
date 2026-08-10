@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+99..103 'show': hir_ty=[<missing>] tir=[throws never]
+191..195 'make': throws never
+240..257 '{\n   ...n    }': 0
+250..251 '0': 0
+307..311 'pick': throws never
+362..379 '{\n   ...n    }': 0
+372..373 '0': 0
+391..400 'rb_static': throws never
+433..543 '{\n   ...  r\n}': int
+439..444 'let r': int
+447..457 'RbBox.make': hir_ty=[(v: user.RbPlain) -> int throws never] tir=[(v: T) -> int throws never]
+447..460 'RbBox.make(p)': int
+458..459 'p': user.RbPlain
+540..541 'r': int
+553..568 'rb_method_value': throws never
+614..727 '{\n   ...  r\n}': int
+620..625 'let g': hir_ty=[(v: user.RbPlain) -> int throws never] tir=[(v: T) -> int throws never]
+628..634 'h.pick': hir_ty=[(v: user.RbPlain) -> int throws never] tir=[(v: T) -> int throws never]
+707..712 'let r': int
+715..716 'g': hir_ty=[(v: user.RbPlain) -> int throws never] tir=[(v: T) -> int throws never]
+715..719 'g(p)': int
+717..718 'p': user.RbPlain
+724..725 'r': int
+447..460 'RbBox.make(p)': [mismatch] expected user.RbShow, got user.RbPlain
+628..634 'h.pick': [mismatch] expected user.RbShow, got user.RbPlain
