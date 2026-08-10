@@ -20,6 +20,6 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> string  [expr] {
 function user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<user.Resume>  [expr] {
   ai.FunctionSpec { spec_name: "TypeBuilderFn", args: map { "from_text": from_text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") }
 }
-function user.TypeBuilderFn$stream(from_text: string, client: ai.StreamingClient? = null) -> ai.Stream<user.Resume$stream | null, user.Resume>  [expr] {
+function user.TypeBuilderFn$stream(from_text: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<user.Resume$stream | null, user.Resume>  [expr] {
   ai.stream_spec(TypeBuilderFn$spec(from_text), client = client)
 }

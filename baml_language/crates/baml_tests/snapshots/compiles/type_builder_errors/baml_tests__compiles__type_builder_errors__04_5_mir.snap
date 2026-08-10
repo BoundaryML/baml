@@ -148,9 +148,9 @@ fn .<lambda(TypeBuilderFn$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.TypeBuilderFn$stream(from_text: string, client: null | ai.StreamingClient) -> ai.Stream<null | Resume$stream, Resume> {
+fn user.TypeBuilderFn$stream(from_text: string, client: null | ai.StreamingClient) -> baml.llm.Stream<null | Resume$stream, Resume> {
     // Locals:
-    let _0: ai.Stream<null | Resume$stream, Resume> // _0 // return
+    let _0: baml.llm.Stream<null | Resume$stream, Resume> // _0 // return
     let _1: string // from_text // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool

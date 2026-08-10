@@ -152,9 +152,9 @@ fn .<lambda(UseRetryClient$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.UseRetryClient$stream(input: string, client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+fn user.UseRetryClient$stream(input: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
-    let _0: ai.Stream<string | null, string> // _0 // return
+    let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // input // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool

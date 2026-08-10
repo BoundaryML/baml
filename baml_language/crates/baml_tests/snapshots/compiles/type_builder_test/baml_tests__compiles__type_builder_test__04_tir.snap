@@ -20,8 +20,8 @@ class user.TopLevelClass {
   a: string
 }
 enum user.TopLevelEnum
-function user.Fn$stream(client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(Fn$spec(), client = client) : ai.Stream<string | null, string>
+function user.Fn$stream(client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(Fn$spec(), client = client) : baml.llm.Stream<string | null, string>
 }
 class user.TopLevelClass$stream {
   a: string | null

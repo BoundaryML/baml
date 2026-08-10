@@ -146,9 +146,9 @@ fn .<lambda(AskO1$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.AskO1$stream(question: string, client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+fn user.AskO1$stream(question: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
-    let _0: ai.Stream<string | null, string> // _0 // return
+    let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // question // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool
@@ -325,9 +325,9 @@ fn .<lambda(AskGpt4o$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.AskGpt4o$stream(question: string, client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+fn user.AskGpt4o$stream(question: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
-    let _0: ai.Stream<string | null, string> // _0 // return
+    let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // question // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool

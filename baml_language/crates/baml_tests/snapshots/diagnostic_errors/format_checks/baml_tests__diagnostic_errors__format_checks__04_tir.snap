@@ -978,20 +978,20 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
     "done" : "done"
   }
 }
-function user.LlmBasic$stream(name: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(LlmBasic$spec(name), client = client) : ai.Stream<string | null, string>
+function user.LlmBasic$stream(name: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(LlmBasic$spec(name), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.LlmMultiLine$stream(text: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(LlmMultiLine$spec(text), client = client) : ai.Stream<string | null, string>
+function user.LlmMultiLine$stream(text: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(LlmMultiLine$spec(text), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.LlmStringClient$stream(text: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(LlmStringClient$spec(text), client = client) : ai.Stream<string | null, string>
+function user.LlmStringClient$stream(text: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(LlmStringClient$spec(text), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.LlmReversedOrder$stream(text: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(LlmReversedOrder$spec(text), client = client) : ai.Stream<string | null, string>
+function user.LlmReversedOrder$stream(text: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(LlmReversedOrder$spec(text), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client) : ai.Stream<string | null, string>
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client) : baml.llm.Stream<string | null, string>
 }
 function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1

@@ -30,9 +30,9 @@ function user.AskGpt4o$render_prompt(question: string) -> string throws never {
 function user.AskGpt4o$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.AskO1$stream(question: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(AskO1$spec(question), client = client) : ai.Stream<string | null, string>
+function user.AskO1$stream(question: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(AskO1$spec(question), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.AskGpt4o$stream(question: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(AskGpt4o$spec(question), client = client) : ai.Stream<string | null, string>
+function user.AskGpt4o$stream(question: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(AskGpt4o$spec(question), client = client) : baml.llm.Stream<string | null, string>
 }

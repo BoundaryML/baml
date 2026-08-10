@@ -1528,142 +1528,6 @@ function ai.RoundRobin.new(members: ai.Client[]) -> ai.RoundRobin {
     throw
 }
 
-function ai.Stream.final(self: ai.Stream<#0, #1>) -> #1 {
-    load_var self
-    load_field ._turns
-    call ai.TurnStream.final_turn
-    store_var turn
-    load_var self
-    load_const true
-    store_field ._finished
-    load_var turn
-    call ai.ModelTurn.terminal_text
-    store_var _5
-    load_var _5
-    store_var candidate
-    load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const ""
-    store_var candidate
-
-  L0:
-    load_var turn
-    load_field .stop_reason
-    discriminant
-    load_const StopReason.MaxTokens
-    cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var turn
-    load_field .stop_reason
-    discriminant
-    load_const StopReason.Refused
-    cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var2 3 1
-    load_field ._cache
-    load_type #0
-    load_type #1
-    sys_op baml.llm.__sap_parse_final
-    return
-
-  L3:
-    load_var self
-    load_field ._provider
-    load_const "the model declined to answer"
-    load_const null
-    init_instance ai.errors.Refused .provider, .reason, .raw_body
-    throw
-
-  L4:
-    load_var self
-    load_field ._provider
-    load_var candidate
-    init_instance ai.errors.ParseFailed .provider, .raw_output
-    throw
-}
-
-function ai.Stream.next(self: ai.Stream<#0, #1>) -> #0 | baml.stream.StreamFinished {
-  L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const "unreachable"
-    call baml.sys.panic
-    jump L8
-
-  L2:
-    load_var self
-    load_field ._finished
-    pop_jump_if_false L3
-    jump L7
-
-  L3:
-    load_var self
-    load_field ._turns
-    call ai.TurnStream.next
-    store_var _3
-    load_var _3
-    store_var _5
-    load_var _5
-    narrow_bind ai.StreamDone, slot=3
-    pop_jump_if_false L4
-    jump L6
-
-  L4:
-    load_type string
-    load_var self
-    load_field ._text
-    call baml.String.from
-    store_var _7
-    load_type string
-    load_var _3
-    call baml.String.from
-    store_var _10
-    load_var2 1 4
-    load_var _10
-    bin_op +
-    store_field ._text
-    load_var self
-    load_field ._text
-    load_var self
-    load_field ._cache
-    load_type #0
-    load_type #1
-    sys_op baml.llm.__sap_parse_partial
-    store_var parsed
-    load_var parsed
-    is_type baml.stream.StreamNoYield
-    pop_jump_if_false L5
-    jump L0
-
-  L5:
-    load_var parsed
-    jump L8
-
-  L6:
-    load_var self
-    load_const true
-    store_field ._finished
-    alloc_instance baml.stream.StreamFinished
-    jump L8
-
-  L7:
-    alloc_instance baml.stream.StreamFinished
-
-  L8:
-    return
-}
-
 function ai.Tool.call(self: ai.Tool, args: map<string, unknown>) -> string {
     load_var self
     load_field .raw_handler
@@ -3187,7 +3051,10 @@ function ai.send_as(req: baml.http.Request, provider: string) -> #0 {
     throw
 }
 
-function ai.stream_spec(spec: ai.FunctionSpec<#1>, client: ai.StreamingClient | null) -> ai.Stream<#0, #1> {
+function ai.stream_spec(spec: ai.FunctionSpec<#1>, client: ai.StreamingClient | null) -> baml.llm.Stream<#0, #1> {
+    load_var ?10
+    make_cell
+    store_var ?10
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -3270,18 +3137,21 @@ function ai.stream_spec(spec: ai.FunctionSpec<#1>, client: ai.StreamingClient | 
     load_type ai.StreamingClient
     load_const "invoke_stream"
     virtual_call nargs=2 ntypeargs=0
-    store_var turns
+    store_deref ?10
     load_type #0
     load_type #1
     call baml.llm.__new_stream_cache
     store_var _37
-    load_var2 10 15
-    load_var provider
+    load_type #0
+    load_type #1
+    load_var turns
+    make_closure .<lambda(stream_spec, 0)>, captures=1, ntypeargs=2
+    load_var _37
     load_const ""
     load_const false
     load_type #0
     load_type #1
-    init_instance<2> ai.Stream ._turns, ._cache, ._provider, ._text, ._finished
+    init_instance<2> baml.llm.Stream ._next_text, ._cache, ._text, ._finished
     return
 
   L7:
@@ -9159,7 +9029,7 @@ function user.AskDocs$spec(query: string, max_results: int, filter: string) -> a
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.StreamingClient | null) -> ai.Stream<string | null, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

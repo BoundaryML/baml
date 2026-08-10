@@ -14,6 +14,6 @@ function user.ExtractAny$render_prompt() -> string  [expr] {
 function user.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json>  [expr] {
   ai.FunctionSpec { spec_name: "ExtractAny", args: map {  }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: TestClient }
 }
-function user.ExtractAny$stream(client: ai.StreamingClient? = null) -> ai.Stream<baml.json.json$stream | null, baml.json.json>  [expr] {
+function user.ExtractAny$stream(client: ai.StreamingClient? = null) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json>  [expr] {
   ai.stream_spec(ExtractAny$spec(), client = client)
 }

@@ -366,20 +366,6 @@ class ai.SseEvent$stream {
   data: string | null
   id: string | null
 }
-class ai.Stream {
-  _turns: ai.TurnStream
-  _cache: baml.llm.StreamCache<TStream, TFinal>
-  _provider: string
-  _text: string
-  _finished: bool
-}
-class ai.Stream$stream {
-  _turns: ai.TurnStream$stream | null
-  _cache: baml.llm.StreamCache$stream<TStream, TFinal> | null
-  _provider: string | null
-  _text: string | null
-  _finished: bool | null
-}
 class ai.StreamDone {
 }
 class ai.StreamDone$stream {
@@ -438,9 +424,6 @@ function ai._finish(self: ?) -> null  [expr] {
 function ai.decode_sse_batch(batch: string) -> ai.SseEvent[]  [expr] {
   {  } baml.json.from_string(batch)
 }
-function ai.final(self: ?) -> TFinal  [expr] {
-  { let turn = self._turns.final_turn(); self._finished = true; let candidate = turn.terminal_text() NullCoalesce ""; match (turn.stop_reason) { StopReason.MaxTokens => { throw root.errors.ParseFailed { provider: self._provider, raw_output: candidate } }, StopReason.Refused => { throw root.errors.Refused { provider: self._provider, reason: "the model decline...", raw_body: null } }, _ => null } } baml.llm.__sap_parse_final(candidate, self._cache)
-}
 function ai.final_turn(self: ?) -> ModelTurn  [expr] {
   { while true { match (self.next()) { d: ai.StreamDone => { break }, _ => null } }; let usage: Usage? = if (self._input_tokens Ne null Or self._output_tokens Ne null) {  } Usage { input_tokens: self._input_tokens NullCoalesce 0, output_tokens: self._output_tokens NullCoalesce 0, cached_input_tokens: null, reasoning_tokens: null } else {  } null } ModelTurn { content: [Text { text: self._text }], stop_reason: self._stop_reason NullCoalesce StopReason.Complete, usage: usage }
 }
@@ -453,12 +436,12 @@ function ai.from_sse(sse: baml.http.SseStream, decode: (string) -> ai.StreamEven
 function ai.next(self: ?) -> string | ai.StreamDone  [expr] {
   { while true { if (self._done) { return ai.StreamDone {  } }; if (self._pcursor Lt self._pending.length()) { let e = self._pending.at(self._pcursor); self._pcursor Add= 1; match (e) { d: ai.TextDelta => { self._text = `...`; return d.text }, m: ai.TurnMeta => { if let s: StopReason = m.stop_reason { self._stop_reason = s }; if let i: int = m.input_tokens { self._input_tokens = i }; if let o: int = m.output_tokens { self._output_tokens = o } } null, d: ai.TurnDone => { let _ = self._finish(); return ai.StreamDone {  } }, null => null }; continue }; match (self._sse) { sse: baml.http.SseStream => { match (sse.next()) { null => { let _ = self._finish(); return ai.StreamDone {  } }, batch: string => { if let decode: (string) -> ai.StreamEvent[] throws unknown = self._decode { for e in decode(batch) { self._pending.push(e) } } null else {  } null } null } } null, null => {  } match (self._chunks.at(self._cursor)) { c: string => { self._cursor Add= 1; self._text = `...`; return c }, null => { let _ = self._finish(); return ai.StreamDone {  } } } } } } baml.sys.panic("unreachable")
 }
-function ai.next(self: ?) -> TStream | baml.stream.StreamFinished  [expr] {
-  { while true { if (self._finished) { return baml.stream.StreamFinished {  } }; match (self._turns.next()) { d: ai.StreamDone => { self._finished = true; return baml.stream.StreamFinished {  } }, s: string => { self._text = `...`; let parsed: TStream | baml.stream.StreamNoYield = baml.llm.__sap_parse_partial(self._text, self._cache); match (parsed) { baml.stream.StreamNoYield => null, p: TStream => { return p } } } null } } } baml.sys.panic("unreachable")
+function ai.stream_spec(spec: FunctionSpec<TFinal>, client: StreamingClient? = null) -> baml.llm.Stream<TStream, TFinal>  [expr] {
+  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: Client => c.id() }; let turns = selected.invoke_stream(ModelTurnInput { prompt: spec.prompt(), journal: Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }); let _ = provider } baml.llm.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.StreamDone => null, s: string => s } }, _cache: baml.llm.__new_stream_cache(), _text: "", _finished: false }
 }
-function ai.stream_spec(spec: FunctionSpec<TFinal>, client: StreamingClient? = null) -> ai.Stream<TStream, TFinal>  [expr] {
-  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: Client => c.id() }; let turns = selected.invoke_stream(ModelTurnInput { prompt: spec.prompt(), journal: Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }) } ai.Stream { _turns: turns, _cache: baml.llm.__new_stream_cache(), _provider: provider, _text: "", _finished: false }
-}
+
+--- captures ---
+lambda () in stream_spec: captures [turns]
 
 --- <builtin>/ai/tools.baml ---
 class ai.Tool {

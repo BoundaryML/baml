@@ -146,9 +146,9 @@ fn .<lambda(FunctionWithComments$spec, 0)>( __spec_output_format: string) -> str
     }
 }
 
-fn user.FunctionWithComments$stream(a: string, b: int, client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+fn user.FunctionWithComments$stream(a: string, b: int, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
-    let _0: ai.Stream<string | null, string> // _0 // return
+    let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // a // param
     let _2: int // b // param
     let _3: null | ai.StreamingClient // client // param
@@ -320,9 +320,9 @@ fn .<lambda(CommentAfterArrow$spec, 0)>( __spec_output_format: string) -> string
     }
 }
 
-fn user.CommentAfterArrow$stream(client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+fn user.CommentAfterArrow$stream(client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
-    let _0: ai.Stream<string | null, string> // _0 // return
+    let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: null | ai.StreamingClient // client // param
     let _2: bool
     let _3: ai.FunctionSpec<string>

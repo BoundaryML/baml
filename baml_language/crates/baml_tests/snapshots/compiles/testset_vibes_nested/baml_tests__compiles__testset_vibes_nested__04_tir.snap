@@ -96,12 +96,12 @@ class user.Sentiment$stream {
   confidence: float | null
   reasoning: string | null
 }
-function user.ClassifySentiment$stream(text: string, client: ai.StreamingClient | null = null) -> ai.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
-  ai.stream_spec(ClassifySentiment$spec(text), client = client) : ai.Stream<user.Sentiment$stream | null, user.Sentiment>
+function user.ClassifySentiment$stream(text: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
+  ai.stream_spec(ClassifySentiment$spec(text), client = client) : baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>
 }
-function user.GenerateTests$stream(count: int, topic: string, client: ai.StreamingClient | null = null) -> ai.Stream<string[], string[]> throws never {
-  ai.stream_spec(GenerateTests$spec(count, topic), client = client) : ai.Stream<string[], string[]>
+function user.GenerateTests$stream(count: int, topic: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string[], string[]> throws never {
+  ai.stream_spec(GenerateTests$spec(count, topic), client = client) : baml.llm.Stream<string[], string[]>
 }
-function user.ClassifySentiment2$stream(text: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(ClassifySentiment2$spec(text), client = client) : ai.Stream<string | null, string>
+function user.ClassifySentiment2$stream(text: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(ClassifySentiment2$spec(text), client = client) : baml.llm.Stream<string | null, string>
 }

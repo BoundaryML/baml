@@ -65,6 +65,6 @@ function user.build_spec(q: string) -> ai.FunctionSpec<user.Answer> throws never
 class user.Answer$stream {
   text: string | null
 }
-function user.PlainChat$stream(q: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(PlainChat$spec(q), client = client) : ai.Stream<string | null, string>
+function user.PlainChat$stream(q: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(PlainChat$spec(q), client = client) : baml.llm.Stream<string | null, string>
 }

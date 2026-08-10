@@ -16,6 +16,6 @@ function user.UseRetryClient$render_prompt(input: string) -> string throws never
 function user.UseRetryClient$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.UseRetryClient$stream(input: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(UseRetryClient$spec(input), client = client) : ai.Stream<string | null, string>
+function user.UseRetryClient$stream(input: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(UseRetryClient$spec(input), client = client) : baml.llm.Stream<string | null, string>
 }

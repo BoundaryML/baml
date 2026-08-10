@@ -14,7 +14,7 @@ function user.CommentAfterArrow$render_prompt() -> string  [expr] {
 function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: TestClient }
 }
-function user.CommentAfterArrow$stream(client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.CommentAfterArrow$stream(client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(CommentAfterArrow$spec(), client = client)
 }
 function user.FunctionWithComments(a: string, b: int, client: ai.Client? = null) -> string  [llm] {
@@ -29,6 +29,6 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> string  [
 function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: TestClient }
 }
-function user.FunctionWithComments$stream(a: string, b: int, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.FunctionWithComments$stream(a: string, b: int, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(FunctionWithComments$spec(a, b), client = client)
 }

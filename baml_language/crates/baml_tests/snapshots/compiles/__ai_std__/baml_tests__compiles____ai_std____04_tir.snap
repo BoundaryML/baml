@@ -826,65 +826,8 @@ function ai.TurnStream.final_turn(self: ai.TurnStream) -> ai.ModelTurn throws ne
     ModelTurn { content: [Text { text: self._text }], stop_reason: self._stop_reason ?? StopReason.Complete, usage: usage } : ai.ModelTurn
   }
 }
-class ai.Stream {
-  _turns: ai.TurnStream
-  _cache: baml.llm.StreamCache<TStream, TFinal>
-  _provider: string
-  _text: string
-  _finished: bool
-}
-function ai.Stream.next(self: ai.Stream<TStream, TFinal>) -> TStream | baml.stream.StreamFinished throws never {
-  { : never
-    while true
-      { : void
-        if (self._finished : bool) : void
-          { : never
-            return baml.stream.StreamFinished {  } : baml.stream.StreamFinished
-          }
-        match (self._turns.next() : string | ai.StreamDone) : null
-          d: StreamDone =>
-            { : never
-              self._finished = true : true
-              return baml.stream.StreamFinished {  } : baml.stream.StreamFinished
-            }
-          s: string =>
-            { : null
-              self._text = `...` : string
-              let parsed: TStream | baml.stream.StreamNoYield = baml.llm.__sap_parse_partial<TStream>(self._text, self._cache) : TStream | baml.stream.StreamNoYield
-              match (parsed : TStream | baml.stream.StreamNoYield) : null
-                baml.stream.StreamNoYield =>
-                  null : null
-                p: TStream =>
-                  { : never
-                    return p : TStream
-                  }
-              null : null
-            }
-      }
-    baml.sys.panic("unreachable") : never
-  }
-}
-function ai.Stream.final(self: ai.Stream<TStream, TFinal>) -> TFinal throws never {
-  { : TFinal
-    let turn = self._turns.final_turn() : ai.ModelTurn
-    self._finished = true : true
-    let candidate = turn.terminal_text() ?? "" : string
-    match (turn.stop_reason : ai.StopReason) : null
-      StopReason.MaxTokens =>
-        { : never
-          throw root.errors.ParseFailed { provider: self._provider, raw_output: candidate } : ai.errors.ParseFailed
-        }
-      StopReason.Refused =>
-        { : never
-          throw root.errors.Refused { provider: self._provider, reason: "the model decline...", raw_body: null } : ai.errors.Refused
-        }
-      _ =>
-        null : null
-    baml.llm.__sap_parse_final<TFinal>(candidate, self._cache) : TFinal
-  }
-}
-function ai.stream_spec<TStream, TFinal>(spec: ai.FunctionSpec<TFinal>, client: ai.StreamingClient | null = null) -> ai.Stream<TStream, TFinal> throws never {
-  { : ai.Stream<TStream, TFinal>
+function ai.stream_spec<TStream, TFinal>(spec: ai.FunctionSpec<TFinal>, client: ai.StreamingClient | null = null) -> baml.llm.Stream<TStream, TFinal> throws never {
+  { : baml.llm.Stream<TStream, TFinal>
     if (Not spec.tools().is_empty() : bool) : void
       { : never
         throw baml.errors.InvalidArgument { message: `...` } : baml.errors.InvalidArgument
@@ -908,8 +851,11 @@ function ai.stream_spec<TStream, TFinal>(spec: ai.FunctionSpec<TFinal>, client: 
         c: Client =>
           c.id() : string
     let turns = selected.invoke_stream(ModelTurnInput { prompt: spec.prompt(), journal: Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }) : ai.TurnStream
-    Stream { _turns: turns, _cache: baml.llm.__new_stream_cache<TStream, TFinal>(), _provider: provider, _text: "", _finished: false } : ai.Stream<TStream, TFinal>
+    let _ = provider : string
+    baml.llm.Stream { _next_text: () -> { ... }, _cache: baml.llm.__new_stream_cache<TStream, TFinal>(), _text: "", _finished: false } : baml.llm.Stream<TStream, TFinal>
   }
+}
+lambda ai.stream_spec {
 }
 class ai.SseEvent$stream {
   event: string | null
@@ -941,13 +887,6 @@ class ai.TurnStream$stream {
   _input_tokens: int | null
   _output_tokens: int | null
   _done: bool | null
-}
-class ai.Stream$stream {
-  _turns: ai.TurnStream$stream | null
-  _cache: baml.llm.StreamCache$stream<TStream, TFinal> | null
-  _provider: string | null
-  _text: string | null
-  _finished: bool | null
 }
 
 --- <builtin>/ai/tools.baml ---

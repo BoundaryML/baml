@@ -201,7 +201,7 @@ namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
   class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot] }
+  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_oneshot, execute_once_oneshot] }
   enum ClientType
   class Context { methods: [output_format_with] }
   class ContextClient { methods: [] }
@@ -239,7 +239,6 @@ namespace baml.llm:
   function prompt_template_for
   function render_output_format
   function render_prompt
-  function stream_llm_function<TStream, TFinal>
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }

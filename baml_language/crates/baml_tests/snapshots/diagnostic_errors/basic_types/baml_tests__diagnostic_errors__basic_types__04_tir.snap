@@ -85,17 +85,17 @@ function user.GetMixedMap$render_prompt() -> string throws never {
 function user.GetMixedMap$parse(json: string) -> map<string, int | string> throws never {
   baml.sap.parse<T>(json) : map<string, int | string>
 }
-function user.GetUser$stream(id: int, client: ai.StreamingClient | null = null) -> ai.Stream<user.User$stream | null, user.User> throws never {
-  ai.stream_spec(GetUser$spec(id), client = client) : ai.Stream<user.User$stream | null, user.User>
+function user.GetUser$stream(id: int, client: ai.StreamingClient | null = null) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
+  ai.stream_spec(GetUser$spec(id), client = client) : baml.llm.Stream<user.User$stream | null, user.User>
 }
-function user.GetStatus$stream(client: ai.StreamingClient | null = null) -> ai.Stream<user.Status | null, user.Status> throws never {
-  ai.stream_spec(GetStatus$spec(), client = client) : ai.Stream<user.Status | null, user.Status>
+function user.GetStatus$stream(client: ai.StreamingClient | null = null) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
+  ai.stream_spec(GetStatus$spec(), client = client) : baml.llm.Stream<user.Status | null, user.Status>
 }
-function user.GetMixedList$stream(client: ai.StreamingClient | null = null) -> ai.Stream<(int | string)[], (int | string)[]> throws never {
-  ai.stream_spec(GetMixedList$spec(), client = client) : ai.Stream<(int | string)[], (int | string)[]>
+function user.GetMixedList$stream(client: ai.StreamingClient | null = null) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
+  ai.stream_spec(GetMixedList$spec(), client = client) : baml.llm.Stream<(int | string)[], (int | string)[]>
 }
-function user.GetMixedMap$stream(client: ai.StreamingClient | null = null) -> ai.Stream<map<string, int | string>, map<string, int | string>> throws never {
-  ai.stream_spec(GetMixedMap$spec(), client = client) : ai.Stream<map<string, int | string>, map<string, int | string>>
+function user.GetMixedMap$stream(client: ai.StreamingClient | null = null) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>> throws never {
+  ai.stream_spec(GetMixedMap$spec(), client = client) : baml.llm.Stream<map<string, int | string>, map<string, int | string>>
 }
 class user.User {
   id: int

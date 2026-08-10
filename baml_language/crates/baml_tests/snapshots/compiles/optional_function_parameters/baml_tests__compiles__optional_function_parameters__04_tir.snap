@@ -81,8 +81,8 @@ function user.SearchService.Docs(self: user.SearchService, query: string, filter
 }
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(AskDocs$spec(query, max_results, filter), client = client) : ai.Stream<string | null, string>
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(AskDocs$spec(query, max_results, filter), client = client) : baml.llm.Stream<string | null, string>
 }
 class user.SearchService$stream {
   base: string | null

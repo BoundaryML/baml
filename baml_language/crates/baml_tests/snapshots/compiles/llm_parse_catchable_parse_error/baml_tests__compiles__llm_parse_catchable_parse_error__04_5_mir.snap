@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16494
 ---
 === MIR2 ===
 fn user.ExtractInvoice(text: string, client: null | ai.Client) -> Invoice {
@@ -153,9 +152,9 @@ fn .<lambda(ExtractInvoice$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.ExtractInvoice$stream(text: string, client: null | ai.StreamingClient) -> ai.Stream<null | Invoice$stream, Invoice> {
+fn user.ExtractInvoice$stream(text: string, client: null | ai.StreamingClient) -> baml.llm.Stream<null | Invoice$stream, Invoice> {
     // Locals:
-    let _0: ai.Stream<null | Invoice$stream, Invoice> // _0 // return
+    let _0: baml.llm.Stream<null | Invoice$stream, Invoice> // _0 // return
     let _1: string // text // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool

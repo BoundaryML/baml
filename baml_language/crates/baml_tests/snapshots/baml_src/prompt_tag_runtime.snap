@@ -186,7 +186,7 @@ function prompt_tag_runtime.PtRenderPerson$spec() -> ai.FunctionSpec<prompt_tag_
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson$stream(client: ai.StreamingClient | null) -> ai.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
+function prompt_tag_runtime.PtRenderPerson$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
     load_var client
     load_const <omitted>
     cmp_op ==

@@ -459,9 +459,9 @@ fn .<lambda(ClassifySentiment$spec, 0)>( __spec_output_format: string) -> string
     }
 }
 
-fn user.ClassifySentiment$stream(text: string, client: null | ai.StreamingClient) -> ai.Stream<null | Sentiment$stream, Sentiment> {
+fn user.ClassifySentiment$stream(text: string, client: null | ai.StreamingClient) -> baml.llm.Stream<null | Sentiment$stream, Sentiment> {
     // Locals:
-    let _0: ai.Stream<null | Sentiment$stream, Sentiment> // _0 // return
+    let _0: baml.llm.Stream<null | Sentiment$stream, Sentiment> // _0 // return
     let _1: string // text // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool
@@ -660,9 +660,9 @@ fn .<lambda(GenerateTests$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.GenerateTests$stream(count: int, topic: string, client: null | ai.StreamingClient) -> ai.Stream<string[], string[]> {
+fn user.GenerateTests$stream(count: int, topic: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string[], string[]> {
     // Locals:
-    let _0: ai.Stream<string[], string[]> // _0 // return
+    let _0: baml.llm.Stream<string[], string[]> // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
     let _3: null | ai.StreamingClient // client // param
@@ -892,9 +892,9 @@ fn .<lambda(ClassifySentiment2$spec, 0)>( __spec_output_format: string) -> strin
     }
 }
 
-fn user.ClassifySentiment2$stream(text: string, client: null | ai.StreamingClient) -> ai.Stream<string | null, string> {
+fn user.ClassifySentiment2$stream(text: string, client: null | ai.StreamingClient) -> baml.llm.Stream<string | null, string> {
     // Locals:
-    let _0: ai.Stream<string | null, string> // _0 // return
+    let _0: baml.llm.Stream<string | null, string> // _0 // return
     let _1: string // text // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool

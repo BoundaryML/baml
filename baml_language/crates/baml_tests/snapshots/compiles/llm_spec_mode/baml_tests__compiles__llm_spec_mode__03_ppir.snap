@@ -32,7 +32,7 @@ function user.PlainChat$render_prompt(q: string) -> string  [expr] {
 function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") }
 }
-function user.PlainChat$stream(q: string, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.PlainChat$stream(q: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(PlainChat$spec(q), client = client)
 }
 function user.SpecAgent(q: string, client: ai.Client? = null) -> user.Answer  [llm] {

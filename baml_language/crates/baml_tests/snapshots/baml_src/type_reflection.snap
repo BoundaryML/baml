@@ -116,7 +116,7 @@ function type_reflection.GetBar$spec() -> ai.FunctionSpec<type_reflection.Bar> {
     return
 }
 
-function type_reflection.GetBar$stream(client: ai.StreamingClient | null) -> ai.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
+function type_reflection.GetBar$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -202,7 +202,7 @@ function type_reflection.GetFoo$spec() -> ai.FunctionSpec<type_reflection.Foo> {
     return
 }
 
-function type_reflection.GetFoo$stream(client: ai.StreamingClient | null) -> ai.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
+function type_reflection.GetFoo$stream(client: ai.StreamingClient | null) -> baml.llm.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
     load_var client
     load_const <omitted>
     cmp_op ==

@@ -16,6 +16,6 @@ function user.Greet$render_prompt(name: string) -> string throws never {
 function user.Greet$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.Greet$stream(name: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(Greet$spec(name), client = client) : ai.Stream<string | null, string>
+function user.Greet$stream(name: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(Greet$spec(name), client = client) : baml.llm.Stream<string | null, string>
 }

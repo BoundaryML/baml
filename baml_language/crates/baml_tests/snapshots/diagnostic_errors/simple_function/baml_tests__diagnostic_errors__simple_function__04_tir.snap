@@ -21,8 +21,8 @@ class user.User {
   name: string
   age: int
 }
-function user.HelloWorld$stream(name: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(HelloWorld$spec(name), client = client) : ai.Stream<string | null, string>
+function user.HelloWorld$stream(name: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(HelloWorld$spec(name), client = client) : baml.llm.Stream<string | null, string>
 }
 class user.User$stream {
   name: string | null

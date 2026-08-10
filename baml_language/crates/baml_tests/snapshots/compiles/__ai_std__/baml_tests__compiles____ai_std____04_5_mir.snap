@@ -3146,182 +3146,9 @@ fn ai.TurnStream.final_turn(self: ai.TurnStream) -> ai.ModelTurn {
     }
 }
 
-fn ai.Stream.next(self: ai.Stream) -> baml.stream.StreamFinished | TStream {
+fn ai.stream_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.StreamingClient) -> baml.llm.Stream<TStream, TFinal> {
     // Locals:
-    let _0: baml.stream.StreamFinished | TStream // _0 // return
-    let _1: ai.Stream // self // param
-    let _2: bool
-    let _3: string | ai.StreamDone
-    let _4: () -> string | ai.StreamDone throws unknown
-    let _5: string | ai.StreamDone
-    let _6: string // s
-    let _7: string
-    let _8: string
-    let _9: type
-    let _10: string
-    let _11: string
-    let _12: type
-    let _13: baml.stream.StreamNoYield | TStream // parsed
-    let _14: string
-    let _15: baml.llm.StreamCache<TStream, TFinal>
-    let _16: type
-    let _17: type
-    let _18: bool
-    let _19: TStream // p
-
-    bb0: {
-        goto -> bb1;
-    }
-
-    bb1: {
-        branch const true -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb13];
-    }
-
-    bb3: {
-        _2 = copy _1.4;
-        branch copy _2 -> [bb12, bb4];
-    }
-
-    bb4: {
-        _4 = copy _1.0;
-        _3 = call const fn ai.TurnStream.next(copy _4) -> [bb5];
-    }
-
-    bb5: {
-        _5 = copy _3;
-        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "StreamDone" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb6];
-    }
-
-    bb6: {
-        _6 = copy _3;
-        _8 = copy _1.3;
-        _9 = load_type(string);
-        _7 = call const fn baml.String.from<copy _9>(copy _8) -> [bb7];
-    }
-
-    bb7: {
-        _11 = copy _6;
-        _12 = load_type(string);
-        _10 = call const fn baml.String.from<copy _12>(copy _11) -> [bb8];
-    }
-
-    bb8: {
-        _1.3 = copy _7 + copy _10;
-        _14 = copy _1.3;
-        _15 = copy _1.1;
-        _16 = load_type(#0);
-        _17 = load_type(#1);
-        _13 = sys_op const fn baml.llm.__sap_parse_partial(copy _14, copy _15, copy _16, copy _17) -> bb9;
-    }
-
-    bb9: {
-        _18 = is_type(copy _13, baml.stream.StreamNoYield);
-        branch copy _18 -> [bb1, bb10];
-    }
-
-    bb10: {
-        _19 = copy _13;
-        _0 = copy _19;
-        goto -> bb13;
-    }
-
-    bb11: {
-        _1.4 = const true;
-        _0 = baml.stream.StreamFinished {  };
-        goto -> bb13;
-    }
-
-    bb12: {
-        _0 = baml.stream.StreamFinished {  };
-        goto -> bb13;
-    }
-
-    bb13: {
-        return;
-    }
-}
-
-fn ai.Stream.final(self: ai.Stream) -> TFinal {
-    // Locals:
-    let _0: TFinal // _0 // return
-    let _1: ai.Stream // self // param
-    let _2: ai.ModelTurn // turn
-    let _3: () -> ai.ModelTurn throws unknown
-    let _4: string // candidate
-    let _5: string | null
-    let _6: bool
-    let _7: ai.StopReason
-    let _8: int
-    let _9: ai.errors.ParseFailed
-    let _10: string
-    let _11: string
-    let _12: ai.errors.Refused
-    let _13: string
-    let _14: string
-    let _15: baml.llm.StreamCache<TStream, TFinal>
-    let _16: type
-    let _17: type
-
-    bb0: {
-        _3 = copy _1.0;
-        _2 = call const fn ai.TurnStream.final_turn(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _1.4 = const true;
-        _5 = call const fn ai.ModelTurn.terminal_text(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        _4 = copy _5;
-        _6 = copy _5 == const null;
-        branch copy _6 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _4 = const "";
-        goto -> bb4;
-    }
-
-    bb4: {
-        _7 = copy _2.1;
-        _8 = discriminant(_7);
-        switch copy _8 [StopReason.MaxTokens: bb8, StopReason.Refused: bb7, otherwise: bb5];
-    }
-
-    bb5: {
-        _14 = copy _4;
-        _15 = copy _1.1;
-        _16 = load_type(#0);
-        _17 = load_type(#1);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _14, copy _15, copy _16, copy _17) -> bb6;
-    }
-
-    bb6: {
-        return;
-    }
-
-    bb7: {
-        _13 = copy _1.2;
-        _12 = ai.errors.Refused { copy _13, const "the model declined to answer", const null };
-        throw copy _12;
-    }
-
-    bb8: {
-        _10 = copy _1.2;
-        _11 = copy _4;
-        _9 = ai.errors.ParseFailed { copy _10, copy _11 };
-        throw copy _9;
-    }
-}
-
-fn ai.stream_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.StreamingClient) -> ai.Stream<TStream, TFinal> {
-    // Locals:
-    let _0: ai.Stream<TStream, TFinal> // _0 // return
+    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
     let _1: ai.FunctionSpec<TFinal> // spec // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool
@@ -3347,7 +3174,7 @@ fn ai.stream_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.StreamingClie
     let _23: ai.Client
     let _24: string // provider
     let _25: ai.Client // c
-    let _26: ai.TurnStream // turns
+    let _26: ai.TurnStream // turns [captured]
     let _27: ai.ModelTurnInput
     let _28: ai.Prompt
     let _29: type
@@ -3357,11 +3184,10 @@ fn ai.stream_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.StreamingClie
     let _33: type
     let _34: type
     let _35: type
-    let _36: ai.TurnStream
+    let _36: () -> string | null throws unknown
     let _37: baml.llm.StreamCache<TStream, TFinal>
     let _38: type
     let _39: type
-    let _40: string
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -3451,15 +3277,14 @@ fn ai.stream_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.StreamingClie
     }
 
     bb17: {
-        _36 = copy _26;
+        _36 = make_closure lambda[0]<2 type_args>(copy _26);
         _38 = load_type(#0);
         _39 = load_type(#1);
         _37 = call const fn baml.llm.__new_stream_cache<copy _38, copy _39>() -> [bb18];
     }
 
     bb18: {
-        _40 = copy _24;
-        _0 = ai.Stream<#0, #1> { copy _36, copy _37, copy _40, const "", const false };
+        _0 = baml.llm.Stream<#0, #1> { copy _36, copy _37, const "", const false };
         goto -> bb19;
     }
 
@@ -3482,6 +3307,39 @@ fn ai.stream_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.StreamingClie
         _9 = copy _10 + const " has a non-empty toolbox";
         _8 = baml.errors.InvalidArgument { copy _9 };
         throw copy _8;
+    }
+}
+
+// lambda[0]
+fn .<lambda(stream_spec, 0)>() -> string | null {
+    // Locals:
+    let _0: string | null // _0 // return
+    let _1: string | ai.StreamDone
+    let _2: string | ai.StreamDone
+    let _3: string // s
+
+    bb0: {
+        _1 = call const fn ai.TurnStream.next(copy capture[0]) -> [bb1];
+    }
+
+    bb1: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "StreamDone" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+    }
+
+    bb2: {
+        _3 = copy _1;
+        _0 = copy _3;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
     }
 }
 

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16464
 ---
 === TIR2 ===
 enum user.Currency
@@ -35,6 +34,6 @@ class user.Invoice$stream {
   currency: user.Currency | null
   amount: float | null
 }
-function user.ExtractInvoice$stream(text: string, client: ai.StreamingClient | null = null) -> ai.Stream<user.Invoice$stream | null, user.Invoice> throws never {
-  ai.stream_spec(ExtractInvoice$spec(text), client = client) : ai.Stream<user.Invoice$stream | null, user.Invoice>
+function user.ExtractInvoice$stream(text: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice> throws never {
+  ai.stream_spec(ExtractInvoice$spec(text), client = client) : baml.llm.Stream<user.Invoice$stream | null, user.Invoice>
 }

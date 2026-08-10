@@ -30,9 +30,9 @@ function user.CommentAfterArrow$render_prompt() -> string throws never {
 function user.CommentAfterArrow$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.FunctionWithComments$stream(a: string, b: int, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(FunctionWithComments$spec(a, b), client = client) : ai.Stream<string | null, string>
+function user.FunctionWithComments$stream(a: string, b: int, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(FunctionWithComments$spec(a, b), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.CommentAfterArrow$stream(client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(CommentAfterArrow$spec(), client = client) : ai.Stream<string | null, string>
+function user.CommentAfterArrow$stream(client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(CommentAfterArrow$spec(), client = client) : baml.llm.Stream<string | null, string>
 }

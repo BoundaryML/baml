@@ -77,7 +77,7 @@ function streaming_parsing.ExtractDoc$spec(input: string) -> ai.FunctionSpec<str
     return
 }
 
-function streaming_parsing.ExtractDoc$stream(input: string, client: ai.StreamingClient | null) -> ai.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
+function streaming_parsing.ExtractDoc$stream(input: string, client: ai.StreamingClient | null) -> baml.llm.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -172,7 +172,7 @@ function streaming_parsing.SayHello$spec(input: string) -> ai.FunctionSpec<strin
     return
 }
 
-function streaming_parsing.SayHello$stream(input: string, client: ai.StreamingClient | null) -> ai.Stream<string | null, string> {
+function streaming_parsing.SayHello$stream(input: string, client: ai.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

@@ -497,7 +497,7 @@ function user.LlmBasic$render_prompt(name: string) -> string  [expr] {
 function user.LlmBasic$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmBasic", args: map { "name": name }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4 }
 }
-function user.LlmBasic$stream(name: string, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.LlmBasic$stream(name: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(LlmBasic$spec(name), client = client)
 }
 function user.LlmMultiLine(text: string, client: ai.Client? = null) -> string  [llm] {
@@ -512,7 +512,7 @@ function user.LlmMultiLine$render_prompt(text: string) -> string  [expr] {
 function user.LlmMultiLine$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmMultiLine", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4 }
 }
-function user.LlmMultiLine$stream(text: string, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.LlmMultiLine$stream(text: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(LlmMultiLine$spec(text), client = client)
 }
 function user.LlmReversedOrder(text: string, client: ai.Client? = null) -> string  [llm] {
@@ -527,7 +527,7 @@ function user.LlmReversedOrder$render_prompt(text: string) -> string  [expr] {
 function user.LlmReversedOrder$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmReversedOrder", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4 }
 }
-function user.LlmReversedOrder$stream(text: string, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.LlmReversedOrder$stream(text: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(LlmReversedOrder$spec(text), client = client)
 }
 function user.LlmStringClient(text: string, client: ai.Client? = null) -> string  [llm] {
@@ -542,7 +542,7 @@ function user.LlmStringClient$render_prompt(text: string) -> string  [expr] {
 function user.LlmStringClient$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmStringClient", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o") }
 }
-function user.LlmStringClient$stream(text: string, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.LlmStringClient$stream(text: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(LlmStringClient$spec(text), client = client)
 }
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.Client? = null) -> string  [llm] {
@@ -557,7 +557,7 @@ function user.LlmWithLongSignature$render_prompt(first_context: string, second_c
 function user.LlmWithLongSignature$spec(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.FunctionSpec<string>  [expr] {
   ai.FunctionSpec { spec_name: "LlmWithLongSignature", args: map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format } } `...` } }, toolbox: ai.Toolbox.new([]), default_client: GPT4 }
 }
-function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.StreamingClient? = null) -> ai.Stream<string | null, string>  [expr] {
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.StreamingClient? = null) -> baml.llm.Stream<string | null, string>  [expr] {
   ai.stream_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client)
 }
 function user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>>  [expr] {

@@ -32,9 +32,9 @@ function user.ValidFunction$render_prompt(input: string) -> string throws never 
 function user.ValidFunction$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
-function user.LegacyRoleMarker$stream(input: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(LegacyRoleMarker$spec(input), client = client) : ai.Stream<string | null, string>
+function user.LegacyRoleMarker$stream(input: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(LegacyRoleMarker$spec(input), client = client) : baml.llm.Stream<string | null, string>
 }
-function user.ValidFunction$stream(input: string, client: ai.StreamingClient | null = null) -> ai.Stream<string | null, string> throws never {
-  ai.stream_spec(ValidFunction$spec(input), client = client) : ai.Stream<string | null, string>
+function user.ValidFunction$stream(input: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
+  ai.stream_spec(ValidFunction$spec(input), client = client) : baml.llm.Stream<string | null, string>
 }

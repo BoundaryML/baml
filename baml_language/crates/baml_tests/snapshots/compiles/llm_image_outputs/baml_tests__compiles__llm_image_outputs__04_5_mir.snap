@@ -167,9 +167,9 @@ fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: string) -> string {
     }
 }
 
-fn user.GenerateImage$stream(prompt: string, client: null | ai.StreamingClient) -> ai.Stream<image, image> {
+fn user.GenerateImage$stream(prompt: string, client: null | ai.StreamingClient) -> baml.llm.Stream<image, image> {
     // Locals:
-    let _0: ai.Stream<image, image> // _0 // return
+    let _0: baml.llm.Stream<image, image> // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool
@@ -367,9 +367,9 @@ fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: string) -> string 
     }
 }
 
-fn user.GenerateImageSet$stream(prompt: string, client: null | ai.StreamingClient) -> ai.Stream<image[], image[]> {
+fn user.GenerateImageSet$stream(prompt: string, client: null | ai.StreamingClient) -> baml.llm.Stream<image[], image[]> {
     // Locals:
-    let _0: ai.Stream<image[], image[]> // _0 // return
+    let _0: baml.llm.Stream<image[], image[]> // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool
@@ -567,9 +567,9 @@ fn .<lambda(GenerateMixedImageNarrative$spec, 0)>( __spec_output_format: string)
     }
 }
 
-fn user.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.StreamingClient) -> ai.Stream<(string | image)[], (string | image)[]> {
+fn user.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.StreamingClient) -> baml.llm.Stream<(string | image)[], (string | image)[]> {
     // Locals:
-    let _0: ai.Stream<(string | image)[], (string | image)[]> // _0 // return
+    let _0: baml.llm.Stream<(string | image)[], (string | image)[]> // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.StreamingClient // client // param
     let _3: bool

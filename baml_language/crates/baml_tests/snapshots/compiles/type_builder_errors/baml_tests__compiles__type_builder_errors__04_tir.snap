@@ -19,8 +19,8 @@ function user.TypeBuilderFn$parse(json: string) -> user.Resume throws never {
 class user.Resume {
   name: string
 }
-function user.TypeBuilderFn$stream(from_text: string, client: ai.StreamingClient | null = null) -> ai.Stream<user.Resume$stream | null, user.Resume> throws never {
-  ai.stream_spec(TypeBuilderFn$spec(from_text), client = client) : ai.Stream<user.Resume$stream | null, user.Resume>
+function user.TypeBuilderFn$stream(from_text: string, client: ai.StreamingClient | null = null) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
+  ai.stream_spec(TypeBuilderFn$spec(from_text), client = client) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
 }
 class user.Resume$stream {
   name: string | null
