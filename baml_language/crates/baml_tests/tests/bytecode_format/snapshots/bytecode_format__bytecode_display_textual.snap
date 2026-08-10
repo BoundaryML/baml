@@ -1068,14 +1068,15 @@ function ai.Fallback._try(self: ai.Fallback, input: ai.ModelTurnInput, index: in
   L3:
     load_var _10
     store_var f
+    load_var index
+    load_const 1
+    add_int
+    store_var _14
     load_var self
     load_field .members
     container_len
     store_var _15
-    load_var index
-    load_const 1
-    add_int
-    load_var _15
+    load_var2 8 9
     cmp_int_op <
     jump_if_false L4
     pop 1

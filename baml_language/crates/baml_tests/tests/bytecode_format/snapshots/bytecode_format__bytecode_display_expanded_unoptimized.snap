@@ -1041,7 +1041,7 @@ function ai.Fallback._try(self: ai.Fallback, input: ai.ModelTurnInput, index: in
         16   load_type 0                        
         17   load_const 2                       ("invoke")
         18   virtual_call nargs=2 ntypeargs=0   
-        19   jump +42                           (to 61)
+        19   jump +43                           (to 62)
         20   load_var 6                         (e)
         21   store_var 7                        (_10)
         22   load_var 7                         (_10)
@@ -1057,40 +1057,41 @@ function ai.Fallback._try(self: ai.Fallback, input: ai.ModelTurnInput, index: in
   147   30   load_var 7                         (_10)
         31   store_var 8                        (f)
 
-  150   32   load_var 1                         (self)
-        33   load_field 0                       (members)
-        34   container_len                      
-        35   store_var 9                        (_15)
-        36   load_var 3                         (index)
-        37   load_const 4                       (1)
-        38   add_int                            
-        39   load_var 9                         (_15)
-        40   cmp_int_op <                       
-        41   jump_if_false +11                  (to 52)
-        42   pop 1                              
+  150   32   load_var 3                         (index)
+        33   load_const 4                       (1)
+        34   add_int                            
+        35   store_var 9                        (_14)
+        36   load_var 1                         (self)
+        37   load_field 0                       (members)
+        38   container_len                      
+        39   store_var 10                       (_15)
+        40   load_var2 9 10                     
+        41   cmp_int_op <                       
+        42   jump_if_false +11                  (to 53)
+        43   pop 1                              
 
-  151   43   load_var 8                         (f)
-        44   load_type 3                        
-        45   load_const 5                       ("retry_safety")
-        46   virtual_call nargs=1 ntypeargs=0   
-        47   store_var 10                       (_17)
-        48   load_var 10                        (_17)
-        49   load_const 6                       (ai.errors.RetrySafety.Safe)
-        50   alloc_variant 453                  (ai.errors.RetrySafety)
-        51   call 658 ntypeargs=0               (baml.ops.equals_equals)
+  151   44   load_var 8                         (f)
+        45   load_type 3                        
+        46   load_const 5                       ("retry_safety")
+        47   virtual_call nargs=1 ntypeargs=0   
+        48   store_var 11                       (_17)
+        49   load_var 11                        (_17)
+        50   load_const 6                       (ai.errors.RetrySafety.Safe)
+        51   alloc_variant 453                  (ai.errors.RetrySafety)
+        52   call 658 ntypeargs=0               (baml.ops.equals_equals)
 
-  149   52   pop_jump_if_false +2               (to 54)
-        53   jump +3                            (to 56)
+  149   53   pop_jump_if_false +2               (to 55)
+        54   jump +3                            (to 57)
 
-  155   54   load_var 6                         (e)
-        55   rethrow                            
+  155   55   load_var 6                         (e)
+        56   rethrow                            
 
-  153   56   load_var2 1 2                      
-        57   load_var 3                         (index)
-        58   load_const 4                       (1)
-        59   add_int                            
-        60   call 836 ntypeargs=0               (ai.Fallback._try)
-        61   return                             
+  153   57   load_var2 1 2                      
+        58   load_var 3                         (index)
+        59   load_const 4                       (1)
+        60   add_int                            
+        61   call 836 ntypeargs=0               (ai.Fallback._try)
+        62   return                             
 }
 
 function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unknown> {
