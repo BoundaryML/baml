@@ -49,6 +49,9 @@ the upstream schema automatically.
 For the cloud handoff and the invariants the future ClickHouse/S3 service must
 preserve, see [CLOUD_CLICKHOUSE_S3.md](CLOUD_CLICKHOUSE_S3.md).
 
+For practical business and engineering/debugging queries, see
+[EXAMPLE.md](EXAMPLE.md).
+
 ## Example
 
 ```rust,no_run
