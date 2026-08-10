@@ -122,7 +122,7 @@ Three things it needs, none of which live in this repo:
 
 1. **GitHub Pages enabled** for the repository, with the source set to *GitHub
    Actions*. Until then the deploy step fails.
-2. **`ANTHROPIC_API_KEY`** in the `boundary-tools-dev` environment.
+2. **`ANTHROPIC_API_KEY`** in the `boundary-tools-prod` environment.
 3. Optionally **`STDLIB_MATRIX_URL`** as a repository variable, if the site is
    served anywhere other than `https://boundaryml.github.io/baml`. It is what the
    workflow fetches the previous report from; get it wrong and every run is a

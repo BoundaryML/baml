@@ -810,8 +810,7 @@ function ints.count_zeros_plus_ones(n: int) -> int {
     store_var _2
     load_var n
     call baml.Int.count_ones
-    store_var _3
-    load_var2 2 3
+    load_var _2
     add_int
     return
 }

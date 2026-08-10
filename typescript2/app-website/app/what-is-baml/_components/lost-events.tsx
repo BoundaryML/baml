@@ -3,17 +3,17 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { getDropped, getStartServer, subscribeDropped } from './dropped-store';
 
-// The observability pair. Two rows, same ripple field: under OTEL the field
-// forgets each ripple as it passes (and the code next to it is the sampler
-// you had to wire up). Under BAML every ripple leaves its light behind (and
-// the code next to it is just a function, because tracing is not code you
-// write). The full runnable example follows in the explorer below.
+// The observability pair. Two rows, same ripple field: under OTEL only the
+// sampled events keep their light after the ripple passes. Under BAML every
+// event keeps its light. The full runnable example follows in the explorer
+// below.
 
 const COLS = 18;
 const ROWS = 9;
 const CELLS = COLS * ROWS;
 const TICK_MS = 110;
-// One calm wavefront sweeping left to right, with a pause between passes.
+// One calm wavefront sweeping left to right. The extra span leaves about
+// 1.8 seconds of calm after the wave clears the slanted field.
 const SWEEP_SPEED = 0.45; // columns per tick
 const SWEEP_SPAN = COLS + 10;
 
@@ -21,10 +21,19 @@ const PURPLE = [109, 40, 217] as const;
 const RED = [180, 52, 43] as const;
 const BEIGE = [232, 227, 213] as const;
 
+function settledGlow(i: number, remember: boolean, pass = 0) {
+  if (remember) return 0.45;
+
+  // A scattered sample of roughly one in nine events. Each pass changes the
+  // offset so the next wave captures a different subset.
+  return (i * 73 + pass * 41 + 19) % 101 < 11 ? 0.6 : 0;
+}
+
 // One animated ripple field, pinned to a mode.
 function Field({ remember }: { remember: boolean }) {
   const [, setFrame] = useState(0);
   const tickRef = useRef(0);
+  const passRef = useRef(0);
   const memoryRef = useRef<Float32Array>(new Float32Array(CELLS));
   const flashRef = useRef<Float32Array>(new Float32Array(CELLS));
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -38,11 +47,7 @@ function Field({ remember }: { remember: boolean }) {
       if (reduced) {
         const memory = memoryRef.current;
         for (let i = 0; i < CELLS; i++) {
-          memory[i] = remember
-            ? ((i * 37) % 4) / 6
-            : (i * 37) % 9 === 0
-              ? 0.4
-              : 0;
+          memory[i] = settledGlow(i, remember);
         }
         setFrame((n) => n + 1);
         return undefined;
@@ -53,18 +58,24 @@ function Field({ remember }: { remember: boolean }) {
         const flash = flashRef.current;
         // A single soft wavefront, slightly slanted, sweeping left to right.
         const front = (t * SWEEP_SPEED) % SWEEP_SPAN;
+        const previousFront = ((t - 1) * SWEEP_SPEED) % SWEEP_SPAN;
+        // Start each pass empty so dots are only revealed after the wave
+        // reaches them. OTEL also selects a new sample for every pass.
+        if (front < previousFront) {
+          memory.fill(0);
+          if (!remember) passRef.current += 1;
+        }
         for (let i = 0; i < CELLS; i++) {
           const x = (i % COLS) + 0.5;
           const y = Math.floor(i / COLS) + 0.5;
           const d = Math.abs(x + y * 0.25 - front);
           const f = d < 1.6 ? 1 - d / 1.6 : 0;
           flash[i] = f * 0.7;
-          if (remember) {
-            // Settle to a calm lavender, a shade deeper on a sparse lattice.
-            const cap = (x + 2 * y) % 5 === 0 ? 0.75 : 0.45;
-            if (f > 0.4) memory[i] = Math.min(cap, memory[i] + 0.2);
-          } else {
-            memory[i] *= 0.95;
+          if (f > 0.4) {
+            // The wave reveals what was retained: every BAML event, but only
+            // the sampled OTEL events. OTEL holds this result through the
+            // pause, then clears it when the next pass starts.
+            memory[i] = settledGlow(i, remember, passRef.current);
           }
         }
         setFrame((n) => n + 1);
@@ -85,8 +96,8 @@ function Field({ remember }: { remember: boolean }) {
     <div
       aria-label={
         remember
-          ? 'A field of dots keeping the light of every passing ripple.'
-          : 'A field of dots forgetting each ripple as it passes.'
+          ? 'A field where every dot stays purple after the ripple passes.'
+          : 'A field where only sampled dots stay red after the ripple passes.'
       }
       className="lev-field"
       ref={rootRef}
