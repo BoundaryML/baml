@@ -312,6 +312,50 @@ function session_step(transcript: string) -> Step {
     `
 }
 
+/// The last turn, which cannot ask for anything.
+///
+/// Identical to `session_step` but for the return type, and that is the whole
+/// point: telling a model the lookup budget is spent is advice it can decline,
+/// and three sessions in a real run declined it and died with nothing to show.
+/// Answering is the only shape this call has, so a session cannot spend its
+/// last round asking a seventh time.
+function session_final(transcript: string) -> Answer {
+    client: Aligner
+    prompt: `
+        ${transcript}
+
+        ${ctx.output_format}
+    `
+}
+
+/// One trivial call, before any of the expensive ones.
+///
+/// A client that is not usable fails every session the same way, and 199
+/// sessions all failing takes a couple of minutes — long enough to look like
+/// work, and it ends with a report that judged nothing. A rejected key is not a
+/// transient error either, so the retry policy does not slow it down: the run
+/// completes having learned nothing, and the only signal is 199 identical
+/// failures.
+///
+/// This asks the smallest question there is, first, so a misconfigured client
+/// says so while it is still free to fix.
+function preflight(question: string) -> string {
+    client: Aligner
+    prompt: `${question}`
+}
+
+/// Fails the run if the model client cannot be reached at all.
+function check_client() -> null {
+    let _ = preflight("Reply with one word: ready") catch_all (error) {
+        _ => {
+            throw baml.errors.InvalidArgument {
+                message: `the model client rejected a trial call, so every session would fail the same way: ${error}. Check that ANTHROPIC_API_KEY holds a working key.`,
+            };
+        },
+    };
+    null
+}
+
 /// How many rounds of lookups a session may take before it must answer.
 ///
 /// Enough to search, read two or three candidates, and check an example; past
@@ -375,15 +419,18 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
         // turn explains. Saying it as well is not redundant — a model handed a
         // schema it did not expect does better for being told why.
         if (round == lookup_rounds()) {
-            turns
-                .push(
-                    Turn {
-                        role: "user",
-                        text: "No more lookups are available. Answer now for every symbol, using only what you have seen. A symbol you could not resolve is `none` with a reason.",
-                    },
-                );
+            turns.push(
+                Turn {
+                    role: "user",
+                    text: "No more lookups are available. Answer now for every symbol, using only what you have seen. A symbol you could not resolve is `none` with a reason.",
+                },
+            );
         }
-        let step = session_step(render_turns(turns)) catch_all (error) {
+        let step: Step = if (round == lookup_rounds()) {
+            session_final(render_turns(turns))
+        } else {
+            session_step(render_turns(turns))
+        } catch_all (error) {
             _ => {
                 return PassFailure { pass: "session", subject: request.subject, reason: `${error}` };
             },
@@ -417,10 +464,9 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
                         },
                         let error: string => {
                             let _ = held.set(finding.ts, finding);
-                            complaints
-                                .push(
-                                    `[${finding.ts}] this example does not compile:\n${finding.example?.baml ?? ""}\n\n${error}`,
-                                );
+                            complaints.push(
+                                `[${finding.ts}] this example does not compile:\n${finding.example?.baml ?? ""}\n\n${error}`,
+                            );
                         },
                     }
                 }
@@ -440,8 +486,9 @@ function run_session(box: Toolbox, request: SessionRequest) -> SessionResult {
                     failure = "";
                 } else {
                     turns.push(Turn { role: "assistant", text: render_findings(answer) });
-                    turns
-                        .push(Turn { role: "user", text: retry_turn(request, covered, complaints) });
+                    turns.push(
+                        Turn { role: "user", text: retry_turn(request, covered, complaints) },
+                    );
                 }
             },
         }
@@ -498,10 +545,9 @@ function retry_turn(
     if (complaints.length() > 0) {
         parts.push(complaints.join("\n\n"));
     }
-    parts
-        .push(
-            `You have not answered for these symbols:\n${missing.join("\n")}\n\nAnswer for exactly these. Everything else you said is kept — do not repeat it. If an example above would not compile, fix it or leave the example out; the finding matters, the example is optional.`,
-        );
+    parts.push(
+        `You have not answered for these symbols:\n${missing.join("\n")}\n\nAnswer for exactly these. Everything else you said is kept — do not repeat it. If an example above would not compile, fix it or leave the example out; the finding matters, the example is optional.`,
+    );
     parts.join("\n\n")
 }
 
@@ -579,10 +625,9 @@ function run_lookups(box: Toolbox, investigate: Investigate) -> string {
         }
     }
     if (investigate.lookups.length() > ran) {
-        blocks
-            .push(
-                `(${investigate.lookups.length() - ran} further lookups were not run — at most ${lookups_per_round()} per round)`,
-            );
+        blocks.push(
+            `(${investigate.lookups.length() - ran} further lookups were not run — at most ${lookups_per_round()} per round)`,
+        );
     }
     blocks.join("\n\n")
 }
@@ -685,15 +730,14 @@ function session_requests(matrix: SymbolMatrix, revision: Revision?) -> SessionR
             } else {
                 subject
             };
-            requests
-                .push(
-                    SessionRequest {
-                        subject: label,
-                        ts_ids: ts_ids,
-                        ts_lines: ts_lines,
-                        prior_lines: prior_lines,
-                    },
-                );
+            requests.push(
+                SessionRequest {
+                    subject: label,
+                    ts_ids: ts_ids,
+                    ts_lines: ts_lines,
+                    prior_lines: prior_lines,
+                },
+            );
         }
     }
     requests
@@ -847,22 +891,20 @@ function apply_findings(matrix: SymbolMatrix, results: SessionResult[]) -> Align
                         continue;
                     }
                     let _ = judged.set(finding.ts, true);
-                    matrix
-                        .judgements
-                        .push(
-                            Judgement {
-                                ts: finding.ts,
-                                baml: counterparts,
-                                verdict: finding.verdict,
-                                basis: "model",
-                                confidence: finding.confidence,
-                                reason: finding.reason,
-                                divergence: finding.divergence,
-                                rejected: none,
-                                verified: false,
-                                example: finding.example,
-                            },
-                        );
+                    matrix.judgements.push(
+                        Judgement {
+                            ts: finding.ts,
+                            baml: counterparts,
+                            verdict: finding.verdict,
+                            basis: "model",
+                            confidence: finding.confidence,
+                            reason: finding.reason,
+                            divergence: finding.divergence,
+                            rejected: none,
+                            verified: false,
+                            example: finding.example,
+                        },
+                    );
                     applied += 1;
                 }
             },
@@ -898,6 +940,7 @@ function align_matrix(
     only: string,
 ) -> AlignOutcome {
     let limit = effective_limit(concurrency);
+    check_client();
     let requests = only_matching(session_requests(matrix, revision), only);
     //# ask, per container, what a BAML developer would do instead
     let queued = 0;
