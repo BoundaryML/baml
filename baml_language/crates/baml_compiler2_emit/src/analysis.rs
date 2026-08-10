@@ -19,6 +19,7 @@ use baml_compiler2_mir::{
     BinOp, BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
     Terminator, UnaryOp,
 };
+use baml_type::{Literal, RuntimeTy};
 
 use crate::stack_carry;
 
@@ -1452,7 +1453,7 @@ fn can_be_virtual(
         // The use site can also sit in a different exception region than the
         // def, which changes the handler and can double-run a `defer` body
         // (once inline on the way out, once in the unwind landing pad).
-        if rvalue_can_panic(&def.rvalue) {
+        if rvalue_can_panic(body, &def.rvalue) {
             return false;
         }
         //
@@ -1688,26 +1689,106 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 /// past that replay runs the defer body once on the way out and a second time
 /// in the unwind landing pad.
 ///
-/// Only arithmetic is listed: `int` add/sub/mul/shift are range-checked
-/// (`IntegerOverflow`), `/` and `%` reject a zero divisor (`DivisionByZero`),
-/// and negation overflows on `INT_MIN`. Bitwise and/or/xor and comparisons stay
-/// in range by construction. Reads through an index projection can also panic
-/// (`IndexOutOfBounds`); cross-block virtualization already rejects every rvalue
-/// with a projection read.
-fn rvalue_can_panic(rvalue: &Rvalue) -> bool {
+/// Only arithmetic can fail. `/` and `%` reject a zero divisor for `int` and
+/// `float` alike. Add/sub/mul/shift and negation are range-checked on `int`
+/// only — `float` saturates to infinity, `bigint` grows, and `string + string`
+/// is concatenation — so those ask [`operand_could_be_int`]. Bitwise and/or/xor
+/// and the comparisons stay in range for every operand type.
+///
+/// Matched exhaustively on purpose. This is a soundness predicate, and a
+/// wrong `false` miscompiles silently — so a new `Rvalue` variant must fail to
+/// compile here rather than default into the infallible group.
+fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
     match rvalue {
-        Rvalue::BinaryOp { op, .. } => matches!(
-            op,
-            BinOp::Add
-                | BinOp::Sub
-                | BinOp::Mul
-                | BinOp::Div
-                | BinOp::Mod
-                | BinOp::Shl
-                | BinOp::Shr
-        ),
-        Rvalue::UnaryOp { op, .. } => matches!(op, UnaryOp::Neg),
-        _ => false,
+        Rvalue::BinaryOp { op, left, right } => match op {
+            BinOp::Div | BinOp::Mod => true,
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Shl | BinOp::Shr => {
+                operand_could_be_int(body, left) && operand_could_be_int(body, right)
+            }
+            BinOp::Eq
+            | BinOp::Ne
+            | BinOp::Lt
+            | BinOp::Le
+            | BinOp::Gt
+            | BinOp::Ge
+            | BinOp::BitAnd
+            | BinOp::BitOr
+            | BinOp::BitXor => false,
+        },
+        Rvalue::UnaryOp { op, operand } => match op {
+            UnaryOp::Neg => operand_could_be_int(body, operand),
+            UnaryOp::Not => false,
+        },
+        // Allocation can report `AllocFailure`, but that is a host resource
+        // condition rather than a property of the program point, and treating
+        // every allocation as a barrier would disable virtualization outright.
+        //
+        // `Use` is the one entry here with a real failing case: reading through
+        // an index projection can raise `IndexOutOfBounds`. Every rvalue with a
+        // projection read is rejected a few lines above this predicate's only
+        // caller, on the same cross-block path, so it never reaches here.
+        Rvalue::Use(_)
+        | Rvalue::Array(..)
+        | Rvalue::Uint8Array(_)
+        | Rvalue::Map(..)
+        | Rvalue::Aggregate { .. }
+        | Rvalue::Discriminant(_)
+        | Rvalue::TypeTag(_)
+        | Rvalue::Len(_)
+        | Rvalue::IsType { .. }
+        | Rvalue::IsTypeTag { .. }
+        | Rvalue::MakeClosure { .. }
+        | Rvalue::MakeBoundMethod { .. }
+        | Rvalue::MakeVirtualBoundMethod { .. }
+        | Rvalue::VirtualFieldAccess { .. }
+        | Rvalue::MakeGenericFunction { .. }
+        | Rvalue::MakeGenericFunctionFromValue { .. }
+        | Rvalue::LoadType(_) => false,
+    }
+}
+
+/// Could this operand hold an `int` at runtime?
+///
+/// Deliberately answers `true` for anything whose runtime representation is not
+/// pinned down — a union, a type variable, a value read through a projection, a
+/// type family variant added later. Only a type that provably never holds an
+/// `int` answers `false`.
+fn operand_could_be_int(body: &MirFunctionBody, operand: &Operand) -> bool {
+    match operand {
+        Operand::Constant(c) => matches!(c, Constant::Int(_)),
+        Operand::Copy(place) | Operand::Move(place) => match place {
+            Place::Local(local) => ty_could_be_int(&body.local(*local).ty),
+            // A field / index / capture read carries no type here.
+            Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => true,
+        },
+    }
+}
+
+/// See [`operand_could_be_int`]. The `_ => true` fallback keeps an unlisted or
+/// newly added variant on the conservative side.
+fn ty_could_be_int(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Int { .. } => true,
+        RuntimeTy::Literal(lit, ..) => matches!(lit, Literal::Int(_)),
+        RuntimeTy::Bigint { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Null { .. }
+        | RuntimeTy::Void { .. }
+        | RuntimeTy::Media(..)
+        | RuntimeTy::Class(..)
+        | RuntimeTy::Enum(..)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::List(..)
+        | RuntimeTy::Map { .. }
+        | RuntimeTy::Function { .. }
+        | RuntimeTy::Future(..)
+        | RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. } => false,
+        _ => true,
     }
 }
 

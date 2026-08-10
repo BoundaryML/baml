@@ -281,8 +281,7 @@ function user.let_statements() -> int {
     load_const 1
     load_const 2
     init_instance user.Point .x, .y
-    store_var point
-    load_var point
+    store_var_load_var point
     load_field .x
     load_var point
     load_field .y
