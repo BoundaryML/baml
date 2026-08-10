@@ -848,13 +848,9 @@ impl FromCST for ClientField {
                 })
             }
             SyntaxKind::PATH_EXPR => ClientName::Path(PathExpr::from_cst(name)?),
-            found => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "STRING_LITERAL, WORD, or PATH_EXPR".into(),
-                    found,
-                    at: name.text_range(),
-                });
-            }
+            // Any other node is an ai.Client expression (a constructor call,
+            // a wrapper, ...) — print through the expression machinery.
+            _ => ClientName::Expr(Box::new(Expression::from_cst(name)?)),
         };
 
         it.expect_end()?;
@@ -900,6 +896,8 @@ impl Printable for ClientField {
 pub enum ClientName {
     Path(PathExpr),
     String(t::QuotedString),
+    /// An arbitrary ai.Client expression (`client openai.OpenAiClient.new(...)`).
+    Expr(Box<Expression>),
 }
 
 impl Printable for ClientName {
@@ -907,18 +905,21 @@ impl Printable for ClientName {
         match self {
             ClientName::Path(path) => printer.print(path, shape),
             ClientName::String(string) => printer.print(string, shape),
+            ClientName::Expr(expr) => printer.print(expr.as_ref(), shape),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ClientName::Path(path) => path.leftmost_token(),
             ClientName::String(string) => string.leftmost_token(),
+            ClientName::Expr(expr) => expr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ClientName::Path(path) => path.rightmost_token(),
             ClientName::String(string) => string.rightmost_token(),
+            ClientName::Expr(expr) => expr.rightmost_token(),
         }
     }
 }

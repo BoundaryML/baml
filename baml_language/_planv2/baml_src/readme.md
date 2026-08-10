@@ -11,20 +11,23 @@ claude_code,mcp}`), reachable from any project as `ai.*`, `openai.*`,
 prefix and no files to copy. This tree keeps only the fixtures, tests,
 how-tos, and live smokes, all written against those builtins.
 
-The `@spec` desugar is implemented in the compiler. A `tools` field on
-an LLM function with a backtick prompt and a `"provider/model"` client
-string switches the function to spec mode (an empty `tools []` opts a
-tool-less function in): it gets a compiler-generated `<Fn>$spec`
-companion — `Fn@spec(args)` builds the bound, unrun
-`ai.FunctionSpec<Out>` (see `examples/plan_trip.baml`) — and its direct
-call desugars to
-`ai.Agent<Out>.new(client = client).run(PlanTrip@spec(...)).value`, with
+There is one execution path: every LLM function desugars to the ai
+world. Each gets a compiler-generated `<Fn>$spec` companion —
+`Fn@spec(args)` builds the bound, unrun `ai.FunctionSpec<Out>` (see
+`examples/plan_trip.baml`) — and its direct call desugars to
+`ai.Agent<Out>.new(client = client).run(Fn@spec(...)).value`, with
 `client` a compiler-injected `ai.Client? = null` override parameter.
-Functions without `tools` keep the legacy `baml.llm` path untouched
-(their prompts may use `${role(...)}` and the full `ctx: Context`
-surface, which the spec template deliberately does not model). The
-spec's default client resolves lazily (a thunk), so building a spec
-never touches credentials.
+`tools` is optional data (default: empty toolbox). The `client:` field
+takes a `"provider/model"` string (compile-time-mapped; unknown prefixes
+are errors) or any expression evaluating to `ai.Client`, and
+`client Name = <expr>;` declares a named client value initialized once
+at program start. The legacy forms — `client<llm>` blocks,
+`retry_policy`, Jinja `#"..."#` prompts, `${role(...)}` markers — are
+compile errors with migration hints. Companions: `$spec`,
+`$render_prompt` (plain text), `$parse`, and `$stream` (StreamingClient
+providers). Provider construction is pure: credentials resolve from the
+environment at request time, so building specs and declaring clients
+never touches env.
 
 ## Layout
 
