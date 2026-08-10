@@ -210,10 +210,10 @@ function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
   {  } RetrySafety.Safe
 }
 function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
-  {  } RetrySafety.Safe
+  {  } RetrySafety.Unsafe
 }
 function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
-  {  } RetrySafety.Safe
+  {  } RetrySafety.Unsafe
 }
 function ai.errors.retry_safety(self: ?) -> ai.errors.RetrySafety  [expr] {
   {  } RetrySafety.Safe

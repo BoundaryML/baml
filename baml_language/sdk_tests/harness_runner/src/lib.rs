@@ -94,6 +94,13 @@ pub fn run_go_test(fixture: &str) {
         .env("CGO_ENABLED", "1")
         .env("GOCACHE", workspace_root.join("target/go-build-cache"))
         .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
+        // Go makes module-cache directories read-only by default, and
+        // deleting a file needs write permission on its PARENT directory —
+        // so `cargo clean` aborts on the first file under `target/
+        // go-mod-cache` with "Permission denied", leaving the whole Rust
+        // target tree behind. `-modcacherw` keeps those directories
+        // writable, which is exactly what this flag exists for.
+        .env("GOFLAGS", "-modcacherw")
         .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root))
         .output()
         .unwrap_or_else(|e| {

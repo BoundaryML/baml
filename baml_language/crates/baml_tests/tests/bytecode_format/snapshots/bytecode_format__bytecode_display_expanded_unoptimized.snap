@@ -2165,7 +2165,7 @@ function ai.errors.Refused.Failure.retry_safety(self: ai.errors.Refused) -> ai.e
 }
 
 function ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety {
-  73   0   load_const 0        (ai.errors.RetrySafety.Safe)
+  77   0   load_const 0        (ai.errors.RetrySafety.Unsafe)
        1   alloc_variant 453   (ai.errors.RetrySafety)
        2   store_var 2         (_0)
        3   load_var 2          (_0)
@@ -2173,15 +2173,15 @@ function ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepB
 }
 
 function ai.errors.StreamingUnsupported.Failure.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
-  98   0   load_const 0        (ai.errors.RetrySafety.Safe)
-       1   alloc_variant 453   (ai.errors.RetrySafety)
-       2   store_var 2         (_0)
-       3   load_var 2          (_0)
-       4   return              
+  106   0   load_const 0        (ai.errors.RetrySafety.Safe)
+        1   alloc_variant 453   (ai.errors.RetrySafety)
+        2   store_var 2         (_0)
+        3   load_var 2          (_0)
+        4   return              
 }
 
 function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
-  85   0   load_const 0        (ai.errors.RetrySafety.Safe)
+  93   0   load_const 0        (ai.errors.RetrySafety.Unsafe)
        1   alloc_variant 453   (ai.errors.RetrySafety)
        2   store_var 2         (_0)
        3   load_var 2          (_0)
@@ -2189,13 +2189,13 @@ function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFail
 }
 
 function ai.errors.classify_http(provider: string, status_code: int, body: string) -> ai.errors.Failure {
-  106   0    load_var 2             (status_code)
+  114   0    load_var 2             (status_code)
         1    load_const 0           (429)
         2    cmp_int_op ==          
         3    pop_jump_if_false +2   (to 5)
         4    jump +34               (to 38)
 
-  108   5    load_var 2             (status_code)
+  116   5    load_var 2             (status_code)
         6    load_const 1           (408)
         7    cmp_int_op ==          
         8    jump_if_false +2       (to 10)
@@ -2207,22 +2207,22 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
         14   pop_jump_if_false +2   (to 16)
         15   jump +12               (to 27)
 
-  114   16   load_type 3            
+  122   16   load_type 3            
         17   load_var 2             (status_code)
         18   call 138 ntypeargs=1   (baml.String.from)
         19   store_var 5            (_11)
 
-  111   20   load_var2 1 2          
+  119   20   load_var2 1 2          
 
-  114   21   load_const 4           ("http ")
+  122   21   load_const 4           ("http ")
         22   load_var 5             (_11)
         23   bin_op +               
         24   load_var 3             (body)
         25   init_instance 0        (ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body)
 
-  108   26   jump +16               (to 42)
+  116   26   jump +16               (to 42)
 
-  109   27   load_type 3            
+  117   27   load_type 3            
         28   load_var 2             (status_code)
         29   call 138 ntypeargs=1   (baml.String.from)
         30   store_var 4            (_8)
@@ -2233,9 +2233,9 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
         35   load_var 3             (body)
         36   init_instance 1        (ai.errors.NetworkFailure .provider, .detail, .raw_body)
 
-  108   37   jump +5                (to 42)
+  116   37   jump +5                (to 42)
 
-  107   38   load_var 1             (provider)
+  115   38   load_var 1             (provider)
         39   load_const 6           (null)
         40   load_var 3             (body)
         41   init_instance 2        (ai.errors.RateLimited .provider, .retry_after_ms, .raw_body)

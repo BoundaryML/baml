@@ -181,7 +181,7 @@ fn ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepBudgetE
     let _1: ai.errors.StepBudgetExceeded // self // param
 
     bb0: {
-        _0 = const ai.errors.RetrySafety.Safe;
+        _0 = const ai.errors.RetrySafety.Unsafe;
         goto -> bb1;
     }
 
@@ -196,7 +196,7 @@ fn ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedErro
     let _1: ai.errors.ToolFailedError // self // param
 
     bb0: {
-        _0 = const ai.errors.RetrySafety.Safe;
+        _0 = const ai.errors.RetrySafety.Unsafe;
         goto -> bb1;
     }
 

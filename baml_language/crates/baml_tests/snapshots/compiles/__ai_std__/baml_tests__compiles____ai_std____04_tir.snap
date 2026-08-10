@@ -180,8 +180,8 @@ class ai.errors.StepBudgetExceeded {
   steps: int
 }
 function ai.errors.StepBudgetExceeded.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety throws never {
-  { : ai.errors.RetrySafety.Safe
-    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  { : ai.errors.RetrySafety.Unsafe
+    RetrySafety.Unsafe : ai.errors.RetrySafety.Unsafe
   }
 }
 class ai.errors.ToolFailedError {
@@ -191,8 +191,8 @@ class ai.errors.ToolFailedError {
   cause: ai.errors.Failure | null
 }
 function ai.errors.ToolFailedError.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety throws never {
-  { : ai.errors.RetrySafety.Safe
-    RetrySafety.Safe : ai.errors.RetrySafety.Safe
+  { : ai.errors.RetrySafety.Unsafe
+    RetrySafety.Unsafe : ai.errors.RetrySafety.Unsafe
   }
 }
 class ai.errors.StreamingUnsupported {

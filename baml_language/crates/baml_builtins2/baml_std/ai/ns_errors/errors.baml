@@ -66,15 +66,23 @@ class ParseFailed {
     }
 }
 
+// The runner hit its step budget. Unlike the client-layer failures above,
+// this is thrown AFTER turns were committed to the journal — and any tools
+// those turns called have already run. Local state advanced, so a blind
+// replay is not safe.
 class StepBudgetExceeded {
     steps: int,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
-            RetrySafety.Safe
+            RetrySafety.Unsafe
         }
     }
 }
 
+// A tool failed and the run was configured to raise. Thrown after the
+// ToolFailed event is on the record, and a tool is arbitrary user code that
+// may have committed effects before it failed — so this is never blind-
+// replayable, whatever the underlying `cause` reports.
 class ToolFailedError {
     id: string,
     name: string,
@@ -82,7 +90,7 @@ class ToolFailedError {
     cause: Failure?, // the classified original, when the tool threw one
     implements Failure {
         function retry_safety(self) -> RetrySafety {
-            RetrySafety.Safe
+            RetrySafety.Unsafe
         }
     }
 }
