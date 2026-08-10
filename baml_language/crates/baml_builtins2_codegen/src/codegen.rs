@@ -2387,10 +2387,6 @@ mod tests {
             output.contains("fn deep_copy(vm: &mut BexVm, value: &Value) -> Value;"),
             "BamlPackageBaml should have deep_copy:\n{output}"
         );
-        assert!(
-            output.contains("fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool;"),
-            "BamlPackageBaml should have deep_equals with &BexVm:\n{output}"
-        );
     }
 
     #[test]

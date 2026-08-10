@@ -1284,11 +1284,10 @@ mod tests {
 
         assert_eq!(deep_copy.vm_usage, VmUsage::MutRef);
 
-        let deep_equals = vm_builtins
-            .iter()
-            .find(|b| b.path == "baml.deep_equals")
-            .expect("missing deep_equals");
-        assert_eq!(deep_equals.vm_usage, VmUsage::Ref);
+        // `//baml:vm` on a non-container receiver: `Array`/`Map` methods default to
+        // `Ref` without the directive, so a media method is what actually pins the
+        // directive being read.
+        assert_eq!(pdf_url.vm_usage, VmUsage::Ref);
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);

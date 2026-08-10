@@ -151,7 +151,6 @@ class baml.TaggedString$stream {
   values: unknown[]
 }
 function baml.deep_copy(value: T) -> T  [builtin]
-function baml.deep_equals(a: T, b: T) -> bool  [builtin]
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {

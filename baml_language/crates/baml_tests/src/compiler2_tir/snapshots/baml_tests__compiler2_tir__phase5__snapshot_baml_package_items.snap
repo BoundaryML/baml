@@ -39,7 +39,6 @@ namespace baml:
   function _to_string_shim<T>
   function _trunc_to_int
   function deep_copy<T>
-  function deep_equals<T>
 namespace baml.csv:
   class CsvError { methods: [] }
   enum CsvErrorKind

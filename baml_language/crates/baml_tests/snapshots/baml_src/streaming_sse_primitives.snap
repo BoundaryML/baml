@@ -330,14 +330,12 @@ function streaming_sse_primitives.sse_event_fields_in_json_fn() -> bool {
     load_const "payload"
     call assert.equal
     pop 1
-    load_type string | null
     load_var parsed
     load_const 0
     load_array_element
     load_field .id
     load_const "42"
-    call baml.deep_equals
-    call assert.is_true
+    call assert.equal
     pop 1
     load_const true
     jump L2

@@ -41,4 +41,4 @@ static methods:
       Creates a new duration of `h` hours.
 
 blanket implementations:
-  baml.Concrete   (<builtin>/baml/core.baml:19)
+  baml.Concrete   (<builtin>/baml/core.baml:13)

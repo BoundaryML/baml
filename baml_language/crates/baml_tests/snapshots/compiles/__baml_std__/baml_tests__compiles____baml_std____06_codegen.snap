@@ -2142,9 +2142,6 @@ function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | n
 function baml.deep_copy(value: #0) -> #0 {
 }
 
-function baml.deep_equals(a: #0, b: #0) -> bool {
-}
-
 function baml.env.get(key: string) -> string | null {
 }
 

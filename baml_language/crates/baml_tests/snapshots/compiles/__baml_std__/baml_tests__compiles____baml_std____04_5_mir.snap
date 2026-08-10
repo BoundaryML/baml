@@ -848,8 +848,6 @@ fn baml._from_json_shim = builtin(vm)
 
 fn baml.deep_copy = builtin(vm)
 
-fn baml.deep_equals = builtin(vm)
-
 fn baml.Float.is_nan = builtin(vm)
 
 fn baml.Float.is_infinite = builtin(vm)

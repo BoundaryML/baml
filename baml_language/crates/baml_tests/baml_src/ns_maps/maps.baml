@@ -5,8 +5,6 @@
 // Map tests that mutate a local map and then read from it require a helper
 // function because test-block locals are boxed (VM bug): reading a local
 // after m.set(...) would return Object(Any) instead of the concrete int.
-// Optional-returning tests use assert.equal (deep_equals can't unify T? with
-// a bare literal).
 
 // ─── len ─────────────────────────────────────────────────────────────────────
 
@@ -19,7 +17,7 @@ function map_len_helper() -> int {
 }
 
 test "len" {
-    assert.is_true(baml.deep_equals(map_len_helper(), 2))
+    assert.equal(map_len_helper(), 2)
 }
 
 // ─── set returns displaced value ──────────────────────────────────────────────
@@ -51,7 +49,7 @@ function map_set_then_get_main() -> int {
 }
 
 test "map_set_then_get_reads_latest" {
-    assert.is_true(baml.deep_equals(map_set_then_get_main(), 2))
+    assert.equal(map_set_then_get_main(), 2)
 }
 
 function map_set_grows_length_main() -> int {
@@ -63,7 +61,7 @@ function map_set_grows_length_main() -> int {
 }
 
 test "map_set_grows_length" {
-    assert.is_true(baml.deep_equals(map_set_grows_length_main(), 3))
+    assert.equal(map_set_grows_length_main(), 3)
 }
 
 function map_set_replace_preserves_length_main() -> int {
@@ -75,7 +73,7 @@ function map_set_replace_preserves_length_main() -> int {
 }
 
 test "map_set_replace_preserves_length" {
-    assert.is_true(baml.deep_equals(map_set_replace_preserves_length_main(), 1))
+    assert.equal(map_set_replace_preserves_length_main(), 1)
 }
 
 // ─── delete ───────────────────────────────────────────────────────────────────
@@ -119,7 +117,7 @@ function map_delete_shrinks_length_main() -> int {
 }
 
 test "map_delete_shrinks_length" {
-    assert.is_true(baml.deep_equals(map_delete_shrinks_length_main(), 1))
+    assert.equal(map_delete_shrinks_length_main(), 1)
 }
 
 function map_delete_does_not_affect_other_keys_main() -> int {
@@ -131,7 +129,7 @@ function map_delete_does_not_affect_other_keys_main() -> int {
 }
 
 test "map_delete_does_not_affect_other_keys" {
-    assert.is_true(baml.deep_equals(map_delete_does_not_affect_other_keys_main(), 2))
+    assert.equal(map_delete_does_not_affect_other_keys_main(), 2)
 }
 
 // ─── get_or_insert ────────────────────────────────────────────────────────────
@@ -142,7 +140,7 @@ function map_get_or_insert_inserts_when_absent_main() -> int {
 }
 
 test "map_get_or_insert_inserts_when_absent" {
-    assert.is_true(baml.deep_equals(map_get_or_insert_inserts_when_absent_main(), 10))
+    assert.equal(map_get_or_insert_inserts_when_absent_main(), 10)
 }
 
 function map_get_or_insert_returns_existing_main() -> int {
@@ -152,7 +150,7 @@ function map_get_or_insert_returns_existing_main() -> int {
 }
 
 test "map_get_or_insert_returns_existing_when_present" {
-    assert.is_true(baml.deep_equals(map_get_or_insert_returns_existing_main(), 1))
+    assert.equal(map_get_or_insert_returns_existing_main(), 1)
 }
 
 function map_get_or_insert_does_not_overwrite_main() -> int {
@@ -163,7 +161,7 @@ function map_get_or_insert_does_not_overwrite_main() -> int {
 }
 
 test "map_get_or_insert_does_not_overwrite" {
-    assert.is_true(baml.deep_equals(map_get_or_insert_does_not_overwrite_main(), 1))
+    assert.equal(map_get_or_insert_does_not_overwrite_main(), 1)
 }
 
 function map_get_or_insert_persists_main() -> int {
@@ -173,7 +171,7 @@ function map_get_or_insert_persists_main() -> int {
 }
 
 test "map_get_or_insert_persists_inserted_value" {
-    assert.is_true(baml.deep_equals(map_get_or_insert_persists_main(), 7))
+    assert.equal(map_get_or_insert_persists_main(), 7)
 }
 
 function map_get_or_insert_grows_length_main() -> int {
@@ -184,7 +182,7 @@ function map_get_or_insert_grows_length_main() -> int {
 }
 
 test "map_get_or_insert_grows_length_only_when_absent" {
-    assert.is_true(baml.deep_equals(map_get_or_insert_grows_length_main(), 1))
+    assert.equal(map_get_or_insert_grows_length_main(), 1)
 }
 
 // ─── clear ────────────────────────────────────────────────────────────────────
@@ -198,7 +196,7 @@ function map_clear_removes_all_main() -> int {
 }
 
 test "map_clear_removes_all" {
-    assert.is_true(baml.deep_equals(map_clear_removes_all_main(), 0))
+    assert.equal(map_clear_removes_all_main(), 0)
 }
 
 function map_clear_already_empty_main() -> int {
@@ -208,7 +206,7 @@ function map_clear_already_empty_main() -> int {
 }
 
 test "map_clear_already_empty_is_noop" {
-    assert.is_true(baml.deep_equals(map_clear_already_empty_main(), 0))
+    assert.equal(map_clear_already_empty_main(), 0)
 }
 
 function map_clear_then_reuse_main() -> int {
@@ -220,7 +218,7 @@ function map_clear_then_reuse_main() -> int {
 }
 
 test "map_clear_then_reuse" {
-    assert.is_true(baml.deep_equals(map_clear_then_reuse_main(), 99))
+    assert.equal(map_clear_then_reuse_main(), 99)
 }
 
 function map_clear_makes_get_return_null_main() -> int? {
@@ -244,7 +242,7 @@ function map_has_after_delete_main() -> bool {
 }
 
 test "map_has_after_delete_is_false" {
-    assert.is_true(baml.deep_equals(map_has_after_delete_main(), false))
+    assert.is_true(!map_has_after_delete_main())
 }
 
 function map_has_after_get_or_insert_main() -> bool {
@@ -254,7 +252,7 @@ function map_has_after_get_or_insert_main() -> bool {
 }
 
 test "map_has_after_get_or_insert_is_true" {
-    assert.is_true(baml.deep_equals(map_has_after_get_or_insert_main(), true))
+    assert.is_true(map_has_after_get_or_insert_main())
 }
 
 // ─── map element subscript access (m[key]) ────────────────────────────────────
@@ -269,7 +267,7 @@ function use_map_helper() -> string {
 }
 
 test "create_and_access" {
-    assert.is_true(baml.deep_equals(use_map_helper(), "world"))
+    assert.equal(use_map_helper(), "world")
 }
 
 // access_no_key: accessing a missing key should throw MapKeyNotFound.
@@ -300,7 +298,7 @@ function use_map_contains_helper() -> string {
 }
 
 test "contains" {
-    assert.is_true(baml.deep_equals(use_map_contains_helper(), "world"))
+    assert.equal(use_map_contains_helper(), "world")
 }
 
 // modify: assign and compound-assign via subscript, then read back.
@@ -313,5 +311,5 @@ function edit_map_key_helper() -> int {
 }
 
 test "modify" {
-    assert.is_true(baml.deep_equals(edit_map_key_helper(), 42))
+    assert.equal(edit_map_key_helper(), 42)
 }
