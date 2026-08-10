@@ -1114,17 +1114,6 @@ pub fn compute_match_usefulness(cx: &dyn PatCtx, arms: &[DPat], scrut_ty: Ty) ->
     }
 }
 
-/// Single-pattern irrefutability check. Returns `Ok(())` if the pattern covers
-/// every value of `ty`; otherwise returns a witness value the pattern doesn't
-/// match.
-pub fn check_irrefutable(cx: &dyn PatCtx, pat: &DPat, ty: Ty) -> Result<(), Box<WitnessPat>> {
-    let report = compute_match_usefulness(cx, std::slice::from_ref(pat), ty);
-    match report.missing.into_iter().next() {
-        None => Ok(()),
-        Some(w) => Err(Box::new(w)),
-    }
-}
-
 /// A column-stack of witness patterns, one entry per remaining matrix column.
 /// Built up during recursion as ctors are unspecialized back onto the witness.
 #[derive(Debug, Clone)]

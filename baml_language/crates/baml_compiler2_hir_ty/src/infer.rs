@@ -83,10 +83,14 @@ fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
 /// value range (`-INT_MIN` = 2^62) - the unfolded dispatch result stands
 /// and the VM raises the catchable overflow, identical to the
 /// through-a-variable path (TIR's `fold_int` rule).
+/// BAML's int value range: i63 (the VM tags the low bit). One
+/// crate-level pair, mirroring TIR's layout and the
+/// `baml_type::MAX_BIGINT_BITS` precedent; a folded result outside it
+/// defers to the runtime overflow.
+const INT_MIN: i64 = -(1 << 62);
+const INT_MAX: i64 = (1 << 62) - 1;
+
 fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
-    // BAML ints are i63 (the VM tags the low bit).
-    const INT_MIN: i64 = -(1 << 62);
-    const INT_MAX: i64 = (1 << 62) - 1;
     let negated = match lit {
         Literal::Int(n) => {
             let v = n.checked_neg()?;
@@ -135,10 +139,6 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
     };
     let lit = |value: Literal| Ty::intern(TyKind::Literal(value, freshness, TyAttr::default()));
     let boolean = |value: bool| Some(lit(Literal::Bool(value)));
-    // BAML ints are i63 (the VM tags the low bit); an out-of-range
-    // fold defers to the runtime overflow, like `negate_literal`.
-    const INT_MIN: i64 = -(1 << 62);
-    const INT_MAX: i64 = (1 << 62) - 1;
     let int = |value: i64| {
         (INT_MIN..=INT_MAX)
             .contains(&value)
@@ -273,7 +273,7 @@ fn format_float(value: f64) -> Option<String> {
     if text.contains('.') {
         Some(text)
     } else {
-        Some(format!("{value}.0"))
+        Some(format!("{text}.0"))
     }
 }
 
