@@ -858,12 +858,18 @@ mod tests {
 
         // Fields keep the BAML names.
         assert!(file.contains("private final long wait;"), "{file}");
-        assert!(file.contains("private final java.lang.String notify;"), "{file}");
+        assert!(
+            file.contains("private final java.lang.String notify;"),
+            "{file}"
+        );
 
         // Accessors are escaped, and read the unescaped field.
         assert!(file.contains("public long wait$() {"), "{file}");
         assert!(file.contains("return this.wait;"), "{file}");
-        assert!(file.contains("public java.lang.String notify$() {"), "{file}");
+        assert!(
+            file.contains("public java.lang.String notify$() {"),
+            "{file}"
+        );
 
         // A non-colliding field is untouched.
         assert!(file.contains("public long ok() {"), "{file}");

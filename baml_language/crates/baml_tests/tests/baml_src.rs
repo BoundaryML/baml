@@ -122,9 +122,7 @@ fn bytecode() {
         // anthropic, google, claude_code, ...) never floods these snapshots.
         let is_stdlib = baml_builtins2::stdlib_package_names().iter().any(|pkg| {
             let pkg: &str = pkg;
-            name.len() > pkg.len()
-                && name.as_bytes()[pkg.len()] == b'.'
-                && name.starts_with(pkg)
+            name.len() > pkg.len() && name.as_bytes()[pkg.len()] == b'.' && name.starts_with(pkg)
         });
         if is_stdlib || name.starts_with("env.") {
             continue;
