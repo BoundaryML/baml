@@ -3,10 +3,136 @@
 This document shows the SQL currently supported by `baml_query`. The examples
 use the default logical tables:
 
-- `function_calls`: call-level fact data.
-- `threads`: thread metadata.
-- `processes`: process metadata.
-- `ccts`: call-context-tree metadata.
+- `function_calls`: one row per function invocation.
+- `threads`: one row per execution thread or logical worker thread.
+- `processes`: one row per process, worker, or runtime instance.
+- `ccts`: one row per call-context-tree node or execution context.
+
+## Data model
+
+The default schema is shaped like a small star schema: `function_calls` is the
+large fact table, while `threads`, `processes`, and `ccts` are smaller metadata
+tables that explain or group those calls.
+
+### `function_calls`
+
+This is the primary event table. Each row represents one function invocation
+and is the table to start with when asking “what happened?” questions.
+
+| Column | Meaning | Typical use |
+| --- | --- | --- |
+| `id` | Stable identifier for the invocation | Trace a single call or deduplicate results |
+| `project_id` | Tenant/project scope | Isolate data and make portable joins safe |
+| `process_id` | Process or worker that executed the call | Filter by runtime instance or join to `processes` |
+| `thread_id` | Thread that executed the call | Inspect one thread or join to `threads` |
+| `cct_id` | Call-context-tree node for the call | Group calls by execution context |
+| `captured_ts` | Call capture timestamp as `Int64` | Time windows, timelines, and ordering |
+| `name` | Function name | Find a function, compare functions, or group by function |
+| `status` | Call outcome/status | Find failures, retries, and success rates |
+| `metadata` | Resident metadata text | Display or filter lightweight call metadata |
+| `metrics` | Resident metrics text | Inspect metrics stored with the call |
+| `args` | Hydrated JSON arguments | Debug inputs and filter on argument fields |
+| `return` | Hydrated JSON return value | Inspect outputs and application-level results |
+| `error` | Hydrated JSON error value | Inspect structured failures |
+
+The resident columns are cheap to scan compared with hydrated columns. A
+query that selects or filters on `args`, `return`, or `error` may read local
+value files. Start with resident predicates such as `name`, `status`, IDs, and
+`captured_ts` before applying hydrated predicates.
+
+`metadata` and `metrics` are currently exposed as resident text columns. They
+may contain JSON in an upstream schema, but this engine does not automatically
+treat them as hydrated `ValueId` columns. If they need structured hydration,
+define separate hydrated columns in the table specification.
+
+### `threads`
+
+This table describes the thread or logical worker associated with a call. It
+is usually much smaller than `function_calls` and is useful when users know a
+human-readable thread name rather than a thread ID.
+
+| Column | Meaning | Typical use |
+| --- | --- | --- |
+| `id` | Stable thread identifier | Join to `function_calls.thread_id` |
+| `project_id` | Tenant/project scope | Keep thread lookups within the project |
+| `process_id` | Owning process, when available | Join the thread to `processes` |
+| `name` | Human-readable thread or worker name | Find calls from a named thread |
+
+The default schema does not include `started_at`, `ended_at`, heartbeat, or
+last-activity columns. If “was this thread running yesterday?” is a required
+question, those fields must be added to the configured logical table schema or
+inferred from another event/activity table.
+
+### `processes`
+
+This table describes the process, worker, or runtime instance that produced
+calls. It is normally the smallest dimension table.
+
+| Column | Meaning | Typical use |
+| --- | --- | --- |
+| `id` | Stable process identifier | Join to `function_calls.process_id` or `threads.process_id` |
+| `project_id` | Tenant/project scope | Keep process lookups within the project |
+| `name` | Process/program/worker name | Filter calls by the runtime that produced them |
+
+Use this table for enrichment and human-readable filtering. Keep the stable
+`process_id` directly on `function_calls` so queries that already know the ID
+do not need a join.
+
+### `ccts`
+
+This table describes call-context-tree nodes. A CCT can represent a logical
+execution context, stack-like grouping, or another hierarchy supplied by the
+upstream system.
+
+| Column | Meaning | Typical use |
+| --- | --- | --- |
+| `id` | Stable context-node identifier | Join to `function_calls.cct_id` |
+| `project_id` | Tenant/project scope | Keep context lookups within the project |
+| `thread_id` | Thread containing the context, when available | Join the context to `threads` |
+| `name` | Human-readable context name | Group or filter calls by context |
+
+The default `ccts` table is intentionally small and descriptive. If the
+upstream CCT model has parent IDs, depths, source locations, or timestamps,
+those can be added as resident columns through a custom table specification.
+
+### Relationships
+
+The usual logical relationships are:
+
+```text
+function_calls.process_id  → processes.id
+function_calls.thread_id   → threads.id
+function_calls.cct_id      → ccts.id
+threads.process_id         → processes.id
+ccts.thread_id             → threads.id
+```
+
+These are generally many-to-one relationships: many calls can belong to one
+thread, process, or CCT. Every relationship is project-scoped in the default
+model, so portable joins should include the project equality:
+
+```sql
+ON related.project_id = calls.project_id
+AND related.id = calls.related_id
+```
+
+Use a regular join when you need columns from the related table. Use a
+semi-join or `IN` pattern when the related table only determines which calls
+are eligible. Because `function_calls` is expected to be much larger than the
+dimension tables, avoid joining it to another large event table unless the
+query is intentionally doing a broad event correlation.
+
+### Choosing a starting table
+
+| Question type | Start with | Why |
+| --- | --- | --- |
+| What calls happened? | `function_calls` | It contains the event rows and timestamps |
+| Which functions are failing? | `function_calls` | `name` and `status` are resident |
+| What did a call receive or return? | `function_calls` | `args`, `return`, and `error` are hydrated there |
+| Which calls came from a named worker? | `threads` or `processes`, then filter calls | The dimension contains the readable name |
+| How much work did each thread do? | `function_calls` grouped by `thread_id` | Avoids a join if only IDs are needed |
+| Which execution context contains failures? | `function_calls` joined to `ccts` | CCT supplies the readable context name |
+| Was a thread active during a time range? | `threads` plus lifecycle/activity columns | The default thread schema has no lifecycle timestamps |
 
 The engine automatically scopes registered tables to the active project. The
 examples still include `project_id` where it makes the tenant boundary clear
