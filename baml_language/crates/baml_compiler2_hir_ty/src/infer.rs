@@ -83,6 +83,15 @@ fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
 /// value range (`-INT_MIN` = 2^62) - the unfolded dispatch result stands
 /// and the VM raises the catchable overflow, identical to the
 /// through-a-variable path (TIR's `fold_int` rule).
+/// Where a type-qualified reference's OWN generic args come from -
+/// r-a's `substs_from_path` split: the call site's turbofish channel,
+/// or fresh variables for a value-position reference.
+#[derive(Clone, Copy)]
+enum OwnArgs {
+    Call(ExprId),
+    Fresh,
+}
+
 /// BAML's int value range: i63 (the VM tags the low bit). One
 /// crate-level pair, mirroring TIR's layout and the
 /// `baml_type::MAX_BIGINT_BITS` precedent; a folded result outside it
@@ -2629,16 +2638,15 @@ impl<'db> InferenceContext<'db> {
         if let Expr::Path(segments) = &body.exprs[callee]
             && segments.len() >= 2
             && !self.path_resolves_locally(callee)
-            && let Some(member) = segments.last()
-            && let Some(method) =
-                self.interface_static_method(&segments[..segments.len() - 1], member)
         {
-            let signature = function_signature(self.db, method);
-            let instantiation = self.instantiation_args(call, &signature.generic_params);
-            self.register_call_bounds(method, &instantiation, call);
-            let fn_ty = function_value_ty(signature, &instantiation);
-            self.result.type_of_expr.insert(callee, fn_ty.clone());
-            return (fn_ty, false);
+            let segments = segments.clone();
+            let (prefix, member) = segments.split_at(segments.len() - 1);
+            if let Some(fn_ty) =
+                self.interface_static_value(prefix, &member[0], OwnArgs::Call(call), call)
+            {
+                self.result.type_of_expr.insert(callee, fn_ty.clone());
+                return (fn_ty, false);
+            }
         }
         // `default.m(..)` inside an `implements` block: delegation to
         // the interface's DEFAULT implementation - a scoped receiver
@@ -2680,36 +2688,11 @@ impl<'db> InferenceContext<'db> {
             // parameter list matches the written arguments (no bound
             // receiver). Class generics have no receiver to pin them, so
             // they instantiate fresh alongside the method's own.
-            if segments.len() >= 2
-                && let Some((class, pinned)) =
-                    self.static_class_for(&segments[..segments.len() - 1])
-            {
-                let member = segments.last().expect("checked len");
-                let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
-                    .methods
-                    .iter()
-                    .copied()
-                    .find(|&method| {
-                        baml_compiler2_ppir::item_data::function_data(self.db, method).name
-                            == *member
-                    });
-                if let Some(method) = method {
-                    let signature = function_signature(self.db, method);
-                    let class_count = crate::lower::class_generic_frame(self.db, class).len();
-                    let mut instantiation: Vec<Ty> = match pinned {
-                        Some(args) => args,
-                        None => crate::lower::class_generic_frame(self.db, class)
-                            .iter()
-                            .map(|param| self.fresh_generic_arg(param))
-                            .collect(),
-                    };
-                    let own_params = signature.generic_params[class_count..].to_vec();
-                    instantiation.extend(self.instantiation_args(call, &own_params));
-                    // r-a registers required obligations at EVERY value
-                    // instantiation (add_required_obligations_for_value
-                    // _path), whatever the spelling.
-                    self.register_call_bounds(method, &instantiation, call);
-                    let fn_ty = function_value_ty(signature, &instantiation);
+            if segments.len() >= 2 {
+                let (prefix, member) = segments.split_at(segments.len() - 1);
+                if let Some(fn_ty) =
+                    self.class_static_value(prefix, &member[0], OwnArgs::Call(call), call)
+                {
                     self.result.type_of_expr.insert(callee, fn_ty.clone());
                     return (fn_ty, false);
                 }
@@ -3118,26 +3101,15 @@ impl<'db> InferenceContext<'db> {
             return function_value_ty(signature, &instantiation);
         }
         // A type-qualified static as a VALUE (`let f = float.nan;`,
-        // `Array.filled`): the same resolution the call path uses, with
-        // every generic fresh (only a call site can spell turbofish).
-        if segments.len() >= 2
-            && let Some((class, _)) = self.static_class_for(&segments[..segments.len() - 1])
-            && let Some(member) = segments.last()
-            && let Some(method) = baml_compiler2_ppir::item_data::class_data(self.db, class)
-                .methods
-                .iter()
-                .copied()
-                .find(|&method| {
-                    baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
-                })
-        {
-            let signature = function_signature(self.db, method);
-            let instantiation: Vec<Ty> = signature
-                .generic_params
-                .iter()
-                .map(|param| self.fresh_generic_arg(param))
-                .collect();
-            return function_value_ty(signature, &instantiation);
+        // `Array.filled`): the same tier the call spellings use, with
+        // the own suffix fresh (only a call site can spell turbofish).
+        if segments.len() >= 2 {
+            let (prefix, member) = segments.split_at(segments.len() - 1);
+            if let Some(fn_ty) =
+                self.class_static_value(prefix, &member[0], OwnArgs::Fresh, expr)
+            {
+                return fn_ty;
+            }
         }
         // `default.m` as a VALUE: the delegation target as a bound
         // method value (same scoped-receiver rule as the callee road).
@@ -3150,28 +3122,20 @@ impl<'db> InferenceContext<'db> {
         // An INTERFACE-qualified method as a VALUE (`Trait::method`):
         // the uniform item road with every frame slot fresh - the call
         // that consumes the value solves `Self` from its argument.
-        if segments.len() >= 2
-            && let Some(member) = segments.last()
-            && let Some(method) =
-                self.interface_static_method(&segments[..segments.len() - 1], member)
-        {
-            let signature = function_signature(self.db, method);
-            let instantiation: Vec<Ty> = signature
-                .generic_params
-                .iter()
-                .map(|param| self.fresh_generic_arg(param))
-                .collect();
-            return function_value_ty(signature, &instantiation);
+        if segments.len() >= 2 {
+            let (prefix, member) = segments.split_at(segments.len() - 1);
+            if let Some(fn_ty) =
+                self.interface_static_value(prefix, &member[0], OwnArgs::Fresh, expr)
+            {
+                return fn_ty;
+            }
         }
         // Enum VARIANT values (`Shape.Rectangle`): the variant's singleton
         // literal type - the same product the type-position path gives
         // (`lower_path` fallback 2; r-a resolves the value namespace to
         // the variant the same way).
-        if segments.len() >= 2 {
-            let ty = self.lower.lower_type_path(segments);
-            if matches!(ty.kind(), TyKind::EnumVariant(..)) {
-                return ty;
-            }
+        if let Some(ty) = self.enum_variant_value(segments) {
+            return ty;
         }
         // `Type.from_json(j)` is language sugar for `baml.json.to<Type>(j)`
         // - the decode counterpart of the `to_json` desugar, same lang-item
@@ -3183,15 +3147,114 @@ impl<'db> InferenceContext<'db> {
             && segments
                 .last()
                 .is_some_and(|segment| segment.as_str() == "from_json")
+            && let Some(fn_ty) = self.from_json_desugar_value(
+                &segments[..segments.len() - 1],
+                OwnArgs::Fresh,
+                None,
+            )
         {
-            let target = self.lower.lower_type_path(&segments[..segments.len() - 1]);
-            if !target.has_error()
-                && let Some(fn_ty) = self.json_desugar_callee("to", target)
-            {
-                return fn_ty;
-            }
+            return fn_ty;
         }
         Ty::error()
+    }
+
+    fn own_instantiation(&mut self, own: OwnArgs, params: &[baml_type::ParamTy]) -> Vec<Ty> {
+        match own {
+            OwnArgs::Call(call) => self.instantiation_args(call, params),
+            OwnArgs::Fresh => params
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect(),
+        }
+    }
+
+    /// TIER: an interface-qualified static (`Trait.method`). Bounds
+    /// register at the instantiation, whatever the spelling.
+    fn interface_static_value(
+        &mut self,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+    ) -> Option<Ty> {
+        let method = self.interface_static_method(prefix, member)?;
+        let signature = function_signature(self.db, method);
+        let instantiation = self.own_instantiation(own, &signature.generic_params);
+        self.register_call_bounds(method, &instantiation, anchor);
+        Some(function_value_ty(signature, &instantiation))
+    }
+
+    /// TIER: a class-qualified static (`Array.filled`, `float.nan`,
+    /// alias and keyword qualifiers included). The class prefix takes
+    /// the qualifier's pinned args when it carries them (an alias
+    /// expansion), else fresh vars; the own suffix follows `own`.
+    fn class_static_value(
+        &mut self,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+    ) -> Option<Ty> {
+        let (class, pinned) = self.static_class_for(prefix)?;
+        let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+            .methods
+            .iter()
+            .copied()
+            .find(|&method| {
+                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+            })?;
+        let signature = function_signature(self.db, method);
+        let frame = crate::lower::class_generic_frame(self.db, class);
+        let mut instantiation: Vec<Ty> = match pinned {
+            Some(args) => args,
+            None => frame
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect(),
+        };
+        let own_params = signature.generic_params[frame.len()..].to_vec();
+        instantiation.extend(self.own_instantiation(own, &own_params));
+        self.register_call_bounds(method, &instantiation, anchor);
+        Some(function_value_ty(signature, &instantiation))
+    }
+
+    /// TIER: an enum variant value (`Shape.Rectangle`) - the singleton
+    /// literal type, the same product the type position gives.
+    fn enum_variant_value(&mut self, segments: &[baml_type::Name]) -> Option<Ty> {
+        if segments.len() < 2 {
+            return None;
+        }
+        let ty = self.lower.lower_type_path(segments);
+        matches!(ty.kind(), TyKind::EnumVariant(..)).then_some(ty)
+    }
+
+    /// TIER: the `Type.from_json` decode desugar (`baml.json.to<Type>`).
+    /// The target is the WRITTEN qualifier, nominal; only the turbofish
+    /// class spelling needs the call channel's hoisted args instead. A
+    /// real `from_json` static outranks this tier in every consumer.
+    fn from_json_desugar_value(
+        &mut self,
+        prefix: &[baml_type::Name],
+        own: OwnArgs,
+        record_base: Option<ExprId>,
+    ) -> Option<Ty> {
+        let written = self.lower.lower_type_path(prefix);
+        let target = if !written.has_error() {
+            written
+        } else if let (OwnArgs::Call(call), Some((class, _))) =
+            (own, self.static_class_for(prefix))
+        {
+            let frame = crate::lower::class_generic_frame(self.db, class);
+            let args = self.instantiation_args(call, &frame);
+            crate::lower::class_ty(crate::lower::class_qualified_name(self.db, class), args)
+        } else {
+            return None;
+        };
+        let fn_ty = self.json_desugar_callee("to", target.clone())?;
+        if let Some(base) = record_base {
+            self.result.type_of_expr.insert(base, target);
+        }
+        Some(fn_ty)
     }
 
     /// The MemberAccess spelling of a TYPE-QUALIFIED callee
@@ -3208,56 +3271,19 @@ impl<'db> InferenceContext<'db> {
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
     ) -> Option<Ty> {
-        if let Some(method) = self.interface_static_method(prefix, member) {
-            let signature = function_signature(self.db, method);
-            let instantiation = self.instantiation_args(call, &signature.generic_params);
-            self.register_call_bounds(method, &instantiation, call);
-            return Some(function_value_ty(signature, &instantiation));
-        }
-        let class = self.static_class_for(prefix);
-        if let Some((class, pinned)) = &class {
-            let class = *class;
-            let frame = crate::lower::class_generic_frame(self.db, class);
-            let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
-                .methods
-                .iter()
-                .copied()
-                .find(|&method| {
-                    baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
-                });
-            if let Some(method) = method {
-                let signature = function_signature(self.db, method);
-                let mut instantiation: Vec<Ty> = match pinned.clone() {
-                    Some(args) => args,
-                    None => frame.iter().map(|param| self.fresh_generic_arg(param)).collect(),
-                };
-                let own_params = signature.generic_params[frame.len()..].to_vec();
-                instantiation.extend(self.instantiation_args(call, &own_params));
-                self.register_call_bounds(method, &instantiation, call);
-                return Some(function_value_ty(signature, &instantiation));
-            }
-        }
-        if member.as_str() == "from_json" {
-            // The desugar target is the WRITTEN qualifier, nominal -
-            // an alias stays an alias (the path spelling's
-            // `lower_type_path` semantics); only the turbofish class
-            // spelling needs the channel's hoisted args instead.
-            let written = self.lower.lower_type_path(prefix);
-            let target = if !written.has_error() {
-                written
-            } else if let Some((class, _)) = class {
-                let frame = crate::lower::class_generic_frame(self.db, class);
-                let args = self.instantiation_args(call, &frame);
-                crate::lower::class_ty(crate::lower::class_qualified_name(self.db, class), args)
-            } else {
-                return None;
-            };
-            if let Some(fn_ty) = self.json_desugar_callee("to", target.clone()) {
-                self.result.type_of_expr.insert(base_expr, target);
-                return Some(fn_ty);
-            }
-        }
-        None
+        let own = OwnArgs::Call(call);
+        self.interface_static_value(prefix, member, own, call)
+            .or_else(|| self.class_static_value(prefix, member, own, call))
+            .or_else(|| {
+                let mut full = prefix.to_vec();
+                full.push(member.clone());
+                self.enum_variant_value(&full)
+            })
+            .or_else(|| {
+                (member.as_str() == "from_json")
+                    .then(|| self.from_json_desugar_value(prefix, own, Some(base_expr)))
+                    .flatten()
+            })
     }
 
     /// The class owning a TYPE-QUALIFIED static path's members: a
