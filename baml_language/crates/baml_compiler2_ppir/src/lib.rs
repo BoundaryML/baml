@@ -416,17 +416,12 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // `ai.Stream<TS, TF>` and the body's explicit call-site type
                 // args on `ai.stream_spec`, so the stdlib reifies both types
                 // from its own frame (`reflect.type_of<TStream/TFinal>()`).
-                let companion_type_args =
-                    vec![stream_type_expr, return_type_spanned.clone()];
+                let companion_type_args = vec![stream_type_expr, return_type_spanned.clone()];
                 let return_type = ast::TypeExprKind::Path {
                     // `baml.llm.Stream`, not `ai.Stream`: every SDK generator
                     // matches a stream companion's return type by this exact
                     // name, which is what makes host-language streaming work.
-                    segments: vec![
-                        Name::new("baml"),
-                        Name::new("llm"),
-                        Name::new("Stream"),
-                    ],
+                    segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
                     generic_args: companion_type_args.clone(),
                     associated_type_bindings: vec![],
                     attrs: vec![],
@@ -445,10 +440,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     .map(|mut p| {
                         if p.name.as_str() == "client" {
                             let capability = ast::TypeExprKind::Path {
-                                segments: vec![
-                                    Name::new("ai"),
-                                    Name::new("StreamingClient"),
-                                ],
+                                segments: vec![Name::new("ai"), Name::new("StreamingClient")],
                                 generic_args: vec![],
                                 associated_type_bindings: vec![],
                                 attrs: vec![],
@@ -488,9 +480,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     throws: None,
                     body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                     declarative_meta: None,
-                    metadata: ast::FunctionMetadata::user_facing(
-                        ast::FunctionOrigin::Companion,
-                    ),
+                    metadata: ast::FunctionMetadata::user_facing(ast::FunctionOrigin::Companion),
                     is_tagged_template_tag: func.is_tagged_template_tag,
                     attributes: vec![],
                     docstring: func.docstring.clone(),

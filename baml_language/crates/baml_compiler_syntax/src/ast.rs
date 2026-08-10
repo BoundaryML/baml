@@ -1023,10 +1023,7 @@ impl ClientValueDef {
                         seen_equals = true;
                         continue;
                     }
-                    if seen_equals
-                        && !t.kind().is_trivia()
-                        && t.kind() != SyntaxKind::SEMICOLON
-                    {
+                    if seen_equals && !t.kind().is_trivia() && t.kind() != SyntaxKind::SEMICOLON {
                         return Some(el);
                     }
                 }

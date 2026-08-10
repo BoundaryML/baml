@@ -7,15 +7,15 @@ import (
 	"testing"
 
 	baml_sdk "baml.local/sdk/baml_sdk"
-	baml "baml.local/sdk/baml_sdk/baml"
 )
 
 // `$parse` is a compiler-synthesized ordinary callable: JSON replaces the
-// parent's prompt arguments, the parent return type is preserved, and the
-// client override remains an optional named argument.
+// parent's prompt arguments and the parent return type is preserved. It takes
+// no client — parsing is local and network-free, so the single-path companion
+// dropped the client override the legacy one carried.
 var (
-	_ func(context.Context, string, ...baml_sdk.LoremExtractResumeParseOption) (baml_sdk.LoremResume, error)        = baml_sdk.LoremExtractResumeParse
-	_ func(context.Context, string, ...baml_sdk.IpsumClassifySentimentParseOption) (baml_sdk.IpsumSentiment, error) = baml_sdk.IpsumClassifySentimentParse
+	_ func(context.Context, string) (baml_sdk.LoremResume, error)        = baml_sdk.LoremExtractResumeParse
+	_ func(context.Context, string) (baml_sdk.IpsumSentiment, error)     = baml_sdk.IpsumClassifySentimentParse
 )
 
 func Test_parse_companion_returns_typed_class_and_fills_missing_nullable_field(t *testing.T) {

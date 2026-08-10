@@ -151,8 +151,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
         span: parent.span,
         name_span: parent.name_span,
     };
-    let body =
-        lower_expr_body::synthesize_spec_parse_body(Some(return_type.clone()), parent.span);
+    let body = lower_expr_body::synthesize_spec_parse_body(Some(return_type.clone()), parent.span);
     Some(companion_def(
         parent,
         Name::new(format!("{}$parse", parent.name)),

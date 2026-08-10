@@ -497,8 +497,7 @@ pub(crate) fn synthesize_llm_spec_body(
     // client expression lowered in place.
     let default_client = match client_spec {
         crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
-            let model_lit =
-                ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
+            let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
             let ctor_callee = ctx.alloc_expr(
                 Expr::Path(vec![Name::new(*pkg), Name::new(*class), Name::new("new")]),
                 span,

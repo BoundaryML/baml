@@ -15,12 +15,11 @@ use rowan::ast::AstNode;
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef,
-        Expr, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
-        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
-        Item, LambdaDef, LambdaKind, LlmBodyDef, MethodSigDef, Param,
-        RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestArgValue, TestDef,
-        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
+        FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
+        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation, Item, LambdaDef,
+        LambdaKind, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
+        TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -344,11 +343,7 @@ fn lower_function(
 
         // Jinja prompts are removed: the single-path world renders prompts as
         // plain backtick templates through the spec.
-        if llm
-            .prompt_field()
-            .and_then(|pf| pf.raw_string())
-            .is_some()
-        {
+        if llm.prompt_field().and_then(|pf| pf.raw_string()).is_some() {
             diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
                 function_name: name.as_str().to_string(),
                 span: llm_body_def.span,
@@ -359,12 +354,7 @@ fn lower_function(
         // compile time to a provider constructor; anything else is an
         // expression evaluating to ai.Client.
         let client_value = llm.client_field().and_then(|cf| cf.value_element());
-        let client_spec = resolve_llm_client(
-            name.as_str(),
-            client_value,
-            llm_body_def.span,
-            diags,
-        );
+        let client_spec = resolve_llm_client(name.as_str(), client_value, llm_body_def.span, diags);
 
         // The function's real parameters — the injected `client` override is
         // added below and is never part of the spec's bound arguments.
@@ -620,13 +610,12 @@ fn lower_client_value_def(
         });
         return None;
     };
-    let (body, source_map) =
-        lower_expr_body::lower_client_initializer(
-            def.value_element().as_ref(),
-            node.span_range(),
-            diags,
-            env_var_refs,
-        );
+    let (body, source_map) = lower_expr_body::lower_client_initializer(
+        def.value_element().as_ref(),
+        node.span_range(),
+        diags,
+        env_var_refs,
+    );
     Some(Item::Let(crate::ast::LetDef {
         name: Name::new(name_token.text()),
         initializer: Some((body, source_map)),
@@ -788,9 +777,7 @@ fn resolve_llm_client(
             let Some((prefix, model)) = text.split_once('/') else {
                 diags.push(LoweringDiagnostic::InvalidLlmClient {
                     function_name: function_name.to_string(),
-                    reason: format!(
-                        "\"{text}\" is not a \"provider/model\" string (no `/`)"
-                    ),
+                    reason: format!("\"{text}\" is not a \"provider/model\" string (no `/`)"),
                     span,
                 });
                 return None;
@@ -835,7 +822,9 @@ fn resolve_llm_client(
 fn tools_value_element(
     llm: &ast::LlmFunctionBody,
 ) -> Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>> {
-    llm.tools_field().as_ref().and_then(ast::ToolsField::value_element)
+    llm.tools_field()
+        .as_ref()
+        .and_then(ast::ToolsField::value_element)
 }
 
 fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {

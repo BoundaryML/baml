@@ -112,3 +112,41 @@ function stream_e2e_extract_resume(text: string) -> Resume {
     JSON:
   `
 }
+
+// BAML-driven collectors: they drive `$stream` from inside BAML so the
+// partial values never cross the FFI boundary as `T | StreamFinished`. The
+// two values that do cross are typed concretely. Useful for isolating a host
+// bridge problem from an engine one — if these pass while the host-driven
+// `*$stream` fails, the break is in the bridge.
+function stream_e2e_collect_doc(text: string) -> StreamingDoc {
+  let s = stream_e2e_extract_doc$stream(text);
+  while (true) {
+    match (s.next()) {
+      baml.stream.StreamFinished => {
+        break;
+      }
+      _ => {}
+    }
+  }
+  s.final()
+}
+
+function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
+  let s = stream_e2e_extract$stream(text);
+  let next_calls: (null | string)[] = [];
+  while (true) {
+    match (s.next()) {
+      baml.stream.StreamFinished => {
+        break;
+      }
+      null => {
+        next_calls.push(null);
+      }
+      let item: string => {
+        next_calls.push(item);
+      }
+    }
+  }
+  let final_call = s.final();
+  StreamE2ECollectResult { next_calls: next_calls, final_call: final_call }
+}
