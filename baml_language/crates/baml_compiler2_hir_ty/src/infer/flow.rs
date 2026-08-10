@@ -225,10 +225,11 @@ impl InferenceContext<'_> {
         if kept.len() == members.len() {
             return scrut.clone();
         }
-        if kept.is_empty() {
-            return Ty::never();
-        }
-        self.union_of(&kept)
+        // Filtering never REWRITES the survivors (TS's `getTypeWithFacts`
+        // shape): the structural constructor keeps each member's
+        // identity - freshness included - where the canonical path
+        // would re-mark literals rigid.
+        crate::infer::syntactic_union(&kept)
     }
 
     /// Applies one polarity's facts onto the flow overlay.

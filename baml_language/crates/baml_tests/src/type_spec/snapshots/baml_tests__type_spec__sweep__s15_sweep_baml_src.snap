@@ -2270,8 +2270,6 @@ panics: 0
     at ns_interfaces_associated_types/interfaces_associated_types.baml:8808..8818 `item.label`
 [1x] hir_ty=[(self: (H as user.interfaces_associated_types.ApdHolder).Item, other: (H as user.interfaces_associated_types.ApdHolder).Item) -> bool throws never] tir=[(other: (H as user.interfaces_associated_types.ApdHolder).Item) -> bool throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:8940..8955 `item.same_label`
-[1x] hir_ty=[(self: (int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null)[]) -> int throws never] tir=[((self: (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[]) -> int throws never) | null]
-    at ns_generic_union_returns/generic_union_returns.baml:1870..1888 `empty_json?.length`
 [1x] hir_ty=[(self: (int | null)[]) -> baml.iter.Iterator<Error = never, Item = int | null> throws never] tir=[() -> baml.iter.Iterator<Item = int | null, Error = never> throws never]
     at ns_iter/iter.baml:5804..5811 `xs.iter`
 [1x] hir_ty=[(self: B) -> A throws never] tir=[() -> A throws never]
@@ -2366,6 +2364,8 @@ panics: 0
     at ns_iter/iter.baml:14912..14945 `baml.iter.... 6).step_by`
 [1x] hir_ty=[(self: baml.iter.Repeat<int>) -> int[] throws never] tir=[() -> int[] throws never]
     at ns_iter/iter.baml:10461..10513 `baml.iter....3 }.collect`
+[1x] hir_ty=[(self: baml.json.json[]) -> int throws never] tir=[((self: (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[]) -> int throws never) | null]
+    at ns_generic_union_returns/generic_union_returns.baml:1870..1888 `empty_json?.length`
 [1x] hir_ty=[(self: baml.llm.Stream<string | null, string>) -> string throws baml.errors.Io | baml.errors.LlmClient] tir=[() -> string throws baml.errors.Io | baml.errors.LlmClient]
     at ns_streaming_parsing/streaming_parsing.baml:6143..6150 `s.final`
 [1x] hir_ty=[(self: baml.llm.Stream<user.streaming_parsing.Doc$stream | null, user.streaming_parsing.Doc>) -> user.streaming_parsing.Doc throws baml.errors.Io | baml.errors.LlmClient] tir=[() -> user.streaming_parsing.Doc throws baml.errors.Io | baml.errors.LlmClient]
@@ -2400,7 +2400,7 @@ panics: 0
     at ns_iter/iter.baml:3005..3023 `[3, 6, 9].for_each`
 [1x] hir_ty=[(self: int[], predicate: (int) -> bool throws string) -> bool throws string] tir=[(self: int[], predicate: (int) -> bool throws E) -> bool throws E]
     at ns_arrays/arrays.baml:22913..22927 `[1, 2, 3].some`
-[1x] hir_ty=[(self: map<string, int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null>) -> int throws never] tir=[((self: map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>) -> int throws never) | null]
+[1x] hir_ty=[(self: map<string, baml.json.json>) -> int throws never] tir=[((self: map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>) -> int throws never) | null]
     at ns_generic_union_returns/generic_union_returns.baml:1920..1936 `metadata?.length`
 [1x] hir_ty=[(self: map<string, int>, key: string) -> int | null throws never] tir=[(self: map<user.type_error_repro.TypeErrReproStrKey | user.type_error_repro.TypeErrReproStrKey, int>, key: user.type_error_repro.TypeErrReproStrKey | user.type_error_repro.TypeErrReproStrKey) -> int | null throws never]
     at ns_type_error_repro/type_error_repro.baml:20850..20860 `counts.get`

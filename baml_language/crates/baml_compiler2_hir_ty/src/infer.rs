@@ -2492,11 +2492,12 @@ impl<'db> InferenceContext<'db> {
                     .filter(|member| !matches!(member.kind(), TyKind::Null { .. }))
                     .cloned()
                     .collect();
-                if non_null.is_empty() {
-                    Ty::never()
-                } else {
-                    self.union_of(&non_null)
-                }
+                // Filtering never REWRITES the survivors (the
+                // `subtract_narrow` rule): the structural constructor
+                // keeps each member's identity - freshness included -
+                // so a fresh literal crossing a null test still widens
+                // at its eventual binding.
+                syntactic_union(&non_null)
             }
             _ => resolved,
         }
