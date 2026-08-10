@@ -277,6 +277,45 @@ fn format_float(value: f64) -> Option<String> {
     }
 }
 
+/// The STRUCTURAL third of union canonicalization, safe on
+/// var-carrying members: flatten nested unions, drop `never`, dedup
+/// identical members, collapse the empty union to `never` and the
+/// singleton to its member. rustc keeps aggregate constructors
+/// invariant-preserving the same way (a `dyn` existential-predicate
+/// list is sorted and deduped BY CONSTRUCTION), and TS's
+/// `getUnionType` flattens/dedups structurally before any semantic
+/// work. The SEMANTIC pieces - absorption, literal-into-base - stay
+/// with the oracle-consulting canonical path, which requires var-free
+/// input. Without the collapse, `Union([?0])` leaks into unification,
+/// whose union arm is positional - it could never unify with the
+/// solved member.
+fn syntactic_union(members: &[Ty]) -> Ty {
+    fn push(flat: &mut Vec<Ty>, ty: &Ty) {
+        match ty.kind() {
+            TyKind::Union(inner, _) => {
+                for member in inner.iter() {
+                    push(flat, member);
+                }
+            }
+            TyKind::Never { .. } => {}
+            _ => {
+                if !flat.contains(ty) {
+                    flat.push(ty.clone());
+                }
+            }
+        }
+    }
+    let mut flat: Vec<Ty> = Vec::new();
+    for member in members {
+        push(&mut flat, member);
+    }
+    match flat.len() {
+        0 => Ty::never(),
+        1 => flat.pop().expect("length checked"),
+        _ => Ty::union(flat),
+    }
+}
+
 /// Reduction budget for the finalize-time projection pass: bounds a
 /// reduction CHAIN (`(A as I).X` -> `(B as J).Y` -> ...), the same
 /// discipline as the canonical walk's fuel. Any real chain is far
@@ -1786,7 +1825,7 @@ impl<'db> InferenceContext<'db> {
     /// re-canonicalizes once every variable is solved or ruled an error.
     fn union_of(&mut self, members: &[Ty]) -> Ty {
         if members.iter().any(Ty::has_infer) {
-            return Ty::union(members.iter().cloned());
+            return syntactic_union(members);
         }
         canonical_union_interned(members, &self.facts)
     }
@@ -4666,5 +4705,36 @@ fn operand_members(ty: &Ty) -> Vec<Ty> {
     match ty.kind() {
         TyKind::Union(members, _) => members.iter().map(widen).collect(),
         _ => vec![widen(ty)],
+    }
+}
+
+#[cfg(test)]
+mod syntactic_union_tests {
+    use super::*;
+
+    fn union(members: &[Ty]) -> Ty {
+        Ty::union(members.iter().cloned())
+    }
+
+    #[test]
+    fn singleton_collapses_to_member() {
+        assert_eq!(syntactic_union(&[Ty::int()]), Ty::int());
+    }
+
+    #[test]
+    fn empty_collapses_to_never() {
+        assert_eq!(syntactic_union(&[]), Ty::never());
+    }
+
+    #[test]
+    fn never_members_drop() {
+        assert_eq!(syntactic_union(&[Ty::never(), Ty::int()]), Ty::int());
+    }
+
+    #[test]
+    fn nested_unions_flatten_and_dedup() {
+        let nested = union(&[Ty::int(), Ty::string()]);
+        let flat = syntactic_union(&[nested, Ty::int()]);
+        assert_eq!(flat, union(&[Ty::int(), Ty::string()]));
     }
 }

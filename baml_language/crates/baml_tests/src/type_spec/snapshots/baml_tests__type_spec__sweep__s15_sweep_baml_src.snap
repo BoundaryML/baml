@@ -2132,7 +2132,7 @@ panics: 0
     at ns_generic_union_returns/generic_union_returns.baml:1678..1695 `parsed.empty_json`
 [1x] hir_ty=[(int) -> int throws never] tir=[(n: int) -> int throws never]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:18744..18771 `(int) -> i...ows unknown`
-[1x] hir_ty=[(int[] | int[] | !error[])[]] tir=[(int[] | _[])[]]
+[1x] hir_ty=[(int[] | !error[])[]] tir=[(int[] | _[])[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:25408..25425 `[[1], [2, 3], []]`
 [1x] hir_ty=[(items: int[]) -> user.inferred_generic_type_args.ArrayCursor<int> throws never] tir=[(items: T[]) -> user.inferred_generic_type_args.ArrayCursor<T> throws never]
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:4206..4220 `ArrayCursor.of`
@@ -3228,7 +3228,7 @@ panics: 0
     at ns_patterns_new_runtime/patterns_new_runtime.baml:11496..11497 `v`
 [1x] hir_ty=[int[]] tir=[0[]]
     at ns_arrays/arrays.baml:35931..35954 `baml.Array.filled(2, 0)`
-[1x] hir_ty=[int[] | int[] | !error[]] tir=[int[] | never[]]
+[1x] hir_ty=[int[] | !error[]] tir=[int[] | never[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:25400..25404 `[..]`
 [1x] hir_ty=[int[] | unknown[]] tir=[unknown[] | int[]]
     at ns_match_container_types/match_container_types.baml:8553..8554 `u`

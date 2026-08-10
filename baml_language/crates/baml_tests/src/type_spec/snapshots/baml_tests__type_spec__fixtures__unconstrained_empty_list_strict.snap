@@ -12,8 +12,8 @@ expression: outcome.dump
 490..598 '{\n   ...tal\n}': int
 496..505 'let total': int
 508..509 '0': 0
-519..526 'let row': hir_ty=[int[] | int[] | !error[]] tir=[int[] | _[]]
-530..547 '[[1], ...], []]': hir_ty=[(int[] | int[] | !error[])[]] tir=[(int[] | _[])[]]
+519..526 'let row': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
+530..547 '[[1], ...], []]': hir_ty=[(int[] | !error[])[]] tir=[(int[] | _[])[]]
 531..534 '[1]': int[]
 532..533 '1': 1
 536..542 '[2, 3]': int[]
