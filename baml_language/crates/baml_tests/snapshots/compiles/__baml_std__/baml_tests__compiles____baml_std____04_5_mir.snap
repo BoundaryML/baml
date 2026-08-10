@@ -18,6 +18,8 @@ fn baml.Bigint.pow = builtin(vm)
 
 fn baml.Bigint.ilog = builtin(vm)
 
+fn baml.Bigint.to_int = builtin(vm)
+
 fn baml.Bigint.parse = builtin(vm)
 
 fn baml.Bigint.random = builtin(vm)
@@ -5970,6 +5972,8 @@ fn baml.json.path_or(j: int | float | string | bool | null | baml.json.json[] | 
     }
 }
 
+fn baml.json.schema = builtin(io)
+
 fn baml.json.serialize(v: T) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -8540,8 +8544,6 @@ fn baml.sap.parse_type(t: type, text: string) -> unknown {
     }
 }
 
-fn baml.schema.json_schema = builtin(io)
-
 fn baml.spawn.TaskGroup.new = builtin(vm)
 
 fn baml.spawn.TaskGroup.cancel = builtin(vm)
@@ -8788,8 +8790,6 @@ fn baml.sys.collect_garbage = builtin(io)
 fn baml.sys.panic = builtin(vm)
 
 fn baml.sys.exit = builtin(vm)
-
-fn baml.sys.now_ms = builtin(vm)
 
 fn baml.sys.argv = builtin(vm)
 

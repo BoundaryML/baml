@@ -47,7 +47,7 @@ spec.default_client  // the resolved default Client
 ```
 
 `output_type()` returns a runtime type value, usable with
-`baml.schema.json_schema` and `baml.sap.parse`. `client` is a keyword
+`baml.json.schema` and `baml.sap.parse`. `client` is a keyword
 and cannot be a method name, so the resolved default client is the
 `default_client` field.
 

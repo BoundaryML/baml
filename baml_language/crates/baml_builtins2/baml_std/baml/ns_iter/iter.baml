@@ -1,46 +1,94 @@
+/// A sentinel class returned by `baml.iter.Iterator.next` when there are no more elements to yield.
 class Done {}
 
+/// Implemented by types that can be iterated over.
 interface Iterable {
+  /// The type of the elements yielded by the iterator.
   type Item
+  /// The type of error that can be thrown by the iterator during iteration (`never` if the iterator does not throw).
   type Error = never
 
+  /// Creates an iterator over the value.
   function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
 }
 
+/// Implemented by types as a way to iterate over a sequence of values,
+/// often from some container.
 interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
+/// The type of the elements yielded by the iterator.
   type Item
+  /// The type of error that can be thrown by the iterator during iteration (`never` if the iterator does not throw).
   type Error = never
 
+  /// Advances the iterator and returns the next value.
+  /// Returns `baml.iter.Done` when iteration is finished.
   function next(self) -> Self.Item | Done throws Self.Error
 
+  /// Creates a new iterator which calls the provided function on each element.
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// and the provided function will not be called unless something calls `next` on the produced iterator.
   function map<R, E2>(self, fn: (Self.Item) -> R throws E2) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
     Map<Self.Item, R, Self.Error, E2> { source: self, func: fn }
   }
 
+  /// Creates a new iterator which uses the provided function to decide if an element should be yielded.
+  /// If the predicate returns `true` then the element is yielded, otherwise it will skip the element
+  /// and try the next one.
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// and the provided function will not be called unless something calls `next` on the produced iterator.
   function filter<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
     Filter<Self.Item, Self.Error, E2> { source: self, predicate: predicate }
   }
 
+  /// A combination of `baml.iter.Iterator.map` and `baml.iter.Iterator.filter`:
+  /// If the provided function returns `null` then the element will be skipped, otherwise the
+  /// produced iterator will yield the result of the provided function.
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// and the provided function will not be called unless something calls `next` on the produced iterator.
   function filter_map<R, E2>(self, fn: (Self.Item) -> R? throws E2) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
     FilterMap<Self.Item, R, Self.Error, E2> { source: self, func: fn }
   }
 
+  /// A combination of `baml.iter.Iterator.map` and `baml.iter.flatten`:
+  /// For each element in the original iterator, the provided function will be called to get some iterable object.
+  /// The produced iterator will then yield each element in that object's iterator and will only consume the
+  /// next element of the original iterator once the object's iterator is exhausted.
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// and the provided function will not be called unless something calls `next` on the produced iterator.
   function flat_map<R, E2, E3>(self, fn: (Self.Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Self.Error | E2 | E3> throws never {
     FlatMap<Self.Item, R, Self.Error, E2, E3> { source: self, func: fn, inner: Done {} }
   }
 
+  /// Creates a new iterator that will only yield every `n` elements of the original iterator.
+  /// For `n <= 1`, the new iterator will yield every element.
+  ///
+  /// Iterators are lazy (pull-based): the original iterator will not be advanced
+  /// unless something calls `next` on the produced iterator.
   function step_by(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
     StepBy<Self.Item, Self.Error> { source: self, n: n, first: true }
   }
 
+  /// Creates a new iterator that represents the concatenation of two iterators.
+  /// It will yield all elements in `self` then all elements in the iterator of `other`.
+  ///
+  /// Iterators are lazy (pull-based): the original iterators will not be advanced
+  /// unless something calls `next` on the produced iterator.
   function chain<E2>(self, other: Iterable<Item = Self.Item, Error = E2>) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
     Chain<Self.Item, Self.Error, E2> { first: self, other: other.iter(), first_done: false }
   }
 
+  /// Creates a new peekable iterator from this iterator.
   function peekable(self) -> Peekable<Self.Item, Self.Error> throws never {
     Peekable<Self.Item, Self.Error> { source: self, buffer: Done {}, has_buffer: false }
   }
 
+  /// Consumes the rest of this iterator and returns an array with all elements.
+  ///
+  /// Do not call this method on an infinite iterator as it will never terminate.
   function collect(self) -> Self.Item[] throws Self.Error {
     let r: Self.Item[] = [];
     while (true) {
@@ -52,6 +100,12 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     r
   }
 
+  /// Consumes the rest of this iterator and for each element, calls the provided function
+  /// with the provided accumulator.
+  ///
+  /// Do not call this method on an infinite iterator as it will never terminate.
+  ///
+  /// ALIASES: fold
   function reduce<A, E2>(self, fn: (A, Self.Item) -> A throws E2, initial: A) -> A throws Self.Error | E2 {
     let acc: A = initial;
     while (true) {
@@ -63,6 +117,9 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     acc
   }
 
+  /// Consumes the rest of this iterator and counts the number of elements.
+  ///
+  /// Do not call this method on an infinite iterator as it will never terminate.
   function count(self) -> int throws Self.Error {
     let n: int = 0;
     while (true) {
@@ -74,6 +131,9 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     n
   }
 
+  /// Consumes the rest of this iterator and calls the provided function on each element.
+  /// It is generally preferred to use a `for (.. in ..)` loop instead, but
+  /// this method may be useful at the end of a long chain of calls.
   function for_each<E2>(self, fn: (Self.Item) -> void throws E2) -> void throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
@@ -83,6 +143,10 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     }
   }
 
+  /// Returns `true` if the predicate returns `true` for any of the elements in the iterator.
+  /// Short circuiting: will only consume elements up to the first `true` result.
+  ///
+  /// ALIASES: any
   function some<E2>(self, predicate: (Self.Item) -> bool throws E2) -> bool throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
@@ -97,6 +161,10 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     false
   }
 
+  /// Returns `true` if the predicate returns `true` for all of the elements in the iterator.
+  /// Short circuiting: will only consume elements up to the first `false` result.
+  ///
+  /// ALIASES: all
   function every<E2>(self, predicate: (Self.Item) -> bool throws E2) -> bool throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
@@ -111,6 +179,8 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     true
   }
 
+  /// Returns the first element where the predicate returns `true`, or `null` if none do.
+  /// Short circuiting: will only consume elements up to the first `true` result.
   function find<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Self.Item? throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
@@ -130,6 +200,7 @@ function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(src: Iterat
   Flatten<I, R, E, E3> { source: src, inner: Done {} }
 }
 
+/// The iterator implementation for an array.
 class ArrayIterator<T> {
   arr: T[]
   idx: int
@@ -199,10 +270,13 @@ class Range {
   }
 }
 
+/// An iterator that returns the same value a specified number of times.
 class Repeat<T> {
   value: T
   count: int
 
+  /// Creates a new repeating iterator.
+  /// If `count` is negative (or not specified), it will repeat forever.
   function new(value: T, count: int = -1) -> Repeat<T> throws never {
     Repeat<T> { value: value, count: count }
   }

@@ -43,7 +43,7 @@ function search_flights(origin: string, destination: string, month: string) -> F
 The schema derives through reflection: `reflect.signature` reads the
 name, docstring, parameters, and defaults; positional parameters are
 required, defaulted parameters are optional, and parameter types lower
-through `baml.schema.json_schema`. The signature is simultaneously the
+through `baml.json.schema`. The signature is simultaneously the
 compile-time check, the schema, and the validator; nothing is declared
 twice.
 

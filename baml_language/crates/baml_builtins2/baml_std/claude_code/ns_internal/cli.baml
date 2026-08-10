@@ -49,7 +49,7 @@ function transcript_text(j: ai.Journal) -> string {
 // lets one CLI run return either the final result or BAML tool calls. T's
 // $defs lift to the envelope root so its $refs stay valid.
 function envelope_schema(output_type: type) -> map<string, unknown> {
-    let final_root = baml.json.from_json<map<string, unknown>>(baml.schema.json_schema(output_type));
+    let final_root = baml.json.from_json<map<string, unknown>>(baml.json.schema(output_type));
     let definitions = final_root.delete("$defs");
     let call_props: map<string, unknown> = {};
     let _ = call_props.set("id", _type_schema("string"));
@@ -235,7 +235,7 @@ function invoke(
     let schema = if (has_tools) {
         baml.json.to_json(envelope_schema(input.output_type))
     } else {
-        baml.schema.json_schema(input.output_type)
+        baml.json.schema(input.output_type)
     };
     let prompt_text = if (has_tools) {
         `${instructions}${transcript_text(input.journal)}${tool_protocol(input.toolbox)}`

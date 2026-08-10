@@ -156,11 +156,6 @@ function exit(code: int) -> never throws never {
   $rust_function
 }
 
-/// Returns the current time as milliseconds since the Unix epoch (UTC).
-function now_ms() -> int throws never {
-  $rust_function
-}
-
 //baml:mut_vm
 /// Returns the command-line arguments passed to the BAML program, as an array of strings.
 function argv() -> string[] throws never {

@@ -24,36 +24,42 @@
 /// `self + rhs`
 interface Add<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete;
+    /// The `+` operator.
     function add(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self - rhs`
 interface Subtract<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete;
+    /// The `-` operator.
     function sub(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self * rhs`
 interface Multiply<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete;
+    /// The `*` operator.
     function mul(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self / rhs`
 interface Divide<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete;
+    /// The `/` operator.
     function div(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self % rhs`
 interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete;
+    /// The `%` operator.
     function rem(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `-self`
 interface Negate requires root.Concrete {
     type Output extends root.Concrete;
+    /// The unary `-` operator.
     function neg(self) -> Self.Output throws never
 }
 

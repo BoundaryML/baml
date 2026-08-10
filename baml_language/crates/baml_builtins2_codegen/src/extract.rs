@@ -773,7 +773,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// Examples:
 /// - `"baml.Array.length"` → `"baml_array_length"`
 /// - `"baml.deep_copy"` → `"baml_deep_copy"`
-/// - `"baml.sys.now_ms"` → `"baml_sys_now_ms"`
+/// - `"baml.sys.argv"` → `"baml_sys_argv"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
     path.replace('.', "_").to_lowercase()
@@ -1172,7 +1172,7 @@ mod tests {
     fn test_path_to_fn_name() {
         assert_eq!(path_to_fn_name("baml.Array.length"), "baml_array_length");
         assert_eq!(path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
-        assert_eq!(path_to_fn_name("baml.sys.now_ms"), "baml_sys_now_ms");
+        assert_eq!(path_to_fn_name("baml.sys.argv"), "baml_sys_argv");
         assert_eq!(path_to_fn_name("baml.media.Pdf.url"), "baml_media_pdf_url");
         assert_eq!(path_to_fn_name("baml.Array.push"), "baml_array_push");
     }

@@ -15,7 +15,8 @@
 //
 // Throw types (from crates/bex_vm/src/package_baml/bigint.rs):
 //   parse invalid/empty                  -> baml.errors.ParseError
-//   isqrt negative, ilog domain, random  -> baml.errors.InvalidArgument
+//   isqrt negative, ilog domain, random,
+//   to_int out of range                  -> baml.errors.InvalidArgument
 //   div/mod by zero                      -> baml.panics.DivisionByZero
 //   negative bit shift                   -> baml.panics.NegativeBitShift
 //   pow/shl/mul oversize                 -> baml.panics.AllocFailure
@@ -391,6 +392,60 @@ test "bigint_ilog_base_one_throws" {
     {
         (10n).ilog(1n);
         baml.sys.panic("expected (10n).ilog(1n) to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+// ─── to_int ───────────────────────────────────────────────────────────────────
+
+test "bigint_to_int_positive" {
+    assert.is_true(baml.deep_equals((42n).to_int(), 42))
+}
+
+test "bigint_to_int_negative" {
+    assert.is_true(baml.deep_equals((-7n).to_int(), -7))
+}
+
+test "bigint_to_int_zero" {
+    assert.is_true(baml.deep_equals((0n).to_int(), 0))
+}
+
+// int is 63-bit signed, so the boundaries are ±2^62 — narrower than a machine
+// 64-bit integer's. Both ends must round-trip exactly.
+test "bigint_to_int_at_max_value" {
+    assert.is_true(baml.deep_equals((4611686018427387903n).to_int(), int.max_value()))
+}
+
+test "bigint_to_int_at_min_value" {
+    assert.is_true(baml.deep_equals((-4611686018427387904n).to_int(), int.min_value()))
+}
+
+// One past each boundary: these still fit an i64, so they exercise the i63
+// range check rather than the i64 conversion.
+test "bigint_to_int_above_max_throws" {
+    {
+        (4611686018427387904n).to_int();
+        baml.sys.panic("expected (4611686018427387904n).to_int() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "bigint_to_int_below_min_throws" {
+    {
+        (-4611686018427387905n).to_int();
+        baml.sys.panic("expected (-4611686018427387905n).to_int() to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+// Far past i64 as well, exercising the conversion failure itself.
+test "bigint_to_int_far_out_of_range_throws" {
+    {
+        (10n).pow(30n).to_int();
+        baml.sys.panic("expected (10n).pow(30n).to_int() to throw")
     } catch (e) {
         baml.errors.InvalidArgument => null
     }

@@ -139,7 +139,7 @@ baml.env
 └── get(name) / get_or_panic(name)        credential resolution in registry factories
 ```
 
-`tool()` derives each `Tool.input_schema` with `baml.schema.json_schema`
+`tool()` derives each `Tool.input_schema` with `baml.json.schema`
 over the signature; `wire.render_output_format` lowers the same schema into
 prompt text; `wire.send_as<T>` wraps `baml.http.send` with status
 classification and typed decoding of the response body, with

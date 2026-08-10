@@ -386,7 +386,7 @@ BEP:
 
 | Primitive | Used by |
 |---|---|
-| `baml.schema.json_schema(t: type) -> json` | `tool()` schema derivation, `wire.render_output_format`, custom clients |
+| `baml.json.schema(t: type) -> json` | `tool()` schema derivation, `wire.render_output_format`, custom clients |
 | `baml.sap.parse<T>(text: string) -> T` | the runner's final parse; custom runners |
 | `baml.json.parse` / `stringify` / `from_json<T>` / `from_string<T>` | clients, everywhere JSON crosses a boundary |
 | `baml.http.Request` / `Response` / `send` / `fetch_sse` | `wire.send_as`; clients that bypass it; streaming later |

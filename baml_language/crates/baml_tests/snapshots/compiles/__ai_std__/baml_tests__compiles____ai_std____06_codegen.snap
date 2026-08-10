@@ -2283,7 +2283,7 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     store_var _12
     load_var a
     load_field .type
-    sys_op baml.schema.json_schema
+    sys_op baml.json.schema
     store_var _13
     load_type string
     load_type unknown

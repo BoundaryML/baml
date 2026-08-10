@@ -63,7 +63,7 @@ the `T | ToolCalls` envelope travels inside the native schema.
 - Every tool schema on this page derives from one source.
   `reflect.signature(search_flights)` supplies the name, the docstring
   as the description, and the parameters with their types and
-  defaults; `baml.schema.json_schema` lowers the types into
+  defaults; `baml.json.schema` lowers the types into
   `Tool.input_schema`. A client only reshapes that
   field into its wire format — the three `parameters` /
   `input_schema` / `parametersJsonSchema` bodies below are the same

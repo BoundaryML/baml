@@ -65,7 +65,7 @@ message, lower the instructions as the sole user message on that turn.
 ## Lowering tools
 
 Each `Tool` carries its `input_schema`, derived from the signature
-through `baml.schema.json_schema` when the tool is constructed. Your
+through `baml.json.schema` when the tool is constructed. Your
 render function reads the field and wraps it in the wire API's shape. If the API constrains schemas —
 closed objects, all-required properties — apply the shared rewrites
 (`wire.closed_schema`, `wire.strict_schema`) rather than writing a
@@ -103,7 +103,7 @@ rewrite:
 | `closed_schema(s)` | `additionalProperties: false` recursively, `required` preserved |
 | `strict_schema(s)` | closed plus every property required |
 
-The helpers sit on `baml.schema.json_schema` and `baml.http`; a client
+The helpers sit on `baml.json.schema` and `baml.http`; a client
 that needs different behavior drops to those primitives. What remains
 per-client is exactly what differs by design: the wire shapes, the
 role mapping, and the API's structured-output mechanism.

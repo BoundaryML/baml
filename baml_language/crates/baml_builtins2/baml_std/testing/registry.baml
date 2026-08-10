@@ -239,10 +239,16 @@ class TestRegistry {
     match (self.expansions.get(ts.name)) {
       let existing: TestRegistry => existing,
       null => {
-        let start = baml.sys.now_ms()
+        let start = baml.time.Instant.now()
         let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] }
         ts.collector(sub_collector)
-        let elapsed = baml.sys.now_ms() - start
+        // `loading_time_ms` is an `int`, so narrowing the bigint millisecond
+        // count is declared fallible. An expansion would have to run for
+        // ~146 million years to leave `int`'s range; there is no honest
+        // duration to report if it somehow did.
+        let elapsed = start.elapsed().to_milliseconds().to_int() catch (_) {
+          baml.errors.InvalidArgument { message } => baml.sys.panic("testing: expansion duration: " + message),
+        }
         let sub_registry = TestRegistry {
           collector: sub_collector,
           expansions: {},
@@ -409,7 +415,7 @@ function run_children_parallel(children: TestSetChild[]) -> TestSetReport throws
 // Run a single test with error handling and optional runner middleware.
 function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
   let base_run: TestReportThunk = () -> TestReport {
-    let start = baml.sys.now_ms()
+    let start = baml.time.Instant.now()
     let result = {
       body()
       RunReport { outcome: "pass", duration_ms: 0, message: null }
@@ -427,9 +433,14 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
         RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
       }
     }
+    // `duration_ms` is an `int`; see the note in expand_testset_registry for
+    // why narrowing the bigint millisecond count cannot fail here.
+    let duration = start.elapsed().to_milliseconds().to_int() catch (_) {
+      baml.errors.InvalidArgument { message } => baml.sys.panic("testing: test duration: " + message),
+    }
     TestReport {
       outcome: result.outcome,
-      runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start, message: result.message }],
+      runs: [RunReport { outcome: result.outcome, duration_ms: duration, message: result.message }],
     }
   }
   match (runner) {

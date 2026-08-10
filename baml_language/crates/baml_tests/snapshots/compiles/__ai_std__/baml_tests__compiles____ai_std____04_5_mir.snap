@@ -350,7 +350,7 @@ fn ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown
         _10 = copy _9;
         _12 = copy _10.0;
         _14 = copy _10.1;
-        _13 = sys_op const fn baml.schema.json_schema(copy _14) -> bb5;
+        _13 = sys_op const fn baml.json.schema(copy _14) -> bb5;
     }
 
     bb5: {

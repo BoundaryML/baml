@@ -266,7 +266,7 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
     let required: string[] = [] : string[]
     for a in sig.args
       { : void
-        let _ = props.set(a.name, baml.schema.json_schema(a.type)) : unknown | null
+        let _ = props.set(a.name, baml.json.schema(a.type)) : unknown | null
         required.push(a.name) : int
       }
     let schema: map<string, unknown> = map {  } : map<string, unknown>

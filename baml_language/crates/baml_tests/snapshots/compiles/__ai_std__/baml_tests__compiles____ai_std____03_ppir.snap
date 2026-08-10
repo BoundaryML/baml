@@ -227,7 +227,7 @@ class ai.internal.SpecCtx$stream {
   output_format: string | null
 }
 function ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown>  [expr] {
-  { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.schema.json_schema(a.type)); required.push(a.name) }; let schema: map<string, unknown> = map {  }; let _ = schema.set("type", "object"); let _ = schema.set("properties", props); let _ = schema.set("required", required); let _ = schema.set("additionalProperties", false) } schema
+  { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.json.schema(a.type)); required.push(a.name) }; let schema: map<string, unknown> = map {  }; let _ = schema.set("type", "object"); let _ = schema.set("properties", props); let _ = schema.set("required", required); let _ = schema.set("additionalProperties", false) } schema
 }
 
 --- <builtin>/ai/ns_mcp/mcp.baml ---

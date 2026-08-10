@@ -8,6 +8,7 @@
 // Two `Fns` classes can't both be imported (no import aliases in Java), so
 // they are fully qualified at the call site.
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -28,12 +29,15 @@ class TestStdlibEntrypoints {
         return Files.readString(path);
     }
 
-    // `baml.sys.now_ms() -> int` is a `$rust_function` -> `FunctionKind::Native`.
-    // Calling it as an entry point should run the native and return a positive
-    // millisecond timestamp, not reject with `NotInvokableAsEntry`.
+    // `baml.sys.argv() -> string[]` is a `$rust_function` ->
+    // `FunctionKind::Native`. Calling it as an entry point should run the
+    // native and return the argument list, not reject with
+    // `NotInvokableAsEntry`. The fixture host passes no program arguments, so
+    // the contents are not worth asserting on — that the call lands and
+    // returns a list is.
     @Test
-    void test_stdlib_entrypoints_native_now_ms_callable_as_entry_point() {
-        assertTrue(baml_sdk.baml.sys.Fns.now_ms() > 0);
+    void test_stdlib_entrypoints_native_argv_callable_as_entry_point() {
+        assertNotNull(baml_sdk.baml.sys.Fns.argv());
     }
 
     // `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` ->

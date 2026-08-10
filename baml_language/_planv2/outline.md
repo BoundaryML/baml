@@ -229,7 +229,7 @@ _planv2/
 - Lowering the journal — roles, tool results by call id, foreign
   clients' turns from canonical blocks, synthesized call ids.
 - The wire library — `send_as<T>`, classification, schema walkers
-  layered over `baml.schema.json_schema` and `baml.http`; what stays
+  layered over `baml.json.schema` and `baml.http`; what stays
   per-client; dropping to the primitives.
 - Testing a client — literal journals in, turns out; `ScriptedClient`
   for loop tests.
@@ -332,7 +332,7 @@ entry notes the task.
 - `clients` — registry functions, built-in clients, wrappers.
 - `wire` — each helper, signature, behavior.
 - `errors` — the `ai.errors` namespace: the interface, `RetrySafety`, each class.
-- Standard library dependencies — `baml.schema.json_schema`,
+- Standard library dependencies — `baml.json.schema`,
   `baml.sap.parse`, `baml.json`, `baml.http`, `reflect`, `baml.env`;
   which layer uses each and where the `wire` helpers sit above them.
 
