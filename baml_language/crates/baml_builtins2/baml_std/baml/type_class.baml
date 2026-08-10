@@ -45,7 +45,7 @@ class TypeValue {
     //baml:vm
     function as_function(self) -> baml.reflect.function.Type? throws never { $rust_function }
 
-    /// Internal shared-render-boundary guard for BEP-066 R-1.
+    /// Internal shared-render-boundary guard for BEP-066 R-1 and R-3.
     //baml:mut_vm
     function _validate_renderable(self) -> void throws baml.reflect.errors.CompilationError {
         $rust_function
