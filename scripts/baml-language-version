@@ -35,6 +35,17 @@ NPM_PACKAGES = (NODE_PACKAGE, WEB_PACKAGE)
 GO_RUNTIME_VERSION = ROOT / "baml_language" / "sdks" / "go" / "baml_go" / "version.go"
 RUST_BRIDGE_VERSION_RS = ROOT / "baml_language" / "sdks" / "rust" / "bridge_rust" / "src" / "version.rs"
 RUST_BRIDGE_CARGO_TOML = ROOT / "baml_language" / "sdks" / "rust" / "bridge_rust" / "Cargo.toml"
+RUBY_BRIDGE_VERSION = (
+    ROOT
+    / "baml_language"
+    / "sdks"
+    / "ruby"
+    / "bridge_ruby"
+    / "lib"
+    / "baml"
+    / "bridge"
+    / "version.rb"
+)
 WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
 CSHARP_PROJECT = (
     ROOT
@@ -677,6 +688,16 @@ def stamp(plan: ReleasePlan) -> None:
         r'^version = ".*"$',
         f'version = "{plan.crates_io_version}"',
     )
+    replace_regex(
+        RUBY_BRIDGE_VERSION,
+        r'^    TOOLCHAIN_VERSION = ".*"$',
+        f'    TOOLCHAIN_VERSION = "{plan.canonical_version}"',
+    )
+    replace_regex(
+        RUBY_BRIDGE_VERSION,
+        r'^    BRIDGE_RUNTIME_VERSION = ".*"$',
+        f'    BRIDGE_RUNTIME_VERSION = "{plan.canonical_version}"',
+    )
     replace_json_version(VSIX_PACKAGE, plan.canonical_version)
     for package in NPM_PACKAGES:
         if package.exists():
@@ -877,6 +898,16 @@ def check_release() -> None:
             RUST_BRIDGE_CARGO_TOML,
             r'^version = "([^"]+)"$',
             expected.crates_io_version,
+        ),
+        "ruby toolchain version": exact_regex_field(
+            RUBY_BRIDGE_VERSION,
+            r'^    TOOLCHAIN_VERSION = "([^"]+)"$',
+            expected.canonical_version,
+        ),
+        "ruby bridge runtime version": exact_regex_field(
+            RUBY_BRIDGE_VERSION,
+            r'^    BRIDGE_RUNTIME_VERSION = "([^"]+)"$',
+            expected.canonical_version,
         ),
         "vsix package version": (
             json_version(VSIX_PACKAGE) == expected.canonical_version

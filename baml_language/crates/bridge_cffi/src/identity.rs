@@ -17,6 +17,7 @@ pub enum BridgeLanguage {
     Java = 7,
     Swift = 8,
     Web = 9,
+    Ruby = 10,
 }
 
 impl BridgeLanguage {
@@ -24,7 +25,7 @@ impl BridgeLanguage {
         self,
     ) -> bex_project::InboundUnionAmbiguityPolicy {
         match self {
-            Self::NodeJs | Self::Python | Self::Web => {
+            Self::NodeJs | Self::Python | Self::Web | Self::Ruby => {
                 bex_project::InboundUnionAmbiguityPolicy::SelectDefault
             }
             Self::Go | Self::Rust | Self::CSharp | Self::Cpp | Self::Java | Self::Swift => {
@@ -44,6 +45,7 @@ impl BridgeLanguage {
             Self::Java => "java",
             Self::Swift => "swift",
             Self::Web => "web",
+            Self::Ruby => "ruby",
         }
     }
 
@@ -58,6 +60,7 @@ impl BridgeLanguage {
             Self::Java => "Java",
             Self::Swift => "Swift",
             Self::Web => "Web",
+            Self::Ruby => "Ruby",
         }
     }
 
@@ -73,6 +76,7 @@ impl BridgeLanguage {
             Self::Java => "com.boundaryml:baml-bridge",
             Self::Swift => "baml-swift",
             Self::Web => "@boundaryml/baml-bridge-web",
+            Self::Ruby => "Baml::Bridge",
         }
     }
 }
@@ -91,6 +95,7 @@ impl TryFrom<u32> for BridgeLanguage {
             7 => Ok(Self::Java),
             8 => Ok(Self::Swift),
             9 => Ok(Self::Web),
+            10 => Ok(Self::Ruby),
             _ => Err(format!("unknown BAML bridge language ID {value}")),
         }
     }
@@ -217,5 +222,16 @@ mod tests {
         let error = registry.register(info(BridgeLanguage::Python)).unwrap_err();
         assert!(error.contains("already registered by @boundaryml/baml-bridge"));
         assert!(error.contains("cannot also register baml-bridge"));
+    }
+
+    #[test]
+    fn ruby_identity_is_stable_and_uses_dynamic_union_selection() {
+        assert_eq!(BridgeLanguage::try_from(10), Ok(BridgeLanguage::Ruby));
+        assert_eq!(BridgeLanguage::Ruby.telemetry_name(), "ruby");
+        assert_eq!(BridgeLanguage::Ruby.legacy_runtime_name(), "Baml::Bridge");
+        assert_eq!(
+            BridgeLanguage::Ruby.inbound_union_ambiguity_policy(),
+            bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
+        );
     }
 }

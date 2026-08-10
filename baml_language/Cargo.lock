@@ -6675,6 +6675,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk_test_ruby_sorbet"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+]
+
+[[package]]
 name = "sdk_test_rust"
 version = "0.1.0"
 dependencies = [

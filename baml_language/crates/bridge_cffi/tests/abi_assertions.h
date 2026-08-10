@@ -50,7 +50,11 @@ BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_PYTHON == 2, "language discriminant drif
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_GO == 3, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_RUST == 4, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_C_SHARP == 5, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_CPP == 6, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_JAVA == 7, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_SWIFT == 8, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_WEB == 9, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_RUBY == 10, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_UNSPECIFIED == 0, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_IMAGE == 1, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_AUDIO == 2, "media discriminant drifted");

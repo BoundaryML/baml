@@ -330,15 +330,20 @@ mod tests {
             BridgeLanguage::NodeJs.inbound_union_ambiguity_policy(),
             SelectDefault
         );
-        assert_eq!(
-            BridgeLanguage::Python.inbound_union_ambiguity_policy(),
-            SelectDefault
-        );
+        for language in [
+            BridgeLanguage::Python,
+            BridgeLanguage::Web,
+            BridgeLanguage::Ruby,
+        ] {
+            assert_eq!(language.inbound_union_ambiguity_policy(), SelectDefault);
+        }
         for language in [
             BridgeLanguage::Go,
             BridgeLanguage::Rust,
             BridgeLanguage::CSharp,
             BridgeLanguage::Cpp,
+            BridgeLanguage::Java,
+            BridgeLanguage::Swift,
         ] {
             assert_eq!(language.inbound_union_ambiguity_policy(), Reject);
         }
