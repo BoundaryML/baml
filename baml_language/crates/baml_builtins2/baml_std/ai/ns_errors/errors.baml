@@ -87,6 +87,19 @@ class ToolFailedError {
     }
 }
 
+// The selected client cannot stream: it does not implement
+// ai.StreamingClient. Thrown by ai.stream_spec when the spec's default
+// client lacks the capability (an explicit override is caught at the call
+// site by its StreamingClient type).
+class StreamingUnsupported {
+    client_id: string,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
 // HTTP status -> classified failure. The classifier attaches the body it
 // received as raw_body, so a failure always carries what the provider said.
 function classify_http(provider: string, status_code: int, body: string) -> Failure {

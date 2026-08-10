@@ -180,6 +180,16 @@ function google_render(
     c: root.GoogleClient,
     input: ai.ModelTurnInput,
 ) -> baml.http.Request {
+    _google_request(c, input, false)
+}
+
+// The shared request builder: identical body for both paths; streaming
+// swaps the method for `:streamGenerateContent?alt=sse`.
+function _google_request(
+    c: root.GoogleClient,
+    input: ai.ModelTurnInput,
+    stream: bool,
+) -> baml.http.Request {
     let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
     let lowered = google_lower_journal(input.journal);
     let body: map<string, unknown> = {};
@@ -215,9 +225,14 @@ function google_render(
     } else {
         null
     };
+    let method = if (stream) {
+        ":streamGenerateContent?alt=sse"
+    } else {
+        ":generateContent"
+    };
     baml.http.Request {
         method: "POST",
-        url: `${c.base_url ?? "https://generativelanguage.googleapis.com/v1beta"}/models/${c.model}:generateContent`,
+        url: `${c.base_url ?? "https://generativelanguage.googleapis.com/v1beta"}/models/${c.model}${method}`,
         headers: {
             "x-goog-api-key": c.api_key ?? baml.env.get_or_panic("GOOGLE_API_KEY"),
             "content-type": "application/json",
@@ -294,4 +309,87 @@ function invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.ModelTurn 
     let req = google_render(c, input);
     let resp = ai.send_as<GmResponse>(req, "google");
     google_parse(resp, seq)
+}
+
+// ---------------------------------------------------------------------------
+// Streaming (`:streamGenerateContent?alt=sse`).
+//
+// Wire chunks observed: each SSE `data:` payload is a GmResponse fragment;
+// text deltas ride in candidates[0].content.parts[].text, the last chunk
+// carries finishReason, and usageMetadata (cumulative) appears on chunks.
+// There is no explicit terminal event: the stream simply closes.
+
+// One SseStream batch -> provider-agnostic stream events.
+function _google_decode_batch(batch: string) -> ai.StreamEvent[] {
+    let out: ai.StreamEvent[] = [];
+    for (let raw in ai.decode_sse_batch(batch)) {
+        if let data: string = raw.data {
+            let chunk: GmResponse? = baml.json.from_string<GmResponse>(data) catch_all (e) {
+                _ => null,
+            };
+            if let resp: GmResponse = chunk {
+                let cand: GmCandidate? = resp.candidates?.at(0);
+                let parts: GmPart[] = cand?.content?.parts ?? [];
+                for (let p in parts) {
+                    if let t: string = p.text {
+                        if (p.thought ?? false) {
+                            null
+                        } else {
+                            out.push(ai.TextDelta { text: t });
+                            null
+                        }
+                    } else {
+                        null
+                    };
+                }
+                let finish = cand?.finishReason ?? "";
+                let blocked = resp.promptFeedback?.blockReason != null;
+                let stop: ai.StopReason? = if (finish == "MAX_TOKENS") {
+                    ai.StopReason.MaxTokens
+                } else if (blocked || finish == "SAFETY" || finish == "RECITATION" || finish == "PROHIBITED_CONTENT") {
+                    ai.StopReason.Refused
+                } else if (finish != "") {
+                    ai.StopReason.Complete
+                } else {
+                    null
+                };
+                let usage: GmUsageMetadata? = resp.usageMetadata;
+                if (stop != null || usage != null) {
+                    out.push(
+                        ai.TurnMeta {
+                            stop_reason: stop,
+                            input_tokens: usage?.promptTokenCount,
+                            output_tokens: usage?.candidatesTokenCount,
+                        },
+                    );
+                    null
+                } else {
+                    null
+                };
+                null
+            } else {
+                null
+            };
+            null
+        } else {
+            null
+        };
+    }
+    out
+}
+
+// The streaming entry point: the same request body as `invoke` against the
+// `:streamGenerateContent?alt=sse` method, wrapped in an ai.TurnStream.
+function invoke_stream(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.TurnStream {
+    let req = _google_request(c, input, true);
+    let sse = baml.http.fetch_sse(req) catch_all (e) {
+        _ => {
+            throw ai.errors.NetworkFailure {
+                provider: "google",
+                detail: `transport failed before a response arrived: ${e.to_string()}`,
+                raw_body: null,
+            }
+        },
+    };
+    ai.TurnStream.from_sse(sse, _google_decode_batch)
 }

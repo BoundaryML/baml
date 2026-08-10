@@ -26,4 +26,10 @@ class GoogleClient {
             root.internal.invoke(self, input)
         }
     }
+
+    implements ai.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.TurnStream {
+            root.internal.invoke_stream(self, input)
+        }
+    }
 }

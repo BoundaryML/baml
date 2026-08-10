@@ -787,7 +787,27 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         prompt,
         // Filled in by the LLM-function branch once param names are known.
         companion_bodies: Vec::new(),
+        has_tools: llm_tools_present(llm_body),
         span,
+    }
+}
+
+/// Whether the `tools` field can hold tools at runtime. An absent field and
+/// the literal empty list (`tools []`) are tool-less; a non-empty literal or
+/// any other expression is conservatively tools-bearing (an arbitrary
+/// expression may evaluate empty, but that is only known at runtime).
+fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
+    match tools_value_element(llm_body) {
+        None => false,
+        Some(rowan::NodeOrToken::Node(node)) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
+            // Elements are expression nodes or bare-identifier tokens.
+            node.children().next().is_some()
+                || node
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|t| lower_expr_body::is_ident_token(t.kind()))
+        }
+        Some(_) => true,
     }
 }
 

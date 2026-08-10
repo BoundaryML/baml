@@ -42,7 +42,7 @@ pub struct EnvVarRef {
 /// `dog_t.implements(animal_t)` on the reflection `type` value. This must
 /// match exactly what `parse_path_or_ident` / `at_member_name` accept in the
 /// parser; adding a new keyword there requires adding it here too.
-fn is_ident_token(kind: SyntaxKind) -> bool {
+pub(crate) fn is_ident_token(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::WORD
@@ -880,6 +880,72 @@ pub(crate) fn synthesize_spec_agent_run_body(
     );
 
     let (body, source_map, _diags, _env_refs) = ctx.finish(Some(value));
+    (body, source_map)
+}
+
+/// Synthesize the `$stream` companion body (built at PPIR level, where the
+/// stream-expanded return type is known) — one-turn streaming over the
+/// function's own spec:
+///
+/// ```baml
+/// ai.stream_spec<Out$stream, Out>(Fn$spec(p1, p2), client = client)
+/// ```
+///
+/// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
+/// stdlib reifies both types from its own frame via `reflect.type_of`.
+/// `client` is the companion's injected `ai.StreamingClient? = null`
+/// override; `stream_spec` falls back to the spec's default client when it
+/// is null.
+pub fn synthesize_spec_stream_body(
+    function_name: &str,
+    param_names: &[Name],
+    type_args: Vec<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+
+    // Fn$spec(p1, p2, ...)
+    let spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$spec"))]),
+        span,
+    );
+    let spec_args: Vec<CallArg> = param_names
+        .iter()
+        .map(|n| {
+            let id = ctx.alloc_expr(Expr::Path(vec![n.clone()]), span);
+            CallArg::positional(id)
+        })
+        .collect();
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: vec![],
+            args: spec_args,
+        },
+        span,
+    );
+
+    // ai.stream_spec<TS, TF>(spec, client = client)
+    let stream_spec_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new("ai"), Name::new("stream_spec")]),
+        span,
+    );
+    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee: stream_spec_callee,
+            type_args,
+            args: vec![
+                CallArg::positional(spec_call),
+                CallArg::named("client", client_ref),
+            ],
+        },
+        span,
+    );
+
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
     (body, source_map)
 }
 

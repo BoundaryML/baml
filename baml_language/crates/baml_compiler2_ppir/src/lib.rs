@@ -367,10 +367,131 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
             }
-            // LLM `$stream` companions return here with the single-path
-            // StreamingClient design; the legacy `baml.llm` companion set
-            // ($stream/$parse_stream over call_llm_function plumbing) is gone.
-            ast::Item::Function(_) => continue,
+            // LLM `$stream` companions, single-path StreamingClient design:
+            // `Fn$stream(args, client)` = one-turn streaming over the
+            // function's own spec, returning the typed partial stream
+            // `ai.Stream<Out$stream, Out>`. Synthesized here (not with the
+            // AST-level companions) because the body's explicit type args
+            // need the stream-expanded return type, which only PPIR can
+            // compute. Tools-bearing functions get no `$stream`: streaming
+            // does not run the tool loop yet (`LlmBodyDef::has_tools` is the
+            // conservative compile-time signal; `ai.stream_spec` re-checks
+            // the toolbox at runtime for the dynamic cases).
+            ast::Item::Function(func) => {
+                let Some(ast::DeclarativeMeta::Llm(llm)) = &func.declarative_meta else {
+                    continue;
+                };
+                if !llm.companion_bodies.iter().any(|(t, _)| t == "spec") {
+                    continue;
+                }
+                if llm.has_tools {
+                    continue;
+                }
+                // Skip companions (contain $) to avoid recursive generation.
+                if func.name.contains('$') {
+                    continue;
+                }
+                let Some(ref return_type_spanned) = func.return_type else {
+                    continue;
+                };
+
+                // Compute the stream-expanded return type.
+                let ppir_ty = PpirTy::from_type_expr(return_type_spanned);
+                let ctx = ExpandCtx {
+                    package_name: &package_name,
+                    namespace_path: &pkg_info.namespace_path,
+                    package_items,
+                    all_package_items: &all_package_items,
+                    block_attrs,
+                    alias_bodies,
+                };
+                let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, &ctx);
+                let stream_type_expr = stream_type.to_type_expr();
+
+                // Share the parent function's span — same as AST-level companions.
+                let span = func.span;
+                let name_span = func.name_span;
+
+                // The `<STREAM_EXPANDED, ORIGINAL>` pair: the return type
+                // `ai.Stream<TS, TF>` and the body's explicit call-site type
+                // args on `ai.stream_spec`, so the stdlib reifies both types
+                // from its own frame (`reflect.type_of<TStream/TFinal>()`).
+                let companion_type_args =
+                    vec![stream_type_expr, return_type_spanned.clone()];
+                let return_type = ast::TypeExprKind::Path {
+                    segments: vec![Name::new("ai"), Name::new("Stream")],
+                    generic_args: companion_type_args.clone(),
+                    associated_type_bindings: vec![],
+                    attrs: vec![],
+                }
+                .at(span);
+
+                // Params: the parent's own params plus its injected trailing
+                // `client` override, retyped to the streaming capability
+                // (`ai.StreamingClient? = null`) so passing a non-streaming
+                // client fails at the call site. The parent's `null` default
+                // is reused (the defaults arena is cloned as-is).
+                let params: Vec<ast::Param> = func
+                    .params
+                    .iter()
+                    .cloned()
+                    .map(|mut p| {
+                        if p.name.as_str() == "client" {
+                            let capability = ast::TypeExprKind::Path {
+                                segments: vec![
+                                    Name::new("ai"),
+                                    Name::new("StreamingClient"),
+                                ],
+                                generic_args: vec![],
+                                associated_type_bindings: vec![],
+                                attrs: vec![],
+                            }
+                            .at(span);
+                            p.type_expr = Some(
+                                ast::TypeExprKind::Optional {
+                                    inner: Box::new(capability),
+                                    attrs: vec![],
+                                }
+                                .at(span),
+                            );
+                        }
+                        p
+                    })
+                    .collect();
+
+                let param_names: Vec<Name> = func
+                    .params
+                    .iter()
+                    .filter(|p| p.name.as_str() != "client")
+                    .map(|p| p.name.clone())
+                    .collect();
+                let (body, source_map) = ast::synthesize_spec_stream_body(
+                    func.name.as_str(),
+                    &param_names,
+                    companion_type_args,
+                    span,
+                );
+
+                let companion = ast::FunctionDef {
+                    name: SmolStr::new(format!("{}$stream", func.name)),
+                    generic_params: func.generic_params.clone(),
+                    params,
+                    defaults: func.defaults.clone(),
+                    return_type: Some(return_type),
+                    throws: None,
+                    body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
+                    declarative_meta: None,
+                    metadata: ast::FunctionMetadata::user_facing(
+                        ast::FunctionOrigin::Companion,
+                    ),
+                    is_tagged_template_tag: func.is_tagged_template_tag,
+                    attributes: vec![],
+                    docstring: func.docstring.clone(),
+                    span,
+                    name_span,
+                };
+                synthetic_items.push(ast::Item::Function(companion));
+            }
             _ => {}
         }
     }

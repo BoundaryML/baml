@@ -1220,9 +1220,12 @@ fn package_lowering_data<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> PackageLoweringData {
-    use baml_compiler2_hir::package::{
-        package_dependencies, package_dependency_closure, package_items,
-    };
+    use baml_compiler2_hir::package::{package_dependencies, package_dependency_closure};
+    // The canonical (PPIR) item view: includes synthesized `*$stream` classes,
+    // whose fields must be projectable like any other class's. TIR already
+    // resolves types against this view; using HIR's pre-expansion view here
+    // made MIR ICE on field access against a `$stream` partial.
+    use baml_compiler2_ppir::package_items;
 
     let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
 

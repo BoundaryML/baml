@@ -96,6 +96,16 @@ function openai_render(
     c: root.OpenAiClient,
     input: ai.ModelTurnInput,
 ) -> baml.http.Request {
+    _openai_request(c, input, false)
+}
+
+// The shared request builder: identical body for both paths, plus the
+// `stream: true` flag on the streaming one.
+function _openai_request(
+    c: root.OpenAiClient,
+    input: ai.ModelTurnInput,
+    stream: bool,
+) -> baml.http.Request {
     let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
     let items = openai_lower_journal(input.journal);
     let body: map<string, unknown> = {};
@@ -126,6 +136,12 @@ function openai_render(
         }
         let _ = body.set("tools", tools);
         let _ = body.set("tool_choice", "auto");
+        null
+    } else {
+        null
+    };
+    if (stream) {
+        let _ = body.set("stream", true);
         null
     } else {
         null
@@ -207,4 +223,85 @@ function invoke(c: root.OpenAiClient, input: ai.ModelTurnInput) -> ai.ModelTurn 
     let req = openai_render(c, input);
     let resp = ai.send_as<OaResponse>(req, "openai");
     openai_parse(resp)
+}
+
+// ---------------------------------------------------------------------------
+// Streaming (Responses API SSE).
+//
+// Wire events observed: `response.output_text.delta` carries the text delta
+// in `delta`; the terminal event (`response.completed` / `response.incomplete`
+// / `response.failed`) carries the full response object in `response`, which
+// yields the stop reason and usage through the same openai_parse as the
+// non-streaming path.
+
+// The envelope of one SSE `data:` payload; only what the decoder reads.
+class OaStreamEvent {
+    type: string?,
+    delta: string?,
+    response: OaResponse?,
+}
+
+// One SseStream batch -> provider-agnostic stream events.
+function _openai_decode_batch(batch: string) -> ai.StreamEvent[] {
+    let out: ai.StreamEvent[] = [];
+    for (let raw in ai.decode_sse_batch(batch)) {
+        if let data: string = raw.data {
+            let ev: OaStreamEvent? = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
+                _ => null,
+            };
+            if let event: OaStreamEvent = ev {
+                let t = event.type ?? raw.event ?? "";
+                if (t == "response.output_text.delta") {
+                    if let d: string = event.delta {
+                        out.push(ai.TextDelta { text: d });
+                        null
+                    } else {
+                        null
+                    };
+                    null
+                } else if (t == "response.completed" || t == "response.incomplete" || t == "response.failed") {
+                    if let r: OaResponse = event.response {
+                        let turn = openai_parse(r);
+                        out.push(
+                            ai.TurnMeta {
+                                stop_reason: turn.stop_reason,
+                                input_tokens: turn.usage?.input_tokens,
+                                output_tokens: turn.usage?.output_tokens,
+                            },
+                        );
+                        null
+                    } else {
+                        null
+                    };
+                    out.push(ai.TurnDone {});
+                    null
+                } else {
+                    null
+                };
+                null
+            } else {
+                null
+            };
+            null
+        } else {
+            null
+        };
+    }
+    out
+}
+
+// The streaming entry point: the same request as `invoke` with
+// `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
+function invoke_stream(c: root.OpenAiClient, input: ai.ModelTurnInput) -> ai.TurnStream {
+    let req = _openai_request(c, input, true);
+    let sse = baml.http.fetch_sse(req) catch_all (e) {
+        _ => {
+            throw ai.errors.NetworkFailure {
+                provider: "openai",
+                detail: `transport failed before a response arrived: ${e.to_string()}`,
+                raw_body: null,
+            }
+        },
+    };
+    ai.TurnStream.from_sse(sse, _openai_decode_batch)
 }

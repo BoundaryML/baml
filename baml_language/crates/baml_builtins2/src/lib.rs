@@ -159,6 +159,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "wire.baml"),
     builtin!("ai", "wrappers.baml"),
     builtin!("ai", "runner.baml"),
+    builtin!("ai", "streaming.baml"),
     builtin!("ai", "ns_errors/errors.baml"),
     builtin!("ai", "ns_internal/helpers.baml"),
     // --- provider client packages ---

@@ -140,11 +140,13 @@ function _anthropic_render_messages(msgs: AnthropicMessage[]) -> map<string, unk
 // ---------------------------------------------------------------------------
 // The client.
 
-// The one internal entry point: render, send, normalize — one model turn.
-function invoke(
+// The shared request builder: identical body for both paths, plus the
+// `stream: true` flag on the streaming one.
+function _anthropic_request(
     c: root.AnthropicClient,
     input: ai.ModelTurnInput,
-) -> ai.ModelTurn {
+    stream: bool,
+) -> baml.http.Request {
     let instructions = input.prompt.render_text(ai.render_output_format(input.output_type));
     let lowered = _anthropic_lower_journal(input.journal);
 
@@ -189,8 +191,15 @@ function invoke(
         null
     };
 
+    if (stream) {
+        let _ = body.set("stream", true);
+        null
+    } else {
+        null
+    };
+
     let base = c.base_url ?? "https://api.anthropic.com";
-    let req = baml.http.Request {
+    baml.http.Request {
         method: "POST",
         url: `${base}/v1/messages`,
         headers: {
@@ -199,7 +208,28 @@ function invoke(
             "content-type": "application/json",
         },
         body: baml.json.stringify(baml.json.to_json(body)),
-    };
+    }
+}
+
+// One wire stop_reason string -> the canonical stop reason.
+function _anthropic_stop_reason(s: string) -> ai.StopReason {
+    if (s == "tool_use") {
+        ai.StopReason.ToolUse
+    } else if (s == "max_tokens") {
+        ai.StopReason.MaxTokens
+    } else if (s == "refusal") {
+        ai.StopReason.Refused
+    } else {
+        ai.StopReason.Complete
+    }
+}
+
+// The one internal entry point: render, send, normalize — one model turn.
+function invoke(
+    c: root.AnthropicClient,
+    input: ai.ModelTurnInput,
+) -> ai.ModelTurn {
+    let req = _anthropic_request(c, input, false);
     let resp = ai.send_as<AnthropicResponse>(req, "anthropic");
 
     let content: ai.ContentBlock[] = [];
@@ -223,17 +253,7 @@ function invoke(
 
     let stop = match (resp.stop_reason) {
         null => ai.StopReason.Complete,
-        let s: string => {
-            if (s == "tool_use") {
-                ai.StopReason.ToolUse
-            } else if (s == "max_tokens") {
-                ai.StopReason.MaxTokens
-            } else if (s == "refusal") {
-                ai.StopReason.Refused
-            } else {
-                ai.StopReason.Complete
-            }
-        },
+        let s: string => _anthropic_stop_reason(s),
     };
 
     let usage: ai.Usage? = match (resp.usage) {
@@ -249,4 +269,123 @@ function invoke(
     };
 
     ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+}
+
+// ---------------------------------------------------------------------------
+// Streaming (Messages API SSE).
+//
+// Wire events observed: `message_start` carries `message.usage.input_tokens`;
+// `content_block_delta` carries text deltas as `delta.type == "text_delta"`
+// with the piece in `delta.text`; `message_delta` carries
+// `delta.stop_reason` and cumulative `usage.output_tokens`; `message_stop`
+// ends the turn.
+
+// Streaming usage objects carry only some fields per event, so every field
+// is optional (unlike the non-streaming AnthropicUsage).
+class AnthStreamUsage {
+    input_tokens: int?,
+    output_tokens: int?,
+}
+
+class AnthStreamDelta {
+    type: string?,
+    text: string?,
+    stop_reason: string?,
+}
+
+class AnthStreamMessage {
+    usage: AnthStreamUsage?,
+}
+
+// The envelope of one SSE `data:` payload; only what the decoder reads.
+class AnthStreamEvent {
+    type: string?,
+    delta: AnthStreamDelta?,
+    message: AnthStreamMessage?,
+    usage: AnthStreamUsage?,
+}
+
+// One SseStream batch -> provider-agnostic stream events.
+function _anthropic_decode_batch(batch: string) -> ai.StreamEvent[] {
+    let out: ai.StreamEvent[] = [];
+    for (let raw in ai.decode_sse_batch(batch)) {
+        if let data: string = raw.data {
+            let ev: AnthStreamEvent? = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
+                _ => null,
+            };
+            if let event: AnthStreamEvent = ev {
+                let t = event.type ?? raw.event ?? "";
+                if (t == "content_block_delta") {
+                    if let d: AnthStreamDelta = event.delta {
+                        if ((d.type ?? "") == "text_delta") {
+                            if let text: string = d.text {
+                                out.push(ai.TextDelta { text: text });
+                                null
+                            } else {
+                                null
+                            }
+                        } else {
+                            null
+                        }
+                    } else {
+                        null
+                    };
+                    null
+                } else if (t == "message_start") {
+                    out.push(
+                        ai.TurnMeta {
+                            stop_reason: null,
+                            input_tokens: event.message?.usage?.input_tokens,
+                            output_tokens: event.message?.usage?.output_tokens,
+                        },
+                    );
+                    null
+                } else if (t == "message_delta") {
+                    let stop: ai.StopReason? = match (event.delta?.stop_reason) {
+                        null => null,
+                        let s: string => _anthropic_stop_reason(s),
+                    };
+                    out.push(
+                        ai.TurnMeta {
+                            stop_reason: stop,
+                            input_tokens: event.usage?.input_tokens,
+                            output_tokens: event.usage?.output_tokens,
+                        },
+                    );
+                    null
+                } else if (t == "message_stop") {
+                    out.push(ai.TurnDone {});
+                    null
+                } else {
+                    null
+                };
+                null
+            } else {
+                null
+            };
+            null
+        } else {
+            null
+        };
+    }
+    out
+}
+
+// The streaming entry point: the same request as `invoke` with
+// `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
+function invoke_stream(
+    c: root.AnthropicClient,
+    input: ai.ModelTurnInput,
+) -> ai.TurnStream {
+    let req = _anthropic_request(c, input, true);
+    let sse = baml.http.fetch_sse(req) catch_all (e) {
+        _ => {
+            throw ai.errors.NetworkFailure {
+                provider: "anthropic",
+                detail: `transport failed before a response arrived: ${e.to_string()}`,
+                raw_body: null,
+            }
+        },
+    };
+    ai.TurnStream.from_sse(sse, _anthropic_decode_batch)
 }
