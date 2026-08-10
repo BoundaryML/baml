@@ -614,8 +614,7 @@ function interfaces_associated_types.rdf_main() -> int {
     load_const 9
     init_instance user.interfaces_associated_types.RdfIntSource .value
     call user.interfaces_associated_types.rdf_score
-    store_var _3
-    load_var2 1 2
+    load_var _1
     add_int
     return
 }
@@ -950,8 +949,7 @@ function interfaces_associated_types.rmf_main() -> int {
     load_const 7
     init_instance user.interfaces_associated_types.RmfIntSource .value
     call user.interfaces_associated_types.rmf_score
-    store_var _3
-    load_var2 1 2
+    load_var _1
     add_int
     return
 }
