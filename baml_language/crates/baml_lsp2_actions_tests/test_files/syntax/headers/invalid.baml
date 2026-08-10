@@ -2,10 +2,10 @@
 
 function HeaderInPrompt() -> string {
     client GPT4
-    prompt #"
+    prompt `
         //# This is inside a prompt
         It should be treated as literal text, not a header
-    "#
+    `
 }
 
 function MixedOnSameLine() -> string {
@@ -37,10 +37,10 @@ function HeaderInExpression() -> string {
 
 function HeaderInStringLiteral() -> string {
     let x = "This string contains # Header Text"
-    let y = #"
+    let y = `
         Raw string with # Header
         Should not be parsed
-    "#
+    `
     x + y
 }
 
@@ -49,7 +49,7 @@ function LLMFunction(input: string) -> string {
     client GPT4
     //# Section Header
     // Should fail - only allowed in expression functions
-    prompt #"Process: {{ input }}"#
+    prompt `Process: ${input}`
 }
 
 client<llm> GPT4 {

@@ -10,7 +10,9 @@ fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
-    let _6: type
+    let _6: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _7: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _8: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -25,11 +27,37 @@ fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
 
     bb2: {
         _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _6 = load_type(Resume);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _7 = make_closure lambda[0]();
+        _6 = call const fn baml.llm.prompt(copy _7) -> [bb3];
     }
 
     bb3: {
+        _8 = load_type(Resume);
+        _0 = call const fn baml.llm.call_llm_function<copy _8>(copy _2, const "TypeBuilderFn", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(TypeBuilderFn, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hello"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -42,6 +70,8 @@ fn user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client) 
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
+    let _6: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _7: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -56,10 +86,36 @@ fn user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client) 
 
     bb2: {
         _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _7 = make_closure lambda[0]();
+        _6 = call const fn baml.llm.prompt(copy _7) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request(copy _2, const "TypeBuilderFn", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(TypeBuilderFn$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hello"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -72,6 +128,8 @@ fn user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.C
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
+    let _6: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _7: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -86,10 +144,36 @@ fn user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.C
 
     bb2: {
         _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _7 = make_closure lambda[0]();
+        _6 = call const fn baml.llm.prompt(copy _7) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "TypeBuilderFn", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(TypeBuilderFn$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hello"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -166,6 +250,8 @@ fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client) 
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
+    let _6: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _7: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -180,10 +266,36 @@ fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client) 
 
     bb2: {
         _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _7 = make_closure lambda[0]();
+        _6 = call const fn baml.llm.prompt(copy _7) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "TypeBuilderFn", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(TypeBuilderFn$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hello"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -196,8 +308,10 @@ fn user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -> baml
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
-    let _6: type
-    let _7: type
+    let _6: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _7: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _8: type
+    let _9: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -212,12 +326,38 @@ fn user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -> baml
 
     bb2: {
         _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _6 = load_type(Resume$stream | null);
-        _7 = load_type(Resume);
-        _0 = call const fn baml.llm.stream_llm_function<copy _6, copy _7>(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _7 = make_closure lambda[0]();
+        _6 = call const fn baml.llm.prompt(copy _7) -> [bb3];
     }
 
     bb3: {
+        _8 = load_type(Resume$stream | null);
+        _9 = load_type(Resume);
+        _0 = call const fn baml.llm.stream_llm_function<copy _8, copy _9>(copy _2, const "TypeBuilderFn", copy _5, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(TypeBuilderFn$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hello"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }

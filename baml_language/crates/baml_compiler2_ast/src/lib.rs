@@ -48,9 +48,8 @@ pub use traverse::BodyNode;
 /// `is_default_receiver_root` helpers over comparing the literal string.
 pub const DEFAULT_RECEIVER_KEYWORD: &str = "default";
 
-/// Parse a string attribute value into its runtime string, handling both
-/// regular strings (`"text"`, `'text'`) and raw strings (`#"text"#`,
-/// `##"text"##`, …).
+/// Parse a string attribute value into its runtime string, handling regular
+/// strings (`"text"`, `'text'`) and static backtick strings (```text```).
 ///
 /// The input is the raw, still-quoted token text as it appears in
 /// [`RawAttributeArg::value`]. Returns `None` if the value is not a recognized
@@ -68,22 +67,17 @@ pub fn parse_string_attr_value(raw: &str) -> Option<String> {
         return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
     }
 
-    // Raw string: #"text"#, ##"text"##, etc.
-    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
-    if hash_count == 0 {
+    // Static backtick string: `text`, ``text``, etc. Attribute values cannot
+    // contain interpolation because aliases and descriptions are compile-time data.
+    let ticks = raw.bytes().take_while(|&b| b == b'`').count();
+    if ticks == 0 || raw.len() < ticks * 2 || !raw.ends_with(&raw[..ticks]) {
         return None;
     }
-
-    let rest = &raw[hash_count..];
-    let closing = format!("\"{}", &raw[..hash_count]);
-
-    // Need at least `"` + `"` + closing hashes
-    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
+    let content = &raw[ticks..raw.len() - ticks];
+    if content.contains("${") {
         return None;
     }
-
-    // Raw strings: no escape processing
-    Some(rest[1..rest.len() - 1 - hash_count].to_string())
+    Some(content.to_string())
 }
 
 /// Push diagnostics for a failed numeric literal. `InvalidDigits` gets one

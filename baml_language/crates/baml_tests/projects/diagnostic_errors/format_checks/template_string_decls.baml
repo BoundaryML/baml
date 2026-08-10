@@ -2,45 +2,45 @@
 // as well as any special cases inside the template string
 
 // ===== Basic template string =====
-template_string BasicTemplate(name: string) #"
-    Hello, {{ name }}!
-"#
+template_string BasicTemplate(name: string) `
+    Hello, ${name}!
+`
 
 // ===== Template string with no params =====
-template_string NoParams() #"
+template_string NoParams() `
     A static template with no parameters.
-"#
+`
 
 // ===== Template string with multiple params =====
-template_string MultiParam(first: string, last: string, age: int) #"
-    Name: {{ first }} {{ last }}
-    Age: {{ age }}
-"#
+template_string MultiParam(first: string, last: string, age: int) `
+    Name: ${first} ${last}
+    Age: ${age}
+`
 
 // ===== Template string with complex param types =====
-template_string ComplexParams(items: string[], config: map<string, int>) #"
-    Items: {{ items }}
-    Config: {{ config }}
-"#
+template_string ComplexParams(items: string[], config: map<string, int>) `
+    Items: ${items}
+    Config: ${config}
+`
 
 // ===== Template string with single-line body =====
-template_string SingleLine(x: int) #"Value is {{ x }}"#
+template_string SingleLine(x: int) `Value is ${x}`
 
 // ===== Template string with many params that should wrap =====
-template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
-    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }} {{ fourth_parameter }}
-"#
+template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) `
+    ${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}
+`
 
 // ===== Very long param list =====
-template_string VeryLongParams(extremely_long_parameter_name: string, another_very_long_parameter_name: int) #"
-    {{ extremely_long_parameter_name }} {{ another_very_long_parameter_name }}
-"#
+template_string VeryLongParams(extremely_long_parameter_name: string, another_very_long_parameter_name: int) `
+    ${extremely_long_parameter_name} ${another_very_long_parameter_name}
+`
 
 // ===== Template with template comments =====
-template_string WithComment(x: string) #"
-    {# This is a template comment #}
-    Value: {{ x }}
-"#
+template_string WithComment(x: string) `
+
+    Value: ${x}
+`
 
 // ===== Trivia on template string declaration (line comments) =====
 // 1 keyword leading
@@ -58,9 +58,9 @@ string // 12 type trailing
 // 13 close paren leading
 ) // 14 close paren trailing
 // 15 body leading
-#"
-    Hello {{ x }}
-"#
+`
+    Hello ${x}
+`
 
 ///////////////////
 
@@ -79,9 +79,9 @@ string /* 11 type trailing */
 /* 12 close paren leading */
 ) /* 13 close paren trailing */
 /* 14 body leading */
-#"
-    Hello {{ x }}
-"#
+`
+    Hello ${x}
+`
 
 ///////////////////
 
@@ -98,9 +98,9 @@ template_string MultiParamTrivia(
     : // 9 second colon trailing
     // 10 second type leading
     int // 11 second type trailing
-) #"
-    {{ a }} {{ b }}
-"#
+) `
+    ${a} ${b}
+`
 
 // ===== Multi param trivia (block comments) =====
 template_string MultiParamTriviaBlock(
@@ -115,62 +115,62 @@ template_string MultiParamTriviaBlock(
     : /* 9 second colon trailing */
     /* 10 second type leading */
     int /* 11 second type trailing */
-) #"
-    {{ a }} {{ b }}
-"#
+) `
+    ${a} ${b}
+`
 
 // ===== Short name =====
-template_string T(x: int) #"{{ x }}"#
+template_string T(x: int) `${x}`
 
 // ===== Long name exceeding limit =====
-template_string ThisIsAnExtremelyLongTemplateStringNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns(x: int) #"
-    {{ x }}
-"#
+template_string ThisIsAnExtremelyLongTemplateStringNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns(x: int) `
+    ${x}
+`
 
 // ===== Long name + many params exceeding limit =====
-template_string VeryLongTemplateNameWithManyParameters(first_parameter: string, second_parameter: int, third_parameter: bool, fourth_parameter: float) #"
-    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }} {{ fourth_parameter }}
-"#
+template_string VeryLongTemplateNameWithManyParameters(first_parameter: string, second_parameter: int, third_parameter: bool, fourth_parameter: float) `
+    ${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}
+`
 
 // ===== Many params with complex types exceeding limit =====
-template_string ComplexTypesWrap(items: (int | string | bool)[], config: map<string, int | string>, callback: (x: int, y: int) -> string) #"
-    {{ items }} {{ config }}
-"#
+template_string ComplexTypesWrap(items: (int | string | bool)[], config: map<string, int | string>, callback: (x: int, y: int) -> string) `
+    ${items} ${config}
+`
 
 // ===== Very long param list with many complex params far exceeding limit =====
-template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
-    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
-"#
+template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) `
+    ${first_parameter} ${second_parameter} ${third_parameter}
+`
 
 // ===== Params with deeply nested generic types exceeding limit =====
-template_string DeepGenericParams(data: map<string, map<string, map<string, int | string | bool | float | null>>>) #"
-    {{ data }}
-"#
+template_string DeepGenericParams(data: map<string, map<string, map<string, int | string | bool | float | null>>>) `
+    ${data}
+`
 
 // ===== Params with union types =====
-template_string UnionParams(result: string | int | bool | null, items: (string | int)[]) #"
-    {{ result }} {{ items }}
-"#
+template_string UnionParams(result: string | int | bool | null, items: (string | int)[]) `
+    ${result} ${items}
+`
 
 // ===== Params with optional types =====
-template_string OptionalParams(name: string?, age: int?, items: string[]?) #"
-    {{ name }} {{ age }} {{ items }}
-"#
+template_string OptionalParams(name: string?, age: int?, items: string[]?) `
+    ${name} ${age} ${items}
+`
 
 // ===== Params with function types =====
-template_string FnTypeParams(transform: (x: int) -> int, combine: (a: string, b: string) -> string) #"
+template_string FnTypeParams(transform: (x: int) -> int, combine: (a: string, b: string) -> string) `
     transformed
-"#
+`
 
 // ===== Long name + long complex params far exceeding limit =====
-template_string ExtremelyLongNamePlusComplexParameters(first_very_long_parameter_name: map<string, int | string | bool>, second_very_long_parameter_name: (int | string | bool | float | null)[]) #"
-    {{ first_very_long_parameter_name }} {{ second_very_long_parameter_name }}
-"#
+template_string ExtremelyLongNamePlusComplexParameters(first_very_long_parameter_name: map<string, int | string | bool>, second_very_long_parameter_name: (int | string | bool | float | null)[]) `
+    ${first_very_long_parameter_name} ${second_very_long_parameter_name}
+`
 
 // ===== Six params all with long names and types exceeding limit =====
-template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
-    {{ first_param }} {{ second_param }} {{ third_param }} {{ fourth_param }} {{ fifth_param }} {{ sixth_param }}
-"#
+template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) `
+    ${first_param} ${second_param} ${third_param} ${fourth_param} ${fifth_param} ${sixth_param}
+`
 
 // ===== Trivia on wrapping many params (line comments) =====
 // 1 keyword leading
@@ -199,9 +199,9 @@ map<string, map<string, int>> // 23 third type trailing
 // 24 close paren leading
 ) // 25 close paren trailing
 // 26 body leading
-#"
-    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
-"#
+`
+    ${first_parameter} ${second_parameter} ${third_parameter}
+`
 
 ///////////////////
 
@@ -232,9 +232,9 @@ map<string, map<string, int>> /* 23 third type trailing */
 /* 24 close paren leading */
 ) /* 25 close paren trailing */
 /* 26 body leading */
-#"
-    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
-"#
+`
+    ${first_parameter} ${second_parameter} ${third_parameter}
+`
 
 ///////////////////
 
@@ -265,9 +265,9 @@ bool // 23 third type trailing
 // 24 close paren leading
 ) // 25 close paren trailing
 // 26 body leading
-#"
-    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
-"#
+`
+    ${first_parameter} ${second_parameter} ${third_parameter}
+`
 
 ///////////////////
 
@@ -298,9 +298,9 @@ bool /* 23 third type trailing */
 /* 24 close paren leading */
 ) /* 25 close paren trailing */
 /* 26 body leading */
-#"
-    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
-"#
+`
+    ${first_parameter} ${second_parameter} ${third_parameter}
+`
 
 ///////////////////
 
@@ -328,9 +328,9 @@ template_string TriviaDeepGenericParam(
     string // 20 union member trailing
     > // 21 inner close angle trailing
     > // 22 outer close angle trailing
-) #"
-    {{ data }}
-"#
+) `
+    ${data}
+`
 
 // ===== Trivia on param with deeply nested generic type (block comments) =====
 template_string TriviaDeepGenericParamBlock(
@@ -356,18 +356,18 @@ template_string TriviaDeepGenericParamBlock(
     string /* 20 union member trailing */
     > /* 21 inner close angle trailing */
     > /* 22 outer close angle trailing */
-) #"
-    {{ data }}
-"#
+) `
+    ${data}
+`
 
 // ===== Extraneous whitespace =====
-template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
-    {{ a }} {{ b }}
-"#
+template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   `
+    ${a} ${b}
+`
 
 // ===== Template with control flow =====
-template_string WithControl(items: string[]) #"
-    {% for item in items %}
-    - {{ item }}
-    {% endfor %}
-"#
+template_string WithControl(items: string[]) `
+    ${for (let item in items)}
+    - ${item}
+    ${endfor}
+`

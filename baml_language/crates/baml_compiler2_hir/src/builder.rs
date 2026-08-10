@@ -2380,8 +2380,8 @@ impl<'db> SemanticIndexBuilder<'db> {
 
 /// Check if a raw attribute argument value is a valid string literal.
 ///
-/// Accepts double-quoted (`"text"`), single-quoted (`'text'`), and raw strings
-/// (`#"text"#`, `##"text"##`, etc.).
+/// Accepts double-quoted (`"text"`), single-quoted (`'text'`), and static
+/// backtick strings (```text```).
 fn is_string_literal(value: &str) -> bool {
     // Double-quoted
     if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
@@ -2391,12 +2391,10 @@ fn is_string_literal(value: &str) -> bool {
     if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
         return true;
     }
-    // Raw string: #"text"#, ##"text"##, etc.
-    let hashes = value.bytes().take_while(|&b| b == b'#').count();
-    if hashes > 0 && value.len() >= hashes * 2 + 2 {
-        let rest = &value[hashes..];
-        let closing = format!("\"{}", &value[..hashes]);
-        return rest.starts_with('"') && rest.ends_with(&closing);
-    }
-    false
+    // Static backtick string: `text`, ``text``, etc.
+    let ticks = value.bytes().take_while(|&b| b == b'`').count();
+    ticks > 0
+        && value.len() >= ticks * 2
+        && value.ends_with(&value[..ticks])
+        && !value[ticks..value.len() - ticks].contains("${")
 }

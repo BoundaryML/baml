@@ -33,11 +33,13 @@ fn user.GPT4o$new(lenient: bool) -> null {
 fn user.ExtractInvoice(text: string, client: baml.llm.Client) -> Invoice {
     // Locals:
     let _0: Invoice // _0 // return
-    let _1: string // text // param
+    let _1: string // text // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -51,11 +53,39 @@ fn user.ExtractInvoice(text: string, client: baml.llm.Client) -> Invoice {
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _5 = load_type(Invoice);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(Invoice);
+        _0 = call const fn baml.llm.call_llm_function<copy _7>(copy _2, const "ExtractInvoice", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(ExtractInvoice, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "extract an invoice from ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = [copy _4]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -63,10 +93,12 @@ fn user.ExtractInvoice(text: string, client: baml.llm.Client) -> Invoice {
 fn user.ExtractInvoice$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
+    let _1: string // text // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -80,10 +112,38 @@ fn user.ExtractInvoice$build_request(text: string, client: baml.llm.Client) -> b
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request(copy _2, const "ExtractInvoice", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(ExtractInvoice$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "extract an invoice from ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = [copy _4]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -91,10 +151,12 @@ fn user.ExtractInvoice$build_request(text: string, client: baml.llm.Client) -> b
 fn user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
+    let _1: string // text // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -108,10 +170,38 @@ fn user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Clien
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ExtractInvoice", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(ExtractInvoice$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "extract an invoice from ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = [copy _4]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -179,10 +269,12 @@ fn user.ExtractInvoice$parse_stream(sse: baml.http.SseStream, client: baml.llm.C
 fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // text // param
+    let _1: string // text // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -196,10 +288,38 @@ fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> b
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "ExtractInvoice", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(ExtractInvoice$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "extract an invoice from ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = [copy _4]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -207,12 +327,14 @@ fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> b
 fn user.ExtractInvoice$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<null | Invoice$stream, Invoice> {
     // Locals:
     let _0: baml.llm.Stream<null | Invoice$stream, Invoice> // _0 // return
-    let _1: string // text // param
+    let _1: string // text // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
-    let _6: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
+    let _8: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -226,12 +348,40 @@ fn user.ExtractInvoice$stream(text: string, client: baml.llm.Client) -> baml.llm
 
     bb2: {
         _4 = { const "text": copy _1 }: map<string, unknown>;
-        _5 = load_type(Invoice$stream | null);
-        _6 = load_type(Invoice);
-        _0 = call const fn baml.llm.stream_llm_function<copy _5, copy _6>(copy _2, const "ExtractInvoice", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(Invoice$stream | null);
+        _8 = load_type(Invoice);
+        _0 = call const fn baml.llm.stream_llm_function<copy _7, copy _8>(copy _2, const "ExtractInvoice", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(ExtractInvoice$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "extract an invoice from ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = [copy _4]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }

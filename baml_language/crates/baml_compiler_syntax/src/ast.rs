@@ -2231,7 +2231,9 @@ impl ConfigItem {
                     let has_string_literal = element.descendants().any(|node| {
                         matches!(
                             node.kind(),
-                            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+                            SyntaxKind::STRING_LITERAL
+                                | SyntaxKind::RAW_STRING_LITERAL
+                                | SyntaxKind::BACKTICK_STRING_LITERAL
                         )
                     });
 
@@ -2288,6 +2290,19 @@ impl ConfigValue {
     ///
     /// Returns `None` if the node contains no significant tokens.
     pub fn scalar_text(&self) -> Option<String> {
+        if let Some(backtick) = self.syntax.descendants().find_map(BacktickStringLiteral::cast) {
+            let mut text = String::new();
+            for segment in backtick.segments() {
+                match segment {
+                    BacktickSegment::Text(part) => text.push_str(&part),
+                    BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                        return None;
+                    }
+                }
+            }
+            return Some(text);
+        }
+
         let text: String = self
             .syntax
             .descendants_with_tokens()

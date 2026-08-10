@@ -53,6 +53,9 @@ function user.TestClient$new(lenient: bool) -> null {
 }
 
 function user.TestFunc(input: string, client: baml.llm.Client) -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -61,20 +64,27 @@ function user.TestFunc(input: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(TestFunc, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_type string
     load_var client
     load_const "TestFunc"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.call_llm_function
     return
 }
 
 function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -83,19 +93,26 @@ function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(TestFunc$build_request, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "TestFunc"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request
     return
 }
 
 function user.TestFunc$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -104,14 +121,18 @@ function user.TestFunc$build_request_stream(input: string, client: baml.llm.Clie
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(TestFunc$build_request_stream, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "TestFunc"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request_stream
     return
 }
@@ -149,6 +170,9 @@ function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.C
 }
 
 function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -157,19 +181,26 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(TestFunc$render_prompt, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "TestFunc"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.render_prompt
     return
 }
 
 function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -178,16 +209,20 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(TestFunc$stream, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_type string | null
     load_type string
     load_var client
     load_const "TestFunc"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.stream_llm_function
     return
 }

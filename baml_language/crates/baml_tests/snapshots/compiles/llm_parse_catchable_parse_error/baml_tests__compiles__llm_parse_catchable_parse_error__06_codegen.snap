@@ -24,6 +24,9 @@ function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unkno
 }
 
 function user.ExtractInvoice(text: string, client: baml.llm.Client) -> Invoice {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -32,20 +35,27 @@ function user.ExtractInvoice(text: string, client: baml.llm.Client) -> Invoice {
     store_var client
 
   L0:
+    load_var text
+    make_closure .<tagged(ExtractInvoice, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_type Invoice
     load_var client
     load_const "ExtractInvoice"
-    load_var text
+    load_deref ?1
     load_const "text"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.call_llm_function
     return
 }
 
 function user.ExtractInvoice$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -54,19 +64,26 @@ function user.ExtractInvoice$build_request(text: string, client: baml.llm.Client
     store_var client
 
   L0:
+    load_var text
+    make_closure .<tagged(ExtractInvoice$build_request, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "ExtractInvoice"
-    load_var text
+    load_deref ?1
     load_const "text"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request
     return
 }
 
 function user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -75,14 +92,18 @@ function user.ExtractInvoice$build_request_stream(text: string, client: baml.llm
     store_var client
 
   L0:
+    load_var text
+    make_closure .<tagged(ExtractInvoice$build_request_stream, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "ExtractInvoice"
-    load_var text
+    load_deref ?1
     load_const "text"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request_stream
     return
 }
@@ -120,6 +141,9 @@ function user.ExtractInvoice$parse_stream(sse: baml.http.SseStream, client: baml
 }
 
 function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -128,19 +152,26 @@ function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client
     store_var client
 
   L0:
+    load_var text
+    make_closure .<tagged(ExtractInvoice$render_prompt, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "ExtractInvoice"
-    load_var text
+    load_deref ?1
     load_const "text"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.render_prompt
     return
 }
 
 function user.ExtractInvoice$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<Invoice$stream | null, Invoice> {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -149,16 +180,20 @@ function user.ExtractInvoice$stream(text: string, client: baml.llm.Client) -> ba
     store_var client
 
   L0:
+    load_var text
+    make_closure .<tagged(ExtractInvoice$stream, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_type Invoice$stream | null
     load_type Invoice
     load_var client
     load_const "ExtractInvoice"
-    load_var text
+    load_deref ?1
     load_const "text"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.stream_llm_function
     return
 }

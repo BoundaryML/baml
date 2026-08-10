@@ -11,9 +11,9 @@ client<llm> GPT4 {
 
 function Summarize(input: Input) -> string {
   client GPT4
-  prompt #"
-    Summarize: {{ input.text }}
-  "#
+  prompt `
+    Summarize: ${input.text}
+  `
 }
 
 test BasicTest {
@@ -50,19 +50,11 @@ test BasicTest {
 // test_block.baml:12:37 (type) [defaultLibrary] len=6 "string"
 // test_block.baml:13:3 (property) len=6 "client"
 // test_block.baml:14:3 (property) [declaration] len=6 "prompt"
-// test_block.baml:14:10 (string) len=1 "#"
-// test_block.baml:14:11 (string) len=1 "\""
+// test_block.baml:14:10 (string) len=1 "`"
 // test_block.baml:15:5 (string) len=9 "Summarize"
 // test_block.baml:15:14 (string) len=1 ":"
-// test_block.baml:15:16 (string) len=1 "{"
-// test_block.baml:15:17 (string) len=1 "{"
-// test_block.baml:15:19 (string) len=5 "input"
-// test_block.baml:15:24 (string) len=1 "."
-// test_block.baml:15:25 (string) len=4 "text"
-// test_block.baml:15:30 (string) len=1 "}"
-// test_block.baml:15:31 (string) len=1 "}"
-// test_block.baml:16:3 (string) len=1 "\""
-// test_block.baml:16:4 (string) len=1 "#"
+// test_block.baml:15:24 (property) len=4 "text"
+// test_block.baml:16:3 (string) len=1 "`"
 // test_block.baml:19:1 (keyword) len=4 "test"
 // test_block.baml:19:6 (struct) [declaration] len=9 "BasicTest"
 // test_block.baml:20:3 (property) len=9 "functions"

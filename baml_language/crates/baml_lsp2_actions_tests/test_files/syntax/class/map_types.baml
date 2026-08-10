@@ -26,9 +26,9 @@ class MapFields {
 
 function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
   client MyClient
-  prompt #"
-    Merge these: {{i1}} {{i2}}
-  "#
+  prompt `
+    Merge these: ${i1} ${i2}
+  `
 }
 
 // error: Error validating: Maps may only have strings, enums or literal strings as keys

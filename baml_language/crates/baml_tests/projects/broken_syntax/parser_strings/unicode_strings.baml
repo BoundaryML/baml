@@ -4,18 +4,18 @@ class UnicodeStrings {
   emoji_basic string @alias("🎉")
   emoji_multiple string @alias("🎉🎊🎈")
   emoji_in_text string @description("Hello 👋 World 🌍")
-  
+
   // Different languages
   chinese string @alias("你好世界")
   arabic string @alias("مرحبا بالعالم")
   japanese string @alias("こんにちは世界")
   russian string @alias("Привет мир")
-  
+
   // Special characters
   math_symbols string @description("α + β = γ")
   currency string @alias("Price: €100 or $120 or ¥1000")
   arrows string @description("→ ← ↑ ↓ ⇒ ⇐")
-  
+
   // Zero-width and special Unicode
   zero_width string @alias("Hello​World") // Contains zero-width space
   rtl_override string @alias("‏Hello World‏") // RTL override characters
@@ -24,8 +24,8 @@ class UnicodeStrings {
 // Test Unicode in function names and prompts
 function 处理文本(输入: string) -> string {
   client GPT4
-  prompt #"
-    Process the text: {{ 输入 }}
+  prompt `
+    Process the text: ${输入}
     Return result with emojis: ✅ or ❌
-  "#
+  `
 }

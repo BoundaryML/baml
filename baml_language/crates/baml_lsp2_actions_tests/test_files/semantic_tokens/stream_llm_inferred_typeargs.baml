@@ -30,7 +30,7 @@ client<llm> TestClient {
 
 function TestFunc(input: string) -> string {
     client TestClient
-    prompt #"hi {{ input }}"#
+    prompt `hi ${input}`
 }
 
 function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
@@ -82,16 +82,9 @@ function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
 // stream_llm_inferred_typeargs.baml:31:37 (type) [defaultLibrary] len=6 "string"
 // stream_llm_inferred_typeargs.baml:32:5 (property) len=6 "client"
 // stream_llm_inferred_typeargs.baml:33:5 (property) [declaration] len=6 "prompt"
-// stream_llm_inferred_typeargs.baml:33:12 (string) len=1 "#"
-// stream_llm_inferred_typeargs.baml:33:13 (string) len=1 "\""
-// stream_llm_inferred_typeargs.baml:33:14 (string) len=2 "hi"
-// stream_llm_inferred_typeargs.baml:33:17 (string) len=1 "{"
-// stream_llm_inferred_typeargs.baml:33:18 (string) len=1 "{"
-// stream_llm_inferred_typeargs.baml:33:20 (string) len=5 "input"
-// stream_llm_inferred_typeargs.baml:33:26 (string) len=1 "}"
-// stream_llm_inferred_typeargs.baml:33:27 (string) len=1 "}"
-// stream_llm_inferred_typeargs.baml:33:28 (string) len=1 "\""
-// stream_llm_inferred_typeargs.baml:33:29 (string) len=1 "#"
+// stream_llm_inferred_typeargs.baml:33:12 (string) len=1 "`"
+// stream_llm_inferred_typeargs.baml:33:13 (string) len=2 "hi"
+// stream_llm_inferred_typeargs.baml:33:24 (string) len=1 "`"
 // stream_llm_inferred_typeargs.baml:36:1 (keyword) len=8 "function"
 // stream_llm_inferred_typeargs.baml:36:10 (function) [declaration] len=20 "call_stream_inferred"
 // stream_llm_inferred_typeargs.baml:36:36 (namespace) [defaultLibrary] len=4 "baml"

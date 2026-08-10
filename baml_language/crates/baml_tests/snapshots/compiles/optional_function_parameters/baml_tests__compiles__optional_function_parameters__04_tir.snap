@@ -56,16 +56,16 @@ function user.HostEntry(query: string, max_results: int = 10, filter: string | n
   }
 }
 function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : string
+  baml.llm.call_llm_function<T>(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }, prompt_closure = baml.llm.prompt`...`) : string
 }
 function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.PromptAst
+  baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
 }
 function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
+  baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
 function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
+  baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
 class user.SearchService {
   base: string
@@ -83,7 +83,7 @@ function user.SearchService.Docs(self: user.SearchService, query: string, filter
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
 function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<string | null, string>
+  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
 }
 function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>

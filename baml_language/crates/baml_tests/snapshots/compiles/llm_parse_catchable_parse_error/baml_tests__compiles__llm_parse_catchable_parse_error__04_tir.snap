@@ -11,16 +11,16 @@ class user.Invoice {
   amount: float
 }
 function user.ExtractInvoice(text: string, client: baml.llm.Client = GPT4o) -> user.Invoice throws never {
-  baml.llm.call_llm_function<T>(client, "ExtractInvoice", map { "text": text }) : user.Invoice
+  baml.llm.call_llm_function<T>(client, "ExtractInvoice", map { "text": text }, prompt_closure = baml.llm.prompt`...`) : user.Invoice
 }
 function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ExtractInvoice", map { "text": text }) : baml.llm.PromptAst
+  baml.llm.render_prompt(client, "ExtractInvoice", map { "text": text }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
 }
 function user.ExtractInvoice$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "ExtractInvoice", map { "text": text }) : baml.http.Request
+  baml.llm.build_request(client, "ExtractInvoice", map { "text": text }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
 function user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "ExtractInvoice", map { "text": text }) : baml.http.Request
+  baml.llm.build_request_stream(client, "ExtractInvoice", map { "text": text }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
 function user.TryExtract(json: string) -> user.Invoice | null throws never {
   { : user.Invoice | null
@@ -35,7 +35,7 @@ class user.Invoice$stream {
   amount: float | null
 }
 function user.ExtractInvoice$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice> throws never {
-  baml.llm.stream_llm_function(client, "ExtractInvoice", map { "text": text }) : baml.llm.Stream<user.Invoice$stream | null, user.Invoice>
+  baml.llm.stream_llm_function(client, "ExtractInvoice", map { "text": text }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<user.Invoice$stream | null, user.Invoice>
 }
 function user.ExtractInvoice$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice> throws never {
   client.__make_stream(sse) : baml.llm.Stream<user.Invoice$stream | null, user.Invoice>

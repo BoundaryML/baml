@@ -57,13 +57,16 @@ function type_reflection.GetBar(client: baml.llm.Client) -> type_reflection.Bar 
     store_var client
 
   L0:
+    make_closure .<tagged(GetBar, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type type_reflection.Bar
     load_var client
     load_const "GetBar"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.call_llm_function
     return
 }
@@ -77,12 +80,15 @@ function type_reflection.GetBar$build_request(client: baml.llm.Client) -> baml.h
     store_var client
 
   L0:
+    make_closure .<tagged(GetBar$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "GetBar"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request
     return
 }
@@ -96,12 +102,15 @@ function type_reflection.GetBar$build_request_stream(client: baml.llm.Client) ->
     store_var client
 
   L0:
+    make_closure .<tagged(GetBar$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "GetBar"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request_stream
     return
 }
@@ -147,12 +156,15 @@ function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    make_closure .<tagged(GetBar$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "GetBar"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.render_prompt
     return
 }
@@ -166,6 +178,9 @@ function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stre
     store_var client
 
   L0:
+    make_closure .<tagged(GetBar$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type type_reflection.Bar$stream | null
     load_type type_reflection.Bar
     load_var client
@@ -173,7 +188,7 @@ function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.stream_llm_function
     return
 }
@@ -187,13 +202,16 @@ function type_reflection.GetFoo(client: baml.llm.Client) -> type_reflection.Foo 
     store_var client
 
   L0:
+    make_closure .<tagged(GetFoo, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type type_reflection.Foo
     load_var client
     load_const "GetFoo"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.call_llm_function
     return
 }
@@ -207,12 +225,15 @@ function type_reflection.GetFoo$build_request(client: baml.llm.Client) -> baml.h
     store_var client
 
   L0:
+    make_closure .<tagged(GetFoo$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "GetFoo"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request
     return
 }
@@ -226,12 +247,15 @@ function type_reflection.GetFoo$build_request_stream(client: baml.llm.Client) ->
     store_var client
 
   L0:
+    make_closure .<tagged(GetFoo$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "GetFoo"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request_stream
     return
 }
@@ -277,12 +301,15 @@ function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    make_closure .<tagged(GetFoo$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "GetFoo"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.render_prompt
     return
 }
@@ -296,6 +323,9 @@ function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stre
     store_var client
 
   L0:
+    make_closure .<tagged(GetFoo$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type type_reflection.Foo$stream | null
     load_type type_reflection.Foo
     load_var client
@@ -303,7 +333,7 @@ function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.stream_llm_function
     return
 }

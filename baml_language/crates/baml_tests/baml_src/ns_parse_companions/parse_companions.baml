@@ -25,7 +25,7 @@ class ParseCompanionsOptPayload {
 
 function ParseCompanionsParseOptPayload() -> ParseCompanionsOptPayload {
     client ParseCompanionsTestClient
-    prompt #"{{ ctx.output_format }}"#
+    prompt `${ctx.output_format}`
 }
 
 function parse_companions_missing_optional_fn() -> bool {
@@ -51,7 +51,7 @@ class ParseCompanionsAliasPayload {
 
 function ParseCompanionsParseAliasPayload() -> ParseCompanionsAliasPayload {
     client ParseCompanionsTestClient
-    prompt #"{{ ctx.output_format }}"#
+    prompt `${ctx.output_format}`
 }
 
 function parse_companions_missing_alias_fn() -> bool {

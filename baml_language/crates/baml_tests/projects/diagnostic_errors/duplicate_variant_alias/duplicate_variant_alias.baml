@@ -28,7 +28,7 @@ enum TripleCollision {
 // value and collide.
 enum NormalizedCollision {
   A @alias("q")
-  B @alias(#"q"#)
+  B @alias(`q`)
 }
 
 // ─── Controls: these must NOT be flagged ─────────────────────────────────────

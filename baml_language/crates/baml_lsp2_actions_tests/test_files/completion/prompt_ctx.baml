@@ -7,9 +7,9 @@ client<llm> GPT4 {
 
 function Chat() -> string {
     client GPT4
-    prompt #"
+    prompt `
         ctx.<[CURSOR]
-    "#
+    `
 }
 
 //----

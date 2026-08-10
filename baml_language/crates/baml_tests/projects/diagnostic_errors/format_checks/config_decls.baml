@@ -104,10 +104,10 @@ client<llm> RawStringConfigClient {
     provider openai,
     options: {
         model: "gpt-4"
-        system_prompt #"
+        system_prompt `
             You are a helpful assistant.
             Always be concise.
-        "#
+        `
     },
 }
 
@@ -120,7 +120,7 @@ client<llm> MixedValuesClient {
         temperature 0.7
         stream true
         stop ["END"]
-        inline_string #"inline raw"#
+        inline_string `inline raw`
         "string key" "value with spaces"
     }
 }
@@ -444,7 +444,7 @@ TriviaRetryBlock /* 4 name trailing */
 // ===== Test declaration =====
 function TestTarget() -> string {
     client BasicClient
-    prompt #"Hello"#
+    prompt `Hello`
 }
 
 test BasicTest {

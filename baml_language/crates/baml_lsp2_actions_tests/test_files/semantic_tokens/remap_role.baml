@@ -14,10 +14,10 @@ client<llm> MyClient {
 
 function TestRemap(input: string) -> string {
   client MyClient
-  prompt #"
-    {{ _.chat("user") }}
-    Test message: {{ input }}
-  "#
+  prompt `
+    ${role("user")}
+    Test message: ${input}
+  `
 }
 
 //----
@@ -54,27 +54,9 @@ function TestRemap(input: string) -> string {
 // remap_role.baml:15:38 (type) [defaultLibrary] len=6 "string"
 // remap_role.baml:16:3 (property) len=6 "client"
 // remap_role.baml:17:3 (property) [declaration] len=6 "prompt"
-// remap_role.baml:17:10 (string) len=1 "#"
-// remap_role.baml:17:11 (string) len=1 "\""
-// remap_role.baml:18:5 (string) len=1 "{"
-// remap_role.baml:18:6 (string) len=1 "{"
-// remap_role.baml:18:8 (string) len=1 "_"
-// remap_role.baml:18:9 (string) len=1 "."
-// remap_role.baml:18:10 (string) len=4 "chat"
-// remap_role.baml:18:14 (string) len=1 "("
-// remap_role.baml:18:15 (string) len=1 "\""
-// remap_role.baml:18:16 (string) len=4 "user"
-// remap_role.baml:18:20 (string) len=1 "\""
-// remap_role.baml:18:21 (string) len=1 ")"
-// remap_role.baml:18:23 (string) len=1 "}"
-// remap_role.baml:18:24 (string) len=1 "}"
+// remap_role.baml:17:10 (string) len=1 "`"
+// remap_role.baml:18:12 (string) len=6 "\"user\""
 // remap_role.baml:19:5 (string) len=4 "Test"
 // remap_role.baml:19:10 (string) len=7 "message"
 // remap_role.baml:19:17 (string) len=1 ":"
-// remap_role.baml:19:19 (string) len=1 "{"
-// remap_role.baml:19:20 (string) len=1 "{"
-// remap_role.baml:19:22 (string) len=5 "input"
-// remap_role.baml:19:28 (string) len=1 "}"
-// remap_role.baml:19:29 (string) len=1 "}"
-// remap_role.baml:20:3 (string) len=1 "\""
-// remap_role.baml:20:4 (string) len=1 "#"
+// remap_role.baml:20:3 (string) len=1 "`"

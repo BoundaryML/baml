@@ -223,10 +223,10 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[nested_quotes.baml:11:48]
  11 │ ╭─▶ function FormatMessage(name: string) -> string {
  12 │ │     client GPT4
- 13 │ │     prompt #"
- 14 │ │       Generate a message for "{{ name }}"
- 15 │ │       Include quotes like: "Welcome, '{{ name }}'!"
- 16 │ │     "#
+ 13 │ │     prompt `
+ 14 │ │       Generate a message for "${name}"
+ 15 │ │       Include quotes like: "Welcome, '${name}'!"
+ 16 │ │     `
  17 │ ╰─▶ }
     ╰────
 
@@ -236,12 +236,12 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[raw_strings.baml:13:47]
  13 │ ╭─▶ function ProcessText(input: string) -> string {
  14 │ │     client GPT4
- 15 │ │     prompt #"
+ 15 │ │     prompt `
  16 │ │       Process the following text:
- 17 │ │       {{ input }}
- 18 │ │       
+ 17 │ │       ${input}
+ 18 │ │   
  19 │ │       Return the processed result.
- 20 │ │     "#
+ 20 │ │     `
  21 │ ╰─▶ }
     ╰────
 
@@ -348,7 +348,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unexpected token
     ╭─[unicode_strings.baml:27:3]
- 27 │   prompt #"
+ 27 │   prompt `
     ·   ───┬──
     ·      ╰── expected `config block`, found `identifier`
     ╰────
@@ -357,25 +357,16 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unexpected token
     ╭─[unicode_strings.baml:27:10]
- 27 │   prompt #"
+ 27 │   prompt `
     ·          ┬
-    ·          ╰── expected `top-level declaration`, found `'#'`
-    ╰────
-
-  [parse] E0010
-
-  × unexpected token
-    ╭─[unicode_strings.baml:27:11]
- 27 │   prompt #"
-    ·           ┬
-    ·           ╰── expected `top-level declaration`, found `'"'`
+    ·          ╰── expected `top-level declaration`, found `'`'`
     ╰────
 
   [parse] E0010
 
   × unexpected token
     ╭─[unicode_strings.baml:28:5]
- 28 │     Process the text: {{ 输入 }}
+ 28 │     Process the text: ${输入}
     ·     ───┬───
     ·        ╰── expected `top-level declaration`, found `identifier`
     ╰────
@@ -384,7 +375,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unexpected token
     ╭─[unicode_strings.baml:28:13]
- 28 │     Process the text: {{ 输入 }}
+ 28 │     Process the text: ${输入}
     ·             ─┬─
     ·              ╰── expected `top-level declaration`, found `identifier`
     ╰────
@@ -393,7 +384,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unexpected token
     ╭─[unicode_strings.baml:28:17]
- 28 │     Process the text: {{ 输入 }}
+ 28 │     Process the text: ${输入}
     ·                 ──┬─
     ·                   ╰── expected `top-level declaration`, found `identifier`
     ╰────
@@ -402,7 +393,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unexpected token
     ╭─[unicode_strings.baml:28:21]
- 28 │     Process the text: {{ 输入 }}
+ 28 │     Process the text: ${输入}
     ·                     ┬
     ·                     ╰── expected `top-level declaration`, found `':'`
     ╰────
@@ -411,16 +402,16 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unexpected token
     ╭─[unicode_strings.baml:28:23]
- 28 │     Process the text: {{ 输入 }}
+ 28 │     Process the text: ${输入}
     ·                       ┬
-    ·                       ╰── expected `top-level declaration`, found `'{'`
+    ·                       ╰── expected `top-level declaration`, found `'$'`
     ╰────
 
   [parse] E0010
 
   × unexpected token
     ╭─[unicode_strings.baml:28:24]
- 28 │     Process the text: {{ 输入 }}
+ 28 │     Process the text: ${输入}
     ·                        ┬
     ·                        ╰── expected `top-level declaration`, found `'{'`
     ╰────
@@ -428,37 +419,28 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0010
 
   × unexpected token
+    ╭─[unicode_strings.baml:28:25]
+ 28 │     Process the text: ${输入}
+    ·                         ─┬
+    ·                          ╰── expected `top-level declaration`, found `error`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
     ╭─[unicode_strings.baml:28:26]
- 28 │     Process the text: {{ 输入 }}
-    ·                          ─┬
-    ·                           ╰── expected `top-level declaration`, found `error`
+ 28 │     Process the text: ${输入}
+    ·                           ─┬
+    ·                            ╰── expected `top-level declaration`, found `error`
     ╰────
 
   [parse] E0010
 
   × unexpected token
     ╭─[unicode_strings.baml:28:27]
- 28 │     Process the text: {{ 输入 }}
-    ·                            ─┬
-    ·                             ╰── expected `top-level declaration`, found `error`
-    ╰────
-
-  [parse] E0010
-
-  × unexpected token
-    ╭─[unicode_strings.baml:28:29]
- 28 │     Process the text: {{ 输入 }}
-    ·                               ┬
-    ·                               ╰── expected `top-level declaration`, found `'}'`
-    ╰────
-
-  [parse] E0010
-
-  × unexpected token
-    ╭─[unicode_strings.baml:28:30]
- 28 │     Process the text: {{ 输入 }}
-    ·                                ┬
-    ·                                ╰── expected `top-level declaration`, found `'}'`
+ 28 │     Process the text: ${输入}
+    ·                             ┬
+    ·                             ╰── expected `top-level declaration`, found `'}'`
     ╰────
 
   [parse] E0010
@@ -537,18 +519,9 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unexpected token
     ╭─[unicode_strings.baml:30:3]
- 30 │   "#
+ 30 │   `
     ·   ┬
-    ·   ╰── expected `top-level declaration`, found `'"'`
-    ╰────
-
-  [parse] E0010
-
-  × unexpected token
-    ╭─[unicode_strings.baml:30:4]
- 30 │   "#
-    ·    ┬
-    ·    ╰── expected `top-level declaration`, found `'#'`
+    ·   ╰── expected `top-level declaration`, found `'`'`
     ╰────
 
   [parse] E0010

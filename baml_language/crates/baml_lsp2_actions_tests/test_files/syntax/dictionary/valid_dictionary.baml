@@ -7,9 +7,9 @@ client<llm> MyClient {
     array_key_with_quoted_unquoted [ "abc", "abc", "ccc" ]
     // separate by commas
     key2 "some random value", hello "world", thing "hello"
-     block_string #"hello there my frien
-                d"#
-    inline_raw_string #"inline "raw" string,,"#
+     block_string `hello there my frien
+                d`
+    inline_raw_string `inline "raw" string,,`
     "string key" "value with spaces"
     booleanValue true
     stringKey "true"
@@ -44,10 +44,10 @@ client<llm> MyClient {
         another_tool "value"
       }
     ]
-    block_string #"
+    block_string `
       hello there my friend
-      {# a comment in a prompt #}
-    "#
+
+    `
   }
 }
 

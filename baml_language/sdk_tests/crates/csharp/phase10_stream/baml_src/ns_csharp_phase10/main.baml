@@ -17,16 +17,16 @@ class StreamEnvelope {
 
 function Deterministic(text: string) -> string {
   client DeterministicReplayClient
-  prompt #"
-    Return the deterministic replay text for: {{ text }}
-  "#
+  prompt `
+    Return the deterministic replay text for: ${text}
+  `
 }
 
 function Structured(text: string) -> StreamEnvelope {
   client DeterministicReplayClient
-  prompt #"
-    Return the deterministic replay object for: {{ text }}
+  prompt `
+    Return the deterministic replay object for: ${text}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }

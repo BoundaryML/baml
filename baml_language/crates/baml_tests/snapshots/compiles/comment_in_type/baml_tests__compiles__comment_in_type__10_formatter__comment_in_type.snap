@@ -14,12 +14,12 @@ function FunctionWithComments(
 ) -> // Comment after arrow
     string {
     client: TestClient
-    prompt: #"test"#
+    prompt: `test`
 }
 
 // Another test - comment immediately after arrow
 function CommentAfterArrow() -> // inline comment
     string {
     client: TestClient
-    prompt: #"test"#
+    prompt: `test`
 }

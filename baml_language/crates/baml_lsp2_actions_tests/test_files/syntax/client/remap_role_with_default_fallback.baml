@@ -12,10 +12,10 @@ client<llm> MyClient {
 
 function TestRemapWithFallback(input: string) -> string {
   client MyClient
-  prompt #"
-    {{ _.chat("assistant") }}
-    This should fallback to system role and then be remapped to instructions: {{ input }}
-  "#
+  prompt `
+    ${role("assistant")}
+    This should fallback to system role and then be remapped to instructions: ${input}
+  `
 }
 
 //----

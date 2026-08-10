@@ -62,7 +62,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × parameter defaults are not supported in template_string `Greeting`
    ╭─[unsupported_contexts.baml:1:41]
- 1 │ template_string Greeting(name: string = "world") #"hello {{ name }}"#
+ 1 │ template_string Greeting(name: string = "world") `hello ${name}`
    ·                                         ───┬───
    ·                                            ╰── default value is not allowed here
    ╰────

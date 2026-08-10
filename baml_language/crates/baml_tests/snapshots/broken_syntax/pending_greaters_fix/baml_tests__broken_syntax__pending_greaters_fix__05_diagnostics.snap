@@ -26,7 +26,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[extra_greater.baml:23:51]
  23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
  24 │ │     client GPT4
- 25 │ │     prompt #"test"#
+ 25 │ │     prompt `test`
  26 │ ╰─▶ }
     ╰────
 
@@ -45,7 +45,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[extra_greater.baml:29:47]
  29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
  30 │ │     client GPT4
- 31 │ │     prompt #"test"#
+ 31 │ │     prompt `test`
  32 │ ╰─▶ }
     ╰────
 

@@ -14,12 +14,12 @@ class Sentiment {
 
 function ClassifySentiment(text: string) -> Sentiment {
     client GPT4o
-    prompt #"classify {{ text }}"#
+    prompt `classify ${text}`
 }
 
 function GenerateTests(count: int, topic: string) -> string[] {
     client GPT4o
-    prompt #"generate {{ count }} tests about {{ topic }}"#
+    prompt `generate ${count} tests about ${topic}`
 }
 
 testset "test" {
@@ -65,5 +65,5 @@ function Foo() -> string | image {
 
 function ClassifySentiment2(text: string) -> string {
     client GPT4o
-    prompt #"classify {{ text }}"#
+    prompt `classify ${text}`
 }

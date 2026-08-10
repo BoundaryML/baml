@@ -5,10 +5,10 @@
 class MalformedClass {
   // This field has an extra '>' - should report error about unmatched '>'
   bad_field map<string, int>>
-  
+
   // This field should parse correctly without cascading errors
   good_field map<string, int>
-  
+
   // Another well-formed field to verify no cascading
   another_field string
 }
@@ -22,13 +22,13 @@ class NestedGenerics {
 // Function parameter with extra >
 function BadParam(x: map<string, int>>) -> string {
   client GPT4
-  prompt #"test"#
+  prompt `test`
 }
 
 // Function return type with extra >
 function BadReturnType() -> map<string, int>> {
   client GPT4
-  prompt #"test"#
+  prompt `test`
 }
 
 // Type alias with extra >

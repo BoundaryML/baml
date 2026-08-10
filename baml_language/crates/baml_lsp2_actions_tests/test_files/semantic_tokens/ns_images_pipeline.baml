@@ -9,13 +9,13 @@ client AiGatewayImagenImageClient {
 
 function generate_image(thing: string) -> image {
     client: AiGatewayImagenImageClient
-    prompt: #"
+    prompt: `
         Create an image from this prompt:
 
-        {{ thing }}
+        ${thing}
 
-        {{ ctx.output_format }}
-    "#
+        ${ctx.output_format}
+    `
 }
 
 //----
@@ -39,8 +39,7 @@ function generate_image(thing: string) -> image {
 // ns_images_pipeline.baml:10:43 (type) [defaultLibrary] len=5 "image"
 // ns_images_pipeline.baml:11:5 (property) len=6 "client"
 // ns_images_pipeline.baml:12:5 (property) [declaration] len=6 "prompt"
-// ns_images_pipeline.baml:12:13 (string) len=1 "#"
-// ns_images_pipeline.baml:12:14 (string) len=1 "\""
+// ns_images_pipeline.baml:12:13 (string) len=1 "`"
 // ns_images_pipeline.baml:13:9 (string) len=6 "Create"
 // ns_images_pipeline.baml:13:16 (string) len=2 "an"
 // ns_images_pipeline.baml:13:19 (string) len=5 "image"
@@ -48,17 +47,5 @@ function generate_image(thing: string) -> image {
 // ns_images_pipeline.baml:13:30 (string) len=4 "this"
 // ns_images_pipeline.baml:13:35 (string) len=6 "prompt"
 // ns_images_pipeline.baml:13:41 (string) len=1 ":"
-// ns_images_pipeline.baml:15:9 (string) len=1 "{"
-// ns_images_pipeline.baml:15:10 (string) len=1 "{"
-// ns_images_pipeline.baml:15:12 (string) len=5 "thing"
-// ns_images_pipeline.baml:15:18 (string) len=1 "}"
-// ns_images_pipeline.baml:15:19 (string) len=1 "}"
-// ns_images_pipeline.baml:17:9 (string) len=1 "{"
-// ns_images_pipeline.baml:17:10 (string) len=1 "{"
-// ns_images_pipeline.baml:17:12 (string) len=3 "ctx"
-// ns_images_pipeline.baml:17:15 (string) len=1 "."
-// ns_images_pipeline.baml:17:16 (string) len=13 "output_format"
-// ns_images_pipeline.baml:17:30 (string) len=1 "}"
-// ns_images_pipeline.baml:17:31 (string) len=1 "}"
-// ns_images_pipeline.baml:18:5 (string) len=1 "\""
-// ns_images_pipeline.baml:18:6 (string) len=1 "#"
+// ns_images_pipeline.baml:17:15 (property) len=13 "output_format"
+// ns_images_pipeline.baml:18:5 (string) len=1 "`"

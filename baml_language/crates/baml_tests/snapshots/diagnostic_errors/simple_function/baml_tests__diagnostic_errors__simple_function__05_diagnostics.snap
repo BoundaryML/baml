@@ -8,8 +8,8 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[main.baml:1:45]
  1 │ ╭─▶ function HelloWorld(name: string) -> string {
  2 │ │     client GPT4
- 3 │ │     prompt #"
- 4 │ │       Say hello to {{name}}
- 5 │ │     "#
+ 3 │ │     prompt `
+ 4 │ │       Say hello to ${name}
+ 5 │ │     `
  6 │ ╰─▶ }
    ╰────

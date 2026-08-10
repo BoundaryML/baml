@@ -20,7 +20,7 @@ enum Job {
 // This function returns the dynamic class defined above.
 function ExtractResume(from_text: string) -> Resume {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
 }
 
 test ReturnDynamicClassTest {
@@ -53,7 +53,7 @@ test ReturnDynamicClassTest {
     }
   }
   args {
-    from_text #"
+    from_text `
       John Doe
 
       Education
@@ -65,7 +65,7 @@ test ReturnDynamicClassTest {
       Skills
       - Python
       - Java
-    "#
+    `
   }
 }
 

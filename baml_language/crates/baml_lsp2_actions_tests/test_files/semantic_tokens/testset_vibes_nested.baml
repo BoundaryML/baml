@@ -14,12 +14,12 @@ class Sentiment {
 
 function ClassifySentiment(text: string) -> Sentiment {
     client GPT4o
-    prompt #"classify {{ text }}"#
+    prompt `classify ${text}`
 }
 
 function GenerateTests(count: int, topic: string) -> string[] {
     client GPT4o
-    prompt #"generate {{ count }} tests about {{ topic }}"#
+    prompt `generate ${count} tests about ${topic}`
 }
 
 testset "test" {
@@ -65,7 +65,7 @@ function Foo() -> string | image {
 
 function ClassifySentiment2(text: string) -> string {
     client GPT4o
-    prompt #"classify {{ text }}"#
+    prompt `classify ${text}`
 }
 
 //----
@@ -98,16 +98,9 @@ function ClassifySentiment2(text: string) -> string {
 // testset_vibes_nested.baml:15:45 (class) len=9 "Sentiment"
 // testset_vibes_nested.baml:16:5 (property) len=6 "client"
 // testset_vibes_nested.baml:17:5 (property) [declaration] len=6 "prompt"
-// testset_vibes_nested.baml:17:12 (string) len=1 "#"
-// testset_vibes_nested.baml:17:13 (string) len=1 "\""
-// testset_vibes_nested.baml:17:14 (string) len=8 "classify"
-// testset_vibes_nested.baml:17:23 (string) len=1 "{"
-// testset_vibes_nested.baml:17:24 (string) len=1 "{"
-// testset_vibes_nested.baml:17:26 (string) len=4 "text"
-// testset_vibes_nested.baml:17:31 (string) len=1 "}"
-// testset_vibes_nested.baml:17:32 (string) len=1 "}"
-// testset_vibes_nested.baml:17:33 (string) len=1 "\""
-// testset_vibes_nested.baml:17:34 (string) len=1 "#"
+// testset_vibes_nested.baml:17:12 (string) len=1 "`"
+// testset_vibes_nested.baml:17:13 (string) len=8 "classify"
+// testset_vibes_nested.baml:17:29 (string) len=1 "`"
 // testset_vibes_nested.baml:20:1 (keyword) len=8 "function"
 // testset_vibes_nested.baml:20:10 (function) [declaration] len=13 "GenerateTests"
 // testset_vibes_nested.baml:20:24 (parameter) [declaration] len=5 "count"
@@ -117,23 +110,11 @@ function ClassifySentiment2(text: string) -> string {
 // testset_vibes_nested.baml:20:54 (type) [defaultLibrary] len=6 "string"
 // testset_vibes_nested.baml:21:5 (property) len=6 "client"
 // testset_vibes_nested.baml:22:5 (property) [declaration] len=6 "prompt"
-// testset_vibes_nested.baml:22:12 (string) len=1 "#"
-// testset_vibes_nested.baml:22:13 (string) len=1 "\""
-// testset_vibes_nested.baml:22:14 (string) len=8 "generate"
-// testset_vibes_nested.baml:22:23 (string) len=1 "{"
-// testset_vibes_nested.baml:22:24 (string) len=1 "{"
-// testset_vibes_nested.baml:22:26 (string) len=5 "count"
-// testset_vibes_nested.baml:22:32 (string) len=1 "}"
-// testset_vibes_nested.baml:22:33 (string) len=1 "}"
-// testset_vibes_nested.baml:22:35 (string) len=5 "tests"
-// testset_vibes_nested.baml:22:41 (string) len=5 "about"
-// testset_vibes_nested.baml:22:47 (string) len=1 "{"
-// testset_vibes_nested.baml:22:48 (string) len=1 "{"
-// testset_vibes_nested.baml:22:50 (string) len=5 "topic"
-// testset_vibes_nested.baml:22:56 (string) len=1 "}"
-// testset_vibes_nested.baml:22:57 (string) len=1 "}"
-// testset_vibes_nested.baml:22:58 (string) len=1 "\""
-// testset_vibes_nested.baml:22:59 (string) len=1 "#"
+// testset_vibes_nested.baml:22:12 (string) len=1 "`"
+// testset_vibes_nested.baml:22:13 (string) len=8 "generate"
+// testset_vibes_nested.baml:22:31 (string) len=5 "tests"
+// testset_vibes_nested.baml:22:37 (string) len=5 "about"
+// testset_vibes_nested.baml:22:51 (string) len=1 "`"
 // testset_vibes_nested.baml:25:1 (keyword) len=7 "testset"
 // testset_vibes_nested.baml:25:9 (string) len=6 "\"test\""
 // testset_vibes_nested.baml:26:5 (keyword) len=3 "let"
@@ -262,13 +243,6 @@ function ClassifySentiment2(text: string) -> string {
 // testset_vibes_nested.baml:66:46 (type) [defaultLibrary] len=6 "string"
 // testset_vibes_nested.baml:67:5 (property) len=6 "client"
 // testset_vibes_nested.baml:68:5 (property) [declaration] len=6 "prompt"
-// testset_vibes_nested.baml:68:12 (string) len=1 "#"
-// testset_vibes_nested.baml:68:13 (string) len=1 "\""
-// testset_vibes_nested.baml:68:14 (string) len=8 "classify"
-// testset_vibes_nested.baml:68:23 (string) len=1 "{"
-// testset_vibes_nested.baml:68:24 (string) len=1 "{"
-// testset_vibes_nested.baml:68:26 (string) len=4 "text"
-// testset_vibes_nested.baml:68:31 (string) len=1 "}"
-// testset_vibes_nested.baml:68:32 (string) len=1 "}"
-// testset_vibes_nested.baml:68:33 (string) len=1 "\""
-// testset_vibes_nested.baml:68:34 (string) len=1 "#"
+// testset_vibes_nested.baml:68:12 (string) len=1 "`"
+// testset_vibes_nested.baml:68:13 (string) len=8 "classify"
+// testset_vibes_nested.baml:68:29 (string) len=1 "`"

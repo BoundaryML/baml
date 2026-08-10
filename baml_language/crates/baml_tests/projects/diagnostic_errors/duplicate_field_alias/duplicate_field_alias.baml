@@ -26,7 +26,7 @@ class TripleCollision {
 // value and collide.
 class NormalizedCollision {
   a string @alias("q")
-  b string @alias(#"q"#)
+  b string @alias(`q`)
 }
 
 // ─── Controls: these must NOT be flagged ─────────────────────────────────────

@@ -14,10 +14,10 @@ client<llm> MyClient {
 
 function TestRemap(input: string) -> string {
   client MyClient
-  prompt #"
-    {{ _.chat("user") }}
-    Test message: {{ input }}
-  "#
+  prompt `
+    ${role("user")}
+    Test message: ${input}
+  `
 }
 
 //----

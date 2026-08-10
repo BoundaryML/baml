@@ -30,9 +30,9 @@ class MapFields {
 
 function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
   client MyClient
-  prompt #"
-    Merge these: {{i1}} {{i2}}
-  "#
+  prompt `
+    Merge these: ${i1} ${i2}
+  `
 }
 
 // error: Error validating: This line is not a valid field or attribute definition. A valid class property looks like: 'myProperty string[] @description("This is a description")'

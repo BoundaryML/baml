@@ -20,7 +20,7 @@ enum Job {
 // This function returns the dynamic class defined above.
 function ExtractResume(from_text: string) -> Resume {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
 }
 
 test ReturnDynamicClassTest {
@@ -53,7 +53,7 @@ test ReturnDynamicClassTest {
     }
   }
   args {
-    from_text #"
+    from_text `
       John Doe
 
       Education
@@ -65,7 +65,7 @@ test ReturnDynamicClassTest {
       Skills
       - Python
       - Java
-    "#
+    `
   }
 }
 
@@ -108,11 +108,9 @@ test ReturnDynamicClassTest {
 // dynamic_type_builder.baml:22:3 (property) len=6 "client"
 // dynamic_type_builder.baml:22:10 (string) len=20 "\"openai/gpt-4o-mini\""
 // dynamic_type_builder.baml:23:3 (property) [declaration] len=6 "prompt"
-// dynamic_type_builder.baml:23:10 (string) len=1 "#"
-// dynamic_type_builder.baml:23:11 (string) len=1 "\""
-// dynamic_type_builder.baml:23:12 (string) len=5 "Hello"
-// dynamic_type_builder.baml:23:17 (string) len=1 "\""
-// dynamic_type_builder.baml:23:18 (string) len=1 "#"
+// dynamic_type_builder.baml:23:10 (string) len=1 "`"
+// dynamic_type_builder.baml:23:11 (string) len=5 "Hello"
+// dynamic_type_builder.baml:23:16 (string) len=1 "`"
 // dynamic_type_builder.baml:26:1 (keyword) len=4 "test"
 // dynamic_type_builder.baml:26:6 (struct) [declaration] len=22 "ReturnDynamicClassTest"
 // dynamic_type_builder.baml:27:3 (property) len=9 "functions"
@@ -149,8 +147,7 @@ test ReturnDynamicClassTest {
 // dynamic_type_builder.baml:52:7 (enumMember) [declaration] len=14 "ProductManager"
 // dynamic_type_builder.baml:55:3 (property) len=4 "args"
 // dynamic_type_builder.baml:56:5 (property) len=9 "from_text"
-// dynamic_type_builder.baml:56:15 (string) len=1 "#"
-// dynamic_type_builder.baml:56:16 (string) len=1 "\""
+// dynamic_type_builder.baml:56:15 (string) len=1 "`"
 // dynamic_type_builder.baml:57:7 (string) len=4 "John"
 // dynamic_type_builder.baml:57:12 (string) len=3 "Doe"
 // dynamic_type_builder.baml:59:7 (string) len=9 "Education"
@@ -187,5 +184,4 @@ test ReturnDynamicClassTest {
 // dynamic_type_builder.baml:66:9 (string) len=6 "Python"
 // dynamic_type_builder.baml:67:7 (string) len=1 "-"
 // dynamic_type_builder.baml:67:9 (string) len=4 "Java"
-// dynamic_type_builder.baml:68:5 (string) len=1 "\""
-// dynamic_type_builder.baml:68:6 (string) len=1 "#"
+// dynamic_type_builder.baml:68:5 (string) len=1 "`"

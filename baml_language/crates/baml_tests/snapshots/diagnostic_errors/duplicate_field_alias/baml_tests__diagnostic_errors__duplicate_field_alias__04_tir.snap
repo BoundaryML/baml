@@ -17,7 +17,7 @@ class user.TripleCollision {
 }
 class user.NormalizedCollision {
   a: string @alias("q")
-  b: string @alias(#"q"#)
+  b: string @alias(`q`)
 }
 class user.AliasEqualsOwnName {
   a: string @alias("a")
@@ -47,7 +47,7 @@ class user.TripleCollision$stream {
 }
 class user.NormalizedCollision$stream {
   a: string | null @alias("q")
-  b: string | null @alias(#"q"#)
+  b: string | null @alias(`q`)
 }
 class user.AliasEqualsOwnName$stream {
   a: string | null @alias("a")

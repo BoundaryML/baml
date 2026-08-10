@@ -30,7 +30,7 @@ client<llm> TestClient {
 
 function TestFunc(input: string) -> string {
     client TestClient
-    prompt #"hi {{ input }}"#
+    prompt `hi ${input}`
 }
 
 function call_stream_inferred() -> baml.llm.Stream<null | string, string> {

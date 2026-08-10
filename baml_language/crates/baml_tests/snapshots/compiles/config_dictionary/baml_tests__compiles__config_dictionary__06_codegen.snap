@@ -53,8 +53,8 @@ function user.MyClient$new(lenient: bool) -> null {
     load_const "somerandomvalue"
     load_const "world"
     load_const "hello"
-    load_const "#hellotheremyfriend#"
-    load_const "#inlinerawstring,,#"
+    load_const "hello there my frien\n                d"
+    load_const "inline \"raw\" string,,"
     load_const true
     load_const true
     load_const "one"
@@ -108,7 +108,7 @@ function user.MyClient$new(lenient: bool) -> null {
     alloc_map 1
     load_type map<string, string | map<string, string>> | map<string, string>
     alloc_array 2
-    load_const "#hellotheremyfriend{#acommentinaprompt#}#"
+    load_const "hello there my friend"
     load_const "max_tokens"
     load_const "array_key_with_quoted_unquoted"
     load_const "key2"

@@ -23,15 +23,15 @@ class Verdict {
 // The function under test.
 function classify(text: string) -> Verdict {
     client: Mini
-    prompt: #"
+    prompt: `
         Classify the sentiment of the text below as positive, negative, or
         neutral. Sarcasm counts as the sentiment actually expressed, not the
         literal words. Plain statements of fact are neutral.
 
-        Text: {{ text }}
+        Text: ${text}
 
-        {{ ctx.output_format }}
-    "#
+        ${ctx.output_format}
+    `
 }
 
 //----
@@ -78,8 +78,7 @@ function classify(text: string) -> Verdict {
 // ns_sentiment.baml:24:36 (class) len=7 "Verdict"
 // ns_sentiment.baml:25:5 (property) len=6 "client"
 // ns_sentiment.baml:26:5 (property) [declaration] len=6 "prompt"
-// ns_sentiment.baml:26:13 (string) len=1 "#"
-// ns_sentiment.baml:26:14 (string) len=1 "\""
+// ns_sentiment.baml:26:13 (string) len=1 "`"
 // ns_sentiment.baml:27:9 (string) len=8 "Classify"
 // ns_sentiment.baml:27:18 (string) len=3 "the"
 // ns_sentiment.baml:27:22 (string) len=9 "sentiment"
@@ -117,17 +116,5 @@ function classify(text: string) -> Verdict {
 // ns_sentiment.baml:29:60 (string) len=1 "."
 // ns_sentiment.baml:31:9 (string) len=4 "Text"
 // ns_sentiment.baml:31:13 (string) len=1 ":"
-// ns_sentiment.baml:31:15 (string) len=1 "{"
-// ns_sentiment.baml:31:16 (string) len=1 "{"
-// ns_sentiment.baml:31:18 (string) len=4 "text"
-// ns_sentiment.baml:31:23 (string) len=1 "}"
-// ns_sentiment.baml:31:24 (string) len=1 "}"
-// ns_sentiment.baml:33:9 (string) len=1 "{"
-// ns_sentiment.baml:33:10 (string) len=1 "{"
-// ns_sentiment.baml:33:12 (string) len=3 "ctx"
-// ns_sentiment.baml:33:15 (string) len=1 "."
-// ns_sentiment.baml:33:16 (string) len=13 "output_format"
-// ns_sentiment.baml:33:30 (string) len=1 "}"
-// ns_sentiment.baml:33:31 (string) len=1 "}"
-// ns_sentiment.baml:34:5 (string) len=1 "\""
-// ns_sentiment.baml:34:6 (string) len=1 "#"
+// ns_sentiment.baml:33:15 (property) len=13 "output_format"
+// ns_sentiment.baml:34:5 (string) len=1 "`"

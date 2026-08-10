@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36459
 ---
 === PPIR ===
 class user.TopLevelClass {
@@ -11,13 +10,13 @@ class user.TopLevelClass$stream {
 }
 enum user.TopLevelEnum {A, B}
 function user.Fn(client: baml.llm.Client = ...) -> string  [llm] {
-  baml.llm.call_llm_function(client, "Fn", map {  })
+  baml.llm.call_llm_function(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "Fn", map {  })
+  baml.llm.build_request(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "Fn", map {  })
+  baml.llm.build_request_stream(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string  [expr] {
   baml.llm.parse(json)
@@ -26,8 +25,8 @@ function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client 
   client.__make_stream(sse)
 }
 function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "Fn", map {  })
+  baml.llm.render_prompt(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "Fn", map {  })
+  baml.llm.stream_llm_function(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
 }

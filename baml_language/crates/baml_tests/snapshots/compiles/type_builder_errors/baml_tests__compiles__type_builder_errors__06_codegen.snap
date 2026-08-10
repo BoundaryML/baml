@@ -32,6 +32,9 @@ function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resum
     store_var client
 
   L0:
+    make_closure .<tagged(TypeBuilderFn, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_type Resume
     load_var client
     load_const "TypeBuilderFn"
@@ -40,7 +43,7 @@ function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resum
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _6
     call baml.llm.call_llm_function
     return
 }
@@ -61,6 +64,9 @@ function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Cl
     store_var client
 
   L0:
+    make_closure .<tagged(TypeBuilderFn$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_var client
     load_const "TypeBuilderFn"
     load_var from_text
@@ -68,7 +74,7 @@ function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Cl
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _6
     call baml.llm.build_request
     return
 }
@@ -89,6 +95,9 @@ function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml
     store_var client
 
   L0:
+    make_closure .<tagged(TypeBuilderFn$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_var client
     load_const "TypeBuilderFn"
     load_var from_text
@@ -96,7 +105,7 @@ function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _6
     call baml.llm.build_request_stream
     return
 }
@@ -163,6 +172,9 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Cl
     store_var client
 
   L0:
+    make_closure .<tagged(TypeBuilderFn$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_var client
     load_const "TypeBuilderFn"
     load_var from_text
@@ -170,7 +182,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Cl
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _6
     call baml.llm.render_prompt
     return
 }
@@ -191,6 +203,9 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -
     store_var client
 
   L0:
+    make_closure .<tagged(TypeBuilderFn$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_type Resume$stream | null
     load_type Resume
     load_var client
@@ -200,7 +215,7 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _6
     call baml.llm.stream_llm_function
     return
 }

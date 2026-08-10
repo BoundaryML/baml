@@ -23,16 +23,16 @@ class Item {
 function ExtractReceipt(receipt: image | string) -> Receipt {
   // see clients.baml
   client GPT4o
-  prompt #"
-    {# start a user message #}
-    {{ _.role("user") }}
+  prompt `
+
+    ${role("user")}
 
     Extract info from this receipt:
-    {{ receipt }}
+    ${receipt}
 
-    {# special macro to print the output schema instructions. #}
-    {{ ctx.output_format }}
-  "#
+
+    ${ctx.output_format}
+  `
 }
 
 // Test when the input is an image
@@ -47,8 +47,8 @@ test ImageReceiptTest {
 test StarbucksTextReceiptTest {
   functions [ExtractReceipt]
   args {
-    // use #""# for multi-line strings
-    receipt #"
+    // use backticks for multiline strings
+    receipt `
       Starbucks
       Date: 2022-01-01
       Total: $5.00 USD
@@ -59,7 +59,7 @@ test StarbucksTextReceiptTest {
       - Croissant
         - $2.50
         - 1
-    "#
+    `
   }
 }
 
@@ -82,25 +82,25 @@ function ExtractResume(resume_text: string) -> Resume {
   client GPT4o
 
   // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
-  prompt #"
+  prompt `
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
     ---
-    {{ resume_text }}
+    ${resume_text}
     ---
 
-    {# special macro to print the output instructions. #}
-    {{ ctx.output_format }}
+
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test Test1 {
   functions [ExtractResume]
   args {
-    resume_text #"
+    resume_text `
       John Doe
 
       Education
@@ -112,7 +112,7 @@ test Test1 {
       - Python
       - Java
       - C++
-    "#
+    `
   }
 }
 // This will be available as an enum in your Python and Typescript code.
@@ -133,19 +133,19 @@ class Message {
 function ClassifyMessage(message: Message) -> Category {
   client GPT4o
 
-  prompt #"
+  prompt `
     Classify the following INPUT into ONE
     of categories listed.
 
     INPUT:
     ---
-    {{ message.userName }}: {{ message.message }}
+    ${message.userName}: ${message.message}
     ---
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Response:
-  "#
+  `
 }
 
 test Test1 {
@@ -258,25 +258,25 @@ class WeatherAPI {
 
 function UseTool(user_message: string) -> WeatherAPI {
   client GPT4o
-  prompt #"
+  prompt `
     Extract the info from this message
     ---
-    {{ user_message }}
+    ${user_message}
     ---
 
-    {# special macro to print the output schema. #}
-    {{ ctx.output_format }}
+
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test TestOne {
   functions [UseTool]
   args {
-    user_message #"
+    user_message `
       what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?
-    "#
+    `
   }
 }
 
@@ -293,61 +293,61 @@ class SendEmail {
 
 function ChooseOneTool(user_message: string) -> WeatherAPI2 | SendEmail {
   client GPT4o
-  prompt #"
+  prompt `
     Choose the right schema that contains all the information in this message:
     ---
-    {{ user_message }}
+    ${user_message}
     ---
 
-    {# special macro to print the output schema. #}
-    {{ ctx.output_format }}
+
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test TestOneFunc {
   functions [ChooseOneTool]
   args {
-    user_message #"
+    user_message `
       what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?
-    "#
+    `
   }
 }
 
 test TestOneFunc2 {
   functions [ChooseOneTool]
   args {
-    user_message #"
+    user_message `
       Send an email to John Doe with the subject 'Hello' and the body 'How are you doing?'
-    "#
+    `
   }
 }
 
 
 function ChooseNTools(user_message: string) -> (WeatherAPI2 | SendEmail)[] {
   client GPT4o
-  prompt #"
+  prompt `
     Choose the right schema(s) that contains all the information in this message:
     ---
-    {{ user_message }}
+    ${user_message}
     ---
 
-    {# special macro to print the output schema. #}
-    {{ ctx.output_format }}
+
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test TestNTools {
   functions [ChooseNTools]
   args {
-    user_message #"
+    user_message `
       what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?
 
       Also send an email to Mark Gonzalez with the subject 'Hello' and the body 'How are you doing?'
-    "#
+    `
   }
 }
 
@@ -357,13 +357,13 @@ test TestNTools {
 
 function AudioInput(audioInput: audio) -> string {
   client Gemini
-  prompt #"
-    {{ _.role("user") }}
+  prompt `
+    ${role("user")}
 
    Does this sound like a roar? Yes or no? One word no other characters.
 
-    {{ audioInput }}
-  "#
+    ${audioInput}
+  `
 }
 
 
@@ -382,19 +382,19 @@ test TestURLAudioInput{
 
 class ImageDescription {
   description string
-  tags string[] @description(#"
+  tags string[] @description(`
     Tags that describe the image
-  "#)
+  `)
 }
 
 function DescribeImage(myImage: image) -> ImageDescription {
   client GPT4o
-  prompt #"
-    {{ _.role("user") }}
-    Describe this in 2 sentences: {{ myImage }}
+  prompt `
+    ${role("user")}
+    Describe this in 2 sentences: ${myImage}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 
@@ -411,13 +411,13 @@ test ImageTest {
 
 function PdfInput(pdfInput: pdf) -> string {
   client GPT4o
-  prompt #"
-    {{ _.role("user") }}
+  prompt `
+    ${role("user")}
 
     Get the title of the pdfs
 
-    {{ pdfInput }}
-  "#
+    ${pdfInput}
+  `
 }
 
 test TestFilePdfInput {
@@ -435,13 +435,13 @@ test TestFilePdfInput {
 
 function VideoInput(videoInput: video) -> string {
   client Gemini
-  prompt #"
-    {{ _.role("user") }}
+  prompt `
+    ${role("user")}
 
     Describe what happens in this video in 5 words or less.
 
-    {{ videoInput }}
-  "#
+    ${videoInput}
+  `
 }
 
 test TestFileVideoInput {
@@ -473,25 +473,25 @@ function ExtractResumeUsingOllama(resume_text: string) -> OResume {
   // client Phi3
 
   // The prompt uses Jinja syntax. Change the models or this text and watch the prompt preview change!
-  prompt #"
+  prompt `
     Parse the following resume and return a structured representation of the data in the schema below.
 
     Resume:
     ---
-    {{ resume_text }}
+    ${resume_text}
     ---
 
-    {# special macro to print the output instructions. #}
-    {{ ctx.output_format }}
+
+    ${ctx.output_format}
 
     JSON:
-  "#
+  `
 }
 
 test OllamaTest1 {
   functions [ExtractResumeUsingOllama]
   args {
-    resume_text #"
+    resume_text `
       John Doe
 
       Education
@@ -503,7 +503,7 @@ test OllamaTest1 {
       - Python
       - Java
       - C++
-    "#
+    `
   }
 }
 enum OCategory {
@@ -528,19 +528,19 @@ function ClassifyMessageUsingOllama(message: OMessage) -> OCategory {
   // client Gemma2
   // client Phi3
 
-  prompt #"
+  prompt `
     Classify the following INPUT into ONE
     of categories listed.
 
     INPUT:
     ---
-    {{ message.userName }}: {{ message.message }}
+    ${message.userName}: ${message.message}
     ---
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Response:
-  "#
+  `
 }
 
 test OllamaTest1 {
@@ -632,17 +632,17 @@ class OrderInfo {
 
 function GetOrderInfo(email: Email) -> OrderInfo {
   client GPT4o
-  prompt #"
+  prompt `
     Extract the info from this email in the INPUT:
 
     INPUT:
     -------
-    from: {{email.from_address}}
-    Email Subject: {{email.subject}}
-    Email Body: {{email.body}}
+    from: ${email.from_address}
+    Email Subject: ${email.subject}
+    Email Body: ${email.body}
     -------
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Before you output the JSON, please explain your
     reasoning step-by-step. Here is an example on how to do this:
@@ -651,7 +651,7 @@ function GetOrderInfo(email: Email) -> OrderInfo {
     {
       ... the json schema ...
     }'
-  "#
+  `
 }
 
 test Test1 {
@@ -660,7 +660,7 @@ test Test1 {
     email {
       from_address "hello@amazon.com"
       subject "Your Amazon.com order of 'Wood Dowel Rods...' has shipped!"
-      body #"
+      body `
         Hi Sam, your package will arrive:
         Thurs, April 4
         Track your package:
@@ -675,7 +675,7 @@ test Test1 {
 
         Shipment total:
         $0.00
-    "#
+    `
 
     }
   }
@@ -707,16 +707,16 @@ enum MyClass {
 function ClassifyMessageWithSymbol(input: string) -> MyClass {
   client GPT4o
 
-  prompt #"
+  prompt `
     Classify the following INPUT into ONE
     of the following categories:
 
-    INPUT: {{ input }}
+    INPUT: ${input}
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
     Response:
-  "#
+  `
 }
 
 test Test1 {
@@ -737,22 +737,22 @@ enum MyCategory {
 function ClassifyMessageWithRoles(input: string) -> MyCategory {
   client GPT4o
 
-  prompt #"
-    {# _.role("system") starts a system message #}
-    {{ _.role("system") }}
+  prompt `
+
+    ${role("system")}
 
     Classify the following INPUT into ONE
     of the following categories:
 
-    {{ ctx.output_format }}
+    ${ctx.output_format}
 
-    {# This starts a user message #}
-    {{ _.role("user") }}
 
-    INPUT: {{ input }}
+    ${role("user")}
+
+    INPUT: ${input}
 
     Response:
-  "#
+  `
 }
 
 test Test1 {
@@ -768,13 +768,13 @@ class User {
 
 function FunctionWithConditionals(user: User) -> string {
   client GPT4o
-  prompt #"
-    {% if user.is_active %}
-      Greet the user {{ user.name }}!
-    {% else %}
+  prompt `
+    ${if (user.is_active)}
+      Greet the user ${user.name}!
+    ${else}
       Tell the user to activate their account
-    {% endif %}
-  "#
+    ${endif}
+  `
 }
 class MyUserMessage {
   user_name string
@@ -783,11 +783,11 @@ class MyUserMessage {
 
 function FunctionWithLoops(messages: MyUserMessage[]) -> string {
   client GPT4o
-  prompt #"
-    {% for message in messages %}
-      {{ message.user_name }}: {{ message.content }}
-    {% endfor %}
-  "#
+  prompt `
+    ${for (let message in messages)}
+      ${message.user_name}: ${message.content}
+    ${endfor}
+  `
 }
 
 test TestName {
@@ -813,22 +813,22 @@ class UserMessage {
 }
 
 // prompt strings and template strings use Jinja2 syntax: https://jinja.palletsprojects.com/en/3.1.x/templates/
-template_string PrintMessages(messages: UserMessage[]) #"
-  {% for m in messages %}
-    {{ _.role(m.role) }}
-    {{ m.message }}
-  {% endfor %}
-"#
+template_string PrintMessages(messages: UserMessage[]) `
+  ${for (let m in messages)}
+    ${role(m.role)}
+    ${m.message}
+  ${endfor}
+`
 
 function ClassifyConversation(messages: UserMessage[]) -> Category[] {
   client GPT4o
-  prompt #"
+  prompt `
     Classify this conversation:
-    {{ PrintMessages(messages) }}
+    ${PrintMessages(messages)}
 
     Use the following categories:
-    {{ ctx.output_format}}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 test TestClassifyConvo {

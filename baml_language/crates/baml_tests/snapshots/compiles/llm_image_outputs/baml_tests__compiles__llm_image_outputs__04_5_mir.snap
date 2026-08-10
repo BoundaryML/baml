@@ -37,11 +37,13 @@ fn user.OpenAIImageResponses$new(lenient: bool) -> null {
 fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     // Locals:
     let _0: image // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -55,11 +57,41 @@ fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(image);
+        _0 = call const fn baml.llm.call_llm_function<copy _7>(copy _2, const "GenerateImage", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImage, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate an image for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -67,10 +99,12 @@ fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
 fn user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -84,10 +118,40 @@ fn user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImage", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImage$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate an image for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -95,10 +159,12 @@ fn user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> 
 fn user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -112,10 +178,40 @@ fn user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Clie
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImage", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImage$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate an image for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -183,10 +279,12 @@ fn user.GenerateImage$parse_stream(sse: baml.http.SseStream, client: baml.llm.Cl
 fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -200,10 +298,40 @@ fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImage", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImage$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate an image for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -211,12 +339,14 @@ fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> 
 fn user.GenerateImage$stream(prompt: string, client: baml.llm.Client) -> baml.llm.Stream<image, image> {
     // Locals:
     let _0: baml.llm.Stream<image, image> // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
-    let _6: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
+    let _8: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -230,12 +360,42 @@ fn user.GenerateImage$stream(prompt: string, client: baml.llm.Client) -> baml.ll
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image);
-        _6 = load_type(image);
-        _0 = call const fn baml.llm.stream_llm_function<copy _5, copy _6>(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(image);
+        _8 = load_type(image);
+        _0 = call const fn baml.llm.stream_llm_function<copy _7, copy _8>(copy _2, const "GenerateImage", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImage$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate an image for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -243,11 +403,13 @@ fn user.GenerateImage$stream(prompt: string, client: baml.llm.Client) -> baml.ll
 fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -261,11 +423,41 @@ fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(image[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _7>(copy _2, const "GenerateImageSet", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImageSet, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate multiple distinct image outputs for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -273,10 +465,12 @@ fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
 fn user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -290,10 +484,40 @@ fn user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImageSet", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImageSet$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate multiple distinct image outputs for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -301,10 +525,12 @@ fn user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) 
 fn user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -318,10 +544,40 @@ fn user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.C
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImageSet", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImageSet$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate multiple distinct image outputs for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -389,10 +645,12 @@ fn user.GenerateImageSet$parse_stream(sse: baml.http.SseStream, client: baml.llm
 fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -406,10 +664,40 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImageSet", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImageSet$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate multiple distinct image outputs for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -417,12 +705,14 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) 
 fn user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client) -> baml.llm.Stream<image[], image[]> {
     // Locals:
     let _0: baml.llm.Stream<image[], image[]> // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
-    let _6: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
+    let _8: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -436,12 +726,42 @@ fn user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client) -> baml
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image[]);
-        _6 = load_type(image[]);
-        _0 = call const fn baml.llm.stream_llm_function<copy _5, copy _6>(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(image[]);
+        _8 = load_type(image[]);
+        _0 = call const fn baml.llm.stream_llm_function<copy _7, copy _8>(copy _2, const "GenerateImageSet", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateImageSet$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate multiple distinct image outputs for this prompt:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -449,11 +769,13 @@ fn user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client) -> baml
 fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (string | image)[] {
     // Locals:
     let _0: (string | image)[] // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -467,11 +789,41 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type((image | string)[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type((image | string)[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _7>(copy _2, const "GenerateMixedImageNarrative", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateMixedImageNarrative, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate a short narrative with text captions and image outputs for:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -479,10 +831,12 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
 fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -496,10 +850,40 @@ fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.l
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request(copy _2, const "GenerateMixedImageNarrative", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateMixedImageNarrative$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate a short narrative with text captions and image outputs for:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -507,10 +891,12 @@ fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.l
 fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -524,10 +910,40 @@ fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client:
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateMixedImageNarrative", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateMixedImageNarrative$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate a short narrative with text captions and image outputs for:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -595,10 +1011,12 @@ fn user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream, clien
 fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -612,10 +1030,40 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.l
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateMixedImageNarrative", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateMixedImageNarrative$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate a short narrative with text captions and image outputs for:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -623,12 +1071,14 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.l
 fn user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.llm.Client) -> baml.llm.Stream<(string | image)[], (string | image)[]> {
     // Locals:
     let _0: baml.llm.Stream<(string | image)[], (string | image)[]> // _0 // return
-    let _1: string // prompt // param
+    let _1: string // prompt // param [captured]
     let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
-    let _5: type
-    let _6: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
+    let _8: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -642,12 +1092,42 @@ fn user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.llm.Clie
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type((image | string)[]);
-        _6 = load_type((image | string)[]);
-        _0 = call const fn baml.llm.stream_llm_function<copy _5, copy _6>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0](copy _1);
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type((image | string)[]);
+        _8 = load_type((image | string)[]);
+        _0 = call const fn baml.llm.stream_llm_function<copy _7, copy _8>(copy _2, const "GenerateMixedImageNarrative", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(GenerateMixedImageNarrative$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: string
+    let _6: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Generate a short narrative with text captions and image outputs for:\n", const "\n\n", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy _2.2;
+        _6 = [copy _4, copy _5]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _6 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }

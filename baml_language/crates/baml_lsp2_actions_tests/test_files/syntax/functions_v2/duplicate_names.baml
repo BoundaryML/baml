@@ -5,7 +5,7 @@ function Bar {
 
 function Bar(a: string, b: int | bool) -> int {
   client Bar
-  prompt #"fa"#
+  prompt `fa`
 }
 
 // error: The function "Bar" cannot be re-defined because a function with that name already exists.
@@ -52,7 +52,7 @@ function Bar(a: string, b: int | bool) -> int {
 // error: Error validating: Missing `prompt` and `client` fields in function. Add to the block:
 // ```
 // client GPT4
-// prompt #"..."#
+// prompt `...`
 // ```
 //   -->  functions_v2/duplicate_names.baml:1
 //    |
@@ -76,7 +76,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    ╭─[functions_v2_duplicate_names.baml:6:47]
 //  6 │ ╭─▶ function Bar(a: string, b: int | bool) -> int {
 //  7 │ │     client Bar
-//  8 │ │     prompt #"fa"#
+//  8 │ │     prompt `fa`
 //  9 │ ├─▶ }
 //    · ╰──── expected `baml.llm.Client`, found `() -> !error throws never`
 //    ╰────

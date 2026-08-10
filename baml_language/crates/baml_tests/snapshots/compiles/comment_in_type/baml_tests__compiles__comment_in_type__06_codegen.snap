@@ -32,13 +32,16 @@ function user.CommentAfterArrow(client: baml.llm.Client) -> string {
     store_var client
 
   L0:
+    make_closure .<tagged(CommentAfterArrow, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type string
     load_var client
     load_const "CommentAfterArrow"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.call_llm_function
     return
 }
@@ -52,12 +55,15 @@ function user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.h
     store_var client
 
   L0:
+    make_closure .<tagged(CommentAfterArrow$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "CommentAfterArrow"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request
     return
 }
@@ -71,12 +77,15 @@ function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) ->
     store_var client
 
   L0:
+    make_closure .<tagged(CommentAfterArrow$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "CommentAfterArrow"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request_stream
     return
 }
@@ -122,12 +131,15 @@ function user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.l
     store_var client
 
   L0:
+    make_closure .<tagged(CommentAfterArrow$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "CommentAfterArrow"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.render_prompt
     return
 }
@@ -141,6 +153,9 @@ function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stre
     store_var client
 
   L0:
+    make_closure .<tagged(CommentAfterArrow$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type string | null
     load_type string
     load_var client
@@ -148,7 +163,7 @@ function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.stream_llm_function
     return
 }
@@ -162,6 +177,9 @@ function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -
     store_var client
 
   L0:
+    make_closure .<tagged(FunctionWithComments, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_type string
     load_var client
     load_const "FunctionWithComments"
@@ -171,7 +189,7 @@ function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -
     load_type string
     load_type unknown
     alloc_map 2
-    load_const <omitted>
+    load_var _6
     call baml.llm.call_llm_function
     return
 }
@@ -185,6 +203,9 @@ function user.FunctionWithComments$build_request(a: string, b: int, client: baml
     store_var client
 
   L0:
+    make_closure .<tagged(FunctionWithComments$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_var client
     load_const "FunctionWithComments"
     load_var2 1 2
@@ -193,7 +214,7 @@ function user.FunctionWithComments$build_request(a: string, b: int, client: baml
     load_type string
     load_type unknown
     alloc_map 2
-    load_const <omitted>
+    load_var _6
     call baml.llm.build_request
     return
 }
@@ -207,6 +228,9 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int, clien
     store_var client
 
   L0:
+    make_closure .<tagged(FunctionWithComments$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_var client
     load_const "FunctionWithComments"
     load_var2 1 2
@@ -215,7 +239,7 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int, clien
     load_type string
     load_type unknown
     alloc_map 2
-    load_const <omitted>
+    load_var _6
     call baml.llm.build_request_stream
     return
 }
@@ -261,6 +285,9 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     store_var client
 
   L0:
+    make_closure .<tagged(FunctionWithComments$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_var client
     load_const "FunctionWithComments"
     load_var2 1 2
@@ -269,7 +296,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     load_type string
     load_type unknown
     alloc_map 2
-    load_const <omitted>
+    load_var _6
     call baml.llm.render_prompt
     return
 }
@@ -283,6 +310,9 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Cl
     store_var client
 
   L0:
+    make_closure .<tagged(FunctionWithComments$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _6
     load_type string | null
     load_type string
     load_var client
@@ -293,7 +323,7 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Cl
     load_type string
     load_type unknown
     alloc_map 2
-    load_const <omitted>
+    load_var _6
     call baml.llm.stream_llm_function
     return
 }

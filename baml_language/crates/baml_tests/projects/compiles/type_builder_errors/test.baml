@@ -1,9 +1,9 @@
 // Test file for type_builder validation errors
 // This tests the missing validations being implemented
 
-function TypeBuilderFn(from_text: string) -> Resume { 
+function TypeBuilderFn(from_text: string) -> Resume {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
   type_builder {
     class Foo {
       foo string

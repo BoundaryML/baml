@@ -315,7 +315,7 @@ source: crates/baml_tests/src/generated_tests.rs
   │        ╰────
   ├─▶   ☞ duplicate template_string definition
   │        ╭─[template_string_decls.baml:364:20]
-  │    364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
+  │    364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   `
   │        ·                    ───────────────
   │        ╰────
   ╰─▶   ☞ duplicate type definition
@@ -353,7 +353,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[function_decls.baml:453:43]
  453 │ ╭─▶ function LlmBasic(name: string) -> string {
  454 │ │       client GPT4
- 455 │ │       prompt #"Say hello to {{name}}"#
+ 455 │ │       prompt `Say hello to ${name}`
  456 │ ╰─▶ }
      ╰────
 
@@ -363,11 +363,11 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[function_decls.baml:464:47]
  464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
  465 │ │       client GPT4
- 466 │ │       prompt #"
+ 466 │ │       prompt `
  467 │ │           Analyze the following text:
- 468 │ │           {{ text }}
+ 468 │ │           ${text}
  469 │ │           Return a summary.
- 470 │ │       "#
+ 470 │ │       `
  471 │ ╰─▶ }
      ╰────
 
@@ -376,7 +376,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved name: `GPT4`
      ╭─[function_decls.baml:480:51]
  480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
- 481 │ │       prompt #"Summarize: {{ text }}"#
+ 481 │ │       prompt `Summarize: ${text}`
  482 │ │       client GPT4
  483 │ ╰─▶ }
      ╰────
@@ -387,10 +387,10 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[function_decls.baml:488:131]
  488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
  489 │ │       client GPT4
- 490 │ │       prompt #"
- 491 │ │           Context: {{ first_context }} {{ second_context }} {{ third_context }}
- 492 │ │           Query: {{ user_query }}
- 493 │ │       "#
+ 490 │ │       prompt `
+ 491 │ │           Context: ${first_context} ${second_context} ${third_context}
+ 492 │ │           Query: ${user_query}
+ 493 │ │       `
  494 │ ╰─▶ }
      ╰────
 
@@ -517,7 +517,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × name `ManyParams` defined 2 times as: function, template_string
     ╭─[template_string_decls.baml:30:17]
- 30 │ template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
+ 30 │ template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) `
     ·                 ─────┬────
     ·                      ╰── duplicate template_string definition
     ╰────
@@ -559,7 +559,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × name `SixLongParams` defined 2 times as: function, template_string
      ╭─[template_string_decls.baml:171:17]
- 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
+ 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) `
      ·                 ──────┬──────
      ·                       ╰── duplicate template_string definition
      ╰────
@@ -580,6 +580,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ╰────
   ╰─▶   ☞ first defined as template_string here
            ╭─[template_string_decls.baml:123:17]
-       123 │ template_string T(x: int) #"{{ x }}"#
+       123 │ template_string T(x: int) `${x}`
            ·                 ─
            ╰────

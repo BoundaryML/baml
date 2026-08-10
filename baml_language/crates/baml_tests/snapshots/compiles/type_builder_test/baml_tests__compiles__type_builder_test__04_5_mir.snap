@@ -9,7 +9,9 @@ fn user.Fn(client: baml.llm.Client) -> string {
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
-    let _5: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -24,11 +26,37 @@ fn user.Fn(client: baml.llm.Client) -> string {
 
     bb2: {
         _4 = {  }: map<string, unknown>;
-        _5 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0]();
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _7>(copy _1, const "Fn", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(Fn, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hi"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -40,6 +68,8 @@ fn user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -54,10 +84,36 @@ fn user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
 
     bb2: {
         _4 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0]();
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request(copy _1, const "Fn", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(Fn$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hi"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -69,6 +125,8 @@ fn user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -83,10 +141,36 @@ fn user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
 
     bb2: {
         _4 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0]();
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.build_request_stream(copy _1, const "Fn", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(Fn$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hi"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -162,6 +246,8 @@ fn user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -176,10 +262,36 @@ fn user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
 
     bb2: {
         _4 = {  }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0]();
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _0 = call const fn baml.llm.render_prompt(copy _1, const "Fn", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(Fn$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hi"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -191,8 +303,10 @@ fn user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, str
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
-    let _5: type
-    let _6: type
+    let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _6: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _7: type
+    let _8: type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -207,12 +321,38 @@ fn user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, str
 
     bb2: {
         _4 = {  }: map<string, unknown>;
-        _5 = load_type(string | null);
-        _6 = load_type(string);
-        _0 = call const fn baml.llm.stream_llm_function<copy _5, copy _6>(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
+        _6 = make_closure lambda[0]();
+        _5 = call const fn baml.llm.prompt(copy _6) -> [bb3];
     }
 
     bb3: {
+        _7 = load_type(string | null);
+        _8 = load_type(string);
+        _0 = call const fn baml.llm.stream_llm_function<copy _7, copy _8>(copy _1, const "Fn", copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(Fn$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "Hi"]: string[];
+        _4 = []: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }

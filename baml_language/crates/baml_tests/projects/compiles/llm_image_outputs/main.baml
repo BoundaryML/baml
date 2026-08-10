@@ -15,30 +15,30 @@ client<llm> OpenAIImageResponses {
 
 function GenerateImage(prompt: string) -> image {
   client OpenAIImageResponses
-  prompt #"
+  prompt `
     Generate an image for this prompt:
-    {{ prompt }}
+    ${prompt}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 function GenerateImageSet(prompt: string) -> image[] {
   client OpenAIImageResponses
-  prompt #"
+  prompt `
     Generate multiple distinct image outputs for this prompt:
-    {{ prompt }}
+    ${prompt}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 function GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
   client OpenAIImageResponses
-  prompt #"
+  prompt `
     Generate a short narrative with text captions and image outputs for:
-    {{ prompt }}
+    ${prompt}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }

@@ -48,7 +48,7 @@ source: crates/baml_tests/src/generated_tests.rs
  28 │   a string @alias("q")
     ·   ┬
     ·   ╰── key `q` first serialized here
- 29 │   b string @alias(#"q"#)
+ 29 │   b string @alias(`q`)
     ·   ┬
     ·   ╰── also serialized as `q` here
     ╰────

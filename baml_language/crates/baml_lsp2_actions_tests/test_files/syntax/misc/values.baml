@@ -10,7 +10,7 @@ class Input {
 
 function Foo(input: Input) -> string {
   client "openai/gpt-4o-mini"
-  prompt #"Tell me a haiku."#
+  prompt `Tell me a haiku.`
 }
 
 test Foo {

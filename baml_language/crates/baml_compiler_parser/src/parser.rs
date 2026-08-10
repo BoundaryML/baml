@@ -7611,8 +7611,8 @@ impl<'a> Parser<'a> {
                 || p.at(TokenKind::Class)
             {
                 p.bump();
-            } else if p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
-                // Quoted or raw string key (e.g., "string key" or #"raw key"#)
+            } else if p.at(TokenKind::Quote) || p.at(TokenKind::Hash) || p.at(TokenKind::Backtick) {
+                // Quoted, legacy raw, or backtick string key.
                 if !p.parse_any_string() {
                     p.error_unexpected_token("config key".to_string());
                     if !p.at_end() {
@@ -7713,7 +7713,7 @@ impl<'a> Parser<'a> {
     fn parse_config_value(&mut self) {
         self.with_node(SyntaxKind::CONFIG_VALUE, |p| {
             // Config values can be:
-            // - Strings: "value", #"value"#
+            // - Strings: "value", `value`
             // - Arrays: [item1, item2]
             // - Nested blocks: { key: value }
             // - Expressions: env.MY_MODEL, "Bearer " + env.FOO_KEY
@@ -7749,8 +7749,8 @@ impl<'a> Parser<'a> {
     /// Check if the current position looks like an expression that should be parsed
     /// as such, rather than as a legacy unquoted string.
     fn looks_like_config_expression(&self) -> bool {
-        // Regular string literals are always expressions
-        if self.at(TokenKind::Quote) {
+        // Quoted and backtick string literals are always expressions.
+        if self.at(TokenKind::Quote) || self.at(TokenKind::Backtick) {
             return true;
         }
 

@@ -3,7 +3,7 @@ function Foo1(arg: int) -> float {
 }
 
 function Foo2(arg: int) -> float {
-  prompt #"..."#
+  prompt `...`
 }
 
 function Foo3(arg: int) -> float {
@@ -20,7 +20,7 @@ function Foo4(arg: int) -> float {
 
 function Foo5(arg: int) -> float {
   client
-  prompt #"..."#
+  prompt `...`
 }
 
 
@@ -55,7 +55,7 @@ function Foo6(arg: int) -> float {
 //    |
 // error: Error validating: Missing `prompt` field in function. Add to the block:
 // ```
-// prompt #"..."#
+// prompt `...`
 // ```
 //   -->  functions_v2/invalid2.baml:1
 //    |
@@ -79,7 +79,7 @@ function Foo6(arg: int) -> float {
 //    |
 // error: Error validating: Missing `prompt` field in function. Add to the block:
 // ```
-// prompt #"..."#
+// prompt `...`
 // ```
 //   -->  functions_v2/invalid2.baml:9
 //    |
@@ -88,7 +88,7 @@ function Foo6(arg: int) -> float {
 //    |
 // error: Error validating: Missing `prompt` field in function. Add to the block:
 // ```
-// prompt #"..."#
+// prompt `...`
 // ```
 //   -->  functions_v2/invalid2.baml:15
 //    |
@@ -107,7 +107,7 @@ function Foo6(arg: int) -> float {
 // error: Error validating: Missing `prompt` and `client` fields in function. Add to the block:
 // ```
 // client GPT4
-// prompt #"..."#
+// prompt `...`
 // ```
 //   -->  functions_v2/invalid2.baml:27
 //    |
@@ -162,16 +162,7 @@ function Foo6(arg: int) -> float {
 //   × mismatched types
 //    ╭─[functions_v2_invalid2.baml:5:34]
 //  5 │ ╭─▶ function Foo2(arg: int) -> float {
-//  6 │ │     prompt #"..."#
-//  7 │ ├─▶ }
-//    · ╰──── expected `baml.llm.Client`, found `null`
-//    ╰────
-// E0001
-//
-//   × mismatched types
-//    ╭─[functions_v2_invalid2.baml:5:1]
-//  5 │ ╭─▶ function Foo2(arg: int) -> float {
-//  6 │ │     prompt #"..."#
+//  6 │ │     prompt `...`
 //  7 │ ├─▶ }
 //    · ╰──── expected `baml.llm.Client`, found `null`
 //    ╰────
@@ -199,17 +190,7 @@ function Foo6(arg: int) -> float {
 //     ╭─[functions_v2_invalid2.baml:21:34]
 //  21 │ ╭─▶ function Foo5(arg: int) -> float {
 //  22 │ │     client
-//  23 │ │     prompt #"..."#
-//  24 │ ├─▶ }
-//     · ╰──── expected `baml.llm.Client`, found `null`
-//     ╰────
-// E0001
-//
-//   × mismatched types
-//     ╭─[functions_v2_invalid2.baml:21:1]
-//  21 │ ╭─▶ function Foo5(arg: int) -> float {
-//  22 │ │     client
-//  23 │ │     prompt #"..."#
+//  23 │ │     prompt `...`
 //  24 │ ├─▶ }
 //     · ╰──── expected `baml.llm.Client`, found `null`
 //     ╰────

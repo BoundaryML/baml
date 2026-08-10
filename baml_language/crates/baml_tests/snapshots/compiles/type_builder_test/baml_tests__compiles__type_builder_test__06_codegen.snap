@@ -32,13 +32,16 @@ function user.Fn(client: baml.llm.Client) -> string {
     store_var client
 
   L0:
+    make_closure .<tagged(Fn, 0)>, 0
+    call baml.llm.prompt
+    store_var _5
     load_type string
     load_var client
     load_const "Fn"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _5
     call baml.llm.call_llm_function
     return
 }
@@ -59,12 +62,15 @@ function user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
     store_var client
 
   L0:
+    make_closure .<tagged(Fn$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "Fn"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request
     return
 }
@@ -85,12 +91,15 @@ function user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Requ
     store_var client
 
   L0:
+    make_closure .<tagged(Fn$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "Fn"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request_stream
     return
 }
@@ -157,12 +166,15 @@ function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     store_var client
 
   L0:
+    make_closure .<tagged(Fn$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "Fn"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _5
     call baml.llm.render_prompt
     return
 }
@@ -183,6 +195,9 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | nul
     store_var client
 
   L0:
+    make_closure .<tagged(Fn$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _5
     load_type string | null
     load_type string
     load_var client
@@ -190,7 +205,7 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | nul
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _5
     call baml.llm.stream_llm_function
     return
 }

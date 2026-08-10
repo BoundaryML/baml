@@ -258,15 +258,17 @@ fn user.HostEntry(query: string, max_results: int, filter: string | null) -> int
 fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
+    let _1: string // query // param [captured]
+    let _2: int // max_results // param [captured]
+    let _3: string // filter // param [captured]
     let _4: baml.llm.Client // client // param
     let _5: bool
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
-    let _9: type
+    let _9: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _10: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _11: type
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -299,11 +301,43 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _9 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _10 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _9 = call const fn baml.llm.prompt(copy _10) -> [bb7];
     }
 
     bb7: {
+        _11 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _11>(copy _4, const "AskDocs", copy _8, copy _9) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(AskDocs, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: int
+    let _6: string
+    let _7: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "", const " ", const " ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy capture[1];
+        _6 = copy capture[2];
+        _7 = [copy _4, copy _5, copy _6]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _7 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -311,14 +345,16 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
 fn user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
+    let _1: string // query // param [captured]
+    let _2: int // max_results // param [captured]
+    let _3: string // filter // param [captured]
     let _4: baml.llm.Client // client // param
     let _5: bool
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
+    let _9: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _10: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -351,10 +387,42 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _10 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _9 = call const fn baml.llm.prompt(copy _10) -> [bb7];
     }
 
     bb7: {
+        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8, copy _9) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(AskDocs$build_request, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: int
+    let _6: string
+    let _7: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "", const " ", const " ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy capture[1];
+        _6 = copy capture[2];
+        _7 = [copy _4, copy _5, copy _6]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _7 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -362,14 +430,16 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
 fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
+    let _1: string // query // param [captured]
+    let _2: int // max_results // param [captured]
+    let _3: string // filter // param [captured]
     let _4: baml.llm.Client // client // param
     let _5: bool
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
+    let _9: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _10: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -402,10 +472,42 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _10 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _9 = call const fn baml.llm.prompt(copy _10) -> [bb7];
     }
 
     bb7: {
+        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8, copy _9) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(AskDocs$build_request_stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: int
+    let _6: string
+    let _7: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "", const " ", const " ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy capture[1];
+        _6 = copy capture[2];
+        _7 = [copy _4, copy _5, copy _6]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _7 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -473,14 +575,16 @@ fn user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) 
 fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
+    let _1: string // query // param [captured]
+    let _2: int // max_results // param [captured]
+    let _3: string // filter // param [captured]
     let _4: baml.llm.Client // client // param
     let _5: bool
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
+    let _9: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _10: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -513,10 +617,42 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _10 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _9 = call const fn baml.llm.prompt(copy _10) -> [bb7];
     }
 
     bb7: {
+        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8, copy _9) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(AskDocs$render_prompt, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: int
+    let _6: string
+    let _7: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "", const " ", const " ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy capture[1];
+        _6 = copy capture[2];
+        _7 = [copy _4, copy _5, copy _6]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _7 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -524,16 +660,18 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
 fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     // Locals:
     let _0: baml.llm.Stream<string | null, string> // _0 // return
-    let _1: string // query // param
-    let _2: int // max_results // param
-    let _3: string // filter // param
+    let _1: string // query // param [captured]
+    let _2: int // max_results // param [captured]
+    let _3: string // filter // param [captured]
     let _4: baml.llm.Client // client // param
     let _5: bool
     let _6: bool
     let _7: bool
     let _8: map<string, unknown>
-    let _9: type
-    let _10: type
+    let _9: (baml.llm.Context) -> baml.llm.PromptAst throws never
+    let _10: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
+    let _11: type
+    let _12: type
 
     bb0: {
         _5 = copy _2 == const <omitted>;
@@ -566,12 +704,44 @@ fn user.AskDocs$stream(query: string, max_results: int, filter: string, client: 
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _9 = load_type(string | null);
-        _10 = load_type(string);
-        _0 = call const fn baml.llm.stream_llm_function<copy _9, copy _10>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
+        _10 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _9 = call const fn baml.llm.prompt(copy _10) -> [bb7];
     }
 
     bb7: {
+        _11 = load_type(string | null);
+        _12 = load_type(string);
+        _0 = call const fn baml.llm.stream_llm_function<copy _11, copy _12>(copy _4, const "AskDocs", copy _8, copy _9) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<tagged(AskDocs$stream, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: (string) -> baml.llm.Role throws never // role // param
+    let _2: baml.llm.Context // ctx // param
+    let _3: string[] // __tt_parts
+    let _4: string
+    let _5: int
+    let _6: string
+    let _7: unknown[] // __tt_values
+
+    bb0: {
+        _3 = [const "", const " ", const " ", const ""]: string[];
+        _4 = copy capture[0];
+        _5 = copy capture[1];
+        _6 = copy capture[2];
+        _7 = [copy _4, copy _5, copy _6]: unknown[];
+        _0 = baml.TaggedString { copy _3, copy _7 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }

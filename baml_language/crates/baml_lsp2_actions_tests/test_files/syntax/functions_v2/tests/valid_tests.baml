@@ -4,12 +4,12 @@ client<llm> Bar {
 
 function InputNone() -> int {
   client Bar
-  prompt #"fa"#
+  prompt `fa`
 }
 
 function InputSimple(a: string, b: int | bool) -> int {
   client Bar
-  prompt #"fa"#
+  prompt `fa`
 }
 
 class Email {
@@ -19,7 +19,7 @@ class Email {
 
 function InputObject(email: Email) -> string {
   client Bar
-  prompt #" subject line {{ email.subject }} "#
+  prompt ` subject line ${email.subject} `
 }
 
 enum Color {
@@ -30,7 +30,7 @@ enum Color {
 
 function InputEnum(color: Color) -> string {
   client Bar
-  prompt #" color {{ color }} "#
+  prompt ` color ${color} `
 }
 
 // Try it with wierd spacing and comments
@@ -53,13 +53,13 @@ string
 // Or else
 {
   client Bar
-  prompt #" color {{ color }} "#
+  prompt ` color ${color} `
 }
 
 
 function InputImage(img: image) -> string {
   client Bar
-  prompt #" image {{ img }} "#
+  prompt ` image ${img} `
 }
 
 test Foo {

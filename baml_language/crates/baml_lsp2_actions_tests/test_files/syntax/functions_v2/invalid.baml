@@ -1,6 +1,6 @@
 function Foo() -> {
   client Bar
-  prompt #"fa"#
+  prompt `fa`
 }
 
 function FooBar(arg) -> bar {
@@ -11,7 +11,7 @@ function FooBar(arg) -> bar {
 // ```
 // function Foo(param1: String, param2: String) -> ReturnType {
 //     client SomeClient
-//     prompt #"..."#
+//     prompt `...`
 // }
 // ```
 //   -->  functions_v2/invalid.baml:1
@@ -19,7 +19,7 @@ function FooBar(arg) -> bar {
 //    |
 //  1 | function Foo() -> {
 //  2 |   client Bar
-//  3 |   prompt #"fa"#
+//  3 |   prompt `fa`
 //  4 | }
 //    |
 // error: Error validating: No type specified for argument: arg. Expected: `arg: type`

@@ -49,7 +49,7 @@ function HostEntry(query: string, max_results: int = 10, filter: string? = null)
 
 function AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> string {
   client TestClient
-  prompt #"{{ query }} {{ max_results }} {{ filter }}"#
+  prompt `${query} ${max_results} ${filter}`
 }
 
 class SearchService {

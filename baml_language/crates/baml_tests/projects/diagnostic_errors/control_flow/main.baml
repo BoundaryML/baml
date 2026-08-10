@@ -109,7 +109,7 @@ client<llm> TestClient {
 
 function LlmFunction(input: string) -> string {
     client TestClient
-    prompt #"
-        Echo: {{ input }}
-    "#
+    prompt `
+        Echo: ${input}
+    `
 }

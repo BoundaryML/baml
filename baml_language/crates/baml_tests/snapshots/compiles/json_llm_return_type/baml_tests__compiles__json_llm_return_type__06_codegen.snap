@@ -32,13 +32,16 @@ function user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
     store_var client
 
   L0:
+    make_closure .<tagged(ExtractAny, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type baml.json.json
     load_var client
     load_const "ExtractAny"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.call_llm_function
     return
 }
@@ -52,12 +55,15 @@ function user.ExtractAny$build_request(client: baml.llm.Client) -> baml.http.Req
     store_var client
 
   L0:
+    make_closure .<tagged(ExtractAny$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ExtractAny"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request
     return
 }
@@ -71,12 +77,15 @@ function user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.h
     store_var client
 
   L0:
+    make_closure .<tagged(ExtractAny$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ExtractAny"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request_stream
     return
 }
@@ -122,12 +131,15 @@ function user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.Prom
     store_var client
 
   L0:
+    make_closure .<tagged(ExtractAny$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ExtractAny"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.render_prompt
     return
 }
@@ -141,6 +153,9 @@ function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml
     store_var client
 
   L0:
+    make_closure .<tagged(ExtractAny$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type baml.json.json$stream | null
     load_type baml.json.json
     load_var client
@@ -148,7 +163,7 @@ function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.stream_llm_function
     return
 }

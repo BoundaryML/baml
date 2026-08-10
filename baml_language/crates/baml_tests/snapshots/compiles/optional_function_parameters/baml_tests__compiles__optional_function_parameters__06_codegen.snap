@@ -24,20 +24,29 @@ function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unkno
 }
 
 function user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
-    load_var max_results
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?2
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
     load_const 10
-    store_var max_results
+    store_deref ?2
 
   L0:
-    load_var filter
+    load_deref ?3
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L1
     call user.DefaultFilter
-    store_var filter
+    store_deref ?3
 
   L1:
     load_var client
@@ -48,37 +57,53 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: b
     store_var client
 
   L2:
-    load_type string
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
     load_const "query"
     load_const "max_results"
     load_const "filter"
     load_type string
     load_type unknown
     alloc_map 3
-    load_const <omitted>
+    store_var _8
+    load_var2 1 2
+    load_var filter
+    make_closure .<tagged(AskDocs, 0)>, 3
+    call baml.llm.prompt
+    store_var _9
+    load_type string
+    load_var client
+    load_const "AskDocs"
+    load_var2 5 6
     call baml.llm.call_llm_function
     return
 }
 
 function user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var max_results
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?2
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
     load_const 10
-    store_var max_results
+    store_deref ?2
 
   L0:
-    load_var filter
+    load_deref ?3
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L1
     call user.DefaultFilter
-    store_var filter
+    store_deref ?3
 
   L1:
     load_var client
@@ -89,36 +114,52 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     store_var client
 
   L2:
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
     load_const "query"
     load_const "max_results"
     load_const "filter"
     load_type string
     load_type unknown
     alloc_map 3
-    load_const <omitted>
+    store_var _8
+    load_var2 1 2
+    load_var filter
+    make_closure .<tagged(AskDocs$build_request, 0)>, 3
+    call baml.llm.prompt
+    store_var _9
+    load_var client
+    load_const "AskDocs"
+    load_var2 5 6
     call baml.llm.build_request
     return
 }
 
 function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
-    load_var max_results
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?2
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
     load_const 10
-    store_var max_results
+    store_deref ?2
 
   L0:
-    load_var filter
+    load_deref ?3
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L1
     call user.DefaultFilter
-    store_var filter
+    store_deref ?3
 
   L1:
     load_var client
@@ -129,17 +170,24 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     store_var client
 
   L2:
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
     load_const "query"
     load_const "max_results"
     load_const "filter"
     load_type string
     load_type unknown
     alloc_map 3
-    load_const <omitted>
+    store_var _8
+    load_var2 1 2
+    load_var filter
+    make_closure .<tagged(AskDocs$build_request_stream, 0)>, 3
+    call baml.llm.prompt
+    store_var _9
+    load_var client
+    load_const "AskDocs"
+    load_var2 5 6
     call baml.llm.build_request_stream
     return
 }
@@ -177,20 +225,29 @@ function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Cl
 }
 
 function user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    load_var max_results
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?2
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
     load_const 10
-    store_var max_results
+    store_deref ?2
 
   L0:
-    load_var filter
+    load_deref ?3
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L1
     call user.DefaultFilter
-    store_var filter
+    store_deref ?3
 
   L1:
     load_var client
@@ -201,36 +258,52 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     store_var client
 
   L2:
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
     load_const "query"
     load_const "max_results"
     load_const "filter"
     load_type string
     load_type unknown
     alloc_map 3
-    load_const <omitted>
+    store_var _8
+    load_var2 1 2
+    load_var filter
+    make_closure .<tagged(AskDocs$render_prompt, 0)>, 3
+    call baml.llm.prompt
+    store_var _9
+    load_var client
+    load_const "AskDocs"
+    load_var2 5 6
     call baml.llm.render_prompt
     return
 }
 
 function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
-    load_var max_results
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?2
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
     load_const 10
-    store_var max_results
+    store_deref ?2
 
   L0:
-    load_var filter
+    load_deref ?3
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L1
     call user.DefaultFilter
-    store_var filter
+    store_deref ?3
 
   L1:
     load_var client
@@ -241,19 +314,26 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string, cl
     store_var client
 
   L2:
-    load_type string | null
-    load_type string
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
     load_const "query"
     load_const "max_results"
     load_const "filter"
     load_type string
     load_type unknown
     alloc_map 3
-    load_const <omitted>
+    store_var _8
+    load_var2 1 2
+    load_var filter
+    make_closure .<tagged(AskDocs$stream, 0)>, 3
+    call baml.llm.prompt
+    store_var _9
+    load_type string | null
+    load_type string
+    load_var client
+    load_const "AskDocs"
+    load_var2 5 6
     call baml.llm.stream_llm_function
     return
 }

@@ -35,7 +35,7 @@ client<llm> GoogleEnvEnterpriseOptionsClient {
 
 function GoogleEnvEnterprisePrompt(input: string) -> string {
     client GoogleEnvEnterpriseOptionsClient
-    prompt #"Say hello to ${input}"#
+    prompt `Say hello to ${input}`
 }
 
 function google_env_enterprise_options_url() -> string {

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 39180
 ---
 === PPIR ===
 class user.ClassAttributes {
@@ -28,13 +27,13 @@ class user.FieldAttributes$stream {
   multiple: string?
 }
 function user.GetMixedList(client: baml.llm.Client = GPT4) -> int | string[]  [llm] {
-  baml.llm.call_llm_function(client, "GetMixedList", map {  })
+  baml.llm.call_llm_function(client, "GetMixedList", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedList$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "GetMixedList", map {  })
+  baml.llm.build_request(client, "GetMixedList", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedList$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "GetMixedList", map {  })
+  baml.llm.build_request_stream(client, "GetMixedList", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedList$parse(json: string, client: baml.llm.Client = GPT4) -> int | string[]  [expr] {
   baml.llm.parse(json)
@@ -43,19 +42,19 @@ function user.GetMixedList$parse_stream(sse: baml.http.SseStream, client: baml.l
   client.__make_stream(sse)
 }
 function user.GetMixedList$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "GetMixedList", map {  })
+  baml.llm.render_prompt(client, "GetMixedList", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedList$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<int | string[], int | string[]>  [expr] {
-  baml.llm.stream_llm_function(client, "GetMixedList", map {  })
+  baml.llm.stream_llm_function(client, "GetMixedList", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedMap(client: baml.llm.Client = GPT4) -> map<string, int | string>  [llm] {
-  baml.llm.call_llm_function(client, "GetMixedMap", map {  })
+  baml.llm.call_llm_function(client, "GetMixedMap", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedMap$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "GetMixedMap", map {  })
+  baml.llm.build_request(client, "GetMixedMap", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedMap$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "GetMixedMap", map {  })
+  baml.llm.build_request_stream(client, "GetMixedMap", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedMap$parse(json: string, client: baml.llm.Client = GPT4) -> map<string, int | string>  [expr] {
   baml.llm.parse(json)
@@ -64,19 +63,19 @@ function user.GetMixedMap$parse_stream(sse: baml.http.SseStream, client: baml.ll
   client.__make_stream(sse)
 }
 function user.GetMixedMap$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "GetMixedMap", map {  })
+  baml.llm.render_prompt(client, "GetMixedMap", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetMixedMap$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>>  [expr] {
-  baml.llm.stream_llm_function(client, "GetMixedMap", map {  })
+  baml.llm.stream_llm_function(client, "GetMixedMap", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetStatus(client: baml.llm.Client = GPT4) -> Status  [llm] {
-  baml.llm.call_llm_function(client, "GetStatus", map {  })
+  baml.llm.call_llm_function(client, "GetStatus", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetStatus$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "GetStatus", map {  })
+  baml.llm.build_request(client, "GetStatus", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetStatus$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "GetStatus", map {  })
+  baml.llm.build_request_stream(client, "GetStatus", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetStatus$parse(json: string, client: baml.llm.Client = GPT4) -> Status  [expr] {
   baml.llm.parse(json)
@@ -85,19 +84,19 @@ function user.GetStatus$parse_stream(sse: baml.http.SseStream, client: baml.llm.
   client.__make_stream(sse)
 }
 function user.GetStatus$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "GetStatus", map {  })
+  baml.llm.render_prompt(client, "GetStatus", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetStatus$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<Status | null, Status>  [expr] {
-  baml.llm.stream_llm_function(client, "GetStatus", map {  })
+  baml.llm.stream_llm_function(client, "GetStatus", map {  }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetUser(id: int, client: baml.llm.Client = ...) -> User  [llm] {
-  baml.llm.call_llm_function(client, "GetUser", map { "id": id })
+  baml.llm.call_llm_function(client, "GetUser", map { "id": id }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetUser$build_request(id: int, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "GetUser", map { "id": id })
+  baml.llm.build_request(client, "GetUser", map { "id": id }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetUser$build_request_stream(id: int, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "GetUser", map { "id": id })
+  baml.llm.build_request_stream(client, "GetUser", map { "id": id }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetUser$parse(json: string, client: baml.llm.Client = ...) -> User  [expr] {
   baml.llm.parse(json)
@@ -106,11 +105,17 @@ function user.GetUser$parse_stream(sse: baml.http.SseStream, client: baml.llm.Cl
   client.__make_stream(sse)
 }
 function user.GetUser$render_prompt(id: int, client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "GetUser", map { "id": id })
+  baml.llm.render_prompt(client, "GetUser", map { "id": id }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.GetUser$stream(id: int, client: baml.llm.Client = ...) -> baml.llm.Stream<User$stream | null, User>  [expr] {
-  baml.llm.stream_llm_function(client, "GetUser", map { "id": id })
+  baml.llm.stream_llm_function(client, "GetUser", map { "id": id }, prompt_closure = baml.llm.prompt`...`)
 }
+
+--- captures ---
+lambda () in GetUser: captures [id]
+lambda () in GetUser$render_prompt: captures [id]
+lambda () in GetUser$build_request: captures [id]
+lambda () in GetUser$build_request_stream: captures [id]
 class user.User {
   id: int
   name: string

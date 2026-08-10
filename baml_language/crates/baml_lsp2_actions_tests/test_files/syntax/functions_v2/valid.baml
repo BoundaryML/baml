@@ -4,12 +4,12 @@ client<llm> Bar {
 
 function InputNone() -> int {
   client Bar
-  prompt #"fa"#
+  prompt `fa`
 }
 
 function InputSimple(a: string, b: int | bool) -> int {
   client Bar
-  prompt #"fa"#
+  prompt `fa`
 }
 
 class Email {
@@ -19,7 +19,7 @@ class Email {
 
 function InputObject(email: Email) -> string {
   client Bar
-  prompt #" subject line {{ email.subject }} "#
+  prompt ` subject line ${email.subject} `
 }
 
 enum Color {
@@ -30,10 +30,10 @@ enum Color {
 
 function InputEnum(color: Color) -> string {
   client Bar
-  prompt #" color {{ color }} "#
+  prompt ` color ${color} `
 }
 
-// Try it with wierd spacing and comments
+// Try it with wierd spacing && comments
 
 function InputEnum2(
   color: Color,
@@ -53,154 +53,228 @@ string
 // Or else
 {
   client Bar
-  prompt #" color {{ color }} "#
+  prompt ` color ${color} `
 }
 
 
 function InputImage(img: image) -> string {
   client Bar
-  prompt #" image {{ img }} "#
+  prompt ` image ${img} `
 }
 
 // Test enum-string comparisons
 function TestEnumStringEquality(color: Color) -> string {
   client Bar
-  prompt #"
+  prompt `
     Testing enum-string comparisons:
 
-    {% if color == "RED" %}
+    ${if (color == Color.RED)}
       Color is RED (comparing to value name)
-    {% endif %}
+    ${endif}
 
-    {% if "BLUE" == color %}
+    ${if (Color.BLUE == color)}
       Color is BLUE (reverse comparison)
-    {% endif %}
+    ${endif}
 
-    {% if color != "GREEN" %}
+    ${if (color != Color.GREEN)}
       Color is not GREEN
-    {% endif %}
+    ${endif}
 
     // Test ordering
-    {% if color < "YELLOW" %}
+    ${if (color < Color.YELLOW)}
       Color comes before YELLOW alphabetically
-    {% endif %}
+    ${endif}
 
-    {% if color >= "BLUE" %}
-      Color is BLUE or comes after it
-    {% endif %}
+    ${if (color >= Color.BLUE)}
+      Color is BLUE || comes after it
+    ${endif}
 
     // Display enum directly
-    The color is: {{ color }}
-  "#
+    The color is: ${color}
+  `
 }
 
 // Test enum comparisons in complex expressions
 function TestEnumInExpressions(color: Color) -> string {
   client Bar
-  prompt #"
-    {% set is_primary = color == "RED" or color == "BLUE" %}
-    {% if is_primary %}
+  prompt `
+    ${if (color == Color.RED || color == Color.BLUE)}
       This is a primary color
-    {% endif %}
+    ${endif}
 
     // Ternary with enum comparison
-    Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
+    Result: ${if (color == Color.RED || color == Color.BLUE) { "Primary" } else { "Secondary" }}
 
     // Multiple comparisons
-    {% if color == "RED" and true %}
-      Color is RED and condition is true
-    {% endif %}
+    ${if (color == Color.RED && true)}
+      Color is RED && condition is true
+    ${endif}
 
     // Nested conditions
-    {% if color != "GREEN" %}
-      {% if color == "RED" %}
+    ${if (color != Color.GREEN)}
+      ${if (color == Color.RED)}
         It's RED
-      {% elif color == "BLUE" %}
+      ${else if (color == Color.BLUE)}
         It's BLUE
-      {% endif %}
-    {% endif %}
-  "#
+      ${endif}
+    ${endif}
+  `
 }
 
 // warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:71
 //    |
 // 70 |
-// 71 |     {% if color == "RED" %}
+// 71 |     ${if (color == Color.RED)}
 //    |
 // warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:75
 //    |
 // 74 |
-// 75 |     {% if "BLUE" == color %}
+// 75 |     ${if (Color.BLUE == color)}
 //    |
 // warning: Use `Color.GREEN` instead of "GREEN" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:79
 //    |
 // 78 |
-// 79 |     {% if color != "GREEN" %}
+// 79 |     ${if (color != Color.GREEN)}
 //    |
 // warning: Use one of: Color.RED, Color.BLUE, Color.GREEN - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:84
 //    |
 // 83 |     // Test ordering
-// 84 |     {% if color < "YELLOW" %}
+// 84 |     ${if (color < Color.YELLOW)}
 //    |
 // warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:88
 //    |
 // 87 |
-// 88 |     {% if color >= "BLUE" %}
+// 88 |     ${if (color >= Color.BLUE)}
 //    |
 // warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:101
 //    |
-// 100 |   prompt #"
-// 101 |     {% set is_primary = color == "RED" or color == "BLUE" %}
+// 100 |   prompt `
+// 101 |     ${ let is_primary = color == Color.RED || color == Color.BLUE }
 //    |
 // warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:101
 //    |
-// 100 |   prompt #"
-// 101 |     {% set is_primary = color == "RED" or color == "BLUE" %}
+// 100 |   prompt `
+// 101 |     ${ let is_primary = color == Color.RED || color == Color.BLUE }
 //    |
 // warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:107
 //    |
 // 106 |     // Ternary with enum comparison
-// 107 |     Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
+// 107 |     Result: ${if (color == Color.RED || color == Color.BLUE) { "Primary" } else { "Secondary" }}
 //    |
 // warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:107
 //    |
 // 106 |     // Ternary with enum comparison
-// 107 |     Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
+// 107 |     Result: ${if (color == Color.RED || color == Color.BLUE) { "Primary" } else { "Secondary" }}
 //    |
 // warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:110
 //    |
 // 109 |     // Multiple comparisons
-// 110 |     {% if color == "RED" and true %}
+// 110 |     ${if (color == Color.RED && true)}
 //    |
 // warning: Use `Color.GREEN` instead of "GREEN" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:115
 //    |
 // 114 |     // Nested conditions
-// 115 |     {% if color != "GREEN" %}
+// 115 |     ${if (color != Color.GREEN)}
 //    |
 // warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:116
 //    |
-// 115 |     {% if color != "GREEN" %}
-// 116 |       {% if color == "RED" %}
+// 115 |     ${if (color != Color.GREEN)}
+// 116 |     ${if (color == Color.RED)}
 //    |
 // warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:118
 //    |
 // 117 |         It's RED
-// 118 |       {% elif color == "BLUE" %}
+// 118 |       ${else if (color == Color.BLUE)}
 //    |
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0007
+//
+//   × type `Color` has no member `YELLOW`
+//     ╭─[functions_v2_valid.baml:84:25]
+//  84 │     ${if (color < Color.YELLOW)}
+//     ·                         ──────
+//     ╰────
+//   ╰─▶   ☞ enum defined here
+//           ╭─[functions_v2_valid.baml:25:6]
+//        25 │ enum Color {
+//           ·      ─────
+//           ╰────
+// E0004
+//
+//   × `Color` does not implement `Compare`, so it cannot be ordered with `>=`
+//     ╭─[functions_v2_valid.baml:88:11]
+//  88 │     ${if (color >= Color.BLUE)}
+//     ·           ───────────────────
+//     ╰────
+// E0007
+//
+//   × type `Color` has no member `YELLOW`
+//     ╭─[functions_v2_valid.baml:84:25]
+//  84 │     ${if (color < Color.YELLOW)}
+//     ·                         ──────
+//     ╰────
+//   ╰─▶   ☞ enum defined here
+//           ╭─[functions_v2_valid.baml:25:6]
+//        25 │ enum Color {
+//           ·      ─────
+//           ╰────
+// E0004
+//
+//   × `Color` does not implement `Compare`, so it cannot be ordered with `>=`
+//     ╭─[functions_v2_valid.baml:88:11]
+//  88 │     ${if (color >= Color.BLUE)}
+//     ·           ───────────────────
+//     ╰────
+// E0007
+//
+//   × type `Color` has no member `YELLOW`
+//     ╭─[functions_v2_valid.baml:84:25]
+//  84 │     ${if (color < Color.YELLOW)}
+//     ·                         ──────
+//     ╰────
+//   ╰─▶   ☞ enum defined here
+//           ╭─[functions_v2_valid.baml:25:6]
+//        25 │ enum Color {
+//           ·      ─────
+//           ╰────
+// E0004
+//
+//   × `Color` does not implement `Compare`, so it cannot be ordered with `>=`
+//     ╭─[functions_v2_valid.baml:88:11]
+//  88 │     ${if (color >= Color.BLUE)}
+//     ·           ───────────────────
+//     ╰────
+// E0007
+//
+//   × type `Color` has no member `YELLOW`
+//     ╭─[functions_v2_valid.baml:84:25]
+//  84 │     ${if (color < Color.YELLOW)}
+//     ·                         ──────
+//     ╰────
+//   ╰─▶   ☞ enum defined here
+//           ╭─[functions_v2_valid.baml:25:6]
+//        25 │ enum Color {
+//           ·      ─────
+//           ╰────
+// E0004
+//
+//   × `Color` does not implement `Compare`, so it cannot be ordered with `>=`
+//     ╭─[functions_v2_valid.baml:88:11]
+//  88 │     ${if (color >= Color.BLUE)}
+//     ·           ───────────────────
+//     ╰────

@@ -7,9 +7,9 @@ client<llm> MyClient {
     array_key_with_quoted_unquoted [ "abc", "abc", "ccc" ]
     // separate by commas
     key2 "some random value", hello "world", thing "hello"
-     block_string #"hello there my frien
-                d"#
-    inline_raw_string #"inline "raw" string,,"#
+     block_string `hello there my frien
+                d`
+    inline_raw_string `inline "raw" string,,`
     "string key" "value with spaces"
     booleanValue true
     stringKey "true"
@@ -44,10 +44,10 @@ client<llm> MyClient {
         another_tool "value"
       }
     ]
-    block_string #"
+    block_string `
       hello there my friend
-      {# a comment in a prompt #}
-    "#
+
+    `
   }
 }
 
@@ -79,27 +79,23 @@ client<llm> MyClient {
 // config_dictionary.baml:9:46 (property) len=5 "thing"
 // config_dictionary.baml:9:52 (string) len=7 "\"hello\""
 // config_dictionary.baml:10:6 (property) len=12 "block_string"
-// config_dictionary.baml:10:19 (string) len=1 "#"
-// config_dictionary.baml:10:20 (string) len=1 "\""
-// config_dictionary.baml:10:21 (string) len=5 "hello"
-// config_dictionary.baml:10:27 (string) len=5 "there"
-// config_dictionary.baml:10:33 (string) len=2 "my"
-// config_dictionary.baml:10:36 (string) len=5 "frien"
+// config_dictionary.baml:10:19 (string) len=1 "`"
+// config_dictionary.baml:10:20 (string) len=5 "hello"
+// config_dictionary.baml:10:26 (string) len=5 "there"
+// config_dictionary.baml:10:32 (string) len=2 "my"
+// config_dictionary.baml:10:35 (string) len=5 "frien"
 // config_dictionary.baml:11:17 (string) len=1 "d"
-// config_dictionary.baml:11:18 (string) len=1 "\""
-// config_dictionary.baml:11:19 (string) len=1 "#"
+// config_dictionary.baml:11:18 (string) len=1 "`"
 // config_dictionary.baml:12:5 (property) len=17 "inline_raw_string"
-// config_dictionary.baml:12:23 (string) len=1 "#"
-// config_dictionary.baml:12:24 (string) len=1 "\""
-// config_dictionary.baml:12:25 (string) len=6 "inline"
-// config_dictionary.baml:12:32 (string) len=1 "\""
-// config_dictionary.baml:12:33 (string) len=3 "raw"
-// config_dictionary.baml:12:36 (string) len=1 "\""
-// config_dictionary.baml:12:38 (string) len=6 "string"
+// config_dictionary.baml:12:23 (string) len=1 "`"
+// config_dictionary.baml:12:24 (string) len=6 "inline"
+// config_dictionary.baml:12:31 (string) len=1 "\""
+// config_dictionary.baml:12:32 (string) len=3 "raw"
+// config_dictionary.baml:12:35 (string) len=1 "\""
+// config_dictionary.baml:12:37 (string) len=6 "string"
+// config_dictionary.baml:12:43 (string) len=1 ","
 // config_dictionary.baml:12:44 (string) len=1 ","
-// config_dictionary.baml:12:45 (string) len=1 ","
-// config_dictionary.baml:12:46 (string) len=1 "\""
-// config_dictionary.baml:12:47 (string) len=1 "#"
+// config_dictionary.baml:12:45 (string) len=1 "`"
 // config_dictionary.baml:13:5 (string) len=12 "\"string key\""
 // config_dictionary.baml:13:18 (string) len=19 "\"value with spaces\""
 // config_dictionary.baml:14:5 (property) len=12 "booleanValue"
@@ -146,20 +142,9 @@ client<llm> MyClient {
 // config_dictionary.baml:44:9 (property) len=12 "another_tool"
 // config_dictionary.baml:44:22 (string) len=7 "\"value\""
 // config_dictionary.baml:47:5 (property) len=12 "block_string"
-// config_dictionary.baml:47:18 (string) len=1 "#"
-// config_dictionary.baml:47:19 (string) len=1 "\""
+// config_dictionary.baml:47:18 (string) len=1 "`"
 // config_dictionary.baml:48:7 (string) len=5 "hello"
 // config_dictionary.baml:48:13 (string) len=5 "there"
 // config_dictionary.baml:48:19 (string) len=2 "my"
 // config_dictionary.baml:48:22 (string) len=6 "friend"
-// config_dictionary.baml:49:7 (string) len=1 "{"
-// config_dictionary.baml:49:8 (string) len=1 "#"
-// config_dictionary.baml:49:10 (string) len=1 "a"
-// config_dictionary.baml:49:12 (string) len=7 "comment"
-// config_dictionary.baml:49:20 (string) len=2 "in"
-// config_dictionary.baml:49:23 (string) len=1 "a"
-// config_dictionary.baml:49:25 (string) len=6 "prompt"
-// config_dictionary.baml:49:32 (string) len=1 "#"
-// config_dictionary.baml:49:33 (string) len=1 "}"
-// config_dictionary.baml:50:5 (string) len=1 "\""
-// config_dictionary.baml:50:6 (string) len=1 "#"
+// config_dictionary.baml:50:5 (string) len=1 "`"

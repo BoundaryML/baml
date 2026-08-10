@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 41988
 ---
 === PPIR ===
 function user.ElseIfChain(x: int) -> string  [expr] {
@@ -13,13 +12,13 @@ function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
   { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"
 }
 function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmFunction", map { "input": input })
+  baml.llm.call_llm_function(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.LlmFunction$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "LlmFunction", map { "input": input })
+  baml.llm.build_request(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.LlmFunction$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "LlmFunction", map { "input": input })
+  baml.llm.build_request_stream(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.LlmFunction$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
   baml.llm.parse(json)
@@ -28,10 +27,10 @@ function user.LlmFunction$parse_stream(sse: baml.http.SseStream, client: baml.ll
   client.__make_stream(sse)
 }
 function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LlmFunction", map { "input": input })
+  baml.llm.render_prompt(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.LlmFunction$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "LlmFunction", map { "input": input })
+  baml.llm.stream_llm_function(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`)
 }
 function user.MatchExpression(x: int) -> string  [expr] {
   {  } match (x) { 1 => { // [1] One } "one", 2 => { // [1] Two } "two", _ => { // [1] Default } "other" }
@@ -48,3 +47,9 @@ function user.TestClient$new(lenient: bool) -> ?  [expr] {
 function user.WhileWithHeaders() -> int  [expr] {
   { // [1] Initialize; let count = 0; // [1] Loop; while count Lt 10 { // [1] Iteration; count Add= 1 }; // [1] Done } count
 }
+
+--- captures ---
+lambda () in LlmFunction: captures [input]
+lambda () in LlmFunction$render_prompt: captures [input]
+lambda () in LlmFunction$build_request: captures [input]
+lambda () in LlmFunction$build_request_stream: captures [input]

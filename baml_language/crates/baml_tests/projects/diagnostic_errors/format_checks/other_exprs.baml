@@ -42,13 +42,13 @@ function OtherExprs(a: int, b: int) -> int {
     null;
 
     // ===== Raw string literals =====
-    #"raw string"#;
-    #"raw string with "quotes" inside"#;
-    #"
+    `raw string`;
+    `raw string with "quotes" inside`;
+    `
         multi-line raw string
         with several lines
         of content
-    "#;
+    `;
 
     // ===== Parenthesized expressions =====
     (a);

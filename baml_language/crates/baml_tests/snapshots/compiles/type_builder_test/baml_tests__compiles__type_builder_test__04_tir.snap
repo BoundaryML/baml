@@ -3,23 +3,23 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.Fn(client: baml.llm.Client = ...) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "Fn", map {  }) : string
+  baml.llm.call_llm_function<T>(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`) : string
 }
 function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "Fn", map {  }) : baml.llm.PromptAst
+  baml.llm.render_prompt(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
 }
 function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "Fn", map {  }) : baml.http.Request
+  baml.llm.build_request(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
 function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "Fn", map {  }) : baml.http.Request
+  baml.llm.build_request_stream(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
 class user.TopLevelClass {
   a: string
 }
 enum user.TopLevelEnum
 function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<string | null, string>
+  baml.llm.stream_llm_function(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
 }
 function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>

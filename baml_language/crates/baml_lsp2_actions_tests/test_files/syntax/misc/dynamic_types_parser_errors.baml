@@ -1,6 +1,6 @@
 function TypeBuilderFn(from_text: string) -> Resume {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
   type_builder {
     class Foo {
       foo string
@@ -63,7 +63,7 @@ test IncompleteSyntax {
 // error: Error validating: Only tests may have a type_builder block.
 //   -->  tests/dynamic_types_parser_errors.baml:4
 //    |
-//  3 |   prompt #"Hello"#
+//  3 |   prompt `Hello`
 //  4 |   type_builder {
 //  5 |     class Foo {
 //  6 |       foo string
@@ -219,7 +219,7 @@ test IncompleteSyntax {
 //     ╭─[misc_dynamic_types_parser_errors.baml:1:53]
 //   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
 //   2 │ │     client "openai/gpt-4o-mini"
-//   3 │ │     prompt #"Hello"#
+//   3 │ │     prompt `Hello`
 //   4 │ │     type_builder {
 //   5 │ │       class Foo {
 //   6 │ │         foo string

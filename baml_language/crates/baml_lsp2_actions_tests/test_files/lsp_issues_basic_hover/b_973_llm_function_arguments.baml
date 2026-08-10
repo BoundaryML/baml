@@ -11,9 +11,9 @@ client<llm> TestClient {
 
 function ClassifyEmail(em<[CURSOR]ail: Email) -> string {
   client TestClient
-  prompt #"
-    Subject: {{ em<[CURSOR]ail.subject }}
-  "#
+  prompt `
+    Subject: ${em<[CURSOR]ail.subject}
+  `
 }
 
 //----
@@ -25,7 +25,7 @@ function ClassifyEmail(em<[CURSOR]ail: Email) -> string {
 // ```baml
 // email: Email
 // ```
-// hover at b_973_llm_function_arguments.baml:15:19
+// hover at b_973_llm_function_arguments.baml:15:18
 // ```baml
 // email: Email
 // ```
