@@ -16,7 +16,8 @@ use std::collections::{HashMap, HashSet};
 
 pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
-    BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
+    BinOp, BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    Terminator, UnaryOp,
 };
 
 use crate::stack_carry;
@@ -1445,6 +1446,15 @@ fn can_be_virtual(
         if rvalue_has_projection_reads(&def.rvalue) {
             return false;
         }
+        // A panicking evaluation is itself observable, and every path from the
+        // def block to the use block crosses at least the def block's
+        // terminator — a call, whose effects would then run before the panic.
+        // The use site can also sit in a different exception region than the
+        // def, which changes the handler and can double-run a `defer` body
+        // (once inline on the way out, once in the unwind landing pad).
+        if rvalue_can_panic(&def.rvalue) {
+            return false;
+        }
         //
         // Rather than walking all intermediate blocks (which requires full path
         // enumeration), we use a sound conservative check: if any local read by
@@ -1663,6 +1673,42 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
 /// so they can be re-emitted at every use site even with multiple uses.
 fn is_pure_constant(rvalue: &Rvalue) -> bool {
     matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
+}
+
+/// Can evaluating this rvalue raise a catchable panic (`baml.panics.*`)?
+///
+/// Virtual emission *moves* an rvalue's evaluation from its definition to its
+/// use site. That is only sound when the evaluation cannot fail: a panicking
+/// evaluation is itself an observable event, so moving it past a call, a store,
+/// or an exception-region boundary changes which effects run before the panic
+/// and which handler receives it.
+///
+/// Concretely, a `defer` block's inline replay is emitted between the
+/// definition and the `return` that uses it. Sinking a panicking arithmetic op
+/// past that replay runs the defer body once on the way out and a second time
+/// in the unwind landing pad.
+///
+/// Only arithmetic is listed: `int` add/sub/mul/shift are range-checked
+/// (`IntegerOverflow`), `/` and `%` reject a zero divisor (`DivisionByZero`),
+/// and negation overflows on `INT_MIN`. Bitwise and/or/xor and comparisons stay
+/// in range by construction. Reads through an index projection can also panic
+/// (`IndexOutOfBounds`); cross-block virtualization already rejects every rvalue
+/// with a projection read.
+fn rvalue_can_panic(rvalue: &Rvalue) -> bool {
+    match rvalue {
+        Rvalue::BinaryOp { op, .. } => matches!(
+            op,
+            BinOp::Add
+                | BinOp::Sub
+                | BinOp::Mul
+                | BinOp::Div
+                | BinOp::Mod
+                | BinOp::Shl
+                | BinOp::Shr
+        ),
+        Rvalue::UnaryOp { op, .. } => matches!(op, UnaryOp::Neg),
+        _ => false,
+    }
 }
 
 /// Check if a local is a "call result immediate": defined by Call/Await/SysOp,
