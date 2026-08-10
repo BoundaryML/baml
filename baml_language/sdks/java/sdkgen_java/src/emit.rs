@@ -447,10 +447,15 @@ pub(crate) fn render_class(
     out.push_str("    }\n");
 
     // PreserveCase accessors — the nullable ones carry `@Nullable` on their
-    // return type (the primary Kotlin-visible nullness signal).
+    // return type (the primary Kotlin-visible nullness signal). The ACCESSOR
+    // name goes through `java_method_identifier`: a field named `wait` is a
+    // legal field but `wait()` cannot override `java.lang.Object`'s final
+    // `wait()`, so the accessor becomes `wait$()` while the field it reads
+    // keeps its own name.
     for (f_ident, f_ty) in &display_fields {
+        let accessor = java_method_identifier(f_ident);
         out.push_str(&format!(
-            "\n    public {f_ty} {f_ident}() {{\n        return this.{f_ident};\n    }}\n"
+            "\n    public {f_ty} {accessor}() {{\n        return this.{f_ident};\n    }}\n"
         ));
     }
 

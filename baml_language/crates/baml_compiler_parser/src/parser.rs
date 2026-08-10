@@ -4236,8 +4236,9 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-                // `client` as KW_CLIENT: LLM directive is `client Model`, not
-                // `client.method(...)` or the named call arg `client = ...`.
+                // `client` as KW_CLIENT: the LLM directive is `client Model`,
+                // not `client.method(...)`, the named call arg `client = ...`,
+                // or a call THROUGH a parameter named `client` — `client(...)`.
                 TokenKind::Client if brace_depth == 1 => {
                     let j = self.skip_trivia_and_comments_from(i + 1);
                     let next = self.tokens.get(j).map(|t| t.kind);
@@ -4248,6 +4249,7 @@ impl<'a> Parser<'a> {
                                 | TokenKind::Equals
                                 | TokenKind::Comma
                                 | TokenKind::RParen
+                                | TokenKind::LParen
                         )
                     ) {
                         return true;
@@ -9338,6 +9340,31 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
         let source = r#"
 function f() -> int {
   client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_calling_a_client_param_is_not_llm_body() {
+        // `client` lexes as KW_CLIENT, so a call THROUGH a parameter named
+        // `client` looks like the start of an LLM directive unless `(` is
+        // excluded — the body would then be parsed as an LLM block and fail.
+        let source = r#"
+function f(client: (int) -> int) -> int {
+  client(1)
 }
 "#;
 

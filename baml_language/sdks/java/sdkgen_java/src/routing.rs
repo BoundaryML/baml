@@ -277,6 +277,8 @@ mod tests {
         assert_eq!(java_method_identifier("close"), "close");
         assert_eq!(java_method_identifier("new"), "new$");
         // Only method position escapes: fields/classes named `wait` are legal.
+        // A value class with such a field therefore declares `wait` as the
+        // FIELD and `wait$()` as its accessor (see `render_class`).
         assert_eq!(java_identifier("wait"), "wait");
     }
 }

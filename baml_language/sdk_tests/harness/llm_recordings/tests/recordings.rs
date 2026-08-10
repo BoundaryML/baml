@@ -244,7 +244,12 @@ fn capture_via_curl(req: &RequestParts) -> Vec<u8> {
 }
 
 /// Well-formedness checks applied to a recording in BOTH record and validate
-/// modes: non-empty, several `data:` lines, terminated by `[DONE]`, no leaked key.
+/// modes: non-empty, several `data:` lines, properly terminated, no leaked key.
+///
+/// The openai client speaks the Responses API, so a recording ends with a
+/// terminal `response.completed` / `response.incomplete` / `response.failed`
+/// event. There is no `data: [DONE]` sentinel — that was Chat Completions,
+/// which no client speaks any more.
 fn validate_sse(bytes: &[u8]) {
     assert!(!bytes.is_empty(), "empty SSE recording");
     let text = String::from_utf8_lossy(bytes);
@@ -253,9 +258,14 @@ fn validate_sse(bytes: &[u8]) {
         data_lines > 3,
         "expected >3 `data:` lines, got {data_lines}"
     );
+    let tail = text.trim_end();
+    let terminated = tail.contains("\"response.completed\"")
+        || tail.contains("\"response.incomplete\"")
+        || tail.contains("\"response.failed\"");
     assert!(
-        text.trim_end().ends_with("data: [DONE]"),
-        "SSE recording must end with `data: [DONE]`"
+        terminated,
+        "SSE recording must end with a terminal Responses-API event \
+         (response.completed / response.incomplete / response.failed)"
     );
     assert!(
         !text.contains("sk-"),

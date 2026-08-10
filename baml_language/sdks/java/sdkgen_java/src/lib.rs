@@ -837,6 +837,42 @@ mod tests {
     }
 
     #[test]
+    fn class_accessor_escapes_object_final_method_names() {
+        // A field may legally be called `wait`, but its accessor may not:
+        // `wait()` cannot override `java.lang.Object`'s final `wait()`, so the
+        // generated class would not compile. The field keeps its name and the
+        // accessor takes the `$` escape.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["collide"], "Collide");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &[],
+                vec![("wait", t_int()), ("notify", t_string()), ("ok", t_int())],
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("collide/Collide.java")];
+
+        // Fields keep the BAML names.
+        assert!(file.contains("private final long wait;"), "{file}");
+        assert!(file.contains("private final java.lang.String notify;"), "{file}");
+
+        // Accessors are escaped, and read the unescaped field.
+        assert!(file.contains("public long wait$() {"), "{file}");
+        assert!(file.contains("return this.wait;"), "{file}");
+        assert!(file.contains("public java.lang.String notify$() {"), "{file}");
+
+        // A non-colliding field is untouched.
+        assert!(file.contains("public long ok() {"), "{file}");
+
+        // The un-escaped forms must not be declared as methods.
+        assert!(!file.contains("public long wait() {"), "{file}");
+    }
+
+    #[test]
     fn class_renders_fields_ctor_accessors_equality() {
         let mut pool = SymbolPool::new();
         let n = name("user", &["primitives"], "Primitives");
