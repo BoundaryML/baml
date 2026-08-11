@@ -1932,6 +1932,46 @@ impl BexVm {
             .unwrap_or_else(HeapPtr::null)
     }
 
+    /// Return the created-once type value for a declaration owned by the
+    /// currently executing runtime package.
+    ///
+    /// Runtime-compiled declarations use per-package runtime mints, so a
+    /// concrete `LoadType` in that package must reuse the value allocated at
+    /// package load instead of deriving the ordinary static digest. Imported
+    /// and composite types deliberately miss this lookup and retain the static
+    /// materialization path.
+    fn current_runtime_declaration_type(&self, ty: &baml_type::RealizedTy) -> Option<HeapPtr> {
+        let (baml_type::RealizedTy::Class(name, ..)
+        | baml_type::RealizedTy::Enum(name, ..)
+        | baml_type::RealizedTy::Interface(name, ..)) = ty
+        else {
+            return None;
+        };
+        if !name.is_local() {
+            return None;
+        }
+
+        let package_ptr = self.current_runtime_package();
+        if package_ptr.is_null() {
+            return None;
+        }
+        let Object::Package(package) = self.get_object(package_ptr) else {
+            unreachable!("runtime function owner does not point to Object::Package")
+        };
+        let key = name
+            .namespace()
+            .iter()
+            .map(baml_type::Name::as_str)
+            .chain(std::iter::once(name.name().as_str()))
+            .collect::<Vec<_>>()
+            .join(".");
+        let ptr = package.runtime.as_ref()?.type_values.get(&key).copied()?;
+        match self.get_object(ptr) {
+            Object::Type(value) if &value.ty == ty => Some(ptr),
+            _ => None,
+        }
+    }
+
     fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
         if package.as_ptr().is_null() {
             return self.globals.get(self.proof(), index);
@@ -7555,7 +7595,11 @@ impl BexVm {
                         } else {
                             DynTypeDefs::default()
                         };
-                        Value::object(self.alloc_static_type_with_defs(ty, defs))
+                        if let Some(type_ptr) = self.current_runtime_declaration_type(&ty) {
+                            Value::object(type_ptr)
+                        } else {
+                            Value::object(self.alloc_static_type_with_defs(ty, defs))
+                        }
                     };
                     self.stack.push(value);
                 }
