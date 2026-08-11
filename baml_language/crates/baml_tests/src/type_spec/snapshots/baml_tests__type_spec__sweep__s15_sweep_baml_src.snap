@@ -17,11 +17,10 @@ panics: 0
 559x canonical-order
 6x enum-complete-collapse
 479x literal-collapse-render
-702x ours-reduced
+703x ours-reduced
 27x ours-residual-never
 110x ours-union-join
 38x qualification-render
-1x rustc-strict-empty-literal
 934x self-showing-callee-render
 2624x throws-precision
 16x tir-error
@@ -1894,8 +1893,6 @@ panics: 0
 [2x] hir_ty=[void] tir=[never]
     at ns_errorcontext/errorcontext.baml:6433..6446 `{ throw "B" }`
     at ns_errorcontext/errorcontext.baml:6455..6468 `{ throw "C" }`
-[1x] hir_ty=[!error[]] tir=[_[]]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:25422..25424 `[]`
 [1x] hir_ty=["."] tir=[string]
     at ns_for_loops/for_loops.baml:6654..6657 `"."`
 [1x] hir_ty=["Blue" | "Green" | "Red"] tir=["Red" | "Green" | "Blue"]
@@ -2152,8 +2149,6 @@ panics: 0
     at ns_generic_union_returns/generic_union_returns.baml:1678..1695 `parsed.empty_json`
 [1x] hir_ty=[(int) -> int throws never] tir=[(n: int) -> int throws never]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:18744..18771 `(int) -> i...ows unknown`
-[1x] hir_ty=[(int[] | !error[])[]] tir=[(int[] | _[])[]]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:25408..25425 `[[1], [2, 3], []]`
 [1x] hir_ty=[(items: int[]) -> user.inferred_generic_type_args.ArrayCursor<int> throws never] tir=[(items: T[]) -> user.inferred_generic_type_args.ArrayCursor<T> throws never]
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:4206..4220 `ArrayCursor.of`
 [1x] hir_ty=[(items: user.interfaces.GbenDog[]) -> string throws never] tir=[(items: T[]) -> string throws never]
@@ -3248,10 +3243,14 @@ panics: 0
     at ns_patterns_new_runtime/patterns_new_runtime.baml:11496..11497 `v`
 [1x] hir_ty=[int[]] tir=[0[]]
     at ns_arrays/arrays.baml:35931..35954 `baml.Array.filled(2, 0)`
-[1x] hir_ty=[int[] | !error[]] tir=[int[] | never[]]
+[1x] hir_ty=[int[]] tir=[_[]]
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:25422..25424 `[]`
+[1x] hir_ty=[int[]] tir=[int[] | never[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:25400..25404 `[..]`
 [1x] hir_ty=[int[] | unknown[]] tir=[unknown[] | int[]]
     at ns_match_container_types/match_container_types.baml:8553..8554 `u`
+[1x] hir_ty=[int[][]] tir=[(int[] | _[])[]]
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:25408..25425 `[[1], [2, 3], []]`
 [1x] hir_ty=[map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null] tir=[map<string, baml.json.json> | null]
     at ns_generic_union_returns/generic_union_returns.baml:1734..1749 `parsed.metadata`
 [1x] hir_ty=[map<string, string> | map<string, T>] tir=[map<string, T> | map<string, string>]

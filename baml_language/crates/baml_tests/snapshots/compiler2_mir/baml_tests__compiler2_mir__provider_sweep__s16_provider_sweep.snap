@@ -16,12 +16,9 @@ ruled thrown-literal: 1
 ruled throws-precision: 31
 ruled throws-precision+tir-unknown: 1
 ruled tir-unknown: 92
-differing: 128
-panics: 1
+differing: 129
+panics: 0
 top-level lets: not diffed (no body renderer yet)
-
-== panics ==
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable [hir_ty] internal error: entered unreachable code: `Error` is not a valid `RuntimeTy`: an error-recovery type reached runtime lowering
 
 == differing functions ==
 ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
@@ -452,6 +449,10 @@ ns_patterns_new_runtime/patterns_new_runtime.baml :: test_fn_is_mismatched
     ...         _1 = make_closure lambda[0]();
     tir:         _2 = is_type(copy _1, never);
     hir:         _2 = is_type(copy _1, (string) -> string throws unknown);
+ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable
+    ...     let _1: int // total
+    tir:     let _2: (int[] | never[])[]
+    hir:     let _2: int[][]
 ns_projection_patterns/projection_patterns.baml :: is_label
     ...     bb0: {
     tir:         _3 = is_type(copy _2, #1);

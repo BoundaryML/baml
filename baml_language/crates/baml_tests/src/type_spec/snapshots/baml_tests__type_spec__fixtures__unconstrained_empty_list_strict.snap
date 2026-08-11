@@ -12,16 +12,16 @@ expression: outcome.dump
 490..598 '{\n   ...tal\n}': int
 496..505 'let total': int
 508..509 '0': 0
-519..526 'let row': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
-530..547 '[[1], ...], []]': hir_ty=[(int[] | !error[])[]] tir=[(int[] | _[])[]]
+519..526 'let row': hir_ty=[int[]] tir=[int[] | _[]]
+530..547 '[[1], ...], []]': hir_ty=[int[][]] tir=[(int[] | _[])[]]
 531..534 '[1]': int[]
 532..533 '1': 1
 536..542 '[2, 3]': int[]
 537..538 '2': 2
 540..541 '3': 3
-544..546 '[]': hir_ty=[!error[]] tir=[_[]]
+544..546 '[]': hir_ty=[int[]] tir=[_[]]
 549..586 '{\n   ...n    }': void
 559..564 'total': int
-568..578 'row.length': hir_ty=[() -> int throws never] tir=[unknown]
+568..578 'row.length': hir_ty=[(self: int[]) -> int throws never] tir=[unknown]
 568..580 'row.length()': hir_ty=[int] tir=[unknown]
 591..596 'total': int

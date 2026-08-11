@@ -1364,6 +1364,25 @@ impl<'db> InferenceContext<'db> {
                                 self.widen_fresh(&ty)
                             })
                             .collect();
+                        // TS's best-common-type adoption (rustc likewise
+                        // unifies vec elements; E0282 needs NO evidence):
+                        // an element still carrying inference vars takes
+                        // the join of its GROUND siblings as an upper
+                        // bound, so `[[1], []]` is `int[][]` - the empty
+                        // list's element solves from the siblings instead
+                        // of erasing under the rustc-strict rule, which
+                        // remains for genuinely unconstrained literals
+                        // (`[[], []]` has no evidence and stays strict).
+                        let (ground, open): (Vec<Ty>, Vec<Ty>) = joined
+                            .iter()
+                            .cloned()
+                            .partition(|ty| !self.table.resolve_completely(ty).has_infer());
+                        if !ground.is_empty() && !open.is_empty() {
+                            let evidence = self.join(&ground);
+                            for ty in &open {
+                                self.sub(ty, &evidence);
+                            }
+                        }
                         Ty::list(self.union_of(&joined))
                     }
                 }
