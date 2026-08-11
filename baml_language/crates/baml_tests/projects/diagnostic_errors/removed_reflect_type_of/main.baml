@@ -1,7 +1,6 @@
-// BEP-066 I-9: `reflect.type_of` was REMOVED (renamed to `type.of`), not
-// aliased. Both the bare shorthand spelling and the fully qualified one must
-// error with a diagnostic that names the replacement, not a bare
-// "unresolved name".
+// BEP-066: the removed `reflect.type_of` reader is an ordinary nonexistent
+// function. Both the bare shorthand spelling and the fully qualified one must
+// produce an ordinary unresolved-name diagnostic.
 
 function old_bare_spelling() -> type {
     reflect.type_of<int>()

@@ -6,11 +6,11 @@ function user.old_bare_spelling() -> type throws never {
   { : unknown
     reflect.type_of() : unknown
   }
-  !! 284..299: `reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`
+  !! 250..265: unresolved name: type_of
 }
 function user.old_qualified_spelling() -> type throws never {
   { : unknown
     baml.reflect.type_of() : unknown
   }
-  !! 358..378: `reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`
+  !! 324..344: unresolved name: type_of
 }

@@ -10718,8 +10718,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 //      (a local, checked above; a user package, step 1; a user
                 //      class/enum, step 3) shadows the shorthand, which only
                 //      kicks in on a full resolution miss. Delegate entirely —
-                //      the aliased lookup owns the diagnostics for its misses
-                //      (including the I-9 removed-`reflect.type_of` message).
+                //      the aliased lookup owns the diagnostics for its misses.
                 if matches!(segments[0].as_str(), "reflect" | "type" | "json") {
                     let mut aliased: Vec<Name> = Vec::with_capacity(segments.len() + 1);
                     aliased.push(Name::new("baml"));
@@ -10918,26 +10917,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         match self.resolve_package_item(pkg_items, &item_path, expr_id) {
             Some(ty) => ty,
             None => {
-                // I-9 (BEP-066): the `reflect.type_of*` readers were *removed*,
-                // not aliased — name each replacement instead of reporting a
-                // bare "unresolved name". Bare `reflect.*` and explicit
-                // `baml.reflect.*` spellings both funnel through this branch.
-                if pkg_name.as_str() == "baml"
-                    && item_path.len() == 2
-                    && item_path[0].as_str() == "reflect"
-                {
-                    let removed_reader = match item_path[1].as_str() {
-                        "type_of" => Some(TirTypeError::RemovedReflectTypeOf),
-                        "type_of_value" => Some(TirTypeError::RemovedReflectTypeOfValue),
-                        _ => None,
-                    };
-                    if let Some(error) = removed_reader {
-                        self.context.report_simple(error, expr_id);
-                        return Ty::Unknown {
-                            attr: TyAttr::default(),
-                        };
-                    }
-                }
                 // Find the first invalid segment in the path.
                 // The path is [ns_0, ns_1, ..., ns_n, item].
                 // Check each prefix of the namespace path to find the first invalid segment.

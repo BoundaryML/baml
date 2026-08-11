@@ -4,16 +4,16 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0003
 
-  × `reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`
-   ╭─[main.baml:7:5]
- 7 │     reflect.type_of<int>()
+  × unresolved name: `type_of`
+   ╭─[main.baml:6:5]
+ 6 │     reflect.type_of<int>()
    ·     ───────────────
    ╰────
 
   [type] E0003
 
-  × `reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`
-    ╭─[main.baml:11:5]
- 11 │     baml.reflect.type_of<string>()
+  × unresolved name: `type_of`
+    ╭─[main.baml:10:5]
+ 10 │     baml.reflect.type_of<string>()
     ·     ────────────────────
     ╰────

@@ -1982,13 +1982,9 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::UnknownClassPropertyShorthand { .. } => DiagnosticId::NoSuchField,
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::UnresolvedName { .. }
-        | TirTypeError::UnresolvedPropertyShorthand { .. }
-        // The removed `reflect.type_of*` spellings (BEP-066 I-9) are
-        // name-resolution failures whose messages name their replacements —
-        // the same id as a plain unresolved name.
-        | TirTypeError::RemovedReflectTypeOf
-        | TirTypeError::RemovedReflectTypeOfValue => DiagnosticId::UnknownVariable,
+        TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
+            DiagnosticId::UnknownVariable
+        }
         TirTypeError::MountedPackageCallUnsupported { .. } => {
             DiagnosticId::MountedPackageCallUnsupported
         }

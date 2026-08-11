@@ -1,4 +1,4 @@
-//! BEP-066 constructor-correctness regression tests (N-1, K-2, and I-9).
+//! BEP-066 constructor-correctness and removed-reader regression tests.
 
 use baml_compiler_diagnostics::Severity;
 use baml_project::{collect_diagnostics, testing::setup_test_db};
@@ -80,7 +80,7 @@ function use_precise_enum_as_runtime_type() -> string {
 }
 
 #[test]
-fn both_removed_reader_spellings_name_their_replacements() {
+fn removed_reader_spellings_are_ordinary_unresolved_names() {
     let errors = compile_errors(
         r#"
 function old_type_reader() -> type {
@@ -93,24 +93,16 @@ function old_value_reader(value: unknown) -> type {
 "#,
     );
 
-    for (old, replacement) in [
-        ("reflect.type_of", "type.of"),
-        ("reflect.type_of_value", "type.of_value"),
-    ] {
-        let quoted_old = format!("`{old}`");
+    for reader in ["type_of", "type_of_value"] {
+        let expected = format!("unresolved name: `{reader}`");
         let matching = errors
             .iter()
-            .filter(|(_, message)| message.contains(&quoted_old))
+            .filter(|(_, message)| message == &expected)
             .collect::<Vec<_>>();
         assert_eq!(
             matching.len(),
             1,
-            "expected exactly one diagnostic naming removed reader {old}, got: {errors:#?}"
-        );
-        assert!(
-            matching[0].1.contains(replacement),
-            "diagnostic for {old} must name replacement {replacement}: {:?}",
-            matching[0]
+            "expected exactly one ordinary unresolved-name diagnostic for {reader}, got: {errors:#?}"
         );
     }
 }

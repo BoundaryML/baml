@@ -111,13 +111,6 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
-    /// The removed `reflect.type_of` spelling (BEP-066 I-9): the intrinsic was
-    /// renamed to `type.of`, and the old name errors with the replacement
-    /// spelled out rather than a bare "unresolved name".
-    RemovedReflectTypeOf,
-    /// The removed `reflect.type_of_value` spelling (BEP-066 I-9): the
-    /// intrinsic was renamed to `type.of_value`.
-    RemovedReflectTypeOfValue,
     /// A CALL whose callee is exported by a MOUNTED dependency but has no
     /// loc-free link contract. Ordinary bytecode functions and methods carry
     /// symbolic identities; compiler/VM builtin bodies do not. `path` is the
@@ -843,18 +836,6 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
-            }
-            TirTypeError::RemovedReflectTypeOf => {
-                write!(
-                    f,
-                    "`reflect.type_of` was renamed to `type.of` (BEP-066): write `type.of<T>()`"
-                )
-            }
-            TirTypeError::RemovedReflectTypeOfValue => {
-                write!(
-                    f,
-                    "`reflect.type_of_value` was renamed to `type.of_value` (BEP-066): write `type.of_value(value)`"
-                )
             }
             TirTypeError::MountedPackageCallUnsupported { path } => {
                 write!(
