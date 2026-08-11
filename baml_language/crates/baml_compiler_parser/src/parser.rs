@@ -1973,7 +1973,7 @@ impl<'a> Parser<'a> {
         }
 
         self.error_here(
-            "Hash-delimited strings and Jinja templates are no longer supported. Use backtick strings with `${...}` interpolation instead. For example, `#\"Hello {{ name }}\"#` becomes `` `Hello ${name}` ``."
+            "hash-delimited strings and Jinja templates are no longer supported. Use backtick strings with `${...}` interpolation instead. For example, `#\"Hello {{ name }}\"#` becomes `` `Hello ${name}` ``."
                 .to_string(),
         );
 
@@ -9257,7 +9257,7 @@ function Demo() -> string {{
                 matches!(
                     &errors[0],
                     ParseError::InvalidSyntax { message, .. }
-                        if message.contains("Hash-delimited strings and Jinja templates are no longer supported")
+                        if message.contains("hash-delimited strings and Jinja templates are no longer supported")
                 ),
                 "unexpected diagnostic: {errors:#?}"
             );
@@ -9662,7 +9662,7 @@ function Demo(x #"hello"#) -> int {
             matches!(
                 &errors[0],
                 ParseError::InvalidSyntax { message, .. }
-                    if message.contains("Hash-delimited strings and Jinja templates are no longer supported")
+                    if message.contains("hash-delimited strings and Jinja templates are no longer supported")
             ),
             "unexpected diagnostic: {errors:#?}"
         );
