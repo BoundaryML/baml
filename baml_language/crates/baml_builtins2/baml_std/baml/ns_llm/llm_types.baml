@@ -755,8 +755,8 @@ class PrimitiveClient {
     return_type: type,
     prompt_closure: ((Context) -> PromptAst throws never)?,
   ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient | baml.reflect.errors.CompilationError {
-    // BEP-066 R-1: reject open interface occurrences at the shared render
-    // boundary, before either the prompt closure or legacy renderer runs.
+    // BEP-066 R-1/R-3: reject open interfaces and conflicting same-name
+    // definitions at the shared render boundary, before either prompt path runs.
     return_type._validate_renderable()
     // BEP-066 R-4: an empty enum is a valid definition, but there is no
     // category the model can emit. Keep this check at the shared render

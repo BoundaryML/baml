@@ -194,6 +194,18 @@ impl BamlClassTypeValue for PackageBamlImpl {
         let Some((field, open_ty)) =
             first_open_interface(vm, &type_value.ty, type_value.defs(), &root, &mut visited)
         else {
+            if let Some(name) = first_conflicting_render_name(vm, &type_value.ty, type_value.defs())
+            {
+                let diagnostic = super::type_kinds::compiler_diagnostic(
+                    baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
+                    format!(
+                        "type `{name}` has non-equivalent definitions in the same LLM render context"
+                    ),
+                );
+                return Err(VmRustFnError::Thrown(
+                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+                ));
+            }
             return Ok(());
         };
         let diagnostic =
@@ -294,6 +306,449 @@ impl BamlClassTypeValue for PackageBamlImpl {
             .into_iter()
             .map(|(ty, _, _)| Value::object(vm.alloc_static_type(ty)))
             .collect()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum RenderDefinition {
+    Class(baml_type::TypeName),
+    Enum(baml_type::TypeName),
+    TypeAlias(baml_type::TypeName),
+}
+
+struct RenderDefinitionValidator<'a> {
+    vm: &'a BexVm,
+    defs: &'a DynTypeDefs,
+    by_display_name: std::collections::HashMap<String, RenderDefinition>,
+    visited: std::collections::HashSet<RenderDefinition>,
+}
+
+impl RenderDefinitionValidator<'_> {
+    fn visit(&mut self, ty: &baml_type::RealizedTy) -> Option<String> {
+        match ty {
+            baml_type::RealizedTy::Class(name, args, _) => {
+                let definition = RenderDefinition::Class(name.clone());
+                if let Some(conflict) = self.check_name(&definition) {
+                    return Some(conflict);
+                }
+                if !self.visited.insert(definition) {
+                    return None;
+                }
+                let class = find_render_class(self.vm, self.defs, name)?;
+                for field in &class.fields {
+                    if field.skip {
+                        continue;
+                    }
+                    if let Some(runtime) = &field.runtime_type {
+                        if let Some(conflict) = self.visit(&runtime.ty) {
+                            return Some(conflict);
+                        }
+                        continue;
+                    }
+                    let field_ty = field
+                        .field_template
+                        .substitute(args, self.vm)
+                        .ok()
+                        .or_else(|| baml_type::RealizedTy::try_from(field.field_type.clone()).ok());
+                    if let Some(field_ty) = field_ty
+                        && let Some(conflict) = self.visit(&field_ty)
+                    {
+                        return Some(conflict);
+                    }
+                }
+                None
+            }
+            baml_type::RealizedTy::Enum(name, _) => {
+                let definition = RenderDefinition::Enum(name.clone());
+                if let Some(conflict) = self.check_name(&definition) {
+                    return Some(conflict);
+                }
+                self.visited.insert(definition);
+                None
+            }
+            baml_type::RealizedTy::TypeAlias(name, _) => {
+                let definition = RenderDefinition::TypeAlias(name.clone());
+                if let Some(conflict) = self.check_name(&definition) {
+                    return Some(conflict);
+                }
+                if !self.visited.insert(definition) {
+                    return None;
+                }
+                self.vm
+                    .recursive_type_alias(name)
+                    .and_then(|alias| baml_type::RealizedTy::try_from(alias.clone()).ok())
+                    .and_then(|alias| self.visit(&alias))
+            }
+            baml_type::RealizedTy::List(element, _) => self.visit(element),
+            baml_type::RealizedTy::Map { key, value, .. } => {
+                self.visit(key).or_else(|| self.visit(value))
+            }
+            baml_type::RealizedTy::Union(members, _) => {
+                members.iter().find_map(|member| self.visit(member))
+            }
+            baml_type::RealizedTy::Future(value, error, _) => {
+                self.visit(value).or_else(|| self.visit(error))
+            }
+            baml_type::RealizedTy::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => params
+                .iter()
+                .find_map(|param| self.visit(&param.ty))
+                .or_else(|| self.visit(ret))
+                .or_else(|| self.visit(throws)),
+            _ => None,
+        }
+    }
+
+    fn check_name(&mut self, definition: &RenderDefinition) -> Option<String> {
+        let display_name = render_definition_display_name(definition);
+        if let Some(previous) = self.by_display_name.get(&display_name) {
+            if previous != definition
+                && !render_definitions_equivalent(self.vm, self.defs, previous, definition)
+            {
+                return Some(display_name);
+            }
+        } else {
+            self.by_display_name
+                .insert(display_name, definition.clone());
+        }
+        None
+    }
+}
+
+fn first_conflicting_render_name(
+    vm: &BexVm,
+    ty: &baml_type::RealizedTy,
+    defs: &DynTypeDefs,
+) -> Option<String> {
+    let mut validator = RenderDefinitionValidator {
+        vm,
+        defs,
+        by_display_name: std::collections::HashMap::new(),
+        visited: std::collections::HashSet::new(),
+    };
+    validator.visit(ty)
+}
+
+fn render_definition_display_name(definition: &RenderDefinition) -> String {
+    match definition {
+        RenderDefinition::Class(name)
+        | RenderDefinition::Enum(name)
+        | RenderDefinition::TypeAlias(name) => name.display_name().to_string(),
+    }
+}
+
+fn find_render_class<'a>(
+    vm: &'a BexVm,
+    defs: &DynTypeDefs,
+    name: &baml_type::TypeName,
+) -> Option<&'a bex_vm_types::Class> {
+    let ptr = defs
+        .classes
+        .get(name)
+        .copied()
+        .or_else(|| vm.lookup_type(name))?;
+    match vm.get_object(ptr) {
+        Object::Class(class) => Some(class),
+        _ => None,
+    }
+}
+
+fn find_render_enum<'a>(
+    vm: &'a BexVm,
+    defs: &DynTypeDefs,
+    name: &baml_type::TypeName,
+) -> Option<&'a bex_vm_types::Enum> {
+    let ptr = defs
+        .enums
+        .get(name)
+        .copied()
+        .or_else(|| vm.lookup_type(name))?;
+    match vm.get_object(ptr) {
+        Object::Enum(enm) => Some(enm),
+        _ => None,
+    }
+}
+
+fn render_definitions_equivalent(
+    vm: &BexVm,
+    defs: &DynTypeDefs,
+    left: &RenderDefinition,
+    right: &RenderDefinition,
+) -> bool {
+    RenderDefinitionEquivalence {
+        vm,
+        defs,
+        left_to_right: std::collections::HashMap::new(),
+        right_to_left: std::collections::HashMap::new(),
+    }
+    .definitions_equivalent(left, right)
+}
+
+struct RenderDefinitionEquivalence<'a> {
+    vm: &'a BexVm,
+    defs: &'a DynTypeDefs,
+    // A bidirectional definition mapping makes recursive equivalence
+    // alpha-invariant while preserving graph sharing: A -> A is not equivalent
+    // to a same-shaped B -> A when the candidate counterpart is B -> B.
+    left_to_right: std::collections::HashMap<RenderDefinition, RenderDefinition>,
+    right_to_left: std::collections::HashMap<RenderDefinition, RenderDefinition>,
+}
+
+impl RenderDefinitionEquivalence<'_> {
+    fn definitions_equivalent(
+        &mut self,
+        left: &RenderDefinition,
+        right: &RenderDefinition,
+    ) -> bool {
+        if render_definition_display_name(left) != render_definition_display_name(right) {
+            return false;
+        }
+        if let Some(mapped) = self.left_to_right.get(left) {
+            return mapped == right;
+        }
+        if let Some(mapped) = self.right_to_left.get(right) {
+            return mapped == left;
+        }
+        self.left_to_right.insert(left.clone(), right.clone());
+        self.right_to_left.insert(right.clone(), left.clone());
+
+        match (left, right) {
+            (RenderDefinition::Class(left), RenderDefinition::Class(right)) => {
+                let (Some(left), Some(right)) = (
+                    find_render_class(self.vm, self.defs, left).cloned(),
+                    find_render_class(self.vm, self.defs, right).cloned(),
+                ) else {
+                    return false;
+                };
+                // `other` is intentionally absent (I-6), and docstring emission
+                // remains undecided. Everything currently prompt/parse-visible is
+                // compared, including order, aliases, descriptions, and SAP attrs.
+                if left.description != right.description
+                    || left.alias != right.alias
+                    || left.ty_attr != right.ty_attr
+                    || left.generic_param_count != right.generic_param_count
+                    || left.fields.len() != right.fields.len()
+                {
+                    return false;
+                }
+                for (left, right) in left.fields.iter().zip(&right.fields) {
+                    if left.name != right.name
+                        || left.description != right.description
+                        || left.alias != right.alias
+                        || left.skip != right.skip
+                        || !self.runtime_types_equivalent(&left.field_type, &right.field_type)
+                    {
+                        return false;
+                    }
+                }
+                true
+            }
+            (RenderDefinition::Enum(left), RenderDefinition::Enum(right)) => {
+                let (Some(left), Some(right)) = (
+                    find_render_enum(self.vm, self.defs, left),
+                    find_render_enum(self.vm, self.defs, right),
+                ) else {
+                    return false;
+                };
+                left.description == right.description
+                    && left.alias == right.alias
+                    && left.ty_attr == right.ty_attr
+                    && left.variants.len() == right.variants.len()
+                    && left
+                        .variants
+                        .iter()
+                        .zip(&right.variants)
+                        .all(|(left, right)| {
+                            left.name == right.name
+                                && left.description == right.description
+                                && left.alias == right.alias
+                                && left.skip == right.skip
+                        })
+            }
+            (RenderDefinition::TypeAlias(left), RenderDefinition::TypeAlias(right)) => {
+                let (Some(left), Some(right)) = (
+                    self.vm.recursive_type_alias(left).cloned(),
+                    self.vm.recursive_type_alias(right).cloned(),
+                ) else {
+                    return false;
+                };
+                let (Ok(left), Ok(right)) = (
+                    baml_type::RealizedTy::try_from(left),
+                    baml_type::RealizedTy::try_from(right),
+                ) else {
+                    return false;
+                };
+                self.types_equivalent(&left, &right)
+            }
+            _ => false,
+        }
+    }
+
+    fn runtime_types_equivalent(
+        &mut self,
+        left: &baml_type::RuntimeTy,
+        right: &baml_type::RuntimeTy,
+    ) -> bool {
+        let (Ok(left), Ok(right)) = (
+            baml_type::RealizedTy::try_from(left.clone()),
+            baml_type::RealizedTy::try_from(right.clone()),
+        ) else {
+            return left == right;
+        };
+        self.types_equivalent(&left, &right)
+    }
+
+    fn types_equivalent(
+        &mut self,
+        left: &baml_type::RealizedTy,
+        right: &baml_type::RealizedTy,
+    ) -> bool {
+        use baml_type::RealizedTy;
+
+        match (left, right) {
+            (
+                RealizedTy::Class(left_name, left_args, left_attr),
+                RealizedTy::Class(right_name, right_args, right_attr),
+            ) => {
+                left_name.display_name() == right_name.display_name()
+                    && left_attr == right_attr
+                    && self.type_lists_equivalent(left_args, right_args)
+                    && self.definitions_equivalent(
+                        &RenderDefinition::Class(left_name.clone()),
+                        &RenderDefinition::Class(right_name.clone()),
+                    )
+            }
+            (
+                RealizedTy::Interface(left_name, left_args, left_assoc, left_attr),
+                RealizedTy::Interface(right_name, right_args, right_assoc, right_attr),
+            ) => {
+                if left_name.display_name() != right_name.display_name()
+                    || left_attr != right_attr
+                    || !self.type_lists_equivalent(left_args, right_args)
+                    || left_assoc.len() != right_assoc.len()
+                {
+                    return false;
+                }
+                for ((left_name, left_ty), (right_name, right_ty)) in
+                    left_assoc.iter().zip(right_assoc)
+                {
+                    if left_name != right_name || !self.types_equivalent(left_ty, right_ty) {
+                        return false;
+                    }
+                }
+                true
+            }
+            (RealizedTy::Enum(left_name, left_attr), RealizedTy::Enum(right_name, right_attr)) => {
+                left_name.display_name() == right_name.display_name()
+                    && left_attr == right_attr
+                    && self.definitions_equivalent(
+                        &RenderDefinition::Enum(left_name.clone()),
+                        &RenderDefinition::Enum(right_name.clone()),
+                    )
+            }
+            (
+                RealizedTy::TypeAlias(left_name, left_attr),
+                RealizedTy::TypeAlias(right_name, right_attr),
+            ) => {
+                left_name.display_name() == right_name.display_name()
+                    && left_attr == right_attr
+                    && self.definitions_equivalent(
+                        &RenderDefinition::TypeAlias(left_name.clone()),
+                        &RenderDefinition::TypeAlias(right_name.clone()),
+                    )
+            }
+            (
+                RealizedTy::EnumVariant(left_name, left_variant, left_attr),
+                RealizedTy::EnumVariant(right_name, right_variant, right_attr),
+            ) => {
+                left_name.display_name() == right_name.display_name()
+                    && left_variant == right_variant
+                    && left_attr == right_attr
+                    && self.definitions_equivalent(
+                        &RenderDefinition::Enum(left_name.clone()),
+                        &RenderDefinition::Enum(right_name.clone()),
+                    )
+            }
+            (RealizedTy::List(left, left_attr), RealizedTy::List(right, right_attr)) => {
+                left_attr == right_attr && self.types_equivalent(left, right)
+            }
+            (
+                RealizedTy::Map {
+                    key: left_key,
+                    value: left_value,
+                    attr: left_attr,
+                },
+                RealizedTy::Map {
+                    key: right_key,
+                    value: right_value,
+                    attr: right_attr,
+                },
+            ) => {
+                left_attr == right_attr
+                    && self.types_equivalent(left_key, right_key)
+                    && self.types_equivalent(left_value, right_value)
+            }
+            (RealizedTy::Union(left, left_attr), RealizedTy::Union(right, right_attr)) => {
+                left_attr == right_attr && self.type_lists_equivalent(left, right)
+            }
+            (
+                RealizedTy::Function {
+                    params: left_params,
+                    ret: left_ret,
+                    throws: left_throws,
+                    attr: left_attr,
+                },
+                RealizedTy::Function {
+                    params: right_params,
+                    ret: right_ret,
+                    throws: right_throws,
+                    attr: right_attr,
+                },
+            ) => {
+                if left_attr != right_attr || left_params.len() != right_params.len() {
+                    return false;
+                }
+                for (left, right) in left_params.iter().zip(right_params) {
+                    if left.name != right.name
+                        || left.mode != right.mode
+                        || !self.types_equivalent(&left.ty, &right.ty)
+                    {
+                        return false;
+                    }
+                }
+                self.types_equivalent(left_ret, right_ret)
+                    && self.types_equivalent(left_throws, right_throws)
+            }
+            (
+                RealizedTy::Future(left_value, left_error, left_attr),
+                RealizedTy::Future(right_value, right_error, right_attr),
+            ) => {
+                left_attr == right_attr
+                    && self.types_equivalent(left_value, right_value)
+                    && self.types_equivalent(left_error, right_error)
+            }
+            _ => left == right,
+        }
+    }
+
+    fn type_lists_equivalent(
+        &mut self,
+        left: &[baml_type::RealizedTy],
+        right: &[baml_type::RealizedTy],
+    ) -> bool {
+        if left.len() != right.len() {
+            return false;
+        }
+        for (left, right) in left.iter().zip(right) {
+            if !self.types_equivalent(left, right) {
+                return false;
+            }
+        }
+        true
     }
 }
 

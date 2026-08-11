@@ -382,6 +382,10 @@ pub enum DiagnosticId {
 
     /// An interface-typed occurrence reached an LLM output schema renderer.
     OpenInterfaceAtRender,
+
+    /// Two non-equivalent definitions with the same displayed qualified name
+    /// reached one LLM render/parse context.
+    ConflictingTypeDefinitionAtRender,
 }
 
 impl DiagnosticId {
@@ -578,6 +582,7 @@ impl DiagnosticId {
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::RuntimeEmptyUnion => "E0160",
             DiagnosticId::OpenInterfaceAtRender => "E0161",
+            DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
