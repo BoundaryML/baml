@@ -5330,6 +5330,13 @@ impl BexEngine {
                         }
                         _ => None,
                     };
+                    if let Some(Ok(request)) = runtime_compile_request.as_ref()
+                        && let bex_vm_types::RuntimeCompileMode::Session(session) = &request.mode
+                        && let Some(future_id) = thread.vm_thread_settles_future()
+                    {
+                        let mut guard = self.futures.acquire(thread.proof()).await;
+                        guard.register_session_lease(future_id, &session.lease)?;
+                    }
                     let runtime_schema_overlay = self.runtime_schema_overlay(&thread.vm, &args);
 
                     let bex_args: Vec<BexExternalValue> =

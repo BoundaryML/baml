@@ -1194,6 +1194,7 @@ dependencies = [
  "baml_workspace",
  "bex_engine",
  "bex_external_types",
+ "bex_heap",
  "bex_project",
  "bex_vm",
  "bex_vm_types",
