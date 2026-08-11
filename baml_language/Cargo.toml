@@ -131,6 +131,7 @@ sys_wasm = { path = "crates/sys_wasm" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 bex_query = { path = "crates/bex_query" }
+baml_query = { path = "crates/baml_query" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
@@ -193,6 +194,9 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
 flate2 = { version = "1" }
 fs2 = "0.4"
+# Public Project Studio SQL engine (design D3/D6): DataFusion owns parsing,
+# planning, and execution semantics for the `baml_query` catalog.
+datafusion = { version = "54.1", default-features = false, features = [ "nested_expressions", "regex_expressions", "sql", "unicode_expressions" ] }
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"

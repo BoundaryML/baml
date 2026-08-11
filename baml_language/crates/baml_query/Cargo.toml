@@ -1,0 +1,29 @@
+[package]
+name = "baml_query"
+description = "Backend-neutral Project Studio SQL core: versioned logical catalog, DataFusion planning, virtual BAML value lowering, budgets, snapshots, and terminal query outcomes (design 04-query-system, D3/D6/D7)."
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+# The canonical BAML value model, codec, and CID space (D7: one codec, no
+# second value model). The ONLY internal dependency this crate may have —
+# no CLI, no runtime host, no AWS SDK, no concrete SQLite/ClickHouse.
+bex_events = { workspace = true }
+async-trait = { workspace = true }
+datafusion = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "sync" ] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }

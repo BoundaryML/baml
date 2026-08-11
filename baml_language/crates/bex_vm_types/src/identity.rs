@@ -698,6 +698,56 @@ mod tests {
         assert_ne!(hash_a, hash_c, "different referent identity must differ");
     }
 
+    /// §4.4 documented non-transitivity (Q1 gate): changing a CALLEE'S
+    /// BODY does not change the caller's local hash — referenced
+    /// definitions contribute their names, never their contents. Equal
+    /// local hashes are therefore not proof of equal effective behavior.
+    #[test]
+    fn def_content_hash_is_not_transitive_over_callee_bodies() {
+        use crate::bytecode::Instruction;
+
+        fn build(callee_body: Vec<Instruction>) -> [u8; 32] {
+            let mut program = Program::default();
+            let mut callee = test_function("user.callee");
+            callee.bytecode.instructions = callee_body;
+            callee.def_meta = Some(DefinitionMeta {
+                definition_key: "function:user.callee".to_string(),
+                owner_type_key: None,
+                lambda: None,
+            });
+            let callee_idx = program.objects.len();
+            program.objects.push(Object::Function(Box::new(callee)));
+            let mut caller = test_function("user.caller");
+            caller.bytecode.instructions = vec![
+                Instruction::LoadGlobal(crate::GlobalIndex::from_raw(7)),
+                Instruction::Return,
+            ];
+            caller
+                .bytecode
+                .constants
+                .push(crate::types::ConstValue::Object(
+                    crate::ObjectIndex::from_raw(callee_idx),
+                ));
+            program
+                .function_global_indices
+                .insert("user.callee".to_string(), 7);
+            let caller_for_hash = caller.clone();
+            program.objects.push(Object::Function(Box::new(caller)));
+            let resolver = DefHashResolver::new(&program);
+            resolver.def_content_hash(&caller_for_hash)
+        }
+
+        let with_short_callee = build(vec![Instruction::Return]);
+        let with_long_callee = build(vec![
+            Instruction::LoadGlobal(crate::GlobalIndex::from_raw(3)),
+            Instruction::Return,
+        ]);
+        assert_eq!(
+            with_short_callee, with_long_callee,
+            "a callee body change must NOT change the caller's local hash"
+        );
+    }
+
     #[test]
     fn lambda_definition_key_shape() {
         let lambda = LambdaIdentity {
