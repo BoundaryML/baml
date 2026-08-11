@@ -71,8 +71,9 @@ fn message_text(content: &serde_json::Value) -> String {
 fn openai_sse_body(chunks: &[&str]) -> String {
     let mut body = String::new();
     for chunk in chunks {
+        let delta = serde_json::to_string(chunk).expect("stream delta is JSON-serializable");
         body.push_str(&format!(
-            "data: {{\"type\":\"response.output_text.delta\",\"delta\":\"{chunk}\"}}\n\n"
+            "data: {{\"type\":\"response.output_text.delta\",\"delta\":{delta}}}\n\n"
         ));
     }
     body.push_str(
@@ -167,7 +168,12 @@ async fn backtick_streaming_renders_output_format() {
     "#,
         client = client_decl(&server.uri()),
     );
-    let _ = baml_test!(&src);
+    let output = baml_test!(&src);
+    assert!(
+        output.result.is_ok(),
+        "streamed class response should parse: {:?}",
+        output.result
+    );
     let backtick = request_messages(
         &server
             .received_requests()

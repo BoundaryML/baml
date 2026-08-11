@@ -37,9 +37,9 @@ recording mode is active (a recordings/*.snap.sse payload is missing, or
 INSTA_UPDATE forces an update), but OPENAI_API_KEY is not set — the live
 SSE capture can't run.
 
-maybe we should be running in `infisical run -- <command>`?
+maybe we should be running with Infisical?
 
-  infisical run -- cargo insta test -p sdk_test_llm_recordings
+  infisical run -- cargo nextest run -p sdk_test_llm_recordings
 
 see sdk_tests/fixtures/llm_functions/recordings/README.md"#;
 

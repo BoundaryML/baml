@@ -40,7 +40,7 @@ Two flows, both plain insta workflows. Both need a real key, so run them under
 ```bash
 # Reviewable flow: delete, re-capture, review the diff.
 rm sdk_tests/fixtures/llm_functions/recordings/replay_extract_doc.snap*
-infisical run -- cargo insta test -p sdk_test_llm_recordings
+infisical run -- cargo nextest run -p sdk_test_llm_recordings
 cargo insta review
 
 # One-shot flow: force in-place update via insta's own env var.
