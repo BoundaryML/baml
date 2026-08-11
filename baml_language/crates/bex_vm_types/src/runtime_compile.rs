@@ -5,7 +5,7 @@
 //! compiler implementation is assembled in `bex_project`.
 
 use std::sync::{
-    Arc,
+    Arc, Weak,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -125,6 +125,9 @@ pub struct RuntimeSessionInitializer {
 #[derive(Clone)]
 pub struct SessionEvalLease(Arc<SessionEvalLeaseInner>);
 
+#[derive(Clone)]
+pub(crate) struct WeakSessionEvalLease(Weak<SessionEvalLeaseInner>);
+
 #[derive(Debug)]
 struct SessionEvalLeaseInner {
     busy: Arc<AtomicBool>,
@@ -139,6 +142,18 @@ impl SessionEvalLease {
 
     pub fn release(&self) {
         self.0.busy.store(false, Ordering::Release);
+    }
+
+    pub(crate) fn downgrade(&self) -> WeakSessionEvalLease {
+        WeakSessionEvalLease(Arc::downgrade(&self.0))
+    }
+}
+
+impl WeakSessionEvalLease {
+    pub(crate) fn release(&self) {
+        if let Some(lease) = self.0.upgrade() {
+            lease.busy.store(false, Ordering::Release);
+        }
     }
 }
 

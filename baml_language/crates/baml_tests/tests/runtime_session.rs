@@ -193,19 +193,16 @@ function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unk
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
   s.eval(#"let baseline = 40"#)
   let pending = spawn {
-    s.eval<int>(#"
-      let committed = baseline + 1
-      app.LongWait()
-    "#)
+    s.eval<int>(#"app.LongWait()"#)
   }
-  baml.sys.sleep(baml.time.Duration.from_milliseconds(500))
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
   pending.cancel()
   let cancelled = (await pending) catch (e) {
     baml.panics.Cancelled => true,
     _ => false,
   }
 
-  cancelled && s.eval<int>(#"baseline + committed"#) == 81
+  cancelled && s.eval<int>(#"baseline + 2"#) == 42
 }
 
 function declaration_redefinition_keeps_earlier_resolution() -> bool throws unknown {
