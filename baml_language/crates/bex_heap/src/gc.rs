@@ -677,7 +677,7 @@ impl BexHeap {
                 if let Some(runtime) = &package.runtime {
                     worklist.extend(runtime.objects.iter().copied());
                     worklist.extend(runtime.object_names.values().copied());
-                    worklist.extend(runtime.class_types.values().copied());
+                    worklist.extend(runtime.type_values.values().copied());
                     worklist.extend(runtime.dependencies.iter().copied());
                     worklist.extend(runtime.dependency_names.values().copied());
                     worklist.extend(runtime.init);
@@ -923,7 +923,7 @@ impl BexHeap {
                             *ptr = new_ptr;
                         }
                     }
-                    for ptr in runtime.class_types.values_mut() {
+                    for ptr in runtime.type_values.values_mut() {
                         if let Some(&new_ptr) = forwarding.get(ptr) {
                             *ptr = new_ptr;
                         }
@@ -1309,7 +1309,7 @@ impl BexHeap {
                             .objects
                             .iter()
                             .chain(runtime.object_names.values())
-                            .chain(runtime.class_types.values())
+                            .chain(runtime.type_values.values())
                             .chain(runtime.dependencies.iter())
                             .chain(runtime.dependency_names.values())
                             .copied()

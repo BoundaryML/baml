@@ -138,6 +138,28 @@ fn display_local_name(name: &LocalName) -> String {
         .join(".")
 }
 
+fn runtime_type_key(name: &LocalName) -> String {
+    name.namespace
+        .iter()
+        .map(baml_type::Name::as_str)
+        .chain(std::iter::once(name.name.as_str()))
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+fn stored_package_type(package: &Package, name: &LocalName) -> Option<HeapPtr> {
+    name.namespace
+        .is_empty()
+        .then(|| package.mounted_types.get(name.name.as_str()).copied())
+        .flatten()
+        .or_else(|| {
+            package
+                .runtime
+                .as_ref()
+                .and_then(|runtime| runtime.type_values.get(&runtime_type_key(name)).copied())
+        })
+}
+
 /// Runtime type facts rooted at the Package being inspected, not at the code
 /// that happened to call the reflection API. This distinction is observable
 /// when a generated package's return class implements an interface imported
@@ -222,6 +244,154 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
     let mut defs = DynTypeDefs::default();
     defs.classes.insert(class.name.clone(), class_ptr);
     Value::object(vm.alloc_static_type_with_defs(ty, defs))
+}
+
+fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: HeapPtr) -> Value {
+    if let Some(runtime_type) = runtime_type {
+        return Value::object(runtime_type);
+    }
+    let Object::Enum(enm) = vm.get_object(enum_ptr) else {
+        unreachable!("Package.enums only contains enum pointers")
+    };
+    let ty = RealizedTy::Enum(enm.name.clone(), enm.ty_attr.clone());
+    let defs = DynTypeDefs::with_enum(enm.name.clone(), enum_ptr);
+    Value::object(vm.alloc_static_type_with_defs(ty, defs))
+}
+
+fn package_interface_type(
+    vm: &mut BexVm,
+    runtime_type: Option<HeapPtr>,
+    interface_ptr: HeapPtr,
+) -> Value {
+    if let Some(runtime_type) = runtime_type {
+        return Value::object(runtime_type);
+    }
+    let Object::Interface(interface) = vm.get_object(interface_ptr) else {
+        unreachable!("Package.interfaces only contains interface pointers")
+    };
+    let ty = RealizedTy::Interface(
+        interface.name.clone(),
+        Vec::new(),
+        Vec::new(),
+        TyAttr::default(),
+    );
+    Value::object(vm.alloc_static_type(ty))
+}
+
+fn allocate_runtime_declaration_types(
+    vm: &mut BexVm,
+    package_ptr: HeapPtr,
+    classes: &IndexMap<LocalName, HeapPtr>,
+    enums: &IndexMap<LocalName, HeapPtr>,
+    interfaces: &IndexMap<LocalName, HeapPtr>,
+) -> IndexMap<String, HeapPtr> {
+    let source_defs = DynTypeDefs {
+        classes: classes
+            .values()
+            .filter_map(|ptr| match vm.get_object(*ptr) {
+                Object::Class(class) if !class.name.name().as_str().ends_with("$stream") => {
+                    Some((class.name.clone(), *ptr))
+                }
+                _ => None,
+            })
+            .collect(),
+        enums: enums
+            .values()
+            .filter_map(|ptr| match vm.get_object(*ptr) {
+                Object::Enum(enm) => Some((enm.name.clone(), *ptr)),
+                _ => None,
+            })
+            .collect(),
+        witnesses: Vec::new(),
+    };
+    let class_rows = classes
+        .iter()
+        .filter_map(|(name, &class_ptr)| match vm.get_object(class_ptr) {
+            Object::Class(class) => Some((
+                runtime_type_key(name),
+                class_ptr,
+                RealizedTy::Class(class.name.clone(), Vec::new(), class.ty_attr.clone()),
+            )),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let enum_rows = enums
+        .iter()
+        .filter_map(|(name, &enum_ptr)| match vm.get_object(enum_ptr) {
+            Object::Enum(enm) => Some((
+                runtime_type_key(name),
+                enum_ptr,
+                RealizedTy::Enum(enm.name.clone(), enm.ty_attr.clone()),
+            )),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let interface_rows = interfaces
+        .iter()
+        .filter_map(
+            |(name, &interface_ptr)| match vm.get_object(interface_ptr) {
+                Object::Interface(interface) => Some((
+                    runtime_type_key(name),
+                    RealizedTy::Interface(
+                        interface.name.clone(),
+                        Vec::new(),
+                        Vec::new(),
+                        TyAttr::default(),
+                    ),
+                )),
+                _ => None,
+            },
+        )
+        .collect::<Vec<_>>();
+
+    let mut type_values = IndexMap::new();
+    for (name, class_ptr, ty) in class_rows {
+        let mint = vm.heap.mint_runtime_id();
+        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
+            ty,
+            mint,
+            source_defs.clone(),
+            package_ptr,
+        ));
+        let Object::Class(class) = vm.get_object_mut(class_ptr) else {
+            unreachable!("runtime package class pointer changed kind")
+        };
+        class.runtime_type = Some(RuntimeTypeProvenance {
+            mint,
+            defs: source_defs.clone(),
+            owner: package_ptr,
+        });
+        type_values.insert(name, type_ptr);
+    }
+    for (name, enum_ptr, ty) in enum_rows {
+        let mint = vm.heap.mint_runtime_id();
+        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
+            ty,
+            mint,
+            source_defs.clone(),
+            package_ptr,
+        ));
+        let Object::Enum(enm) = vm.get_object_mut(enum_ptr) else {
+            unreachable!("runtime package enum pointer changed kind")
+        };
+        enm.runtime_type = Some(RuntimeTypeProvenance {
+            mint,
+            defs: source_defs.clone(),
+            owner: package_ptr,
+        });
+        type_values.insert(name, type_ptr);
+    }
+    for (name, ty) in interface_rows {
+        let mint = vm.heap.mint_runtime_id();
+        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
+            ty,
+            mint,
+            source_defs.clone(),
+            package_ptr,
+        ));
+        type_values.insert(name, type_ptr);
+    }
+    type_values
 }
 
 fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName) -> Option<Value> {
@@ -496,7 +666,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
                 global_names: IndexMap::new(),
-                class_types: IndexMap::new(),
+                type_values: IndexMap::new(),
                 diagnostics: artifact.diagnostics,
                 dependencies: dependencies.values().copied().collect(),
                 dependency_names: dependencies.clone(),
@@ -714,70 +884,8 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             .map(|index| objects[*index]);
         let test_init = program_package.test_init.map(|index| objects[index.raw()]);
 
-        let mut class_types = IndexMap::new();
-        for (name, class_ptr) in &classes {
-            let Object::Class(class) = vm.get_object(*class_ptr) else {
-                continue;
-            };
-            let ty = RealizedTy::Class(class.name.clone(), Vec::new(), TyAttr::default());
-            let mint = vm.heap.mint_runtime_id();
-            let type_ptr = vm.alloc_type(TypeValue::runtime(ty, mint, package_ptr));
-            let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
-                unreachable!("runtime package class pointer changed kind")
-            };
-            class.runtime_type = Some(RuntimeTypeProvenance {
-                mint,
-                defs: DynTypeDefs::default(),
-                owner: package_ptr,
-            });
-            let local = name
-                .namespace
-                .iter()
-                .map(baml_type::Name::as_str)
-                .chain(std::iter::once(name.name.as_str()))
-                .collect::<Vec<_>>()
-                .join(".");
-            class_types.insert(local, type_ptr);
-        }
-
-        let source_defs = DynTypeDefs {
-            classes: classes
-                .values()
-                .filter_map(|ptr| match vm.get_object(*ptr) {
-                    Object::Class(class) if !class.name.name().as_str().ends_with("$stream") => {
-                        Some((class.name.clone(), *ptr))
-                    }
-                    _ => None,
-                })
-                .collect(),
-            enums: enums
-                .values()
-                .filter_map(|ptr| match vm.get_object(*ptr) {
-                    Object::Enum(enm) => Some((enm.name.clone(), *ptr)),
-                    _ => None,
-                })
-                .collect(),
-            witnesses: Vec::new(),
-        };
-        for class_ptr in classes.values() {
-            let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
-                continue;
-            };
-            if let Some(runtime_type) = &mut class.runtime_type {
-                runtime_type.defs = source_defs.clone();
-            }
-        }
-        for enum_ptr in enums.values() {
-            let mint = vm.heap.mint_runtime_id();
-            let Object::Enum(enm) = vm.get_object_mut(*enum_ptr) else {
-                continue;
-            };
-            enm.runtime_type = Some(RuntimeTypeProvenance {
-                mint,
-                defs: source_defs.clone(),
-                owner: package_ptr,
-            });
-        }
+        let type_values =
+            allocate_runtime_declaration_types(vm, package_ptr, &classes, &enums, &interfaces);
 
         let Object::Package(package) = vm.get_object_mut(package_ptr) else {
             unreachable!("package was just allocated")
@@ -792,7 +900,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         runtime.objects = objects.into_boxed_slice();
         runtime.globals = globals.into_boxed_slice();
         runtime.global_names = global_names;
-        runtime.class_types = class_types;
+        runtime.type_values = type_values;
         runtime.init = init;
 
         let wrapper = copy::reflect::Package {
@@ -827,23 +935,34 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             return None;
         };
         let local = local_name(name.as_str())?;
-        if local.namespace.is_empty()
-            && let Some(type_ptr) = package.mounted_types.get(local.name.as_str()).copied()
-        {
-            return Some(Value::object(type_ptr));
+        if local.name.as_str().ends_with("$stream") {
+            return None;
         }
         let class_ptr = package.classes.get(&local).copied()?;
-        let runtime_type = package.runtime.as_ref().and_then(|runtime| {
-            let key = local
-                .namespace
-                .iter()
-                .map(baml_type::Name::as_str)
-                .chain(std::iter::once(local.name.as_str()))
-                .collect::<Vec<_>>()
-                .join(".");
-            runtime.class_types.get(&key).copied()
-        });
+        let runtime_type = stored_package_type(package, &local);
         Some(package_class_type(vm, runtime_type, class_ptr))
+    }
+
+    fn get_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+        let ptr = package_ptr(vm, *package).ok()?;
+        let Object::Package(package) = vm.get_object(ptr) else {
+            return None;
+        };
+        let local = local_name(name.as_str())?;
+        let enum_ptr = package.enums.get(&local).copied()?;
+        let runtime_type = stored_package_type(package, &local);
+        Some(package_enum_type(vm, runtime_type, enum_ptr))
+    }
+
+    fn get_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+        let ptr = package_ptr(vm, *package).ok()?;
+        let Object::Package(package) = vm.get_object(ptr) else {
+            return None;
+        };
+        let local = local_name(name.as_str())?;
+        let interface_ptr = package.interfaces.get(&local).copied()?;
+        let runtime_type = stored_package_type(package, &local);
+        Some(package_interface_type(vm, runtime_type, interface_ptr))
     }
 
     fn with_types(
@@ -911,6 +1030,20 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 RealizedTy::Enum(qtn, _) => {
                     if let Some(enm) = type_value.defs().enums.get(qtn).copied() {
                         derived.enums.insert(local.clone(), enm);
+                    }
+                }
+                RealizedTy::Interface(qtn, _, _, _) => {
+                    let owned_interface = (!type_value.owner.is_null())
+                        .then(|| match vm.get_object(type_value.owner) {
+                            Object::Package(owner) => owner.interfaces.values().find_map(|ptr| {
+                                matches!(vm.get_object(*ptr), Object::Interface(interface) if interface.name == *qtn)
+                                    .then_some(*ptr)
+                            }),
+                            _ => None,
+                        })
+                        .flatten();
+                    if let Some(interface) = owned_interface.or_else(|| vm.lookup_interface(qtn)) {
+                        derived.interfaces.insert(local.clone(), interface);
                     }
                 }
                 _ => {}
@@ -988,24 +1121,8 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         let entries = package
             .classes
             .iter()
-            .map(|(name, &class)| {
-                let mounted_type = name
-                    .namespace
-                    .is_empty()
-                    .then(|| package.mounted_types.get(name.name.as_str()).copied())
-                    .flatten();
-                let runtime_type = package.runtime.as_ref().and_then(|runtime| {
-                    let key = name
-                        .namespace
-                        .iter()
-                        .map(baml_type::Name::as_str)
-                        .chain(std::iter::once(name.name.as_str()))
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    runtime.class_types.get(&key).copied()
-                });
-                (name.clone(), class, mounted_type.or(runtime_type))
-            })
+            .filter(|(name, _)| !name.name.as_str().ends_with("$stream"))
+            .map(|(name, &class)| (name.clone(), class, stored_package_type(package, name)))
             .collect::<Vec<_>>();
         entries
             .into_iter()
@@ -1013,6 +1130,52 @@ impl BamlClassReflectPackage for PackageBamlImpl {
                 (
                     display_local_name(&name).into(),
                     package_class_type(vm, runtime_type, class),
+                )
+            })
+            .collect()
+    }
+
+    fn enums(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+        let Ok(ptr) = package_ptr(vm, *package) else {
+            return IndexMap::new();
+        };
+        let Object::Package(package) = vm.get_object(ptr) else {
+            return IndexMap::new();
+        };
+        let entries = package
+            .enums
+            .iter()
+            .map(|(name, &enm)| (name.clone(), enm, stored_package_type(package, name)))
+            .collect::<Vec<_>>();
+        entries
+            .into_iter()
+            .map(|(name, enm, runtime_type)| {
+                (
+                    display_local_name(&name).into(),
+                    package_enum_type(vm, runtime_type, enm),
+                )
+            })
+            .collect()
+    }
+
+    fn interfaces(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+        let Ok(ptr) = package_ptr(vm, *package) else {
+            return IndexMap::new();
+        };
+        let Object::Package(package) = vm.get_object(ptr) else {
+            return IndexMap::new();
+        };
+        let entries = package
+            .interfaces
+            .iter()
+            .map(|(name, &interface)| (name.clone(), interface, stored_package_type(package, name)))
+            .collect::<Vec<_>>();
+        entries
+            .into_iter()
+            .map(|(name, interface, runtime_type)| {
+                (
+                    display_local_name(&name).into(),
+                    package_interface_type(vm, runtime_type, interface),
                 )
             })
             .collect()
@@ -1465,68 +1628,14 @@ fn graft_session_submission(
         new_impl_rules.insert(interface, pointers);
     }
 
-    let mut class_types = IndexMap::new();
-    for (name, class_ptr) in &new_classes {
-        let Object::Class(class) = vm.get_object(*class_ptr) else {
-            continue;
-        };
-        let ty = RealizedTy::Class(class.name.clone(), Vec::new(), TyAttr::default());
-        let mint = vm.heap.mint_runtime_id();
-        let type_ptr = vm.alloc_type(TypeValue::runtime(ty, mint, package_ptr));
-        extra_owned.push(type_ptr);
-        let Object::Class(class) = vm.get_object_mut(*class_ptr) else {
-            unreachable!()
-        };
-        class.runtime_type = Some(RuntimeTypeProvenance {
-            mint,
-            defs: DynTypeDefs::default(),
-            owner: package_ptr,
-        });
-        let local = name
-            .namespace
-            .iter()
-            .map(baml_type::Name::as_str)
-            .chain(std::iter::once(name.name.as_str()))
-            .collect::<Vec<_>>()
-            .join(".");
-        class_types.insert(local, type_ptr);
-    }
-    let source_defs = DynTypeDefs {
-        classes: new_classes
-            .values()
-            .filter_map(|pointer| match vm.get_object(*pointer) {
-                Object::Class(class) if !class.name.name().as_str().ends_with("$stream") => {
-                    Some((class.name.clone(), *pointer))
-                }
-                _ => None,
-            })
-            .collect(),
-        enums: new_enums
-            .values()
-            .filter_map(|pointer| match vm.get_object(*pointer) {
-                Object::Enum(enm) => Some((enm.name.clone(), *pointer)),
-                _ => None,
-            })
-            .collect(),
-        witnesses: Vec::new(),
-    };
-    for pointer in new_classes.values() {
-        if let Object::Class(class) = vm.get_object_mut(*pointer)
-            && let Some(runtime_type) = &mut class.runtime_type
-        {
-            runtime_type.defs = source_defs.clone();
-        }
-    }
-    for pointer in new_enums.values() {
-        let mint = vm.heap.mint_runtime_id();
-        if let Object::Enum(enm) = vm.get_object_mut(*pointer) {
-            enm.runtime_type = Some(RuntimeTypeProvenance {
-                mint,
-                defs: source_defs.clone(),
-                owner: package_ptr,
-            });
-        }
-    }
+    let type_values = allocate_runtime_declaration_types(
+        vm,
+        package_ptr,
+        &new_classes,
+        &new_enums,
+        &new_interfaces,
+    );
+    extra_owned.extend(type_values.values().copied());
 
     let mut object_name_updates = IndexMap::new();
     for (name, index) in &plan.program.function_indices {
@@ -1653,7 +1762,7 @@ fn graft_session_submission(
     runtime.object_names.extend(object_name_updates);
     runtime.global_names.extend(cached_import_names);
     runtime.global_names.extend(global_name_updates);
-    runtime.class_types.extend(class_types);
+    runtime.type_values.extend(type_values);
     runtime.diagnostics.clone_from(&artifact.diagnostics);
     Ok(actions)
 }
@@ -1695,7 +1804,7 @@ impl BamlClassReflectSession for PackageBamlImpl {
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
                 global_names: IndexMap::new(),
-                class_types: IndexMap::new(),
+                type_values: IndexMap::new(),
                 diagnostics: Vec::new(),
                 dependencies: dependencies.values().copied().collect(),
                 dependency_names: dependencies,

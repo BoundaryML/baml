@@ -79,8 +79,9 @@ pub struct RuntimePackage {
     pub globals: Box<[AtomicValueSlot]>,
     /// Fully-qualified function/let name to this image's local global slot.
     pub global_names: IndexMap<String, usize>,
-    /// Created-once reflected class type values, keyed by source-visible FQN.
-    pub class_types: IndexMap<String, HeapPtr>,
+    /// Created-once reflected class, enum, and interface type values, keyed by
+    /// source-visible FQN.
+    pub type_values: IndexMap<String, HeapPtr>,
     /// Compiler warnings retained on a successful package.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
     /// Runtime package objects imported by this image.
