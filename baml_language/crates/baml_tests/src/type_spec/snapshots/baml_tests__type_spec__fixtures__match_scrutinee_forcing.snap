@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/type_spec/fixtures.rs
+assertion_line: 93
 expression: outcome.dump
 ---
 134..138 'iter': hir_ty=[<missing>] tir=[throws never]
@@ -19,9 +20,9 @@ expression: outcome.dump
 658..663 'let v': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
 666..680 'self.iter.next': hir_ty=[(self: user.PkIterator<T, E>) -> user.PkDone | T throws E] tir=[() -> T | user.PkDone throws E]
 666..682 'self.i...next()': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
-691..702 'self.buffer': hir_ty=[<missing>] tir=[T | user.PkDone]
+691..702 'self.buffer': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
 705..706 'v': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
-715..730 'self.has_buffer': hir_ty=[<missing>] tir=[bool]
+715..730 'self.has_buffer': bool
 733..737 'true': true
 746..747 'v': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
 806..810 'iter': throws never
@@ -34,9 +35,9 @@ expression: outcome.dump
 986..1142 '{\n   ...     }': never
 1004..1009 'let v': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
 1012..1023 'self.buffer': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
-1040..1051 'self.buffer': hir_ty=[<missing>] tir=[T | user.PkDone]
+1040..1051 'self.buffer': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
 1054..1063 'PkDone {}': user.PkDone
-1080..1095 'self.has_buffer': hir_ty=[<missing>] tir=[bool]
+1080..1095 'self.has_buffer': bool
 1098..1103 'false': false
 1127..1128 'v': hir_ty=[user.PkDone | T] tir=[T | user.PkDone]
 1155..1169 'self.iter.next': hir_ty=[(self: user.PkIterator<T, E>) -> user.PkDone | T throws E] tir=[() -> T | user.PkDone throws E]
