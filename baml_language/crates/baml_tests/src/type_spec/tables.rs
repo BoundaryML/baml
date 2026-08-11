@@ -233,3 +233,67 @@ function mr_chain(p: Person) -> string throws never {
         "value-rooted chains record per-segment ladders"
     );
 }
+
+#[test]
+fn records_call_plans() {
+    let source = r#"
+function cp_id<T>(x: T) -> T throws never {
+    x
+}
+function cp_defaults(a: int, b: int = 2) -> int throws never {
+    a
+}
+function cp_use() -> int throws never {
+    let solved = cp_id(42);
+    let named = cp_defaults(b = 5, a = 1);
+    cp_defaults(7)
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut plans = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        for (&call, plan) in &result.call_plans {
+            let range = source_map.expr_span(call);
+            let snippet = source[range].to_string();
+            let type_args: Vec<String> = plan
+                .type_args
+                .iter()
+                .map(|ty| ty.to_plain().render_canonical())
+                .collect();
+            let bindings: Vec<String> = plan
+                .bindings
+                .iter()
+                .map(|binding| match binding {
+                    baml_compiler2_hir_ty::infer::ParamBinding::Provided { param_index, .. } => {
+                        format!("provided:{param_index}")
+                    }
+                    baml_compiler2_hir_ty::infer::ParamBinding::OmittedDefault {
+                        param_index,
+                        param_name,
+                    } => format!("default:{param_index}:{param_name}"),
+                })
+                .collect();
+            plans.push(format!(
+                "{snippet} | type_args [{}] | bindings [{}]",
+                type_args.join(", "),
+                bindings.join(", ")
+            ));
+        }
+    }
+    plans.sort();
+    assert_eq!(
+        plans,
+        vec![
+            "cp_defaults(7) | type_args [] | bindings [provided:0, default:1:b]".to_string(),
+            "cp_defaults(b = 5, a = 1) | type_args [] | bindings [provided:0, provided:1]"
+                .to_string(),
+            "cp_id(42) | type_args [int] | bindings [provided:0]".to_string(),
+        ],
+        "call plans record solved instantiations and param-ordered bindings"
+    );
+}

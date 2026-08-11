@@ -413,6 +413,34 @@ pub struct ResolvedPathSegment<'db> {
     pub resolution: Option<MemberResolution<'db>>,
 }
 
+/// One call's argument-to-parameter matching and solved instantiation -
+/// TIR's `CallPlan` minus its dead fields (`instantiated_throws` was
+/// TIR-internal; `call_type_instantiations` had no consumer). Rust needs
+/// no analog (no named/default arguments); the prior art is Swift's
+/// Sema-recorded argument matching consumed by SILGen. Keyed by the CALL
+/// expression.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CallPlan {
+    /// Parameter-ordered bindings over the callee's parameter list MINUS
+    /// any bound receiver slot (the list written arguments match).
+    /// Required parameters with no argument get no entry (the arity
+    /// diagnostic is S17's).
+    pub bindings: Vec<ParamBinding>,
+    /// The callee's solved generic instantiation in declared De Bruijn
+    /// order (owner frame prefix + own suffix). Recorded raw at the
+    /// instantiation site; ground after writeback.
+    pub type_args: Vec<Ty>,
+    /// The trailing `$id = ...` side-channel argument (TIR's
+    /// `CallSideChannels`, flattened until a second channel exists).
+    pub runtime_id: Option<ExprId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParamBinding {
+    Provided { param_index: usize, arg: ExprId },
+    OmittedDefault { param_index: usize, param_name: baml_type::Name },
+}
+
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
 /// rust-analyzer's `InferenceResult`. Types are the hash-consed
 /// `baml_type::interned` representation (this crate's native vocabulary);
@@ -444,6 +472,10 @@ pub struct InferenceResult<'db> {
     /// field-chain-vs-method decisions read the ladder instead of
     /// re-resolving.
     pub path_resolutions: FxHashMap<ExprId, ResolvedPath<'db>>,
+    /// Per-call argument matching and solved instantiations, keyed by the
+    /// CALL expression. S16: MIR's argument emission and `LoadType`
+    /// operands read this instead of re-planning.
+    pub call_plans: FxHashMap<ExprId, CallPlan>,
 }
 
 impl Default for InferenceResult<'_> {
@@ -456,6 +488,7 @@ impl Default for InferenceResult<'_> {
             non_exhaustive_matches: rustc_hash::FxHashSet::default(),
             member_resolutions: FxHashMap::default(),
             path_resolutions: FxHashMap::default(),
+            call_plans: FxHashMap::default(),
         }
     }
 }
@@ -1247,7 +1280,7 @@ impl<'db> InferenceContext<'db> {
                 let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
                 let nonnull = self.peel_chain_null(&callee_ty);
                 let args = args.clone();
-                self.check_call_args(body, *callee, &nonnull, false, &args)
+                self.check_call_args(body, expr, *callee, &nonnull, false, &args)
             }
             Expr::Lambda(def) => self.infer_lambda(body, expr, def, expected),
             Expr::Match {
@@ -2639,7 +2672,7 @@ impl<'db> InferenceContext<'db> {
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
         let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
-        self.check_call_args(body, callee, &callee_fn_ty, bound_receiver, args)
+        self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args)
     }
 
     /// The argument/return half of a call, shared by ordinary calls and
@@ -2649,6 +2682,7 @@ impl<'db> InferenceContext<'db> {
     fn check_call_args(
         &mut self,
         body: &ExprBody,
+        call: ExprId,
         callee: ExprId,
         callee_fn_ty: &Ty,
         bound_receiver: bool,
@@ -2683,6 +2717,26 @@ impl<'db> InferenceContext<'db> {
             .cloned()
             .collect();
         let ret = ret.clone();
+        // The matching is decided ONCE, checked below and recorded as the
+        // call plan's bindings: a LABELED argument selects its parameter
+        // by NAME (`options(cancel = tok)` checks against `cancel`, not
+        // whatever sits at its position); unlabeled arguments fill
+        // positionally; an unmatched label falls back to position. The
+        // label/arity diagnostics are S17's. `$id = ...` is the runtime-id
+        // side channel (TIR's rule: not a parameter binding) - it still
+        // TYPES through the positional fallback today; aligning its check
+        // with the side-channel contract rides with the S17 diagnostics.
+        let matched: Vec<Option<usize>> = args
+            .iter()
+            .enumerate()
+            .map(|(index, arg)| match &arg.label {
+                Some(label) => params
+                    .iter()
+                    .position(|param| param.name.as_ref() == Some(label))
+                    .or_else(|| params.get(index).map(|_| index)),
+                None => params.get(index).map(|_| index),
+            })
+            .collect();
         let is_lambda_arg =
             |arg: &baml_compiler2_ast::CallArg| matches!(body.exprs[arg.expr], Expr::Lambda(_));
         for pass in 0..2 {
@@ -2690,20 +2744,7 @@ impl<'db> InferenceContext<'db> {
                 if (pass == 0) == is_lambda_arg(arg) {
                     continue;
                 }
-                // A LABELED argument selects its parameter by NAME
-                // (`options(cancel = tok)` checks against `cancel`, not
-                // whatever sits at its position); unlabeled arguments
-                // fill positionally. An unmatched label falls back to
-                // position - the label/arity diagnostic is S17's.
-                let param_ty = match &arg.label {
-                    Some(label) => params
-                        .iter()
-                        .find(|param| param.name.as_ref() == Some(label))
-                        .or_else(|| params.get(index))
-                        .map(|param| param.ty.clone()),
-                    None => params.get(index).map(|param| param.ty.clone()),
-                };
-                match param_ty {
+                match matched[index].map(|param_index| params[param_index].ty.clone()) {
                     Some(param_ty) => {
                         self.check_expr(body, arg.expr, &param_ty);
                     }
@@ -2714,6 +2755,46 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+        // Parameter-ordered bindings: provided slots from the matching,
+        // omitted OPTIONAL slots as defaults (required gaps get no entry;
+        // arity is S17's).
+        let mut slots: Vec<Option<ExprId>> = vec![None; params.len()];
+        let mut runtime_id = None;
+        for (index, arg) in args.iter().enumerate() {
+            if arg.label.as_ref().is_some_and(|label| label.as_str() == "$id") {
+                runtime_id = Some(arg.expr);
+                continue;
+            }
+            if let Some(param_index) = matched[index]
+                && slots[param_index].is_none()
+            {
+                slots[param_index] = Some(arg.expr);
+            }
+        }
+        let bindings: Vec<ParamBinding> = slots
+            .iter()
+            .enumerate()
+            .filter_map(|(param_index, slot)| match slot {
+                Some(arg) => Some(ParamBinding::Provided {
+                    param_index,
+                    arg: *arg,
+                }),
+                None => match &params[param_index] {
+                    param if param.mode == baml_type::FunctionParamMode::Optional => {
+                        param.name.clone().map(|param_name| {
+                            ParamBinding::OmittedDefault {
+                                param_index,
+                                param_name,
+                            }
+                        })
+                    }
+                    _ => None,
+                },
+            })
+            .collect();
+        let plan = self.result.call_plans.entry(call).or_default();
+        plan.bindings = bindings;
+        plan.runtime_id = runtime_id;
         ret
     }
 
@@ -2772,6 +2853,7 @@ impl<'db> InferenceContext<'db> {
                 let signature = function_signature(self.db, function);
                 let instantiation = self.instantiation_args(call, &signature.generic_params);
                 self.register_call_bounds(function, &instantiation, call);
+                self.write_call_type_args(call, &instantiation);
                 let fn_ty = function_value_ty(signature, &instantiation);
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
                 self.write_member_resolution(callee, MemberResolution::Free { func: function });
@@ -2975,6 +3057,7 @@ impl<'db> InferenceContext<'db> {
         let mut instantiation = candidate.class_args;
         instantiation.extend(self.instantiation_args(call, &own_params));
         self.register_call_bounds(candidate.method, &instantiation, call);
+        self.write_call_type_args(call, &instantiation);
         let fn_ty = function_value_ty(signature, &instantiation);
         let bound = signature
             .params
@@ -3143,6 +3226,7 @@ impl<'db> InferenceContext<'db> {
             let mut instantiation = pending.prefix;
             instantiation.extend(self.instantiation_args(call, &own_params));
             self.register_call_bounds(pending.method, &instantiation, call);
+            self.write_call_type_args(call, &instantiation);
             let fn_ty = function_value_ty(signature, &instantiation);
             return (fn_ty, interface_member.is_method);
         }
@@ -3322,6 +3406,9 @@ impl<'db> InferenceContext<'db> {
         let signature = function_signature(self.db, method);
         let instantiation = self.own_instantiation(own, &signature.generic_params);
         self.register_call_bounds(method, &instantiation, anchor);
+        if let OwnArgs::Call(call) = own {
+            self.write_call_type_args(call, &instantiation);
+        }
         Some(function_value_ty(signature, &instantiation))
     }
 
@@ -3361,6 +3448,9 @@ impl<'db> InferenceContext<'db> {
         let own_params = signature.generic_params[frame.len()..].to_vec();
         instantiation.extend(self.own_instantiation(own, &own_params));
         self.register_call_bounds(method, &instantiation, anchor);
+        if let OwnArgs::Call(call) = own {
+            self.write_call_type_args(call, &instantiation);
+        }
         if let Some(record_at) = record_at {
             self.write_member_resolution(
                 record_at,
@@ -4409,6 +4499,15 @@ impl<'db> InferenceContext<'db> {
         self.result.member_resolutions.insert(expr, resolution);
     }
 
+    /// Records a call's solved instantiation vector (raw; ground after
+    /// writeback). The plan's two halves have two writers keyed by the
+    /// same call id - type args at the instantiation site, bindings in
+    /// `check_call_args` - the r-a shape of separate tables written where
+    /// each decision is made, co-located in one struct.
+    fn write_call_type_args(&mut self, call: ExprId, type_args: &[Ty]) {
+        self.result.call_plans.entry(call).or_default().type_args = type_args.to_vec();
+    }
+
     /// Walks the MEMBER segments of a value-rooted path (everything after
     /// the root name), returning the final type and the recorded ladder.
     /// Shared by the value road and the callee road; callers append their
@@ -4524,6 +4623,11 @@ impl<'db> InferenceContext<'db> {
                 {
                     *view = self.finalize_ty(view);
                 }
+            }
+        }
+        for plan in result.call_plans.values_mut() {
+            for ty in &mut plan.type_args {
+                *ty = self.finalize_ty(ty);
             }
         }
         result
