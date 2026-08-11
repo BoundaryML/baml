@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use baml_tests::baml_test;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_heap::{CollectionLevel, HeapPermit};
+use bex_vm_types::Object;
 use sys_native::SysOpsExt;
 
 const BASIC_SESSION: &str = r####"
@@ -13,6 +15,24 @@ function main() -> int throws unknown {
   s.eval<int>(#"x + 1"#)
 }
 "####;
+
+const S11_LIVENESS_PROBE: &str = r#####"
+function escape_one_session_value() -> type throws unknown {
+  let dependency = reflect.Package.compile({
+    "dep.baml": #"
+      class Mounted {
+        value int
+      }
+    "#,
+  })
+  let s = reflect.Session.new(packages = { "dep": dependency })
+  s.eval(#"class Escaped { value string }"#)
+  s.eval(#"let first = Escaped { value: "first" }"#)
+  s.eval(#"let count = 2"#)
+  s.eval(#"let note = "history""#)
+  s.eval<type>(#"type.of<Escaped>()"#)
+}
+"#####;
 
 const SESSION_IMPORTED_FIELD: &str = r####"
 function LoadNotes() -> string {
@@ -337,6 +357,130 @@ async fn session_client_declarations_do_not_perform_network_io() {
 async fn scoped_runtime_type_bindings_persist_and_rebind_between_submissions() {
     let output = baml_test!(baml: SCENARIO_7, entry: "runtime_type_binding_persists");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn s11_heap_liveness_probe_for_one_escaped_session_value() {
+    let program = baml_project::testing::compile_source(S11_LIVENESS_PROBE);
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .expect("S-11 liveness probe engine"),
+    );
+    let escaped = engine
+        .call_function(
+            "user.escape_one_session_value",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("Session eval should return one escaped value");
+    let BexExternalValue::Handle(handle) = escaped else {
+        panic!("expected escaped type handle, got {escaped:?}")
+    };
+
+    let with_escape_gc = engine.collect_garbage(CollectionLevel::Major).await;
+    let inactive = engine.heap_permit_manager().new_permit(()).await;
+    let active = inactive.acquire().await;
+    let escaped_ptr = engine
+        .resolve_handle(active.proof(), &handle)
+        .expect("escaped handle should remain live after major GC");
+    let Object::Type(escaped_type) = (unsafe { escaped_ptr.get() }) else {
+        panic!("escaped handle should point to Object::Type")
+    };
+    let definition_classes = escaped_type.defs().classes.len();
+    let owner_ptr = (!escaped_type.owner.is_null())
+        .then_some(escaped_type.owner)
+        .or_else(|| {
+            escaped_type.defs().classes.values().find_map(|class_ptr| {
+                match unsafe { class_ptr.get() } {
+                    Object::Class(class) => class
+                        .runtime_type
+                        .as_ref()
+                        .map(|runtime| runtime.owner)
+                        .filter(|owner| !owner.is_null()),
+                    _ => None,
+                }
+            })
+        });
+    let mut owner_is_session = false;
+    let mut session_history = 0;
+    let mut retained_globals = 0;
+    let mut retained_objects = 0;
+    let mut retained_dependencies = 0;
+    let mut retained_dependency_objects = 0;
+    if let Some(owner_ptr) = owner_ptr {
+        let Object::Package(owner) = (unsafe { owner_ptr.get() }) else {
+            panic!("escaped definition owner should be a Package")
+        };
+        owner_is_session = owner.session.is_some();
+        session_history = owner
+            .session
+            .as_ref()
+            .map_or(0, |state| state.history.len());
+        let runtime = owner.runtime.as_ref().expect("runtime owner image");
+        retained_globals = runtime.globals.len();
+        retained_objects = runtime.objects.len();
+        retained_dependencies = runtime.dependencies.len();
+        retained_dependency_objects = runtime
+            .dependencies
+            .iter()
+            .map(|dependency| match unsafe { dependency.get() } {
+                Object::Package(package) => package
+                    .runtime
+                    .as_ref()
+                    .map_or(0, |runtime| runtime.objects.len()),
+                _ => 0,
+            })
+            .sum::<usize>();
+    }
+    drop(active);
+    drop(handle);
+    let without_escape_gc = engine.collect_garbage(CollectionLevel::Major).await;
+    let escaped_graph_objects = with_escape_gc
+        .live_count
+        .saturating_sub(without_escape_gc.live_count);
+    eprintln!(
+        "S11_LIVENESS with_escape_live={} with_escape_collected={} \
+         without_escape_live={} escaped_graph_objects={} definition_classes={} \
+         owner_is_session={} session_history={} retained_globals={} retained_objects={} \
+         retained_dependencies={} retained_dependency_objects={}",
+        with_escape_gc.live_count,
+        with_escape_gc.collected_count,
+        without_escape_gc.live_count,
+        escaped_graph_objects,
+        definition_classes,
+        owner_is_session,
+        session_history,
+        retained_globals,
+        retained_objects,
+        retained_dependencies,
+        retained_dependency_objects,
+    );
+
+    assert!(
+        !owner_is_session,
+        "an escaped eval value must not retain its Session owner"
+    );
+    assert_eq!(
+        (
+            session_history,
+            retained_globals,
+            retained_dependencies,
+            retained_dependency_objects,
+        ),
+        (0, 0, 0, 0),
+        "the escaped value retained Session history, globals, or mounted Package state"
+    );
+    assert!(
+        definition_classes <= 1 && retained_objects <= 4 && escaped_graph_objects <= 4,
+        "the escaped value retained more than its own bounded definition closure"
+    );
 }
 
 fn resident_kib() -> u64 {
