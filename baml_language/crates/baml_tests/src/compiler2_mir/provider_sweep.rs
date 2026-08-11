@@ -220,8 +220,12 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
     for event in aligned_events(tir, hir) {
         match event {
             AlignEvent::Pair(tl, hl) => {
-                let t_test = tl.trim_start().starts_with("_ = is_type(");
-                let h_test = hl.trim_start().starts_with("_ = is_type(");
+                let swappable = |s: &str| {
+                    let s = s.trim_start();
+                    s.starts_with("_ = is_type(") || s.starts_with("_ = call const fn ")
+                };
+                let t_test = swappable(&tl);
+                let h_test = swappable(&hl);
                 match classify_pair(&tl, &hl) {
                     Some(Some(bucket)) => {
                         buckets.insert(bucket);
@@ -282,6 +286,63 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
             .collect::<Vec<_>>()
             .join("+")
     })
+}
+
+/// The arm set of a `switch copy _ [...]` line, when it is one.
+fn switch_arms(line: &str) -> Option<std::collections::BTreeSet<String>> {
+    let line = line.trim_start();
+    let rest = line.strip_prefix("switch copy _ [")?;
+    let end = rest.find(']')?;
+    Some(
+        rest[..end]
+            .split(", ")
+            .map(|arm| arm.trim().to_string())
+            .collect(),
+    )
+}
+
+/// Replaces the type region after the LAST `: ` with `_ELEM_` when it
+/// ends with `[]` - the empty-list pair's hir side carries the adopted
+/// element there.
+fn regex_free_elem_placeholder(line: &str) -> String {
+    let Some(at) = line.rfind(": ") else {
+        return line.to_string();
+    };
+    let (head, tail) = line.split_at(at + 2);
+    if tail.trim_end_matches(';').ends_with("[]") {
+        let suffix = if tail.ends_with(';') { ";" } else { "" };
+        format!("{head}_ELEM_{suffix}")
+    } else {
+        line.to_string()
+    }
+}
+
+/// Strips ONE wrapping paren layer from the region after `: ` (the
+/// chain-peel union parenthesizes the fn member; the bare decl does
+/// not).
+fn strip_one_paren_layer(line: &str) -> Option<String> {
+    let at = line.find(": (")?;
+    let inner_start = at + ": (".len();
+    let mut depth = 1usize;
+    for (index, c) in line[inner_start..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    let close = inner_start + index;
+                    return Some(format!(
+                        "{}: {}{}",
+                        &line[..at],
+                        &line[inner_start..close],
+                        &line[close + 1..]
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// A load_type pair where the TIR payload's members are a STRICT
@@ -387,16 +448,37 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     if throws_rigid_var_pair(&t_norm, &h_norm) {
         return Some(Some("throws-precision"));
     }
+    // Switch ARM order (canonical-order ruling, switch spelling): an
+    // exhaustive tag switch's arms are order-independent; equal arm
+    // multisets admit.
+    if let (Some(t_arms), Some(h_arms)) = (switch_arms(&t_norm), switch_arms(&h_norm))
+        && t_arms == h_arms
+    {
+        return Some(Some("canonical-order"));
+    }
+    // empty-list-adoption (hir ahead; the sibling/expectation adoption
+    // rulings): TIR types an empty list's element as `never` where
+    // hir_ty adopted the context's element.
+    if t_norm.contains(": never[]")
+        && t_norm.replacen(": never[]", ": _ELEM_", 1)
+            == regex_free_elem_placeholder(&h_norm)
+    {
+        return Some(Some("empty-list-adoption"));
+    }
+    if t_norm.contains(" | never[]") && t_norm.replace(" | never[]", "") == h_norm {
+        return Some(Some("empty-list-adoption"));
+    }
     // chain-callee-peel (ruled 2026-08-11, "do what TS does"): an
     // optional-chain link's callee temp types as the PEELED function
     // (TS short-circuit semantics - intermediate links see the
     // non-null type); TIR includes the link's null. Scoped to fn-typed
     // decls where stripping one `null | ` from the TIR side matches.
-    if t_norm.contains("->")
-        && (t_norm.replacen("null | (", "(", 1) == h_norm
-            || t_norm.replacen("null | ", "", 1) == h_norm)
-    {
-        return Some(Some("chain-callee-peel"));
+    if t_norm.contains("->") && t_norm.contains("null | ") {
+        let stripped = t_norm.replacen("null | ", "", 1);
+        let unparen = strip_one_paren_layer(&stripped);
+        if stripped == h_norm || unparen.as_deref() == Some(h_norm.as_str()) {
+            return Some(Some("chain-callee-peel"));
+        }
     }
     None
 }
@@ -427,15 +509,32 @@ fn thrown_literal_narrow_pair(tir: &str, hir: &str) -> bool {
 /// Replaces every local id (`_12`) with `_` so renumbering compares
 /// equal; ids appear only in this shape in the pretty-printer.
 fn strip_local_ids(line: &str) -> String {
+    // Local ids (`_12`) and BLOCK ids (`bb7`) both renumber under
+    // accepted insertions/removals; both strip to their prefix.
     let mut out = String::with_capacity(line.len());
-    let mut chars = line.chars().peekable();
-    while let Some(c) = chars.next() {
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
         out.push(c);
         if c == '_' {
-            while chars.peek().is_some_and(char::is_ascii_digit) {
-                chars.next();
+            while i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
+                i += 1;
+            }
+        } else if c == 'b'
+            && i + 1 < chars.len()
+            && chars[i + 1] == 'b'
+            && i + 2 < chars.len()
+            && chars[i + 2].is_ascii_digit()
+            && (i == 0 || !chars[i - 1].is_alphanumeric())
+        {
+            out.push('b');
+            i += 1;
+            while i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
+                i += 1;
             }
         }
+        i += 1;
     }
     out
 }
@@ -506,9 +605,11 @@ fn dedup_union_members(line: &str) -> String {
 /// annotations, narrow_bind templates.
 fn normalize_line(line: &str) -> String {
     let out = strip_local_ids(line);
-    let out = normalize_type_literals(&out);
-    let out = collapse_json_alias(&out);
+    // json collapses FIRST: literal normalization rewrites quoted tokens
+    // (`"json"` -> string) and would break the Debug-blob matcher.
     let out = collapse_json_alias_debug(&out);
+    let out = collapse_json_alias(&out);
+    let out = normalize_type_literals(&out);
     let out = dedup_union_members(&out);
     canonicalize_type_regions(&out)
 }
