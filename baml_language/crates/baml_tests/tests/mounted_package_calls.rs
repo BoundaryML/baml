@@ -1,9 +1,9 @@
-//! BEP-066 slice 6a: CALLS into MOUNTED (source-less) packages, end to end —
+//! BEP-066 mounted-package linking: CALLS into MOUNTED (source-less) packages, end to end —
 //! check → MIR → emit → link → run.
 //!
-//! # The two-database harness (the slice-6 dynamic-linking prototype)
+//! # The two-database linking harness
 //!
-//! Phase 1 — the LIBRARY database: the library's source is compiled under
+//! The LIBRARY database compiles the library's source under
 //! `<builtin>/app/…` (the `Compiler2ExtraFiles` channel, so `file_package`
 //! assigns the files the package name `app`). Two artifacts are captured:
 //!
@@ -14,7 +14,7 @@
 //!      linked image is `stdlib ++ app`, a user-independent prefix exactly
 //!      like the stdlib slice).
 //!
-//! Phase 2 — the CONSUMER database: a FRESH `ProjectDatabase` with NO `app`
+//! The CONSUMER database is a fresh `ProjectDatabase` with NO `app`
 //! source anywhere. The blob is mounted via `set_mounted_packages` (checking
 //! resolves `app.…` through the interface rows and records loc-free
 //! `MemberResolution::External` callees), and bytecode is generated with
@@ -22,8 +22,7 @@
 //! the public seam links the units and seeds emit from that prefix, so the
 //! consumer's symbolic references (`app.add`, `app.Widget`, the interface
 //! method slots) LINK against the library's already-compiled definitions by
-//! fully-qualified name — the same name-keyed resolution slice 6's dynamic
-//! linker performs against a live image.
+//! fully-qualified name, matching the runtime linker's name-keyed resolution.
 //!
 //! The resulting single `Program` runs on the ordinary engine harness.
 
@@ -138,7 +137,7 @@ fn compile_options() -> CompileOptions {
     }
 }
 
-/// Phase 1: compile the library under `<builtin>/app/` and capture both
+/// Compile the library under `<builtin>/app/` and capture both
 /// artifacts — the `borsh(PackageInterface)` blob (check surface) and the
 /// symbolic `CompilationUnit` set (run surface; links to `stdlib ++ app`, a
 /// user-independent prefix image).
@@ -162,7 +161,7 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     (blob, units)
 }
 
-/// Phase 2: a fresh consumer database — blob mounted as `app`, NO `app`
+/// Build a fresh consumer database — blob mounted as `app`, NO `app`
 /// source — checked clean, then spliced against the library image.
 fn consumer_program(user_src: &str) -> Program {
     let (blob, lib_units) = compile_library();

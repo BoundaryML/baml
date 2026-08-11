@@ -1,4 +1,4 @@
-//! BEP-066 slice-1 capstone oracles for the nine sealed reflection-kind views.
+//! Executable oracles for the nine sealed reflection-kind views.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;

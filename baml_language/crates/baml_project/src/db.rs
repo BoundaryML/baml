@@ -171,7 +171,7 @@ pub struct ProjectDatabase {
     /// long-lived `ProjectDatabase`).
     seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
     /// Source-less dependency packages mounted as `borsh(PackageInterface)`
-    /// blobs, keyed by the mount alias (BEP-066 slice 6a).
+    /// blobs, keyed by the mount alias (BEP-066 mounted-package linking).
     ///
     /// Same present-from-construction discipline as the `seeded_*` inputs
     /// above: a real `#[salsa::input]` handle created **once** (empty) in the
@@ -423,7 +423,7 @@ impl ProjectDatabase {
     /// builtin stubs from (ordinary project files with a `<builtin>/` path are
     /// filtered out there).
     ///
-    /// Fixture/testing hook (BEP-066 slice 6a): compiling library files under
+    /// Fixture/testing hook (BEP-066 mounted-package linking): compiling library files under
     /// `<builtin>/<pkg>/…` makes `file_package` assign them the package name
     /// `<pkg>`, so a test can derive a real `PackageInterface` blob for a
     /// package that is not `user` and mount it elsewhere. Requires
@@ -448,7 +448,7 @@ impl ProjectDatabase {
     }
 
     /// Mount source-less dependency packages as serialized `PackageInterface`
-    /// blobs, keyed by the mount alias (BEP-066 slice 6a); each value is
+    /// blobs, keyed by the mount alias (BEP-066 mounted-package linking); each value is
     /// `borsh(PackageInterface)`.
     ///
     /// Mutates the always-present `MountedPackages` input (created in `new`)
@@ -1328,7 +1328,7 @@ impl ProjectDatabase {
                 | MemberResolution::Variant { .. }
                 | MemberResolution::InterfaceVirtualField { .. }
                 // A mounted (source-less) callee has no `FunctionLoc` in this
-                // database (BEP-066 slice 6a).
+                // database (BEP-066 mounted-package linking).
                 | MemberResolution::External(_),
             )
             | None => None,

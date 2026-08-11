@@ -1,5 +1,5 @@
 //! The payload of a runtime `type` value: a described type plus its minted
-//! identity (BEP-066 slice 1).
+//! identity (BEP-066 I-1 and I-2).
 //!
 //! Equality and hashing on a [`TypeValue`] are **exactly the mint** — never
 //! the heap pointer (the GC is copying, so a pointer can never be an identity
@@ -142,9 +142,8 @@ pub enum MintId {
     Static(u64),
     /// One per constructor evaluation (I-1): allocated from the monotonic
     /// engine-wide counter on `BexHeap` (`mint_runtime_id`), shared by
-    /// spawned VMs. No producer exists yet in slice 1 — the structured
-    /// constructors land in slice 2 — but the variant is part of the
-    /// equality/hash contract now so the semantics cannot drift.
+    /// spawned VMs. Structured runtime constructors allocate this identity,
+    /// and the variant is part of the equality/hash contract.
     Runtime(u64),
 }
 
@@ -201,8 +200,8 @@ impl TypeValue {
 
     /// Assemble a type value from an already-derived mint.
     ///
-    /// For the memoized static-digest path (`BexVm::alloc_static_type`), the
-    /// slice-2 runtime constructors (a counter mint from
+    /// For the memoized static-digest path (`BexVm::alloc_static_type`), runtime
+    /// constructors (using a counter mint from
     /// `BexHeap::mint_runtime_id`), and tests pinning mint semantics. The
     /// caller owns the invariant that `mint` was produced for `ty` — a
     /// mismatched pair breaks type-value equality program-wide.

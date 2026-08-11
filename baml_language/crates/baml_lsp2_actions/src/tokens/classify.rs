@@ -127,7 +127,7 @@ pub(super) fn classify_member(res: &MemberResolution<'_>) -> (SemanticTokenType,
         | M::UnboundMethod { .. }
         | M::InterfaceConcreteMethod { .. }
         | M::InterfaceVirtualMethod { .. } => T::Method,
-        // A mounted (source-less) dependency's callee (BEP-066 slice 6a).
+        // A mounted (source-less) dependency's callee (BEP-066 mounted-package linking).
         M::External(external) => match &external.target {
             baml_compiler2_tir::inference::ExternalCallTarget::Free { .. } => T::Function,
             baml_compiler2_tir::inference::ExternalCallTarget::Method { .. }

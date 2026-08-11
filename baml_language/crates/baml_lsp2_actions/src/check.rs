@@ -577,7 +577,7 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
             "overlapping interface implementations for the same receiver/interface".to_string()
         };
         // A span-less partner is a MOUNTED (source-less) dependency's blob
-        // impl (BEP-066 slice 6a): primary-only attribution, the partner
+        // impl (BEP-066 mounted-package linking): primary-only attribution, the partner
         // rendered structurally in the message.
         let message = match &violation.secondary_desc {
             Some(desc) => format!("{message} (conflicts with the mounted dependency's `{desc}`)"),

@@ -1,4 +1,4 @@
-//! BEP-066 slice 9: live Sessions and Scenario 7.
+//! BEP-066 Scenario 7: live Sessions.
 
 use std::sync::Arc;
 

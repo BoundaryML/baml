@@ -368,15 +368,16 @@ mod tests {
     }
 }
 
-/// Whether `name` is reserved against mounting (BEP-066 slice 6a): builtin
+/// Whether `name` is reserved against mounting (BEP-066 mounted-package linking): builtin
 /// packages, `user`, `root`, and `env`. The complete list is single-sourced in
 /// [`baml_builtins2::reserved_package_names`], shared with runtime reflection.
 pub fn is_reserved_package_name(name: &str) -> bool {
     baml_builtins2::reserved_package_names().contains(&name)
 }
 
-/// The names of every mounted source-less dependency package (BEP-066 slice
-/// 6a): the keys of the [`baml_workspace::MountedPackages`] input, minus any
+/// The names of every mounted source-less dependency package (BEP-066
+/// mounted-package linking): the keys of the [`baml_workspace::MountedPackages`]
+/// input, minus any
 /// reserved name ([`is_reserved_package_name`] — a blob may not shadow the
 /// stdlib, `user`, `root`, or `env`). Deterministically ordered (`BTreeMap`
 /// keys). Empty for databases that mount nothing.
@@ -431,7 +432,7 @@ pub fn package_dependencies<'db>(
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
         // User packages depend on public builtin packages — plus every mounted
-        // source-less package (BEP-066 slice 6a) and every auxiliary source
+        // source-less package (BEP-066 mounted-package linking) and every auxiliary source
         // package installed through `compiler2_extra_files`. The latter makes
         // the source side of the source-vs-blob contract real: a package such
         // as `<builtin>/app/…` is the same direct dependency whether its source

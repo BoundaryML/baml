@@ -1,4 +1,4 @@
-//! BEP-066 slice 3 executable oracles: runtime classes and composites flow
+//! BEP-066 Scenarios 2 and 3: runtime classes and composites flow
 //! through offline LLM companions, retain mint identity, and remain usable
 //! through the dynamic access/JSON surfaces.
 

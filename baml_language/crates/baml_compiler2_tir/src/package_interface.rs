@@ -65,11 +65,12 @@ pub struct PackageInterface {
     /// The package's *full* namespace-path set — every namespace `package_items`
     /// resolves, whether or not it exports a type or function (the root
     /// namespace is `[]`). A source-less consumer needs this to distinguish "a
-    /// namespace with nothing visible" from "no such namespace" (BEP-066 slice
-    /// 6a; mounted namespace traversal can consume it without source items).
+    /// namespace with nothing visible" from "no such namespace" (BEP-066
+    /// mounted-package linking; traversal consumes it without source items).
     pub namespaces: BTreeSet<Vec<Name>>,
     /// Every `implements` block the package declares, exported loc-free (BEP-066
-    /// slice 6a) — the blob-side twin of the `impl_data` substrate, so a
+    /// mounted-package linking) — the blob-side twin of the `impl_data`
+    /// substrate, so a
     /// source-less dependency still contributes its impls to matching,
     /// membership, coherence, and dispatch (closing the R2 "fails-open" hole).
     ///
@@ -102,7 +103,7 @@ pub enum ExportedType {
         qtn: QualifiedTypeName,
         resolved: Ty,
     },
-    /// An interface declaration's full loc-free surface (BEP-066 slice 6a),
+    /// An interface declaration's full loc-free surface (BEP-066 mounted-package linking),
     /// consumed for mounted type/bound/member resolution and virtual dispatch.
     ///
     /// Every type below is lowered at the interface's *own declaration scope*:
@@ -207,7 +208,7 @@ pub struct ExportedFunction {
     pub callable_fqn: String,
 }
 
-/// One `implements` block exported loc-free (BEP-066 slice 6a) — the blob-side
+/// One `implements` block exported loc-free (BEP-066 mounted-package linking) — the blob-side
 /// mirror of [`crate::interfaces::ImplData`], carrying everything a source-less
 /// consumer needs to run impl matching (`match_impl_head`-shaped unification),
 /// bound discharge, membership, coherence, and dispatch without `ImplLoc`s.
@@ -484,7 +485,7 @@ impl PackageInterface {
 }
 
 /// The mounted (source-less) package interface for `pkg_name`, or `None` when
-/// `pkg_name` is not a mounted package (BEP-066 slice 6a). The single entry
+/// `pkg_name` is not a mounted package (BEP-066 mounted-package linking). The single entry
 /// point for foreign (blob-backed) lookups: callers holding a package-prefixed
 /// path or a foreign `QualifiedTypeName` consult the blob's rows through this
 /// instead of raw `package_items` (which is empty for a mounted package).
@@ -819,7 +820,8 @@ fn lower_alias_export<'db>(
 }
 
 /// Lower an interface definition into its `ExportedType::Interface` (BEP-066
-/// slice 6a). Reuses the declaration-scope substrate `interfaces.rs` already
+/// mounted-package linking). Reuses the declaration-scope substrate
+/// `interfaces.rs` already
 /// maintains — nothing here lowers a `TypeRef` on its own:
 ///
 /// - `requires`: [`crate::interfaces::interface_requires_closure_symbolic`]
@@ -1109,7 +1111,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
         }
     }
 
-    // Mounted-package arm (BEP-066 slice 6a): a source-less dependency mounted
+    // Mounted-package arm (BEP-066 mounted-package linking): a source-less dependency mounted
     // as a blob serves its captured interface verbatim — the same seed
     // mechanism generalized to any (non-reserved) alias. Distinct from the
     // stdlib seed above: the stdlib map is an *optimization* over packages
@@ -1142,7 +1144,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
 }
 
 /// Lower every resolvable `implements` block of `pkg_id` into its
-/// [`ExportedImpl`] row (BEP-066 slice 6a).
+/// [`ExportedImpl`] row (BEP-066 mounted-package linking).
 ///
 /// Enumeration rides [`crate::interfaces::package_impl_locs`] (the canonical
 /// substrate); per-impl facts come from [`crate::interfaces::impl_data`]
@@ -1513,7 +1515,7 @@ impl<'db> PackageResolutionContext<'db> {
                 if &path[0] == dep_name {
                     if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
                         // Interface rows resolve only for MOUNTED (source-less)
-                        // dependencies (BEP-066 slice 6a) — their rows are the
+                        // dependencies (BEP-066 mounted-package linking) — their rows are the
                         // sole representation. A source-backed dependency's
                         // interface rows stay invisible here, preserving the
                         // pre-export resolution (its interfaces resolve through

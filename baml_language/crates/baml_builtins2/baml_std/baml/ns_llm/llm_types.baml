@@ -892,7 +892,7 @@ function make_role(name: string) -> Role throws never {
 ///
 /// The body lambda receives `role` (a `Role` constructor) and `ctx` (per-render
 /// `Context`); `${role("user")}` markers split the rendered template into chat
-/// messages. `ctx.output_format` schema injection lands in a later slice.
+/// messages. The orchestrator handles schema injection through `ctx.output_format`.
 //baml:tagged_string
 function prompt(
   body: (role: (string) -> Role throws never, ctx: Context) -> baml.TaggedString throws never,

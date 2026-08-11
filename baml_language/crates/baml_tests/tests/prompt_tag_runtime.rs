@@ -4,8 +4,8 @@
 //! invoking it folds the template into a `PromptAst`, where `${role("...")}`
 //! markers split the content into chat messages (M5d structural assembly —
 //! no magic delimiters). `${ctx.output_format}` injects the return type's
-//! schema (M5b). Orchestrator wiring (auto-building `Context` per attempt) is
-//! a later slice; here we build a `Context` by hand and inspect the result.
+//! schema (M5b). Here we build a `Context` by hand and inspect the result;
+//! orchestrator wiring is covered separately.
 
 use std::sync::Arc;
 

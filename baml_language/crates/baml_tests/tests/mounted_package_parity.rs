@@ -1,4 +1,4 @@
-//! BEP-066 slice-6a capstone: consuming a dependency from source and from its
+//! BEP-066 mounted-package linking capstone: consuming a dependency from source and from its
 //! `PackageInterface` blob must be observationally equivalent.
 //!
 //! The SOURCE path puts the rich `app` fixture and the consumer in one database.
@@ -660,8 +660,8 @@ implement app.Tagged for Mine {
 /// receiver constructors, while a package attempting to overlap a dependency's
 /// blanket impl is rejected by this same E0132 check before its blob is emitted.
 /// This makes user-vs-blob the only expressible load-time direction for valid
-/// slice-6a artifacts; malformed/tampered blobs belong to slice 6's artifact
-/// validation ledger.
+/// mounted-package artifacts; artifact validation rejects malformed or
+/// tampered blobs.
 #[test]
 fn blob_vs_blob_overlap_is_not_expressible_for_valid_artifacts() {
     // Keep the argument executable: the rich fixture's blanket impl is exported

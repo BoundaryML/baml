@@ -411,7 +411,7 @@ async fn signature_object_literal_construction() {
 }
 
 // ---------------------------------------------------------------------------
-// BEP-066 slice 2: runtime-minted enums through offline LLM companions.
+// Runtime-minted enums through offline LLM companions.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

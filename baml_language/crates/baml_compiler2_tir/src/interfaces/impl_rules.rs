@@ -29,7 +29,7 @@ use crate::{
 /// instead of re-lowering the raw `TypeExpr` paths.
 /// The resolved identity of the interface an impl implements: a source-backed
 /// declaration (a loc), or a MOUNTED (source-less) dependency's interface row
-/// (BEP-066 slice 6a) — identified by qualified name, its declaration surface
+/// (BEP-066 mounted-package linking) — identified by qualified name, its declaration surface
 /// served from the mounted `PackageInterface` blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImplInterfaceTarget<'db> {
@@ -488,7 +488,7 @@ pub fn impl_data<'db>(
     // Associated bindings are skipped here — they can't be checked without the
     // interface declaration. A target naming a MOUNTED (source-less)
     // dependency's interface has no loc; its declaration surface is the
-    // exported row (BEP-066 slice 6a), handled by the mounted arm below.
+    // exported row (BEP-066 mounted-package linking), handled by the mounted arm below.
     let resolved_target =
         resolve_ref_to_interface(db, &block.type_refs, block.interface_target, pkg_items, ns);
     if resolved_target.is_none()
@@ -859,7 +859,7 @@ struct MountedImplParts {
     bound_diags: Vec<crate::infer_context::TirTypeError>,
 }
 
-/// The MOUNTED-interface arm of [`impl_data`] (BEP-066 slice 6a): a user impl
+/// The MOUNTED-interface arm of [`impl_data`] (BEP-066 mounted-package linking): a user impl
 /// whose target is a source-less dependency's interface. The declaration
 /// surface — associated types (with pre-lowered symbolic-`Self` defaults),
 /// fields, required/default methods — comes from the exported row instead of
@@ -1477,7 +1477,7 @@ pub fn validate_impl_signatures<'db>(
         }
         Err(ImplDataError::InterfaceUnresolved { .. } | ImplDataError::Malformed) => return diags,
     };
-    // A MOUNTED interface target (BEP-066 slice 6a) has no loc; its
+    // A MOUNTED interface target (BEP-066 mounted-package linking) has no loc; its
     // declaration surface is the exported row, and type-level conformance runs
     // through the substitution-based mounted arm.
     let iface_loc = match &data.interface {
@@ -1932,8 +1932,9 @@ pub fn validate_impl_signatures<'db>(
     diags
 }
 
-/// The MOUNTED-interface arm of [`validate_impl_signatures`] (BEP-066 slice
-/// 6a): type-level conformance for a user impl of a source-less dependency's
+/// The MOUNTED-interface arm of [`validate_impl_signatures`] (BEP-066
+/// mounted-package linking): type-level conformance for a user impl of a
+/// source-less dependency's
 /// interface. The interface side of every comparison comes from the exported
 /// row — pre-lowered at the interface's own declaration scope with symbolic
 /// `Self` — so realization at this impl is pure substitution (generic params →
@@ -2301,7 +2302,7 @@ fn validate_mounted_impl_signatures<'db>(
 }
 
 /// A stable reference to one impl: a source-backed `implements` block (by
-/// loc), or one of a MOUNTED package's blob rows (BEP-066 slice 6a — loc-free,
+/// loc), or one of a MOUNTED package's blob rows (BEP-066 mounted-package linking — loc-free,
 /// indexed into [`mounted_impl_datas`]).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ImplRef<'db> {
@@ -2328,7 +2329,7 @@ pub struct ResolvedImpl<'db> {
 
 /// The impls of a MOUNTED (source-less) package, materialized from its blob's
 /// `ExportedImpl` rows into the checker's native [`ImplData`] currency
-/// (BEP-066 slice 6a) — so matching, membership, and coherence run unchanged
+/// (BEP-066 mounted-package linking) — so matching, membership, and coherence run unchanged
 /// over them. Loc-free by construction: the interface target resolves to a
 /// source loc when the implemented interface is itself source-backed in THIS
 /// database (a blob impl of a stdlib interface), else stays a `Mounted`

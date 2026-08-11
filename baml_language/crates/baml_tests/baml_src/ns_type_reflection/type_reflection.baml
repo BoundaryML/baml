@@ -74,11 +74,11 @@ test "deep_equals_type_values_different" {
     assert.is_true(baml.deep_equals(baml.deep_equals(a, b), false))
 }
 
-// ─── BEP-066 PR 4: unified type equality on permuted unions ─────────────────
+// ─── BEP-066: unified type equality on permuted unions ──────────────────────
 //
-// PR 1 deliberately pinned the old divergence: `==` canonicalized while
+// Historically, `==` canonicalized while
 // `baml.deep_equals` compared the `RealizedTy` payload syntactically. BEP-066
-// slice-1 PR 4 flips those pins: all three VM equality sites compare the same
+// requires all three VM equality sites to compare the same
 // mint. Static mints digest the canonical form, so union order is irrelevant
 // to both operations. Function and test-block contexts remain paired as the
 // regression net for #3782.
@@ -108,7 +108,7 @@ function union_order_deep_equals_fn() -> bool {
 }
 
 test "union_order_deep_equals_syntactic_in_function" {
-    // Flipped in BEP-066 slice-1 PR 4: deep_equals now uses the same static
+    // BEP-066 requires deep_equals to use the same static
     // canonical mint as `==`.
     assert.is_true(baml.deep_equals(union_order_deep_equals_fn(), true))
 }

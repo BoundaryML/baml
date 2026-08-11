@@ -356,10 +356,10 @@ pub enum DiagnosticId {
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
 
-    // Mounted packages (BEP-066 slice 6a, E0158)
+    // Mounted packages (BEP-066 mounted-package linking, E0158)
     /// A call whose callee resolves into a MOUNTED (source-less) dependency
-    /// package. References type from the mounted interface; calls need a
-    /// loc-backed resolution for lowering, which lands in a later slice-6a PR.
+    /// package. References type from the mounted interface; callables without
+    /// a loc-free bytecode link contract report this diagnostic.
     MountedPackageCallUnsupported,
 
     // Projection bases (E0156)

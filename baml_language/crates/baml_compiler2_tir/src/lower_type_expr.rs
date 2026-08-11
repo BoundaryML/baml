@@ -312,7 +312,8 @@ fn interface_base_without_member_pin(
 
 /// A type-position resolution result: a definition in a source-backed package
 /// (a loc), or an exported row of a MOUNTED source-less dependency (BEP-066
-/// slice 6a) — which has no loc, only its blob-captured typed surface. The two
+/// mounted-package linking) — which has no loc, only its blob-captured typed
+/// surface. The two
 /// heads of every declaration-site type path; `lower_path`'s arms build the
 /// corresponding `Ty` from either.
 #[derive(Debug, Clone, Copy)]
@@ -1221,7 +1222,7 @@ fn lower_path(
 }
 
 /// The [`lower_path`] arm for a *foreign* resolution — an exported row of a
-/// mounted source-less dependency (BEP-066 slice 6a). Mirrors the `Own` arms
+/// mounted source-less dependency (BEP-066 mounted-package linking). Mirrors the `Own` arms
 /// exactly, drawing every declared fact (qtn, generic arity, associated types
 /// with pre-lowered symbolic-`Self` defaults) from the row instead of per-loc
 /// queries, so a blob-backed and a source-backed dependency lower the same

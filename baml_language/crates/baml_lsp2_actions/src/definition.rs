@@ -461,7 +461,7 @@ fn resolve_field_access_at(
             })
         }
         // A mounted (source-less) dependency's callee has no source anywhere in
-        // this workspace — nothing to navigate to (BEP-066 slice 6a).
+        // this workspace — nothing to navigate to (BEP-066 mounted-package linking).
         MemberResolution::External(_) => None,
     }
 }

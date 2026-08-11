@@ -186,9 +186,8 @@ pub struct BexHeap {
     /// counter — because the heap is the one object every allocation path
     /// already shares, including spawned VMs (each `Tlab` holds an
     /// `Arc<BexHeap>`), so two threads can never mint the same runtime
-    /// identity. Monotonic and never reused; no producer exists until the
-    /// slice-2 constructors, but the allocator lands with the identity
-    /// semantics (`bex_vm_types::types::MintId`).
+    /// identity. Monotonic and never reused; runtime type constructors allocate
+    /// identities through `bex_vm_types::types::MintId`.
     next_runtime_mint: AtomicU64,
 
     /// BEP-042: instances whose `cleanup` finalizer must run after the current

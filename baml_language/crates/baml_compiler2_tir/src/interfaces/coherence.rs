@@ -41,7 +41,7 @@ pub struct CoherenceViolation {
     pub primary: Span,
     /// The impl it overlaps with. May live in a dependency package; `None`
     /// when the partner is a MOUNTED (source-less) dependency's blob row
-    /// (BEP-066 slice 6a), which has no span anywhere — the diagnostic is
+    /// (BEP-066 mounted-package linking), which has no span anywhere — the diagnostic is
     /// attributed primary-only, with the partner rendered structurally in
     /// [`secondary_desc`](Self::secondary_desc).
     pub secondary: Option<Span>,
@@ -132,7 +132,7 @@ pub fn package_coherence_diagnostics<'db>(
         }
         // own × dependency — the owning package's impl carries the error. A
         // mounted dependency's row has no span: primary-only attribution,
-        // the partner rendered structurally (BEP-066 slice 6a).
+        // the partner rendered structurally (BEP-066 mounted-package linking).
         for dep in &dep_impls {
             if let Some(indeterminate) =
                 overlap_violation(impls_conflict(db, pkg_id, own_impl, dep, res_ctx, &aliases))
@@ -171,7 +171,7 @@ fn package_impls_with_spans<'db>(
             })
         })
         .collect();
-    // A MOUNTED package's blob rows participate span-less (BEP-066 slice 6a):
+    // A MOUNTED package's blob rows participate span-less (BEP-066 mounted-package linking):
     // a user impl overlapping a dependency's exported impl is a real E0132,
     // attributed primary-only at the user's impl.
     out.extend(

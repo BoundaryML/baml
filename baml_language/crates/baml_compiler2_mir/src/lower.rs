@@ -983,7 +983,7 @@ fn resolution_to_item_ref(
             // The interface's qualified name is total over source-backed and
             // MOUNTED targets (a user impl of a mounted interface has no
             // interface loc, but its qtn names the same dispatch slot —
-            // BEP-066 slice 6a).
+            // BEP-066 mounted-package linking).
             let iface_qtn = data.interface_qtn(db)?;
             let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
             Some(ItemRef::Method {
@@ -993,7 +993,7 @@ fn resolution_to_item_ref(
                 name: func_data.name.clone(),
             })
         }
-        // A mounted-package callee (BEP-066 slice 6a): the resolution already
+        // A mounted-package callee (BEP-066 mounted-package linking): the resolution already
         // carries the exact names of the library's exported symbol.
         MemberResolution::External(external) => {
             use baml_compiler2_tir::inference::ExternalCallTarget;
@@ -1050,7 +1050,7 @@ fn resolution_func_loc<'db>(
         | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(*func_loc),
         // A mounted callee has no loc-backed body in this database at all —
         // and is never a builtin, so every builtin/sys-op probe correctly
-        // answers "no" through this `None` (BEP-066 slice 6a).
+        // answers "no" through this `None` (BEP-066 mounted-package linking).
         MemberResolution::External(_)
         | MemberResolution::InterfaceVirtualMethod { .. }
         | MemberResolution::Field { .. }
@@ -1285,7 +1285,7 @@ fn class_type_tags_for_project(
     // MOUNTED (source-less) packages have no files; their classes tag from the
     // blob rows. Content-addressing is over the fq name alone, so these are
     // byte-identical to the tags the library's own compile assigned (BEP-066
-    // slice 6a).
+    // mounted-package linking).
     for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
         let Some(mounted) = baml_compiler2_tir::package_interface::mounted_interface(db, &pkg_name)
         else {
@@ -1335,7 +1335,7 @@ fn package_lowering_data<'db>(
             let dep_name = dep_id.name(db);
             // A MOUNTED (source-less) dependency has no items — its class
             // fields / enum variants come from the interface blob's rows
-            // (BEP-066 slice 6a).
+            // (BEP-066 mounted-package linking).
             if let Some(mounted) =
                 baml_compiler2_tir::package_interface::mounted_interface(db, &dep_name)
             {
@@ -1383,7 +1383,7 @@ fn package_lowering_data<'db>(
     for pkg in all_pkgs {
         // A MOUNTED (source-less) dependency's interface methods come from its
         // blob rows — without them the fast pre-filter would hide every
-        // mounted-impl dispatch (BEP-066 slice 6a).
+        // mounted-impl dispatch (BEP-066 mounted-package linking).
         if let Some(mounted) =
             baml_compiler2_tir::package_interface::mounted_interface(db, &pkg.name(db))
         {
@@ -2006,7 +2006,8 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// The MOUNTED-package twin of [`Self::populate_from_package`] (BEP-066
-    /// slice 6a): class field indices/types and enum variant indices from the
+    /// mounted-package linking): class field indices/types and enum variant
+    /// indices from the
     /// blob's exported rows. Field types are already-lowered `Ty`s, so
     /// population is a pure conversion — no per-loc lowering.
     fn populate_from_mounted_package(
@@ -5824,7 +5825,7 @@ impl<'db> LoweringContext<'db> {
                     // virtual-bound path below handles it; a bare function constant
                     // would name an interface-keyed global that (for a required
                     // method) does not exist. An interface-routed MOUNTED callee
-                    // (BEP-066 slice 6a) rides the same rule.
+                    // (BEP-066 mounted-package linking) rides the same rule.
                     Some(
                         MemberResolution::InterfaceVirtualMethod { .. }
                         | MemberResolution::InterfaceConcreteMethod { .. },
@@ -8346,7 +8347,7 @@ impl<'db> LoweringContext<'db> {
                             // takes `self`; there is no static body to inspect.
                             MemberResolution::InterfaceVirtualMethod { .. } => true,
                             // A mounted callee carries its receiver convention
-                            // on the resolution (BEP-066 slice 6a).
+                            // on the resolution (BEP-066 mounted-package linking).
                             MemberResolution::External(external) => external.takes_self,
                             _ => false,
                         })
@@ -8470,7 +8471,7 @@ impl<'db> LoweringContext<'db> {
                         }
                         MemberResolution::InterfaceVirtualMethod { .. } => true,
                         // A mounted callee carries its receiver convention on
-                        // the resolution (BEP-066 slice 6a).
+                        // the resolution (BEP-066 mounted-package linking).
                         MemberResolution::External(external) => external.takes_self,
                         _ => false,
                     }
@@ -10069,7 +10070,7 @@ impl<'db> LoweringContext<'db> {
                     // the receiver and bind its impl at runtime — the virtual-bound
                     // path below handles it.
                 }
-                // A mounted callee (BEP-066 slice 6a): a plain method on a
+                // A mounted callee (BEP-066 mounted-package linking): a plain method on a
                 // value receiver binds like `BoundMethod`; an interface-routed
                 // one falls through to the virtual-bound path below (same rule
                 // as the interface arms above).

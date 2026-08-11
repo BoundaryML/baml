@@ -5,7 +5,7 @@ class Parameter {
 }
 
 /// A function-kind view of a `type` value. Throws are intentionally not part
-/// of the slice-1 reflection surface.
+/// of the function reflection surface.
 class Type {
   implements baml.reflect.TypeView {
     //baml:vm

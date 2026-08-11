@@ -1,8 +1,7 @@
 //! Function-context pins for BEP-066 minted equality on `type` values.
 //!
-//! PR 1 characterized a known inconsistency: `==` canonicalized `RealizedTy`
-//! while `baml.deep_equals` compared it syntactically. BEP-066 slice-1 PR 4
-//! deliberately flips the deep-equality pin. Every equality path now compares
+//! `==` once canonicalized `RealizedTy` while `baml.deep_equals` compared it
+//! syntactically. BEP-066 now requires every equality path to compare
 //! the mint, and equivalent static spellings receive the same canonical digest.
 //! Matching test-block pins live in
 //! `baml_src/ns_type_reflection/type_reflection.baml`.
@@ -36,7 +35,7 @@ async fn permuted_union_deep_equals_uses_the_canonical_mint() {
         }
         "#
     );
-    // Flipped in BEP-066 slice-1 PR 4: deep_equals agrees with `==` because
+    // BEP-066 requires deep_equals to agree with `==` because
     // both compare the same canonical static mint.
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

@@ -1,4 +1,4 @@
-//! BEP-066 slice 5 executable oracles: structured interface witnesses,
+//! Executable oracles for structured runtime interface witnesses,
 //! bounded `unreflect`, open-schema rendering failures, and dynamic-rule GC.
 
 use baml_tests::baml_test;

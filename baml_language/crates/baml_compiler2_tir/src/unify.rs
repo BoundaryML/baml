@@ -376,7 +376,7 @@ pub(crate) fn normalized_alias_map<'db>(
         crate::inference::collect_type_aliases(db, baml_compiler2_ppir::package_items(db, pkg_id));
     for dep in baml_compiler2_hir::package::package_dependency_closure(db, pkg_id) {
         // A mounted (source-less) dependency's aliases live pre-resolved on
-        // its interface blob (BEP-066 slice 6a); its raw items are empty.
+        // its interface blob (BEP-066 mounted-package linking); its raw items are empty.
         if let Some(mounted) = crate::package_interface::mounted_interface(db, &dep.name(db)) {
             for types_in_ns in mounted.types.values() {
                 for exported in types_in_ns.values() {
@@ -409,7 +409,7 @@ pub(crate) fn normalized_alias_map<'db>(
 /// its enum (`Cmp`).
 pub(crate) fn enum_variant_names(db: &dyn crate::Db, enum_qtn: &TypeName) -> Option<Vec<Name>> {
     // A mounted (source-less) package's enums live on its interface blob
-    // (BEP-066 slice 6a); its raw items are empty by design.
+    // (BEP-066 mounted-package linking); its raw items are empty by design.
     if let Some(row) = crate::package_interface::mounted_type_row(db, enum_qtn) {
         let crate::package_interface::ExportedType::Enum { variants, .. } = row else {
             return None;

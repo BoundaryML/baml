@@ -1,4 +1,4 @@
-//! BEP-066 slice 6: runtime package compilation and Scenario 5.
+//! BEP-066 Scenario 5: runtime package compilation.
 
 use std::sync::Arc;
 

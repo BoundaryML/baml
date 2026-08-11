@@ -678,7 +678,7 @@ pub(crate) fn existential_associated_default(
 ) -> Option<Ty> {
     // A MOUNTED (source-less) interface's defaults live pre-lowered (symbolic
     // `Self`) on its exported row — realization is pure substitution
-    // (BEP-066 slice 6a).
+    // (BEP-066 mounted-package linking).
     if let Some(crate::package_interface::ExportedType::Interface {
         self_param,
         generic_params,
@@ -1490,7 +1490,7 @@ pub fn interface_requires<'db>(
     // A MOUNTED (source-less) `sub`: its exported `requires` rows are the
     // pre-flattened transitive closure at identity args with symbolic `Self`
     // — realize by substituting `sub`'s generic arguments and compare
-    // (BEP-066 slice 6a). Two conservative gaps vs. the source walk, both
+    // (BEP-066 mounted-package linking). Two conservative gaps vs. the source walk, both
     // fail-closed (`false`, never a wrong `true`): a member pinned at the
     // walk root stays a symbolic `Self.<member>` projection rather than
     // collapsing to `sub`'s written witness, and unfilled defaults are left

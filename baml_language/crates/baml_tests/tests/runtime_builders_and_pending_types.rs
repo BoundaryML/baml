@@ -1,4 +1,4 @@
-//! BEP-066 slice 4 executable oracles: incremental class builders, pending
+//! Executable oracles for incremental runtime class builders, pending
 //! composites, recursive group freezing, and structured diagnostics.
 
 use baml_tests::baml_test;

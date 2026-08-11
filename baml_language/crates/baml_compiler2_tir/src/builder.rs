@@ -119,7 +119,7 @@ enum ClassMethodLookup<'db> {
         func_loc: FunctionLoc<'db>,
     },
     /// A method of a MOUNTED (source-less) dependency's class, typed from its
-    /// exported signature (BEP-066 slice 6a). Carries no locs; `callee` is the
+    /// exported signature (BEP-066 mounted-package linking). Carries no locs; `callee` is the
     /// loc-free [`MemberResolution::External`] payload the caller records so
     /// MIR can lower a call symbolically. `None` marks the residue MIR cannot
     /// lower yet (a blob-exported builtin-kind body) — the reference still
@@ -949,7 +949,7 @@ pub struct TypeInferenceBuilder<'db> {
     /// otherwise absent from the call-site bindings.
     owner_type_arg_binding_seed: FxHashMap<ExprId, Vec<(crate::ty::ParamTy, Ty)>>,
     /// Callee-position expressions that resolved to a MOUNTED (source-less)
-    /// package's function or method (BEP-066 slice 6a), keyed by the resolved
+    /// package's function or method (BEP-066 mounted-package linking), keyed by the resolved
     /// expression with the dotted path for the message. A *reference* types
     /// fine (the exported signature), but an actual CALL needs a
     /// `MemberResolution` for MIR — which a blob cannot provide until the
@@ -2257,7 +2257,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .user_generic_params
                 .is_empty()
             }
-            // A mounted free function (BEP-066 slice 6a): the exported facts
+            // A mounted free function (BEP-066 mounted-package linking): the exported facts
             // carry the user-declared params.
             Some(crate::inference::MemberResolution::External(external))
                 if matches!(
@@ -2351,7 +2351,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .cloned()?;
                 return Some((declared_params, declared_bounds, callee_name));
             }
-            // A mounted-package callee (BEP-066 slice 6a): the declared list is
+            // A mounted-package callee (BEP-066 mounted-package linking): the declared list is
             // the resolution's owned copy of the exported facts — the owner
             // params this call form supplies (unbounded at call position, like
             // the loc path's prepended class params), then the user-declared
@@ -3107,7 +3107,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // exported facts the resolution carries: the owner params it
                 // supplies at this call form, then the callee's own (user +
                 // synthetic effect) params — mirroring the loc path's
-                // `function_generic_env` ordering (BEP-066 slice 6a).
+                // `function_generic_env` ordering (BEP-066 mounted-package linking).
                 MemberResolution::External(external) => {
                     let mut params: Vec<crate::ty::ParamTy> = external.owner_generic_params.clone();
                     params.extend(external.generic_params.iter().cloned());
@@ -6836,7 +6836,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Report the reserved BEP-066 slice 6a diagnostic when a mounted callee
+    /// Report the reserved BEP-066 mounted-package linking diagnostic when a mounted callee
     /// has no loc-free link contract (currently compiler/VM builtin bodies).
     fn report_reserved_mounted_call(&mut self, callee: ExprId, at: ExprId) {
         if let Some(path) = self.foreign_callable_exprs.remove(&callee) {
@@ -10997,7 +10997,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // A MOUNTED (source-less) package answers from its interface blob —
-        // its raw items are empty by design (BEP-066 slice 6a).
+        // its raw items are empty by design (BEP-066 mounted-package linking).
         if let Some(mounted) =
             crate::package_interface::mounted_interface(self.context.db(), &pkg_items.package)
         {
@@ -11147,7 +11147,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// The MOUNTED-package arm of [`Self::resolve_package_item`] (BEP-066
-    /// slice 6a): answer a `pkg.…` value/type path from the mounted interface
+    /// mounted-package linking): answer a `pkg.…` value/type path from the
+    /// mounted interface
     /// blob. Mirrors the raw-items arm — functions type from their exported
     /// signature and record a loc-free [`MemberResolution::External`] (so MIR
     /// lowers the call to the library's exported symbol); classes/enums/
@@ -13362,7 +13363,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         method_name: &Name,
     ) -> ClassMethodLookup<'db> {
         // A MOUNTED (source-less) dependency's class: type the method from its
-        // exported signature (BEP-066 slice 6a) — declaration-scoped, with the
+        // exported signature (BEP-066 mounted-package linking) — declaration-scoped, with the
         // class generics substituted at this receiver's type args. No locs;
         // the `ForeignFound` carries the loc-free `External` callee facts so
         // the caller can record a MIR-lowerable resolution.

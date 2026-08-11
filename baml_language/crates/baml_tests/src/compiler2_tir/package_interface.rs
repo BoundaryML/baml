@@ -1,4 +1,4 @@
-//! BEP-066 slice 6a: the enriched `PackageInterface` export schema.
+//! BEP-066 mounted-package linking: the enriched `PackageInterface` export schema.
 //!
 //! These tests pin the *derivation* of the new loc-free rows — interface
 //! surfaces (params/bounds/`requires`/associated types/fields/methods), class
@@ -132,7 +132,7 @@ fn fixture_db() -> ProjectDatabase {
         "ns_util/helpers.baml",
         "function helper() -> int throws never {\n    1\n}\n",
     );
-    // A namespace whose ONLY item is an interface: before slice 6a its
+    // A namespace whose ONLY item is an interface: before interface export its
     // namespace was invisible in the interface (interfaces were dropped and
     // nothing else exported from it).
     db.add_file("ns_shapes/only_iface.baml", "interface Marker {\n}\n");
@@ -658,7 +658,7 @@ interface M {
     );
 }
 
-// ── The impls table (PR 2) ─────────────────────────────────────────────────
+// ── Exported implementation rows ───────────────────────────────────────────
 
 #[test]
 fn in_body_impl_exports_with_field_links() {
@@ -830,7 +830,7 @@ fn generic_impl_exports_params_bounds_and_patterns() {
 
 #[test]
 fn dep_interface_rows_resolve_only_for_mounted_packages() {
-    // BEP-066 slice 6a: an `ExportedType::Interface` row resolves through both
+    // BEP-066 mounted-package linking: an `ExportedType::Interface` row resolves through both
     // `PackageResolutionContext::resolve_type` paths ONLY when the dependency
     // is a MOUNTED (source-less) package — its rows are the sole
     // representation. A source-backed dependency's interface rows stay
@@ -1028,9 +1028,9 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
     );
 }
 
-// ── Mounted source-less packages (PR 3: type-position consumption) ─────────
+// ── Mounted source-less packages in type positions ─────────────────────────
 
-/// BEP-066 slice 6a, PR 3: a package mounted as a `borsh(PackageInterface)`
+/// A package mounted as a `borsh(PackageInterface)`
 /// blob — with NO source files — resolves in TYPE positions at check level.
 /// Each test compiles a fixture "library" package (files under
 /// `<builtin>/app/…` so `file_package` assigns them the package name `app`),

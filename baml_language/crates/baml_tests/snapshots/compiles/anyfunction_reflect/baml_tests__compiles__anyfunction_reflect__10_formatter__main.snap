@@ -74,7 +74,7 @@ function typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] | str
     };
 }
 
-// BEP-066 slice 2: a runtime enum is a legal call-site type argument for the
+// A runtime enum is a legal call-site type argument for the
 // offline LLM companions. This compile model pins the public surface while the
 // executable scenarios in `reflect_call_any.rs` prove rendering and SAP landing.
 client<llm> RuntimeEnumClient {

@@ -688,7 +688,7 @@ pub(crate) fn associated_type_declared_bound(
     // A MOUNTED (source-less) interface's bounds live pre-realized (identity
     // args, symbolic `Self`) on its exported row: realize at the qualifier's
     // arguments by substitution; `Self` stays symbolic per this oracle's
-    // contract (BEP-066 slice 6a). Sibling pins ride `Self.<name>`
+    // contract (BEP-066 mounted-package linking). Sibling pins ride `Self.<name>`
     // projections and stay symbolic (fail-safe: an unreduced projection only
     // makes the bound-satisfaction check conservative).
     if let Some(crate::package_interface::ExportedType::Interface {
@@ -937,7 +937,7 @@ pub(crate) fn resolve_concrete_projection(
 
 /// Whether interface `qtn` declares associated type `member` directly.
 fn interface_declares_member(db: &dyn crate::Db, qtn: &QualifiedTypeName, member: &Name) -> bool {
-    // A MOUNTED interface answers from its exported row (BEP-066 slice 6a).
+    // A MOUNTED interface answers from its exported row (BEP-066 mounted-package linking).
     if let Some(crate::package_interface::ExportedType::Interface {
         associated_types, ..
     }) = crate::package_interface::mounted_type_row(db, qtn)

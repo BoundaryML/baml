@@ -238,7 +238,7 @@ fn interface_associated_type_names_for_qtn_inner(
 
     // A MOUNTED (source-less) interface answers from its exported row; its
     // `requires` rows are the pre-flattened transitive closure, so one level
-    // of name collection per entry covers inheritance (BEP-066 slice 6a).
+    // of name collection per entry covers inheritance (BEP-066 mounted-package linking).
     if let Some(crate::package_interface::ExportedType::Interface {
         associated_types,
         requires,
@@ -843,7 +843,7 @@ pub enum MemberResolution<'db> {
         field: Name,
     },
     /// A callee that resolved into a MOUNTED (source-less) dependency package
-    /// (BEP-066 slice 6a). Loc-free by construction: the identity is carried as
+    /// (BEP-066 mounted-package linking). Loc-free by construction: the identity is carried as
     /// plain names — exactly the material MIR's `ItemRef` is built from — and the
     /// call-site facts TIR/MIR consult (receiver convention, generic params and
     /// bounds) are copied OUT of the exported signature at resolution time. All
@@ -2839,7 +2839,7 @@ pub fn collect_type_aliases<'db>(
 /// package happens to re-export).
 pub fn alias_def(db: &dyn crate::Db, qtn: &crate::ty::QualifiedTypeName) -> Option<Ty> {
     // A mounted (source-less) package's aliases live pre-resolved on its
-    // interface blob (BEP-066 slice 6a).
+    // interface blob (BEP-066 mounted-package linking).
     if let Some(row) = crate::package_interface::mounted_type_row(db, qtn) {
         let crate::package_interface::ExportedType::TypeAlias { resolved, .. } = row else {
             return None;
@@ -2868,7 +2868,7 @@ pub fn enum_variants<'db>(
     enum_name: &crate::ty::QualifiedTypeName,
 ) -> Option<Vec<Name>> {
     // A mounted (source-less) package's enums live on its interface blob
-    // (BEP-066 slice 6a); its raw items are empty by design.
+    // (BEP-066 mounted-package linking); its raw items are empty by design.
     if let Some(row) = crate::package_interface::mounted_type_row(db, enum_name) {
         let crate::package_interface::ExportedType::Enum { variants, .. } = row else {
             return None;

@@ -359,7 +359,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Option<Ty> {
         // A MOUNTED (source-less) interface has no loc: its declaration
         // surface is the exported row, resolved by pure substitution
-        // (BEP-066 slice 6a).
+        // (BEP-066 mounted-package linking).
         if crate::package_interface::mounted_type_row(self.context.db(), bound.name).is_some() {
             return self.resolve_member_on_mounted_interface(bound, recv, access);
         }
@@ -472,8 +472,8 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Loc-free declarers for one mounted bound, with root-wins tiering and a
-    /// mixed source/mounted `requires` closure. Mounted fields remain outside
-    /// the current slice; this helper intentionally enumerates methods only.
+    /// mixed source/mounted `requires` closure. Mounted fields are intentionally
+    /// omitted; this helper enumerates methods only.
     fn mounted_method_declarers_for_bound(
         &self,
         bound: InterfaceBound<'_>,
@@ -1721,7 +1721,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Resolve `access.member` on a receiver whose bound names a MOUNTED
     /// (source-less) interface — the loc-free foreign twin of
-    /// [`Self::resolve_interface_member`] (BEP-066 slice 6a). The exported row
+    /// [`Self::resolve_interface_member`] (BEP-066 mounted-package linking). The exported row
     /// carries pre-lowered symbolic-`Self` signatures and the pre-flattened
     /// `requires` closure, so root-wins tiering runs over rows and realization
     /// at this receiver is pure substitution. A `requires` parent that is
@@ -1886,7 +1886,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Build the `Ty::Function` for a MOUNTED interface's method resolved on a
     /// receiver — the substitution twin of [`Self::build_interface_method_ty`]
-    /// (BEP-066 slice 6a). The exported signature keeps `Self` symbolic (and
+    /// (BEP-066 mounted-package linking). The exported signature keeps `Self` symbolic (and
     /// associated types as `Self.<name>` projections on it), so realization is
     /// one substitution: interface params to the realized args, `Self` to the
     /// receiver; residual projections reduce under `normalize` through the

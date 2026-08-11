@@ -1,4 +1,4 @@
-//! BEP-066 slice 8 executable oracles: Package type views and scoped runtime
+//! Executable oracles for Package type views and scoped runtime
 //! type bindings.
 
 use baml_tests::baml_test;

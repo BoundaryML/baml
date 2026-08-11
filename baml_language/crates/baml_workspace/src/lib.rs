@@ -89,7 +89,7 @@ pub trait Db: salsa::Database {
     /// Source-less dependency packages mounted into this database as serialized
     /// `PackageInterface` blobs, keyed by the package name (the mount alias).
     ///
-    /// When present (BEP-066 slice 6a), each entry makes its name a *dependency*
+    /// When present (BEP-066 mounted-package linking), each entry makes its name a *dependency*
     /// of every user package (`package_dependencies`) whose `package_interface`
     /// is served straight from the blob — the mounted package has **no source
     /// files** (`package_items` is empty; that is the point). Cross-package
@@ -154,7 +154,7 @@ pub struct SeededStdlibInterface {
 /// crate. `baml_compiler2_tir` deserializes a package's bytes when its
 /// `package_interface` is queried. A Salsa input, so mounting/unmounting a
 /// package invalidates dependents for free (the B-694 delivery mechanism
-/// generalized to any alias, per BEP-066 slice 6a).
+/// generalized to any alias, per BEP-066 mounted-package linking).
 #[salsa::input]
 pub struct MountedPackages {
     #[returns(ref)]

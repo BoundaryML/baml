@@ -651,8 +651,9 @@ mod contextual_keyword_name_tests {
 
     #[test]
     fn keyword_method_names_round_trip() {
-        // Declaration keywords stay valid as member/path names. Slice 2/3
-        // relies on `class`/`enum`/`function` namespace segments, while the
+        // Declaration keywords stay valid as member/path names. Runtime
+        // reflection relies on `class`/`enum`/`function` namespace segments,
+        // while the
         // reflection API uses `implements` as a method name.
         assert_round_trips(
             "function f(dog_t: type, animal_t: type) -> bool {\n    let views = dog_t.class.enum.function.interface;\n    dog_t.implements(animal_t)\n}\n",

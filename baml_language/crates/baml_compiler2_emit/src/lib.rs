@@ -1580,7 +1580,7 @@ pub fn generate_project_bytecode_with_stdlib(
 /// Compile and link a source consumer against independently emitted mounted
 /// dependency units.
 ///
-/// This is the supported slice-6 seam between a package's two artifacts:
+/// This is the supported linking seam between a package's two artifacts:
 ///
 /// - `db` must already contain the dependency's serialized package-interface
 ///   blobs through its mounted-packages input; those blobs drive checking and
@@ -1599,7 +1599,7 @@ pub fn generate_project_bytecode_with_stdlib(
 /// diagnostics retain the ordinary [`LoweringError`] surface through
 /// [`MountedPackageLinkError::Consumer`].
 ///
-/// # Slice 6a residue ledger
+/// # Mounted-package linking: known limitations
 ///
 /// - E0158 remains only for mounted compiler/VM builtin-kind callables, which
 ///   have no loc-free bytecode link contract.
@@ -1607,10 +1607,11 @@ pub fn generate_project_bytecode_with_stdlib(
 ///   rename, and other location-owning LSP handles remain unavailable.
 /// - Mount aliases must equal the package identity encoded in the blob;
 ///   transitive re-export and package re-aliasing are not implemented.
-/// - Canonical `$stream` companion types are exported and consumer LLM
-///   expansion checks, but live Package.compile/sys-op loading is slice 6.
-/// - Artifact compatibility/version validation and loading into an already-live
-///   VM are slice 6 concerns; this seam produces a new combined `Program`.
+/// - Canonical `$stream` companion types are exported and checked during
+///   consumer LLM expansion; live `Package.compile`/sys-op loading uses a
+///   separate runtime path.
+/// - This seam produces a new combined `Program`; it does not validate artifact
+///   versions or load dependencies into an already-live VM.
 /// - First-class interface-method values still depend on the compiler's general
 ///   synthesized-dispatcher support; direct, UFCS, and virtual calls are linked.
 pub fn generate_project_bytecode_with_mounted_units(
@@ -3041,7 +3042,7 @@ fn generate_impl(
     // (`from_stdlib_program` clears both for recomputation). Restore them from
     // the spliced base image, which carries the library's own compiled rules —
     // without this, interface dispatch through a mounted impl would find no
-    // registered rule at runtime (BEP-066 slice 6a).
+    // registered rule at runtime (BEP-066 mounted-package linking).
     if let Some(base) = base {
         for pkg_name in baml_compiler2_hir::package::mounted_package_names(db) {
             let Some(base_pkg) = base.packages.get(&pkg_name) else {
