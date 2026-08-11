@@ -282,24 +282,24 @@ pub(crate) fn lower_client_initializer(
 /// ai.FunctionSpec<Out> {
 ///     spec_name: "Fn",
 ///     args: { "p": p, ... },
-///     prompt_template: ai.Prompt {
+///     prompt_template: (output_format: string) -> {
 ///         // the parameter's real name is ` __spec_output_format` (leading
 ///         // space) so it can never shadow a user identifier
-///         template: (output_format: string) -> {
-///             let ctx = ai.internal.SpecCtx { output_format: output_format };
-///             `...the function's backtick prompt...`
-///         },
+///         let ctx = ai.internal.SpecCtx { output_format: output_format };
+///         let tagged = baml.TaggedString { ...the function's prompt... };
+///         ai.internal.assemble_prompt(tagged.parts, tagged.values)
 ///     },
 ///     toolbox: ai.Toolbox.new([ai.tool(a), ...]),
 ///     default_client: openai.OpenAiClient.new(model = "gpt-4o-mini"),
 /// }
 /// ```
 ///
-/// The prompt closure re-lowers the backtick as an ordinary template string
-/// with `ctx` bound to an `ai.internal.SpecCtx`, so `${ctx.output_format}`
-/// resolves to the closure's parameter and every other interpolation captures
-/// the enclosing function's parameters. Provider construction is pure, so the
-/// eager default client never touches credentials.
+/// The prompt closure uses the same structural parts/values representation as
+/// the built-in `prompt` tag. `${role(...)}` values become prompt messages
+/// and media remains structural. `ctx` is bound to an `ai.internal.SpecCtx`,
+/// so `${ctx.output_format}` resolves to the closure's parameter and every
+/// other interpolation captures the enclosing function's parameters. Provider
+/// construction is pure, so the eager default client never touches credentials.
 ///
 /// In the `tools` list, a bare function reference is wrapped in `ai.tool(...)`;
 /// any other element expression must already produce an `ai.Tool`.
@@ -342,12 +342,12 @@ pub(crate) fn synthesize_llm_spec_body(
         .collect();
     let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
 
-    // prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }
+    // prompt_template: ( __spec_output_format: string) -> ai.Prompt { ... }
     //
     // The lambda parameter carries a leading-space name so it can never
     // shadow a user identifier: a function parameter named `output_format`
     // must stay visible to `${output_format}` in the template (the parameter
-    // is only the render_text calling convention; `ctx.output_format` is the
+    // is only the render calling convention; `ctx.output_format` is the
     // documented way to reach the rendered schema). Mirrors the `__tt_*`
     // accumulator naming in `elaborate_tagged_body`.
     //
@@ -385,13 +385,89 @@ pub(crate) fn synthesize_llm_spec_body(
         },
         prompt_start,
     );
-    // The template itself keeps its real source spans so `${…}` diagnostics
-    // point at the user's prompt.
-    let template_expr = ctx.lower_backtick_string_literal(prompt_backtick.syntax());
+    // Flatten the template exactly like the public `prompt` tag: values stay
+    // structural until the Rust prompt assembler sees them. Rewrite the
+    // prompt-local role constructor before name resolution; it is the same
+    // binding that the public tag supplies to its body lambda.
+    let segments = ctx.lower_template_segments_checked(prompt_backtick);
+    let role_callees: Vec<ExprId> = ctx
+        .exprs
+        .iter()
+        .filter_map(|(_, expr)| match expr {
+            Expr::Call { callee, .. }
+                if matches!(&ctx.exprs[*callee], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "role") =>
+            {
+                Some(*callee)
+            }
+            _ => None,
+        })
+        .collect();
+    for callee in role_callees {
+        ctx.exprs[callee] = Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("prompt"),
+            Name::new("make_role"),
+        ]);
+    }
+
+    let prev_synth = std::mem::replace(&mut ctx.synthesizing, true);
+    let tagged_expr = ctx.elaborate_tagged_body(&segments, prompt_lambda_span);
+    ctx.synthesizing = prev_synth;
+
+    // Evaluate the flattened template once before reading its two arrays.
+    let tagged_name = Name::new(" __spec_tagged_prompt");
+    let tagged_pat = ctx.alloc_pattern(
+        Pattern::Bind {
+            name: tagged_name.clone(),
+            subpat: None,
+        },
+        prompt_start,
+    );
+    let let_tagged = ctx.alloc_stmt(
+        Stmt::Let {
+            pattern: tagged_pat,
+            initializer: Some(tagged_expr),
+            origin: LetOrigin::Source,
+            else_branch: None,
+        },
+        prompt_start,
+    );
+    let parts_base = ctx.alloc_expr(Expr::Path(vec![tagged_name.clone()]), prompt_start);
+    let parts = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: parts_base,
+            member: Name::new("parts"),
+        },
+        prompt_start,
+    );
+    let values_base = ctx.alloc_expr(Expr::Path(vec![tagged_name]), prompt_start);
+    let values = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: values_base,
+            member: Name::new("values"),
+        },
+        prompt_start,
+    );
+    let assemble_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("internal"),
+            Name::new("assemble_prompt"),
+        ]),
+        prompt_start,
+    );
+    let prompt_ast = ctx.alloc_expr(
+        Expr::Call {
+            callee: assemble_callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(parts), CallArg::positional(values)],
+        },
+        prompt_start,
+    );
     let lambda_body = ctx.alloc_expr(
         Expr::Block {
-            stmts: vec![let_ctx],
-            tail_expr: Some(template_expr),
+            stmts: vec![let_ctx, let_tagged],
+            tail_expr: Some(prompt_ast),
         },
         prompt_lambda_span,
     );
@@ -419,16 +495,6 @@ pub(crate) fn synthesize_llm_spec_body(
         })),
         prompt_lambda_span,
     );
-    let prompt_obj = ctx.alloc_expr(
-        Expr::Object {
-            type_name: baml_base::TypePath::from_dotted("ai.Prompt"),
-            type_args: vec![],
-            fields: vec![(Name::new("template"), prompt_lambda)],
-            spreads: vec![],
-        },
-        span,
-    );
-
     // toolbox: ai.Toolbox.new([...])
     let tool_list = match tools_value {
         Some(rowan::NodeOrToken::Node(node)) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
@@ -526,32 +592,6 @@ pub(crate) fn synthesize_llm_spec_body(
             .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
     };
 
-    // `${role(...)}` markers cannot exist in the instructions-only prompt;
-    // catch the call shape anywhere in the lowered template and emit the
-    // migration error instead of letting `role` cascade as an unresolved
-    // name. Scanning the whole arena is safe: at this point it only holds
-    // the spec body's own expressions, where a bare `role` call is always
-    // the removed marker.
-    let role_spans: Vec<TextRange> = ctx
-        .exprs
-        .iter()
-        .filter_map(|(id, expr)| {
-            if let Expr::Call { callee, .. } = expr {
-                if matches!(&ctx.exprs[*callee], Expr::Path(p) if p.len() == 1 && p[0].as_str() == "role")
-                {
-                    return Some(ctx.source_map.expr_span(id));
-                }
-            }
-            None
-        })
-        .collect();
-    for role_span in role_spans {
-        ctx.diags.push(LoweringDiagnostic::LlmRoleMarkerRemoved {
-            function_name: function_name.to_string(),
-            span: role_span,
-        });
-    }
-
     let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
     let spec_obj = ctx.alloc_expr(
         Expr::Object {
@@ -560,7 +600,7 @@ pub(crate) fn synthesize_llm_spec_body(
             fields: vec![
                 (Name::new("spec_name"), name_lit),
                 (Name::new("args"), args_map),
-                (Name::new("prompt_template"), prompt_obj),
+                (Name::new("prompt_template"), prompt_lambda),
                 (Name::new("toolbox"), toolbox),
                 (Name::new("default_client"), default_client),
             ],
@@ -574,7 +614,7 @@ pub(crate) fn synthesize_llm_spec_body(
 
 /// Synthesize the `$render_prompt` companion body: render the spec's prompt
 /// with the return type's output-format text —
-/// `Fn$spec(p...).prompt().render_text(ai.render_output_format(reflect.type_of<Out>()))`.
+/// `Fn$spec(p...).prompt(ai.wire.render_output_format(reflect.type_of<Out>()))`.
 pub(crate) fn synthesize_spec_render_prompt_body(
     function_name: &str,
     param_names: &[Name],
@@ -608,14 +648,6 @@ pub(crate) fn synthesize_spec_render_prompt_body(
         },
         span,
     );
-    let prompt_call = ctx.alloc_expr(
-        Expr::Call {
-            callee: prompt_callee,
-            type_args: vec![],
-            args: vec![],
-        },
-        span,
-    );
     let type_of_callee = ctx.alloc_expr(
         Expr::Path(vec![Name::new("reflect"), Name::new("type_of")]),
         span,
@@ -644,18 +676,11 @@ pub(crate) fn synthesize_spec_render_prompt_body(
         },
         span,
     );
-    let render_callee = ctx.alloc_expr(
-        Expr::MemberAccess {
-            base: prompt_call,
-            member: Name::new("render_text"),
-        },
-        span,
-    );
     let render_call = ctx.alloc_expr(
         Expr::Call {
-            callee: render_callee,
+            callee: prompt_callee,
             type_args: vec![],
-            args: vec![CallArg::positional(rof_call)],
+            args: vec![CallArg::named("output_format", rof_call)],
         },
         span,
     );
@@ -789,7 +814,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
 /// function's own spec:
 ///
 /// ```baml
-/// ai.from_spec<Out$stream, Out>(Fn$spec(p1, p2), client = client)
+/// ai.stream.from_spec<Out$stream, Out>(Fn$spec(p1, p2), client = client)
 /// ```
 ///
 /// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
@@ -828,7 +853,7 @@ pub fn synthesize_spec_stream_body(
         span,
     );
 
-    // ai.from_spec<TS, TF>(spec, client = client)
+    // ai.stream.from_spec<TS, TF>(spec, client = client)
     let stream_spec_callee = ctx.alloc_expr(
         Expr::Path(vec![
             Name::new("ai"),
@@ -3986,7 +4011,7 @@ impl LoweringContext {
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
 
         // BEP-049 ergonomic hack: a bare `` prompt`...` `` tag resolves to the
-        // stdlib `baml.llm.prompt`. `prompt` lives in the `baml.llm` namespace
+        // stdlib `ai.prompt`. BAML has no prelude,
         // and BAML has no prelude, so the unqualified form (which the BEP §10
         // examples use) would otherwise be an unresolved name. Rewriting the bare
         // path here — same `ExprId`, so the source span is preserved — means every
@@ -3995,11 +4020,7 @@ impl LoweringContext {
         // caller who needs a different `prompt` tag can write it qualified.
         if matches!(&self.exprs[tag], Expr::Path(segs) if segs.len() == 1 && segs[0].as_str() == "prompt")
         {
-            self.exprs[tag] = Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("llm"),
-                Name::new("prompt"),
-            ]);
+            self.exprs[tag] = Expr::Path(vec![Name::new("ai"), Name::new("prompt")]);
         }
 
         let segments = backtick_node

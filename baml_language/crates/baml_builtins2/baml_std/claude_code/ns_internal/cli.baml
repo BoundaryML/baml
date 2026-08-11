@@ -230,7 +230,10 @@ function invoke(
 ) -> ai.ModelTurn {
     // the contract travels via --json-schema, so the prompt's schema slot
     // renders empty
-    let instructions = input.prompt.render_text("");
+    // The CLI accepts one string rather than a chat-message array. Keep the
+    // structural prompt until this transport boundary, then use its readable
+    // role-headed projection.
+    let instructions = input.prompt("").text();
     let has_tools = !input.toolbox.is_empty();
     let schema = if (has_tools) {
         baml.json.to_json(envelope_schema(input.output_type))

@@ -117,7 +117,7 @@ pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
     match value {
         BexExternalValue::Instance {
             class_name, fields, ..
-        } if class_name == "baml.llm.PromptAst" => {
+        } if class_name == "ai.Prompt" => {
             let data = fields
                 .get("_data")
                 .expect("PromptAst instance should contain _data");
@@ -176,7 +176,7 @@ function TestFunc(input: string) -> {return_type} {{
 }}
 
 function get_prompt() -> string {{
-    TestFunc$render_prompt("test")
+    TestFunc$render_prompt("test").text()
 }}
 "##
     );
@@ -186,7 +186,7 @@ function get_prompt() -> string {{
 /// Like `render_output_format` but with custom kwargs on the output format.
 ///
 /// `kwargs` is inserted into `ctx.output_format_with(...)` on the
-/// still-supported `baml.llm` library path (the ai-world LLM-function prompt
+/// standalone `baml.prompt` tag path (the ai-world LLM-function prompt
 /// only binds plain `ctx.output_format`), e.g. `render_null_as = "omit"`.
 pub(crate) async fn render_output_format_with_opts(
     baml_types: &str,
@@ -198,15 +198,15 @@ pub(crate) async fn render_output_format_with_opts(
 {baml_types}
 
 function get_prompt() -> string {{
-    let cc = baml.llm.ContextClient {{ name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }};
+    let cc = baml.prompt.ContextClient {{ name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }};
     let rt = reflect.type_of<{return_type}>();
-    let render_ctx = baml.llm.Context {{
+    let render_ctx = baml.prompt.Context {{
         client: cc,
         tags: {{}},
-        output_format: baml.llm.render_output_format(rt),
-        _output_format: baml.llm.build_output_format(rt),
+        output_format: baml.prompt.render_output_format(rt),
+        _output_format: baml.prompt.build_output_format(rt),
     }};
-    let render = baml.llm.prompt`test
+    let render = ai.prompt`test
 ${{render_ctx.output_format_with({kwargs})}}`;
     render(render_ctx).text()
 }}

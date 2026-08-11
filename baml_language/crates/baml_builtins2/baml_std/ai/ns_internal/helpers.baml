@@ -23,3 +23,12 @@ function _schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown
 class SpecCtx {
     output_format: string,
 }
+
+/// Assemble a structural `ai.Prompt` from a tagged template's flattened
+/// `parts` and `values`. `baml.prompt.Role` values start new messages; media
+/// remains structural until a provider lowers the prompt.
+//baml:mut_vm
+//baml:may_yield
+function assemble_prompt(parts: string[], values: unknown[]) -> root.Prompt throws never {
+    $rust_function
+}

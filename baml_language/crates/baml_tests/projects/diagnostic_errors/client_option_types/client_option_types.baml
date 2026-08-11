@@ -27,7 +27,8 @@ function LegacyJinjaPrompt(input: string) -> string {
     prompt #"Echo: {{ input }}"#
 }
 
-// Removed: `${role(...)}` markers in a backtick prompt.
+// Structural role markers remain valid while the surrounding fixture checks
+// the independently removed client/Jinja forms.
 function LegacyRoleMarker(input: string) -> string {
     client ValidClient
     prompt `${role("system")}Be terse. ${input}`

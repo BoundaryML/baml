@@ -313,7 +313,7 @@ public final class ProtoWriter {
             w.writeMessage(IV_CLASS, encodeMediaClass(media));
             alreadyTyped = true;
         } else if (value instanceof baml_bridge.BamlStream stream) {
-            // BamlStream (baml.llm.Stream receiver): lifted to a bare
+            // BamlStream (ai.stream.Stream receiver): lifted to a bare
             // handle_value(ADT_TAGGED_HEAP_HANDLE) on the wire — the engine
             // reconstructs the heap pointer from the receiver's HANDLE_TABLE row
             // (Adt(TaggedHeapHandle)). Mirrors bridge_python's

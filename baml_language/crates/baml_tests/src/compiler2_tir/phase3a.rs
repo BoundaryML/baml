@@ -193,7 +193,7 @@ fn new_mode_failures_have_good_diagnostics() {
     // surface a diagnostic that points at the user's `${…}` source with a
     // user-facing message — never a `0..0` span and never a leaked internal
     // desugaring type. The prompt body is lowered into a synthesized
-    // `(ctx: baml.llm.Context) -> PromptAst` closure, so the risk is that
+    // `(ctx: baml.prompt.Context) -> PromptAst` closure, so the risk is that
     // errors land on compiler-generated nodes. These cases pin that they don't.
     //
     // `expect_substr` is asserted; the span column is checked to be non-`0..0`
@@ -205,16 +205,6 @@ fn new_mode_failures_have_good_diagnostics() {
             "client C",
             "prompt `Hi ${nobody}!`",
             "unresolved name: nobody",
-        ),
-        // `${role(...)}` markers are removed wholesale — the full diagnostics
-        // pipeline adds the LlmRoleMarkerRemoved migration error (a lowering
-        // diagnostic, not rendered by `render_tir`); at TIR level the marker
-        // surfaces as an unresolved name at the user's span.
-        (
-            "role_marker_removed",
-            "client C",
-            "prompt `${role(5)}hi`",
-            "unresolved name: role",
         ),
         (
             "ctx_bad_field",
@@ -258,10 +248,10 @@ fn new_mode_failures_have_good_diagnostics() {
             "operator `+`",
         ),
         (
-            "role_marker_removed_no_args",
+            "role_marker_requires_name",
             "client C",
             "prompt `${role()}hi`",
-            "unresolved name: role",
+            "expected 1 argument(s), got 0",
         ),
     ];
     for (label, client, body, expect_substr) in cases {
@@ -1954,7 +1944,7 @@ fn explicit_unknown_list_annotation_pins_element_type() {
         r#"
 function main() -> int {
   let xs: unknown[] = []
-  let r = baml.llm.Role { name: "x", metadata: {} }
+  let r = baml.prompt.Role { name: "x", metadata: {} }
   xs.push(r)
   xs.push("hello")
   return 0

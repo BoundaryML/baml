@@ -14,14 +14,14 @@ import copy
 
 import pytest
 
-from baml_bridge import BamlPyHandle
+from baml_bridge import BamlPyHandle, BamlStream
 from baml_bridge.baml_py import (
     _seed_function_ref_handle,
     _seed_generic_media_handle,
 )
 from baml_bridge.proto import _decode_handle
 from baml_bridge.typemap import BamlTypeMap
-from baml_bridge.cffi.v1 import baml_handle_pb2
+from baml_bridge.cffi.v1 import baml_handle_pb2, baml_outbound_pb2
 
 
 def _make_handle(key: int, handle_type: int) -> "baml_handle_pb2.BamlHandle":
@@ -58,3 +58,40 @@ def test_decoded_pyhandle_releases_on_drop():
     assert callable(stale)
     with pytest.raises(RuntimeError, match="invalid handle"):
         copy.copy(stale._handle)
+
+
+def test_tagged_handle_passes_class_fqn_to_wrapper():
+    class TaggedWrapper:
+        @classmethod
+        def _from_pyhandle(cls, pyhandle, class_fqn):
+            return pyhandle, class_fqn
+
+    key, _ = _seed_function_ref_handle(9)
+    handle = baml_outbound_pb2.BamlOutboundHandle()
+    handle.key = key
+    handle.handle_type = baml_handle_pb2.ADT_TAGGED_HEAP_HANDLE
+    handle.ty.class_ty.name = "test.stream.Custom"
+    tm = BamlTypeMap()
+    tm._class_cache["test.stream.Custom"] = TaggedWrapper
+
+    pyhandle, class_fqn = _decode_handle(handle, tm)
+    assert isinstance(pyhandle, BamlPyHandle)
+    assert class_fqn == "test.stream.Custom"
+
+
+@pytest.mark.asyncio
+async def test_stream_derives_method_fqns_from_tagged_class(monkeypatch):
+    stream = BamlStream._from_pyhandle(
+        typing.cast(BamlPyHandle, object()), "test.stream.Custom"
+    )
+    monkeypatch.setattr(BamlStream, "_call_sync", lambda _self, fqn: fqn)
+
+    async def capture_async(_self, fqn):
+        return fqn
+
+    monkeypatch.setattr(BamlStream, "_call_async", capture_async)
+
+    assert stream.next() == "test.stream.Custom.next"
+    assert stream.final() == "test.stream.Custom.final"
+    assert await stream.next_async() == "test.stream.Custom.next"
+    assert await stream.final_async() == "test.stream.Custom.final"

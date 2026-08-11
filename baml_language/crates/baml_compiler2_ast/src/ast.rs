@@ -1500,8 +1500,9 @@ pub enum Item {
 pub enum DeclarativeMeta {
     /// LLM function metadata (client name, prompt template).
     /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
-    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
-    /// while this field preserves the original metadata for Jinja type-checking.
+    /// The body is desugared to a synthetic `Expr` that constructs an
+    /// `ai.FunctionSpec` and runs it through `ai.Agent`, while this field
+    /// preserves the original declaration metadata.
     Llm(LlmBodyDef),
 }
 
@@ -1635,7 +1636,7 @@ pub struct LlmBodyDef {
     /// []`). A non-literal expression (`tools shared()`) counts as `true`
     /// even if it evaluates empty — the compile-time signal is conservative.
     /// PPIR skips `$stream` synthesis when set (streaming does not run the
-    /// tool loop); `ai.from_spec`'s runtime empty-toolbox check covers the
+    /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
     /// dynamic cases.
     pub has_tools: bool,
     pub span: TextRange,

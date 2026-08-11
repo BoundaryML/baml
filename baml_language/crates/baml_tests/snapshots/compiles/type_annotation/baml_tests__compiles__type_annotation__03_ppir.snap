@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35502
 ---
 === PPIR ===
 type user.MetaAlias = type
@@ -10,7 +9,7 @@ type user.MetaList$stream = unknown[]
 type user.MetaUnion = type | string
 type user.MetaUnion$stream = unknown | string
 function user.test_type_annotation(function_name: string) -> string  [expr] {
-  { let t: type = baml.llm.get_return_type(function_name); return "ok" }
+  { let t: type = baml.prompt.get_return_type(function_name); return "ok" }
 }
 class user.MetaField {
   type: type
@@ -28,7 +27,7 @@ class user.RiskFactor$stream {
 }
 enum user.Kind {type, other}
 function user.test_let_binding(function_name: string) -> string  [expr] {
-  { let t: type = baml.llm.get_return_type(function_name); return "ok" }
+  { let t: type = baml.prompt.get_return_type(function_name); return "ok" }
 }
 function user.test_list(function_name: string) -> string  [expr] {
   { let ts: type[] = []; return "ok" }
@@ -43,7 +42,7 @@ function user.test_param(t: type) -> string  [expr] {
   { return "ok" }
 }
 function user.test_return_type(function_name: string) -> type  [expr] {
-  { return baml.llm.get_return_type(function_name) }
+  { return baml.prompt.get_return_type(function_name) }
 }
 function user.test_union(function_name: string) -> string  [expr] {
   { let t: type | string = "hello"; return "ok" }

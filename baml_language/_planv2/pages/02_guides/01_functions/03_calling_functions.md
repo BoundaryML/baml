@@ -27,8 +27,8 @@ let trip: Itinerary = ai.Agent<Itinerary>
     .value;
 ```
 
-The desugared form is not implemented yet; write it manually where you
-need it.
+This is the compiler's direct-call desugaring. Use the explicit form when you
+need the full `RunResult` rather than only its value.
 
 ## One-turn functions
 

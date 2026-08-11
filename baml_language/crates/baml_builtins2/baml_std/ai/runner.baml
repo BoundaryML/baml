@@ -114,7 +114,7 @@ class Agent<Out> {
     ) -> ModelTurn {
         let turn = c.invoke(
             ModelTurnInput {
-                prompt: spec.prompt(),
+                prompt: spec.prompt_template,
                 journal: j,
                 toolbox: spec.tools(),
                 output_type: spec.output_type(),

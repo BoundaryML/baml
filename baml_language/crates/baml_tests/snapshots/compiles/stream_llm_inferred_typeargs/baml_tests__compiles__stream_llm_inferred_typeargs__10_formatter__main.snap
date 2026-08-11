@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 // TODO(stream-migration): this project pinned the call shape of the removed
-// `baml.llm.stream_llm_function<TStream, TFinal>` machinery (inference-reliant
+// `baml.prompt.stream_llm_function<TStream, TFinal>` machinery (inference-reliant
 // call sites without explicit type args). The `$stream`/`$parse_stream`
 // companions and `stream_llm_function` were removed with the legacy LLM path.
 // When streaming returns, restore the inferred-typeargs call-shape pin from

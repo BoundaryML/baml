@@ -8,18 +8,18 @@ source: crates/baml_tests/src/generated_tests.rs
 
 // Negative case: assigning a `type` value to `int` must now diagnose.
 function assign_type_to_int(function_name: string) -> int {
-    let x: int = baml.llm.get_return_type(function_name);
+    let x: int = baml.prompt.get_return_type(function_name);
     return x;
 }
 
 // Negative case: passing a `type` value where a string is expected must diagnose.
 function pass_type_as_string(function_name: string) -> string {
-    let t = baml.llm.get_return_type(function_name);
+    let t = baml.prompt.get_return_type(function_name);
     return t;
 }
 
 // Positive case: `type`-to-`type` continues to type-check cleanly.
 function type_to_type(function_name: string) -> type {
-    let t: type = baml.llm.get_return_type(function_name);
+    let t: type = baml.prompt.get_return_type(function_name);
     return t;
 }

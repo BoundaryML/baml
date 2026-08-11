@@ -22,12 +22,34 @@ takes a `"provider/model"` string (compile-time-mapped; unknown prefixes
 are errors) or any expression evaluating to `ai.Client`, and
 `client Name = <expr>;` declares a named client value initialized once
 at program start. The legacy forms — `client<llm>` blocks,
-`retry_policy`, Jinja `#"..."#` prompts, `${role(...)}` markers — are
+`retry_policy`, and Jinja `#"..."#` prompts — are
 compile errors with migration hints. Companions: `$spec`,
-`$render_prompt` (plain text), `$parse`, and `$stream` (StreamingClient
-providers). Provider construction is pure: credentials resolve from the
-environment at request time, so building specs and declaring clients
-never touches env.
+`$render_prompt` (structural `ai.Prompt`), `$parse`, and
+`$stream` (StreamingClient providers). Provider construction is pure:
+credentials resolve from the environment at request time, so building
+specs and declaring clients never touches env.
+
+## Prompt rendering contract
+
+`ai.FunctionSpec.prompt_template` holds a `(string) -> ai.Prompt` template closure.
+`spec.prompt(output_format = output_format)` invokes that closure, and
+`<Fn>$render_prompt(...)` returns the same structural prompt with the function's
+output schema supplied automatically. There is no `ai.Prompt.render_text`.
+
+The compiler lowers an LLM function's backtick prompt through the same
+tagged-template assembler as the builtin `prompt` tag:
+
+- template parts remain ordered;
+- `${role("system")}`, `${role("user")}`, and other role markers start new
+  prompt messages;
+- interpolated media remains structural in the Rust-backed prompt data;
+- ordinary values retain normal interpolation and `baml.ToString` behavior.
+
+`Prompt.messages()` is the provider-facing role/content projection and
+`Prompt.text()` is the readable, role-headed projection for display or a
+single-string transport. OpenAI, Anthropic, and Google lower messages into
+their own wire shapes. Claude Code alone calls `.text()`, at the final CLI
+boundary because `claude -p` accepts one prompt string.
 
 ## Layout
 
@@ -64,6 +86,10 @@ infisical run --env=test -- ../target/debug/baml-cli run -e 'live_anthropic()'
 infisical run --env=test -- ../target/debug/baml-cli run -e 'live_google()'
 ../target/debug/baml-cli run -e 'live_claude_code()'   # uses the CLI's own login
 
+# minimal integration gate: one tool loop through every configured provider
+infisical run --env=test -- ../target/debug/baml-cli run --output-format json \
+  -e '[live_openai(), live_anthropic(), live_google(), live_claude_code()]'
+
 # MCP, both forms (no API key; npx fetches the everything server):
 ../target/debug/baml-cli run -e 'live_mcp_tools()'              # mcp: journaled tools
 ../target/debug/baml-cli run -e 'live_claude_code_dynamic_mcp()' # harness: model attaches mid-run
@@ -86,7 +112,11 @@ return a typed `Itinerary`.
   committed re-ask — the failed attempt, its usage, and the correction
   request are journal events, and a repair attempt does not consume a step.
 - The parse-feedback how-to works from public primitives only
-  (`spec.prompt()`, `Journal.append_all`, `UserMessage`, `client.invoke`).
+  (`spec.prompt_template`, `Journal.append_all`, `UserMessage`, `client.invoke`).
+- `@spec().prompt(...)` and `$render_prompt` return `ai.Prompt` values
+  with authored message roles intact; media survives in the underlying Rust
+  AST. Provider request-shape tests prove OpenAI, Anthropic, and Google consume
+  those messages instead of receiving one flattened instruction string.
 - `Retry` replays Safe network failures, never resends a rejected request;
   `Fallback` advances past a dead member. `FlakyClient` in the tests is the
   minimal custom client.
@@ -104,7 +134,13 @@ return a typed `Itinerary`.
   the equals form matters because the flag is variadic and would swallow
   the trailing prompt argument).
 
-## Deviations from the BEP pages (to sync back)
+## Reference implementation status
+
+The BEP pages incorporate the reference-derived behavior below: structural
+prompt rendering, provider-specific lowering, pure client construction,
+committed repair events, boundary decoding, and the concrete event fields.
+Items explicitly described as unimplemented are remaining implementation gaps;
+they do not replace the intended BEP surface.
 
 1. `client` is a keyword: `spec.client()` cannot exist; the impl exposes the
    `default_client` field. The `Agent.client` FIELD works everywhere,
@@ -117,19 +153,26 @@ return a typed `Itinerary`.
    `tool_errors`; this is what makes "per-tool wins" coherent.
 3. `ToolUse.args` is `map<string, unknown>` and `ToolCompleted.output` /
    `FinalProduced.value_json` are JSON strings — not `json`-typed fields.
-4. `Prompt` has `render_text` only; the media `InstructionPart[]` form and
-   the `Media` content block are not implemented (no media in phase 1
-   fixtures).
-5. Wire APIs constrain how a journal may open. Gemini rejects
-   `systemInstruction` + a journal that opens with a function-call turn, so
-   the Google client sends the instructions as leading user content on
-   EVERY turn. Anthropic requires the first message to be user-role, which
-   a committed first-step repair violates, so the Anthropic client leads
-   with the instructions as a user message whenever the lowered journal
-   does not start with one (`tests/request_shapes.baml`).
-6. `resolve` lives in root, not `ai.clients`: the core namespace never
-   depends on the providers. `register()` needs process-global state and is
-   deferred.
+4. `FunctionSpec.prompt(...)` and `$render_prompt` return the Rust-backed
+   `ai.Prompt`; `render_text` is gone. Role markers remain ordered
+   messages and interpolated input media remains structural. `messages()` is
+   used for provider-specific role lowering; `.text()` is an explicit readable
+   projection. The BEP retains `Media` as model-output content and its phase 2
+   return-type binding; the working reference does not implement that output
+   path yet.
+5. Wire APIs constrain how prompt messages and a journal may combine. OpenAI
+   prepends the rendered prompt messages to Responses `input`. Anthropic moves
+   authored system messages to its top-level `system` field and sends the
+   remaining prompt messages before the journal; when the resulting transcript
+   would not begin with a user message, system content becomes the leading user
+   fallback. Google maps assistant to `model`, uses `systemInstruction` for
+   authored system messages, and likewise uses a leading-user fallback for a
+   system-only or assistant-first prompt. These policies live in the provider
+   clients rather than in `ai.Prompt`.
+6. The intended public surface remains `ai.clients.resolve/register`. In the
+   working reference, `resolve` is a root fixture so the core namespace does
+   not depend on providers, and `register()` remains deferred because it needs
+   process-global state.
 7. Model defaults are real models: `gpt-4o-mini`, `claude-haiku-4-5`
    (3-5-haiku is retired), `gemini-2.5-flash`.
 8. `reflect.call_any` performs a boundary decode on dynamic arguments
@@ -167,7 +210,7 @@ return a typed `Itinerary`.
 15. `ClaudeCodeClient` is a harness client over `baml.sys.start_process`
     (ported from the old repo; streams the CLI's full stream-json event
     transcript live as log lines) — no HTTP.
-    The output contract is native (`--json-schema`, `render_text("")`), BAML
+    The output contract is native (`--json-schema`, `render("").text()`), BAML
     tools ride the `outcome` envelope, and two protocol lines are required
     in practice: "no tool results yet means outcome MUST be calls" (haiku
     otherwise answers directly and invents data) and "catalog tools are NOT

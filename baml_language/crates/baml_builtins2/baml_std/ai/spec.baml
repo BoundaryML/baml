@@ -3,15 +3,54 @@
 // No journal, no conversation, no wire state.
 // Mirrors _planv2/pages/02_guides/02_specs_and_runners/01_specs.md.
 
-// The function's prompt with arguments bound but nothing rendered. The
-// template closure receives the output-format text to substitute at the
-// ${ctx.output_format} position (empty when the contract goes on the wire).
-class Prompt {
-    template: (string) -> string throws never,
+/// A single chat message in a rendered prompt.
+class PromptMessage {
+    /// The chat role, e.g. "system", "user", or "assistant". Empty for
+    /// role-less content.
+    role: string,
+    /// The message's rendered text. Media parts use a readable placeholder.
+    content: string,
+}
 
-    function render_text(self, output_format: string) -> string {
-        self.template(output_format)
+/// The rendered, provider-neutral prompt passed to clients. Roles split the
+/// prompt into messages and media remains structural until a provider lowers
+/// it to its wire format.
+class Prompt {
+    _data $rust_type
+
+    /// Render the prompt as readable text. Message roles are emitted as headers.
+    //baml:vm
+    function text(self) -> string throws never {
+        $rust_function
     }
+
+    /// Return the ordered chat messages used by provider request builders.
+    //baml:mut_vm
+    function messages(self) -> PromptMessage[] throws never {
+        $rust_function
+    }
+
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.text()
+        }
+    }
+}
+
+/// Standalone tagged prompt constructor. The returned closure renders a
+/// structural `ai.Prompt` for the supplied low-level prompt context.
+//baml:tagged_string
+function prompt(
+    body: (
+        role: (string) -> baml.prompt.Role throws never,
+        ctx: baml.prompt.Context,
+    ) -> baml.TaggedString throws never,
+) -> (baml.prompt.Context) -> Prompt throws never {
+    let render = (ctx: baml.prompt.Context) -> {
+        let tagged = body(baml.prompt.make_role, ctx)
+        root.internal.assemble_prompt(tagged.parts, tagged.values)
+    }
+    render
 }
 
 // One unit of model work, bound and unrun. Immutable; getters only.
@@ -22,7 +61,7 @@ class Prompt {
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
-    prompt_template: Prompt,
+    prompt_template: (string) -> Prompt throws never,
     toolbox: root.tools.Toolbox,
     default_client: Client,
 
@@ -38,8 +77,8 @@ class FunctionSpec<Out> {
         reflect.type_of<Out>()
     }
 
-    function prompt(self) -> Prompt {
-        self.prompt_template
+    function prompt(self, output_format: string = "") -> Prompt {
+        self.prompt_template(output_format)
     }
 
     function tools(self) -> root.tools.Toolbox {

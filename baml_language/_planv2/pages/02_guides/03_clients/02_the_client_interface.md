@@ -33,7 +33,7 @@ in a later phase — without the runner ever seeing a wire request.
 
 ```baml
 class ModelTurnInput {
-    prompt: Prompt,    // the function's template with arguments bound; not rendered
+    prompt: (string) -> Prompt throws never, // bound template; the client renders it
     journal: Journal,        // the run so far; the transcript source
     toolbox: Toolbox,        // the active tools
     output_type: type,       // the return type as a runtime type value
@@ -51,23 +51,25 @@ request.
 Four decisions belong to the client, and different wire APIs make them
 differently:
 
-- **Output-contract placement.** The schema can render into the prompt
-  as text (`prompt.render(wire.render_output_format(input.output_type))`)
-  or travel in the request body while the prompt's schema slot renders
-  empty. In this phase the built-in clients render it as text; native
+- **Output-contract placement.** The schema can render into the structural
+  prompt (`prompt(wire.render_output_format(input.output_type))`)
+  or travel in the request body while the prompt's schema slot renders empty.
+  In this phase the built-in clients render it into prompt text; native
   body placement arrives as later values of their `output_mode` field
   (`05_the_built_in_clients.md`).
 - **Output-format dialect.** The text at `${ctx.output_format}` is the
   client's rendering of the schema, not a fixed string.
 - **Tool lowering.** Tool schemas lower to the wire API's shape: flat
   function objects, `input_schema` blocks, or `functionDeclarations`.
-- **Transcript lowering.** Journal events lower to native messages
-  after the instructions: assistant turns from content blocks, tool
-  results by call id in the API's result format, roles per the API's
-  role set. On a first turn with an empty journal, an API that
-  requires a user message may receive the instructions as the sole
-  user message, and a wire API may require the instructions as the
-  leading user content on every turn, as Gemini does
+- **Prompt and transcript lowering.** Invoking `input.prompt(schema_text)` produces ordered
+  messages. The client maps their roles and parts to its wire format, then
+  appends the journal transcript: assistant turns from content blocks, tool
+  results by call id in the API's result format, and roles per the API's role
+  set. OpenAI places all prompt messages at the front of Responses `input`.
+  Anthropic uses top-level `system` unless the combined messages need its
+  system content as a leading-user fallback. Gemini uses
+  `systemInstruction` for a normal user-first prompt and a leading-user
+  fallback for a system-only or assistant-first prompt
   (`05_the_built_in_clients.md`).
 
 The concrete mappings for the built-in clients, with the wire bodies,

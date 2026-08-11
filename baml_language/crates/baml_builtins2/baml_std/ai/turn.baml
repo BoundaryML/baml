@@ -4,7 +4,9 @@
 // Mirrors _planv2/pages/02_guides/03_clients/02_the_client_interface.md.
 
 class ModelTurnInput {
-    prompt: Prompt,
+    // The bound prompt template. The client supplies the output-format text
+    // appropriate for its own wire format and receives one structural prompt.
+    prompt: (string) -> Prompt throws never,
     journal: Journal,
     toolbox: root.tools.Toolbox,
     output_type: type,
@@ -42,4 +44,3 @@ interface Client {
     function id(self) -> string throws never
     function invoke(self, input: ModelTurnInput) -> ModelTurn throws unknown
 }
-

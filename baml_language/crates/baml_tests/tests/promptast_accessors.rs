@@ -1,4 +1,4 @@
-//! B-627 — `baml.llm.PromptAst` readable accessors.
+//! B-627 — `ai.Prompt` readable accessors.
 //!
 //! `PromptAst` (returned by `<Fn>$render_prompt` and the `prompt` tag) is a
 //! `$rust_type`-backed handle. Before B-627 it had no way to read the rendered
@@ -15,8 +15,8 @@ fn prompt_expr_src(expr: &str) -> String {
     format!(
         r#"
 function main() -> string {{
-  let cc = baml.llm.ContextClient {{ name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }}
-  let ctx = baml.llm.Context {{ client: cc, tags: {{}} }}
+  let cc = baml.prompt.ContextClient {{ name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }}
+  let ctx = baml.prompt.Context {{ client: cc, tags: {{}} }}
   let render = prompt`${{role("system")}}You are helpful.${{role("user")}}Hi World!`
   let ast = render(ctx)
   {expr}
@@ -71,12 +71,12 @@ async fn messages_expose_role_and_content() {
 
 #[tokio::test]
 async fn messages_yields_promptmessage_instances() {
-    // The element type is the new `baml.llm.PromptMessage` class.
+    // The element type is the new `ai.PromptMessage` class.
     let output = baml_test!(
         r#"
-function main() -> baml.llm.PromptMessage[] {
-  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-  let ctx = baml.llm.Context { client: cc, tags: {} }
+function main() -> ai.PromptMessage[] {
+  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
+  let ctx = baml.prompt.Context { client: cc, tags: {} }
   let render = prompt`Just a system prompt.`
   let ast = render(ctx)
   ast.messages()
@@ -89,13 +89,13 @@ function main() -> baml.llm.PromptMessage[] {
             match &items[0] {
                 BexExternalValue::Instance {
                     class_name, fields, ..
-                } if class_name == "baml.llm.PromptMessage" => {
+                } if class_name == "ai.PromptMessage" => {
                     assert_eq!(
                         fields.get("content"),
                         Some(&BexExternalValue::from("Just a system prompt."))
                     );
                 }
-                other => panic!("expected a baml.llm.PromptMessage instance, got {other:?}"),
+                other => panic!("expected a ai.PromptMessage instance, got {other:?}"),
             }
         }
         other => panic!("expected a PromptMessage array, got {other:?}"),

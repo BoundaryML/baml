@@ -8,10 +8,15 @@ use bex_vm_types::{
 };
 
 use super::{
-    BamlNamespaceLlm, Continuation, NativeCallResult, PackageBamlImpl, make_to_string_callee,
+    Continuation, NativeCallResult, make_to_string_callee,
     root::{StringRenderState, StructuralRenderSink, collect_to_string_overrides, render_to_sink},
 };
-use crate::BexVm;
+use crate::{
+    BexVm,
+    package_ai::{
+        BamlClassPrompt, BamlNamespaceInternal, BamlPackageAi, PackageAiImpl, view as ai_view,
+    },
+};
 
 #[derive(Default)]
 struct PromptContentSink {
@@ -76,7 +81,7 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
         _ => return None,
     };
     let (name_index, metadata_index) = match vm.get_object(class_ptr) {
-        Object::Class(class) if class.name.render_dotted(false) == "baml.llm.Role" => (
+        Object::Class(class) if class.name.render_dotted(false) == "baml.prompt.Role" => (
             class.fields.iter().position(|field| field.name == "name")?,
             class
                 .fields
@@ -142,7 +147,7 @@ impl PromptAssembly {
         }
         .merge_adjacent();
 
-        let prompt_ast_class = vm.resolve_class("baml.llm.PromptAst");
+        let prompt_ast_class = vm.resolve_class("ai.Prompt");
         let data = Value::object(vm.alloc_rust_data(ast));
         NativeCallResult::Done(Value::object(
             vm.alloc_instance(prompt_ast_class, vec![data]),
@@ -200,8 +205,35 @@ impl Continuation for PromptAssembly {
     }
 }
 
-impl BamlNamespaceLlm for PackageBamlImpl {
-    fn assemble_prompt_ast(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
+impl BamlClassPrompt for PackageAiImpl {
+    fn text(vm: &BexVm, prompt: &ai_view::Prompt<'_>) -> bex_str::BexStr {
+        bex_str::BexStr::from(prompt._data::<PromptAst>(vm).render_text())
+    }
+
+    fn messages(vm: &mut BexVm, prompt: &Value) -> Vec<Value> {
+        let messages = {
+            let instance = vm
+                .as_instance(prompt)
+                .expect("ai.Prompt.messages receiver must be an ai.Prompt instance");
+            let data = instance.load_field(0);
+            vm.as_rust_data::<PromptAst>(&data)
+                .expect("ai.Prompt._data must contain baml_builtins2::PromptAst")
+                .to_messages()
+        };
+        let message_class = vm.resolve_class("ai.PromptMessage");
+        messages
+            .into_iter()
+            .map(|(role, content)| {
+                let role = Value::object(vm.alloc_string(role));
+                let content = Value::object(vm.alloc_string(content));
+                Value::object(vm.alloc_instance(message_class, vec![role, content]))
+            })
+            .collect()
+    }
+}
+
+impl BamlNamespaceInternal for PackageAiImpl {
+    fn assemble_prompt(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
         let mut pending = Vec::new();
         for value in values.iter().copied() {
             if prompt_role(vm, value).is_none() {
@@ -218,3 +250,5 @@ impl BamlNamespaceLlm for PackageBamlImpl {
         .dispatch_next(vm)
     }
 }
+
+impl BamlPackageAi for PackageAiImpl {}

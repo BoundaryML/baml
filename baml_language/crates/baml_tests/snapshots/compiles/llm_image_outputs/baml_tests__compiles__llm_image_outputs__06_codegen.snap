@@ -44,19 +44,16 @@ function user.GenerateImage$parse(json: string) -> image {
     return
 }
 
-function user.GenerateImage$render_prompt(prompt: string) -> string {
+function user.GenerateImage$render_prompt(prompt: string) -> ai.Prompt {
     load_var prompt
     call user.GenerateImage$spec
-    store_var _3
-    load_type image
-    load_var _3
-    call ai.FunctionSpec.prompt
     store_var _2
     load_type image
     call ai.wire.render_output_format
-    store_var _5
-    load_var2 2 4
-    call ai.Prompt.render_text
+    store_var _3
+    load_type image
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -67,7 +64,7 @@ function user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _4
     load_const "GenerateImage"
     load_deref ?1
     load_const "prompt"
@@ -76,15 +73,14 @@ function user.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
     alloc_map 1
     load_var prompt
     make_closure .<lambda(GenerateImage$spec, 0)>, 1
-    init_instance ai.Prompt .template
-    load_var _5
+    load_var _4
     load_global user.OpenAIImageResponses
     load_type image
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.GenerateImage$stream(prompt: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<image, image> {
+function user.GenerateImage$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image, image> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -139,19 +135,16 @@ function user.GenerateImageSet$parse(json: string) -> image[] {
     return
 }
 
-function user.GenerateImageSet$render_prompt(prompt: string) -> string {
+function user.GenerateImageSet$render_prompt(prompt: string) -> ai.Prompt {
     load_var prompt
     call user.GenerateImageSet$spec
-    store_var _3
-    load_type image[]
-    load_var _3
-    call ai.FunctionSpec.prompt
     store_var _2
     load_type image[]
     call ai.wire.render_output_format
-    store_var _5
-    load_var2 2 4
-    call ai.Prompt.render_text
+    store_var _3
+    load_type image[]
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -162,7 +155,7 @@ function user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> 
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _4
     load_const "GenerateImageSet"
     load_deref ?1
     load_const "prompt"
@@ -171,15 +164,14 @@ function user.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> 
     alloc_map 1
     load_var prompt
     make_closure .<lambda(GenerateImageSet$spec, 0)>, 1
-    init_instance ai.Prompt .template
-    load_var _5
+    load_var _4
     load_global user.OpenAIImageResponses
     load_type image[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.GenerateImageSet$stream(prompt: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<image[], image[]> {
+function user.GenerateImageSet$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image[], image[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -234,19 +226,16 @@ function user.GenerateMixedImageNarrative$parse(json: string) -> (image | string
     return
 }
 
-function user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> string {
+function user.GenerateMixedImageNarrative$render_prompt(prompt: string) -> ai.Prompt {
     load_var prompt
     call user.GenerateMixedImageNarrative$spec
-    store_var _3
-    load_type (image | string)[]
-    load_var _3
-    call ai.FunctionSpec.prompt
     store_var _2
     load_type (image | string)[]
     call ai.wire.render_output_format
-    store_var _5
-    load_var2 2 4
-    call ai.Prompt.render_text
+    store_var _3
+    load_type (image | string)[]
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -257,7 +246,7 @@ function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpe
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _4
     load_const "GenerateMixedImageNarrative"
     load_deref ?1
     load_const "prompt"
@@ -266,15 +255,14 @@ function user.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpe
     alloc_map 1
     load_var prompt
     make_closure .<lambda(GenerateMixedImageNarrative$spec, 0)>, 1
-    init_instance ai.Prompt .template
-    load_var _5
+    load_var _4
     load_global user.OpenAIImageResponses
     load_type (image | string)[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<(image | string)[], (image | string)[]> {
+function user.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
     load_var client
     load_const <omitted>
     cmp_op ==

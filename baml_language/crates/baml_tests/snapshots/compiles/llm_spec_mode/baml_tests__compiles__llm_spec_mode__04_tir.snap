@@ -19,12 +19,12 @@ function user.PlainChat(q: string, client: ai.Client | null = null) -> string th
   ai.Agent.new<string>(client = client).run(PlainChat$spec(q)).value : string
 }
 function user.PlainChat$spec(q: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<string>
 }
 lambda user.PlainChat$spec {
 }
-function user.PlainChat$render_prompt(q: string) -> string throws never {
-  PlainChat$spec(q).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
+function user.PlainChat$render_prompt(q: string) -> ai.Prompt throws never {
+  PlainChat$spec(q).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
 function user.PlainChat$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -33,12 +33,12 @@ function user.SpecAgent(q: string, client: ai.Client | null = null) -> user.Answ
   ai.Agent.new<Answer>(client = client).run(SpecAgent$spec(q)).value : user.Answer
 }
 function user.SpecAgent$spec(q: string) -> ai.FunctionSpec<user.Answer> throws never {
-  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([ai.tools.tool(double_it)]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<user.Answer>
+  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([ai.tools.tool(double_it)]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<user.Answer>
 }
 lambda user.SpecAgent$spec {
 }
-function user.SpecAgent$render_prompt(q: string) -> string throws never {
-  SpecAgent$spec(q).prompt().render_text(ai.wire.render_output_format(reflect.type_of<Answer>())) : string
+function user.SpecAgent$render_prompt(q: string) -> ai.Prompt throws never {
+  SpecAgent$spec(q).prompt(output_format = ai.wire.render_output_format(reflect.type_of<Answer>())) : ai.Prompt
 }
 function user.SpecAgent$parse(json: string) -> user.Answer throws never {
   baml.sap.parse<T>(json) : user.Answer
@@ -47,12 +47,12 @@ function user.NamedTools(q: string, client: ai.Client | null = null) -> user.Ans
   ai.Agent.new<Answer>(client = client).run(NamedTools$spec(q)).value : user.Answer
 }
 function user.NamedTools$spec(q: string) -> ai.FunctionSpec<user.Answer> throws never {
-  ai.FunctionSpec { spec_name: "NamedTools", args: map { "q": q }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new(more_tools()), default_client: anthropic.AnthropicClient.new(model = "claude-haiku-4-5") } : ai.FunctionSpec<user.Answer>
+  ai.FunctionSpec { spec_name: "NamedTools", args: map { "q": q }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new(more_tools()), default_client: anthropic.AnthropicClient.new(model = "claude-haiku-4-5") } : ai.FunctionSpec<user.Answer>
 }
 lambda user.NamedTools$spec {
 }
-function user.NamedTools$render_prompt(q: string) -> string throws never {
-  NamedTools$spec(q).prompt().render_text(ai.wire.render_output_format(reflect.type_of<Answer>())) : string
+function user.NamedTools$render_prompt(q: string) -> ai.Prompt throws never {
+  NamedTools$spec(q).prompt(output_format = ai.wire.render_output_format(reflect.type_of<Answer>())) : ai.Prompt
 }
 function user.NamedTools$parse(json: string) -> user.Answer throws never {
   baml.sap.parse<T>(json) : user.Answer
@@ -65,6 +65,6 @@ function user.build_spec(q: string) -> ai.FunctionSpec<user.Answer> throws never
 class user.Answer$stream {
   text: string | null
 }
-function user.PlainChat$stream(q: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream.from_spec(PlainChat$spec(q), client = client) : baml.llm.Stream<string | null, string>
+function user.PlainChat$stream(q: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(PlainChat$spec(q), client = client) : ai.stream.Stream<string | null, string>
 }

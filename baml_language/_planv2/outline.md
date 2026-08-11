@@ -69,9 +69,9 @@ _planv2/
   loops rewritten per application.
 - The approach — one typed function form; specs, runners, and clients
   as plain values; the journal as the single record.
-- What you do not get — no built-in sessions, steering, policies,
-  jobs, graph DSL, or streaming yet; each arrives later, and a custom
-  runner can build the run shapes today from public primitives.
+- What you do not get — no built-in sessions, steering, policies, jobs, or
+  graph DSL; streaming is an optional client capability, and a custom runner
+  can build other run shapes today from public primitives.
 - Relation to other systems — one paragraph each; details in
   `../05_appendix/01_comparisons.md`.
 
@@ -92,9 +92,10 @@ _planv2/
 
 - An LLM function is a typed function — prompt body, return type,
   `client:` field.
-- The prompt is the instructions — rendered fresh each turn; the
-  conversation lowers as messages after it; `${ctx.output_format}` is
-  the one placeholder; the first-turn mapping belongs to the client.
+- The prompt is structured messages — a fresh `ai.Prompt` each turn with
+  authored roles and media; the journal remains the transcript source;
+  `${ctx.output_format}` is the one placeholder; wire mapping belongs to the
+  client.
 - The return type is the contract — parsing and repair happen before
   user code sees the value.
 - Media arguments and outputs — media parameters lower as parts; a
@@ -168,8 +169,8 @@ _planv2/
   committing every attempt to the journal; the same loop is writable
   from public primitives.
 - `RunResult` — value, journal, usage.
-- Observing a run — `on_event`; deltas are out of scope until
-  streaming.
+- Observing a run — `on_event`; streaming deltas use the pull-based stream and
+  are not journal events.
 
 ### 02_specs_and_runners/03_writing_a_runner.md
 
@@ -199,10 +200,9 @@ _planv2/
 - The one override — `$client` at the call site; `Agent { client: }`
   is the same setting at the explicit layer, not a second way.
 - Constructing and deriving clients — clients are plain values;
-  `resolve` is a convenience over `new`, which defaults every
-  parameter including the environment credential; a class literal
-  gives full control; spread an existing client to change one option.
-  There is no separate client-registry mutation API.
+  `resolve` is a convenience over pure `new`, which defaults configuration and
+  resolves a null credential at request time; a class literal gives full
+  control; spread an existing client to change one option.
 
 ### 03_clients/02_the_client_interface.md
 
@@ -211,7 +211,8 @@ _planv2/
 - `ModelTurnInput` — prompt, journal, toolbox, output type; materials,
   not renderings.
 - The client owns the transformation — output-contract placement,
-  `ctx.output_format` dialect, tool lowering, transcript lowering.
+  `ctx.output_format` dialect, tool lowering, structural prompt lowering, and
+  transcript lowering.
 - `ModelTurn` and content blocks — `Text`, `Reasoning`, `ToolUse`,
   `Media`; the final candidate; `StopReason`.
 - Statelessness — every request rebuilt from the input; what this buys
@@ -266,9 +267,10 @@ _planv2/
   content blocks including thinking; `output_config` composes with
   tools, so no reserved function.
 - Google (`GoogleClient`) — `generateContent`; instructions as the
-  leading user content on every turn, never `systemInstruction`;
-  synthesized call ids; `responseJsonSchema` versus the
-  reserved-function fallback when tools are present.
+  authored `systemInstruction` for normal user-first prompts and a
+  leading-user fallback for system-only or assistant-first prompts;
+  synthesized call ids; `responseJsonSchema` versus the reserved-function
+  fallback when tools are present.
 - Media lowering — the per-provider argument table; rejected cells
   throw `Unsupported`; media output normalization is phase 2.
 - Claude Code (`ClaudeCodeClient`) — a harness client over the CLI as
@@ -295,7 +297,7 @@ entry notes the task.
 
 - `readme.md` — what belongs in this section; the page list.
 - `01_retry_a_failed_parse_with_feedback.md` — the feedback loop from
-  public primitives: `spec.prompt()`, `Journal.append_all`,
+  public primitives: `spec.prompt_template`, `Journal.append_all`,
   `UserMessage`, `client.invoke`; every attempt is committed.
 - `02_test_without_a_network.md` — `ScriptedClient` drives the loop;
   assert on `received()`; tools still execute for real.
@@ -324,8 +326,8 @@ entry notes the task.
 - `Client`, `ModelTurnInput`, `ModelTurn` — the interface and the
   turn contract.
 - Content blocks and `StopReason` — shapes and validity rules.
-- `Prompt` — the render surface a client calls; returns the
-  instruction parts; `render_text` for text-only wire APIs.
+- `Prompt` — the render surface a client calls; returns a structural
+  `ai.Prompt` for provider-specific lowering.
 - `Journal` and events — the journal API; pointer to the event
   catalog.
 - `tools` — `Tool`, `Toolbox`, constructors.
@@ -404,9 +406,9 @@ entry notes the task.
 - Wrapper clients for reliability versus runner-level retry.
 - Optional capability interfaces versus a capabilities struct.
 - Deterministic synthesized call ids versus counters in state.
-- The prompt is the instructions; no transcript placeholder — the
-  marker's position was wire fiction; trailing content returns as
-  injected messages with sessions.
+- The prompt is structural; no transcript placeholder — the marker's position
+  was wire fiction; role markers and media remain in `ai.Prompt`, while
+  trailing transcript content returns as injected messages with sessions.
 - Prompt-mode tools are a wrapper client, not a client mode — v4's
   `tool_mode` flag rejected; one composable `PromptTools`
   implementation in phase 2.
@@ -415,9 +417,9 @@ entry notes the task.
 - No sessions in this BEP — what forced the cut, what re-entry
   requires.
 - Adjustments forced by the reference implementation — the `client`
-  keyword and `default_client`; nullable per-tool `on_error`; Gemini's
-  every-turn instructions rule; float widening in argument validation;
-  events carrying serialized JSON pending a `json`-typed event design.
+  keyword and `default_client`; pure construction and request-time credentials;
+  nullable per-tool `on_error`; structural prompt/provider lowering; lossless
+  numeric and array boundary decoding; explicit serializable event fields.
 - MCP: journaled tools are canonical; harness attachment is client
   configuration — `root.mcp` over `raw_tool` versus
   `ClaudeCodeClient.mcp_servers`; why both exist; `raw_tool` as the
@@ -430,9 +432,9 @@ entry notes the task.
 - The two invariants — structured assistant content; the journal alone
   renders a complete request; why every later phase is additive if
   they hold.
-- Phase 2 — fidelity and streaming: replay capsules and wire domains;
-  native structured-output modes; `StreamingClient`; the `PromptTools`
-  wrapper; media-output binding.
+- Phase 2 — fidelity and other extensions: replay capsules and wire domains;
+  native structured-output modes; shipped `StreamingClient`; the
+  `PromptTools` wrapper; media-output binding.
 - Phase 3 — continuations: journaled response-chain checkpoints;
   context policy on the turn input; delta rendering; classified
   fallback.

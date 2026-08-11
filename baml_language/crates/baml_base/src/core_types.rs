@@ -180,7 +180,7 @@ impl TypePath {
         Self(vec![name])
     }
 
-    /// Build a `TypePath` from a compile-time dotted literal like `"baml.llm.Client"`.
+    /// Build a `TypePath` from a compile-time dotted literal like `"ai.Prompt"`.
     /// Use only at synthetic construction sites; runtime input should come from
     /// already-segmented data (e.g., parser tokens).
     pub fn from_dotted(s: &str) -> Self {

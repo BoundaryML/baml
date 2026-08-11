@@ -3,10 +3,10 @@
 //! Rust-level tests drive `sys_llm` template rendering directly; BAML-level
 //! tests drive the compiler-generated `<Fn>$render_prompt` companion, which
 //! renders the spec's prompt (with the return type's output format) as a
-//! plain string.
+//! structural `ai.Prompt`.
 //!
 //! Removed with the legacy LLM path (see git history): the
-//! `baml.llm.render_prompt`/`build_request`/`call_llm_function` builtin flow
+//! `baml.prompt.render_prompt`/`build_request`/`call_llm_function` builtin flow
 //! over declared `client<llm>` blocks and Jinja prompts, and the
 //! `template_string`-in-prompt expansion tests (`template_string` calls do not
 //! bind inside ai-world backtick prompts).
@@ -261,8 +261,8 @@ class Person {
     );
 }
 
-/// The `$render_prompt` companion renders the prompt offline as a plain
-/// string. Provider construction is pure in the ai world (credentials
+/// The `$render_prompt` companion renders the prompt offline as an `ai.Prompt`.
+/// Provider construction is pure in the ai world (credentials
 /// resolve from the environment at request time), so rendering never needs
 /// an `api_key` env var — the B-626 guarantee, now structural.
 #[tokio::test]
@@ -284,7 +284,7 @@ function Extract(raw: string) -> C {
 }
 
 function get_prompt() -> string {
-    Extract$render_prompt("hello")
+    Extract$render_prompt("hello").text()
 }
 "##;
 
@@ -331,7 +331,7 @@ function Greet(name: string) -> string {
 }
 
 function get_prompt() -> string {
-    Greet$render_prompt("World")
+    Greet$render_prompt("World").text()
 }
 "##;
 
@@ -384,7 +384,7 @@ function ExtractAny() -> json {
 }
 
 function get_prompt() -> string {
-    ExtractAny$render_prompt()
+    ExtractAny$render_prompt().text()
 }
 "##;
 

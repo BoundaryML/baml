@@ -89,7 +89,7 @@ test "$stream yields progressive partials and a typed final value" {
     let partials: Contact$stream[] = [];
     while (true) {
         match (stream.next()) {
-            let done: baml.stream.StreamFinished => break,
+            let done: ai.stream.Done => break,
             let p: Contact$stream => {
                 partials.push(p);
                 null
@@ -102,7 +102,7 @@ test "$stream yields progressive partials and a typed final value" {
     let early = partials.at(0);
     assert.equal(early?.name ?? "", "Ada Lovelace");
     assert.is_true(early?.email == null);
-    // "call final() after StreamFinished" returns the full typed value
+    // Calling final() after Done returns the full typed value.
     let value = stream.final();
     assert.equal(value.name, "Ada Lovelace");
     assert.equal(value.email, "ada@example.com")
@@ -119,7 +119,7 @@ test "from_spec drives a spec directly through a streaming client" {
     let yields = 0;
     while (true) {
         match (stream.next()) {
-            let done: baml.stream.StreamFinished => break,
+            let done: ai.stream.Done => break,
             _ => {
                 yields += 1;
                 null

@@ -47,7 +47,7 @@ pub struct NativeBuiltin {
 impl NativeBuiltin {
     /// Derive the `SysOp` enum variant name from the path.
     /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
-    /// `"baml.env.get"` → `"BamlEnvGet"`, `"baml.llm.render_prompt"` → `"BamlLlmRenderPrompt"`.
+    /// `"baml.env.get"` → `"BamlEnvGet"`, `"ai.Prompt.text"` → `"AiPromptText"`.
     pub fn sys_op_variant_name(&self) -> String {
         self.path
             .split('.')

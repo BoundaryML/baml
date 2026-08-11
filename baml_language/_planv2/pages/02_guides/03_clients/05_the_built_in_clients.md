@@ -103,7 +103,6 @@ The first turn of `PlanTrip("2 weeks in Japan")`:
 {
   "model": "gpt-5.6",
   "store": false,
-  "instructions": "You are a travel agent. The brief: 2 weeks in Japan\nAnswer with JSON matching this schema: ...",
   "input": [
     { "role": "user", "content": "You are a travel agent. The brief: 2 weeks in Japan\n..." }
   ],
@@ -130,9 +129,11 @@ The first turn of `PlanTrip("2 weeks in Japan")`:
 }
 ```
 
-On the first turn the journal is empty, so the instructions also stand
-as the sole user input item; on later turns `input` carries the
-lowered journal and the instructions render fresh into `instructions`.
+Invoking the bound prompt template produces ordered messages, which the client places first in
+`input`; the lowered journal follows them. Role-less prompt content maps to
+`user`, authored roles remain roles accepted by Responses, and an authored
+`tool` prompt role falls back to `user` because tool results use dedicated
+input-item shapes. The prompt renders fresh on every turn.
 
 The model calls a tool:
 
@@ -227,9 +228,13 @@ required `max_tokens` from the client's configuration.
 {
   "model": "claude-haiku-4-5",
   "max_tokens": 4096,
-  "system": "You are a travel agent. The brief: 2 weeks in Japan\n...",
   "messages": [
-    { "role": "user", "content": "You are a travel agent. The brief: 2 weeks in Japan\n..." }
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "You are a travel agent. The brief: 2 weeks in Japan\n..." }
+      ]
+    }
   ],
   "tools": [
     {
@@ -251,12 +256,13 @@ required `max_tokens` from the client's configuration.
 }
 ```
 
-The API requires a non-empty message list that starts with a user
-message. Whenever the lowered journal does not begin with one — the
-first turn, or a first step opened by a committed repair attempt — the
-instructions lead as a user message and `system` is omitted; otherwise
-`system` carries the fresh instructions and `messages` carries the
-lowered journal.
+The client extracts authored system prompt messages into Anthropic's top-level
+`system` blocks. Other prompt messages map to `user` or `assistant` and precede
+the lowered journal; role-less content maps to `user`, as in the example. The
+API requires a non-empty message list beginning with a user message. If the
+combined prompt and journal would not begin with one and system blocks are
+available, those blocks move into a leading user message and `system` is
+omitted. Otherwise the authored system blocks remain in `system`.
 
 The model calls a tool with interleaved content blocks:
 
@@ -363,13 +369,14 @@ the same codec.
 }
 ```
 
-The client never sends `systemInstruction`. The instructions render
-fresh into the leading user content of `contents` on every turn, and
-the lowered journal follows them. The API rejects a request whose
-lowered journal opens with a function-call turn ("function call turn
-must come immediately after a user turn or a function response turn"),
-so the first-turn mapping the other clients apply generalizes to every
-turn here.
+The client extracts authored system prompt messages into
+`systemInstruction`. Other prompt messages precede the lowered journal in
+`contents`: role-less content maps to `user`, authored assistant content maps
+to `model`, and other non-system roles map to `user`. If the resulting prompt
+would be system-only or assistant-first and system parts are available, those
+parts move into a leading user content instead of `systemInstruction`. This
+preserves Gemini's required leading-user shape without flattening an otherwise
+well-formed multi-message prompt.
 
 The model's calls arrive as parts of one candidate:
 
@@ -467,8 +474,9 @@ claude -p --output-format json --model haiku --permission-mode default \
     --no-session-persistence --tools "" --json-schema <schema> <prompt>
 ```
 
-- The output contract travels natively: the client passes an empty
-  string to `render_text` and sends the schema through `--json-schema`
+- The output contract travels natively: the client invokes the prompt template
+  with an empty string, projects the resulting `ai.Prompt` with `.text()`, and
+  sends the schema through `--json-schema`
   — the one shipped client whose contract is on the wire rather than
   in the prompt.
 - The CLI's `-p` mode takes a single prompt, so the journal folds into

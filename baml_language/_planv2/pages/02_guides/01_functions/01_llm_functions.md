@@ -30,14 +30,19 @@ An LLM function is the only place BAML talks to a model. Code that
 reaches a provider through raw HTTP records no journal and gets no
 typed parsing.
 
-## The prompt is the instructions
+## The prompt is structured messages
 
-The prompt template renders to one instructions string, fresh on every
-model turn, and the conversation so far lowers as messages after it.
-In a chat wire API the rendered prompt is the system prompt. There is
-no placeholder for the conversation; its position on the wire is the
-client's decision, not the template's
+The prompt template renders to a `ai.Prompt`, fresh on every
+model turn. It preserves ordered messages, authored roles, and media rather
+than flattening them into one instructions string. The conversation so far
+still comes from the journal; there is no placeholder for it in the template.
+How prompt messages and journal messages combine on the wire is the client's
+decision
 (`../../05_appendix/02_alternatives_considered.md`).
+
+`${role("system")}`, `${role("user")}`, and other role markers begin a new
+message in the rendered AST. Content before the first marker is role-less;
+the built-in clients lower that ordinary prompt content as a user message.
 
 One placeholder exists:
 
@@ -45,11 +50,13 @@ One placeholder exists:
   in the client's dialect. Include it wherever the model must produce
   the return type.
 
-On the first turn of a run there is no conversation yet. A wire API
-that requires a user message may receive the instructions as the sole
-user message on that turn, and a wire API may require the instructions
-as the leading user content on every turn, as Gemini does; the mapping
-belongs to the client
+On the first turn of a run there is no journal transcript yet, so the rendered
+prompt messages are the request's initial conversation. Anthropic normally
+moves authored system messages to its dedicated system field, but uses them as
+a leading user message when the combined prompt and journal would not begin
+with `user`. Gemini likewise uses `systemInstruction` for a normal user-first
+prompt and a leading-user fallback for a system-only or assistant-first prompt.
+The mapping belongs to the client
 (`../03_clients/02_the_client_interface.md`).
 
 ## The return type is the contract
@@ -68,8 +75,8 @@ produced, and the schema shows the model both.
 
 A parameter of a media type (`image`, `audio`, `pdf`, `video`)
 interpolates into the prompt as a media part, not as text. The
-instructions render as a part list, and the client lowers each media
-part in its wire API's format
+`ai.Prompt` retains the media in template order alongside text and role
+boundaries, and the client lowers each media part in its wire API's format
 (`../03_clients/05_the_built_in_clients.md`).
 
 A media return type works differently, because image data cannot ride

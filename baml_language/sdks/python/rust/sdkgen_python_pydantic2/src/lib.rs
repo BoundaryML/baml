@@ -98,7 +98,6 @@ enum RuntimePayload<'a> {
     SourceFiles(&'a [UserBamlFile]),
     Bytecode(&'a [u8], Option<&'a str>),
 }
-
 impl RuntimePayload<'_> {
     fn is_bytecode(self) -> bool {
         matches!(self, RuntimePayload::Bytecode(_, _))
@@ -168,7 +167,7 @@ fn to_source_code_internal(
     }
 
     // `baml/` always exists — even if no stdlib symbols route there,
-    // leaves that reference `baml.media.*` / `baml.llm.*` need the
+    // leaves that reference `baml.media.*` / `baml.prompt.*` need the
     // subpackage to import from. The root leaf itself is always emitted
     // as well. (25b2 Phase 2 relocated `_inlinedbaml.py` to the SDK
     // root; `baml/` is no longer load-bearing for the root init.)
@@ -2176,87 +2175,6 @@ mod tests {
         // `typing.Union[..., UNSET]` type expressions above (type checkers
         // reject `baml.UNSET` member access in a type position).
         assert!(pyi.contains("    from ..baml import UNSET as UNSET\n"));
-    }
-
-    #[test]
-    fn llm_default_client_argument_renders_in_function_and_companion_signatures() {
-        let mut pool: SymbolPool = HashMap::new();
-        let client_ty = class_ty(cg_name("baml", &["llm"], "Client"), vec![]);
-        let client_default = Some(FunctionArgumentDefault::Expression {
-            source: Some("GPT4".to_string()),
-        });
-        let make_args = |first_name: &str, first_ty: Ty| {
-            vec![
-                FunctionArgument {
-                    name: BaseName::new(first_name),
-                    docstring: None,
-                    ty: first_ty,
-                    default: None,
-                },
-                FunctionArgument {
-                    name: BaseName::new("client"),
-                    docstring: None,
-                    ty: client_ty.clone(),
-                    default: client_default.clone(),
-                },
-            ]
-        };
-
-        pool.insert(
-            cg_name("user", &["lorem"], "extract_resume"),
-            Symbol::Function(Function {
-                generic_params: Vec::new(),
-                name: BaseName::new("extract_resume"),
-                docstring: None,
-                arguments: make_args(
-                    "resume",
-                    Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                ),
-                return_type: Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
-                throws: None,
-                watchers: vec![],
-                origin: origin("x.baml", 0),
-            }),
-        );
-        pool.insert(
-            cg_name("user", &["lorem"], "extract_resume$build_request"),
-            Symbol::Function(Function {
-                generic_params: Vec::new(),
-                name: BaseName::new("extract_resume$build_request"),
-                docstring: None,
-                arguments: make_args(
-                    "resume",
-                    Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                ),
-                return_type: class_ty(cg_name("baml", &["http"], "Request"), vec![]),
-                throws: None,
-                watchers: vec![],
-                origin: origin("x.baml", 0),
-            }),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let py = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(py.contains(
-            "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"resume\"], [\"client\"])\n"
-        ));
-        assert!(py.contains(
-            "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"resume\"], [\"client\"])\n"
-        ));
-
-        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
-        assert!(pyi.contains(
-            "def extract_resume(resume: str, *, client: typing.Union[baml.llm.Client, UNSET] = UNSET) -> str: ...\n"
-        ));
-        assert!(pyi.contains(
-            "def extract_resume__build_request(resume: str, *, client: typing.Union[baml.llm.Client, UNSET] = UNSET) -> baml.http.Request: ...\n"
-        ));
     }
 
     #[test]

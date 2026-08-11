@@ -26,7 +26,7 @@ The registry maps each prefix to a factory:
 ```baml
 let c: Client = ai.clients.resolve("openai/gpt-5.6");
 // resolves to:
-// OpenAiClient { model: "gpt-5.6", api_key: baml.env.get_or_panic("OPENAI_API_KEY") }
+// OpenAiClient { model: "gpt-5.6", api_key: null, ... }
 ```
 
 The built-in prefixes and their credentials:
@@ -38,8 +38,9 @@ The built-in prefixes and their credentials:
 | `google` | `GoogleClient` | Gemini `generateContent` | `GOOGLE_API_KEY` |
 | `claude-code` | `ClaudeCodeClient` | the Claude Code CLI (local process) | the CLI's own login |
 
-A `client:` field resolves when the spec is created, so a missing
-credential fails at the call site, before any model turn.
+A `client:` field resolves when the spec is created, but built-in client
+construction does not read credentials. A missing credential fails only when
+the selected client invokes a request.
 
 In the reference implementation `resolve` lives in the application
 root rather than under `ai.clients`, so the core namespace never
@@ -95,9 +96,9 @@ methods.
 
 ## Constructing and deriving clients
 
-Clients are plain values, and `resolve` is a convenience for
-constructing one. `new` is the same thing with every parameter
-defaulted, including the credential from the environment:
+Clients are plain values, and `resolve` is a convenience for constructing one.
+`new` defaults configuration without reading the environment; a null
+credential resolves from the provider's environment variable at request time:
 
 ```baml
 let direct: Client = GoogleClient.new(model = "gemini-2.5-flash");

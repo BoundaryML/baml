@@ -198,48 +198,6 @@ namespace baml.json:
   function to<T>
   function to_json<T>
   function to_string<T>
-namespace baml.llm:
-  class AnthropicOptions { methods: [] }
-  class AzureOpenAiOptions { methods: [] }
-  class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_oneshot, execute_once_oneshot] }
-  enum ClientType
-  class Context { methods: [output_format_with] }
-  class ContextClient { methods: [] }
-  class ExecutionContext { methods: [] }
-  class GoogleAiOptions { methods: [] }
-  class MediaUrlHandler { methods: [] }
-  class OrchestrationStep { methods: [] }
-  class OutputFormat { methods: [] }
-  class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
-  class PrimitiveClientOptions { methods: [] }
-  class PromptAst { methods: [text, messages, to_string] }
-  class PromptMessage { methods: [] }
-  class RetryPolicy { methods: [initial_delay_or_default, multiplier_or_default, max_delay_or_default] }
-  class Role { methods: [] }
-  class Stream<TStream, TFinal> { methods: [next, final] }
-  class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
-  class StreamCache<TStream, TFinal> { methods: [new] }
-  class VertexAiOptions { methods: [] }
-  function __new_stream_cache<TStream, TFinal>
-  function __sap_parse_final<TStream, TFinal>
-  function __sap_parse_partial<TStream, TFinal>
-  function assemble_prompt_ast
-  function build_output_format
-  function build_prompt_context
-  function build_request
-  function build_request_stream
-  function call_llm_function<T>
-  function from_shorthand
-  function get_jinja_template
-  function get_return_type
-  function make_role
-  function parse<TStream, TFinal>
-  function prompt
-  function prompt_template_for
-  function render_output_format
-  function render_prompt
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
@@ -285,12 +243,33 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
+namespace baml.prompt:
+  class AnthropicOptions { methods: [] }
+  class AzureOpenAiOptions { methods: [] }
+  class BedrockOptions { methods: [] }
+  class Context { methods: [output_format_with] }
+  class ContextClient { methods: [] }
+  class GoogleAiOptions { methods: [] }
+  class MediaUrlHandler { methods: [] }
+  class OutputFormat { methods: [] }
+  class PrimitiveClientOptions { methods: [] }
+  class Role { methods: [] }
+  class VertexAiOptions { methods: [] }
+  function build_output_format
+  function get_return_type
+  function make_role
+  function render_output_format
 namespace baml.random:
   class ChaCha20 { methods: [new, _new, random, random_int] }
   type Rng
   class SystemRandom { methods: [get, random, random_int] }
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
 namespace baml.sap:
+  class NoYield { methods: [] }
+  class ParseCache<TStream, TFinal> { methods: [new] }
+  function __new_parse_cache<TStream, TFinal>
+  function __parse_final<TStream, TFinal>
+  function __parse_partial<TStream, TFinal>
   function parse<T>
   function parse_type
 namespace baml.spawn:
@@ -298,9 +277,6 @@ namespace baml.spawn:
   class SpawnParams<T, E> { methods: [] }
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
-namespace baml.stream:
-  class StreamFinished { methods: [] }
-  class StreamNoYield { methods: [] }
 namespace baml.sys:
   class Process { methods: [write_stdin, close_stdin, wait, kill, close] }
   class ProcessExit { methods: [ok] }

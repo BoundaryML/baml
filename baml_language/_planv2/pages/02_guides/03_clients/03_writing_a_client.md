@@ -35,12 +35,18 @@ The prompt renders with the output-format text your client chooses:
 ```baml
 function mylab_render(c: MyLabClient, input: ModelTurnInput) -> baml.http.Request {
     let schema_text = ai.wire.render_output_format(input.output_type);
-    // render_text suffices for a text-only wire API; a client that
-    // accepts media arguments walks prompt.render's parts instead
-    let instructions: string = input.prompt.render_text(schema_text);
-    // the system message first, then the lowered journal
-    let messages = [{ "role": "system", "content": instructions }]
-        .concat(mylab_transcript(input.journal));
+    let prompt = input.prompt(schema_text);
+    // Preserve authored messages; role policy belongs to the provider.
+    let messages: map<string, unknown>[] = [];
+    for (let message in prompt.messages()) {
+        messages.push({
+            "role": if (message.role == "") { "user" } else { message.role },
+            "content": message.content,
+        });
+    }
+    for (let message in mylab_transcript(input.journal)) {
+        messages.push(message);
+    }
     baml.http.Request {
         method: "POST",
         url: `${c.base_url ?? "https://api.mylab.ai"}/v1/chat`,
@@ -57,10 +63,10 @@ function mylab_render(c: MyLabClient, input: ModelTurnInput) -> baml.http.Reques
 }
 ```
 
-A client that places the contract on the wire instead passes an empty
-string to `render` and sets its API's schema field in the body. On a
-first turn the journal is empty; if the wire API requires a user
-message, lower the instructions as the sole user message on that turn.
+A client that places the contract on the wire instead passes an empty string to
+the prompt template and sets its API's schema field in the body. The example maps role-less
+prompt content to `user`; a provider with a dedicated system field can extract
+authored system messages before appending the lowered journal.
 
 ## Lowering tools
 

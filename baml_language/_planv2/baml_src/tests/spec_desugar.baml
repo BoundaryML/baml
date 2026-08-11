@@ -28,9 +28,16 @@ function NamedToolbox(q: string) -> string {
     `
 }
 
+function StructuredPrompt(name: string) -> string {
+    client "openai/gpt-4o-mini"
+    tools []
+    prompt `${role("system")}Follow the rules.${role("user")}Hello ${name}.`
+}
+
 test "spec prompt keeps a user parameter named output_format" {
     let spec = EchoFormat@spec(output_format = "haiku");
-    let text = spec.prompt().render_text("SCHEMA_TEXT");
+    let prompt = spec.prompt(output_format = "SCHEMA_TEXT");
+    let text = prompt.text();
     // the argument lands in the prompt; the runner-supplied schema text only
     // substitutes at ${ctx.output_format}
     assert.contains(text, "Answer as haiku.");
@@ -41,6 +48,15 @@ test "empty tools opts a one-turn function into spec mode" {
     let spec = EchoFormat@spec(output_format = "prose");
     assert.equal(spec.name(), "EchoFormat");
     assert.is_true(spec.tools().is_empty())
+}
+
+test "spec prompt preserves structural role messages" {
+    let messages = StructuredPrompt@spec(name = "Ada").prompt().messages();
+    assert.equal(messages.length(), 2);
+    assert.equal(messages[0].role, "system");
+    assert.equal(messages[0].content, "Follow the rules.");
+    assert.equal(messages[1].role, "user");
+    assert.equal(messages[1].content, "Hello Ada.")
 }
 
 test "tools accepts a named ai.tools.Tool[] expression" {

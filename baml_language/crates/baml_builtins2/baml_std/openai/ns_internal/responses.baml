@@ -29,6 +29,28 @@ class OaResponse {
     usage: OaUsage?,
 }
 
+// A rendered structural prompt becomes Responses input messages. Role-less
+// content uses the ordinary user role; `tool` is not a valid
+// free-standing Responses message role, so authored tool context is user
+// content (actual tool outputs come from the journal path below).
+function openai_lower_prompt(prompt: ai.Prompt) -> map<string, unknown>[] {
+    let items: map<string, unknown>[] = [];
+    for (let message in prompt.messages()) {
+        let role = if (message.role == "") {
+            "user"
+        } else if (message.role == "tool") {
+            "user"
+        } else {
+            message.role
+        };
+        let item: map<string, unknown> = {};
+        let _ = item.set("role", role);
+        let _ = item.set("content", message.content);
+        items.push(item);
+    }
+    items
+}
+
 // ai.Journal -> Responses API input items. Only promptable events lower;
 // ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
 function openai_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
@@ -106,23 +128,15 @@ function _openai_request(
     input: ai.ModelTurnInput,
     stream: bool,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(ai.wire.render_output_format(input.output_type));
-    let items = openai_lower_journal(input.journal);
+    let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
+    let items = openai_lower_prompt(prompt);
+    for (let item in openai_lower_journal(input.journal)) {
+        items.push(item);
+    }
     let body: map<string, unknown> = {};
     let _ = body.set("model", c.model);
     let _ = body.set("store", false);
-    if (items.length() == 0) {
-        // first turn: the instructions stand as the sole user input item
-        let first: map<string, unknown> = {};
-        let _ = first.set("role", "user");
-        let _ = first.set("content", instructions);
-        let _ = body.set("input", [first]);
-        null
-    } else {
-        let _ = body.set("instructions", instructions);
-        let _ = body.set("input", items);
-        null
-    };
+    let _ = body.set("input", items);
     if (!input.toolbox.is_empty()) {
         let tools: map<string, unknown>[] = [];
         for (let t in input.toolbox.list()) {

@@ -29,7 +29,7 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 ///   - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 ///   - baml.llm.PromptAst                     -> ADT_PROMPT_AST
 ///   - baml.llm.Collector                     -> ADT_COLLECTOR
-///   - baml.llm.Stream                        -> ADT_TAGGED_HEAP_HANDLE
+///   - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose

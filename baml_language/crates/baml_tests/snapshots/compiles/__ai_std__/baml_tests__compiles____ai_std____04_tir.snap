@@ -640,7 +640,7 @@ class ai.stream.TurnMeta {
 class ai.stream.TurnDone {
 }
 type ai.stream.StreamEvent = ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
-class ai.stream.StreamDone {
+class ai.stream.Done {
 }
 class ai.stream.TurnStream {
   _sse: baml.http.SseStream | null
@@ -671,13 +671,13 @@ function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null throws
     if let <pat> = self._sse { 0 stmts + tail } else { 0 stmts + tail } : null
   }
 }
-function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.StreamDone throws never {
+function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.Done throws never {
   { : never
     while true
       { : void
         if (self._done : bool) : void
           { : never
-            return StreamDone {  } : ai.stream.StreamDone
+            return Done {  } : ai.stream.Done
           }
         if (self._pcursor < self._pending.length() : bool) : void
           { : never
@@ -699,7 +699,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
               d: TurnDone =>
                 { : never
                   let _ = self._finish() : null
-                  return StreamDone {  } : ai.stream.StreamDone
+                  return Done {  } : ai.stream.Done
                 }
               null =>
                 null : null
@@ -712,7 +712,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
                 null =>
                   { : never
                     let _ = self._finish() : null
-                    return StreamDone {  } : ai.stream.StreamDone
+                    return Done {  } : ai.stream.Done
                   }
                 batch: string =>
                   { : null
@@ -733,7 +733,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.st
                 null =>
                   { : never
                     let _ = self._finish() : null
-                    return StreamDone {  } : ai.stream.StreamDone
+                    return Done {  } : ai.stream.Done
                   }
             }
       }
@@ -744,8 +744,8 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
   { : ai.ModelTurn
     while true
       { : void
-        match (self.next() : string | ai.stream.StreamDone) : null
-          d: StreamDone =>
+        match (self.next() : string | ai.stream.Done) : null
+          d: Done =>
             { : never
               break
             }
@@ -764,8 +764,62 @@ function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.Model
     root.ModelTurn { content: [root.content.Text { text: self._text }], stop_reason: self._stop_reason ?? root.content.StopReason.Complete, usage: usage } : ai.ModelTurn
   }
 }
-function ai.stream.from_spec<TStream, TFinal>(spec: ai.FunctionSpec<TFinal>, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<TStream, TFinal> throws never {
-  { : baml.llm.Stream<TStream, TFinal>
+class ai.stream.Stream {
+  _next_text: () -> string | null throws unknown
+  _cache: baml.sap.ParseCache<TStream, TFinal>
+  _text: string
+  _finished: bool
+}
+function ai.stream.Stream.next(self: ai.stream.Stream<TStream, TFinal>) -> TStream | ai.stream.Done throws never {
+  { : never
+    while true
+      { : void
+        if (self._finished : bool) : void
+          { : never
+            return Done {  } : ai.stream.Done
+          }
+        match (self._next_text() : string | null) : void
+          null =>
+            { : never
+              self._finished = true : true
+              return Done {  } : ai.stream.Done
+            }
+          s: string =>
+            { : void
+              self._text = self._text + s : string
+              let parsed: TStream | baml.sap.NoYield = baml.sap.__parse_partial<TStream>(self._text, self._cache) : TStream | baml.sap.NoYield
+              match (parsed : TStream | baml.sap.NoYield) : void
+                baml.sap.NoYield =>
+                  { : void
+                  }
+                p: TStream =>
+                  { : never
+                    return p : TStream
+                  }
+            }
+      }
+    baml.sys.panic("unreachable") : never
+  }
+}
+function ai.stream.Stream.final(self: ai.stream.Stream<TStream, TFinal>) -> TFinal throws never {
+  { : TFinal
+    while Not self._finished
+      { : void
+        match (self._next_text() : string | null) : void
+          null =>
+            { : void
+              self._finished = true : true
+            }
+          s: string =>
+            { : void
+              self._text = self._text + s : string
+            }
+      }
+    baml.sap.__parse_final<TFinal>(self._text, self._cache) : TFinal
+  }
+}
+function ai.stream.from_spec<TStream, TFinal>(spec: ai.FunctionSpec<TFinal>, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<TStream, TFinal> throws never {
+  { : ai.stream.Stream<TStream, TFinal>
     if (Not spec.tools().is_empty() : bool) : void
       { : never
         throw baml.errors.InvalidArgument { message: `...` } : baml.errors.InvalidArgument
@@ -788,9 +842,9 @@ function ai.stream.from_spec<TStream, TFinal>(spec: ai.FunctionSpec<TFinal>, cli
       match (selected : ai.stream.StreamingClient) : string
         c: root.Client =>
           c.id() : string
-    let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt(), journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }) : ai.stream.TurnStream
+    let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }) : ai.stream.TurnStream
     let _ = provider : string
-    baml.llm.Stream { _next_text: () -> { ... }, _cache: baml.llm.__new_stream_cache<TStream, TFinal>(), _text: "", _finished: false } : baml.llm.Stream<TStream, TFinal>
+    Stream { _next_text: () -> { ... }, _cache: baml.sap.__new_parse_cache<TStream, TFinal>(), _text: "", _finished: false } : ai.stream.Stream<TStream, TFinal>
   }
 }
 lambda ai.stream.from_spec {
@@ -811,7 +865,7 @@ class ai.stream.TurnMeta$stream {
 class ai.stream.TurnDone$stream {
 }
 type ai.stream.StreamEvent$stream = ai.stream.TextDelta$stream | ai.stream.TurnMeta$stream | ai.stream.TurnDone$stream
-class ai.stream.StreamDone$stream {
+class ai.stream.Done$stream {
 }
 class ai.stream.TurnStream$stream {
   _sse: baml.http.SseStream$stream | null
@@ -825,6 +879,12 @@ class ai.stream.TurnStream$stream {
   _input_tokens: int | null
   _output_tokens: int | null
   _done: bool | null
+}
+class ai.stream.Stream$stream {
+  _next_text: unknown
+  _cache: baml.sap.ParseCache$stream<TStream, TFinal> | null
+  _text: string | null
+  _finished: bool | null
 }
 
 --- <builtin>/ai/ns_tools/tools.baml ---
@@ -938,7 +998,7 @@ function ai.wire.send_as<T>(req: baml.http.Request, provider: string) -> T throw
 }
 function ai.wire.render_output_format(t: type) -> string throws never {
   { : string
-    baml.llm.render_output_format(t) : string
+    baml.prompt.render_output_format(t) : string
   }
 }
 
@@ -1011,7 +1071,7 @@ function ai.Agent._parses(self: ai.Agent<Out>, candidate: string) -> bool throws
 }
 function ai.Agent._attempt_turn(self: ai.Agent<Out>, c: ai.Client, spec: ai.FunctionSpec<Out>, j: ai.Journal, total: ai.events.Usage, attempts_left: int) -> ai.ModelTurn throws never {
   { : ai.ModelTurn
-    let turn = c.invoke(ModelTurnInput { prompt: spec.prompt(), journal: j, toolbox: spec.tools(), output_type: spec.output_type() }) : ai.ModelTurn
+    let turn = c.invoke(ModelTurnInput { prompt: spec.prompt_template, journal: j, toolbox: spec.tools(), output_type: spec.output_type() }) : ai.ModelTurn
     if let <pat> = turn.usage { 3 stmts + tail } : void
     let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }] : ai.events.Event[]
     for u in turn.tool_uses()
@@ -1128,18 +1188,35 @@ class ai.Agent$stream {
 }
 
 --- <builtin>/ai/spec.baml ---
-class ai.Prompt {
-  template: (string) -> string throws never
+class ai.PromptMessage {
+  role: string
+  content: string
 }
-function ai.Prompt.render_text(self: ai.Prompt, output_format: string) -> string throws never {
+class ai.Prompt {
+  _data: $rust_type
+}
+function ai.Prompt.to_string(self: ai.Prompt) -> string throws never {
   { : string
-    self.template(output_format) : string
+    self.text() : string
   }
+}
+function ai.prompt(body: (role: (string) -> baml.prompt.Role throws never, ctx: baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never throws never {
+  { : (ctx: baml.prompt.Context) -> ai.Prompt throws never
+    let render = : (ctx: baml.prompt.Context) -> ai.Prompt throws never
+      (ctx: baml.prompt.Context) -> { ... } : (ctx: baml.prompt.Context) -> ai.Prompt throws never
+        {
+          let tagged = body(baml.prompt.make_role, ctx)
+          root.internal.assemble_prompt(tagged.parts, tagged.values)
+        }
+    render : (ctx: baml.prompt.Context) -> ai.Prompt throws never
+  }
+}
+lambda ai.prompt {
 }
 class ai.FunctionSpec {
   spec_name: string
   args: map<string, unknown>
-  prompt_template: ai.Prompt
+  prompt_template: (string) -> ai.Prompt throws never
   toolbox: ai.tools.Toolbox
   default_client: ai.Client
 }
@@ -1158,9 +1235,9 @@ function ai.FunctionSpec.output_type(self: ai.FunctionSpec<Out>) -> type throws 
     reflect.type_of() : type
   }
 }
-function ai.FunctionSpec.prompt(self: ai.FunctionSpec<Out>) -> ai.Prompt throws never {
+function ai.FunctionSpec.prompt(self: ai.FunctionSpec<Out>, output_format: string = "") -> ai.Prompt throws never {
   { : ai.Prompt
-    self.prompt_template : ai.Prompt
+    self.prompt_template(output_format) : ai.Prompt
   }
 }
 function ai.FunctionSpec.tools(self: ai.FunctionSpec<Out>) -> ai.tools.Toolbox throws never {
@@ -1168,20 +1245,24 @@ function ai.FunctionSpec.tools(self: ai.FunctionSpec<Out>) -> ai.tools.Toolbox t
     self.toolbox : ai.tools.Toolbox
   }
 }
+class ai.PromptMessage$stream {
+  role: string | null
+  content: string | null
+}
 class ai.Prompt$stream {
-  template: unknown
+  _data: $rust_type
 }
 class ai.FunctionSpec$stream {
   spec_name: string | null
   args: map<string, unknown>
-  prompt_template: ai.Prompt$stream | null
+  prompt_template: unknown
   toolbox: ai.tools.Toolbox$stream | null
   default_client: ai.Client | null
 }
 
 --- <builtin>/ai/turn.baml ---
 class ai.ModelTurnInput {
-  prompt: ai.Prompt
+  prompt: (string) -> ai.Prompt throws never
   journal: ai.Journal
   toolbox: ai.tools.Toolbox
   output_type: type
@@ -1212,7 +1293,7 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] thro
   }
 }
 class ai.ModelTurnInput$stream {
-  prompt: ai.Prompt$stream | null
+  prompt: unknown
   journal: ai.Journal$stream | null
   toolbox: ai.tools.Toolbox$stream | null
   output_type: unknown

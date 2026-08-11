@@ -39,10 +39,8 @@ use crate::db::ProjectDatabase;
 /// `CycleDetector`.
 const MAX_DEPTH: usize = 64;
 
-/// The compiler appends a synthetic trailing `client` parameter to every LLM
-/// function — `baml.llm.Client` from `append_default_client_param` on the
-/// legacy path, `ai.Client? = null` from `append_spec_client_param` in BEP
-/// spec mode. `client` is a reserved parameter name on LLM functions
+/// The compiler appends a synthetic trailing `client: ai.Client? = null`
+/// parameter to every LLM function. `client` is a reserved parameter name on LLM functions
 /// (`reject_reserved_llm_client_params`), so a trailing param with this name
 /// can only be the injected one. The form must not render it.
 const INJECTED_CLIENT_PARAM_NAME: &str = "client";
@@ -828,7 +826,7 @@ function Plain(x: int) -> int { x }
         let db = db_with(&[("main.baml", LLM_FIXTURE)]);
         let listing = list_functions_with_metadata(&db);
         // Only the user-declared param survives; the compiler-injected
-        // trailing `client: baml.llm.Client` must not reach the form.
+        // trailing `client: ai.Client?` must not reach the form.
         assert_eq!(
             params_json(&listing, "Extract"),
             json!([

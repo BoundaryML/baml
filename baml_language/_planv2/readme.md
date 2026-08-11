@@ -77,12 +77,12 @@ ai
 ├── RunResult<Out>                        value, journal, usage
 ├── Client                                interface: id(), invoke(ModelTurnInput) -> ModelTurn
 ├── ModelTurnInput                        prompt, journal, toolbox, output_type
-├── Prompt                                the function's template with arguments bound
-│   ├── render(output_format)             the turn's instruction parts (text and media arguments)
-│   └── render_text(output_format)        all-text convenience; throws when a media argument is present
+├── Prompt                                rendered structure: ordered roles, content, and media
+│   ├── messages()                        provider-facing role/content projection
+│   └── text()                            readable lossy projection for text-only transports
 ├── ModelTurn                             content, stop_reason, usage
 ├── content
-│   ├── Text / Reasoning / ToolUse        canonical assistant content blocks
+│   ├── Text / Reasoning / ToolUse / Media canonical assistant content blocks
 │   ├── Block                             the union of the above
 │   └── StopReason                        Complete | ToolUse | MaxTokens | Refused
 ├── Journal                               append-only typed record of one run
@@ -94,7 +94,8 @@ ai
 │   ├── ErrorMode                         Report (default) or Raise, per tool
 │   ├── tool(fn, name =, description =, on_error =)   explicit constructor; schemas come from signatures
 │   └── raw_tool(name, description, schema, handler)  dynamic tool sources (MCP); the schema is supplied
-├── clients                               the wrapper clients: a Client that composes other Clients
+├── clients                               registry plus clients that compose other Clients
+│   ├── resolve / register                model-string resolution and prefix registration
 │   ├── Retry                             retries replay-safe failures
 │   ├── Fallback                          advances to the next member
 │   ├── RoundRobin                        rotates across members on each invoke
@@ -103,9 +104,11 @@ ai
 ├── stream                                streaming; a client opts in by implementing StreamingClient
 │   ├── StreamingClient                   interface: invoke_stream(ModelTurnInput) -> TurnStream
 │   ├── TurnStream                        one streamed model turn, folded from provider events
-│   ├── StreamEvent                       TextDelta | TurnMeta | TurnDone | StreamDone
+│   ├── StreamEvent                       TextDelta | TurnMeta | TurnDone
 │   ├── SseEvent / decode_sse_batch       the SSE framing clients decode against
-│   └── from_spec(spec, client)           drive a spec directly, returning baml.llm.Stream
+│   ├── Stream<TPartial, TFinal>           parsed function stream returned to BAML and host SDKs
+│   ├── Done                              the single nominal end-of-stream marker
+│   └── from_spec(spec, client)           drive a spec directly, returning ai.stream.Stream
 ├── wire                                  shared helpers for client authors
 │   ├── send_as<T>(req, provider)         send, classify the status, decode the body as T
 │   └── render_output_format(type)        the ctx.output_format text in the standard dialect
@@ -130,12 +133,10 @@ google       └── GoogleClient              the Gemini generateContent wire
 claude_code  └── ClaudeCodeClient          the Claude Code CLI as a client
 ```
 
-`ai.clients` holds only the wrapper clients — the ones that compose
-other clients rather than speak a wire API. A model string resolves to a
-provider class through a compile-time map in the desugar, so there is no
-runtime `register` / `resolve` pair: `"openai/gpt-5.6"` becomes
-`openai.OpenAiClient { model: "gpt-5.6" }` during lowering, and an
-unknown prefix is a compile error rather than a runtime failure.
+`ai.clients` owns model-string resolution and the wrapper clients — the ones
+that compose other clients rather than speak a wire API. Built-in prefixes
+resolve to the root provider packages above; applications can register another
+prefix with a factory for a compatible or custom client implementation.
 
 The `wire` helpers are conveniences over existing standard library
 primitives. Client and runner authors also use those primitives
@@ -151,12 +152,12 @@ baml.json
 baml.http
 ├── Request / Response                    method, url, headers, body; text(), ok()
 ├── send(request, timeout =)              one blocking call
-└── fetch_sse(request) -> SseStream       server-sent events; streaming clients later
+└── fetch_sse(request) -> SseStream       server-sent events for streaming clients
 reflect
 ├── type_of<T>() / signature(f)           types and signatures as runtime values
 └── call_any(f, args)                     validated dynamic call; how the runner executes tools
 baml.env
-└── get(name) / get_or_panic(name)        credential resolution in registry factories
+└── get(name) / get_or_panic(name)        request-time credentials; custom registry factories
 ```
 
 `tool()` derives each `Tool.input_schema` with `baml.json.schema`
@@ -192,7 +193,7 @@ client. The section grows as recipes accumulate.
 **Appendix.** `01_comparisons` (pi, Pydantic AI, OpenAI Agents SDK, and
 the two earlier BAML designs), `02_alternatives_considered` (each
 settled decision, the options weighed, and why),
-`03_future_phases` (fidelity and streaming, continuations, remote
+`03_future_phases` (replay fidelity and other extensions, continuations, remote
 state, sessions).
 
 `outline.md` lists every page and header. `style.md` states the prose

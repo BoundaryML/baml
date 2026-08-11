@@ -41,7 +41,8 @@ client switch between runs needs no conversion step.
 spec.name()          // "PlanTrip"
 spec.arguments()     // { "trip_request": "2 weeks in Japan" }
 spec.output_type()   // the Itinerary type, as a runtime value
-spec.prompt()        // the prompt template with arguments bound
+spec.prompt()        // a freshly rendered ai.Prompt (empty output-format text)
+spec.prompt(output_format = schema) // render with schema text at ${ctx.output_format}
 spec.tools()         // the initial Toolbox
 spec.default_client  // the resolved default Client
 ```

@@ -67,6 +67,38 @@ function _gm_function_response(
     part
 }
 
+class GooglePrompt {
+    system_parts: map<string, unknown>[],
+    contents: map<string, unknown>[],
+    first_role: string,
+}
+
+// Gemini spells assistant as `model` and carries system instructions outside
+// `contents`. Role-less prompt content is an ordinary user turn.
+function google_lower_prompt(prompt: ai.Prompt) -> GooglePrompt {
+    let system_parts: map<string, unknown>[] = [];
+    let contents: map<string, unknown>[] = [];
+    let first_role = "";
+    for (let message in prompt.messages()) {
+        let part = _gm_text_part(message.content);
+        if (message.role == "system") {
+            system_parts.push(part);
+            null
+        } else {
+            let role = if (message.role == "assistant") { "model" } else { "user" };
+            if (first_role == "") {
+                first_role = role;
+                null
+            } else {
+                null
+            };
+            contents.push(_gm_content(role, [part]));
+            null
+        };
+    }
+    GooglePrompt { system_parts: system_parts, contents: contents, first_role: first_role }
+}
+
 // Gemini correlates tool results by NAME, not id: find the tool name for a
 // result id by scanning the ai.AssistantMessage ai.ToolUse blocks in the journal.
 function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
@@ -190,19 +222,29 @@ function _google_request(
     input: ai.ModelTurnInput,
     stream: bool,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(ai.wire.render_output_format(input.output_type));
-    let lowered = google_lower_journal(input.journal);
-    let body: map<string, unknown> = {};
-    // DEVIATION from the wire page: the instructions travel as the leading
-    // user content on EVERY turn, and systemInstruction is never sent. With
-    // systemInstruction + lowered journal, a later turn's contents begin with
-    // the model's functionCall turn, and the API rejects that: "Please ensure
-    // that function call turn comes immediately after a user turn or after a
-    // function response turn."
-    let contents: map<string, unknown>[] = [_gm_content("user", [_gm_text_part(instructions)])];
-    for (let item in lowered) {
+    let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
+    let prompt_parts = google_lower_prompt(prompt);
+    let contents = prompt_parts.contents;
+    for (let item in google_lower_journal(input.journal)) {
         contents.push(item);
     }
+    let body: map<string, unknown> = {};
+    // A system-only/assistant-first prompt cannot satisfy Gemini's required
+    // leading user turn. In that unusual shape, preserve the old fallback by
+    // moving the system parts into a leading user content. Otherwise keep the
+    // authored system role in `systemInstruction`.
+    let first_role = prompt_parts.first_role;
+    if (first_role != "user" && prompt_parts.system_parts.length() > 0) {
+        contents = [_gm_content("user", prompt_parts.system_parts)].concat(contents);
+        null
+    } else if (prompt_parts.system_parts.length() > 0) {
+        let system_instruction: map<string, unknown> = {};
+        let _ = system_instruction.set("parts", prompt_parts.system_parts);
+        let _ = body.set("systemInstruction", system_instruction);
+        null
+    } else {
+        null
+    };
     let _ = body.set("contents", contents);
     if (!input.toolbox.is_empty()) {
         let decls: map<string, unknown>[] = [];

@@ -46,19 +46,16 @@ function user.UseRetryClient$parse(json: string) -> string {
     return
 }
 
-function user.UseRetryClient$render_prompt(input: string) -> string {
+function user.UseRetryClient$render_prompt(input: string) -> ai.Prompt {
     load_var input
     call user.UseRetryClient$spec
-    store_var _3
-    load_type string
-    load_var _3
-    call ai.FunctionSpec.prompt
     store_var _2
     load_type string
     call ai.wire.render_output_format
-    store_var _5
-    load_var2 2 4
-    call ai.Prompt.render_text
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -69,7 +66,7 @@ function user.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _4
     load_const "UseRetryClient"
     load_deref ?1
     load_const "input"
@@ -78,15 +75,14 @@ function user.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string> {
     alloc_map 1
     load_var input
     make_closure .<lambda(UseRetryClient$spec, 0)>, 1
-    init_instance ai.Prompt .template
-    load_var _5
+    load_var _4
     load_global user.MyClient
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.UseRetryClient$stream(input: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.UseRetryClient$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

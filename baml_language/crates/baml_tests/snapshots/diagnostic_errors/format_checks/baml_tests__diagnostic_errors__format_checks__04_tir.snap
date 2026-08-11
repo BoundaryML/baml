@@ -862,15 +862,13 @@ function user.LlmBasic(name: string, client: ai.Client | null = null) -> string 
   ai.Agent.new<string>(client = client).run(LlmBasic$spec(name)).value : string
 }
 function user.LlmBasic$spec(name: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "LlmBasic", args: map { "name": name }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
-  !! 11280..11284: type mismatch: expected T, got string
-  !! 11264..11286: cannot infer type parameter `T`
+  ai.FunctionSpec { spec_name: "LlmBasic", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
   !! 11248..11252: unresolved name: GPT4
 }
 lambda user.LlmBasic$spec {
 }
-function user.LlmBasic$render_prompt(name: string) -> string throws never {
-  LlmBasic$spec(name).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
+function user.LlmBasic$render_prompt(name: string) -> ai.Prompt throws never {
+  LlmBasic$spec(name).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
 function user.LlmBasic$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -879,15 +877,13 @@ function user.LlmMultiLine(text: string, client: ai.Client | null = null) -> str
   ai.Agent.new<string>(client = client).run(LlmMultiLine$spec(text)).value : string
 }
 function user.LlmMultiLine$spec(text: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "LlmMultiLine", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
-  !! 11469..11473: type mismatch: expected T, got string
-  !! 11421..11506: cannot infer type parameter `T`
+  ai.FunctionSpec { spec_name: "LlmMultiLine", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
   !! 11405..11409: unresolved name: GPT4
 }
 lambda user.LlmMultiLine$spec {
 }
-function user.LlmMultiLine$render_prompt(text: string) -> string throws never {
-  LlmMultiLine$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
+function user.LlmMultiLine$render_prompt(text: string) -> ai.Prompt throws never {
+  LlmMultiLine$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
 function user.LlmMultiLine$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -896,14 +892,12 @@ function user.LlmStringClient(text: string, client: ai.Client | null = null) -> 
   ai.Agent.new<string>(client = client).run(LlmStringClient$spec(text)).value : string
 }
 function user.LlmStringClient$spec(text: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "LlmStringClient", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o") } : ai.FunctionSpec<string>
-  !! 11660..11664: type mismatch: expected T, got string
-  !! 11646..11666: cannot infer type parameter `T`
+  ai.FunctionSpec { spec_name: "LlmStringClient", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o") } : ai.FunctionSpec<string>
 }
 lambda user.LlmStringClient$spec {
 }
-function user.LlmStringClient$render_prompt(text: string) -> string throws never {
-  LlmStringClient$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
+function user.LlmStringClient$render_prompt(text: string) -> ai.Prompt throws never {
+  LlmStringClient$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
 function user.LlmStringClient$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -912,15 +906,13 @@ function user.LlmReversedOrder(text: string, client: ai.Client | null = null) ->
   ai.Agent.new<string>(client = client).run(LlmReversedOrder$spec(text)).value : string
 }
 function user.LlmReversedOrder$spec(text: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "LlmReversedOrder", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
-  !! 11809..11813: type mismatch: expected T, got string
-  !! 11795..11815: cannot infer type parameter `T`
+  ai.FunctionSpec { spec_name: "LlmReversedOrder", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
   !! 11827..11831: unresolved name: GPT4
 }
 lambda user.LlmReversedOrder$spec {
 }
-function user.LlmReversedOrder$render_prompt(text: string) -> string throws never {
-  LlmReversedOrder$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
+function user.LlmReversedOrder$render_prompt(text: string) -> ai.Prompt throws never {
+  LlmReversedOrder$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
 function user.LlmReversedOrder$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -929,21 +921,13 @@ function user.LlmWithLongSignature(first_context: string, second_context: string
   ai.Agent.new<string>(client = client).run(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query)).value : string
 }
 function user.LlmWithLongSignature$spec(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "LlmWithLongSignature", args: map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
-  !! 12069..12082: type mismatch: expected T, got string
-  !! 12048..12153: cannot infer type parameter `T`
-  !! 12086..12100: type mismatch: expected T, got string
-  !! 12048..12153: cannot infer type parameter `T`
-  !! 12104..12117: type mismatch: expected T, got string
-  !! 12048..12153: cannot infer type parameter `T`
-  !! 12136..12146: type mismatch: expected T, got string
-  !! 12048..12153: cannot infer type parameter `T`
+  ai.FunctionSpec { spec_name: "LlmWithLongSignature", args: map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
   !! 12032..12036: unresolved name: GPT4
 }
 lambda user.LlmWithLongSignature$spec {
 }
-function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> string throws never {
-  LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
+function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.Prompt throws never {
+  LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
 function user.LlmWithLongSignature$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -978,20 +962,20 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
     "done" : "done"
   }
 }
-function user.LlmBasic$stream(name: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream.from_spec(LlmBasic$spec(name), client = client) : baml.llm.Stream<string | null, string>
+function user.LlmBasic$stream(name: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmBasic$spec(name), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmMultiLine$stream(text: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream.from_spec(LlmMultiLine$spec(text), client = client) : baml.llm.Stream<string | null, string>
+function user.LlmMultiLine$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmMultiLine$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmStringClient$stream(text: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream.from_spec(LlmStringClient$spec(text), client = client) : baml.llm.Stream<string | null, string>
+function user.LlmStringClient$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmStringClient$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmReversedOrder$stream(text: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream.from_spec(LlmReversedOrder$spec(text), client = client) : baml.llm.Stream<string | null, string>
+function user.LlmReversedOrder$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmReversedOrder$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream.from_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client) : baml.llm.Stream<string | null, string>
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client) : ai.stream.Stream<string | null, string>
 }
 function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1

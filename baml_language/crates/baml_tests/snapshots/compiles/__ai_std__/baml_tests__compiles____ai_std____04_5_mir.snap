@@ -1086,6 +1086,8 @@ fn ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown
     }
 }
 
+fn ai.internal.assemble_prompt = builtin(vm)
+
 fn ai.mcp._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string, unknown>) -> string throws unknown {
     // Locals:
     let _0: (map<string, unknown>) -> string throws unknown // _0 // return
@@ -2059,9 +2061,9 @@ fn ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> null {
     }
 }
 
-fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.StreamDone {
+fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.Done {
     // Locals:
-    let _0: string | ai.stream.StreamDone // _0 // return
+    let _0: string | ai.stream.Done // _0 // return
     let _1: ai.stream.TurnStream // self // param
     let _2: bool
     let _3: bool
@@ -2181,7 +2183,7 @@ fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.S
     }
 
     bb10: {
-        _0 = ai.stream.StreamDone {  };
+        _0 = ai.stream.Done {  };
         goto -> bb40;
     }
 
@@ -2257,7 +2259,7 @@ fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.S
     }
 
     bb23: {
-        _0 = ai.stream.StreamDone {  };
+        _0 = ai.stream.Done {  };
         goto -> bb40;
     }
 
@@ -2289,7 +2291,7 @@ fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.S
     }
 
     bb29: {
-        _0 = ai.stream.StreamDone {  };
+        _0 = ai.stream.Done {  };
         goto -> bb40;
     }
 
@@ -2350,7 +2352,7 @@ fn ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.S
     }
 
     bb39: {
-        _0 = ai.stream.StreamDone {  };
+        _0 = ai.stream.Done {  };
         goto -> bb40;
     }
 
@@ -2363,8 +2365,8 @@ fn ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.ModelTurn {
     // Locals:
     let _0: ai.ModelTurn // _0 // return
     let _1: ai.stream.TurnStream // self // param
-    let _2: string | ai.stream.StreamDone
-    let _3: string | ai.stream.StreamDone
+    let _2: string | ai.stream.Done
+    let _3: string | ai.stream.Done
     let _4: null | ai.events.Usage // usage
     let _5: bool
     let _6: bool
@@ -2400,7 +2402,7 @@ fn ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.ModelTurn {
 
     bb3: {
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "StreamDone" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb1];
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "Done" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb1];
     }
 
     bb4: {
@@ -2487,9 +2489,157 @@ fn ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.ModelTurn {
     }
 }
 
-fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.StreamingClient) -> baml.llm.Stream<TStream, TFinal> {
+fn ai.stream.Stream.next(self: ai.stream.Stream) -> ai.stream.Done | TStream {
     // Locals:
-    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
+    let _0: ai.stream.Done | TStream // _0 // return
+    let _1: ai.stream.Stream // self // param
+    let _2: bool
+    let _3: string | null
+    let _4: () -> string | null throws unknown
+    let _5: bool
+    let _6: string // s
+    let _7: string
+    let _8: string
+    let _9: baml.sap.NoYield | TStream // parsed
+    let _10: string
+    let _11: baml.sap.ParseCache<TStream, TFinal>
+    let _12: type
+    let _13: type
+    let _14: bool
+    let _15: TStream // p
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        branch const true -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb11];
+    }
+
+    bb3: {
+        _2 = copy _1.3;
+        branch copy _2 -> [bb10, bb4];
+    }
+
+    bb4: {
+        _4 = copy _1.0;
+        _3 = call copy _4() -> [bb5];
+    }
+
+    bb5: {
+        _5 = copy _3 == const null;
+        branch copy _5 -> [bb9, bb6];
+    }
+
+    bb6: {
+        _6 = copy _3;
+        _7 = copy _1.2;
+        _8 = copy _6;
+        _1.2 = copy _7 + copy _8;
+        _10 = copy _1.2;
+        _11 = copy _1.1;
+        _12 = load_type(#0);
+        _13 = load_type(#1);
+        _9 = sys_op const fn baml.sap.__parse_partial(copy _10, copy _11, copy _12, copy _13) -> bb7;
+    }
+
+    bb7: {
+        _14 = is_type(copy _9, baml.sap.NoYield);
+        branch copy _14 -> [bb1, bb8];
+    }
+
+    bb8: {
+        _15 = copy _9;
+        _0 = copy _15;
+        goto -> bb11;
+    }
+
+    bb9: {
+        _1.3 = const true;
+        _0 = ai.stream.Done {  };
+        goto -> bb11;
+    }
+
+    bb10: {
+        _0 = ai.stream.Done {  };
+        goto -> bb11;
+    }
+
+    bb11: {
+        return;
+    }
+}
+
+fn ai.stream.Stream.final(self: ai.stream.Stream) -> TFinal {
+    // Locals:
+    let _0: TFinal // _0 // return
+    let _1: ai.stream.Stream // self // param
+    let _2: bool
+    let _3: bool
+    let _4: string | null
+    let _5: () -> string | null throws unknown
+    let _6: bool
+    let _7: string // s
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: baml.sap.ParseCache<TStream, TFinal>
+    let _12: type
+    let _13: type
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _1.3;
+        _2 = !copy _3;
+        branch copy _2 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _10 = copy _1.2;
+        _11 = copy _1.1;
+        _12 = load_type(#0);
+        _13 = load_type(#1);
+        _0 = sys_op const fn baml.sap.__parse_final(copy _10, copy _11, copy _12, copy _13) -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _5 = copy _1.0;
+        _4 = call copy _5() -> [bb5];
+    }
+
+    bb5: {
+        _6 = copy _4 == const null;
+        branch copy _6 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _7 = copy _4;
+        _8 = copy _1.2;
+        _9 = copy _7;
+        _1.2 = copy _8 + copy _9;
+        goto -> bb1;
+    }
+
+    bb7: {
+        _1.3 = const true;
+        goto -> bb1;
+    }
+}
+
+fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<TStream, TFinal> {
+    // Locals:
+    let _0: ai.stream.Stream<TStream, TFinal> // _0 // return
     let _1: ai.FunctionSpec<TFinal> // spec // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
@@ -2517,18 +2667,17 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
     let _25: ai.Client // c
     let _26: ai.stream.TurnStream // turns [captured]
     let _27: ai.ModelTurnInput
-    let _28: ai.Prompt
-    let _29: type
-    let _30: ai.Journal
-    let _31: type
-    let _32: ai.tools.Toolbox
+    let _28: (string) -> ai.Prompt throws never
+    let _29: ai.Journal
+    let _30: type
+    let _31: ai.tools.Toolbox
+    let _32: type
     let _33: type
     let _34: type
-    let _35: type
-    let _36: () -> string | null throws unknown
-    let _37: baml.llm.StreamCache<TStream, TFinal>
+    let _35: () -> string | null throws unknown
+    let _36: baml.sap.ParseCache<TStream, TFinal>
+    let _37: type
     let _38: type
-    let _39: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -2551,7 +2700,7 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
 
     bb4: {
         _4 = !copy _5;
-        branch copy _4 -> [bb20, bb5];
+        branch copy _4 -> [bb19, bb5];
     }
 
     bb5: {
@@ -2593,57 +2742,53 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
     }
 
     bb12: {
-        _29 = load_type(#1);
-        _28 = call const fn ai.FunctionSpec.prompt<copy _29>(copy _1) -> [bb13];
+        _28 = copy _1.2;
+        _30 = load_type(#1);
+        _29 = call const fn ai.Journal.new<copy _30>(copy _1) -> [bb13];
     }
 
     bb13: {
-        _31 = load_type(#1);
-        _30 = call const fn ai.Journal.new<copy _31>(copy _1) -> [bb14];
+        _32 = load_type(#1);
+        _31 = call const fn ai.FunctionSpec.tools<copy _32>(copy _1) -> [bb14];
     }
 
     bb14: {
-        _33 = load_type(#1);
-        _32 = call const fn ai.FunctionSpec.tools<copy _33>(copy _1) -> [bb15];
+        _34 = load_type(#1);
+        _33 = call const fn ai.FunctionSpec.output_type<copy _34>(copy _1) -> [bb15];
     }
 
     bb15: {
-        _35 = load_type(#1);
-        _34 = call const fn ai.FunctionSpec.output_type<copy _35>(copy _1) -> [bb16];
+        _27 = ai.ModelTurnInput { copy _28, copy _29, copy _31, copy _33 };
+        _26 = virtual_call invoke_stream as ai.stream.StreamingClient(copy _15, copy _27) -> [bb16];
     }
 
     bb16: {
-        _27 = ai.ModelTurnInput { copy _28, copy _30, copy _32, copy _34 };
-        _26 = virtual_call invoke_stream as ai.stream.StreamingClient(copy _15, copy _27) -> [bb17];
+        _35 = make_closure lambda[0]<2 type_args>(copy _26);
+        _37 = load_type(#0);
+        _38 = load_type(#1);
+        _36 = call const fn baml.sap.__new_parse_cache<copy _37, copy _38>() -> [bb17];
     }
 
     bb17: {
-        _36 = make_closure lambda[0]<2 type_args>(copy _26);
-        _38 = load_type(#0);
-        _39 = load_type(#1);
-        _37 = call const fn baml.llm.__new_stream_cache<copy _38, copy _39>() -> [bb18];
+        _0 = ai.stream.Stream<#0, #1> { copy _35, copy _36, const "", const false };
+        goto -> bb18;
     }
 
     bb18: {
-        _0 = baml.llm.Stream<#0, #1> { copy _36, copy _37, const "", const false };
-        goto -> bb19;
-    }
-
-    bb19: {
         return;
     }
 
-    bb20: {
+    bb19: {
         _13 = load_type(#1);
-        _12 = call const fn ai.FunctionSpec.name<copy _13>(copy _1) -> [bb21];
+        _12 = call const fn ai.FunctionSpec.name<copy _13>(copy _1) -> [bb20];
+    }
+
+    bb20: {
+        _14 = load_type(string);
+        _11 = call const fn baml.String.from<copy _14>(copy _12) -> [bb21];
     }
 
     bb21: {
-        _14 = load_type(string);
-        _11 = call const fn baml.String.from<copy _14>(copy _12) -> [bb22];
-    }
-
-    bb22: {
         _10 = const "streaming does not run the tool loop yet: " + copy _11;
         _9 = copy _10 + const " has a non-empty toolbox";
         _8 = baml.errors.InvalidArgument { copy _9 };
@@ -2655,8 +2800,8 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
 fn .<lambda(from_spec, 0)>() -> string | null {
     // Locals:
     let _0: string | null // _0 // return
-    let _1: string | ai.stream.StreamDone
-    let _2: string | ai.stream.StreamDone
+    let _1: string | ai.stream.Done
+    let _2: string | ai.stream.Done
     let _3: string // s
 
     bb0: {
@@ -2665,7 +2810,7 @@ fn .<lambda(from_spec, 0)>() -> string | null {
 
     bb1: {
         _2 = copy _1;
-        _2 = narrow_bind copy _2 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "StreamDone" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+        _2 = narrow_bind copy _2 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "Done" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
     }
 
     bb2: {
@@ -3250,7 +3395,7 @@ fn ai.wire.render_output_format(t: type) -> string {
     let _1: type // t // param
 
     bb0: {
-        _0 = sys_op const fn baml.llm.render_output_format(copy _1) -> bb1;
+        _0 = sys_op const fn baml.prompt.render_output_format(copy _1) -> bb1;
     }
 
     bb1: {
@@ -3571,346 +3716,341 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
     let _6: int // attempts_left // param
     let _7: ai.ModelTurn // turn
     let _8: ai.ModelTurnInput
-    let _9: ai.Prompt
-    let _10: type
-    let _11: ai.tools.Toolbox
+    let _9: (string) -> ai.Prompt throws never
+    let _10: ai.tools.Toolbox
+    let _11: type
     let _12: type
     let _13: type
-    let _14: type
+    let _14: null | ai.events.Usage
     let _15: null | ai.events.Usage
-    let _16: null | ai.events.Usage
-    let _17: ai.events.Usage // u
+    let _16: ai.events.Usage // u
+    let _17: int
     let _18: int
-    let _19: int
+    let _19: int | null
     let _20: int | null
-    let _21: int | null
-    let _22: int // ci
-    let _23: int
-    let _24: int | null
-    let _25: bool
-    let _26: int
+    let _21: int // ci
+    let _22: int
+    let _23: int | null
+    let _24: bool
+    let _25: int
+    let _26: int | null
     let _27: int | null
-    let _28: int | null
-    let _29: int // rt
-    let _30: int
-    let _31: int | null
-    let _32: bool
-    let _33: int
-    let _34: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // batch
-    let _35: ai.events.AssistantMessage
-    let _36: (ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[]
-    let _37: string
-    let _38: ai.content.ToolUse[]
-    let _39: baml.iter.Iterator<Error = never, Item = ai.content.ToolUse>
-    let _40: unknown
-    let _41: bool
-    let _42: ai.content.ToolUse
-    let _43: ai.content.ToolUse // u
-    let _44: int
-    let _45: ai.events.ToolRequested
+    let _28: int // rt
+    let _29: int
+    let _30: int | null
+    let _31: bool
+    let _32: int
+    let _33: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // batch
+    let _34: ai.events.AssistantMessage
+    let _35: (ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[]
+    let _36: string
+    let _37: ai.content.ToolUse[]
+    let _38: baml.iter.Iterator<Error = never, Item = ai.content.ToolUse>
+    let _39: unknown
+    let _40: bool
+    let _41: ai.content.ToolUse
+    let _42: ai.content.ToolUse // u
+    let _43: int
+    let _44: ai.events.ToolRequested
+    let _45: string
     let _46: string
-    let _47: string
-    let _48: map<string, unknown>
+    let _47: map<string, unknown>
+    let _48: null | ai.events.Usage
     let _49: null | ai.events.Usage
-    let _50: null | ai.events.Usage
-    let _51: ai.events.Usage // u
-    let _52: int
-    let _53: ai.events.Usage
-    let _54: string // candidate
-    let _55: string | null
-    let _56: bool
-    let _57: bool // accepted
+    let _50: ai.events.Usage // u
+    let _51: int
+    let _52: ai.events.Usage
+    let _53: string // candidate
+    let _54: string | null
+    let _55: bool
+    let _56: bool // accepted
+    let _57: bool
     let _58: bool
     let _59: bool
-    let _60: bool
-    let _61: int
-    let _62: ai.content.ToolUse[]
+    let _60: int
+    let _61: ai.content.ToolUse[]
+    let _62: ai.content.StopReason
     let _63: ai.content.StopReason
-    let _64: ai.content.StopReason
-    let _65: string
-    let _66: type
-    let _67: bool
-    let _68: void
-    let _69: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _70: ai.content.StopReason
-    let _71: int
-    let _72: ai.errors.ParseFailed
+    let _64: string
+    let _65: type
+    let _66: bool
+    let _67: void
+    let _68: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _69: ai.content.StopReason
+    let _70: int
+    let _71: ai.errors.ParseFailed
+    let _72: string
     let _73: string
-    let _74: string
-    let _75: ai.errors.Refused
-    let _76: string
-    let _77: bool
-    let _78: int
-    let _79: ai.events.UserMessage
-    let _80: void
-    let _81: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _82: int
-    let _83: type
-    let _84: void
-    let _85: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _86: ai.errors.ParseFailed
+    let _74: ai.errors.Refused
+    let _75: string
+    let _76: bool
+    let _77: int
+    let _78: ai.events.UserMessage
+    let _79: void
+    let _80: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _81: int
+    let _82: type
+    let _83: void
+    let _84: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _85: ai.errors.ParseFailed
+    let _86: string
     let _87: string
-    let _88: string
 
     bb0: {
-        _10 = load_type(#0);
-        _9 = call const fn ai.FunctionSpec.prompt<copy _10>(copy _3) -> [bb1];
+        _9 = copy _3.2;
+        _11 = load_type(#0);
+        _10 = call const fn ai.FunctionSpec.tools<copy _11>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _12 = load_type(#0);
-        _11 = call const fn ai.FunctionSpec.tools<copy _12>(copy _3) -> [bb2];
+        _13 = load_type(#0);
+        _12 = call const fn ai.FunctionSpec.output_type<copy _13>(copy _3) -> [bb2];
     }
 
     bb2: {
-        _14 = load_type(#0);
-        _13 = call const fn ai.FunctionSpec.output_type<copy _14>(copy _3) -> [bb3];
+        _8 = ai.ModelTurnInput { copy _9, copy _4, copy _10, copy _12 };
+        _7 = virtual_call invoke as ai.Client(copy _2, copy _8) -> [bb3];
     }
 
     bb3: {
-        _8 = ai.ModelTurnInput { copy _9, copy _4, copy _11, copy _13 };
-        _7 = virtual_call invoke as ai.Client(copy _2, copy _8) -> [bb4];
+        _14 = copy _7.2;
+        _15 = copy _14;
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb12];
     }
 
     bb4: {
-        _15 = copy _7.2;
         _16 = copy _15;
-        _16 = narrow_bind copy _16 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb13];
+        _17 = copy _16.0;
+        _5.0 = copy _5.0 + copy _17;
+        _18 = copy _16.1;
+        _5.1 = copy _5.1 + copy _18;
+        _19 = copy _16.2;
+        _20 = copy _19;
+        _20 = narrow_bind copy _20 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb8];
     }
 
     bb5: {
-        _17 = copy _16;
-        _18 = copy _17.0;
-        _5.0 = copy _5.0 + copy _18;
-        _19 = copy _17.1;
-        _5.1 = copy _5.1 + copy _19;
-        _20 = copy _17.2;
         _21 = copy _20;
-        _21 = narrow_bind copy _21 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb6, bb9];
+        _23 = copy _5.2;
+        _22 = copy _23;
+        _24 = copy _23 == const null;
+        branch copy _24 -> [bb6, bb7];
     }
 
     bb6: {
-        _22 = copy _21;
-        _24 = copy _5.2;
-        _23 = copy _24;
-        _25 = copy _24 == const null;
-        branch copy _25 -> [bb7, bb8];
+        _22 = const 0_i64;
+        goto -> bb7;
     }
 
     bb7: {
-        _23 = const 0_i64;
+        _25 = copy _21;
+        _5.2 = copy _22 + copy _25;
         goto -> bb8;
     }
 
     bb8: {
-        _26 = copy _22;
-        _5.2 = copy _23 + copy _26;
-        goto -> bb9;
+        _26 = copy _16.3;
+        _27 = copy _26;
+        _27 = narrow_bind copy _27 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb9, bb12];
     }
 
     bb9: {
-        _27 = copy _17.3;
         _28 = copy _27;
-        _28 = narrow_bind copy _28 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb10, bb13];
+        _30 = copy _5.3;
+        _29 = copy _30;
+        _31 = copy _30 == const null;
+        branch copy _31 -> [bb10, bb11];
     }
 
     bb10: {
-        _29 = copy _28;
-        _31 = copy _5.3;
-        _30 = copy _31;
-        _32 = copy _31 == const null;
-        branch copy _32 -> [bb11, bb12];
+        _29 = const 0_i64;
+        goto -> bb11;
     }
 
     bb11: {
-        _30 = const 0_i64;
+        _32 = copy _28;
+        _5.3 = copy _29 + copy _32;
         goto -> bb12;
     }
 
     bb12: {
-        _33 = copy _29;
-        _5.3 = copy _30 + copy _33;
-        goto -> bb13;
+        _35 = copy _7.0;
+        _36 = virtual_call id as ai.Client(copy _2) -> [bb13];
     }
 
     bb13: {
-        _36 = copy _7.0;
-        _37 = virtual_call id as ai.Client(copy _2) -> [bb14];
+        _34 = ai.events.AssistantMessage { copy _35, copy _36 };
+        _33 = [copy _34]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced[];
+        _37 = call const fn ai.ModelTurn.tool_uses(copy _7) -> [bb14];
     }
 
     bb14: {
-        _35 = ai.events.AssistantMessage { copy _36, copy _37 };
-        _34 = [copy _35]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced[];
-        _38 = call const fn ai.ModelTurn.tool_uses(copy _7) -> [bb15];
+        _38 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.ToolUse>(copy _37) -> [bb15];
     }
 
     bb15: {
-        _39 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.ToolUse>(copy _38) -> [bb16];
+        _39 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.ToolUse>(copy _38) -> [bb16];
     }
 
     bb16: {
-        _40 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.ToolUse>(copy _39) -> [bb17];
+        _40 = is_type(copy _39, baml.iter.Done);
+        branch copy _40 -> [bb18, bb17];
     }
 
     bb17: {
-        _41 = is_type(copy _40, baml.iter.Done);
-        branch copy _41 -> [bb19, bb18];
+        _41 = copy _39;
+        fresh_cell(_42);
+        _42 = copy _41;
+        _45 = copy _42.0;
+        _46 = copy _42.1;
+        _47 = copy _42.2;
+        _44 = ai.events.ToolRequested { copy _45, copy _46, copy _47 };
+        _43 = call const fn baml.Array.push(copy _33, copy _44) -> [bb15];
     }
 
     bb18: {
-        _42 = copy _40;
-        fresh_cell(_43);
-        _43 = copy _42;
-        _46 = copy _43.0;
-        _47 = copy _43.1;
-        _48 = copy _43.2;
-        _45 = ai.events.ToolRequested { copy _46, copy _47, copy _48 };
-        _44 = call const fn baml.Array.push(copy _34, copy _45) -> [bb16];
+        _48 = copy _7.2;
+        _49 = copy _48;
+        _49 = narrow_bind copy _49 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb19, bb20];
     }
 
     bb19: {
-        _49 = copy _7.2;
         _50 = copy _49;
-        _50 = narrow_bind copy _50 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb20, bb21];
+        _52 = copy _50;
+        _51 = call const fn baml.Array.push(copy _33, copy _52) -> [bb20];
     }
 
     bb20: {
-        _51 = copy _50;
-        _53 = copy _51;
-        _52 = call const fn baml.Array.push(copy _34, copy _53) -> [bb21];
+        _54 = call const fn ai.ModelTurn.terminal_text(copy _7) -> [bb21];
     }
 
     bb21: {
-        _55 = call const fn ai.ModelTurn.terminal_text(copy _7) -> [bb22];
+        _53 = copy _54;
+        _55 = copy _54 == const null;
+        branch copy _55 -> [bb22, bb23];
     }
 
     bb22: {
-        _54 = copy _55;
-        _56 = copy _55 == const null;
-        branch copy _56 -> [bb23, bb24];
+        _53 = const "";
+        goto -> bb23;
     }
 
     bb23: {
-        _54 = const "";
-        goto -> bb24;
+        _61 = call const fn ai.ModelTurn.tool_uses(copy _7) -> [bb24];
     }
 
     bb24: {
-        _62 = call const fn ai.ModelTurn.tool_uses(copy _7) -> [bb25];
+        _60 = len(_61);
+        goto -> bb25;
     }
 
     bb25: {
-        _61 = len(_62);
-        goto -> bb26;
+        _59 = copy _60 > const 0_i64;
+        _58 = short_circuit(||) copy _59 -> [eval: bb26, join: bb27];
     }
 
     bb26: {
-        _60 = copy _61 > const 0_i64;
-        _59 = short_circuit(||) copy _60 -> [eval: bb27, join: bb28];
+        _62 = copy _7.1;
+        _58 = call const fn baml.ops.equals_equals(copy _62, const ai.content.StopReason.MaxTokens) -> [bb27];
     }
 
     bb27: {
-        _63 = copy _7.1;
-        _59 = call const fn baml.ops.equals_equals(copy _63, const ai.content.StopReason.MaxTokens) -> [bb28];
+        _57 = short_circuit(||) copy _58 -> [eval: bb28, join: bb29];
     }
 
     bb28: {
-        _58 = short_circuit(||) copy _59 -> [eval: bb29, join: bb30];
+        _63 = copy _7.1;
+        _57 = call const fn baml.ops.equals_equals(copy _63, const ai.content.StopReason.Refused) -> [bb29];
     }
 
     bb29: {
-        _64 = copy _7.1;
-        _58 = call const fn baml.ops.equals_equals(copy _64, const ai.content.StopReason.Refused) -> [bb30];
+        _56 = short_circuit(||) copy _57 -> [eval: bb30, join: bb31];
     }
 
     bb30: {
-        _57 = short_circuit(||) copy _58 -> [eval: bb31, join: bb32];
+        _64 = copy _53;
+        _65 = load_type(#0);
+        _56 = call const fn ai.Agent._parses<copy _65>(copy _1, copy _64) -> [bb31];
     }
 
     bb31: {
-        _65 = copy _54;
-        _66 = load_type(#0);
-        _57 = call const fn ai.Agent._parses<copy _66>(copy _1, copy _65) -> [bb32];
+        _66 = copy _56;
+        branch copy _66 -> [bb39, bb32];
     }
 
     bb32: {
-        _67 = copy _57;
-        branch copy _67 -> [bb40, bb33];
+        _76 = copy _6 > const 1_i64;
+        branch copy _76 -> [bb36, bb33];
     }
 
     bb33: {
-        _77 = copy _6 > const 1_i64;
-        branch copy _77 -> [bb37, bb34];
+        _84 = copy _33;
+        _83 = call const fn ai.Journal.append_all(copy _4, copy _84) -> [bb34];
     }
 
     bb34: {
-        _85 = copy _34;
-        _84 = call const fn ai.Journal.append_all(copy _4, copy _85) -> [bb35];
+        _86 = virtual_call id as ai.Client(copy _2) -> [bb35];
     }
 
     bb35: {
-        _87 = virtual_call id as ai.Client(copy _2) -> [bb36];
+        _87 = copy _53;
+        _85 = ai.errors.ParseFailed { copy _86, copy _87 };
+        throw copy _85;
     }
 
     bb36: {
-        _88 = copy _54;
-        _86 = ai.errors.ParseFailed { copy _87, copy _88 };
-        throw copy _86;
+        _78 = ai.events.UserMessage { const "The reply did not match the required schema. Answer again with only the corrected value." };
+        _77 = call const fn baml.Array.push(copy _33, copy _78) -> [bb37];
     }
 
     bb37: {
-        _79 = ai.events.UserMessage { const "The reply did not match the required schema. Answer again with only the corrected value." };
-        _78 = call const fn baml.Array.push(copy _34, copy _79) -> [bb38];
+        _80 = copy _33;
+        _79 = call const fn ai.Journal.append_all(copy _4, copy _80) -> [bb38];
     }
 
     bb38: {
-        _81 = copy _34;
-        _80 = call const fn ai.Journal.append_all(copy _4, copy _81) -> [bb39];
+        _81 = copy _6 - const 1_i64;
+        _82 = load_type(#0);
+        _0 = call const fn ai.Agent._attempt_turn<copy _82>(copy _1, copy _2, copy _3, copy _4, copy _5, copy _81) -> [bb42];
     }
 
     bb39: {
-        _82 = copy _6 - const 1_i64;
-        _83 = load_type(#0);
-        _0 = call const fn ai.Agent._attempt_turn<copy _83>(copy _1, copy _2, copy _3, copy _4, copy _5, copy _82) -> [bb43];
+        _68 = copy _33;
+        _67 = call const fn ai.Journal.append_all(copy _4, copy _68) -> [bb40];
     }
 
     bb40: {
-        _69 = copy _34;
-        _68 = call const fn ai.Journal.append_all(copy _4, copy _69) -> [bb41];
+        _69 = copy _7.1;
+        _70 = discriminant(_69);
+        switch copy _70 [StopReason.MaxTokens: bb45, StopReason.Refused: bb43, otherwise: bb41];
     }
 
     bb41: {
-        _70 = copy _7.1;
-        _71 = discriminant(_70);
-        switch copy _71 [StopReason.MaxTokens: bb46, StopReason.Refused: bb44, otherwise: bb42];
+        _0 = copy _7;
+        goto -> bb42;
     }
 
     bb42: {
-        _0 = copy _7;
-        goto -> bb43;
-    }
-
-    bb43: {
         return;
     }
 
+    bb43: {
+        _75 = virtual_call id as ai.Client(copy _2) -> [bb44];
+    }
+
     bb44: {
-        _76 = virtual_call id as ai.Client(copy _2) -> [bb45];
+        _74 = ai.errors.Refused { copy _75, const "the model declined to answer", const null };
+        throw copy _74;
     }
 
     bb45: {
-        _75 = ai.errors.Refused { copy _76, const "the model declined to answer", const null };
-        throw copy _75;
+        _72 = virtual_call id as ai.Client(copy _2) -> [bb46];
     }
 
     bb46: {
-        _73 = virtual_call id as ai.Client(copy _2) -> [bb47];
-    }
-
-    bb47: {
-        _74 = copy _54;
-        _72 = ai.errors.ParseFailed { copy _73, copy _74 };
-        throw copy _72;
+        _73 = copy _53;
+        _71 = ai.errors.ParseFailed { copy _72, copy _73 };
+        throw copy _71;
     }
 }
 
@@ -4510,19 +4650,63 @@ fn .<lambda(Agent.run, 2)>(one: ai.content.ToolUse) -> bool {
     }
 }
 
-fn ai.Prompt.render_text(self: ai.Prompt, output_format: string) -> string {
+fn ai.Prompt.text = builtin(vm)
+
+fn ai.Prompt.messages = builtin(vm)
+
+fn ai.Prompt.baml.ToString.to_string(self: ai.Prompt) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: ai.Prompt // self // param
-    let _2: string // output_format // param
-    let _3: (string) -> string throws never
 
     bb0: {
-        _3 = copy _1.0;
-        _0 = call copy _3(copy _2) -> [bb1];
+        _0 = call const fn ai.Prompt.text(copy _1) -> [bb1];
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn ai.prompt(body: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never {
+    // Locals:
+    let _0: (baml.prompt.Context) -> ai.Prompt throws never // _0 // return
+    let _1: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never // body // param [captured]
+    let _2: (baml.prompt.Context) -> ai.Prompt throws never // render
+
+    bb0: {
+        _2 = make_closure lambda[0](copy _1);
+        _0 = copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(prompt, 0)>(ctx: baml.prompt.Context) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: baml.prompt.Context // ctx // param
+    let _2: baml.TaggedString // tagged
+    let _3: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never
+    let _4: string[]
+    let _5: unknown[]
+
+    bb0: {
+        _3 = copy capture[0];
+        _2 = call copy _3(const fn baml.prompt.make_role, copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = copy _2.0;
+        _5 = copy _2.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _4, copy _5) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }
@@ -4572,17 +4756,30 @@ fn ai.FunctionSpec.output_type(self: ai.FunctionSpec) -> type {
     }
 }
 
-fn ai.FunctionSpec.prompt(self: ai.FunctionSpec) -> ai.Prompt {
+fn ai.FunctionSpec.prompt(self: ai.FunctionSpec, output_format: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.FunctionSpec // self // param
+    let _2: string // output_format // param
+    let _3: bool
+    let _4: (string) -> ai.Prompt throws never
 
     bb0: {
-        _0 = copy _1.2;
-        goto -> bb1;
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
+        _2 = const "";
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = copy _1.2;
+        _0 = call copy _4(copy _2) -> [bb3];
+    }
+
+    bb3: {
         return;
     }
 }

@@ -93,8 +93,8 @@ let trip: Itinerary = result.value;
 ```
 
 A function without `tools:` runs the same loop and completes on its
-first model turn. The desugared form is not implemented yet; until it
-is, write it manually where you need it.
+first model turn. The compiler performs this desugaring for direct calls; write
+the explicit form when you need the full `RunResult`.
 
 ## Inspect the run
 

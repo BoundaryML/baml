@@ -58,14 +58,6 @@ string requestCountFile = Environment.GetEnvironmentVariable("BAML_CSHARP_REPLAY
     ?? throw new InvalidOperationException("native child request-count file is missing");
 
 int requestsBefore = ReplayRequestCount();
-string renderedPrompt = Functions.DeterministicRenderPrompt("render-only");
-Require(
-    renderedPrompt.Contains("render-only", StringComparison.Ordinal),
-    "render-prompt companion did not render its argument into the prompt");
-Require(
-    ReplayRequestCount() == requestsBefore,
-    "render-prompt companion unexpectedly dispatched HTTP");
-
 BamlStream<string?, string> finalOnly = Functions.DeterministicStream("final-only");
 Require(
     ReplayRequestCount() == requestsBefore,

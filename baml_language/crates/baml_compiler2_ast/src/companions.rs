@@ -117,7 +117,7 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 /// Build the `<Fn>$render_prompt` companion: the spec's prompt rendered with
-/// the return type's output-format text, as plain text.
+/// the return type's output-format text as a structural `ai.Prompt`.
 fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
     let out = parent.return_type.clone()?;
@@ -129,7 +129,13 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
         Some(out),
         parent.span,
     );
-    let return_type = (TypeExprKind::String { attrs: vec![] }).at(parent.span);
+    let return_type = (TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("Prompt")],
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(parent.span);
     Some(companion_def(
         parent,
         Name::new(format!("{}$render_prompt", parent.name)),

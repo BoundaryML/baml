@@ -4,7 +4,7 @@ The default runner already re-asks the model when a final candidate
 fails to parse
 (`../02_guides/02_specs_and_runners/02_the_default_runner.md`). Write
 the loop yourself when you want your own feedback wording or attempt
-policy. The pieces are public primitives: `spec.prompt()`,
+policy. The pieces are public primitives: `spec.prompt_template`,
 `Journal.append_all`, `UserMessage`, and `client.invoke`.
 
 Every attempt is committed. The journal is the complete record of the
@@ -19,7 +19,7 @@ function turn_with_feedback<Out>(
     attempts: int,
 ) -> ModelTurn {
     let turn = c.invoke(ModelTurnInput {
-        prompt: spec.prompt(),
+        prompt: spec.prompt_template,
         journal: j,
         toolbox: spec.tools(),
         output_type: spec.output_type(),

@@ -11,7 +11,7 @@ function turn_with_feedback<Out>(
 ) -> ai.ModelTurn {
     let turn = c.invoke(
         ai.ModelTurnInput {
-            prompt: spec.prompt(),
+            prompt: spec.prompt_template,
             journal: j,
             toolbox: spec.tools(),
             output_type: spec.output_type(),

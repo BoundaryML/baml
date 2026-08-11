@@ -9,12 +9,12 @@ function user.GetBoxedInt(client: ai.Client | null = null) -> user.Box<int> thro
   ai.Agent.new<Box<int>>(client = client).run(GetBoxedInt$spec()).value : user.Box<int>
 }
 function user.GetBoxedInt$spec() -> ai.FunctionSpec<user.Box<int>> throws never {
-  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: Dummy } : ai.FunctionSpec<user.Box<int>>
+  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: Dummy } : ai.FunctionSpec<user.Box<int>>
 }
 lambda user.GetBoxedInt$spec {
 }
-function user.GetBoxedInt$render_prompt() -> string throws never {
-  GetBoxedInt$spec().prompt().render_text(ai.wire.render_output_format(reflect.type_of<Box<int>>())) : string
+function user.GetBoxedInt$render_prompt() -> ai.Prompt throws never {
+  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of<Box<int>>())) : ai.Prompt
 }
 function user.GetBoxedInt$parse(json: string) -> user.Box<int> throws never {
   baml.sap.parse<T>(json) : user.Box<int>
@@ -22,6 +22,6 @@ function user.GetBoxedInt$parse(json: string) -> user.Box<int> throws never {
 class user.Box$stream {
   value: T | null
 }
-function user.GetBoxedInt$stream(client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<user.Box$stream<int> | null, user.Box<int>> throws never {
-  ai.stream.from_spec(GetBoxedInt$spec(), client = client) : baml.llm.Stream<user.Box$stream<int> | null, user.Box<int>>
+function user.GetBoxedInt$stream(client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>> throws never {
+  ai.stream.from_spec(GetBoxedInt$spec(), client = client) : ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>>
 }

@@ -1,7 +1,8 @@
 // Streaming: the raw text-delta stream of one model turn (TurnStream), the
-// typed partial-value stream (Stream), and the one-turn streaming runner
-// (from_spec). Streaming is a client capability: a client that can stream
-// implements StreamingClient; `Fn$stream` companions call from_spec.
+// typed partial-value stream returned to BAML and host SDKs (Stream), and the
+// one-turn streaming runner (from_spec). Streaming is a client capability: a
+// client that can stream implements StreamingClient; `Fn$stream` companions
+// call from_spec.
 //
 // Phase 1 scope: one model turn, no tool loop. A spec whose toolbox is not
 // empty is rejected with baml.errors.InvalidArgument.
@@ -49,14 +50,16 @@ class TurnDone {}
 
 type StreamEvent = TextDelta | TurnMeta | TurnDone;
 
-// The end-of-stream marker `TurnStream.next` returns.
-class StreamDone {}
+// The single end-of-stream marker returned by both raw turn streams and typed
+// function streams. A nominal sentinel is required because null may itself be
+// a valid partial value.
+class Done {}
 
 // The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 // from the wire until `next()` or `final_turn()` is called.
 //
 // `next()` yields DELTA chunks (each item is only the newly arrived text,
-// never the accumulated prefix) and returns StreamDone when the turn is over.
+// never the accumulated prefix) and returns Done when the turn is over.
 // `final_turn()` drains the rest of the stream and returns the completed
 // turn: the accumulated text as one Text block, the folded stop_reason, and
 // usage where the wire provided token counts.
@@ -128,13 +131,12 @@ class TurnStream {
         }
     }
 
-    // The next text DELTA, or StreamDone when the turn is over. Metadata
-    // events are folded silently; calling next() after StreamDone keeps
-    // returning StreamDone.
-    function next(self) -> string | StreamDone {
+    // The next text DELTA, or Done when the turn is over. Metadata events are
+    // folded silently; calling next() after Done keeps returning Done.
+    function next(self) -> string | Done {
         while (true) {
             if (self._done) {
-                return StreamDone {};
+                return Done {};
             }
             // deliver decoded events before pulling more from the wire
             if (self._pcursor < self._pending.length()) {
@@ -159,7 +161,7 @@ class TurnStream {
                     },
                     let d: TurnDone => {
                         let _ = self._finish();
-                        return StreamDone {};
+                        return Done {};
                     },
                     null => null,
                 };
@@ -170,7 +172,7 @@ class TurnStream {
                     match (sse.next()) {
                         null => {
                             let _ = self._finish();
-                            return StreamDone {};
+                            return Done {};
                         },
                         let batch: string => {
                             if let decode: (string) -> StreamEvent[] throws unknown = self._decode {
@@ -196,7 +198,7 @@ class TurnStream {
                         },
                         null => {
                             let _ = self._finish();
-                            return StreamDone {};
+                            return Done {};
                         },
                     }
                 },
@@ -206,11 +208,11 @@ class TurnStream {
     }
 
     // Drain the stream and return the completed turn. Safe to call at any
-    // point (including after StreamDone); calling twice returns an equal turn.
+    // point (including after Done); calling twice returns an equal turn.
     function final_turn(self) -> root.ModelTurn {
         while (true) {
             match (self.next()) {
-                let d: StreamDone => {
+                let d: Done => {
                     break;
                 },
                 _ => null,
@@ -234,6 +236,58 @@ class TurnStream {
     }
 }
 
+// The typed partial-value stream returned by an LLM function's `$stream`
+// companion. This is the one canonical host-stream class; tagged handles carry
+// its FQN across FFI so host bridges do not need to hardcode a namespace.
+class Stream<TStream, TFinal> {
+    _next_text: () -> string? throws unknown,
+    _cache: baml.sap.ParseCache<TStream, TFinal>,
+    _text: string,
+    _finished: bool,
+
+    /// Return the next parsed partial value, or Done after EOF.
+    function next(self) -> TStream | Done {
+        while (true) {
+            if (self._finished) {
+                return Done {}
+            }
+            match (self._next_text()) {
+                null => {
+                    self._finished = true;
+                    return Done {}
+                },
+                let s: string => {
+                    self._text = self._text + s;
+                    let parsed: TStream | baml.sap.NoYield =
+                        baml.sap.__parse_partial<TStream, TFinal>(self._text, self._cache);
+                    match (parsed) {
+                        baml.sap.NoYield => {},
+                        let p: TStream => {
+                            return p
+                        },
+                    }
+                },
+            }
+        }
+        baml.sys.panic("unreachable")
+    }
+
+    /// Drain the stream and parse the accumulated text as the final value.
+    function final(self) -> TFinal {
+        while (!self._finished) {
+            match (self._next_text()) {
+                null => {
+                    self._finished = true
+                },
+                let s: string => {
+                    self._text = self._text + s
+                },
+            }
+        }
+        baml.sap.__parse_final<TStream, TFinal>(self._text, self._cache)
+    }
+}
+
 // One-turn streaming over a spec: render the spec's prompt exactly as the
 // default runner's first turn would, require a streaming-capable client, and
 // return the typed partial stream. `Fn$stream(...)` desugars to
@@ -247,7 +301,7 @@ class TurnStream {
 function from_spec<TStream, TFinal>(
     spec: root.FunctionSpec<TFinal>,
     client: StreamingClient? = null,
-) -> baml.llm.Stream<TStream, TFinal> {
+) -> Stream<TStream, TFinal> {
     if (!spec.tools().is_empty()) {
         throw baml.errors.InvalidArgument {
             message: `streaming does not run the tool loop yet: ${spec.name()} has a non-empty toolbox`,
@@ -272,27 +326,23 @@ function from_spec<TStream, TFinal>(
     };
     let turns = selected.invoke_stream(
         root.ModelTurnInput {
-            prompt: spec.prompt(),
+            prompt: spec.prompt_template,
             journal: root.Journal.new(spec),
             toolbox: spec.tools(),
             output_type: spec.output_type(),
         },
     );
-    // The host-facing stream is `baml.llm.Stream` — every SDK generator
-    // matches a stream companion's return type by that exact name, so this is
-    // what makes streaming work from Python/TS/Go/Java/C#/Swift/Rust as well
-    // as from BAML. It is provider-agnostic: all it needs is a way to pull the
-    // next chunk of text, which this closure takes from the provider's
-    // TurnStream.
+    // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
+    // all it needs is a way to pull the next text delta from TurnStream.
     let _ = provider;
-    baml.llm.Stream {
+    Stream {
         _next_text: () -> {
             match (turns.next()) {
-                let d: StreamDone => null,
+                let d: Done => null,
                 let s: string => s,
             }
         },
-        _cache: baml.llm.__new_stream_cache<TStream, TFinal>(),
+        _cache: baml.sap.__new_parse_cache<TStream, TFinal>(),
         _text: "",
         _finished: false,
     }

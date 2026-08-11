@@ -34,5 +34,5 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
 // The return type's schema as prompt text, in the standard dialect —
 // exactly what ${ctx.output_format} renders in an LLM function block.
 function render_output_format(t: type) -> string {
-    baml.llm.render_output_format(t)
+    baml.prompt.render_output_format(t)
 }

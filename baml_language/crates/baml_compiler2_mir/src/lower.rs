@@ -4463,7 +4463,7 @@ impl LoweringContext<'_> {
             .map(|sm| sm.expr_span(tag).start())
             .unwrap_or_default();
         // Prefer the resolution TIR recorded for the tag expression. A qualified
-        // tag like `baml.llm.prompt` is a multi-segment path whose `func_loc`
+        // tag like `ai.prompt` is a multi-segment path whose `func_loc`
         // lives in `resolutions` (`infer_multi_segment_path`); resolving only
         // the bare last segment (`prompt`) in the user's scope would miss it.
         // Fall back to bare-name resolution for unqualified, in-file tags.
@@ -5559,7 +5559,7 @@ impl LoweringContext<'_> {
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
-        // Multi-segment paths (e.g. baml.llm.render_prompt, self.field, obj.method) — check TIR resolution first
+        // Multi-segment paths (e.g. baml.http.fetch, self.field, obj.method) — check TIR resolution first
         if segments.len() > 1 {
             // Check path_member_resolutions first (set by infer_local_rooted_path for local-rooted paths).
             // This takes priority over the flat resolutions map since infer_local_rooted_path
@@ -7974,7 +7974,7 @@ impl<'db> LoweringContext<'db> {
                         .unwrap_or(false),
                 };
                 // Check if the resolved method expects a `self` receiver.
-                // Static methods (e.g. StreamCache.new) have no `self` param
+                // Static methods (e.g. ParseCache.new) have no `self` param
                 // and must not get the class reference prepended as an argument.
                 let method_takes_self = {
                     use baml_compiler2_tir::inference::MemberResolution;
@@ -8856,7 +8856,7 @@ impl LoweringContext<'_> {
         // args synthesized by PPIR companions reference `*$stream` classes
         // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
         // the PPIR-expanded item universe. Resolving against HIR's original
-        // items lowered them to `Unknown` → `Void` and broke `StreamCache.new`
+        // items lowered them to `Unknown` → `Void` and broke `ParseCache.new`
         // at runtime.
         let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         let mut diags = Vec::new();
@@ -9420,7 +9420,7 @@ impl<'db> LoweringContext<'db> {
         // prefix — so the source-verbatim form would miss the lookup. Falling
         // back to the parser name only when TIR has no type info handles
         // synthetic Object exprs from `lower_cst.rs` that already use registry-
-        // matching dotted forms like "baml.llm.Client".
+        // matching dotted forms like "ai.Prompt".
         let class_name = if let Some(tn) = &type_name_key {
             tn.render_dotted(false)
         } else {

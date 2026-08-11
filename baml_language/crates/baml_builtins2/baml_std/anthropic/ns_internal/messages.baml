@@ -40,6 +40,34 @@ class AnthropicMessage {
     blocks: map<string, unknown>[],
 }
 
+// Anthropic carries system content outside the alternating messages list.
+// Keep that split provider-local while preserving the authored prompt roles.
+class AnthropicPrompt {
+    system: map<string, unknown>[],
+    messages: AnthropicMessage[],
+}
+
+function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
+    let system: map<string, unknown>[] = [];
+    let messages: AnthropicMessage[] = [];
+    for (let message in prompt.messages()) {
+        let block: map<string, unknown> = {};
+        let _ = block.set("type", "text");
+        let _ = block.set("text", message.content);
+        if (message.role == "system") {
+            system.push(block);
+            null
+        } else {
+            let role = if (message.role == "assistant") { "assistant" } else { "user" };
+            messages.push(
+                AnthropicMessage { role: role, tool_results: false, blocks: [block] },
+            );
+            null
+        };
+    }
+    AnthropicPrompt { system: system, messages: messages }
+}
+
 function _anthropic_assistant_blocks(content: ai.content.Block[]) -> map<string, unknown>[] {
     let out: map<string, unknown>[] = [];
     for (let b in content) {
@@ -147,30 +175,39 @@ function _anthropic_request(
     input: ai.ModelTurnInput,
     stream: bool,
 ) -> baml.http.Request {
-    let instructions = input.prompt.render_text(ai.wire.render_output_format(input.output_type));
-    let lowered = _anthropic_lower_journal(input.journal);
+    let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
+    let prompt_parts = _anthropic_lower_prompt(prompt);
+    let system = prompt_parts.system;
+    let lowered = prompt_parts.messages;
+    for (let message in _anthropic_lower_journal(input.journal)) {
+        lowered.push(message);
+    }
 
     let body: map<string, unknown> = {};
     let _ = body.set("model", c.model);
     let _ = body.set("max_tokens", c.max_tokens);
-    // The API requires a non-empty message list that STARTS with a user
-    // message. A repaired first step opens the journal with an assistant
-    // message, so the first-turn rule generalizes (as it did for Gemini):
-    // whenever the lowered journal does not begin with a user message, the
-    // instructions lead as one, and system is omitted.
+    // The API requires a non-empty message list that starts with a user
+    // message. Normal role-less prompts already lower to user. For the unusual
+    // system-only/assistant-first shape, move the system blocks into a leading
+    // user message, matching the old first-turn fallback without flattening
+    // an otherwise well-formed multi-message prompt.
     let first_role = lowered.at(0)?.role ?? "";
-    if (first_role == "user") {
-        let _ = body.set("system", instructions);
-        let _ = body.set("messages", _anthropic_render_messages(lowered));
+    if (first_role != "user" && system.length() > 0) {
+        let first = AnthropicMessage {
+            role: "user",
+            tool_results: false,
+            blocks: system,
+        };
+        let _ = body.set("messages", _anthropic_render_messages([first].concat(lowered)));
         null
     } else {
-        let block: map<string, unknown> = {};
-        let _ = block.set("type", "text");
-        let _ = block.set("text", instructions);
-        let msg: map<string, unknown> = {};
-        let _ = msg.set("role", "user");
-        let _ = msg.set("content", [block]);
-        let _ = body.set("messages", [msg].concat(_anthropic_render_messages(lowered)));
+        if (system.length() > 0) {
+            let _ = body.set("system", system);
+            null
+        } else {
+            null
+        };
+        let _ = body.set("messages", _anthropic_render_messages(lowered));
         null
     };
     if (!input.toolbox.is_empty()) {

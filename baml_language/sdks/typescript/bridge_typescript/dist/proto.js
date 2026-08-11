@@ -409,14 +409,14 @@ function decodeValueHolder(holder, typeMap) {
         if (ht === BamlHandleType.ADT_TAGGED_HEAP_HANDLE) {
             // Dispatch via the typemap: every tagged-heap class self-registers
             // under its engine FQN (codegen emits the entry, e.g.
-            // `baml.llm.Stream → BamlStream`), so any class is reachable without
+            // `ai.stream.Stream → BamlStream`), so any class is reachable without
             // special-casing here. Mirrors bridge_python's `_decode_handle`
             // ADT_TAGGED_HEAP_HANDLE arm (sdks/python/.../proto.py).
             // The handle's `ty` is a full `BamlTy`; the typed-wrapper FQN lives
             // on its class variant (a non-class `ty` reads back as `''`).
             const fqn = holder.handleValue.ty?.classTy?.name ?? '';
             const Cls = typeMap.getClass(fqn);
-            return Cls._fromHandle(handle);
+            return Cls._fromHandle(handle, fqn);
         }
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
         return handle;

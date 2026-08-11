@@ -56,10 +56,11 @@ function echo_spec(c: ai.Client, tools: ai.tools.Tool[]) -> ai.FunctionSpec<Echo
     ai.FunctionSpec {
         spec_name: "EchoBack",
         args: args,
-        prompt_template: ai.Prompt {
-            template: (output_format: string) -> {
-                `Call the echo tool with the message 'baml-mcp-ok', then return its exact reply. ${output_format}`
-            },
+        prompt_template: (output_format: string) -> {
+            ai.internal.assemble_prompt(
+                [`Call the echo tool with the message 'baml-mcp-ok', then return its exact reply. `, ""],
+                [output_format],
+            )
         },
         toolbox: ai.tools.Toolbox.new(tools),
         default_client: c,

@@ -56,9 +56,9 @@ function StreamingExtract(text: string) -> StreamingDoc {
 // === Streaming coverage ===
 //
 // `$stream` is synthesized for every tool-less LLM function and returns
-// `ai.Stream<PARTIAL, FINAL>`, driven by the provider's `invoke_stream`
-// (ai.StreamingClient). The 8-bullet plain-text format forces multi-chunk
-// SSE so `next()` yields a series of partials before StreamFinished.
+// `ai.stream.Stream<PARTIAL, FINAL>`, driven by the provider's `invoke_stream`
+// (`ai.stream.StreamingClient`). The 8-bullet plain-text format forces
+// multi-chunk SSE so `next()` yields a series of partials before Done.
 function stream_e2e_extract(text: string) -> string {
   client StreamStub
   prompt `
@@ -114,7 +114,7 @@ function stream_e2e_extract_resume(text: string) -> Resume {
 }
 
 // BAML-driven collectors: they drive `$stream` from inside BAML so the
-// partial values never cross the FFI boundary as `T | StreamFinished`. The
+// partial values never cross the FFI boundary as `T | ai.stream.Done`. The
 // two values that do cross are typed concretely. Useful for isolating a host
 // bridge problem from an engine one — if these pass while the host-driven
 // `*$stream` fails, the break is in the bridge.
@@ -122,7 +122,7 @@ function stream_e2e_collect_doc(text: string) -> StreamingDoc {
   let s = stream_e2e_extract_doc$stream(text);
   while (true) {
     match (s.next()) {
-      baml.stream.StreamFinished => {
+      ai.stream.Done => {
         break;
       }
       _ => {}
@@ -136,7 +136,7 @@ function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
   let next_calls: (null | string)[] = [];
   while (true) {
     match (s.next()) {
-      baml.stream.StreamFinished => {
+      ai.stream.Done => {
         break;
       }
       null => {

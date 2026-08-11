@@ -55,18 +55,15 @@ function parse_companions.ParseCompanionsParseAliasPayload$parse(json: string) -
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> string {
+function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> ai.Prompt {
     call user.parse_companions.ParseCompanionsParseAliasPayload$spec
-    store_var _2
-    load_type parse_companions.ParseCompanionsAliasPayload
-    load_var _2
-    call ai.FunctionSpec.prompt
     store_var _1
     load_type parse_companions.ParseCompanionsAliasPayload
     call ai.wire.render_output_format
-    store_var _4
-    load_var2 1 3
-    call ai.Prompt.render_text
+    store_var _2
+    load_type parse_companions.ParseCompanionsAliasPayload
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -74,21 +71,20 @@ function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.Function
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _3
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(ParseCompanionsParseAliasPayload$spec, 0)>, 0
-    init_instance ai.Prompt .template
-    load_var _4
+    load_var _3
     load_global user.parse_companions.ParseCompanionsTestClient
     load_type parse_companions.ParseCompanionsAliasPayload
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
+function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -141,18 +137,15 @@ function parse_companions.ParseCompanionsParseOptPayload$parse(json: string) -> 
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> string {
+function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> ai.Prompt {
     call user.parse_companions.ParseCompanionsParseOptPayload$spec
-    store_var _2
-    load_type parse_companions.ParseCompanionsOptPayload
-    load_var _2
-    call ai.FunctionSpec.prompt
     store_var _1
     load_type parse_companions.ParseCompanionsOptPayload
     call ai.wire.render_output_format
-    store_var _4
-    load_var2 1 3
-    call ai.Prompt.render_text
+    store_var _2
+    load_type parse_companions.ParseCompanionsOptPayload
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -160,21 +153,20 @@ function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSp
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _3
     load_const "ParseCompanionsParseOptPayload"
     load_type string
     load_type unknown
     alloc_map 0
     make_closure .<lambda(ParseCompanionsParseOptPayload$spec, 0)>, 0
-    init_instance ai.Prompt .template
-    load_var _4
+    load_var _3
     load_global user.parse_companions.ParseCompanionsTestClient
     load_type parse_companions.ParseCompanionsOptPayload
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.stream.StreamingClient | null) -> baml.llm.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
+function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==

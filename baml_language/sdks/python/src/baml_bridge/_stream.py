@@ -1,4 +1,4 @@
-"""`BamlStream` — pure-Python wrapper for `baml.llm.Stream`.
+"""`BamlStream` — pure-Python wrapper for a BAML stream handle.
 
 Holds a `BamlPyHandle` whose `HANDLE_TABLE` row is a
 `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`.
@@ -23,9 +23,6 @@ from typing import Any, Generic, TypeVar
 
 from .baml_py import BamlPyHandle
 
-_STREAM_NEXT_FN = "baml.llm.Stream.next"
-_STREAM_FINAL_FN = "baml.llm.Stream.final"
-
 TStream = TypeVar("TStream")
 TFinal = TypeVar("TFinal")
 
@@ -43,31 +40,36 @@ class BamlStream(Generic[TStream, TFinal]):
     `Stream<TStream, TFinal>` (stream type first, final type second).
     """
 
-    def __init__(self, handle: BamlPyHandle) -> None:
+    def __init__(self, handle: BamlPyHandle, class_fqn: str) -> None:
+        if not class_fqn:
+            raise ValueError("a BAML stream handle must carry its class FQN")
         self._handle = handle
+        self._class_fqn = class_fqn
 
     @classmethod
-    def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> "BamlStream":
+    def _from_pyhandle(
+        cls, pyhandle: BamlPyHandle, class_fqn: str
+    ) -> "BamlStream":
         """Internal: build a `BamlStream` from a `BamlPyHandle`. Used by
         `proto.py::_decode_handle`, which has already dispatched on the
-        wire `handle_type` tag — no further validation needed here."""
-        return cls(pyhandle)
+        wire `handle_type` tag and read the tagged handle's class FQN."""
+        return cls(pyhandle, class_fqn)
 
     def _to_pyhandle(self) -> BamlPyHandle:
         """Internal: expose the inner `BamlPyHandle` for inbound encode."""
         return self._handle
 
     def next(self) -> Any:
-        return self._call_sync(_STREAM_NEXT_FN)
+        return self._call_sync(f"{self._class_fqn}.next")
 
     async def next_async(self) -> Any:
-        return await self._call_async(_STREAM_NEXT_FN)
+        return await self._call_async(f"{self._class_fqn}.next")
 
     def final(self) -> Any:
-        return self._call_sync(_STREAM_FINAL_FN)
+        return self._call_sync(f"{self._class_fqn}.final")
 
     async def final_async(self) -> Any:
-        return await self._call_async(_STREAM_FINAL_FN)
+        return await self._call_async(f"{self._class_fqn}.final")
 
     # `proto.py` imports `BamlStream` at module load, so the call-path
     # imports (`get_runtime`, `encode_call_args`, `decode_call_result`)

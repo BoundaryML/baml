@@ -1,8 +1,8 @@
-// Tests for `Object::Type` structural equality via `baml.llm.get_return_type`.
+// Tests for `Object::Type` structural equality via `baml.prompt.get_return_type`.
 //
 // Converted from crates/baml_tests/tests/type_reflection.rs.
 //
-// `baml.llm.get_return_type(name)` is a pure static lookup — it does NOT
+// `baml.prompt.get_return_type(name)` is a pure static lookup — it does NOT
 // make an actual LLM network call. The client declaration is required by the
 // compiler (LLM functions must declare a client) but no request is sent.
 //
@@ -32,8 +32,8 @@ function GetBar() -> Bar {
 // ─── Equality / inequality tests ─────────────────────────────────────────────
 
 function eq_type_values_same_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
+    let a = baml.prompt.get_return_type("GetFoo");
+    let b = baml.prompt.get_return_type("GetFoo");
     a == b
 }
 
@@ -42,8 +42,8 @@ test "eq_type_values_same" {
 }
 
 function eq_type_values_different_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
+    let a = baml.prompt.get_return_type("GetFoo");
+    let b = baml.prompt.get_return_type("GetBar");
     a == b
 }
 
@@ -52,8 +52,8 @@ test "eq_type_values_different" {
 }
 
 function neq_type_values_same_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
+    let a = baml.prompt.get_return_type("GetFoo");
+    let b = baml.prompt.get_return_type("GetFoo");
     a != b
 }
 
@@ -62,8 +62,8 @@ test "neq_type_values_same" {
 }
 
 function neq_type_values_different_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
+    let a = baml.prompt.get_return_type("GetFoo");
+    let b = baml.prompt.get_return_type("GetBar");
     a != b
 }
 
@@ -72,8 +72,8 @@ test "neq_type_values_different" {
 }
 
 function deep_equals_type_values_same_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
+    let a = baml.prompt.get_return_type("GetFoo");
+    let b = baml.prompt.get_return_type("GetFoo");
     baml.deep_equals(a, b)
 }
 
@@ -82,8 +82,8 @@ test "deep_equals_type_values_same" {
 }
 
 function deep_equals_type_values_different_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
+    let a = baml.prompt.get_return_type("GetFoo");
+    let b = baml.prompt.get_return_type("GetBar");
     baml.deep_equals(a, b)
 }
 

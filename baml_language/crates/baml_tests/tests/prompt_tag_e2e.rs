@@ -1,5 +1,4 @@
-//! BEP-049 M5e/M5f end-to-end: a backtick `prompt` streams through the
-//! orchestrator and its rendered text reaches the provider request.
+//! BEP-049 M5e/M5f end-to-end prompt and streaming coverage.
 //!
 //! Removed with the legacy LLM path (see git history):
 //!   - `backtick_prompt_renders_into_provider_request` — asserted on the wire

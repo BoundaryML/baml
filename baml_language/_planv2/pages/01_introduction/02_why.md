@@ -46,10 +46,11 @@ return a handle instead of a value today
 There is no graph or state-machine DSL. Control flow between runs is
 ordinary BAML code.
 
-There is no streaming in this phase. `invoke` blocks for one model
-turn; the streaming capability is a later, additive interface. A
-custom client that wants deltas sooner can consume its provider's
-stream internally and still return one terminal `ModelTurn`.
+Streaming is an optional client capability. `StreamingClient.invoke_stream`
+returns a pull-based one-turn stream, and an LLM function's `$stream` companion
+exposes typed partial values while retaining the same terminal result shape.
+The journal records only the completed turn, not token deltas, so streaming
+does not change replay semantics.
 
 ## Relation to other systems
 

@@ -33,15 +33,17 @@ class FunctionSpec<Out> {
     function name(self) -> string throws never
     function arguments(self) -> map<string, unknown> throws never
     function output_type(self) -> type throws never
-    function prompt(self) -> Prompt throws never
+    prompt_template: (string) -> Prompt throws never,
+    function prompt(self, output_format: string = "") -> Prompt throws never
     function tools(self) -> Toolbox throws never
 }
 ```
 
 `default_client` holds the resolved client; `client` is a keyword and
 cannot be a method name. Resolution of the function's `client:` string
-happens at spec creation and throws there on an unknown prefix or
-missing credential.
+happens at spec creation and throws there on an unknown prefix. Built-in
+clients resolve credentials only when they invoke a request, so a missing
+credential fails at that boundary rather than during spec construction.
 
 ## `Runner<Out>` and `Agent<Out>`
 
@@ -110,7 +112,7 @@ interface Client {
 }
 
 class ModelTurnInput {
-    prompt: Prompt,
+    prompt: (string) -> Prompt throws never,
     journal: Journal,
     toolbox: Toolbox,
     output_type: type,
@@ -156,21 +158,22 @@ media return type is a phase 2 rule
 ## `Prompt`
 
 ```baml
-type InstructionPart = string | image | audio | video | pdf
-
 class Prompt {
-    function render(self, output_format: string) -> InstructionPart[] throws never
-    function render_text(self, output_format: string) -> string throws baml.errors.Unsupported
+    function text(self) -> string throws never
+    function messages(self) -> PromptMessage[] throws never
 }
+
+class PromptMessage { role: string, content: string }
 ```
 
-`render` substitutes the bound arguments and the given text at
-`${ctx.output_format}` and returns the turn's instructions as parts:
-text segments and media arguments alternate in template order, and a
-text-only template renders as one text part. `render_text` joins an
-all-text rendering and throws `Unsupported` when a media argument is
-present. The conversation is not part of the rendering; the client
-lowers the journal as messages after the instructions.
+`FunctionSpec.prompt(output_format = text)` substitutes the bound arguments and the given text at
+`${ctx.output_format}` and returns the turn's instructions as a structural
+prompt. Role markers split it into ordered messages, and media remains
+structural inside message content. Each client invokes the bound template with
+its output-format text, lowers the result to its own wire shape, then lowers the
+journal after the prompt messages. `Prompt.text()` is
+available for display and text-only transports, but it is an explicit lossy
+projection rather than the client rendering API.
 
 ## `Journal` and events
 
@@ -254,57 +257,58 @@ function resolve(shorthand: string) -> Client
     // unknown prefix or bad configuration; factory errors propagate
 ```
 
-Built-in clients. Every client is a plain value; `new` defaults every
-parameter, reads the credential from the environment when `api_key` is
-null, and throws when neither is available:
+Built-in clients. Every client is a plain value and `new` is pure: it defaults
+configuration but does not read the environment. An explicit `api_key` is
+stored when supplied; otherwise `invoke` resolves the provider's environment
+variable at request time and fails there when no credential is available:
 
 ```baml
 enum OutputMode { Sap }    // phase 2 adds Native and Strict
 
 class OpenAiClient {
     model: string,
-    api_key: string,
+    api_key: string?,
     base_url: string?,
     extra_headers: map<string, string>?,
     output_mode: OutputMode,
 
     function new(
         model: string = "gpt-4o-mini",
-        api_key: string? = null,                 // null: read OPENAI_API_KEY
+        api_key: string? = null,                 // null: invoke reads OPENAI_API_KEY
         base_url: string? = null,
         extra_headers: map<string, string>? = null,
         output_mode: OutputMode = OutputMode.Sap,
-    ) -> OpenAiClient throws baml.errors.InvalidArgument
+    ) -> OpenAiClient throws never
 }
 
 class AnthropicClient {
     model: string,
-    api_key: string,
+    api_key: string?,
     base_url: string?,
     max_tokens: int,
     output_mode: OutputMode,
 
     function new(
         model: string = "claude-haiku-4-5",
-        api_key: string? = null,                 // null: read ANTHROPIC_API_KEY
+        api_key: string? = null,                 // null: invoke reads ANTHROPIC_API_KEY
         base_url: string? = null,
         max_tokens: int = 4096,
         output_mode: OutputMode = OutputMode.Sap,
-    ) -> AnthropicClient throws baml.errors.InvalidArgument
+    ) -> AnthropicClient throws never
 }
 
 class GoogleClient {
     model: string,
-    api_key: string,
+    api_key: string?,
     base_url: string?,
     output_mode: OutputMode,
 
     function new(
         model: string = "gemini-2.5-flash",
-        api_key: string? = null,                 // null: read GOOGLE_API_KEY
+        api_key: string? = null,                 // null: invoke reads GOOGLE_API_KEY
         base_url: string? = null,
         output_mode: OutputMode = OutputMode.Sap,
-    ) -> GoogleClient throws baml.errors.InvalidArgument
+    ) -> GoogleClient throws never
 }
 ```
 
@@ -389,10 +393,10 @@ BEP:
 | `baml.json.schema(t: type) -> json` | `tool()` schema derivation, `wire.render_output_format`, custom clients |
 | `baml.sap.parse<T>(text: string) -> T` | the runner's final parse; custom runners |
 | `baml.json.parse` / `stringify` / `from_json<T>` / `from_string<T>` | clients, everywhere JSON crosses a boundary |
-| `baml.http.Request` / `Response` / `send` / `fetch_sse` | `wire.send_as`; clients that bypass it; streaming later |
+| `baml.http.Request` / `Response` / `send` / `fetch_sse` | `wire.send_as`; clients that bypass it; streaming clients |
 | `baml.sys.exec` / `start_process` | process-transport clients; the Claude Code client streams its event transcript live |
 | `reflect.type_of<T>` / `signature` / `call_any` | tool schema derivation; tool execution |
-| `baml.env.get` / `get_or_panic` | credential resolution in registry factories |
+| `baml.env.get` / `get_or_panic` | request-time credential resolution in built-in clients; custom registry factories |
 
 `wire` is a convenience layer over these; dropping to the primitives
 is always available.

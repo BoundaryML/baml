@@ -29,7 +29,7 @@ import * as complexModels from "./baml_sdk/complex_models/index.js";
 import * as lorem from "./baml_sdk/lorem/index.js";
 import * as a from "./baml_sdk/a/index.js";
 import * as builtinMedia from "./baml_sdk/baml/media/index.js";
-import * as builtinLlm from "./baml_sdk/baml/llm/index.js";
+import * as builtinAiStream from "./baml_sdk/ai/stream/index.js";
 
 describe("type_shapes — namespace imports", () => {
   it("main_root_imports_cleanly", () => {
@@ -56,14 +56,14 @@ describe("type_shapes — namespace imports", () => {
       lorem,
       a,
       builtinMedia,
-      builtinLlm,
+      builtinAiStream,
     ]) {
       expect(mod).toBeDefined();
     }
   });
 
   it("main_runtime_owned_builtin_leaves_expose_their_public_names", () => {
-    for (const value of [builtinMedia.Image, builtinMedia.Audio, builtinMedia.Video, builtinMedia.Pdf, builtinLlm.Stream]) {
+    for (const value of [builtinMedia.Image, builtinMedia.Audio, builtinMedia.Video, builtinMedia.Pdf, builtinAiStream.Stream]) {
       expect(value).toBeTypeOf("function");
     }
   });

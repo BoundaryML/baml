@@ -370,7 +370,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
             // LLM `$stream` companions, single-path StreamingClient design:
             // `Fn$stream(args, client)` = one-turn streaming over the
             // function's own spec, returning the typed partial stream
-            // `ai.Stream<Out$stream, Out>`. Synthesized here (not with the
+            // `ai.stream.Stream<Out$stream, Out>`. Synthesized here (not with the
             // AST-level companions) because the body's explicit type args
             // need the stream-expanded return type, which only PPIR can
             // compute. Tools-bearing functions get no `$stream`: streaming
@@ -413,15 +413,14 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 let name_span = func.name_span;
 
                 // The `<STREAM_EXPANDED, ORIGINAL>` pair: the return type
-                // `ai.Stream<TS, TF>` and the body's explicit call-site type
-                // args on `ai.from_spec`, so the stdlib reifies both types
+                // `ai.stream.Stream<TS, TF>` and the body's explicit call-site
+                // type args on `ai.stream.from_spec`, so the stdlib reifies both types
                 // from its own frame (`reflect.type_of<TStream/TFinal>()`).
                 let companion_type_args = vec![stream_type_expr, return_type_spanned.clone()];
                 let return_type = ast::TypeExprKind::Path {
-                    // `baml.llm.Stream`, not `ai.Stream`: every SDK generator
-                    // matches a stream companion's return type by this exact
-                    // name, which is what makes host-language streaming work.
-                    segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
+                    // The canonical host-facing stream lives with the rest of
+                    // the AI streaming contract.
+                    segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
                     generic_args: companion_type_args.clone(),
                     associated_type_bindings: vec![],
                     attrs: vec![],

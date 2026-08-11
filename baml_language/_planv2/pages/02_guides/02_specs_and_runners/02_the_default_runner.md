@@ -87,7 +87,7 @@ a step, and each attempt's token usage counts toward
 `RunResult.usage`. A turn whose last attempt still fails throws
 `ParseFailed`, with the whole exchange on the record.
 A custom runner can write the same loop with its own feedback wording,
-because the pieces are public primitives — `spec.prompt()`,
+because the pieces are public primitives — `spec.prompt_template`,
 `Journal.append_all`, `UserMessage`, and `client.invoke`
 (`../../03_how_to/01_retry_a_failed_parse_with_feedback.md`).
 

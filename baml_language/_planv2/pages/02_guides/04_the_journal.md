@@ -26,13 +26,13 @@ filter the transcript the same way
 | Event | Fields | Appended |
 |---|---|---|
 | `RunStarted` | `spec_name`, `arguments` | once, before the first turn |
-| `UserMessage` | `content` | by custom runners; parse repair uses it ephemerally |
+| `UserMessage` | `content` | by custom runners and committed parse-repair re-asks |
 | `AssistantMessage` | `content: Block[]`, `client_id` | one per model turn |
 | `ToolRequested` | `id`, `name`, `args` | one per `ToolUse` block, with its turn |
 | `ToolCompleted` | `id`, `output` | when the tool returns |
 | `ToolFailed` | `id`, `message` | when the tool throws or validation fails |
 | `Usage` | `input_tokens`, `output_tokens`, `cached_input_tokens?`, `reasoning_tokens?` | one per model turn |
-| `FinalProduced` | `value: json` | once, when the final candidate parses |
+| `FinalProduced` | `value_json: string` | once, when the final candidate parses |
 
 The reference catalog with ordering and rendering rules is
 `../04_reference/02_events.md`.
@@ -72,9 +72,10 @@ uses these API-reported numbers, not estimates from prompt sizes.
 
 ## What is not recorded
 
-Token deltas are not events. Streaming, when a later phase adds it,
-travels on an ephemeral channel; the journal records final turns only,
-so replay does not become re-streaming.
+Token deltas are not events. Streaming travels through the pull-based stream
+returned by `$stream`; the journal records terminal turns only, so replay does
+not become re-streaming. A streamed and blocking turn therefore commit the
+same canonical event shape.
 
 Raw HTTP envelopes are not events. A response body is not valid model
 input and does not belong in the transcript source. The narrow

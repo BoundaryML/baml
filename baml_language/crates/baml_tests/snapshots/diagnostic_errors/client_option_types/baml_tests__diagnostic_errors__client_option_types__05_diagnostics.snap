@@ -40,39 +40,14 @@ source: crates/baml_tests/src/generated_tests.rs
     · ╰──── migrate to a backtick prompt
     ╰────
 
-  [type] E0096
-
-  × declared throws is `never`, but this function may also throw `unknown`
-    ╭─[client_option_types.baml:33:12]
- 33 │     prompt `${role("system")}Be terse. ${input}`
-    ·            ─────────────────────────────────────
-    ╰────
-
-  [hir] E0010
-
-  × `${role(...)}` markers are removed; the prompt of `LegacyRoleMarker` is instructions-only — the conversation lives in the journal, and message roles are the client's wire concern
-    ╭─[client_option_types.baml:33:15]
- 33 │     prompt `${role("system")}Be terse. ${input}`
-    ·               ───────┬──────
-    ·                      ╰── delete the role marker; write plain instructions
-    ╰────
-
-  [type] E0003
-
-  × unresolved name: `role`
-    ╭─[client_option_types.baml:33:15]
- 33 │     prompt `${role("system")}Be terse. ${input}`
-    ·               ────
-    ╰────
-
   [hir] E0010
 
   × LLM function `UnknownProviderPrefix` has an unusable `client`: no builtin provider for prefix "aws-bedrock"; construct a client value instead (OpenAI-compatible endpoints:
   │ openai.OpenAiClient.new(base_url = ..., model = "anthropic.claude-3-haiku"))
-    ╭─[client_option_types.baml:37:57]
- 37 │ ╭─▶ function UnknownProviderPrefix(input: string) -> string {
- 38 │ │       client "aws-bedrock/anthropic.claude-3-haiku"
- 39 │ │       prompt `${input}`
- 40 │ ├─▶ }
+    ╭─[client_option_types.baml:38:57]
+ 38 │ ╭─▶ function UnknownProviderPrefix(input: string) -> string {
+ 39 │ │       client "aws-bedrock/anthropic.claude-3-haiku"
+ 40 │ │       prompt `${input}`
+ 41 │ ├─▶ }
     · ╰──── use a "provider/model" string or an expression evaluating to ai.Client
     ╰────

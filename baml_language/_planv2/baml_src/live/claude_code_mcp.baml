@@ -8,18 +8,15 @@ function dynamic_mcp_spec(c: claude_code.ClaudeCodeClient) -> ai.FunctionSpec<Ec
     ai.FunctionSpec {
         spec_name: "DynamicMcpEcho",
         args: args,
-        prompt_template: ai.Prompt {
-            template: (output_format: string) -> {
-                `
+        prompt_template: (output_format: string) -> {
+            ai.internal.assemble_prompt([`
                     You have no echo capability yet. First call attach_mcp with
                     name "everything", command "npx",
                     args ["-y", "@modelcontextprotocol/server-everything"].
                     After it reports attached, an mcp__everything__echo tool will be
                     installed in your environment on your next turn; call it with the
                     message 'baml-dynamic-ok' and return its exact reply.
-                    ${output_format}
-                `
-            },
+                    `, ""], [output_format])
         },
         toolbox: ai.tools.Toolbox.new([attach_mcp_tool(c)]),
         default_client: c,

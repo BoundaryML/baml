@@ -45,20 +45,17 @@ function user.AskDocs$parse(json: string) -> string {
     return
 }
 
-function user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> string {
+function user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> ai.Prompt {
     load_var2 1 2
     load_var filter
     call user.AskDocs$spec
-    store_var _5
-    load_type string
-    load_var _5
-    call ai.FunctionSpec.prompt
     store_var _4
     load_type string
     call ai.wire.render_output_format
-    store_var _7
-    load_var2 4 6
-    call ai.Prompt.render_text
+    store_var _5
+    load_type string
+    load_var2 4 5
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -75,7 +72,7 @@ function user.AskDocs$spec(query: string, max_results: int, filter: string) -> a
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _7
+    store_var _6
     load_const "AskDocs"
     load_deref ?1
     load_deref ?2
@@ -89,15 +86,14 @@ function user.AskDocs$spec(query: string, max_results: int, filter: string) -> a
     load_var2 1 2
     load_var filter
     make_closure .<lambda(AskDocs$spec, 0)>, 3
-    init_instance ai.Prompt .template
-    load_var _7
+    load_var _6
     load_global user.TestClient
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

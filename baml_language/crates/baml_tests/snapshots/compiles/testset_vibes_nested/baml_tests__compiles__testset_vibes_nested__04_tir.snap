@@ -11,12 +11,12 @@ function user.ClassifySentiment(text: string, client: ai.Client | null = null) -
   ai.Agent.new<Sentiment>(client = client).run(ClassifySentiment$spec(text)).value : user.Sentiment
 }
 function user.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<user.Sentiment> throws never {
-  ai.FunctionSpec { spec_name: "ClassifySentiment", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<user.Sentiment>
+  ai.FunctionSpec { spec_name: "ClassifySentiment", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<user.Sentiment>
 }
 lambda user.ClassifySentiment$spec {
 }
-function user.ClassifySentiment$render_prompt(text: string) -> string throws never {
-  ClassifySentiment$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of<Sentiment>())) : string
+function user.ClassifySentiment$render_prompt(text: string) -> ai.Prompt throws never {
+  ClassifySentiment$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<Sentiment>())) : ai.Prompt
 }
 function user.ClassifySentiment$parse(json: string) -> user.Sentiment throws never {
   baml.sap.parse<T>(json) : user.Sentiment
@@ -25,12 +25,12 @@ function user.GenerateTests(count: int, topic: string, client: ai.Client | null 
   ai.Agent.new<string[]>(client = client).run(GenerateTests$spec(count, topic)).value : string[]
 }
 function user.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]> throws never {
-  ai.FunctionSpec { spec_name: "GenerateTests", args: map { "count": count, "topic": topic }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<string[]>
+  ai.FunctionSpec { spec_name: "GenerateTests", args: map { "count": count, "topic": topic }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<string[]>
 }
 lambda user.GenerateTests$spec {
 }
-function user.GenerateTests$render_prompt(count: int, topic: string) -> string throws never {
-  GenerateTests$spec(count, topic).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string[]>())) : string
+function user.GenerateTests$render_prompt(count: int, topic: string) -> ai.Prompt throws never {
+  GenerateTests$spec(count, topic).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string[]>())) : ai.Prompt
 }
 function user.GenerateTests$parse(json: string) -> string[] throws never {
   baml.sap.parse<T>(json) : string[]
@@ -53,12 +53,12 @@ function user.ClassifySentiment2(text: string, client: ai.Client | null = null) 
   ai.Agent.new<string>(client = client).run(ClassifySentiment2$spec(text)).value : string
 }
 function user.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> throws never {
-  ai.FunctionSpec { spec_name: "ClassifySentiment2", args: map { "text": text }, prompt_template: ai.Prompt { template: ( __spec_output_format: string) -> { ... } }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<string>
+  ai.FunctionSpec { spec_name: "ClassifySentiment2", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<string>
 }
 lambda user.ClassifySentiment2$spec {
 }
-function user.ClassifySentiment2$render_prompt(text: string) -> string throws never {
-  ClassifySentiment2$spec(text).prompt().render_text(ai.wire.render_output_format(reflect.type_of<string>())) : string
+function user.ClassifySentiment2$render_prompt(text: string) -> ai.Prompt throws never {
+  ClassifySentiment2$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
 function user.ClassifySentiment2$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
@@ -96,12 +96,12 @@ class user.Sentiment$stream {
   confidence: float | null
   reasoning: string | null
 }
-function user.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
-  ai.stream.from_spec(ClassifySentiment$spec(text), client = client) : baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>
+function user.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
+  ai.stream.from_spec(ClassifySentiment$spec(text), client = client) : ai.stream.Stream<user.Sentiment$stream | null, user.Sentiment>
 }
-function user.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string[], string[]> throws never {
-  ai.stream.from_spec(GenerateTests$spec(count, topic), client = client) : baml.llm.Stream<string[], string[]>
+function user.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string[], string[]> throws never {
+  ai.stream.from_spec(GenerateTests$spec(count, topic), client = client) : ai.stream.Stream<string[], string[]>
 }
-function user.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null = null) -> baml.llm.Stream<string | null, string> throws never {
-  ai.stream.from_spec(ClassifySentiment2$spec(text), client = client) : baml.llm.Stream<string | null, string>
+function user.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(ClassifySentiment2$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }

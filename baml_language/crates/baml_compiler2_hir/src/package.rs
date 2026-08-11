@@ -390,7 +390,7 @@ pub fn package_dependencies<'db>(
         // a primitive string.
         "boundary" => vec![],
         // "baml" depends on "log" and "reflect" so stdlib code can call
-        // log.info/debug/etc. and reflect.type_of<T>() inside ns_llm.
+        // log.info/debug/etc. and reflect.type_of<T>() inside builtin BAML namespaces.
         "baml" => vec![
             PackageId::new(db, Name::new("log")),
             PackageId::new(db, Name::new("reflect")),

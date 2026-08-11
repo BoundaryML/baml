@@ -37,19 +37,16 @@ function streaming_parsing.ExtractDoc$parse(json: string) -> streaming_parsing.D
     return
 }
 
-function streaming_parsing.ExtractDoc$render_prompt(input: string) -> string {
+function streaming_parsing.ExtractDoc$render_prompt(input: string) -> ai.Prompt {
     load_var input
     call user.streaming_parsing.ExtractDoc$spec
-    store_var _3
-    load_type streaming_parsing.Doc
-    load_var _3
-    call ai.FunctionSpec.prompt
     store_var _2
     load_type streaming_parsing.Doc
     call ai.wire.render_output_format
-    store_var _5
-    load_var2 2 4
-    call ai.Prompt.render_text
+    store_var _3
+    load_type streaming_parsing.Doc
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -60,7 +57,7 @@ function streaming_parsing.ExtractDoc$spec(input: string) -> ai.FunctionSpec<str
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _4
     load_const "ExtractDoc"
     load_deref ?1
     load_const "input"
@@ -69,15 +66,14 @@ function streaming_parsing.ExtractDoc$spec(input: string) -> ai.FunctionSpec<str
     alloc_map 1
     load_var input
     make_closure .<lambda(ExtractDoc$spec, 0)>, 1
-    init_instance ai.Prompt .template
-    load_var _5
+    load_var _4
     load_global user.streaming_parsing.StreamParseClient
     load_type streaming_parsing.Doc
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function streaming_parsing.ExtractDoc$stream(input: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
+function streaming_parsing.ExtractDoc$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<streaming_parsing.Doc$stream | null, streaming_parsing.Doc> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -132,19 +128,16 @@ function streaming_parsing.SayHello$parse(json: string) -> string {
     return
 }
 
-function streaming_parsing.SayHello$render_prompt(input: string) -> string {
+function streaming_parsing.SayHello$render_prompt(input: string) -> ai.Prompt {
     load_var input
     call user.streaming_parsing.SayHello$spec
-    store_var _3
-    load_type string
-    load_var _3
-    call ai.FunctionSpec.prompt
     store_var _2
     load_type string
     call ai.wire.render_output_format
-    store_var _5
-    load_var2 2 4
-    call ai.Prompt.render_text
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -155,7 +148,7 @@ function streaming_parsing.SayHello$spec(input: string) -> ai.FunctionSpec<strin
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _4
     load_const "SayHello"
     load_deref ?1
     load_const "input"
@@ -164,15 +157,14 @@ function streaming_parsing.SayHello$spec(input: string) -> ai.FunctionSpec<strin
     alloc_map 1
     load_var input
     make_closure .<lambda(SayHello$spec, 0)>, 1
-    init_instance ai.Prompt .template
-    load_var _5
+    load_var _4
     load_global user.streaming_parsing.StreamParseClient
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function streaming_parsing.SayHello$stream(input: string, client: ai.stream.StreamingClient | null) -> baml.llm.Stream<string | null, string> {
+function streaming_parsing.SayHello$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -188,68 +180,5 @@ function streaming_parsing.SayHello$stream(input: string, client: ai.stream.Stre
     load_type string
     load_var2 3 2
     call ai.stream.from_spec
-    return
-}
-
-function streaming_parsing.openai_sse_body(chunks: string[], finish_reason: string) -> string {
-    load_const ""
-    store_var body
-    load_var chunks
-    load_type baml.iter.Iterable<Error = never, Item = string>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _4
-
-  L0:
-    load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = string>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
-    is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var body
-    load_const "data: {\"choices\":[{\"delta\":{\"content\":\""
-    bin_op +
-    load_var _5
-    bin_op +
-    load_const "\"}}]}\n\n"
-    bin_op +
-    store_var body
-    jump L0
-
-  L2:
-    load_var body
-    load_const "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\""
-    bin_op +
-    load_var finish_reason
-    bin_op +
-    load_const "\"}]}\n\n"
-    bin_op +
-    store_var_load_var body
-    load_const "data: [DONE]\n\n"
-    bin_op +
-    store_var body
-    load_var body
-    return
-}
-
-function streaming_parsing.repoint_request(req: baml.http.Request, addr: string) -> baml.http.Request {
-    load_var req
-    load_field .method
-    load_const "http://"
-    load_var addr
-    bin_op +
-    load_const "/chat/completions"
-    bin_op +
-    load_var req
-    load_field .headers
-    load_var req
-    load_field .body
-    init_instance baml.http.Request .method, .url, .headers, .body
     return
 }

@@ -22,7 +22,7 @@ new optional interfaces discovered by `match`, new journal event
 types, and new content block kinds behind the existing union. No phase
 removes or repurposes a phase 1 name.
 
-## Phase 2 — fidelity and streaming
+## Phase 2 — fidelity and other extensions
 
 **Replay capsules.** Same-provider fidelity needs API-native data that
 canonical blocks deliberately omit: signed reasoning items, output
@@ -47,7 +47,7 @@ final turns only, so a streamed run and a blocking run produce identical
 journals. It differs in one respect. Rather than feeding an ephemeral
 sink, `invoke_stream` returns a `TurnStream` the caller pulls, folded
 from provider `StreamEvent`s; the host-facing surface is `f@stream(...)`,
-which returns `baml.llm.Stream` so every SDK sees its own language's
+which returns `ai.stream.Stream` so every SDK sees its own language's
 stream type. `ai.stream.from_spec` is the explicit form for driving a spec
 without the companion.
 

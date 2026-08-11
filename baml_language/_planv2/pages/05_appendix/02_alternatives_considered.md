@@ -202,12 +202,13 @@ provider kept (`next_call_id`, serialized into resume tokens).
 Clients are stateless, so the id must be a function of the input;
 journal position makes the same turn produce the same ids on replay.
 
-## 16. The prompt is the instructions; no transcript placeholder
+## 16. The prompt is structural; no transcript placeholder
 
-The prompt template renders to one instructions string per turn, and
-the journal lowers as messages after it. There is no
-`${ctx.transcript}` placeholder, and the template does not control
-where the conversation appears.
+The prompt template renders to an `ai.Prompt` of ordered messages and parts per
+turn. Authored role markers and media remain structural. The journal is still
+the independent transcript source: there is no `${ctx.transcript}` placeholder,
+and the template does not control where the conversation appears. Each client
+decides how to combine prompt messages with the lowered journal in its wire API.
 
 Rejected: a positional transcript marker in the template, as the
 sessions draft had. At the wire level the position is fiction — chat
@@ -217,11 +218,11 @@ That suffix works against prompt caching, because the cacheable static
 prefix ends where the growing history begins, and its one use case —
 a per-turn reminder placed after the history — is better served by
 injected messages, which arrive as journal events when sessions do.
-Dropping the marker also removes the `RenderedPrompt` before/after
-split from the client surface; `Prompt.render` returns one
-string. The cost is that a template author cannot place static content
-after the conversation; a client that needs a trailing element on the
-wire synthesizes it from the instructions.
+Dropping the marker also removes the `RenderedPrompt` before/after split from
+the client surface; invoking the prompt template returns one structural prompt. The cost is
+that a template author cannot place static content after the conversation; a
+client that needs a trailing element on the wire synthesizes it from the
+rendered prompt.
 
 ## 17. Prompt-mode tools are a wrapper client, not a client mode
 
@@ -281,25 +282,30 @@ surface they build on is already stable
 
 ## 20. Adjustments forced by the reference implementation
 
-Building the working reference changed five details of the designed
-surface. `client` is a keyword and cannot be a method name, so the
-spec exposes the resolved default client as the `default_client` field
-rather than a `client()` getter. `Tool.on_error` is `ErrorMode?`
-defaulting to null, where null inherits the run's `tool_errors` mode,
-which is what makes the per-tool-wins rule coherent. The Gemini API
-rejects a request whose lowered journal opens with a function-call
-turn, so the Google client sends the instructions as the leading user
-content on every turn and never uses `systemInstruction`. `reflect.call_any`'s argument
-validation widens integral JSON numbers into `float` and `float?`
-parameters, because models emit `150` for `150.0` and JSON Schema
-`number` accepts integers. The widening is a value-level check, not a
-type-level coercion: BAML ints are i64 and floats are f64, so only
-values that round-trip exactly (up to 2^53) widen, a lossy value
-remains an `InvalidArgumentError`, and language-level typing keeps no
-implicit coercion. Events carry serialized JSON rather than
-`json`-typed fields — `ToolUse.args` is `map<string, unknown>` and
-`ToolCompleted.output` is JSON text — pending a design for
-`json`-typed event fields.
+Building the working reference clarified these details of the designed surface:
+
+- `client` is a keyword and cannot be a method name, so the spec exposes the
+  resolved default client as the `default_client` field rather than a
+  `client()` getter. Built-in client construction is pure: optional credentials
+  resolve from the environment when a request is invoked, not when a client or
+  spec is constructed.
+- `Tool.on_error` is `ErrorMode?`, defaulting to null, where null inherits the
+  run's `tool_errors` mode. This makes the per-tool-wins rule coherent.
+- the prompt template returns a structural `ai.Prompt`. OpenAI prepends its messages
+  to Responses `input`. Anthropic extracts authored system messages to
+  top-level `system`, using them as a leading-user fallback when its combined
+  messages would not start with `user`. Google uses `systemInstruction` for a
+  normal user-first prompt and the leading-user fallback for a system-only or
+  assistant-first prompt.
+- `reflect.call_any` widens integral JSON numbers into `float` and `float?`
+  parameters, because models emit `150` for `150.0` and JSON Schema `number`
+  accepts integers. The widening is a value-level check, not a type-level
+  coercion: only values that round-trip through f64 exactly widen. Dynamic JSON
+  arrays are also rebuilt element-by-element for a typed array parameter, so
+  the same lossless rule recurses while language-level arrays remain invariant.
+- Events use explicit serializable fields: `ToolUse.args` is
+  `map<string, unknown>`, while `ToolCompleted.output` and
+  `FinalProduced.value_json` are JSON text.
 
 ## 21. MCP: journaled tools are canonical; harness attachment is client configuration
 

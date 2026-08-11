@@ -989,83 +989,12 @@ source: crates/baml_tests/src/generated_tests.rs
      ·            ────
      ╰────
 
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:455:12]
- 455 │     prompt `Say hello to ${name}`
-     ·            ──────────────────────
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:455:28]
- 455 │     prompt `Say hello to ${name}`
-     ·                            ──┬─
-     ·                              ╰── expected `T`, found `string`
-     ╰────
-
   [type] E0003
 
   × unresolved name: `GPT4`
      ╭─[function_decls.baml:465:12]
  465 │     client GPT4
      ·            ────
-     ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:466:12]
- 466 │ ╭─▶     prompt `
- 467 │ │           Analyze the following text:
- 468 │ │           ${text}
- 469 │ │           Return a summary.
- 470 │ ╰─▶     `
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:468:11]
- 468 │         ${text}
-     ·           ──┬─
-     ·             ╰── expected `T`, found `string`
-     ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:476:12]
- 476 │     prompt `Summarize: ${text}`
-     ·            ────────────────────
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:476:26]
- 476 │     prompt `Summarize: ${text}`
-     ·                          ──┬─
-     ·                            ╰── expected `T`, found `string`
-     ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:481:12]
- 481 │     prompt `Summarize: ${text}`
-     ·            ────────────────────
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:481:26]
- 481 │     prompt `Summarize: ${text}`
-     ·                          ──┬─
-     ·                            ╰── expected `T`, found `string`
      ╰────
 
   [type] E0003
@@ -1082,82 +1011,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[function_decls.baml:489:12]
  489 │     client GPT4
      ·            ────
-     ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:490:12]
- 490 │ ╭─▶     prompt `
- 491 │ │           Context: ${first_context} ${second_context} ${third_context}
- 492 │ │           Query: ${user_query}
- 493 │ ╰─▶     `
-     ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:490:12]
- 490 │ ╭─▶     prompt `
- 491 │ │           Context: ${first_context} ${second_context} ${third_context}
- 492 │ │           Query: ${user_query}
- 493 │ ╰─▶     `
-     ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:490:12]
- 490 │ ╭─▶     prompt `
- 491 │ │           Context: ${first_context} ${second_context} ${third_context}
- 492 │ │           Query: ${user_query}
- 493 │ ╰─▶     `
-     ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-     ╭─[function_decls.baml:490:12]
- 490 │ ╭─▶     prompt `
- 491 │ │           Context: ${first_context} ${second_context} ${third_context}
- 492 │ │           Query: ${user_query}
- 493 │ ╰─▶     `
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:491:20]
- 491 │         Context: ${first_context} ${second_context} ${third_context}
-     ·                    ──────┬──────
-     ·                          ╰── expected `T`, found `string`
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:491:37]
- 491 │         Context: ${first_context} ${second_context} ${third_context}
-     ·                                     ───────┬──────
-     ·                                            ╰── expected `T`, found `string`
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:491:55]
- 491 │         Context: ${first_context} ${second_context} ${third_context}
-     ·                                                       ──────┬──────
-     ·                                                             ╰── expected `T`, found `string`
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[function_decls.baml:492:18]
- 492 │         Query: ${user_query}
-     ·                  ─────┬────
-     ·                       ╰── expected `T`, found `string`
      ╰────
 
   [type] E0146

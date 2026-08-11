@@ -1910,661 +1910,6 @@ class baml.json.JsonPathError$stream {
   selector: string | null
 }
 
---- <builtin>/baml/ns_llm/llm.baml ---
-class baml.llm.OrchestrationStep {
-  primitive_client: baml.llm.PrimitiveClient
-  delay_ms: int
-}
-class baml.llm.ExecutionContext {
-  jinja_string: string
-  args: map<string, unknown>
-  function_name: string
-  prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null
-}
-class baml.llm.PlannerState {
-  rr_client_names: string[]
-}
-function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int throws never {
-  { : int
-    let offset = 0 : 0 -> int
-    for seen_name in self.rr_client_names
-      { : void
-        if (seen_name == client_name : bool) : void
-          { : void
-            offset Add= 1 : int
-          }
-      }
-    offset : int
-  }
-}
-function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, counter: int, sub_client_count: int) -> int throws never {
-  { : int
-    let local_offset = self.rr_local_offset(client_name) : int
-    self.rr_client_names.push(client_name) : int
-    counter + local_offset % sub_client_count : int
-  }
-}
-function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string throws baml.errors.InvalidArgument {
-  { : string | ""
-    match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
-      null =>
-        get_jinja_template(function_name) : string
-      _ =>
-        "" : ""
-  }
-}
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
-  { : baml.llm.PromptAst
-    let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client(lenient = true) : baml.llm.PrimitiveClient
-    let template = prompt_template_for(function_name, prompt_closure) : string
-    primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
-  }
-}
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
-  { : baml.http.Request
-    let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let template = prompt_template_for(function_name, prompt_closure) : string
-    let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
-    primitive_client.build_request(specialized_prompt, return_type) : baml.http.Request
-  }
-}
-function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
-  { : baml.http.Request
-    let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let template = prompt_template_for(function_name, prompt_closure) : string
-    let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
-    primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
-  }
-}
-function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.errors.ParseError {
-  { : TFinal
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
-    catch (__sap_parse_final<TFinal>(json, cache) : TFinal) : TFinal
-      catch (_)
-        root.errors.LlmClient { message: message } =>
-          throw root.errors.ParseError { message: message } : never
-  }
-}
-function baml.llm.__new_stream_cache<TStream, TFinal>() -> baml.llm.StreamCache<TStream, TFinal> throws never {
-  { : baml.llm.StreamCache<TStream, TFinal>
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
-    cache : baml.llm.StreamCache<TStream, TFinal>
-  }
-}
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
-  { : T
-    let jinja_string = : string | "" -> string
-      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
-        null =>
-          get_jinja_template(function_name) : string
-        _ =>
-          "" : ""
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
-    let result: T = client.execute_oneshot<T>(context, 0) : T
-    result : T
-  }
-}
-class baml.llm.OrchestrationStep$stream {
-  primitive_client: baml.llm.PrimitiveClient$stream | null
-  delay_ms: int | null
-}
-class baml.llm.ExecutionContext$stream {
-  jinja_string: string | null
-  args: map<string, unknown>
-  function_name: string | null
-  prompt_closure: unknown | null
-}
-class baml.llm.PlannerState$stream {
-  rr_client_names: string[]
-}
-
---- <builtin>/baml/ns_llm/llm_types.baml ---
-class baml.llm.PromptMessage {
-  role: string
-  content: string
-}
-class baml.llm.PromptAst {
-  _data: $rust_type
-}
-function baml.llm.PromptAst.to_string(self: baml.llm.PromptAst) -> string throws never {
-  { : string
-    self.text() : string
-  }
-}
-class baml.llm.OutputFormat {
-  _data: $rust_type
-}
-class baml.llm.Role {
-  name: string
-  metadata: map<string, unknown>
-}
-class baml.llm.ContextClient {
-  name: string
-  provider: string
-  default_role: string
-  allowed_roles: string[]
-}
-class baml.llm.Context {
-  client: baml.llm.ContextClient
-  tags: map<string, unknown>
-  output_format: string
-  _output_format: baml.llm.OutputFormat
-}
-enum baml.llm.ClientType
-class baml.llm.RetryPolicy {
-  max_retries: int
-  initial_delay_ms: int | null
-  multiplier: float | null
-  max_delay_ms: int | null
-}
-function baml.llm.RetryPolicy.initial_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
-  { : float
-    self.initial_delay_ms ?? 200 + 0.0 : float
-  }
-}
-function baml.llm.RetryPolicy.multiplier_or_default(self: baml.llm.RetryPolicy) -> float throws never {
-  { : float
-    self.multiplier ?? 1.5 : float
-  }
-}
-function baml.llm.RetryPolicy.max_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
-  { : float
-    self.max_delay_ms ?? 10000 + 0.0 : float
-  }
-}
-class baml.llm.Client {
-  name: string
-  client_type: baml.llm.ClientType
-  sub_clients: baml.llm.Client[]
-  retry: baml.llm.RetryPolicy | null
-  counter: int
-}
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool = false) -> baml.llm.PrimitiveClient throws never {
-  { : baml.llm.PrimitiveClient
-    if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
-      { : baml.llm.PrimitiveClient
-        from_shorthand(self.name) : baml.llm.PrimitiveClient
-      }
-    else
-      { : baml.llm.PrimitiveClient
-        self.get_constructor()(lenient) : baml.llm.PrimitiveClient
-      }
-  }
-}
-function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
-    self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
-  }
-}
-function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[]
-      ClientType.Primitive =>
-        { : baml.llm.OrchestrationStep[]
-          let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : baml.llm.OrchestrationStep[]
-        }
-      ClientType.Fallback =>
-        { : baml.llm.OrchestrationStep[]
-          let steps: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
-          for sub in self.sub_clients
-            { : void
-              for step in sub.build_plan_with_state(planner_state)
-                { : int
-                  steps.push(step) : int
-                }
-            }
-          steps : baml.llm.OrchestrationStep[]
-        }
-      ClientType.RoundRobin =>
-        { : baml.llm.OrchestrationStep[]
-          if (self.sub_clients.length() == 0 : bool) : baml.llm.OrchestrationStep[]
-            { : baml.llm.OrchestrationStep[]
-              [] : baml.llm.OrchestrationStep[]
-            }
-          else
-            { : baml.llm.OrchestrationStep[]
-              let idx = planner_state.rr_pick_index(self.name, self.counter, self.sub_clients.length()) : int
-              self.sub_clients[idx].build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
-            }
-        }
-  }
-}
-function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
-    self.build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
-  }
-}
-function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    match (self.retry : baml.llm.RetryPolicy | null) : baml.llm.OrchestrationStep[]
-      r: RetryPolicy =>
-        { : baml.llm.OrchestrationStep[]
-          let result: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
-          let current_delay = r.initial_delay_or_default() : float
-          { : void
-            let attempt = 0 : 0 -> int
-            while attempt <= r.max_retries
-              { : void
-                let delay = 0 : 0 -> int
-                if (attempt > 0 : bool) : void
-                  { : void
-                    delay = root._trunc_to_int(current_delay) : int
-                    let next = current_delay * r.multiplier_or_default() : float
-                    if (next > r.max_delay_or_default() : bool) : void
-                      { : void
-                        current_delay = r.max_delay_or_default() : float
-                      }
-                    else
-                      { : void
-                        current_delay = next : float
-                      }
-                  }
-                let inner = self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
-                for step in inner
-                  { : void
-                    result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : int
-                  }
-              }
-          }
-          result : baml.llm.OrchestrationStep[]
-        }
-      null =>
-        self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
-  }
-}
-function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
-  { : never
-    match (self.retry : baml.llm.RetryPolicy | null) : never
-      r: RetryPolicy =>
-        { : never
-          let current_delay = r.initial_delay_or_default() : float
-          { : void
-            let attempt = 0 : 0 -> int
-            while attempt <= r.max_retries
-              { : never
-                let attempt_delay = inherited_delay_ms : int
-                if (attempt > 0 : bool) : void
-                  { : void
-                    attempt_delay = root._trunc_to_int(current_delay) : int
-                    let next = current_delay * r.multiplier_or_default() : float
-                    if (next > r.max_delay_or_default() : bool) : void
-                      { : void
-                        current_delay = r.max_delay_or_default() : float
-                      }
-                    else
-                      { : void
-                        current_delay = next : float
-                      }
-                  }
-                if (attempt == r.max_retries : bool) : void
-                  { : void
-                    attempt_delay = inherited_delay_ms : int
-                  }
-                let result2: T = : T
-                  catch (self.execute_once_oneshot<T>(context, attempt_delay) : T) : T
-                    catch (e)
-                      _ =>
-                        { : never
-                          continue
-                        }
-                return result2 : T
-              }
-          }
-          throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
-        }
-      null =>
-        { : never
-          let result: T = self.execute_once_oneshot<T>(context, inherited_delay_ms) : T
-          return result : T
-        }
-  }
-}
-function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
-  { : T
-    match (self.client_type : baml.llm.ClientType) : T
-      ClientType.Primitive =>
-        { : T
-          let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = reflect.type_of() : type
-          let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
-          let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
-          let http_response = root.http.send(http_request) : baml.http.Response
-          if (http_response.ok() : bool) : T
-            { : T
-              let body = http_response.text() : string
-              let result: T = : T
-                catch (primitive.parse<T>(body) : T) : T
-                  catch (e)
-                    _ =>
-                      { : never
-                        if (active_delay_ms > 0 : bool) : void
-                          { : null
-                            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
-                          }
-                        throw e : baml.errors.LlmClient
-                      }
-              result : T
-            }
-          else
-            { : never
-              let error_body = : string | "" -> string
-                catch (http_response.text() : string) : string | ""
-                  catch (e)
-                    _ =>
-                      { : ""
-                        "" : ""
-                      }
-              if (active_delay_ms > 0 : bool) : void
-                { : null
-                  root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
-                }
-              throw root.errors.DevOther { message: "HTTP request fail..." + error_body } : baml.errors.DevOther
-            }
-        }
-      ClientType.Fallback =>
-        { : never
-          for sub in self.sub_clients
-            { : never
-              let result2: T = : T
-                catch (sub.execute_oneshot<T>(context, active_delay_ms) : T) : T
-                  catch (e)
-                    _ =>
-                      { : never
-                        continue
-                      }
-              return result2 : T
-            }
-          throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
-        }
-      ClientType.RoundRobin =>
-        { : never
-          if (self.sub_clients.length() == 0 : bool) : void
-            { : never
-              throw root.errors.DevOther { message: "RoundRobin client..." } : baml.errors.DevOther
-            }
-          let idx = self.counter % self.sub_clients.length() : int
-          self.counter Add= 1 : int
-          let result3: T = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
-          return result3 : T
-        }
-  }
-}
-class baml.llm.MediaUrlHandler {
-  image: string | null
-  audio: string | null
-  video: string | null
-  pdf: string | null
-}
-class baml.llm.PrimitiveClientOptions {
-  model: string | null
-  base_url: string | null
-  allowed_role_metadata: unknown | null
-  finish_reason_allow_list: string[] | null
-  finish_reason_deny_list: string[] | null
-  supports_streaming: bool | null
-  default_role: string | null
-  allowed_roles: string[] | null
-  remap_roles: map<string, string> | null
-  api_key: string | null
-  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.GoogleAiOptions | baml.llm.VertexAiOptions | null
-  media_url_handler: baml.llm.MediaUrlHandler | null
-  headers: map<string, string>
-  query_params: map<string, string>
-  request_body: map<string, unknown>
-}
-class baml.llm.AzureOpenAiOptions {
-  resource_name: string | null
-  deployment_id: string | null
-  api_version: string
-  max_tokens: int | null
-}
-class baml.llm.AnthropicOptions {
-  max_tokens: int | null
-}
-class baml.llm.GoogleAiOptions {
-  enterprise: bool | null
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-class baml.llm.VertexAiOptions {
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-class baml.llm.BedrockOptions {
-  region: string | null
-  endpoint_url: string | null
-  access_key_id: string | null
-  secret_access_key: string | null
-  session_token: string | null
-  profile: string | null
-  stop_sequences: string[] | null
-  max_tokens: int | null
-  temperature: float | null
-  top_p: float | null
-}
-class baml.llm.StreamAccumulator {
-  _handle: $rust_type
-}
-class baml.llm.StreamCache {
-  _data: $rust_type
-}
-class baml.llm.Stream {
-  _next_text: () -> string | null throws unknown
-  _cache: baml.llm.StreamCache<TStream, TFinal>
-  _text: string
-  _finished: bool
-}
-function baml.llm.Stream.next(self: baml.llm.Stream<TStream, TFinal>) -> TStream | baml.stream.StreamFinished throws never {
-  { : never
-    while true
-      { : void
-        if (self._finished : bool) : void
-          { : never
-            return root.stream.StreamFinished {  } : baml.stream.StreamFinished
-          }
-        match (self._next_text() : string | null) : void
-          null =>
-            { : never
-              self._finished = true : true
-              return root.stream.StreamFinished {  } : baml.stream.StreamFinished
-            }
-          s: string =>
-            { : void
-              self._text = self._text + s : string
-              let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial<TStream>(self._text, self._cache) : TStream | baml.stream.StreamNoYield
-              match (parsed : TStream | baml.stream.StreamNoYield) : void
-                root.stream.StreamNoYield =>
-                  { : void
-                  }
-                p: TStream =>
-                  { : never
-                    return p : TStream
-                  }
-            }
-      }
-    root.sys.panic("unreachable") : never
-  }
-}
-function baml.llm.Stream.final(self: baml.llm.Stream<TStream, TFinal>) -> TFinal throws never {
-  { : TFinal
-    while Not self._finished
-      { : void
-        match (self._next_text() : string | null) : void
-          null =>
-            { : void
-              self._finished = true : true
-            }
-          s: string =>
-            { : void
-              self._text = self._text + s : string
-            }
-      }
-    __sap_parse_final<TFinal>(self._text, self._cache) : TFinal
-  }
-}
-class baml.llm.PrimitiveClient {
-  name: string
-  provider: string
-  options: baml.llm.PrimitiveClientOptions
-}
-function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.RenderPrompt | baml.errors.LlmClient {
-  { : baml.llm.PromptAst
-    let prompt = : baml.llm.PromptAst
-      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
-        null =>
-          self.render_prompt(template, args, return_type) : baml.llm.PromptAst
-        closure: (Context) -> PromptAst throws never =>
-          closure(build_prompt_context(self, return_type)) : baml.llm.PromptAst
-    self.specialize_prompt(prompt) : baml.llm.PromptAst
-  }
-}
-function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context throws never {
-  { : baml.llm.Context
-    Context { client: ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role ?? "system", allowed_roles: primitive.options.allowed_roles ?? [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) } : baml.llm.Context
-  }
-}
-function baml.llm.make_role(name: string) -> baml.llm.Role throws never {
-  { : baml.llm.Role
-    Role { name: name, metadata: map {  } } : baml.llm.Role
-  }
-}
-function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never throws never {
-  { : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
-    let render = : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
-      (ctx: Context) -> { ... } : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
-        {
-          let t = body(make_role, ctx)
-          assemble_prompt_ast(t.parts, t.values)
-        }
-    render : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
-  }
-}
-lambda baml.llm.prompt {
-}
-class baml.llm.PromptMessage$stream {
-  role: string | null
-  content: string | null
-}
-class baml.llm.PromptAst$stream {
-  _data: $rust_type
-}
-class baml.llm.OutputFormat$stream {
-  _data: $rust_type
-}
-class baml.llm.Role$stream {
-  name: string | null
-  metadata: map<string, unknown>
-}
-class baml.llm.ContextClient$stream {
-  name: string | null
-  provider: string | null
-  default_role: string | null
-  allowed_roles: string[]
-}
-class baml.llm.Context$stream {
-  client: baml.llm.ContextClient$stream | null
-  tags: map<string, unknown>
-  output_format: string | null
-  _output_format: baml.llm.OutputFormat$stream | null
-}
-class baml.llm.RetryPolicy$stream {
-  max_retries: int | null
-  initial_delay_ms: int | null
-  multiplier: float | null
-  max_delay_ms: int | null
-}
-class baml.llm.Client$stream {
-  name: string | null
-  client_type: baml.llm.ClientType | null
-  sub_clients: baml.llm.Client$stream[]
-  retry: baml.llm.RetryPolicy$stream | null
-  counter: int | null
-}
-class baml.llm.MediaUrlHandler$stream {
-  image: string | null
-  audio: string | null
-  video: string | null
-  pdf: string | null
-}
-class baml.llm.PrimitiveClientOptions$stream {
-  model: string | null
-  base_url: string | null
-  allowed_role_metadata: unknown | null
-  finish_reason_allow_list: string[] | null
-  finish_reason_deny_list: string[] | null
-  supports_streaming: bool | null
-  default_role: string | null
-  allowed_roles: string[] | null
-  remap_roles: map<string, string> | null
-  api_key: string | null
-  provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | baml.llm.BedrockOptions$stream | baml.llm.GoogleAiOptions$stream | baml.llm.VertexAiOptions$stream | null
-  media_url_handler: baml.llm.MediaUrlHandler$stream | null
-  headers: map<string, string>
-  query_params: map<string, string>
-  request_body: map<string, unknown>
-}
-class baml.llm.AzureOpenAiOptions$stream {
-  resource_name: string | null
-  deployment_id: string | null
-  api_version: string | null
-  max_tokens: int | null
-}
-class baml.llm.AnthropicOptions$stream {
-  max_tokens: int | null
-}
-class baml.llm.GoogleAiOptions$stream {
-  enterprise: bool | null
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-class baml.llm.VertexAiOptions$stream {
-  credentials: string | null
-  credentials_content: string | null
-  location: string | null
-  project_id: string | null
-}
-class baml.llm.BedrockOptions$stream {
-  region: string | null
-  endpoint_url: string | null
-  access_key_id: string | null
-  secret_access_key: string | null
-  session_token: string | null
-  profile: string | null
-  stop_sequences: string[] | null
-  max_tokens: int | null
-  temperature: float | null
-  top_p: float | null
-}
-class baml.llm.StreamAccumulator$stream {
-  _handle: $rust_type
-}
-class baml.llm.StreamCache$stream {
-  _data: $rust_type
-}
-class baml.llm.Stream$stream {
-  _next_text: unknown
-  _cache: baml.llm.StreamCache$stream<TStream, TFinal> | null
-  _text: string | null
-  _finished: bool | null
-}
-class baml.llm.PrimitiveClient$stream {
-  name: string | null
-  provider: string | null
-  options: baml.llm.PrimitiveClientOptions$stream | null
-}
-
 --- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Pdf {
   _data: $rust_type
@@ -2817,6 +2162,167 @@ class baml.panics.IntegerOverflow$stream {
 }
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream | baml.panics.IntegerOverflow$stream
 
+--- <builtin>/baml/ns_prompt/prompt.baml ---
+class baml.prompt.OutputFormat {
+  _data: $rust_type
+}
+class baml.prompt.Role {
+  name: string
+  metadata: map<string, unknown>
+}
+class baml.prompt.ContextClient {
+  name: string
+  provider: string
+  default_role: string
+  allowed_roles: string[]
+}
+class baml.prompt.Context {
+  client: baml.prompt.ContextClient
+  tags: map<string, unknown>
+  output_format: string
+  _output_format: baml.prompt.OutputFormat
+}
+function baml.prompt.make_role(name: string) -> baml.prompt.Role throws never {
+  { : baml.prompt.Role
+    Role { name: name, metadata: map {  } } : baml.prompt.Role
+  }
+}
+class baml.prompt.OutputFormat$stream {
+  _data: $rust_type
+}
+class baml.prompt.Role$stream {
+  name: string | null
+  metadata: map<string, unknown>
+}
+class baml.prompt.ContextClient$stream {
+  name: string | null
+  provider: string | null
+  default_role: string | null
+  allowed_roles: string[]
+}
+class baml.prompt.Context$stream {
+  client: baml.prompt.ContextClient$stream | null
+  tags: map<string, unknown>
+  output_format: string | null
+  _output_format: baml.prompt.OutputFormat$stream | null
+}
+
+--- <builtin>/baml/ns_prompt/sys_llm_types.baml ---
+class baml.prompt.MediaUrlHandler {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
+class baml.prompt.PrimitiveClientOptions {
+  model: string | null
+  base_url: string | null
+  allowed_role_metadata: unknown | null
+  finish_reason_allow_list: string[] | null
+  finish_reason_deny_list: string[] | null
+  supports_streaming: bool | null
+  default_role: string | null
+  allowed_roles: string[] | null
+  remap_roles: map<string, string> | null
+  api_key: string | null
+  provider_options: baml.prompt.AnthropicOptions | baml.prompt.AzureOpenAiOptions | baml.prompt.BedrockOptions | baml.prompt.GoogleAiOptions | baml.prompt.VertexAiOptions | null
+  media_url_handler: baml.prompt.MediaUrlHandler | null
+  headers: map<string, string>
+  query_params: map<string, string>
+  request_body: map<string, unknown>
+}
+class baml.prompt.AzureOpenAiOptions {
+  resource_name: string | null
+  deployment_id: string | null
+  api_version: string
+  max_tokens: int | null
+}
+class baml.prompt.AnthropicOptions {
+  max_tokens: int | null
+}
+class baml.prompt.GoogleAiOptions {
+  enterprise: bool | null
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
+}
+class baml.prompt.VertexAiOptions {
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
+}
+class baml.prompt.BedrockOptions {
+  region: string | null
+  endpoint_url: string | null
+  access_key_id: string | null
+  secret_access_key: string | null
+  session_token: string | null
+  profile: string | null
+  stop_sequences: string[] | null
+  max_tokens: int | null
+  temperature: float | null
+  top_p: float | null
+}
+class baml.prompt.MediaUrlHandler$stream {
+  image: string | null
+  audio: string | null
+  video: string | null
+  pdf: string | null
+}
+class baml.prompt.PrimitiveClientOptions$stream {
+  model: string | null
+  base_url: string | null
+  allowed_role_metadata: unknown | null
+  finish_reason_allow_list: string[] | null
+  finish_reason_deny_list: string[] | null
+  supports_streaming: bool | null
+  default_role: string | null
+  allowed_roles: string[] | null
+  remap_roles: map<string, string> | null
+  api_key: string | null
+  provider_options: baml.prompt.AnthropicOptions$stream | baml.prompt.AzureOpenAiOptions$stream | baml.prompt.BedrockOptions$stream | baml.prompt.GoogleAiOptions$stream | baml.prompt.VertexAiOptions$stream | null
+  media_url_handler: baml.prompt.MediaUrlHandler$stream | null
+  headers: map<string, string>
+  query_params: map<string, string>
+  request_body: map<string, unknown>
+}
+class baml.prompt.AzureOpenAiOptions$stream {
+  resource_name: string | null
+  deployment_id: string | null
+  api_version: string | null
+  max_tokens: int | null
+}
+class baml.prompt.AnthropicOptions$stream {
+  max_tokens: int | null
+}
+class baml.prompt.GoogleAiOptions$stream {
+  enterprise: bool | null
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
+}
+class baml.prompt.VertexAiOptions$stream {
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
+}
+class baml.prompt.BedrockOptions$stream {
+  region: string | null
+  endpoint_url: string | null
+  access_key_id: string | null
+  secret_access_key: string | null
+  session_token: string | null
+  profile: string | null
+  stop_sequences: string[] | null
+  max_tokens: int | null
+  temperature: float | null
+  top_p: float | null
+}
+
 --- <builtin>/baml/ns_random/random.baml ---
 function baml.random.Rng.random_int(self: baml.random.Rng) -> int throws never {
   { : int
@@ -2865,17 +2371,33 @@ class baml.random.ChaCha20$stream {
 }
 
 --- <builtin>/baml/ns_sap/sap.baml ---
+class baml.sap.ParseCache {
+  _data: $rust_type
+}
+class baml.sap.NoYield {
+}
+function baml.sap.__new_parse_cache<TStream, TFinal>() -> baml.sap.ParseCache<TStream, TFinal> throws never {
+  { : baml.sap.ParseCache<TStream, TFinal>
+    let cache: ParseCache<TStream, TFinal> = ParseCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.sap.ParseCache<TStream, TFinal>
+    cache : baml.sap.ParseCache<TStream, TFinal>
+  }
+}
 function baml.sap.parse<T>(text: string) -> T throws baml.errors.LlmClient {
   { : T
-    let cache = root.llm.__new_stream_cache() : baml.llm.StreamCache<T, T>
-    root.llm.__sap_parse_final<TFinal>(text, cache) : T
+    let cache = __new_parse_cache() : baml.sap.ParseCache<T, T>
+    __parse_final<TFinal>(text, cache) : T
   }
 }
 function baml.sap.parse_type(t: type, text: string) -> unknown throws baml.errors.LlmClient {
   { : unknown
-    let cache: root.llm.StreamCache<unknown, unknown> = root.llm.StreamCache.new(t, t) : baml.llm.StreamCache<unknown, unknown>
-    root.llm.__sap_parse_final<TFinal>(text, cache) : unknown
+    let cache: ParseCache<unknown, unknown> = ParseCache.new(t, t) : baml.sap.ParseCache<unknown, unknown>
+    __parse_final<TFinal>(text, cache) : unknown
   }
+}
+class baml.sap.ParseCache$stream {
+  _data: $rust_type
+}
+class baml.sap.NoYield$stream {
 }
 
 --- <builtin>/baml/ns_spawn/spawn.baml ---
@@ -2914,16 +2436,6 @@ class baml.spawn.TaskGroup$stream {
 }
 class baml.spawn.CancelToken$stream {
   _handle: $rust_type
-}
-
---- <builtin>/baml/ns_stream/stream.baml ---
-class baml.stream.StreamFinished {
-}
-class baml.stream.StreamNoYield {
-}
-class baml.stream.StreamFinished$stream {
-}
-class baml.stream.StreamNoYield$stream {
 }
 
 --- <builtin>/baml/ns_sys/sys.baml ---

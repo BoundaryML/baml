@@ -21,7 +21,7 @@ class ReplayHandler {
       // Stream the body one SSE event at a time with a small inter-event delay,
       // exactly as a real provider does. A buffered single-write response (the
       // earlier `Response.new` form) is delivered to the client in one socket
-      // read, so the SAP partial parser drains straight to `StreamFinished`
+      // read, so the SAP partial parser drains straight to `ai.stream.Done`
       // without a partial ever crossing the FFI boundary — masking host-driven
       // streaming bugs. Real-time chunked delivery makes those partials cross
       // deterministically. The writes run in a `spawn` because hyper only reads

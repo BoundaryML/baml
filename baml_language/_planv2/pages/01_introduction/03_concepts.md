@@ -67,8 +67,9 @@ runner never sees a wire request or response.
  when a later phase adds it, is an optimization that can always be
  discarded.
 
-Later phases — replay fidelity, streaming, server-side continuations —
-extend this BEP without breaking it as long as these two laws hold
+Streaming already extends the client boundary without changing either law:
+deltas are ephemeral and the completed turn remains canonical. Later phases —
+replay fidelity and server-side continuations — extend the BEP the same way
 (`../05_appendix/03_future_phases.md`).
 
 ## Glossary
@@ -86,4 +87,3 @@ except in the phrase "provider wire API" and as a registry prefix.
 - **tool** — a function the model may call during a run.
 - **content block** — one element of a model turn: `Text`,
 `Reasoning`, `ToolUse`, or `Media`.
-
