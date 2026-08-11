@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × LLM function `LegacyJinjaPrompt` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
+   ╭─[main.baml:1:53]
+ 1 │ ╭─▶ function LegacyJinjaPrompt(input: string) -> string {
+ 2 │ │       prompt #"Echo: {{ input }}"#
+ 3 │ ├─▶ }
+   · ╰──── migrate to a backtick prompt
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[main.baml:2:12]
+ 2 │     prompt #"Echo: {{ input }}"#
+   ·            ┬
+   ·            ╰── hash-delimited strings and Jinja templates are no longer supported. Use backtick strings with `${...}` interpolation instead. For example, `#"Hello {{ name }}"#` becomes `` `Hello ${name}` ``.
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:3:1]
+ 3 │ }
+   · ┬
+   · ╰── expected `LLM function missing 'client' field`, found `'}'`
+   ╰────

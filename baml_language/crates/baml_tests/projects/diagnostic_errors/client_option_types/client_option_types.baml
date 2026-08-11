@@ -7,37 +7,31 @@
 
 // Removed: `client<llm>` config block.
 client<llm> LegacyOpenAI {
-    provider openai
-    options {
-        model "gpt-4"
-        max_tokens 100
-        temperature 0.7
-        base_url "https://api.openai.com/v1"
-    }
+    provider: openai,
+    options: {
+        model: "gpt-4",
+        max_tokens: 100,
+        temperature: 0.7,
+        base_url: "https://api.openai.com/v1",
+    },
 }
 
 // Removed: `retry_policy` block.
 retry_policy LegacyRetry {
-    max_retries 3
-}
-
-// Removed: Jinja `#"..."#` prompt on an LLM function.
-function LegacyJinjaPrompt(input: string) -> string {
-    client ValidClient
-    prompt #"Echo: {{ input }}"#
+    max_retries: 3,
 }
 
 // Structural role markers remain valid while the surrounding fixture checks
-// the independently removed client/Jinja forms.
+// the independently removed client forms.
 function LegacyRoleMarker(input: string) -> string {
-    client ValidClient
-    prompt `${role("system")}Be terse. ${input}`
+    client: ValidClient
+    prompt: `${role("system")}Be terse. ${input}`
 }
 
 // Removed: only a known "provider/model" prefix works as a client string.
 function UnknownProviderPrefix(input: string) -> string {
-    client "aws-bedrock/anthropic.claude-3-haiku"
-    prompt `${input}`
+    client: "aws-bedrock/anthropic.claude-3-haiku"
+    prompt: `${input}`
 }
 
 // Control: the new-world replacement compiles cleanly.
@@ -47,6 +41,6 @@ client ValidClient = openai.OpenAiClient.new(
 );
 
 function ValidFunction(input: string) -> string {
-    client ValidClient
-    prompt `Echo: ${input}`
+    client: ValidClient
+    prompt: `Echo: ${input}`
 }

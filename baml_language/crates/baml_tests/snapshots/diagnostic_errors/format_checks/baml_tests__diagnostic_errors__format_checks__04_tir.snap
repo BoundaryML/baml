@@ -576,6 +576,24 @@ class user.SemicolonTrivia$stream {
   name: string | null
   age: int | null
 }
+function user.TestTarget(client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(TestTarget$spec()).value : string
+}
+function user.TestTarget$spec() -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "TestTarget", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: BasicClient } : ai.FunctionSpec<string>
+  !! 13597..13608: unresolved name: BasicClient
+}
+lambda user.TestTarget$spec {
+}
+function user.TestTarget$render_prompt() -> ai.Prompt throws never {
+  TestTarget$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
+}
+function user.TestTarget$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
+}
+function user.TestTarget$stream(client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(TestTarget$spec(), client = client) : ai.stream.Stream<string | null, string>
+}
 enum user.Minimal
 enum user.TwoVariants
 enum user.MultiVariant
@@ -1647,9 +1665,9 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     true : true
     false : false
     null : null
-    "raw string" : "raw string"
-    "raw string with \"..." : "raw string with \"quotes\" inside"
-    "\n        multi-li..." : "\n        multi-line raw string\n        with several lines\n        of content\n    "
+    `...` : "raw string"
+    `...` : "raw string with \"quotes\" inside"
+    `...` : "multi-line raw string\nwith several lines\nof content"
     a : int
     a + b : int
     a : int

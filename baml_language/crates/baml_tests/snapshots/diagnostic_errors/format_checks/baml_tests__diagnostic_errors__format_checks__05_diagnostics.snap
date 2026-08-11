@@ -415,10 +415,10 @@ source: crates/baml_tests/src/generated_tests.rs
  104 │ │       provider openai,
  105 │ │       options: {
  106 │ │           model: "gpt-4"
- 107 │ │           system_prompt #"
+ 107 │ │           system_prompt `
  108 │ │               You are a helpful assistant.
  109 │ │               Always be concise.
- 110 │ │           "#
+ 110 │ │           `
  111 │ │       },
  112 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
@@ -437,7 +437,7 @@ source: crates/baml_tests/src/generated_tests.rs
  120 │ │           temperature 0.7
  121 │ │           stream true
  122 │ │           stop ["END"]
- 123 │ │           inline_string #"inline raw"#
+ 123 │ │           inline_string `inline raw`
  124 │ │           "string key" "value with spaces"
  125 │ │       }
  126 │ ├─▶ }
@@ -844,15 +844,12 @@ source: crates/baml_tests/src/generated_tests.rs
      · ╰──── retry composes at the client boundary now
      ╰────
 
-  [hir] E0010
+  [type] E0003
 
-  × LLM function `TestTarget` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
-     ╭─[config_decls.baml:445:33]
- 445 │ ╭─▶ function TestTarget() -> string {
- 446 │ │       client BasicClient
- 447 │ │       prompt #"Hello"#
- 448 │ ├─▶ }
-     · ╰──── migrate to a backtick prompt
+  × unresolved name: `BasicClient`
+     ╭─[config_decls.baml:446:12]
+ 446 │     client BasicClient
+     ·            ───────────
      ╰────
 
   [hir] E0010
@@ -931,7 +928,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [validation] E0011
 
-  × name `ExtraWhitespace` defined 5 times as: class, enum, function, template_string, type
+  × name `ExtraWhitespace` defined 4 times as: class, enum, function, type
      ╭─[enum_decls.baml:211:9]
  211 │ enum    ExtraWhitespace    {
      ·         ───────┬───────
@@ -946,11 +943,6 @@ source: crates/baml_tests/src/generated_tests.rs
   │        ╭─[function_decls.baml:497:13]
   │    497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
   │        ·             ───────────────
-  │        ╰────
-  ├─▶   ☞ duplicate template_string definition
-  │        ╭─[template_string_decls.baml:364:20]
-  │    364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
-  │        ·                    ───────────────
   │        ╰────
   ╰─▶   ☞ duplicate type definition
            ╭─[type_alias_decls.baml:401:9]
@@ -1131,74 +1123,3 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                                                    ┬
      ·                                                                    ╰── expected `string`, found `0`
      ╰────
-
-  [validation] E0011
-
-  × name `ManyParams` defined 2 times as: function, template_string
-    ╭─[template_string_decls.baml:30:17]
- 30 │ template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
-    ·                 ─────┬────
-    ·                      ╰── duplicate template_string definition
-    ╰────
-  ╰─▶   ☞ first defined as function here
-          ╭─[function_decls.baml:23:10]
-       23 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
-          ·          ──────────
-          ╰────
-
-  [validation] E0011
-
-  × name `MultiParamTrivia` defined 2 times as: function, template_string
-    ╭─[template_string_decls.baml:89:17]
- 89 │ template_string MultiParamTrivia(
-    ·                 ────────┬───────
-    ·                         ╰── duplicate template_string definition
-    ╰────
-  ╰─▶   ☞ first defined as function here
-           ╭─[function_decls.baml:135:10]
-       135 │ function MultiParamTrivia(
-           ·          ────────────────
-           ╰────
-
-  [validation] E0011
-
-  × name `MultiParamTriviaBlock` defined 2 times as: function, template_string
-     ╭─[template_string_decls.baml:106:17]
- 106 │ template_string MultiParamTriviaBlock(
-     ·                 ──────────┬──────────
-     ·                           ╰── duplicate template_string definition
-     ╰────
-  ╰─▶   ☞ first defined as function here
-           ╭─[function_decls.baml:152:10]
-       152 │ function MultiParamTriviaBlock(
-           ·          ─────────────────────
-           ╰────
-
-  [validation] E0011
-
-  × name `SixLongParams` defined 2 times as: function, template_string
-     ╭─[template_string_decls.baml:171:17]
- 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
-     ·                 ──────┬──────
-     ·                       ╰── duplicate template_string definition
-     ╰────
-  ╰─▶   ☞ first defined as function here
-          ╭─[function_decls.baml:37:10]
-       37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int,
-      fifth_parameter_name: string, sixth_parameter_name: float) -> string {
-          ·          ─────────────
-          ╰────
-
-  [validation] E0011
-
-  × name `T` defined 2 times as: template_string, type
-     ╭─[type_alias_decls.baml:398:6]
- 398 │ type T = int
-     ·      ┬
-     ·      ╰── duplicate type definition
-     ╰────
-  ╰─▶   ☞ first defined as template_string here
-           ╭─[template_string_decls.baml:123:17]
-       123 │ template_string T(x: int) #"{{ x }}"#
-           ·                 ─
-           ╰────

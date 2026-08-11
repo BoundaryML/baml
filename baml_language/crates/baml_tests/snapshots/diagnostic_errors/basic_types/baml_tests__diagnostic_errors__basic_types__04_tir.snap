@@ -45,7 +45,7 @@ function user.GetStatus(client: ai.Client | null = null) -> user.Status throws n
 }
 function user.GetStatus$spec() -> ai.FunctionSpec<user.Status> throws never {
   ai.FunctionSpec { spec_name: "GetStatus", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<user.Status>
-  !! 138..142: unresolved name: GPT4
+  !! 141..145: unresolved name: GPT4
 }
 lambda user.GetStatus$spec {
 }
@@ -60,7 +60,7 @@ function user.GetMixedList(client: ai.Client | null = null) -> (int | string)[] 
 }
 function user.GetMixedList$spec() -> ai.FunctionSpec<(int | string)[]> throws never {
   ai.FunctionSpec { spec_name: "GetMixedList", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<(int | string)[]>
-  !! 267..271: unresolved name: GPT4
+  !! 272..276: unresolved name: GPT4
 }
 lambda user.GetMixedList$spec {
 }
@@ -75,7 +75,7 @@ function user.GetMixedMap(client: ai.Client | null = null) -> map<string, int | 
 }
 function user.GetMixedMap$spec() -> ai.FunctionSpec<map<string, int | string>> throws never {
   ai.FunctionSpec { spec_name: "GetMixedMap", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<map<string, int | string>>
-  !! 368..372: unresolved name: GPT4
+  !! 375..379: unresolved name: GPT4
 }
 lambda user.GetMixedMap$spec {
 }

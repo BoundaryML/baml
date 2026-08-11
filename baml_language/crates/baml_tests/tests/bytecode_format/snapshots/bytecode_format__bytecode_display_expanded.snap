@@ -2965,7 +2965,7 @@ function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.Stream
 }
 
 function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string {
-  26   0    load_var 1             (self)
+  25   0    load_var 1             (self)
        1    load_field 4           (raw_handler)
        2    store_var 3            (_4)
        3    load_var 3             (_4)
@@ -2973,7 +2973,7 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
        5    pop_jump_if_false +2   (to 7)
        6    jump +63               (to 69)
 
-  29   7    load_var 1             (self)
+  28   7    load_var 1             (self)
        8    load_field 3           (handler)
        9    store_var 4            (_8)
        10   load_var 4             (_8)
@@ -2981,7 +2981,7 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
        12   pop_jump_if_false +2   (to 14)
        13   jump +13               (to 26)
 
-  37   14   load_type 2            
+  36   14   load_type 2            
        15   load_var 1             (self)
        16   load_field 0           (name)
        17   call 138 ntypeargs=1   (baml.String.from)
@@ -2994,15 +2994,15 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
        24   init_instance 0        (baml.errors.InvalidArgument .message)
        25   throw                  
 
-  30   26   load_type 5            
+  29   26   load_type 5            
        27   load_type 5            
 
-  29   28   load_var2 4 2          
+  28   28   load_var2 4 2          
        29   call 696 ntypeargs=2   (reflect.call_any)
        30   store_var 5            (value)
        31   jump +33               (to 64)
 
-  30   32   load_var 6             (e)
+  29   32   load_var 6             (e)
        33   store_var 7            (_15)
        34   load_var 7             (_15)
        35   narrow_bind 6 7        
@@ -3013,7 +3013,7 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
        40   load_var 7             (_15)
        41   store_var 8            (bad)
 
-  32   42   load_type 2            
+  31   42   load_type 2            
        43   load_var 1             (self)
        44   load_field 0           (name)
        45   call 138 ntypeargs=1   (baml.String.from)
@@ -3036,15 +3036,15 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
        62   init_instance 1        (baml.errors.InvalidArgument .message)
        63   throw                  
 
-  35   64   load_type 5            
+  34   64   load_type 5            
        65   load_var 5             (value)
        66   call 331 ntypeargs=1   (baml.json.to_json)
        67   call 328 ntypeargs=0   (baml.json.stringify)
        68   jump +3                (to 71)
 
-  27   69   load_var2 2 3          
+  26   69   load_var2 2 3          
 
-  26   70   call_indirect          
+  25   70   call_indirect          
        71   return                 
 }
 
@@ -3053,7 +3053,7 @@ function ai.tools.Toolbox.get(self: ai.tools.Toolbox, name: string) -> ai.tools.
         1    make_cell             
         2    store_var 2           
 
-  112   3    load_type 0           
+  111   3    load_type 0           
         4    load_type 1           
         5    load_var 1            (self)
         6    load_field 0          (entries)
@@ -3064,7 +3064,7 @@ function ai.tools.Toolbox.get(self: ai.tools.Toolbox, name: string) -> ai.tools.
 }
 
 function ai.tools.Toolbox.is_empty(self: ai.tools.Toolbox) -> bool {
-  118   0   load_var 1      (self)
+  117   0   load_var 1      (self)
         1   load_field 0    (entries)
         2   container_len   
         3   store_var 2     (_2)
@@ -3075,17 +3075,17 @@ function ai.tools.Toolbox.is_empty(self: ai.tools.Toolbox) -> bool {
 }
 
 function ai.tools.Toolbox.list(self: ai.tools.Toolbox) -> ai.tools.Tool[] {
-  108   0   load_var 1     (self)
+  107   0   load_var 1     (self)
         1   load_field 0   (entries)
         2   return         
 }
 
 function ai.tools.Toolbox.new(tools: ai.tools.Tool[]) -> ai.tools.Toolbox {
-  97    0    load_type 0                        
+  96    0    load_type 0                        
         1    alloc_array 0                      
         2    store_var 2                        (names)
 
-  98    3    load_var 1                         (tools)
+  97    3    load_var 1                         (tools)
         4    load_type 1                        
         5    load_const 2                       ("iter")
         6    virtual_call nargs=1 ntypeargs=0   
@@ -3102,20 +3102,20 @@ function ai.tools.Toolbox.new(tools: ai.tools.Tool[]) -> ai.tools.Toolbox {
         17   load_var 4                         (_4)
         18   store_var 5                        (t)
 
-  99    19   load_type 0                        
+  98    19   load_type 0                        
         20   load_var2 2 5                      
         21   load_field 0                       (name)
         22   call 23 ntypeargs=1                (baml.Array.includes)
         23   pop_jump_if_false +2               (to 25)
         24   jump +6                            (to 30)
 
-  102   25   load_var2 2 5                      
+  101   25   load_var2 2 5                      
         26   load_field 0                       (name)
         27   call 4 ntypeargs=0                 (baml.Array.push)
         28   pop 1                              
         29   jump -21                           (to 8)
 
-  100   30   load_type 0                        
+  99    30   load_type 0                        
         31   load_var 5                         (t)
         32   load_field 0                       (name)
         33   call 138 ntypeargs=1               (baml.String.from)
@@ -3126,7 +3126,7 @@ function ai.tools.Toolbox.new(tools: ai.tools.Tool[]) -> ai.tools.Toolbox {
         38   init_instance 0                    (baml.errors.InvalidArgument .message)
         39   throw                              
 
-  104   40   load_var 1                         (tools)
+  103   40   load_var 1                         (tools)
         41   init_instance 1                    (ai.tools.Toolbox .entries)
         42   return                             
 }
@@ -3137,23 +3137,23 @@ function ai.tools.raw_tool(name: string, description: string, input_schema: map<
        2    cmp_op ==              
        3    pop_jump_if_false +3   (to 6)
 
-  77   4    load_const 1           (null)
+  76   4    load_const 1           (null)
        5    store_var 5            (on_error)
 
-  79   6    load_var 1             (name)
+  78   6    load_var 1             (name)
        7    load_const 2           ("__baml_return_output")
        8    cmp_op ==              
        9    pop_jump_if_false +2   (to 11)
        10   jump +7                (to 17)
 
-  82   11   load_var2 1 2          
+  81   11   load_var2 1 2          
        12   load_var 3             (input_schema)
        13   load_const 1           (null)
        14   load_var2 4 5          
        15   init_instance 0        (ai.tools.Tool .name, .description, .input_schema, .handler, .raw_handler, .on_error)
        16   return                 
 
-  80   17   load_const 3           ("the tool name __baml_return_output is reserved")
+  79   17   load_const 3           ("the tool name __baml_return_output is reserved")
        18   init_instance 1        (baml.errors.InvalidArgument .message)
        19   throw                  
 }
@@ -3164,28 +3164,28 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
        2    cmp_op ==              
        3    pop_jump_if_false +3   (to 6)
 
-  45   4    load_const 1           (null)
+  44   4    load_const 1           (null)
        5    store_var 2            (name)
        6    load_var 3             (description)
        7    load_const 0           (<omitted>)
        8    cmp_op ==              
        9    pop_jump_if_false +3   (to 12)
 
-  46   10   load_const 1           (null)
+  45   10   load_const 1           (null)
        11   store_var 3            (description)
        12   load_var 4             (on_error)
        13   load_const 0           (<omitted>)
        14   cmp_op ==              
        15   pop_jump_if_false +3   (to 18)
 
-  47   16   load_const 1           (null)
+  46   16   load_const 1           (null)
        17   store_var 4            (on_error)
 
-  49   18   load_var 1             (handler)
+  48   18   load_var 1             (handler)
        19   call 695 ntypeargs=0   (reflect.signature)
        20   store_var 5            (sig)
 
-  50   21   load_var 2             (name)
+  49   21   load_var 2             (name)
        22   store_var 6            (resolved_name)
        23   load_var 2             (name)
        24   load_const 1           (null)
@@ -3195,26 +3195,26 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
        28   load_field 0           (name)
        29   store_var 6            (resolved_name)
 
-  51   30   load_var 6             (resolved_name)
+  50   30   load_var 6             (resolved_name)
        31   store_var 7            (_11)
        32   load_var 7             (_11)
        33   narrow_bind 2 7        
        34   pop_jump_if_false +2   (to 36)
        35   jump +4                (to 39)
 
-  64   36   load_const 3           ("anonymous tool needs a name")
+  63   36   load_const 3           ("anonymous tool needs a name")
        37   init_instance 0        (baml.errors.InvalidArgument .message)
        38   throw                  
 
-  51   39   load_var 7             (_11)
+  50   39   load_var 7             (_11)
        40   store_var_load_var 8   (n)
 
-  52   41   load_const 4           ("__baml_return_output")
+  51   41   load_const 4           ("__baml_return_output")
        42   cmp_op ==              
        43   pop_jump_if_false +2   (to 45)
        44   jump +27               (to 71)
 
-  57   45   load_var 3             (description)
+  56   45   load_var 3             (description)
        46   store_var 10           (_18)
        47   load_var 3             (description)
        48   load_const 1           (null)
@@ -3232,18 +3232,18 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
        60   load_const 5           ("")
        61   store_var 9            (_17)
 
-  58   62   load_var 1             (handler)
+  57   62   load_var 1             (handler)
        63   call 821 ntypeargs=0   (ai.internal._schema_for_signature)
        64   store_var 11           (_21)
 
-  56   65   load_var2 8 9          
+  55   65   load_var2 8 9          
        66   load_var2 11 1         
        67   load_const 1           (null)
        68   load_var 4             (on_error)
        69   init_instance 1        (ai.tools.Tool .name, .description, .input_schema, .handler, .raw_handler, .on_error)
        70   return                 
 
-  53   71   load_const 6           ("the tool name __baml_return_output is reserved")
+  52   71   load_const 6           ("the tool name __baml_return_output is reserved")
        72   init_instance 2        (baml.errors.InvalidArgument .message)
        73   throw                  
 }

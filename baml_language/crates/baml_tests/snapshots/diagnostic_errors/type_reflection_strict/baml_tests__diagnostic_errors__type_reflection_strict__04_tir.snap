@@ -10,19 +10,19 @@ function user.reflect_type_to_int() -> int throws never {
     let x: int = reflect.type_of() : type -> int
     return x : int
   }
-  !! 507..530: type mismatch: expected int, got type
+  !! 513..536: type mismatch: expected int, got type
 }
 function user.unknown_type_in_reflect() -> type throws never {
   { : type
     reflect.type_of() : type
   }
-  !! 656..686: unresolved type: NonExistent
+  !! 662..692: unresolved type: NonExistent
 }
 function user.too_many_type_args() -> type throws never {
   { : type
     reflect.type_of() : type
   }
-  !! 892..922: function `type_of` expects 1 type argument(s), got 2
+  !! 898..928: function `type_of` expects 1 type argument(s), got 2
 }
 class user.User$stream {
   name: string | null

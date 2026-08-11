@@ -2,7 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === PPIR ===
-function user.LegacyJinjaPrompt(input: string, client: ai.Client? = null) -> string  [llm]
 function user.LegacyRoleMarker(input: string, client: ai.Client? = null) -> string  [llm] {
   ai.Agent.new(client = client).run(LegacyRoleMarker$spec(input)).value
 }

@@ -9,6 +9,5 @@ namespace []
   interface                Renderer     span:Renderer     doc: Renderer docs.
   class                    Widget       span:Widget       doc: Widget docs.
   class                    Widget$stream span:             doc: Widget docs. [synthetic]
-  template_string          Prompt       span:Prompt       doc: -
   function                 greet        span:greet        doc: -
   test                     greet_works  span:greet_works  doc: -
