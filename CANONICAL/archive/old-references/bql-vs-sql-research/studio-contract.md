@@ -1,6 +1,6 @@
 # Research: baml-studio-design.md (all 3958 lines read) vs the query-language decision
 
-Doc identity: `TASK/studio-design/baml-studio-design.md`, header claims "**Status:** Canonical implementation design, **Date:** 2026-07-27" (lines 3-4) — i.e. it *self-describes* as authoritative ("When this document disagrees with an older file, this document wins", line 30), but it predates `TASK/design.md` (2026-07-30) and per the task framing is the TENTATIVE cloud Studio design. This matters for §5 conflicts below: both documents claim to own the query contract.
+Doc identity: historical `studio-design/baml-studio-design.md` (already absent when this corpus was archived), whose header claims "**Status:** Canonical implementation design, **Date:** 2026-07-27" (lines 3-4) — i.e. it *self-describes* as authoritative ("When this document disagrees with an older file, this document wins", line 30), but it predates the historical `design.md` (2026-07-30; also absent) and per the task framing is the TENTATIVE cloud Studio design. This matters for §5 conflicts below: both documents claim to own the query contract.
 
 ## 1. The semantic query contract (§6, lines 418-620)
 
@@ -71,7 +71,7 @@ From §3's question table (165-186) and §2.1 workflows (100-163):
 14. Honest absence: "fact not emitted" for CPU/wait time etc. (§3 last rows).
 15. Distinguish app failure from missing telemetry / delayed projection / redaction (§2.1).
 
-## 5. AGREE / CONFLICT: studio-design vs TASK/design.md (+ as-built BQL)
+## 5. AGREE / CONFLICT: studio-design vs historical design.md (+ as-built BQL)
 
 **Neither document knows the other's query language.** grep confirms zero occurrences of "BQL" or "pipeline" query in studio-design.md; zero occurrences of "StudioQueryV1"/"semantic query" in design.md. Each defines its own contract and each claims canonicity (studio line 3/30/3613 vs design.md title "Canonical Design" + §8 "Decision: one query engine... one primary surface (BQL)"). design.md is 3 days newer and is what shipped (IMPLEMENTATION.md:597 "BQL v1 LANDED", bex_query/src/bql.rs).
 

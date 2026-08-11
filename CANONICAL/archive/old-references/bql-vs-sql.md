@@ -1,7 +1,7 @@
 # BQL vs SQL: the query-surface decision, investigated fully
 
 **Status:** analysis for review · 2026-08-04
-**Inputs:** `TASK/design.md` (shipped observability design, §8), `TASK/studio-design/baml-studio-design.md` (tentative cloud Studio design, §5–§7), `TASK/IMPLEMENTATION.md` (as-built ledger), `crates/bex_query/` (as-built BQL v1). Produced from a multi-agent research pass: five deep readers, an SQL steelman, and two adversarial critiques (anti-BQL and anti-SQL), each verifying claims against repo files.
+**Inputs:** historical `design.md` (shipped observability design, §8; absent from this archive), historical `studio-design/baml-studio-design.md` (tentative cloud Studio design, §5–§7; absent), [IMPLEMENTATION.md](IMPLEMENTATION.md) (as-built ledger), `crates/bex_query/` (as-built BQL v1). Produced from a multi-agent research pass: five deep readers, an SQL steelman, and two adversarial critiques (anti-BQL and anti-SQL), each verifying claims against repo files.
 
 ---
 

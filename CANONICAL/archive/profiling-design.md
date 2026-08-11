@@ -2,7 +2,7 @@
 
 **Status:** Canonical. Supersedes `stale-profiling-design.md` (2026-07-30) and incorporates the 2026-08-04 query-surface decisions.
 **Companion:** `studio-design.md` (the hosted product and capture-upload architecture). This document owns everything that happens on the machine where a BAML program runs: capture, aggregation, storage, local querying, and the local UI.
-**Execution order:** `TASK/PLAN.md` (M0–M5).
+**Execution order:** `CANONICAL/archive/PLAN.md` (M0–M5).
 **State:** the architecture described in Parts I–III is **implemented and shipped** (phases P0–P9 complete; evidence in Part IV). The SQL query tier (§10) is the one major component still to build; its phases are listed in §16.
 
 ---

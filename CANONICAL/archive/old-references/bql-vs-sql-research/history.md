@@ -1,4 +1,4 @@
-# SQL-vs-BQL decision history, reconstructed from TASK/design.md
+# SQL-vs-BQL decision history, reconstructed from the historical design.md
 
 ## 1. The competition, the losing designs, and §8.6 grafts
 

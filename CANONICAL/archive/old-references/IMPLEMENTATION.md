@@ -1,6 +1,6 @@
 # BAML Observability — Implementation Ledger
 
-Working notes for the P0→P9 implementation of `TASK/design.md`. Maintained by Claude
+Working notes for the P0→P9 implementation of the historical `design.md`, which was already absent when this corpus was archived. Maintained by Claude
 across sessions; update as phases land. Source of truth for *what is done and where*.
 
 ## Ground rules (from the goal)
@@ -23,7 +23,7 @@ across sessions; update as phases land. Source of truth for *what is done and wh
 - BAML syntax references: `crates/baml_tests/baml_src/ns_*/*.baml` (functions, tests, spawn/await/catch,
   `baml.spawn.TaskGroup`, `baml.sys.sleep`, `baml.time.Duration`).
 - Prior docs referenced in design Appendix B (`1-impl/...`, `2-not-impl/...`, `3-not-impl/research/...`)
-  are NOT in the repo. TASK/design.md is the only spec.
+  are NOT in the repo. The historical `design.md` was the only spec available to this document and is also absent from the archive.
 
 ## Phase status
 
