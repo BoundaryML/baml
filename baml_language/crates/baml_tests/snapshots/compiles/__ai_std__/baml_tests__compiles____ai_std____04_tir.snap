@@ -95,7 +95,7 @@ function ai.clients.Retry._attempt(self: ai.clients.Retry, input: ai.ModelTurnIn
               }
             else
               { : never
-                throw e : unknown
+                throw e : ai.errors.Failure
               }
           }
         _ =>
@@ -109,7 +109,10 @@ function ai.clients.Retry.id(self: ai.clients.Retry) -> string throws never {
 }
 function ai.clients.Retry.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn throws never {
   { : ai.ModelTurn
-    self._attempt(input, self.max_attempts) : ai.ModelTurn
+    catch (self._attempt(input, self.max_attempts) : ai.ModelTurn) : ai.ModelTurn
+      catch_all (e)
+        _ =>
+          throw root.errors.normalize(e) : never
   }
 }
 class ai.clients.RoundRobin {
@@ -132,15 +135,10 @@ function ai.clients.RoundRobin.id(self: ai.clients.RoundRobin) -> string throws 
 }
 function ai.clients.RoundRobin.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn throws never {
   { : ai.ModelTurn
-    let index = self.counter % self.members.length() : int
-    self.counter = self.counter + 1 : int
-    match (self.members.at(index) : ai.Client | null) : ai.ModelTurn
-      c: root.Client =>
-        c.invoke(input) : ai.ModelTurn
-      null =>
-        { : never
-          throw baml.errors.InvalidArgument { message: "RoundRobin needs ..." } : baml.errors.InvalidArgument
-        }
+    catch ({ 2 stmts + tail } : ai.ModelTurn) : ai.ModelTurn
+      catch_all (e)
+        _ =>
+          throw root.errors.normalize(e) : never
   }
 }
 class ai.clients.Fallback {
@@ -161,7 +159,7 @@ function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurn
                     }
                   else
                     { : never
-                      throw e : unknown
+                      throw e : ai.errors.Failure
                     }
                 }
               _ =>
@@ -180,7 +178,10 @@ function ai.clients.Fallback.id(self: ai.clients.Fallback) -> string throws neve
 }
 function ai.clients.Fallback.invoke(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn throws never {
   { : ai.ModelTurn
-    self._try(input, 0) : ai.ModelTurn
+    catch (self._try(input, 0) : ai.ModelTurn) : ai.ModelTurn
+      catch_all (e)
+        _ =>
+          throw root.errors.normalize(e) : never
   }
 }
 class ai.clients.Backoff$stream {
@@ -231,6 +232,17 @@ type ai.content.Block$stream = ai.content.Text$stream | ai.content.Reasoning$str
 
 --- <builtin>/ai/ns_errors/errors.baml ---
 enum ai.errors.RetrySafety
+function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.UnknownError throws never {
+  { : ai.errors.Failure | baml.errors.UnknownError
+    match (error : unknown) : ai.errors.Failure | baml.errors.UnknownError
+      failure: Failure =>
+        failure : ai.errors.Failure
+      unknown_error: baml.errors.UnknownError =>
+        unknown_error : baml.errors.UnknownError
+      _ =>
+        baml.errors.UnknownError { data: error, message: [error.to_string()] } : baml.errors.UnknownError
+  }
+}
 class ai.errors.RateLimited {
   provider: string
   retry_after_ms: int | null
@@ -1145,7 +1157,14 @@ function ai.Agent.run(self: ai.Agent<Out>, spec: ai.FunctionSpec<Out>) -> ai.Run
                     { : never
                       throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate } : ai.errors.ParseFailed
                     }
-            j.append_all([root.events.FinalProduced { value_json: baml.json.stringify(baml.json.to_json(value)) }]) : void
+            let value_json = : baml.json.json
+              catch (baml.json.to_json<T>(value) : baml.json.json) : baml.json.json
+                catch_all (e)
+                  _ =>
+                    { : never
+                      throw baml.errors.UnknownError { data: e, message: [e.to_string()] } : baml.errors.UnknownError
+                    }
+            j.append_all([root.events.FinalProduced { value_json: baml.json.stringify(value_json) }]) : void
             seen = self._emit_from(j, seen) : int
             return RunResult { value: value, journal: j, usage: total } : ai.RunResult<Out>
           }

@@ -502,15 +502,31 @@ fn ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.ModelTu
     let _0: ai.ModelTurn // _0 // return
     let _1: ai.clients.Retry // self // param
     let _2: ai.ModelTurnInput // input // param
-    let _3: int
+    let _3: unknown // e
+    let _4: int
+    let _5: baml.errors.UnknownError | ai.errors.Failure
+    let _6: baml.errors.Io | baml.errors.UnknownError | ai.errors.Failure | unknown
 
     bb0: {
-        _3 = copy _1.1;
-        _0 = call const fn ai.clients.Retry._attempt(copy _1, copy _2, copy _3) -> [bb1];
+        _4 = copy _1.1;
+        _0 = call const fn ai.clients.Retry._attempt(copy _1, copy _2, copy _4) -> [bb1, unwind: bb2];
     }
 
     bb1: {
         return;
+    }
+
+    bb2: {
+        throw_if_panic copy _3 -> bb3;
+    }
+
+    bb3: {
+        _6 = copy _3;
+        _5 = call const fn ai.errors.normalize(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        throw copy _5;
     }
 }
 
@@ -588,53 +604,69 @@ fn ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, input: 
     let _0: ai.ModelTurn // _0 // return
     let _1: ai.clients.RoundRobin // self // param
     let _2: ai.ModelTurnInput // input // param
-    let _3: int // index
-    let _4: int
+    let _3: unknown // e
+    let _4: int // index
     let _5: int
-    let _6: (ai.Client[]) -> int throws never
-    let _7: int
-    let _8: null | ai.Client
-    let _9: (ai.Client[], int) -> null | ai.Client throws never
-    let _10: int
-    let _11: type
-    let _12: null | ai.Client
-    let _13: ai.Client // c
-    let _14: baml.errors.InvalidArgument
+    let _6: int
+    let _7: (ai.Client[]) -> int throws never
+    let _8: int
+    let _9: null | ai.Client
+    let _10: (ai.Client[], int) -> null | ai.Client throws never
+    let _11: int
+    let _12: type
+    let _13: null | ai.Client
+    let _14: ai.Client // c
+    let _15: baml.errors.InvalidArgument
+    let _16: baml.errors.UnknownError | ai.errors.Failure
+    let _17: baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure
 
     bb0: {
-        _4 = copy _1.1;
-        _6 = copy _1.0;
-        _5 = len(_6);
+        _5 = copy _1.1;
+        _7 = copy _1.0;
+        _6 = len(_7);
         goto -> bb1;
     }
 
     bb1: {
-        _3 = copy _4 % copy _5;
-        _7 = copy _1.1;
-        _1.1 = copy _7 + const 1_i64;
-        _9 = copy _1.0;
-        _10 = copy _3;
-        _11 = load_type(ai.Client);
-        _8 = call const fn baml.Array.at<copy _11>(copy _9, copy _10) -> [bb2];
+        _4 = copy _5 % copy _6;
+        _8 = copy _1.1;
+        _1.1 = copy _8 + const 1_i64;
+        _10 = copy _1.0;
+        _11 = copy _4;
+        _12 = load_type(ai.Client);
+        _9 = call const fn baml.Array.at<copy _12>(copy _10, copy _11) -> [bb2, unwind: bb6];
     }
 
     bb2: {
-        _12 = copy _8;
-        _12 = narrow_bind copy _12 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "Client" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb3];
+        _13 = copy _9;
+        _13 = narrow_bind copy _13 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: [], name: "Client" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb3];
     }
 
     bb3: {
-        _14 = baml.errors.InvalidArgument { const "RoundRobin needs at least one member" };
-        throw copy _14;
+        _15 = baml.errors.InvalidArgument { const "RoundRobin needs at least one member" };
+        throw copy _15;
     }
 
     bb4: {
-        _13 = copy _12;
-        _0 = virtual_call invoke as ai.Client(copy _13, copy _2) -> [bb5];
+        _14 = copy _13;
+        _0 = virtual_call invoke as ai.Client(copy _14, copy _2) -> [bb5, unwind: bb6];
     }
 
     bb5: {
         return;
+    }
+
+    bb6: {
+        throw_if_panic copy _3 -> bb7;
+    }
+
+    bb7: {
+        _17 = copy _3;
+        _16 = call const fn ai.errors.normalize(copy _17) -> [bb8];
+    }
+
+    bb8: {
+        throw copy _16;
     }
 }
 
@@ -775,12 +807,78 @@ fn ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input: ai.M
     let _0: ai.ModelTurn // _0 // return
     let _1: ai.clients.Fallback // self // param
     let _2: ai.ModelTurnInput // input // param
+    let _3: unknown // e
+    let _4: baml.errors.UnknownError | ai.errors.Failure
+    let _5: baml.errors.InvalidArgument | baml.errors.UnknownError | ai.errors.Failure | unknown
 
     bb0: {
-        _0 = call const fn ai.clients.Fallback._try(copy _1, copy _2, const 0_i64) -> [bb1];
+        _0 = call const fn ai.clients.Fallback._try(copy _1, copy _2, const 0_i64) -> [bb1, unwind: bb2];
     }
 
     bb1: {
+        return;
+    }
+
+    bb2: {
+        throw_if_panic copy _3 -> bb3;
+    }
+
+    bb3: {
+        _5 = copy _3;
+        _4 = call const fn ai.errors.normalize(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        throw copy _4;
+    }
+}
+
+fn ai.errors.normalize(error: unknown) -> baml.errors.UnknownError | ai.errors.Failure {
+    // Locals:
+    let _0: baml.errors.UnknownError | ai.errors.Failure // _0 // return
+    let _1: unknown // error // param
+    let _2: unknown
+    let _3: ai.errors.Failure // failure
+    let _4: unknown
+    let _5: baml.errors.UnknownError // unknown_error
+    let _6: string[]
+    let _7: string
+    let _8: type
+
+    bb0: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: ["errors"], name: "Failure" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "UnknownError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb2];
+    }
+
+    bb2: {
+        _8 = load_type(unknown);
+        _7 = call const fn baml.String.from<copy _8>(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _6 = [copy _7]: string[];
+        _0 = baml.errors.UnknownError { copy _1, copy _6 };
+        goto -> bb6;
+    }
+
+    bb4: {
+        _5 = copy _4;
+        _0 = copy _5;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _3 = copy _2;
+        _0 = copy _3;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -4141,21 +4239,28 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
     let _102: ai.errors.ParseFailed
     let _103: string
     let _104: string
-    let _105: void
-    let _106: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _107: ai.events.FinalProduced
-    let _108: string
-    let _109: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _110: Out
-    let _111: type
-    let _112: ai.Journal
-    let _113: int
-    let _114: type
-    let _115: Out
-    let _116: ai.Journal
-    let _117: ai.events.Usage
-    let _118: ai.errors.StepBudgetExceeded
-    let _119: int
+    let _105: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // value_json
+    let _106: unknown // e
+    let _107: Out
+    let _108: type
+    let _109: baml.errors.UnknownError
+    let _110: baml.json.JsonSerializationError
+    let _111: string[]
+    let _112: string
+    let _113: type
+    let _114: void
+    let _115: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _116: ai.events.FinalProduced
+    let _117: string
+    let _118: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _119: ai.Journal
+    let _120: int
+    let _121: type
+    let _122: Out
+    let _123: ai.Journal
+    let _124: ai.events.Usage
+    let _125: ai.errors.StepBudgetExceeded
+    let _126: int
 
     bb0: {
         _4 = copy _1.1;
@@ -4195,9 +4300,9 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
     }
 
     bb6: {
-        _119 = copy _11;
-        _118 = ai.errors.StepBudgetExceeded { copy _119 };
-        throw copy _118;
+        _126 = copy _11;
+        _125 = ai.errors.StepBudgetExceeded { copy _126 };
+        throw copy _125;
     }
 
     bb7: {
@@ -4253,33 +4358,34 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
     }
 
     bb16: {
-        _110 = copy _98;
-        _111 = load_type(#0);
-        _109 = call const fn baml.json.to_json<copy _111>(copy _110) -> [bb17];
+        _107 = copy _98;
+        _108 = load_type(#0);
+        _105 = call const fn baml.json.to_json<copy _108>(copy _107) -> [bb17, unwind: bb50];
     }
 
     bb17: {
-        _108 = call const fn baml.json.stringify(copy _109) -> [bb18];
+        _118 = copy _105;
+        _117 = call const fn baml.json.stringify(copy _118) -> [bb18];
     }
 
     bb18: {
-        _107 = ai.events.FinalProduced { copy _108 };
-        _106 = [copy _107]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced[];
-        _105 = call const fn ai.Journal.append_all(copy _6, copy _106) -> [bb19];
+        _116 = ai.events.FinalProduced { copy _117 };
+        _115 = [copy _116]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced[];
+        _114 = call const fn ai.Journal.append_all(copy _6, copy _115) -> [bb19];
     }
 
     bb19: {
-        _112 = copy _6;
-        _113 = copy _8;
-        _114 = load_type(#0);
-        _8 = call const fn ai.Agent._emit_from<copy _114>(copy _1, copy _112, copy _113) -> [bb20];
+        _119 = copy _6;
+        _120 = copy _8;
+        _121 = load_type(#0);
+        _8 = call const fn ai.Agent._emit_from<copy _121>(copy _1, copy _119, copy _120) -> [bb20];
     }
 
     bb20: {
-        _115 = copy _98;
-        _116 = copy _6;
-        _117 = copy _12;
-        _0 = ai.RunResult<#0> { copy _115, copy _116, copy _117 };
+        _122 = copy _98;
+        _123 = copy _6;
+        _124 = copy _12;
+        _0 = ai.RunResult<#0> { copy _122, copy _123, copy _124 };
         goto -> bb21;
     }
 
@@ -4454,6 +4560,22 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
         _104 = copy _95;
         _102 = ai.errors.ParseFailed { copy _103, copy _104 };
         throw copy _102;
+    }
+
+    bb50: {
+        throw_if_panic copy _106 -> bb51;
+    }
+
+    bb51: {
+        _110 = copy _106;
+        _113 = load_type(baml.json.JsonSerializationError);
+        _112 = call const fn baml.String.from<copy _113>(copy _106) -> [bb52];
+    }
+
+    bb52: {
+        _111 = [copy _112]: string[];
+        _109 = baml.errors.UnknownError { copy _110, copy _111 };
+        throw copy _109;
     }
 }
 

@@ -94,7 +94,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_const 0
     cmp_int_op >
     pop_jump_if_false L4
-    jump L7
+    jump L8
 
   L4:
     load_var turn
@@ -130,10 +130,24 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_type #0
     load_var value
     call baml.json.to_json
+    jump L7
+    load_var e
+    throw_if_panic
+    load_type baml.json.JsonSerializationError
+    load_var e
+    call baml.String.from
+    store_var _112
+    load_var2 38 39
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L7:
     call baml.json.stringify
-    store_var _108
+    store_var _117
     load_deref ?5
-    load_var _108
+    load_var _117
     init_instance ai.events.FinalProduced .value_json
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     alloc_array 1
@@ -152,7 +166,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     init_instance<1> ai.RunResult .value, .journal, .usage
     return
 
-  L7:
+  L8:
     load_deref ?5
     call ai.Journal.entries
     container_len
@@ -185,7 +199,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var before
     store_var i
 
-  L8:
+  L9:
     load_var i
     store_var _47
     load_var entries
@@ -200,7 +214,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var _52
     load_var _52
     narrow_bind ai.events.ToolFailed, slot=19
-    pop_jump_if_false L10
+    pop_jump_if_false L11
     load_var _52
     store_deref ?20
     load_type ai.content.ToolUse
@@ -213,7 +227,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     store_var _58
     load_var _58
     narrow_bind ai.content.ToolUse, slot=21
-    pop_jump_if_false L10
+    pop_jump_if_false L11
     load_var _58
     store_var known
     load_type string
@@ -242,11 +256,11 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var _70
     load_const null
     cmp_op ==
-    pop_jump_if_false L9
+    pop_jump_if_false L10
     load_const 0
     store_var _69
 
-  L9:
+  L10:
     load_var _69
     load_const 1
     add_int
@@ -260,17 +274,17 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     load_var n
     load_const 3
     cmp_int_op >=
-    pop_jump_if_false L10
-    jump L11
+    pop_jump_if_false L11
+    jump L12
 
-  L10:
+  L11:
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L8
+    jump L9
 
-  L11:
+  L12:
     load_var known
     load_field .id
     store_var _83
@@ -1285,6 +1299,14 @@ function ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input
     load_var2 1 2
     load_const 0
     call ai.clients.Fallback._try
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L0:
     return
 }
 
@@ -1441,6 +1463,14 @@ function ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.M
     load_var self
     load_field .max_attempts
     call ai.clients.Retry._attempt
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L0:
     return
 }
 
@@ -1498,11 +1528,11 @@ function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> st
 function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn {
     load_var self
     load_field .counter
-    store_var _4
+    store_var _5
     load_var self
     load_field .members
     container_len
-    store_var _5
+    store_var _6
     load_var2 1 1
     load_field .counter
     load_const 1
@@ -1511,12 +1541,12 @@ function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, i
     load_type ai.Client
     load_var self
     load_field .members
-    load_var2 4 5
+    load_var2 5 6
     mod_int
     call baml.Array.at
-    store_var _12
-    load_var _12
-    narrow_bind ai.Client, slot=6
+    store_var _13
+    load_var _13
+    narrow_bind ai.Client, slot=7
     pop_jump_if_false L0
     jump L1
 
@@ -1526,11 +1556,19 @@ function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, i
     throw
 
   L1:
-    load_var2 6 2
+    load_var2 7 2
     load_type ai.Client
     load_const "invoke"
     virtual_call nargs=2 ntypeargs=0
     store_var _0
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L2:
     load_var _0
     return
 }
@@ -1683,6 +1721,44 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
     init_instance ai.errors.RateLimited .provider, .retry_after_ms, .raw_body
 
   L6:
+    return
+}
+
+function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.UnknownError {
+    load_var error
+    store_var _2
+    load_var _2
+    narrow_bind ai.errors.Failure, slot=2
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var error
+    store_var _4
+    load_var _4
+    narrow_bind baml.errors.UnknownError, slot=3
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type unknown
+    load_var error
+    call baml.String.from
+    store_var _7
+    load_var2 1 4
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    jump L4
+
+  L2:
+    load_var _4
+    jump L4
+
+  L3:
+    load_var _2
+
+  L4:
     return
 }
 

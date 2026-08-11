@@ -62,7 +62,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         50    pop_jump_if_false +2                       (to 52)
         51    jump +4                                    (to 55)
 
-  261   52    load_var 7                                 (steps)
+  266   52    load_var 7                                 (steps)
         53    init_instance 1                            (ai.errors.StepBudgetExceeded .steps)
         54    throw                                      
 
@@ -99,7 +99,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         81    load_const 2                               (0)
         82    cmp_int_op >                               
         83    pop_jump_if_false +2                       (to 85)
-        84    jump +51                                   (to 135)
+        84    jump +63                                   (to 147)
 
   244   85    load_var 10                                (turn)
         86    call 781 ntypeargs=0                       (ai.ModelTurn.terminal_text)
@@ -130,191 +130,205 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
         109   init_instance 2                            (ai.errors.ParseFailed .provider, .raw_output)
         110   throw                                      
 
-  253   111   load_type 1                                
+  250   111   load_type 1                                
         112   load_var 35                                (value)
         113   call 333 ntypeargs=1                       (baml.json.to_json)
-        114   call 330 ntypeargs=0                       (baml.json.stringify)
-        115   store_var 38                               (_108)
+        114   jump +12                                   (to 126)
+        115   load_var 38                                (e)
+        116   throw_if_panic                             
 
-  250   116   load_deref 5                               
+  252   117   load_type 10                               
+        118   load_var 38                                (e)
+        119   call 139 ntypeargs=1                       (baml.String.from)
+        120   store_var 39                               (_112)
+        121   load_var2 38 39                            
+        122   load_type 3                                
+        123   alloc_array 1                              
+        124   init_instance 3                            (baml.errors.UnknownError .data, .message)
+        125   throw                                      
 
-  252   117   load_var 38                                (_108)
-        118   init_instance 3                            (ai.events.FinalProduced .value_json)
-        119   load_type 10                               
-        120   alloc_array 1                              
-        121   call 764 ntypeargs=0                       (ai.Journal.append_all)
-        122   pop 1                                      
+  258   126   call 330 ntypeargs=0                       (baml.json.stringify)
+        127   store_var 40                               (_117)
 
-  257   123   load_type 1                                
-        124   load_deref 1                               
-        125   load_deref 5                               
-        126   load_var 6                                 (seen)
-        127   call 802 ntypeargs=1                       (ai.Agent._emit_from)
-        128   store_var 6                                (seen)
+  255   128   load_deref 5                               
 
-  258   129   load_var 35                                (value)
-        130   load_deref 5                               
-        131   load_var 8                                 (total)
-        132   load_type 1                                
-        133   init_instance 4                            (ai.RunResult .value, .journal, .usage)
-        134   return                                     
+  257   129   load_var 40                                (_117)
+        130   init_instance 4                            (ai.events.FinalProduced .value_json)
+        131   load_type 11                               
+        132   alloc_array 1                              
+        133   call 764 ntypeargs=0                       (ai.Journal.append_all)
+        134   pop 1                                      
 
-  210   135   load_deref 5                               
-        136   call 762 ntypeargs=0                       (ai.Journal.entries)
-        137   container_len                              
-        138   store_var 13                               (before)
+  262   135   load_type 1                                
+        136   load_deref 1                               
+        137   load_deref 5                               
+        138   load_var 6                                 (seen)
+        139   call 802 ntypeargs=1                       (ai.Agent._emit_from)
+        140   store_var 6                                (seen)
 
-  212   139   load_type 11                               
-        140   load_type 12                               
-        141   load_type 13                               
-        142   load_var 11                                (calls)
-        143   load_type 1                                
-        144   load_var2 1 2                              
-        145   load_var 5                                 (j)
-        146   make_closure 1678 captures=3 ntypeargs=1   
-        147   call 16 ntypeargs=3                        (baml.Array.map)
-        148   store_var 14                               (futures)
+  263   141   load_var 35                                (value)
+        142   load_deref 5                               
+        143   load_var 8                                 (total)
+        144   load_type 1                                
+        145   init_instance 5                            (ai.RunResult .value, .journal, .usage)
+        146   return                                     
 
-  215   149   load_type 14                               
-        150   load_type 15                               
-        151   load_var 14                                (futures)
-        152   call 485 ntypeargs=2                       (baml.future.all)
-        153   await                                      
-        154   pop 1                                      
+  210   147   load_deref 5                               
+        148   call 762 ntypeargs=0                       (ai.Journal.entries)
+        149   container_len                              
+        150   store_var 13                               (before)
 
-  216   155   load_type 1                                
-        156   load_deref 1                               
-        157   load_deref 5                               
-        158   load_var 6                                 (seen)
-        159   call 802 ntypeargs=1                       (ai.Agent._emit_from)
-        160   store_var 6                                (seen)
+  212   151   load_type 12                               
+        152   load_type 13                               
+        153   load_type 14                               
+        154   load_var 11                                (calls)
+        155   load_type 1                                
+        156   load_var2 1 2                              
+        157   load_var 5                                 (j)
+        158   make_closure 1678 captures=3 ntypeargs=1   
+        159   call 16 ntypeargs=3                        (baml.Array.map)
+        160   store_var 14                               (futures)
 
-  220   161   load_deref 5                               
-        162   call 762 ntypeargs=0                       (ai.Journal.entries)
-        163   store_var 15                               (entries)
+  215   161   load_type 15                               
+        162   load_type 16                               
+        163   load_var 14                                (futures)
+        164   call 485 ntypeargs=2                       (baml.future.all)
+        165   await                                      
+        166   pop 1                                      
 
-  221   164   load_var 13                                (before)
-        165   store_var 16                               (i)
+  216   167   load_type 1                                
+        168   load_deref 1                               
+        169   load_deref 5                               
+        170   load_var 6                                 (seen)
+        171   call 802 ntypeargs=1                       (ai.Agent._emit_from)
+        172   store_var 6                                (seen)
 
-  222   166   load_var 16                                (i)
-        167   store_var 17                               (_47)
-        168   load_var 15                                (entries)
-        169   container_len                              
-        170   store_var 18                               (_48)
-        171   load_var2 17 18                            
-        172   cmp_int_op <                               
-        173   pop_jump_if_false -127                     (to 46)
+  220   173   load_deref 5                               
+        174   call 762 ntypeargs=0                       (ai.Journal.entries)
+        175   store_var 15                               (entries)
 
-  223   174   load_type 10                               
-        175   load_var2 15 16                            
-        176   call 3 ntypeargs=1                         (baml.Array.at)
-        177   store_var 19                               (_52)
-        178   load_var 19                                (_52)
-        179   narrow_bind 16 19                          
-        180   pop_jump_if_false +60                      (to 240)
-        181   load_var 19                                (_52)
-        182   store_deref 20                             
+  221   176   load_var 13                                (before)
+        177   store_var 16                               (i)
 
-  224   183   load_type 11                               
-        184   load_type 13                               
-        185   load_var 11                                (calls)
-        186   load_type 1                                
-        187   load_var 20                                (f)
-        188   make_closure 1679 captures=1 ntypeargs=1   
-        189   call 19 ntypeargs=2                        (baml.Array.find)
+  222   178   load_var 16                                (i)
+        179   store_var 17                               (_47)
+        180   load_var 15                                (entries)
+        181   container_len                              
+        182   store_var 18                               (_48)
+        183   load_var2 17 18                            
+        184   cmp_int_op <                               
+        185   pop_jump_if_false -139                     (to 46)
 
-  227   190   store_var 21                               (_58)
-        191   load_var 21                                (_58)
-        192   narrow_bind 17 21                          
-        193   pop_jump_if_false +47                      (to 240)
-        194   load_var 21                                (_58)
-        195   store_var 22                               (known)
+  223   186   load_type 11                               
+        187   load_var2 15 16                            
+        188   call 3 ntypeargs=1                         (baml.Array.at)
+        189   store_var 19                               (_52)
+        190   load_var 19                                (_52)
+        191   narrow_bind 17 19                          
+        192   pop_jump_if_false +60                      (to 252)
+        193   load_var 19                                (_52)
+        194   store_deref 20                             
 
-  228   196   load_type 3                                
-        197   load_var 22                                (known)
-        198   load_field 1                               (name)
-        199   call 139 ntypeargs=1                       (baml.String.from)
-        200   store_var 24                               (_62)
-        201   load_type 3                                
-        202   load_deref 20                              
-        203   load_field 1                               (message)
-        204   call 139 ntypeargs=1                       (baml.String.from)
-        205   store_var 25                               (_65)
-        206   load_var 24                                (_62)
-        207   load_const 18                              ("|")
-        208   bin_op +                                   
-        209   load_var 25                                (_65)
-        210   bin_op +                                   
-        211   store_var 23                               (key)
+  224   195   load_type 12                               
+        196   load_type 14                               
+        197   load_var 11                                (calls)
+        198   load_type 1                                
+        199   load_var 20                                (f)
+        200   make_closure 1679 captures=1 ntypeargs=1   
+        201   call 19 ntypeargs=2                        (baml.Array.find)
 
-  229   212   load_type 3                                
-        213   load_type 4                                
-        214   load_var2 9 23                             
-        215   call 38 ntypeargs=2                        (baml.Map.get)
-        216   store_var 28                               (_70)
-        217   load_var 28                                (_70)
-        218   store_var 27                               (_69)
-        219   load_var 28                                (_70)
-        220   load_const 0                               (null)
-        221   cmp_op ==                                  
-        222   pop_jump_if_false +3                       (to 225)
-        223   load_const 2                               (0)
-        224   store_var 27                               (_69)
-        225   load_var 27                                (_69)
-        226   load_const 6                               (1)
-        227   add_int                                    
-        228   store_var 26                               (n)
+  227   202   store_var 21                               (_58)
+        203   load_var 21                                (_58)
+        204   narrow_bind 18 21                          
+        205   pop_jump_if_false +47                      (to 252)
+        206   load_var 21                                (_58)
+        207   store_var 22                               (known)
 
-  230   229   load_type 3                                
-        230   load_type 4                                
-        231   load_var2 9 23                             
-        232   load_var 26                                (n)
-        233   call 37 ntypeargs=2                        (baml.Map.set)
-        234   pop 1                                      
+  228   208   load_type 3                                
+        209   load_var 22                                (known)
+        210   load_field 1                               (name)
+        211   call 139 ntypeargs=1                       (baml.String.from)
+        212   store_var 24                               (_62)
+        213   load_type 3                                
+        214   load_deref 20                              
+        215   load_field 1                               (message)
+        216   call 139 ntypeargs=1                       (baml.String.from)
+        217   store_var 25                               (_65)
+        218   load_var 24                                (_62)
+        219   load_const 19                              ("|")
+        220   bin_op +                                   
+        221   load_var 25                                (_65)
+        222   bin_op +                                   
+        223   store_var 23                               (key)
 
-  231   235   load_var 26                                (n)
-        236   load_const 19                              (3)
-        237   cmp_int_op >=                              
-        238   pop_jump_if_false +2                       (to 240)
-        239   jump +6                                    (to 245)
+  229   224   load_type 3                                
+        225   load_type 4                                
+        226   load_var2 9 23                             
+        227   call 38 ntypeargs=2                        (baml.Map.get)
+        228   store_var 28                               (_70)
+        229   load_var 28                                (_70)
+        230   store_var 27                               (_69)
+        231   load_var 28                                (_70)
+        232   load_const 0                               (null)
+        233   cmp_op ==                                  
+        234   pop_jump_if_false +3                       (to 237)
+        235   load_const 2                               (0)
+        236   store_var 27                               (_69)
+        237   load_var 27                                (_69)
+        238   load_const 6                               (1)
+        239   add_int                                    
+        240   store_var 26                               (n)
 
-  241   240   load_var 16                                (i)
-        241   load_const 6                               (1)
-        242   add_int                                    
-        243   store_var 16                               (i)
+  230   241   load_type 3                                
+        242   load_type 4                                
+        243   load_var2 9 23                             
+        244   load_var 26                                (n)
+        245   call 37 ntypeargs=2                        (baml.Map.set)
+        246   pop 1                                      
 
-  222   244   jump -78                                   (to 166)
+  231   247   load_var 26                                (n)
+        248   load_const 20                              (3)
+        249   cmp_int_op >=                              
+        250   pop_jump_if_false +2                       (to 252)
+        251   jump +6                                    (to 257)
 
-  233   245   load_var 22                                (known)
-        246   load_field 0                               (id)
-        247   store_var 29                               (_83)
+  241   252   load_var 16                                (i)
+        253   load_const 6                               (1)
+        254   add_int                                    
+        255   store_var 16                               (i)
 
-  234   248   load_var 22                                (known)
-        249   load_field 1                               (name)
-        250   store_var 30                               (_84)
+  222   256   jump -78                                   (to 178)
 
-  235   251   load_type 4                                
-        252   load_var 26                                (n)
-        253   call 139 ntypeargs=1                       (baml.String.from)
-        254   store_var 31                               (_88)
-        255   load_type 3                                
-        256   load_deref 20                              
-        257   load_field 1                               (message)
-        258   call 139 ntypeargs=1                       (baml.String.from)
-        259   store_var 32                               (_91)
+  233   257   load_var 22                                (known)
+        258   load_field 0                               (id)
+        259   store_var 29                               (_83)
 
-  232   260   load_var2 29 30                            
+  234   260   load_var 22                                (known)
+        261   load_field 1                               (name)
+        262   store_var 30                               (_84)
 
-  235   261   load_const 20                              ("the same tool call failed ")
-        262   load_var 31                                (_88)
-        263   bin_op +                                   
-        264   load_const 21                              (" times; stopping the run: ")
-        265   bin_op +                                   
-        266   load_var 32                                (_91)
-        267   bin_op +                                   
-        268   load_const 0                               (null)
-        269   init_instance 5                            (ai.errors.ToolFailedError .id, .name, .message, .cause)
-        270   throw                                      
+  235   263   load_type 4                                
+        264   load_var 26                                (n)
+        265   call 139 ntypeargs=1                       (baml.String.from)
+        266   store_var 31                               (_88)
+        267   load_type 3                                
+        268   load_deref 20                              
+        269   load_field 1                               (message)
+        270   call 139 ntypeargs=1                       (baml.String.from)
+        271   store_var 32                               (_91)
+
+  232   272   load_var2 29 30                            
+
+  235   273   load_const 21                              ("the same tool call failed ")
+        274   load_var 31                                (_88)
+        275   bin_op +                                   
+        276   load_const 22                              (" times; stopping the run: ")
+        277   bin_op +                                   
+        278   load_var 32                                (_91)
+        279   bin_op +                                   
+        280   load_const 0                               (null)
+        281   init_instance 6                            (ai.errors.ToolFailedError .id, .name, .message, .cause)
+        282   throw                                      
 }
 
 function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.FunctionSpec<#0>, j: ai.Journal, total: ai.events.Usage, attempts_left: int) -> ai.ModelTurn {
@@ -1141,7 +1155,7 @@ function ai.clients.Backoff.new(initial_ms: int, multiplier: int, max_ms: int) -
 }
 
 function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurnInput, index: int) -> ai.ModelTurn {
-  145   0    load_type 0                        
+  151   0    load_type 0                        
         1    load_var 1                         (self)
         2    load_field 0                       (members)
         3    load_var 3                         (index)
@@ -1152,17 +1166,17 @@ function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurn
         8    pop_jump_if_false +2               (to 10)
         9    jump +4                            (to 13)
 
-  162   10   load_const 1                       ("Fallback needs at least one member")
+  168   10   load_const 1                       ("Fallback needs at least one member")
         11   init_instance 0                    (baml.errors.InvalidArgument .message)
         12   throw                              
 
-  145   13   load_var2 4 2                      
+  151   13   load_var2 4 2                      
         14   load_type 0                        
         15   load_const 2                       ("invoke")
         16   virtual_call nargs=2 ntypeargs=0   
         17   jump +43                           (to 60)
 
-  147   18   load_var 5                         (e)
+  153   18   load_var 5                         (e)
         19   store_var 6                        (_10)
         20   load_var 6                         (_10)
         21   narrow_bind 3 6                    
@@ -1171,13 +1185,13 @@ function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurn
         24   load_var 5                         (e)
         25   throw_if_panic                     
 
-  158   26   load_var 5                         (e)
+  164   26   load_var 5                         (e)
         27   rethrow                            
 
-  147   28   load_var 6                         (_10)
+  153   28   load_var 6                         (_10)
         29   store_var 7                        (f)
 
-  150   30   load_var 3                         (index)
+  156   30   load_var 3                         (index)
         31   load_const 4                       (1)
         32   add_int                            
         33   store_var 8                        (_14)
@@ -1190,7 +1204,7 @@ function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurn
         40   jump_if_false +11                  (to 51)
         41   pop 1                              
 
-  151   42   load_var 7                         (f)
+  157   42   load_var 7                         (f)
         43   load_type 3                        
         44   load_const 5                       ("retry_safety")
         45   virtual_call nargs=1 ntypeargs=0   
@@ -1200,13 +1214,13 @@ function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurn
         49   alloc_variant 438                  (ai.errors.RetrySafety)
         50   call 614 ntypeargs=0               (baml.ops.equals_equals)
 
-  149   51   pop_jump_if_false +2               (to 53)
+  155   51   pop_jump_if_false +2               (to 53)
         52   jump +3                            (to 55)
 
-  155   53   load_var 5                         (e)
+  161   53   load_var 5                         (e)
         54   rethrow                            
 
-  153   55   load_var2 1 2                      
+  159   55   load_var2 1 2                      
         56   load_var 3                         (index)
         57   load_const 4                       (1)
         58   add_int                            
@@ -1215,7 +1229,7 @@ function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurn
 }
 
 function ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string {
-  171   0    load_type 0                        
+  177   0    load_type 0                        
         1    load_var 1                         (self)
         2    load_field 0                       (members)
         3    load_const 1                       (0)
@@ -1226,10 +1240,10 @@ function ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string
         8    pop_jump_if_false +2               (to 10)
         9    jump +4                            (to 13)
 
-  174   10   load_const 2                       ("fallback")
+  180   10   load_const 2                       ("fallback")
         11   store_var 2                        (_0)
 
-  171   12   jump +6                            (to 18)
+  177   12   jump +6                            (to 18)
         13   load_var 3                         (_5)
         14   load_type 0                        
         15   load_const 3                       ("id")
@@ -1240,10 +1254,17 @@ function ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string
 }
 
 function ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn {
-  179   0   load_var2 1 2          
+  185   0   load_var2 1 2          
         1   load_const 0           (0)
         2   call 795 ntypeargs=0   (ai.clients.Fallback._try)
-        3   return                 
+        3   jump +6                (to 9)
+        4   load_var 3             (e)
+        5   throw_if_panic         
+
+  186   6   load_var 3             (e)
+        7   call 813 ntypeargs=0   (ai.errors.normalize)
+        8   throw                  
+        9   return                 
 }
 
 function ai.clients.Retry._attempt(self: ai.clients.Retry, input: ai.ModelTurnInput, remaining: int) -> ai.ModelTurn {
@@ -1388,15 +1409,22 @@ function ai.clients.Retry.root.Client.id(self: ai.clients.Retry) -> string {
 }
 
 function ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn {
-  99   0   load_var2 1 2          
-       1   load_var 1             (self)
-       2   load_field 1           (max_attempts)
-       3   call 789 ntypeargs=0   (ai.clients.Retry._attempt)
-       4   return                 
+  99    0    load_var2 1 2          
+        1    load_var 1             (self)
+        2    load_field 1           (max_attempts)
+        3    call 789 ntypeargs=0   (ai.clients.Retry._attempt)
+        4    jump +6                (to 10)
+        5    load_var 3             (e)
+        6    throw_if_panic         
+
+  100   7    load_var 3             (e)
+        8    call 813 ntypeargs=0   (ai.errors.normalize)
+        9    throw                  
+        10   return                 
 }
 
 function ai.clients.RoundRobin.new(members: ai.Client[]) -> ai.clients.RoundRobin {
-  113   0    load_var 1             (members)
+  115   0    load_var 1             (members)
         1    container_len          
         2    store_var 2            (_3)
         3    load_var 2             (_3)
@@ -1405,18 +1433,18 @@ function ai.clients.RoundRobin.new(members: ai.Client[]) -> ai.clients.RoundRobi
         6    pop_jump_if_false +2   (to 8)
         7    jump +5                (to 12)
 
-  116   8    load_var 1             (members)
+  118   8    load_var 1             (members)
         9    load_const 0           (0)
         10   init_instance 0        (ai.clients.RoundRobin .members, .counter)
         11   return                 
 
-  114   12   load_const 1           ("RoundRobin needs at least one member")
+  116   12   load_const 1           ("RoundRobin needs at least one member")
         13   init_instance 1        (baml.errors.InvalidArgument .message)
         14   throw                  
 }
 
 function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> string {
-  121   0    load_type 0                        
+  123   0    load_type 0                        
         1    load_var 1                         (self)
         2    load_field 0                       (members)
         3    load_const 1                       (0)
@@ -1427,10 +1455,10 @@ function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> st
         8    pop_jump_if_false +2               (to 10)
         9    jump +4                            (to 13)
 
-  124   10   load_const 2                       ("round-robin")
+  126   10   load_const 2                       ("round-robin")
         11   store_var 2                        (_0)
 
-  121   12   jump +6                            (to 18)
+  123   12   jump +6                            (to 18)
         13   load_var 3                         (_5)
         14   load_type 0                        
         15   load_const 3                       ("id")
@@ -1441,45 +1469,53 @@ function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> st
 }
 
 function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn {
-  129   0    load_var 1                         (self)
+  132   0    load_var 1                         (self)
         1    load_field 1                       (counter)
-        2    store_var 4                        (_4)
+        2    store_var 5                        (_5)
         3    load_var 1                         (self)
         4    load_field 0                       (members)
         5    container_len                      
-        6    store_var 5                        (_5)
+        6    store_var 6                        (_6)
 
-  130   7    load_var2 1 1                      
+  133   7    load_var2 1 1                      
         8    load_field 1                       (counter)
         9    load_const 0                       (1)
         10   bin_op +                           
         11   store_field 1                      (counter)
 
-  131   12   load_type 1                        
+  134   12   load_type 1                        
         13   load_var 1                         (self)
         14   load_field 0                       (members)
 
-  129   15   load_var2 4 5                      
+  132   15   load_var2 5 6                      
         16   mod_int                            
         17   call 3 ntypeargs=1                 (baml.Array.at)
 
-  131   18   store_var 6                        (_12)
-        19   load_var 6                         (_12)
-        20   narrow_bind 1 6                    
+  134   18   store_var 7                        (_13)
+        19   load_var 7                         (_13)
+        20   narrow_bind 1 7                    
         21   pop_jump_if_false +2               (to 23)
         22   jump +4                            (to 26)
 
-  134   23   load_const 2                       ("RoundRobin needs at least one member")
+  137   23   load_const 2                       ("RoundRobin needs at least one member")
         24   init_instance 0                    (baml.errors.InvalidArgument .message)
         25   throw                              
 
-  131   26   load_var2 6 2                      
+  134   26   load_var2 7 2                      
         27   load_type 1                        
         28   load_const 3                       ("invoke")
         29   virtual_call nargs=2 ntypeargs=0   
         30   store_var 3                        (_0)
-        31   load_var 3                         (_0)
-        32   return                             
+        31   jump +6                            (to 37)
+
+  131   32   load_var 4                         (e)
+        33   throw_if_panic                     
+
+  141   34   load_var 4                         (e)
+        35   call 813 ntypeargs=0               (ai.errors.normalize)
+        36   throw                              
+        37   load_var 3                         (_0)
+        38   return                             
 }
 
 function ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
@@ -1519,61 +1555,61 @@ function ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
 }
 
 function ai.errors.InvalidRequest.Failure.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety {
-  43   0   load_const 0        (ai.errors.RetrySafety.Safe)
-       1   alloc_variant 438   (ai.errors.RetrySafety)
-       2   return              
-}
-
-function ai.errors.NetworkFailure.Failure.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety {
-  31   0   load_const 0        (ai.errors.RetrySafety.Safe)
-       1   alloc_variant 438   (ai.errors.RetrySafety)
-       2   return              
-}
-
-function ai.errors.ParseFailed.Failure.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
-  64   0   load_const 0        (ai.errors.RetrySafety.Safe)
-       1   alloc_variant 438   (ai.errors.RetrySafety)
-       2   return              
-}
-
-function ai.errors.RateLimited.Failure.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety {
-  20   0   load_const 0        (ai.errors.RetrySafety.Safe)
-       1   alloc_variant 438   (ai.errors.RetrySafety)
-       2   return              
-}
-
-function ai.errors.Refused.Failure.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety {
   54   0   load_const 0        (ai.errors.RetrySafety.Safe)
        1   alloc_variant 438   (ai.errors.RetrySafety)
        2   return              
 }
 
+function ai.errors.NetworkFailure.Failure.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety {
+  42   0   load_const 0        (ai.errors.RetrySafety.Safe)
+       1   alloc_variant 438   (ai.errors.RetrySafety)
+       2   return              
+}
+
+function ai.errors.ParseFailed.Failure.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
+  75   0   load_const 0        (ai.errors.RetrySafety.Safe)
+       1   alloc_variant 438   (ai.errors.RetrySafety)
+       2   return              
+}
+
+function ai.errors.RateLimited.Failure.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety {
+  31   0   load_const 0        (ai.errors.RetrySafety.Safe)
+       1   alloc_variant 438   (ai.errors.RetrySafety)
+       2   return              
+}
+
+function ai.errors.Refused.Failure.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety {
+  65   0   load_const 0        (ai.errors.RetrySafety.Safe)
+       1   alloc_variant 438   (ai.errors.RetrySafety)
+       2   return              
+}
+
 function ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety {
-  77   0   load_const 0        (ai.errors.RetrySafety.Unsafe)
+  88   0   load_const 0        (ai.errors.RetrySafety.Unsafe)
        1   alloc_variant 438   (ai.errors.RetrySafety)
        2   return              
 }
 
 function ai.errors.StreamingUnsupported.Failure.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
-  106   0   load_const 0        (ai.errors.RetrySafety.Safe)
+  117   0   load_const 0        (ai.errors.RetrySafety.Safe)
         1   alloc_variant 438   (ai.errors.RetrySafety)
         2   return              
 }
 
 function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
-  93   0   load_const 0        (ai.errors.RetrySafety.Unsafe)
-       1   alloc_variant 438   (ai.errors.RetrySafety)
-       2   return              
+  104   0   load_const 0        (ai.errors.RetrySafety.Unsafe)
+        1   alloc_variant 438   (ai.errors.RetrySafety)
+        2   return              
 }
 
 function ai.errors.classify_http(provider: string, status_code: int, body: string) -> ai.errors.Failure {
-  114   0    load_var 2             (status_code)
+  125   0    load_var 2             (status_code)
         1    load_const 0           (429)
         2    cmp_int_op ==          
         3    pop_jump_if_false +2   (to 5)
         4    jump +34               (to 38)
 
-  116   5    load_var 2             (status_code)
+  127   5    load_var 2             (status_code)
         6    load_const 1           (408)
         7    cmp_int_op ==          
         8    jump_if_false +2       (to 10)
@@ -1585,22 +1621,22 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
         14   pop_jump_if_false +2   (to 16)
         15   jump +12               (to 27)
 
-  122   16   load_type 3            
+  133   16   load_type 3            
         17   load_var 2             (status_code)
         18   call 139 ntypeargs=1   (baml.String.from)
         19   store_var 5            (_11)
 
-  119   20   load_var2 1 2          
+  130   20   load_var2 1 2          
 
-  122   21   load_const 4           ("http ")
+  133   21   load_const 4           ("http ")
         22   load_var 5             (_11)
         23   bin_op +               
         24   load_var 3             (body)
         25   init_instance 0        (ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body)
 
-  116   26   jump +16               (to 42)
+  127   26   jump +16               (to 42)
 
-  117   27   load_type 3            
+  128   27   load_type 3            
         28   load_var 2             (status_code)
         29   call 139 ntypeargs=1   (baml.String.from)
         30   store_var 4            (_8)
@@ -1611,13 +1647,43 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
         35   load_var 3             (body)
         36   init_instance 1        (ai.errors.NetworkFailure .provider, .detail, .raw_body)
 
-  116   37   jump +5                (to 42)
+  127   37   jump +5                (to 42)
 
-  115   38   load_var 1             (provider)
+  126   38   load_var 1             (provider)
         39   load_const 6           (null)
         40   load_var 3             (body)
         41   init_instance 2        (ai.errors.RateLimited .provider, .retry_after_ms, .raw_body)
         42   return                 
+}
+
+function ai.errors.normalize(error: unknown) -> ai.errors.Failure | baml.errors.UnknownError {
+  18   0    load_var 1             (error)
+       1    store_var 2            (_2)
+       2    load_var 2             (_2)
+       3    narrow_bind 0 2        
+       4    pop_jump_if_false +2   (to 6)
+       5    jump +18               (to 23)
+       6    load_var 1             (error)
+       7    store_var 3            (_4)
+       8    load_var 3             (_4)
+       9    narrow_bind 1 3        
+       10   pop_jump_if_false +2   (to 12)
+       11   jump +10               (to 21)
+
+  21   12   load_type 2            
+       13   load_var 1             (error)
+       14   call 139 ntypeargs=1   (baml.String.from)
+       15   store_var 4            (_7)
+       16   load_var2 1 4          
+       17   load_type 3            
+       18   alloc_array 1          
+       19   init_instance 0        (baml.errors.UnknownError .data, .message)
+
+  18   20   jump +4                (to 24)
+       21   load_var 3             (_4)
+       22   jump +2                (to 24)
+       23   load_var 2             (_2)
+       24   return                 
 }
 
 function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
@@ -1704,10 +1770,10 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
 
   108   9     load_var2 4 2                      
         10    load_var 3                         (params)
-        11    call 882 ntypeargs=0               (ai.mcp.rpc_line)
+        11    call 883 ntypeargs=0               (ai.mcp.rpc_line)
         12    store_var 5                        (_6)
         13    load_var2 1 5                      
-        14    call 884 ntypeargs=0               (ai.mcp.McpConnection._send)
+        14    call 885 ntypeargs=0               (ai.mcp.McpConnection._send)
         15    pop 1                              
 
   109   16    load_const 1                       (true)
@@ -1945,7 +2011,7 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
         5    load_type 3                        
         6    load_type 4                        
         7    alloc_map 2                        
-        8    call 885 ntypeargs=0               (ai.mcp.McpConnection._request)
+        8    call 886 ntypeargs=0               (ai.mcp.McpConnection._request)
         9    store_var 4                        (result)
 
   194   10   load_type 3                        
@@ -2113,16 +2179,16 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
        59   load_type 4            
        60   load_type 19           
        61   alloc_map 3            
-       62   call 885 ntypeargs=0   (ai.mcp.McpConnection._request)
+       62   call 886 ntypeargs=0   (ai.mcp.McpConnection._request)
        63   pop 1                  
 
   82   64   load_const 2           (null)
        65   load_const 20          ("notifications/initialized")
        66   load_const 2           (null)
-       67   call 882 ntypeargs=0   (ai.mcp.rpc_line)
+       67   call 883 ntypeargs=0   (ai.mcp.rpc_line)
        68   store_var 11           (_26)
        69   load_var2 10 11        
-       70   call 884 ntypeargs=0   (ai.mcp.McpConnection._send)
+       70   call 885 ntypeargs=0   (ai.mcp.McpConnection._send)
        71   pop 1                  
 
   83   72   load_var 10            (conn)
@@ -2135,7 +2201,7 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
         2    load_type 1                        
         3    load_type 2                        
         4    alloc_map 0                        
-        5    call 885 ntypeargs=0               (ai.mcp.McpConnection._request)
+        5    call 886 ntypeargs=0               (ai.mcp.McpConnection._request)
         6    store_var 2                        (result)
 
   163   7    load_type 3                        
@@ -2204,7 +2270,7 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
         63   store_var 13                       (_31)
 
   179   64   load_var2 1 7                      
-        65   call 881 ntypeargs=0               (ai.mcp._proxy)
+        65   call 882 ntypeargs=0               (ai.mcp._proxy)
         66   store_var 14                       (_32)
 
   176   67   load_var2 7 12                     
@@ -2231,7 +2297,7 @@ function ai.mcp._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string,
        5   store_var 2           
 
   20   6   load_var2 1 2         
-       7   make_closure 2243 2   
+       7   make_closure 2244 2   
        8   return                
 }
 
@@ -3167,7 +3233,7 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
        61   store_var 9            (_17)
 
   58   62   load_var 1             (handler)
-       63   call 822 ntypeargs=0   (ai.internal._schema_for_signature)
+       63   call 823 ntypeargs=0   (ai.internal._schema_for_signature)
        64   store_var 11           (_21)
 
   56   65   load_var2 8 9          
@@ -3249,7 +3315,7 @@ function ai.wire.send_as(req: baml.http.Request, provider: string) -> #0 {
   27   48   load_var2 2 3          
        49   load_field 0           (status_code)
        50   load_var 7             (text)
-       51   call 821 ntypeargs=0   (ai.errors.classify_http)
+       51   call 822 ntypeargs=0   (ai.errors.classify_http)
        52   throw                  
 }
 
@@ -3267,13 +3333,20 @@ function anthropic.AnthropicClient.ai.Client.id(self: anthropic.AnthropicClient)
 
 function anthropic.AnthropicClient.ai.Client.invoke(self: anthropic.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
   32   0   load_var2 1 2          
-       1   call 849 ntypeargs=0   (anthropic.internal.invoke)
-       2   return                 
+       1   call 850 ntypeargs=0   (anthropic.internal.invoke)
+       2   jump +6                (to 8)
+       3   load_var 3             (e)
+       4   throw_if_panic         
+
+  33   5   load_var 3             (e)
+       6   call 813 ntypeargs=0   (ai.errors.normalize)
+       7   throw                  
+       8   return                 
 }
 
 function anthropic.AnthropicClient.ai.stream.StreamingClient.invoke_stream(self: anthropic.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-  38   0   load_var2 1 2          
-       1   call 851 ntypeargs=0   (anthropic.internal.invoke_stream)
+  40   0   load_var2 1 2          
+       1   call 852 ntypeargs=0   (anthropic.internal.invoke_stream)
        2   return                 
 }
 
@@ -3545,7 +3618,7 @@ function anthropic.internal._anthropic_decode_batch(batch: string) -> (ai.stream
         98    pop_jump_if_false +2               (to 100)
         99    jump +5                            (to 104)
         100   load_var 21                        (_65)
-        101   call 848 ntypeargs=0               (anthropic.internal._anthropic_stop_reason)
+        101   call 849 ntypeargs=0               (anthropic.internal._anthropic_stop_reason)
         102   store_var 20                       (stop)
         103   jump +3                            (to 106)
 
@@ -3753,7 +3826,7 @@ function anthropic.internal._anthropic_lower_journal(j: ai.Journal) -> anthropic
         47    load_var 14                        (f)
         48    load_field 1                       (message)
         49    load_const 10                      (true)
-        50    call 844 ntypeargs=0               (anthropic.internal._anthropic_push_tool_result)
+        50    call 845 ntypeargs=0               (anthropic.internal._anthropic_push_tool_result)
         51    pop 1                              
         52    jump -43                           (to 9)
 
@@ -3765,13 +3838,13 @@ function anthropic.internal._anthropic_lower_journal(j: ai.Journal) -> anthropic
         57    load_var 12                        (c)
         58    load_field 1                       (output)
         59    load_const 11                      (false)
-        60    call 844 ntypeargs=0               (anthropic.internal._anthropic_push_tool_result)
+        60    call 845 ntypeargs=0               (anthropic.internal._anthropic_push_tool_result)
         61    pop 1                              
         62    jump -53                           (to 9)
 
   131   63    load_var 9                         (_24)
         64    load_field 0                       (content)
-        65    call 843 ntypeargs=0               (anthropic.internal._anthropic_assistant_blocks)
+        65    call 844 ntypeargs=0               (anthropic.internal._anthropic_assistant_blocks)
         66    store_var 10                       (_28)
 
   140   67    load_var 2                         (msgs)
@@ -4074,7 +4147,7 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
         6     load_var 4                         (_5)
         7     call_indirect                      
 
-  179   8     call 842 ntypeargs=0               (anthropic.internal._anthropic_lower_prompt)
+  179   8     call 843 ntypeargs=0               (anthropic.internal._anthropic_lower_prompt)
         9     store_var 5                        (prompt_parts)
 
   180   10    load_var 5                         (prompt_parts)
@@ -4087,7 +4160,7 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
 
   182   16    load_var 2                         (input)
         17    load_field 1                       (journal)
-        18    call 845 ntypeargs=0               (anthropic.internal._anthropic_lower_journal)
+        18    call 846 ntypeargs=0               (anthropic.internal._anthropic_lower_journal)
         19    load_type 0                        
         20    load_const 1                       ("iter")
         21    virtual_call nargs=1 ntypeargs=0   
@@ -4188,7 +4261,7 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
         107   pop 1                              
 
   210   108   load_var 7                         (lowered)
-        109   call 846 ntypeargs=0               (anthropic.internal._anthropic_render_messages)
+        109   call 847 ntypeargs=0               (anthropic.internal._anthropic_render_messages)
         110   store_var 16                       (_60)
         111   load_type 5                        
         112   load_type 6                        
@@ -4211,7 +4284,7 @@ function anthropic.internal._anthropic_request(c: anthropic.AnthropicClient, inp
 
   201   126   load_var 7                         (lowered)
         127   call 7 ntypeargs=1                 (baml.Array.concat)
-        128   call 846 ntypeargs=0               (anthropic.internal._anthropic_render_messages)
+        128   call 847 ntypeargs=0               (anthropic.internal._anthropic_render_messages)
         129   store_var 14                       (_45)
         130   load_type 5                        
         131   load_type 6                        
@@ -4422,7 +4495,7 @@ function anthropic.internal._anthropic_stop_reason(s: string) -> ai.content.Stop
 function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
   269   0     load_var2 1 2                      
         1     load_const 0                       (false)
-        2     call 847 ntypeargs=0               (anthropic.internal._anthropic_request)
+        2     call 848 ntypeargs=0               (anthropic.internal._anthropic_request)
         3     store_var 3                        (req)
 
   270   4     load_type 1                        
@@ -4559,7 +4632,7 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
         123   pop_jump_if_false +2               (to 125)
         124   jump +5                            (to 129)
         125   load_var 20                        (_43)
-        126   call 848 ntypeargs=0               (anthropic.internal._anthropic_stop_reason)
+        126   call 849 ntypeargs=0               (anthropic.internal._anthropic_stop_reason)
         127   store_var 19                       (stop)
         128   jump +4                            (to 132)
 
@@ -4600,7 +4673,7 @@ function anthropic.internal.invoke(c: anthropic.AnthropicClient, input: ai.Model
 function anthropic.internal.invoke_stream(c: anthropic.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
   417   0    load_var2 1 2          
         1    load_const 0           (true)
-        2    call 847 ntypeargs=0   (anthropic.internal._anthropic_request)
+        2    call 848 ntypeargs=0   (anthropic.internal._anthropic_request)
 
   418   3    sys_op 234             (baml.http.fetch_sse)
         4    jump +18               (to 22)
@@ -4807,8 +4880,15 @@ function claude_code.ClaudeCodeClient.ai.Client.id(self: claude_code.ClaudeCodeC
 
 function claude_code.ClaudeCodeClient.ai.Client.invoke(self: claude_code.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
   44   0   load_var2 1 2          
-       1   call 880 ntypeargs=0   (claude_code.internal.invoke)
-       2   return                 
+       1   call 881 ntypeargs=0   (claude_code.internal.invoke)
+       2   jump +6                (to 8)
+       3   load_var 3             (e)
+       4   throw_if_panic         
+
+  45   5   load_var 3             (e)
+       6   call 813 ntypeargs=0   (ai.errors.normalize)
+       7   throw                  
+       8   return                 
 }
 
 function claude_code.ClaudeCodeClient.new(model: string, executable: string, cwd: string | null, timeout_ms: int, permission_mode: string, harness_tools: string[], mcp_servers: map<string, baml.json.json> | null) -> claude_code.ClaudeCodeClient {
@@ -5022,7 +5102,7 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         122   load_const 31                      (".thinking")
         123   load_const 32                      ("")
         124   call 342 ntypeargs=1               (baml.json.path_or)
-        125   call 876 ntypeargs=0               (claude_code.internal._preview)
+        125   call 877 ntypeargs=0               (claude_code.internal._preview)
         126   store_var 17                       (_55)
         127   load_type 0                        
         128   load_var 17                        (_55)
@@ -5043,7 +5123,7 @@ function claude_code.internal._log_cc_event(raw: baml.json.json) -> null {
         140   load_const 34                      (".text")
         141   load_const 35                      ("")
         142   call 342 ntypeargs=1               (baml.json.path_or)
-        143   call 876 ntypeargs=0               (claude_code.internal._preview)
+        143   call 877 ntypeargs=0               (claude_code.internal._preview)
         144   store_var 15                       (_47)
         145   load_type 0                        
         146   load_var 15                        (_47)
@@ -5237,7 +5317,7 @@ function claude_code.internal._read_result(p: baml.sys.Process) -> baml.json.jso
         34   throw                              
 
   136   35   load_var 6                         (raw)
-        36   call 877 ntypeargs=0               (claude_code.internal._log_cc_event)
+        36   call 878 ntypeargs=0               (claude_code.internal._log_cc_event)
         37   pop 1                              
 
   137   38   load_type 8                        
@@ -5299,7 +5379,7 @@ function claude_code.internal.allowed_mcp_tools(c: claude_code.ClaudeCodeClient)
         8    load_type 2           
         9    load_var 3            (_3)
 
-  220   10   make_closure 2179 0   
+  220   10   make_closure 2180 0   
         11   call 16 ntypeargs=3   (baml.Array.map)
         12   store_var 2           (_2)
 
@@ -5332,7 +5412,7 @@ function claude_code.internal.envelope_schema(output_type: type) -> map<string, 
        16    store_var 5            (call_props)
 
   55   17    load_const 4           ("string")
-       18    call 873 ntypeargs=0   (claude_code.internal._type_schema)
+       18    call 874 ntypeargs=0   (claude_code.internal._type_schema)
        19    store_var 6            (_10)
        20    load_type 1            
        21    load_type 2            
@@ -5343,7 +5423,7 @@ function claude_code.internal.envelope_schema(output_type: type) -> map<string, 
        26    pop 1                  
 
   56   27    load_const 6           ("string")
-       28    call 873 ntypeargs=0   (claude_code.internal._type_schema)
+       28    call 874 ntypeargs=0   (claude_code.internal._type_schema)
        29    store_var 7            (_14)
        30    load_type 1            
        31    load_type 2            
@@ -5354,7 +5434,7 @@ function claude_code.internal.envelope_schema(output_type: type) -> map<string, 
        36    pop 1                  
 
   57   37    load_const 8           ("object")
-       38    call 873 ntypeargs=0   (claude_code.internal._type_schema)
+       38    call 874 ntypeargs=0   (claude_code.internal._type_schema)
        39    store_var 8            (_18)
        40    load_type 1            
        41    load_type 2            
@@ -5596,7 +5676,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
 
   239   18    load_var 2                         (input)
         19    load_field 3                       (output_type)
-        20    call 872 ntypeargs=0               (claude_code.internal.envelope_schema)
+        20    call 873 ntypeargs=0               (claude_code.internal.envelope_schema)
         21    store_var 7                        (_11)
         22    load_type 1                        
         23    load_var 7                         (_11)
@@ -5613,7 +5693,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         32    store_var 14                       (_29)
         33    load_var 2                         (input)
         34    load_field 1                       (journal)
-        35    call 871 ntypeargs=0               (claude_code.internal.transcript_text)
+        35    call 872 ntypeargs=0               (claude_code.internal.transcript_text)
         36    store_var 16                       (_33)
         37    load_type 2                        
         38    load_var 16                        (_33)
@@ -5631,7 +5711,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         48    store_var 9                        (_18)
         49    load_var 2                         (input)
         50    load_field 1                       (journal)
-        51    call 871 ntypeargs=0               (claude_code.internal.transcript_text)
+        51    call 872 ntypeargs=0               (claude_code.internal.transcript_text)
         52    store_var 11                       (_22)
         53    load_type 2                        
         54    load_var 11                        (_22)
@@ -5639,7 +5719,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         56    store_var 10                       (_21)
         57    load_var 2                         (input)
         58    load_field 2                       (toolbox)
-        59    call 874 ntypeargs=0               (claude_code.internal.tool_protocol)
+        59    call 875 ntypeargs=0               (claude_code.internal.tool_protocol)
         60    store_var 13                       (_26)
         61    load_type 2                        
         62    load_var 13                        (_26)
@@ -5761,7 +5841,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         162   pop 1                              
 
   270   163   load_var 1                         (c)
-        164   call 878 ntypeargs=0               (claude_code.internal.mcp_config_json)
+        164   call 879 ntypeargs=0               (claude_code.internal.mcp_config_json)
         165   store_var 24                       (_70)
         166   load_var 24                        (_70)
         167   narrow_bind 21 24                  
@@ -5784,7 +5864,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         181   pop 1                              
 
   274   182   load_var 1                         (c)
-        183   call 879 ntypeargs=0               (claude_code.internal.allowed_mcp_tools)
+        183   call 880 ntypeargs=0               (claude_code.internal.allowed_mcp_tools)
         184   store_var 27                       (_79)
         185   load_type 2                        
         186   load_var 27                        (_79)
@@ -5858,7 +5938,7 @@ function claude_code.internal.invoke(c: claude_code.ClaudeCodeClient, input: ai.
         243   throw_if_panic                     
 
   302   244   load_var 29                        (p)
-        245   call 875 ntypeargs=0               (claude_code.internal._read_result)
+        245   call 876 ntypeargs=0               (claude_code.internal._read_result)
         246   store_var 36                       (result)
 
   303   247   load_var 29                        (p)
@@ -6562,13 +6642,20 @@ function google.GoogleClient.ai.Client.id(self: google.GoogleClient) -> string {
 
 function google.GoogleClient.ai.Client.invoke(self: google.GoogleClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
   26   0   load_var2 1 2          
-       1   call 865 ntypeargs=0   (google.internal.invoke)
-       2   return                 
+       1   call 866 ntypeargs=0   (google.internal.invoke)
+       2   jump +6                (to 8)
+       3   load_var 3             (e)
+       4   throw_if_panic         
+
+  27   5   load_var 3             (e)
+       6   call 813 ntypeargs=0   (ai.errors.normalize)
+       7   throw                  
+       8   return                 
 }
 
 function google.GoogleClient.ai.stream.StreamingClient.invoke_stream(self: google.GoogleClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-  32   0   load_var2 1 2          
-       1   call 867 ntypeargs=0   (google.internal.invoke_stream)
+  34   0   load_var2 1 2          
+       1   call 868 ntypeargs=0   (google.internal.invoke_stream)
        2   return                 
 }
 
@@ -7047,7 +7134,7 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
         6     load_var 4                         (_5)
         7     call_indirect                      
 
-  226   8     call 859 ntypeargs=0               (google.internal.google_lower_prompt)
+  226   8     call 860 ntypeargs=0               (google.internal.google_lower_prompt)
         9     store_var 5                        (prompt_parts)
 
   227   10    load_var 5                         (prompt_parts)
@@ -7056,7 +7143,7 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
 
   228   13    load_var 2                         (input)
         14    load_field 1                       (journal)
-        15    call 861 ntypeargs=0               (google.internal.google_lower_journal)
+        15    call 862 ntypeargs=0               (google.internal.google_lower_journal)
         16    load_type 0                        
         17    load_const 1                       ("iter")
         18    virtual_call nargs=1 ntypeargs=0   
@@ -7134,7 +7221,7 @@ function google.internal._google_request(c: google.GoogleClient, input: ai.Model
   238   80    load_const 11                      ("user")
         81    load_var 5                         (prompt_parts)
         82    load_field 0                       (system_parts)
-        83    call 856 ntypeargs=0               (google.internal._gm_content)
+        83    call 857 ntypeargs=0               (google.internal._gm_content)
         84    store_var 11                       (_28)
         85    load_type 12                       
         86    load_var 11                        (_28)
@@ -7419,9 +7506,9 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   195   60    load_var2 1 34                     
         61    load_field 0                       (id)
-        62    call 860 ntypeargs=0               (google.internal._gm_tool_name_for)
+        62    call 861 ntypeargs=0               (google.internal._gm_tool_name_for)
         63    load_var 35                        (response)
-        64    call 858 ntypeargs=0               (google.internal._gm_function_response)
+        64    call 859 ntypeargs=0               (google.internal._gm_function_response)
         65    store_var 36                       (_84)
         66    load_var2 3 36                     
         67    call 4 ntypeargs=0                 (baml.Array.push)
@@ -7447,9 +7534,9 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   189   84    load_var2 1 30                     
         85    load_field 0                       (id)
-        86    call 860 ntypeargs=0               (google.internal._gm_tool_name_for)
+        86    call 861 ntypeargs=0               (google.internal._gm_tool_name_for)
         87    load_var 31                        (response)
-        88    call 858 ntypeargs=0               (google.internal._gm_function_response)
+        88    call 859 ntypeargs=0               (google.internal._gm_function_response)
         89    store_var 32                       (_72)
         90    load_var2 3 32                     
         91    call 4 ntypeargs=0                 (baml.Array.push)
@@ -7469,7 +7556,7 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   152   103   load_const 15                      ("user")
         104   load_var 3                         (pending)
-        105   call 856 ntypeargs=0               (google.internal._gm_content)
+        105   call 857 ntypeargs=0               (google.internal._gm_content)
         106   store_var 16                       (_27)
         107   load_var2 2 16                     
         108   call 4 ntypeargs=0                 (baml.Array.push)
@@ -7558,7 +7645,7 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   160   181   load_var 21                        (_36)
         182   load_field 0                       (text)
-        183   call 857 ntypeargs=0               (google.internal._gm_text_part)
+        183   call 858 ntypeargs=0               (google.internal._gm_text_part)
         184   store_var 22                       (_39)
 
   162   185   load_var2 17 22                    
@@ -7576,7 +7663,7 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   179   196   load_const 25                      ("model")
         197   load_var 17                        (parts)
-        198   call 856 ntypeargs=0               (google.internal._gm_content)
+        198   call 857 ntypeargs=0               (google.internal._gm_content)
         199   store_var 28                       (_62)
         200   load_var2 2 28                     
         201   call 4 ntypeargs=0                 (baml.Array.push)
@@ -7596,7 +7683,7 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   141   213   load_const 26                      ("user")
         214   load_var 3                         (pending)
-        215   call 856 ntypeargs=0               (google.internal._gm_content)
+        215   call 857 ntypeargs=0               (google.internal._gm_content)
         216   store_var 10                       (_15)
         217   load_var2 2 10                     
         218   call 4 ntypeargs=0                 (baml.Array.push)
@@ -7608,13 +7695,13 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   147   223   load_var 8                         (u)
         224   load_field 0                       (content)
-        225   call 857 ntypeargs=0               (google.internal._gm_text_part)
+        225   call 858 ntypeargs=0               (google.internal._gm_text_part)
         226   store_var 12                       (_20)
         227   load_const 27                      ("user")
         228   load_var 12                        (_20)
         229   load_type 0                        
         230   alloc_array 1                      
-        231   call 856 ntypeargs=0               (google.internal._gm_content)
+        231   call 857 ntypeargs=0               (google.internal._gm_content)
         232   store_var 11                       (_18)
         233   load_var2 2 11                     
         234   call 4 ntypeargs=0                 (baml.Array.push)
@@ -7631,7 +7718,7 @@ function google.internal.google_lower_journal(j: ai.Journal) -> map<string, unkn
 
   202   244   load_const 28                      ("user")
         245   load_var 3                         (pending)
-        246   call 856 ntypeargs=0               (google.internal._gm_content)
+        246   call 857 ntypeargs=0               (google.internal._gm_content)
         247   store_var 38                       (_91)
         248   load_var2 2 38                     
         249   call 4 ntypeargs=0                 (baml.Array.push)
@@ -7672,7 +7759,7 @@ function google.internal.google_lower_prompt(prompt: ai.Prompt) -> google.intern
        24   store_var_load_var 7               (message)
 
   83   25   load_field 1                       (content)
-       26   call 857 ntypeargs=0               (google.internal._gm_text_part)
+       26   call 858 ntypeargs=0               (google.internal._gm_text_part)
        27   store_var 8                        (part)
 
   84   28   load_var 7                         (message)
@@ -7705,7 +7792,7 @@ function google.internal.google_lower_prompt(prompt: ai.Prompt) -> google.intern
   95   51   load_var2 9 8                      
        52   load_type 0                        
        53   alloc_array 1                      
-       54   call 856 ntypeargs=0               (google.internal._gm_content)
+       54   call 857 ntypeargs=0               (google.internal._gm_content)
        55   store_var 10                       (_23)
        56   load_var2 3 10                     
        57   call 4 ntypeargs=0                 (baml.Array.push)
@@ -8040,7 +8127,7 @@ function google.internal.google_parse(resp: google.internal.GmResponse, seq: int
 function google.internal.google_render(c: google.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
   215   0   load_var2 1 2          
         1   load_const 0           (false)
-        2   call 863 ntypeargs=0   (google.internal._google_request)
+        2   call 864 ntypeargs=0   (google.internal._google_request)
         3   return                 
 }
 
@@ -8052,7 +8139,7 @@ function google.internal.invoke(c: google.GoogleClient, input: ai.ModelTurnInput
         4    store_var 3            (seq)
 
   351   5    load_var2 1 2          
-        6    call 862 ntypeargs=0   (google.internal.google_render)
+        6    call 863 ntypeargs=0   (google.internal.google_render)
         7    store_var 4            (req)
 
   352   8    load_type 0            
@@ -8061,14 +8148,14 @@ function google.internal.invoke(c: google.GoogleClient, input: ai.ModelTurnInput
         11   call 783 ntypeargs=1   (ai.wire.send_as)
 
   353   12   load_var 3             (seq)
-        13   call 864 ntypeargs=0   (google.internal.google_parse)
+        13   call 865 ntypeargs=0   (google.internal.google_parse)
         14   return                 
 }
 
 function google.internal.invoke_stream(c: google.GoogleClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
   426   0    load_var2 1 2          
         1    load_const 0           (true)
-        2    call 863 ntypeargs=0   (google.internal._google_request)
+        2    call 864 ntypeargs=0   (google.internal._google_request)
 
   427   3    sys_op 234             (baml.http.fetch_sse)
         4    jump +18               (to 22)
@@ -8112,13 +8199,20 @@ function openai.OpenAiClient.ai.Client.id(self: openai.OpenAiClient) -> string {
 
 function openai.OpenAiClient.ai.Client.invoke(self: openai.OpenAiClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
   62   0   load_var2 1 2          
-       1   call 835 ntypeargs=0   (openai.internal.invoke)
-       2   return                 
+       1   call 836 ntypeargs=0   (openai.internal.invoke)
+       2   jump +6                (to 8)
+       3   load_var 3             (e)
+       4   throw_if_panic         
+
+  63   5   load_var 3             (e)
+       6   call 813 ntypeargs=0   (ai.errors.normalize)
+       7   throw                  
+       8   return                 
 }
 
 function openai.OpenAiClient.ai.stream.StreamingClient.invoke_stream(self: openai.OpenAiClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-  68   0   load_var2 1 2          
-       1   call 837 ntypeargs=0   (openai.internal.invoke_stream)
+  70   0   load_var2 1 2          
+       1   call 838 ntypeargs=0   (openai.internal.invoke_stream)
        2   return                 
 }
 
@@ -8328,7 +8422,7 @@ function openai.internal._openai_decode_batch(batch: string) -> (ai.stream.TextD
         83    narrow_bind 15 14                  
         84    pop_jump_if_false +38              (to 122)
         85    load_var 14                        (_38)
-        86    call 834 ntypeargs=0               (openai.internal.openai_parse)
+        86    call 835 ntypeargs=0               (openai.internal.openai_parse)
         87    store_var 15                       (turn)
 
   281   88    load_var 15                        (turn)
@@ -8404,12 +8498,12 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
         6     load_var 4                         (_5)
         7     call_indirect                      
 
-  132   8     call 830 ntypeargs=0               (openai.internal.openai_lower_prompt)
+  132   8     call 831 ntypeargs=0               (openai.internal.openai_lower_prompt)
         9     store_var 5                        (items)
 
   133   10    load_var 2                         (input)
         11    load_field 1                       (journal)
-        12    call 831 ntypeargs=0               (openai.internal.openai_lower_journal)
+        12    call 832 ntypeargs=0               (openai.internal.openai_lower_journal)
         13    load_type 0                        
         14    load_const 1                       ("iter")
         15    virtual_call nargs=1 ntypeargs=0   
@@ -8570,7 +8664,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
         150   pop 1                              
 
   165   151   load_var 1                         (c)
-        152   call 826 ntypeargs=0               (openai.OpenAiClient.resolved_base_url)
+        152   call 827 ntypeargs=0               (openai.OpenAiClient.resolved_base_url)
         153   store_var 16                       (_76)
         154   load_var 16                        (_76)
         155   store_var 15                       (_75)
@@ -8586,7 +8680,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
         165   store_var 14                       (_74)
 
   167   166   load_var 1                         (c)
-        167   call 825 ntypeargs=0               (openai.OpenAiClient.resolved_api_key)
+        167   call 826 ntypeargs=0               (openai.OpenAiClient.resolved_api_key)
         168   store_var 18                       (_82)
         169   load_type 5                        
         170   load_var 18                        (_82)
@@ -8621,7 +8715,7 @@ function openai.internal._openai_request(c: openai.OpenAiClient, input: ai.Model
 
 function openai.internal.invoke(c: openai.OpenAiClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
   237   0   load_var2 1 2          
-        1   call 832 ntypeargs=0   (openai.internal.openai_render)
+        1   call 833 ntypeargs=0   (openai.internal.openai_render)
         2   store_var 3            (req)
 
   238   3   load_type 0            
@@ -8629,14 +8723,14 @@ function openai.internal.invoke(c: openai.OpenAiClient, input: ai.ModelTurnInput
         5   load_const 1           ("openai")
         6   call 783 ntypeargs=1   (ai.wire.send_as)
 
-  239   7   call 834 ntypeargs=0   (openai.internal.openai_parse)
+  239   7   call 835 ntypeargs=0   (openai.internal.openai_parse)
         8   return                 
 }
 
 function openai.internal.invoke_stream(c: openai.OpenAiClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
   310   0    load_var2 1 2          
         1    load_const 0           (true)
-        2    call 833 ntypeargs=0   (openai.internal._openai_request)
+        2    call 834 ntypeargs=0   (openai.internal._openai_request)
 
   311   3    sys_op 234             (baml.http.fetch_sse)
         4    jump +18               (to 22)
@@ -9308,7 +9402,7 @@ function openai.internal.openai_parse(resp: openai.internal.OaResponse) -> ai.Mo
 function openai.internal.openai_render(c: openai.OpenAiClient, input: ai.ModelTurnInput) -> baml.http.Request {
   121   0   load_var2 1 2          
         1   load_const 0           (false)
-        2   call 833 ntypeargs=0   (openai.internal._openai_request)
+        2   call 834 ntypeargs=0   (openai.internal._openai_request)
         3   return                 
 }
 
@@ -12403,7 +12497,7 @@ function user.User.promote(self: User, bonus: int) -> Report {
        5    store_field 1          (age)
 
   10   6    load_var2 1 2          
-       7    call 890 ntypeargs=0   (user.score)
+       7    call 891 ntypeargs=0   (user.score)
        8    store_var 3            (base)
 
   11   9    load_var 3             (base)
