@@ -783,6 +783,25 @@ ORDER BY failed DESC, cancelled DESC;
 
 ## 8. `exact_windows`
 
+The profiler's **tape** is bounded, rolling exact-event memory: new events enter
+the tape and the oldest events are eventually overwritten. When an error,
+manual action, or policy asks to preserve what happened, the profiler writes
+the retained region as a durable dump. Explicit capture and the opt-in raw
+stream can produce retained regions through the same logical model.
+
+`exact_windows` is not the tape and does not contain an event row for every
+call. It is the small searchable ledger of those preserved regions:
+
+```text
+runtime events -> bounded rolling tape -> retained dump in local evidence/S3
+                                      -> one exact_windows metadata row
+```
+
+The detailed events stay in the dump identified by `evidence_id`. Calls decoded
+from a retained region appear in `retained_calls`. A new ledger row is created
+per preserved region, not per call or elapsed-time bucket; nearby dumps may
+cover some of the same events.
+
 ### Proposed schema
 
 | Column | Type / rule | Why this row field is necessary |
@@ -804,7 +823,9 @@ ORDER BY failed DESC, cancelled DESC;
 ### Why it exists
 
 - **Row:** one retained region of detailed events.
-- **Growth:** triggered/manual retained regions, not clock time.
+- **Growth:** one row per preserved tape/dump region, not per call or clock
+  tick. Detailed evidence bytes and decoded retained calls grow with the events
+  inside those selected regions.
 - **Keep:** yes as a small evidence ledger; detailed bytes remain outside the
   table.
 - **Enables:** whether incident evidence exists, why it was retained, and
