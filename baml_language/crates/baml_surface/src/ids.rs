@@ -337,9 +337,12 @@ impl SymbolId {
 }
 
 impl SymbolId {
-    /// The id of a named item or method. `None` for impls (unnamed — the
-    /// export layer identifies them structurally) and for free-impl methods
-    /// (their identity lives under that impl id).
+    /// The id of a named item or method.
+    ///
+    /// A method contributed by an `implements` block is addressed through that
+    /// block, free or in-body alike; an inherent method and an interface's own
+    /// default take the plain path form. `None` only for an impl block itself,
+    /// which is not a named item — the export layer gives it a structural id.
     pub fn of_symbol(db: &dyn Db, symbol: Symbol<'_>) -> Option<Self> {
         // A method's id nests under its owner type rather than the namespace.
         if let Symbol::Function(function) = symbol {
@@ -475,6 +478,18 @@ impl SymbolId {
                 let imp = crate::handles::project_impls(db)
                     .into_iter()
                     .find(|imp| Self::impl_owner(db, *imp).as_ref() == Some(&self.owner))?;
+                // `all_methods`, so the defaults a block inherits resolve too.
+                //
+                // For those, `of_symbol` gives back the *interface's* path id
+                // rather than this one, and that asymmetry is deliberate: the
+                // two answer different questions. `M:baml.iter.Iterator.chain`
+                // says where the code is written — once. `M:(T[] as
+                // baml.iter.Iterator).chain` says how it is reached, and
+                // thirteen implementors reach the same declaration. A
+                // declaration has one id; an access path has one per block,
+                // which is why the export carries both (`id`, `declared_by`).
+                // Rejecting the access path here would leave the record the
+                // export publishes unresolvable.
                 let method = imp
                     .all_methods(db)
                     .into_iter()

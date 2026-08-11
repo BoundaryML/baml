@@ -14,7 +14,7 @@
 //! only finds a symbol that shares a *word* with its name or its prose.
 //! `subprocess` finds nothing, because no symbol and no docstring in the
 //! standard library uses that word — `baml.sys.exec` says "Runs `program`".
-//! Reaching that needs an index this is not.
+//! Reaching that needs a semantic index, which this search is not.
 //!
 //! Matching is on whole words, not substrings. Substrings are how a search
 //! becomes noise — `run` is inside `trunc`, so a substring search for "run a
@@ -52,14 +52,48 @@ const STOP_WORDS: &[&str] = &[
 /// name — and `CAFÉ` lowercased to `cafÉ` on one side and `café` on the other.
 ///
 /// One- and two-character tokens, and the stop words above, match nearly
-/// everything and are dropped.
-fn query_tokens(query: &str) -> Vec<String> {
-    haystack(query)
+/// everything, so they are dropped from `relevance` — but not from `names`,
+/// because a symbol may simply *be* called `get`.
+fn query_tokens(query: &str) -> Query {
+    let words: Vec<String> = haystack(query)
         .split_whitespace()
-        .filter(|token| token.chars().count() > 2 && !STOP_WORDS.contains(token))
         .map(str::to_string)
         .take(8)
-        .collect()
+        .collect();
+    Query {
+        relevance: words
+            .iter()
+            .filter(|token| token.chars().count() > 2 && !STOP_WORDS.contains(&token.as_str()))
+            .cloned()
+            .collect(),
+        // Single characters stay out of both: camelCase splitting turns `toA`
+        // into ` to a `, so a stray `a` in a query would match on nothing but
+        // an artefact of the tokenizer.
+        names: words
+            .into_iter()
+            .filter(|token| token.chars().count() > 1)
+            .collect(),
+    }
+}
+
+/// A tokenized query, split by what each half may be matched against.
+///
+/// Two lists rather than one because filtering serves ranking and defeats
+/// lookup. `get` is too common to rank a docstring by and is exactly the right
+/// thing to match a name against, and a single list has to choose.
+#[derive(Debug)]
+struct Query {
+    /// Tokens that discriminate: prose and owner are ranked on these.
+    relevance: Vec<String>,
+    /// Tokens that might be a symbol's name, whole-word.
+    names: Vec<String>,
+}
+
+impl Query {
+    /// Nothing to look for on either axis.
+    fn is_empty(&self) -> bool {
+        self.relevance.is_empty() && self.names.is_empty()
+    }
 }
 
 /// A name or docstring reduced to whole words, space-delimited at both ends so
@@ -103,14 +137,25 @@ fn haystack(text: &str) -> String {
 /// A prefix still scores, so `run` finds "Runs" — English inflection is not
 /// worth a stemmer here, but ignoring it entirely would lose the most natural
 /// way to ask.
-fn score(leaf: &str, owner: &str, docs: &str, tokens: &[String]) -> u32 {
+fn score(leaf: &str, owner: &str, docs: &str, query: &Query) -> u32 {
     let mut total = 0;
-    for token in tokens {
+    // A name is matched on every token, including the ones too common to rank
+    // prose by. Symbols really are called `get`, `set` and `id`, and filtering
+    // those out of the name test made each one unfindable by typing it.
+    for token in &query.names {
+        if leaf.contains(&format!(" {token} ")) {
+            total += 20;
+        }
+    }
+    // Everything else is ranked on the discriminating tokens only. A stop word
+    // appears in most docstrings in the library, so scoring prose by it ranks
+    // the whole surface equally, which is the same as not ranking at all.
+    for token in &query.relevance {
         let exact = format!(" {token} ");
         let prefix = format!(" {token}");
-        if leaf.contains(&exact) {
+        if !query.names.contains(token) && leaf.contains(&exact) {
             total += 20;
-        } else if leaf.contains(&prefix) {
+        } else if leaf.contains(&prefix) && !leaf.contains(&exact) {
             total += 10;
         }
         if docs.contains(&exact) {
@@ -142,6 +187,18 @@ struct Candidate {
     docstring: Option<String>,
 }
 
+/// The prefix `describe` accepts for a package.
+///
+/// The user package is called `user` internally and addressed as `root`:
+/// `resolve` maps a leading `root.` onto it, and reads a leading `user.` as an
+/// item *named* `user`, which is nothing. So a hit printed as `user.Judgement`
+/// was a path the reader could not paste back into `describe` — and pasting it
+/// back is the entire reason a path is printed. This mirrors the `root` the
+/// search walk already pushes for the same reason.
+fn addressable_package(package: &str) -> &str {
+    if package == "user" { "root" } else { package }
+}
+
 /// Everything in a package that a search can land on.
 ///
 /// The match over `ItemDetail` is exhaustive on purpose: a kind that gains
@@ -158,7 +215,7 @@ fn candidates(export: &PackageExport) -> Vec<Candidate> {
         // The package is not part of `item.namespace`, and without it a result
         // reads `sys.exec`: ambiguous across packages, and not the name the id
         // beside it uses or the one `describe` accepts.
-        let mut segments: Vec<&str> = vec![export.package.as_str()];
+        let mut segments: Vec<&str> = vec![addressable_package(&export.package)];
         segments.extend(item.namespace.iter().map(String::as_str));
         segments.push(&item.name);
         let path = segments.join(".");
@@ -264,8 +321,8 @@ fn candidates(export: &PackageExport) -> Vec<Candidate> {
 
 /// Search every package the project can see, best first.
 pub fn search(db: &ProjectDatabase, query: &str, limit: usize) -> Vec<Hit> {
-    let tokens = query_tokens(query);
-    if tokens.is_empty() {
+    let query = query_tokens(query);
+    if query.is_empty() {
         return Vec::new();
     }
 
@@ -299,7 +356,7 @@ pub fn search(db: &ProjectDatabase, query: &str, limit: usize) -> Vec<Hit> {
                 &haystack(&candidate.leaf),
                 &haystack(&owner),
                 &haystack(docs),
-                &tokens,
+                &query,
             );
             if score > 0 {
                 hits.push(Hit {
@@ -313,17 +370,20 @@ pub fn search(db: &ProjectDatabase, query: &str, limit: usize) -> Vec<Hit> {
         }
     }
 
-    // Best first, then by path, so equal scores come out in a stable order
-    // rather than in whichever order the packages were walked.
     // Best first, then path, then id: two impl blocks can provide the same
     // method name for the same receiver display, so path alone is not a total
-    // order and the tie would fall to the walk order.
+    // order and the tie would fall to whichever order the packages were walked.
     hits.sort_by(|a, b| {
         b.score
             .cmp(&a.score)
             .then_with(|| a.path.cmp(&b.path))
             .then_with(|| a.id.cmp(&b.id))
     });
+    // One symbol, one row. A method written in a class body's `implements`
+    // block is listed by the export both as a method of the class and as a
+    // method of the block; both now carry the same id, so a search for `id`
+    // printed `ai.clients.Fallback.id` twice, character for character.
+    hits.dedup_by(|a, b| a.id == b.id);
     hits.truncate(limit);
     hits
 }
@@ -337,7 +397,7 @@ mod tests {
         // The bug this scoring exists to prevent: `run` is a substring of
         // `trunc`, and a substring search buries the answer under arithmetic.
         let tokens = query_tokens("run a subprocess");
-        assert_eq!(tokens, ["run", "subprocess"]);
+        assert_eq!(tokens.relevance, ["run", "subprocess"]);
         assert_eq!(
             score(
                 &haystack("trunc"),
@@ -419,9 +479,60 @@ mod tests {
     fn stop_words_are_dropped() {
         // `the` scores against essentially every docstring in the library.
         assert_eq!(
-            query_tokens("read the file from disk"),
+            query_tokens("read the file from disk").relevance,
             ["read", "file", "disk"]
         );
+    }
+
+    #[test]
+    fn a_name_that_is_a_stop_word_is_still_findable() {
+        // `get`, `set` and `id` are all filtered out of relevance ranking —
+        // two of them are stop words and one is two characters — and every
+        // symbol actually called that became unreachable by typing its name.
+        for name in ["get", "set", "id", "all", "any", "use"] {
+            let query = query_tokens(name);
+            assert!(
+                query.relevance.is_empty(),
+                "{name} is filtered from ranking, which is the premise"
+            );
+            assert!(
+                score(
+                    &haystack(name),
+                    &haystack("baml.env"),
+                    &haystack(""),
+                    &query
+                ) > 0,
+                "{name} still scores against a symbol of that exact name"
+            );
+        }
+
+        // Still filtered where it was noise: a stop word must not pull in
+        // every docstring that happens to contain it.
+        let query = query_tokens("get");
+        assert_eq!(
+            score(
+                &haystack("read"),
+                &haystack("baml.fs"),
+                &haystack("Get the contents of a file"),
+                &query
+            ),
+            0,
+            "a stop word scores no prose"
+        );
+
+        // And a single character stays out of both: camelCase splitting turns
+        // `toA` into ` to a `, so a stray `a` would match a tokenizer artefact.
+        let query = query_tokens("a");
+        assert!(query.is_empty());
+    }
+
+    #[test]
+    fn a_user_symbol_is_printed_as_a_path_describe_accepts() {
+        // The resolver maps a leading `root.` to the user package and reads a
+        // leading `user.` as an item *named* `user`. Printing `user.Foo` gave
+        // the reader a path that `describe` then rejected.
+        assert_eq!(addressable_package("user"), "root");
+        assert_eq!(addressable_package("baml"), "baml");
     }
 
     #[test]
@@ -437,8 +548,16 @@ mod tests {
     fn short_tokens_are_dropped() {
         // `a` and `of` match nearly every docstring in the standard library —
         // and so did `the`, which this test used to assert *survives*.
-        assert_eq!(query_tokens("a list of the"), ["list"]);
+        assert_eq!(query_tokens("a list of the").relevance, ["list"]);
         assert!(query_tokens("").is_empty());
-        assert!(query_tokens("the and for").is_empty());
+
+        // Dropped from ranking but kept for names, deliberately: `all` and
+        // `any` are stop words *and* real methods, so a query of nothing but
+        // stop words still has somewhere to look. Only the empty query, and
+        // one made of single characters, has nothing.
+        let stops = query_tokens("the and for");
+        assert!(stops.relevance.is_empty(), "none of them rank prose");
+        assert_eq!(stops.names, ["the", "and", "for"]);
+        assert!(query_tokens("a b c").is_empty());
     }
 }

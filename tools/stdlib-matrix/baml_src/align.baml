@@ -563,6 +563,14 @@ function finding_fault(box: Toolbox, finding: Finding, baml_names: map<string, s
     if (unknown.length() > 0) {
         return `[${finding.ts}] these are not BAML symbols: ${unknown.join(", ")}. Look them up, or leave the baml list empty and say what you looked for.`;
     }
+    // A pairing verdict that names nothing is refused here, not only in
+    // `apply_findings`. That check runs after the session has ended, so the
+    // symbol was already marked covered: the model was never told, never spent
+    // a retry putting it right, and the symbol came out unjudged with the
+    // reason recorded somewhere the session could not see.
+    if (finding.baml.length() == 0 && judgement_pairs_verdict(finding.verdict)) {
+        return `[${finding.ts}] you said ${finding.verdict} but named no BAML symbol. Name what a developer would use, or say none if there is nothing.`;
+    }
     // `divergent` is not a stronger `match`, it is the verdict that carries a
     // caveat, and the caveat is the whole of what it adds. Thirteen shipped
     // without one, rendering as a striped swatch whose tooltip had nothing to

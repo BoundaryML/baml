@@ -27,6 +27,21 @@ interface Encoder {
 function greet(name: string) -> string { name }
 "#;
 
+const DEFAULTED_FIXTURE: &str = r#"
+interface Greeter {
+  function greet(self) -> string
+  function shout(self) -> string { self.greet() }
+}
+
+class Widget {
+  name string
+
+  implements Greeter {
+    function greet(self) -> string { self.name }
+  }
+}
+"#;
+
 /// A class implementing one interface at two instantiations. This is the shape
 /// that broke: both blocks contribute a method named `scaled`, so addressing
 /// either on the class alone names both.
@@ -96,6 +111,43 @@ fn one_interface_at_two_instantiations_yields_two_ids() {
             "resolution lands on the method the id names"
         );
     }
+}
+
+/// An inherited default is reachable through every block that inherits it, and
+/// still names one declaration.
+///
+/// The two ids answer different questions and both are needed: the export
+/// publishes a record per block, so the access path must resolve, while
+/// `declared_by` carries the single place the code is written. Collapsing them
+/// would either make a published record unaddressable or claim thirteen
+/// implementors had thirteen `chain`s.
+#[test]
+fn an_inherited_default_is_reachable_through_the_block_and_declared_once() {
+    let mut db = make_db();
+    db.add_file("defaults.baml", DEFAULTED_FIXTURE);
+
+    // The override the block writes itself.
+    let overridden = SymbolId::from_str("M:(user.Widget as user.Greeter).greet")
+        .expect("the override's id parses");
+    assert!(
+        overridden.resolve(&db).is_some(),
+        "a method the block declares resolves through it"
+    );
+
+    // The default it inherits, reached through the same block.
+    let inherited = SymbolId::from_str("M:(user.Widget as user.Greeter).shout")
+        .expect("the access path parses");
+    let Some(Resolved::Member(Symbol::Impl(_), Member::Method(shout))) = inherited.resolve(&db)
+    else {
+        panic!("an inherited default resolves through the block that inherits it")
+    };
+
+    // And it is declared exactly once, on the interface.
+    assert_eq!(
+        SymbolId::of_symbol(&db, Symbol::Function(shout)).map(|id| id.to_string()),
+        Some("M:user.Greeter.shout".to_string()),
+        "the declaration keeps the interface's id, however it was reached"
+    );
 }
 
 /// The parenthesized form survives a for-type that is itself parenthesized,

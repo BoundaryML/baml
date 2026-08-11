@@ -162,14 +162,22 @@ pub struct SourceExport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FunctionExport {
-    /// Where this record lives, unique across the document. A method reached
-    /// through an impl block is addressed under that block, because the same
-    /// declaration can be re-listed by many of them.
+    /// Where this record lives. A method reached through an impl block is
+    /// addressed *through* it — `M:(int as baml.ops.Add<bigint>).add` — because
+    /// the same declaration can be re-listed by many blocks and each listing
+    /// needs its own address.
+    ///
+    /// One id may appear on two records when they are the same symbol seen two
+    /// ways: a method written in a class body's `implements` block is listed
+    /// both as a method of the class and as a method of the block. Two
+    /// *different* symbols never share one.
     pub id: String,
-    /// The declaring symbol's own id, when it has one — an inherited default
-    /// names the interface method it came from, and an override on a named type
-    /// names that type's member. Absent for a method declared only inside a
-    /// free impl block, which has no address other than [`id`](Self::id).
+    /// Where the code is written, when that is somewhere else — an inherited
+    /// default names the interface method it came from. Absent when [`id`]
+    /// already names the declaration, which is the case for every method a
+    /// block writes itself.
+    ///
+    /// [`id`]: Self::id
     #[serde(skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     pub name: String,
@@ -430,13 +438,34 @@ fn function_export(
     db: &dyn Db,
     function: Function<'_>,
     from_default: bool,
-    block: Option<&str>,
+    via: Option<Impl<'_>>,
 ) -> FunctionExport {
     let sig = function.signature(db);
     let name = function.name(db);
     let declared = SymbolId::of_symbol(db, Symbol::Function(function)).map(|id| id.to_string());
-    let (id, declared_by) = match block {
-        Some(block) => (format!("{block}::{name}"), declared),
+    let (id, declared_by) = match via {
+        // Reached through an impl block, so addressed through it, in the
+        // qualified path a caller would actually write. This used to be
+        // `<block id>::<name>`, which addressed the record perfectly well and
+        // was spelled in a language BAML is not: `::` appears nowhere in the
+        // grammar, and an id exists to be pasted back into a tool.
+        Some(imp) => {
+            let qualified = SymbolId::impl_owner(db, imp)
+                .map(|owner| {
+                    SymbolId {
+                        kind: crate::ids::IdKind::Method,
+                        owner,
+                        member: Some(name.to_string()),
+                    }
+                    .to_string()
+                })
+                .unwrap_or_default();
+            // `declared_by` is only worth stating when it differs — an
+            // inherited default lives on the interface, while a method the
+            // block writes itself is already named by `id`.
+            let declared_by = declared.filter(|declared| declared != &qualified);
+            (qualified, declared_by)
+        }
         // A method of a named type: its declaration is its address.
         None => (declared.unwrap_or_default(), None),
     };
@@ -560,7 +589,7 @@ fn export_impl(db: &dyn Db, imp: Impl<'_>) -> Option<ImplExport> {
     let mut methods: Vec<FunctionExport> = imp
         .all_methods(db)
         .into_iter()
-        .map(|m| function_export(db, m.function, m.from_default, Some(&id)))
+        .map(|m| function_export(db, m.function, m.from_default, Some(imp)))
         .collect();
     methods.sort_by(|a, b| a.name.cmp(&b.name));
 

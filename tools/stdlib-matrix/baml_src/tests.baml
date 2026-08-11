@@ -1152,6 +1152,81 @@ function fixture_divergence(
     }
 }
 
+test "a pairing verdict that names nothing is sent back" {
+    // `apply_findings` already refused these, but it runs after the session has
+    // ended: the symbol was marked covered, no retry was spent, and it came out
+    // unjudged with the reason recorded where the session could not read it.
+    let box = fixture_toolbox();
+    let names: map<string, string> = { "M:baml.Foo.index_of": "M:baml.Foo.index_of" };
+    let nothing: string[] = [];
+
+    let bare_match = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "match",
+        baml: nothing,
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        example: null,
+    };
+    if let complaint: string = finding_fault(box, bare_match, names) {
+        assert.is_true(complaint.includes("named no BAML symbol"));
+    } else {
+        baml.sys.panic("a match naming nothing was accepted");
+    }
+
+    let bare_divergent = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "divergent",
+        baml: nothing,
+        confidence: "high",
+        reason: "fixture",
+        divergence: "they differ",
+        example: null,
+    };
+    if let complaint: string = finding_fault(box, bare_divergent, names) {
+        assert.is_true(complaint.includes("named no BAML symbol"));
+    } else {
+        baml.sys.panic("a divergent naming nothing was accepted");
+    }
+
+    // The verdicts that legitimately name nothing are untouched.
+    let absent = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "none",
+        baml: nothing,
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        example: null,
+    };
+    assert.is_true(finding_fault(box, absent, names) == null);
+}
+
+test "freshness follows references all the way, not one step" {
+    // A judgement naming A carried when A referenced B and B was built from a
+    // changed C. One hop short of what the module header already promised.
+    let seed = fixture_revision(fixture_matrix("sha-t", "5.8.3-test"));
+    let before = Revision {
+        provenance: seed.provenance,
+        texts: { "M:baml.a": "a", "T:baml.b": "b", "T:baml.c": "c" },
+        baml_ids: seed.baml_ids,
+        judgements: {},
+    };
+    let references: map<string, string[]> = { "M:baml.a": ["T:baml.b"], "T:baml.b": ["T:baml.c"] };
+    // C two hops out has been retyped.
+    let now: map<string, string> = { "M:baml.a": "a", "T:baml.b": "b", "T:baml.c": "changed" };
+    assert.is_true(!is_fresh_transitively("M:baml.a", now, before, references));
+
+    // Nothing moved: it carries.
+    let still: map<string, string> = { "M:baml.a": "a", "T:baml.b": "b", "T:baml.c": "c" };
+    assert.is_true(is_fresh_transitively("M:baml.a", still, before, references));
+
+    // A cycle terminates rather than spinning.
+    let cyclic: map<string, string[]> = { "M:baml.a": ["T:baml.b"], "T:baml.b": ["M:baml.a"] };
+    assert.is_true(is_fresh_transitively("M:baml.a", still, before, cyclic));
+}
+
 test "a divergent verdict must say how they diverge" {
     // Thirteen shipped without one. `divergent` is not a stronger `match`; the
     // caveat is the entire difference between them, and a striped swatch whose
