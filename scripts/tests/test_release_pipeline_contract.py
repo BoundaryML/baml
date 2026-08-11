@@ -1068,9 +1068,10 @@ class WorkflowGraphTests(unittest.TestCase):
             "publish-swift-sdk",
             "publish-crates-io",
             "publish-homebrew",
-            "publish-aur",
         ):
             self.assertIn(f"- {publisher}", prerequisites)
+        # AUR is temporarily excluded while upstream maintenance rejects SSH clones.
+        self.assertNotRegex(prerequisites, r"(?m)^\s+- publish-aur\s*$")
         self.assertIn(
             "needs: [plan, release-prerequisites-complete]",
             manifest,
