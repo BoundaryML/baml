@@ -1201,6 +1201,7 @@ dependencies = [
  "rayon",
  "salsa",
  "serde_json",
+ "similar",
  "syn 2.0.117",
  "sys_native",
  "sys_ops",

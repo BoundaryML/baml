@@ -104,38 +104,104 @@ fn lower_pretty_at(
 ///   unknown arm).
 /// - `throws-precision`: TIR keeps an unresolved rigid effect var
 ///   (`throws E`) where hir_ty inferred the effect - the S12 ruling.
-fn classify_diff(tir: &str, hir: &str) -> Option<String> {
-    let tir_lines: Vec<&str> = tir.lines().collect();
-    let hir_lines: Vec<&str> = hir.lines().collect();
-    let mut buckets: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
-    let mut renumber_only = false;
-    let (mut t, mut h) = (0usize, 0usize);
-    while t < tir_lines.len() || h < hir_lines.len() {
-        let t_line = tir_lines.get(t).copied();
-        let h_line = hir_lines.get(h).copied();
-        match (t_line, h_line) {
-            (Some(tl), Some(hl)) if tl == hl => {
-                t += 1;
-                h += 1;
-            }
-            (_, Some(hl)) if seeding_insertion(hl) => {
-                buckets.insert("receiver-seeding");
-                h += 1;
-            }
-            (Some(tl), Some(hl)) => {
-                if let Some(bucket) = classify_pair(tl, hl) {
-                    if let Some(bucket) = bucket {
-                        buckets.insert(bucket);
-                    } else {
-                        renumber_only = true;
-                    }
-                    t += 1;
-                    h += 1;
-                } else {
-                    return None;
+/// The unclassifiable line pairs of one diff (empty when the diff
+/// classifies), normalized like the classifier sees them - the census
+/// groups these across the corpus so remaining families rank by count.
+fn residual_pairs(tir: &str, hir: &str) -> Vec<(String, String)> {
+    let mut residual = Vec::new();
+    for event in aligned_events(tir, hir) {
+        match event {
+            AlignEvent::Pair(tl, hl) => {
+                if classify_pair(&tl, &hl).is_none() {
+                    residual.push((
+                        strip_local_ids(&tl).trim().to_string(),
+                        strip_local_ids(&hl).trim().to_string(),
+                    ));
                 }
             }
-            _ => return None,
+            AlignEvent::HirOnly(hl) => {
+                if !seeding_insertion(&hl) {
+                    residual.push(("<absent>".into(), strip_local_ids(&hl).trim().to_string()));
+                }
+            }
+            AlignEvent::TirOnly(tl) => {
+                residual.push((strip_local_ids(&tl).trim().to_string(), "<absent>".into()));
+            }
+        }
+    }
+    residual
+}
+
+/// One diff's line events under REAL alignment (Myers via `similar`,
+/// insta's own diff engine): equal runs vanish, replace runs pair
+/// line-by-line, and pure insertions/deletions surface as one-sided
+/// events. The earlier greedy two-pointer desynced on long bodies and
+/// classified alignment noise; anchoring on the LCS makes each event
+/// the actual local change.
+enum AlignEvent {
+    Pair(String, String),
+    HirOnly(String),
+    TirOnly(String),
+}
+
+fn aligned_events(tir: &str, hir: &str) -> Vec<AlignEvent> {
+    let diff = similar::TextDiff::from_lines(tir, hir);
+    let mut deletes: Vec<String> = Vec::new();
+    let mut inserts: Vec<String> = Vec::new();
+    let mut events = Vec::new();
+    let mut flush = |deletes: &mut Vec<String>, inserts: &mut Vec<String>, events: &mut Vec<AlignEvent>| {
+        // Seeding-shaped inserts peel off FIRST: a replace run holding
+        // both an accepted insertion and renumbered lines must not let
+        // the insertion shift the positional pairing of the rest.
+        if inserts.len() > deletes.len() {
+            let mut surplus = inserts.len() - deletes.len();
+            inserts.retain(|line| {
+                if surplus > 0 && seeding_insertion(line) {
+                    surplus -= 1;
+                    events.push(AlignEvent::HirOnly(line.clone()));
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+        let paired = deletes.len().min(inserts.len());
+        for (tl, hl) in deletes.drain(..paired).zip(inserts.drain(..paired)) {
+            events.push(AlignEvent::Pair(tl, hl));
+        }
+        events.extend(deletes.drain(..).map(AlignEvent::TirOnly));
+        events.extend(inserts.drain(..).map(AlignEvent::HirOnly));
+    };
+    for change in diff.iter_all_changes() {
+        let line = change.value().trim_end_matches('\n').to_string();
+        match change.tag() {
+            similar::ChangeTag::Equal => flush(&mut deletes, &mut inserts, &mut events),
+            similar::ChangeTag::Delete => deletes.push(line),
+            similar::ChangeTag::Insert => inserts.push(line),
+        }
+    }
+    flush(&mut deletes, &mut inserts, &mut events);
+    events
+}
+
+fn classify_diff(tir: &str, hir: &str) -> Option<String> {
+    let mut buckets: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
+    let mut renumber_only = false;
+    for event in aligned_events(tir, hir) {
+        match event {
+            AlignEvent::Pair(tl, hl) => match classify_pair(&tl, &hl)? {
+                Some(bucket) => {
+                    buckets.insert(bucket);
+                }
+                None => renumber_only = true,
+            },
+            AlignEvent::HirOnly(hl) => {
+                if !seeding_insertion(&hl) {
+                    return None;
+                }
+                buckets.insert("receiver-seeding");
+            }
+            AlignEvent::TirOnly(_) => return None,
         }
     }
     // A pure-renumbering pair is only admissible as the CONSEQUENCE of
@@ -174,8 +240,8 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
             None
         });
     }
-    let t_norm = normalize_type_literals(&t_ids);
-    let h_norm = normalize_type_literals(&h_ids);
+    let t_norm = dedup_union_members(&collapse_json_alias(&normalize_type_literals(&t_ids)));
+    let h_norm = dedup_union_members(&collapse_json_alias(&normalize_type_literals(&h_ids)));
     if t_norm == h_norm {
         return Some(Some("literal-widening"));
     }
@@ -268,6 +334,36 @@ fn strip_type_arg_splice(line: &str) -> String {
 /// on BOTH sides (the hir side has none after widening, so this is
 /// symmetric). `const 42_i64` operands are untouched: only bare tokens
 /// qualify, and constants carry the `const ` prefix and a suffix.
+/// The stdlib json union's definition text - TIR renders the alias
+/// EXPANDED one level deeper than hir_ty's nominal render (the S15
+/// alias-nominal ruled family); collapsing the definition to the name on
+/// both sides nets the difference.
+const JSON_DEF: &str =
+    "int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>";
+
+fn collapse_json_alias(line: &str) -> String {
+    let mut out = line.to_string();
+    while out.contains(JSON_DEF) {
+        out = out.replace(JSON_DEF, "baml.json.json");
+    }
+    out
+}
+
+/// Collapses duplicate adjacent union members after literal
+/// normalization (`bool | true` normalizes to `bool | bool`, which IS
+/// `bool` - TIR renders such unions uncollapsed; the canonical algebra
+/// and hir_ty collapse them).
+fn dedup_union_members(line: &str) -> String {
+    let mut out = line.to_string();
+    for base in ["int", "float", "string", "bool", "bigint", "null"] {
+        let dup = format!("{base} | {base}");
+        while out.contains(&dup) {
+            out = out.replace(&dup, base);
+        }
+    }
+    out
+}
+
 fn normalize_type_literals(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     for (index, token) in split_inclusive_tokens(line) {
@@ -441,6 +537,8 @@ fn s16_provider_sweep_baml_src() {
     let mut o2_agreements = 0usize;
     let mut ruled: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     let mut differing: Vec<(String, String)> = Vec::new();
+    let mut census: std::collections::BTreeMap<(String, String), (usize, String)> =
+        std::collections::BTreeMap::new();
     let mut panics: Vec<String> = Vec::new();
 
     for (rel, file) in &loaded {
@@ -464,9 +562,18 @@ fn s16_provider_sweep_baml_src() {
                 (Ok(tir), Ok(hir)) if tir == hir => Verdict::Agree,
                 (Ok(tir), Ok(hir)) => match classify_diff(&tir, &hir) {
                     Some(buckets) => Verdict::Ruled { buckets },
-                    None => Verdict::Differ {
-                        excerpt: first_diff_excerpt(&tir, &hir),
-                    },
+                    None => {
+                        for pair in residual_pairs(&tir, &hir) {
+                            let entry = census.entry(pair).or_insert((0usize, String::new()));
+                            entry.0 += 1;
+                            if entry.1.is_empty() {
+                                entry.1 = key.clone();
+                            }
+                        }
+                        Verdict::Differ {
+                            excerpt: first_diff_excerpt(&tir, &hir),
+                        }
+                    }
                 },
                 (Err(message), _) => Verdict::Panic {
                     side: "tir",
@@ -507,6 +614,16 @@ fn s16_provider_sweep_baml_src() {
         writeln!(report, "\n== panics ==").unwrap();
         for line in &panics {
             writeln!(report, "{line}").unwrap();
+        }
+    }
+    if !census.is_empty() {
+        writeln!(report, "\n== residual pair census (all shapes, by count) ==").unwrap();
+        let mut ranked: Vec<(&(String, String), &(usize, String))> = census.iter().collect();
+        ranked.sort_by(|a, b| b.1.0.cmp(&a.1.0).then(a.0.cmp(b.0)));
+        for ((tir_line, hir_line), (count, example)) in ranked {
+            writeln!(report, "[{count}x] e.g. {example}").unwrap();
+            writeln!(report, "    tir: {tir_line}").unwrap();
+            writeln!(report, "    hir: {hir_line}").unwrap();
         }
     }
     if !differing.is_empty() {

@@ -143,6 +143,14 @@ impl<'db> ConvertedTables<'db> {
 fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db> {
     let mut out = ConvertedTables::default();
     for (&expr, ty) in &result.type_of_expr {
+        // Sugar callees present as UNTYPED (TIR's convention: MIR keys
+        // the to_string/to_json/from_json desugars on the absence of a
+        // recorded callee type). hir_ty records the type AND the sugar
+        // decision; the provider materializes the absence. Post-flip,
+        // MIR reads desugared_callees directly instead.
+        if result.desugared_callees.contains(&expr) {
+            continue;
+        }
         out.expr_types.insert(expr, ty.to_plain());
     }
     for (&pat, ty) in &result.type_of_pat {

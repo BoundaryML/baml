@@ -531,6 +531,13 @@ pub struct InferenceResult<'db> {
     /// Coercion steps per expression (r-a's `expr_adjustments` shape).
     /// S16: MIR synthesizes the recorded adapters instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment]>>,
+    /// Callee expressions the walk resolved through a LANGUAGE-SUGAR
+    /// tier (`to_string`/`to_json`/`from_json` lang-item desugars).
+    /// Recorded as POSITIVE knowledge; TIR's convention leaves these
+    /// callees untyped and MIR keys the desugar on that absence, so the
+    /// provider omits their expr types (post-flip, MIR reads this table
+    /// directly instead of an absence).
+    pub desugared_callees: rustc_hash::FxHashSet<ExprId>,
 }
 
 impl Default for InferenceResult<'_> {
@@ -545,6 +552,7 @@ impl Default for InferenceResult<'_> {
             path_resolutions: FxHashMap::default(),
             call_plans: FxHashMap::default(),
             expr_adjustments: FxHashMap::default(),
+            desugared_callees: rustc_hash::FxHashSet::default(),
         }
     }
 }
@@ -3108,8 +3116,11 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
-                let (ty, bound, resolution) = self.member_callee(call, &receiver, &member);
+                let (ty, bound, resolution, desugar) = self.member_callee(call, &receiver, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
+                if desugar {
+                    self.result.desugared_callees.insert(callee);
+                }
                 if let Some(resolution) = resolution {
                     self.write_member_resolution(callee, resolution);
                 }
@@ -3121,8 +3132,11 @@ impl<'db> InferenceContext<'db> {
                 let member = member.clone();
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let nonnull = self.peel_chain_null(&receiver);
-                let (ty, bound, resolution) = self.member_callee(call, &nonnull, &member);
+                let (ty, bound, resolution, desugar) = self.member_callee(call, &nonnull, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
+                if desugar {
+                    self.result.desugared_callees.insert(callee);
+                }
                 if let Some(resolution) = resolution {
                     self.write_member_resolution(callee, resolution);
                 }
@@ -3151,8 +3165,11 @@ impl<'db> InferenceContext<'db> {
                 let (receiver, mut steps) =
                     self.walk_path_members(callee, root, &segments[1..segments.len() - 1]);
                 let member = segments.last().expect("checked len");
-                let (ty, bound, resolution) = self.member_callee(call, &receiver, member);
+                let (ty, bound, resolution, desugar) = self.member_callee(call, &receiver, member);
                 self.result.type_of_expr.insert(callee, ty.clone());
+                if desugar {
+                    self.result.desugared_callees.insert(callee);
+                }
                 steps.push(ResolvedPathSegment {
                     ty: ty.clone(),
                     resolution,
@@ -3174,7 +3191,7 @@ impl<'db> InferenceContext<'db> {
         call: ExprId,
         receiver: &Ty,
         member: &baml_type::Name,
-    ) -> (Ty, bool, Option<MemberResolution<'db>>) {
+    ) -> (Ty, bool, Option<MemberResolution<'db>>, bool) {
         let resolved = self.structurally_resolve(receiver);
         // Callee position on a UNION: every member must yield the
         // member as a callable with IDENTICAL parameters and boundness
@@ -3187,7 +3204,7 @@ impl<'db> InferenceContext<'db> {
                 // One expression, one recorded entry: the union access
                 // has no single declaration (its virtual view is an S16
                 // follow-up).
-                return (ty, bound, None);
+                return (ty, bound, None, false);
             }
             // No per-member resolution: FALL THROUGH - the
             // operator-style sugars at the bottom of the ladder are
@@ -3211,7 +3228,7 @@ impl<'db> InferenceContext<'db> {
             if let Some(interface_member) = interface_member {
                 let resolution = self.declarer_resolution(&interface_member.declarer, member);
                 let (ty, bound) = self.interface_member_callee(interface_member, call);
-                return (ty, bound, resolution);
+                return (ty, bound, resolution, false);
             }
             // The var-carrying probe resolves through an impl candidate
             // whose block loc `ImplFacts` does not carry yet, so its
@@ -3222,7 +3239,7 @@ impl<'db> InferenceContext<'db> {
                 && let Some(interface_member) = self.probe_impl_member(&resolved, member, call)
             {
                 let (ty, bound) = self.interface_member_callee(interface_member, call);
-                return (ty, bound, None);
+                return (ty, bound, None, false);
             }
             let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
             // `recv.to_json()` is language sugar for `baml.json.from(recv)`
@@ -3235,8 +3252,9 @@ impl<'db> InferenceContext<'db> {
                 && let Some(fn_ty) = self.json_desugar_callee("from", resolved.clone())
             {
                 // Desugar tiers record nothing: MIR keys the sugar on the
-                // ABSENCE of a resolution (TIR's convention).
-                return (fn_ty, true, None);
+                // ABSENCE of a resolution (TIR's convention); the callee
+                // gets a desugared_callees mark instead.
+                return (fn_ty, true, None, true);
             }
             // `recv.to_string()` with no real `implements baml.ToString`
             // member is likewise sugar for `string.from(recv)` (TIR's
@@ -3246,9 +3264,9 @@ impl<'db> InferenceContext<'db> {
                 && member.as_str() == "to_string"
                 && let Some(fn_ty) = self.string_from_callee(resolved.clone())
             {
-                return (fn_ty, true, None);
+                return (fn_ty, true, None, true);
             }
-            return (field, false, field_resolution);
+            return (field, false, field_resolution, false);
         };
         let signature = function_signature(self.db, candidate.method);
         let class_count = candidate.class_args.len();
@@ -3273,7 +3291,7 @@ impl<'db> InferenceContext<'db> {
                 func: candidate.method,
             }
         };
-        (fn_ty, bound, Some(resolution))
+        (fn_ty, bound, Some(resolution), false)
     }
 
     /// Callee position on a UNION receiver: every member must yield the
@@ -3289,7 +3307,7 @@ impl<'db> InferenceContext<'db> {
     ) -> Option<(Ty, bool)> {
         let mut resolved_fns = Vec::new();
         for member_ty in union_members {
-            let (ty, bound, _) = self.member_callee(call, member_ty, member);
+            let (ty, bound, _, _) = self.member_callee(call, member_ty, member);
             if ty.has_error() {
                 return None;
             }
@@ -3578,6 +3596,7 @@ impl<'db> InferenceContext<'db> {
                 None,
             )
         {
+            self.result.desugared_callees.insert(expr);
             return fn_ty;
         }
         Ty::error()
@@ -3748,7 +3767,11 @@ impl<'db> InferenceContext<'db> {
             })
             .or_else(|| {
                 (member.as_str() == "from_json")
-                    .then(|| self.from_json_desugar_value(prefix, own, Some(base_expr)))
+                    .then(|| {
+                        let fn_ty = self.from_json_desugar_value(prefix, own, Some(base_expr))?;
+                        self.result.desugared_callees.insert(record_at);
+                        Some(fn_ty)
+                    })
                     .flatten()
             })
     }
