@@ -95,7 +95,9 @@ Deliverables:
 - a backend-neutral **baml_query** crate;
 - the complete versioned logical catalog, including **runs_v1**, **cct_population_v1**, and **retained_calls_v1**;
 - exact Arrow/SQL types, nullability, keys, grain, availability, provenance, and snapshot fields;
-- the platform-owned BAML value/path function catalog;
+- the virtual BAML value type, ordinary equality/comparison/subscript surface,
+  internal analyzer lowering, and the smaller platform-owned function catalog
+  for operations without a natural SQL form;
 - the typed row-level unavailable/unknown carrier;
 - QueryScope, snapshot, provider, ValueResolver, and capability contracts;
 - query-global budgets, cancellation, memory/spill, backpressure, and outcome types; and
@@ -103,13 +105,19 @@ Deliverables:
 
 Gate:
 
-- grammar/catalog golden tests;
+- grammar/catalog golden tests, including natural value expressions and their
+  internal rewrites;
+- planning tests prove whole-value equality is never silently implemented as
+  serialized-byte, public-CID, or opaque-handle equality;
 - planning tests for every capability and forbidden construct;
 - fixed-snapshot and running/pending semantics tests;
 - every SQL stream has exactly one terminal **query_outcome**, including planning/execution failure, budget exhaustion, and cancellation; and
 - no dependency from the core to CLI, runtime host, AWS SDK, concrete SQLite, or concrete ClickHouse client.
 
-The exact public function spellings and unavailable carrier are freeze work, not product deferrals.
+Exact `args` root shape, subscript grammar/index base,
+available-but-absent/type-mismatch behavior, the unavailable carrier, and any
+remaining public functions are freeze work—not product deferrals. Internal
+lowering-function names are not public freeze items.
 
 ## Q2 — Local providers and command surface
 
@@ -126,7 +134,11 @@ Gate:
 
 - deleting provider state and rebuilding produces identical normalized results/outcomes;
 - predicate/limit/aggregate behavior matches a no-pushdown reference executor;
+- whole-value equality and nested scalar predicates match the canonical BAML
+  value evaluator, including unavailable evidence;
 - candidate hydration is batched, deduplicated, bounded, cancelled, and backpressured;
+- resident predicates run before hydration, and a final limit never moves
+  below a value predicate unless that predicate is executed exactly;
 - no second value codec/CID/store exists; and
 - local qualification targets pass on the published corpus.
 

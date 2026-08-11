@@ -26,7 +26,10 @@ ClickHouse must not persist:
 - query-scoped hydrated body tables after a statement; or
 - pack/chunk bytes as a private KV cache.
 
-It may persist an authorization-gated opaque provider handle plus occurrence/role/availability metadata needed to locate a canonical S3/CAS value. The representation and equality behavior of that handle are deferred.
+It may persist an authorization-gated opaque provider handle plus
+occurrence/role/availability metadata needed to locate a canonical S3/CAS
+value. The handle representation and any identity-based equality optimization
+are deferred by X4; public semantic value equality does not expose the handle.
 
 ## Public versus physical schema
 

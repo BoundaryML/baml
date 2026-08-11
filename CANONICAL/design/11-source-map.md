@@ -72,6 +72,7 @@ This hierarchy distinguishes “canonical target” from “currently implemente
 | Ordinary SQL follows a live tail | Every query binds a fixed catalog/generation/watermark/provider snapshot (D10). |
 | Accepted S3 evidence expires by ordinary default retention | Indefinite hosted retention by default; only explicit erasure removes accepted evidence (D11). |
 | Unavailable value is ordinary NULL/non-match | Preserve a typed unknown/evaluation state and incomplete outcome (D12/D13). |
+| Prototype public `value_at`/`value_field`/typed-conversion chains | Ordinary SQL equality, comparison, and subscript syntax over virtual BAML values; DataFusion lowers to private internal expressions (D7). |
 | User-defined query functions/plugins | Platform-owned allowlisted functions only (D14). |
 | Only terminal rows are durable/queryable | Running/pending/so-far facts are part of the durable catalog (D15). |
 | Unversioned public relation names | Versioned logical catalog such as **runs_v1**, **retained_calls_v1**, **cct_population_v1** (D16). |

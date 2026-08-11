@@ -41,12 +41,15 @@ Still unresolved:
 - raw canonical CID;
 - deterministic tenant-scoped token;
 - random occurrence reference;
-- public syntax/stability;
-- equality-query availability;
+- whether equal canonical values deliberately share a resident handle;
+- whether a provider may prove semantic equality from handles or must hydrate;
 - key rotation; and
 - local/hosted comparability.
 
-No v1 schema or example may assume one before this decision closes.
+Opaque handles are provider-private and have no public SQL syntax. D7
+whole-value equality remains available regardless of X4 and means semantic
+BAML-value equality. No schema or example may assume an identity-based
+optimization before this decision closes.
 
 ### Strict unavailable-value mode
 
@@ -112,7 +115,9 @@ The semantic contract is already fixed. Benchmarks choose an implementation with
 These are required work, not optional later features:
 
 - implement **baml_query** and the public catalog;
-- freeze column types/nullability and row-level unavailable semantics;
+- freeze column types/nullability, canonical `args` root shape, natural
+  BAML-value subscript grammar/index base, available-but-absent/type-mismatch
+  behavior, and row-level unavailable semantics;
 - implement local providers and the canonical ValueResolver;
 - implement mandatory query outcomes;
 - build hosted ClickHouse/S3 providers;

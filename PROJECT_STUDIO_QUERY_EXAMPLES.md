@@ -7,12 +7,16 @@ why it exists, how it grows, and the queries it makes possible.
 The query presentation follows the local query-engine
 [example](https://github.com/BoundaryML/baml/blob/codex/local-query-engine/baml_language/crates/baml_query/EXAMPLE.md),
 but the tables below follow Project Studio's aggregate-plus-retained-evidence
-model rather than the prototype's all-call table.
+model rather than the prototype's all-call table. The prototype exposes
+hydrated JSON through helper chains such as `value_string(value_field(...))`.
+Studio instead makes canonical BAML values behave like values in SQL; any
+helper expressions used by DataFusion are internal lowering details.
 
 > **Status:** this is a proposed target SQL model, not a command surface on this
 > branch today. Names omit version suffixes for readability. Exact SQL types,
-> enum spellings, parameter binding, and BAML value-function names freeze in
-> milestone Q1. `:name` means a value supplied by the caller.
+> enum spellings, parameter binding, argument root shape, subscript grammar and
+> index base, and absent-path/type mismatch behavior freeze in milestone Q1.
+> `:name` means a typed value supplied by the caller.
 
 ## Start with four questions
 
@@ -73,6 +77,9 @@ Remove:
 - `retained_calls.args`, `retained_calls.return`, and `retained_calls.error`
   from the resident schema; they remain virtual query fields resolved from
   local evidence or S3.
+- Required public helper chains such as
+  `baml_value_int(baml_value_at_path(...))`; DataFusion may use internal
+  functions after lowering ordinary SQL syntax.
 - Physical sequence/byte ranges from `exact_windows`; `evidence_id` hides that
   layout.
 
@@ -85,6 +92,8 @@ Add:
 - First/last timestamps on grouped loss summaries.
 - LLM provider identity and token-availability state.
 - Stable IDs on spawn instances and exact-evidence windows.
+- Whole-value equality and nested value traversal through ordinary SQL
+  operators and subscripts.
 
 Still unresolved:
 
@@ -97,6 +106,10 @@ Still unresolved:
   remove public SQL log inspection from P0.
 - `exact_windows` is an evidence ledger, not an event table. Keep detailed
   event reads on the bounded private RPC unless `retained_events` is designed.
+- Q1 must freeze how an available value with an absent path or incompatible
+  leaf type evaluates. It must remain distinct from unavailable evidence.
+- Q1 must freeze whether `args` is a positional list, a named-argument object,
+  or another canonical shape, plus the numeric subscript base.
 
 ## 1. `runs`
 
@@ -308,9 +321,39 @@ evidence handles and resolves the requested values from local evidence or S3.
 
 | Field | Type | Why expose it in SQL |
 | --- | --- | --- |
-| `args` | `value?`; resolved on demand | Lets users inspect captured inputs and apply bounded value predicates without exposing storage layout. |
-| `return` | `value?`; resolved on demand | Lets users inspect captured outputs and apply bounded value predicates without copying output bodies into ClickHouse. |
-| `error` | `value?`; resolved on demand | Lets users inspect captured error detail without copying error bodies into ClickHouse. |
+| `args` | `value` or typed unavailable; resolved on demand | Lets users inspect captured inputs and apply bounded value predicates without exposing storage layout. |
+| `return` | `value` or typed unavailable; resolved on demand | Lets users inspect captured outputs and apply bounded value predicates without copying output bodies into ClickHouse. |
+| `error` | `value` or typed unavailable; resolved on demand | Lets users inspect captured error detail without copying error bodies into ClickHouse. |
+
+### Public value syntax
+
+Users write ordinary operators and subscripts against virtual values:
+
+```sql
+-- Exact equality against one complete argument value supplied by the caller.
+WHERE args = :expected_args
+
+-- A predicate over a nested scalar.
+WHERE args[0]['customer']['age'] >= 30
+
+-- A predicate over a returned field.
+WHERE "return"['status'] = 'rejected'
+```
+
+`args = :expected_args` means whole-value semantic equality, not partial object
+matching, serialized-byte equality, or storage-ID equality. `:expected_args`
+must be bound as a BAML value rather than JSON text. Numeric subscripts are
+shown with BAML-style zero-based intent in these examples; string subscripts
+select object/class/map fields. Q1 must freeze the argument root shape, index
+base, exact spelling, and behavior for an absent path or incompatible leaf
+type before this becomes a compatibility contract.
+
+DataFusion recognizes expressions over the virtual BAML `value` type and
+lowers them to internal hydration, traversal, type checking, and comparison
+operations. Those internal functions are not part of public SQL. A captured
+BAML null is SQL null-like data; pending, redacted, lost, corrupt, or otherwise
+unavailable evidence is a typed unknown recorded in `query_outcome`, never an
+ordinary `NULL` or silent non-match.
 
 ### Why it exists
 
@@ -376,6 +419,25 @@ The IDs narrow the candidate set before local/S3 value loading. `args`,
 `return`, and `error` are virtual query fields in this statement, not resident
 ClickHouse columns.
 
+### Which retained calls had exactly these arguments?
+
+**English:** Within one run and function, find retained calls whose complete
+captured argument value exactly equals the BAML value supplied by the caller.
+
+```sql
+SELECT
+    call_id,
+    run_id,
+    definition_key
+FROM retained_calls
+WHERE run_id = :run_id
+  AND definition_key = :definition_key
+  AND args = :expected_args
+LIMIT 100;
+```
+
+This is whole-value equality. It does not mean “contains these fields.”
+
 ### Which retained calls contain a particular value?
 
 **English:** Within one run and function, find up to 100 retained calls whose
@@ -389,15 +451,13 @@ SELECT
 FROM retained_calls
 WHERE run_id = :run_id
   AND definition_key = :definition_key
-  AND baml_value_int(
-        baml_value_at_path(args, baml_path('arg[0].customer.age'))
-      ) >= 30
+  AND args[0]['customer']['age'] >= 30
 LIMIT 100;
 ```
 
 Cheap run/function filters execute first. Values load in bounded, deduplicated
-batches through the virtual `args` field, and the limit applies only after the
-value condition.
+batches through the virtual `args` field. DataFusion evaluates the nested
+comparison, and the limit applies only after that value condition.
 
 ## 4. `evidence_issues`
 

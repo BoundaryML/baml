@@ -26,7 +26,7 @@ Terms in this document set are normative unless marked otherwise.
 | **Committed prefix** | Longest checksummed portion of an append-only artifact that a reader can safely observe after a torn write. |
 | **Complete query** | A query that reached its terminal outcome within its bound snapshot and budgets. It can still be *incomplete as evidence* if value evaluations were unavailable; callers must inspect the outcome. |
 | **control.sqlite** | Proposed non-rebuildable local control database for spool ownership, upload obligations, receipts/watermarks, policies, and pending operations. It is not an analytical provider cache. |
-| **DataFusion/BAML SQL** | Target public SQL surface: DataFusion relational semantics plus platform-owned BAML value/path functions, provider capabilities, budgets, snapshots, and outcomes. |
+| **DataFusion/BAML SQL** | Target public SQL surface: DataFusion relational semantics plus ordinary operators/subscripts over virtual BAML values, allowlisted functions where needed, provider capabilities, budgets, snapshots, and outcomes. |
 | **Definition key** | Stable semantic function identity used across revisions. A rename intentionally changes it. |
 | **Deferred** | Deliberately outside v1 or awaiting a separate product/policy decision. It does not mean an already-settled v1 implementation gap. |
 | **Degraded** | Evidence whose attribution or completeness was affected by declared loss/corruption/budget state. Degraded is never silently presented as complete. |
@@ -40,8 +40,8 @@ Terms in this document set are normative unless marked otherwise.
 | **Function ID** | Dense **u32** compiler/profiler identity meaningful only with its revision; real functions begin at 16. Not a cross-revision key. |
 | **Generation** | Versioned physical projection/provider universe. A query binds exactly one generation; this is independent of logical catalog version. |
 | **Grain** | What one row represents. Core grains include run, population CCT path, retained call, exact window, loss fact, function, and revision. |
-| **Hosted value handle** | Authorization-gated opaque provider reference used to locate a canonical value in S3/CAS. Its physical representation and equality semantics are unresolved. |
-| **Hydrated column/operator** | Logical value data or predicate that requires resolving canonical value content outside the resident analytical store. |
+| **Hosted value handle** | Authorization-gated private provider reference used to locate a canonical value in S3/CAS. Its physical representation and use as a proven equality optimization are unresolved; public semantic equality does not expose it. |
+| **Hydrated column/operator** | Virtual BAML value data or an expression that requires resolving canonical value content outside the resident analytical store. Public SQL uses ordinary operators/subscripts; DataFusion lowers them to internal hydration/value expressions. |
 | **Integrity state** | Independent classification such as unverified, verified, truncated, corrupt, conflicting, or quarantined. |
 | **Lane** | Ordered hosted ingest/projection routing subdivision inside a cell. |
 | **Ledger date** | Object/ledger routing partition fixed at first authorization. It is not part of artifact-chunk identity. |

@@ -81,12 +81,10 @@ This produces population-true totals by revision; it does not, by itself, prove 
 ### Which retained calls contain a customer older than 30?
 
 ~~~sql
--- Target v1 spelling; helper names freeze with catalog v1.
+-- Target v1 intent; args shape/subscript grammar freezes with catalog v1.
 SELECT call_id, run_id, definition_key
 FROM retained_calls
-WHERE baml_value_int(
-        baml_value_at_path(args, baml_path('arg[0].customer.age'))
-      ) >= 30
+WHERE args[0]['customer']['age'] >= 30
 LIMIT 100;
 ~~~
 
@@ -95,6 +93,12 @@ This means “matching retained instances,” not “30% of all calls.” The pl
 `args` is a virtual query field in this example, not a ClickHouse column. The
 resident row contains availability metadata and a private lookup handle; the
 captured body remains in local evidence or S3/CAS.
+
+DataFusion lowers the ordinary subscript/comparison expression into internal
+hydration, traversal, type-checking, and comparison work. Users do not write
+those internal helper calls. Whole-value equality is also direct SQL—such as
+`args = :expected_args`—and means exact BAML-value equality, not partial-object
+or serialized-byte equality.
 
 ### Is the answer complete?
 
@@ -153,7 +157,7 @@ flowchart LR
 1. **Run.** The runtime emits fixed-width structural records into per-thread rings. A background consumer maintains population aggregates, bounded exact-event windows, and captured value roots.
 2. **Retain locally.** Sealed artifacts land under the project’s **.baml** directory. Canonical values live in a shared content-addressed store.
 3. **Inspect.** The playground’s private fold-engine RPC provides the low-latency live debugger. Ordinary SQL binds a fixed durable snapshot and never follows an unbounded live tail.
-4. **Query.** The DataFusion/BAML layer owns parsing, logical planning, BAML value functions, budgets, cancellation, provider mappings, and the terminal outcome.
+4. **Query.** The DataFusion/BAML layer owns parsing, logical planning, ordinary SQL operators/subscripts over virtual BAML values, remaining allowlisted functions, budgets, cancellation, provider mappings, and the terminal outcome.
 5. **Upload, when configured.** A host adapter spools immutable chunks, uploads them directly to object storage, and reclaims local bytes only through a receipt-backed contiguous watermark.
 6. **Project.** PostgreSQL records commitment and workflow state. SQS carries replaceable pointers. Projectors build non-value analytical facts in ClickHouse. Canonical bodies remain in S3/CAS.
 7. **Read hosted.** DataFusion pushes semantics-preserving resident work to ClickHouse, hydrates authorized values from S3/CAS in bounded batches, and evaluates residual value predicates itself.

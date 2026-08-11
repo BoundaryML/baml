@@ -151,7 +151,8 @@ Owns:
 - SQL parsing and logical planning;
 - provider and capability contracts;
 - trusted logical-to-physical mappings;
-- BAML value functions;
+- BAML value typing, ordinary operator/subscript rewrites, and remaining
+  allowlisted functions;
 - query-global budgets, cancellation, spill and backpressure;
 - snapshot binding; and
 - terminal query outcomes.

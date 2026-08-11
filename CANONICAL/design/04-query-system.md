@@ -1,10 +1,18 @@
 # Query system
 
-**Status:** Settled v1 semantics; implementation is not present on this branch. Exact value-function names, row-level unavailable carrier details, and the full column/type catalog are freeze gates.
+**Status:** Settled v1 semantics; implementation is not present on this branch.
+Exact argument root shape, subscript grammar/index base,
+available-but-absent/type-mismatch behavior, row-level unavailable carrier
+details, and the full column/type catalog are freeze gates.
 
 ## Contract in one sentence
 
-Project Studio exposes one versioned BAML/DataFusion SQL surface. DataFusion owns public semantics, snapshots, BAML value functions, budgets, cancellation, pushdown validation, and outcomes; local providers read canonical local evidence, while hosted providers push safe non-value work to ClickHouse and hydrate authorized values from S3/CAS.
+Project Studio exposes one versioned BAML/DataFusion SQL surface. DataFusion
+owns public semantics, snapshots, BAML value operators/traversal and
+allowlisted functions, budgets, cancellation, pushdown validation, and
+outcomes; local providers read canonical local evidence, while hosted
+providers push safe non-value work to ClickHouse and hydrate authorized values
+from S3/CAS.
 
 It is SQL, but it is not raw physical ClickHouse SQL.
 
@@ -20,7 +28,8 @@ The retained safeguards are:
 - typed availability and loss facts;
 - query-global budgets and cancellation;
 - semantics-checked pushdown;
-- a small platform-owned function catalog; and
+- ordinary SQL operators/subscripts over virtual BAML values plus a small
+  platform-owned function catalog for operations with no natural SQL form; and
 - a mandatory terminal query outcome.
 
 BQL and StudioQueryV1 are superseded product surfaces. The existing **baml q** implementation remains compatibility code until SQL reaches parity.
@@ -52,7 +61,8 @@ The backend-neutral crate owns:
 - ValueResolver contract;
 - QueryScope and snapshot binding;
 - pushdown classification;
-- BAML function registration;
+- BAML value-expression typing, analyzer rewrites, and allowlisted function
+  registration;
 - query-global counters, timeouts, cancellation, memory pool and spill;
 - output backpressure; and
 - terminal outcome creation.
@@ -197,7 +207,44 @@ Older designs modeled an apparent row for every call and included value previews
 
 ### Virtual hydrated value operations
 
-DataFusion must support scoped occurrence/root/path operations and typed path predicates. A provider may expose a query-scoped hydrated relation, but no standing **value_nodes_v1**, **value_scalars_v1**, or **value_bodies_v1** table is persisted in ClickHouse.
+DataFusion must support scoped occurrence/root/path operations and typed path
+predicates. A provider may expose a query-scoped hydrated relation, but no
+standing **value_nodes_v1**, **value_scalars_v1**, or **value_bodies_v1** table
+is persisted in ClickHouse.
+
+The public surface uses ordinary SQL expressions over the virtual BAML `value`
+type:
+
+~~~sql
+-- Exact whole-value equality against a typed parameter.
+WHERE args = :expected_args
+
+-- Nested scalar comparison.
+WHERE args[0]['customer']['age'] >= 30
+
+-- Returned-field comparison.
+WHERE "return"['status'] = 'rejected'
+~~~
+
+The equality operator means canonical BAML semantic equality. It never means
+partial-object matching, serialized-byte equality, public CID equality, or
+opaque-handle equality. A provider may optimize equality using identity only
+when it proves that the optimization is equivalent to the public semantics.
+
+Numeric subscripts select argument/list positions and string subscripts select
+object/class/map fields. The examples show BAML-style zero-based intent, but Q1
+must freeze the canonical `args` root shape, index base, and exact grammar
+after parser/analyzer tests. DataFusion recognizes the virtual value type and
+lowers these expressions into internal hydration, traversal, runtime type
+checking, and comparison expressions. Internal UDF names are not a public or
+versioned contract. Platform-owned functions remain available only for value
+operations with no clear operator/subscript form.
+
+An unavailable value produces the D12 typed-unknown evaluation and contributes
+to the terminal outcome; it is not SQL `NULL` or false. A captured BAML null is
+ordinary null-like data. Q1 must freeze the distinct behavior of an available
+value whose requested path is absent or whose leaf type is incompatible with
+the comparison.
 
 ## Value-query execution
 
@@ -206,13 +253,12 @@ Consider:
 ~~~sql
 SELECT call_id
 FROM retained_calls_v1
-WHERE baml_value_int(
-        baml_value_at_path(args, baml_path('arg[0].customer.age'))
-      ) >= 30
+WHERE args[0]['customer']['age'] >= 30
 LIMIT 100;
 ~~~
 
-The names are illustrative until the v1 function freeze. The execution contract is not:
+The subscript spelling is target syntax until the Q1 grammar freeze. The
+execution contract is not:
 
 ~~~text
 ClickHouse LIMIT 100 -> hydrate those 100 -> hope they match
@@ -379,7 +425,9 @@ V1 has no local-plus-hosted federation planner. Supported product shapes are:
 - run the same portable statement separately with local/hosted routing and label the results; or
 - export bounded hosted data and join it locally through an explicit external relation if the local provider supports it.
 
-Hosted value-reference syntax and equality semantics are deferred, so no v1 example may promise that a raw local CID joins directly to a hosted token.
+Hosted handle representation and any identity-based equality optimization are
+deferred by X4. Public whole-value semantic equality is fixed by D7. No v1
+example may promise that a raw local CID joins directly to a hosted handle.
 
 ## Conformance requirements
 
@@ -391,6 +439,10 @@ The corpus must compare:
 - fixed snapshots while ingest continues;
 - running/pending semantics;
 - missing/redacted/corrupt values and reconciled outcomes;
+- natural whole-value equality and nested subscript predicates against a
+  canonical BAML-value reference evaluator;
+- captured null, unavailable evidence, absent path, and incompatible leaf type
+  remain distinguishable under the Q1-frozen rules;
 - final limit after hydrated predicates;
 - cancellation across all stages;
 - query-global budgets across many batches;
@@ -417,6 +469,8 @@ An agent evaluation runs against schema documentation alone before catalog v1 fr
 It does not define the production physical model. Specifically rejected:
 
 - loose SHA-256 JSON blobs;
+- serialized `LargeBinary` JSON plus required public helper chains as the BAML
+  value-expression contract;
 - an apparently population-true all-call **function_calls** table;
 - NULL-only availability;
 - per-batch limits presented as query-global; and
@@ -431,7 +485,9 @@ Before calling the catalog implementable:
 - define keys and identity scopes;
 - specify per-role availability columns;
 - define how an unavailable predicate preserves the affected row/evaluation without altering ordinary SQL row schemas;
-- freeze platform function names and exact type/error behavior;
+- freeze the `args` root shape, subscript grammar/index base, available-value
+  absent-path/type-mismatch behavior, and any remaining platform function
+  names/type behavior;
 - freeze the terminal outcome wire schema;
 - define saved-query/catalog compatibility;
 - declare local and hosted capability matrices; and

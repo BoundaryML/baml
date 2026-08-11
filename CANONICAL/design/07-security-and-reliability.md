@@ -25,7 +25,12 @@ Treat all customer-derived metadata as tenant data, including function names, so
 | Work notification | SQS pointer containing only the minimum routing/work identity | Artifact payloads, secrets, value bodies |
 | Presigned URL and credentials | In-memory, short-lived transport context | Application logs, UI diagnostics, analytical stores |
 
-S3 object keys contain scoped identifiers and are themselves sensitive. Canonical content IDs can reveal equality; hosted value-handle representation and equality are therefore intentionally unresolved in v1 design work. See [Deferred X4](10-deferred.md#x4--hosted-opaque-value-reference).
+S3 object keys contain scoped identifiers and are themselves sensitive.
+Canonical content IDs can reveal equality; hosted value-handle representation
+and identity-based equality optimization are therefore intentionally
+unresolved in v1 design work. Public BAML-value semantic equality is fixed by
+D7 and does not expose those identities. See
+[Deferred X4](10-deferred.md#x4--hosted-opaque-value-reference).
 
 ## Authorization chain
 

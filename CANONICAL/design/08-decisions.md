@@ -20,7 +20,7 @@
 | D4 | Backend-only functions fail explicitly where unavailable | Local planning returns E_BACKEND_CAPABILITY; never silently uploads |
 | D5 | ClickHouse extensions are allowlisted inside the BAML/DataFusion grammar | No raw ClickHouse parser/passthrough |
 | D6 | A backend-neutral baml_query crate owns catalog, planning, scope, budgets and provider contracts | SQLite/Parquet/direct-artifact are implementation choices |
-| D7 | Canonical typed path/value predicates remain public | Hydrate canonical CAS values; exact helper/relation names freeze later |
+| D7 | Virtual BAML values use ordinary SQL equality, comparison, and subscript syntax | DataFusion lowers them to internal hydration/path/type expressions; helper chains are not the primary public contract |
 | D8 | ClickHouse stores no customer value content | Only non-content opaque handles plus occurrence/availability metadata may be resident |
 | D9 | One streaming SQL path handles large finite value queries | Size alone does not require a background scan; budget/cancel remain |
 | D10 | Ordinary SQL binds a fixed snapshot | Catalog, generation, watermark, scope and provider handles stay stable |
@@ -62,8 +62,9 @@ The structural-exhaustion row is a target policy. Current ring overflow still ab
 | DataFusion rejected | DataFusion owns planning/coordination locally and hosted |
 | Same ClickHouse DDL local and cloud | Same logical catalog; trusted physical mappings differ |
 | Persistent value_scalars/value_nodes/previews in CH | No customer value-derived content in CH |
+| Public `value_at`/`value_field`/typed-conversion helper chains for ordinary traversal and comparison | Ordinary SQL operators and subscripts over the virtual BAML value type; internal lowering names remain private (D7) |
 | Optional CH chunk-KV hydration cache | Not allowed by D8 |
-| Hosted deterministic per-tenant CID token fixed | Representation/equality deferred by X4 |
+| Hosted deterministic per-tenant CID token fixed | Handle representation and identity-based optimization are deferred by X4; public semantic equality is fixed by D7 |
 | Evidence ledgers/freshness footer are enough | Keep ledgers, plus mandatory query_outcome |
 | Large value candidate sets require deferred scans | Ordinary queries stream; durable background mode is separate |
 | Hosted automatic age/size retention | Accepted evidence indefinite; explicit erasure only |
@@ -88,6 +89,8 @@ The structural-exhaustion row is a target policy. Current ring overflow still ab
 - Silent local-to-hosted routing.
 - LLMs or arbitrary user code in query execution.
 - ClickHouse customer value bodies or derived search indexes.
+- Required public helper chains for ordinary BAML value equality, traversal,
+  or scalar comparison.
 - Loose prototype value storage or a second CID space.
 - NULL as the only evidence/availability model.
 - Per-batch budgets presented as query-global.
