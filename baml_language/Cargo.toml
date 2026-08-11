@@ -132,6 +132,7 @@ baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 bex_query = { path = "crates/bex_query" }
 baml_query = { path = "crates/baml_query" }
+baml_query_local = { path = "crates/baml_query_local" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"

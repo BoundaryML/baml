@@ -1,0 +1,25 @@
+[package]
+name = "baml_query_local"
+description = "Local Project Studio providers: direct-artifact/fold-backed catalog relations over the .baml tree plus the canonical-CAS ValueResolver (Q2, design 04-query-system local provider contract)."
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+baml_query = { workspace = true }
+bex_events = { workspace = true }
+bex_query = { workspace = true }
+datafusion = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }
+bex_engine = { workspace = true }
+
+[lints]
+workspace = true

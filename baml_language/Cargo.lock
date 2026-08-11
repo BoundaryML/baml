@@ -970,6 +970,8 @@ dependencies = [
  "baml_lsp2_actions",
  "baml_lsp_server",
  "baml_project",
+ "baml_query",
+ "baml_query_local",
  "baml_release",
  "baml_tests",
  "baml_type",
@@ -985,6 +987,7 @@ dependencies = [
  "clap",
  "console",
  "ctrlc",
+ "datafusion",
  "flate2",
  "hex",
  "indexmap",
@@ -1381,6 +1384,19 @@ dependencies = [
  "datafusion",
  "futures",
  "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "baml_query_local"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_query",
+ "bex_engine",
+ "bex_events",
+ "bex_query",
+ "datafusion",
  "serde_json",
  "tokio",
 ]

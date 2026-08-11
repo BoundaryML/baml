@@ -370,6 +370,13 @@ impl ValueRow {
     }
 }
 
+/// Decode a legacy inline `BamlOutboundValue` body to schema-erased JSON
+/// (public for the local query provider's legacy fallback path).
+#[must_use]
+pub fn decode_legacy_body_json(bytes: &[u8]) -> Option<serde_json::Value> {
+    outbound::decode_to_json(bytes).ok()
+}
+
 /// Minimal read-only mirror of `baml_bridge.cffi.v1.BamlOutboundValue` —
 /// the legacy inline body codec. Variants the trace encoder never produces
 /// (literal/union/handle/prompt-ast/ty) decode as unknown fields and

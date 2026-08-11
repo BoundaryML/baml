@@ -45,8 +45,17 @@ pub struct CctFold {
     /// Spawn edges: (parent_node fold id, entry_fn, spawns, completed,
     /// errored, cancelled).
     pub spawns: Vec<(u32, u32, u64, u64, u64, u64)>,
-    /// LLM totals per fold node: (llm_calls, tokens_in, tokens_out).
-    pub llm: FxHashMap<u32, (u64, u64, u64)>,
+    /// Partition each node was born in (u32::MAX = fold root/unknown).
+    /// Partition ids are session-scoped; with `partition_binds` they
+    /// attribute live-session subtrees to bound boundaries.
+    pub partition: Vec<u32>,
+    /// PartitionBind rows seen: (partition_id, boundary_id bytes).
+    pub partition_binds: Vec<(u32, [u8; 16])>,
+    /// LLM totals per (fold node, model id): (llm_calls, tokens_in,
+    /// tokens_out, provider_errs, parse_errs).
+    pub llm: FxHashMap<(u32, u32), (u64, u64, u64, u64, u64)>,
+    /// Model id → interned model name (ModelBirth rows).
+    pub models: FxHashMap<u32, String>,
     /// (parent<<32)|function → node id intern (fold construction).
     intern: FxHashMap<u64, u32>,
     /// Scan facts for the §8.4 trust contract.
@@ -76,11 +85,18 @@ pub struct BandRow {
 impl CctFold {
     fn root() -> CctFold {
         let mut fold = CctFold::default();
-        fold.push_node(0, 0, 0, 0);
+        fold.push_node(0, 0, 0, 0, u32::MAX);
         fold
     }
 
-    fn push_node(&mut self, parent: u32, function: u32, thread: u64, depth: u32) -> u32 {
+    fn push_node(
+        &mut self,
+        parent: u32,
+        function: u32,
+        thread: u64,
+        depth: u32,
+        partition: u32,
+    ) -> u32 {
         let id = u32::try_from(self.parent.len()).unwrap_or(u32::MAX);
         self.intern
             .insert(u64::from(parent) << 32 | u64::from(function), id);
@@ -88,6 +104,7 @@ impl CctFold {
         self.function.push(function);
         self.thread.push(thread);
         self.depth.push(depth);
+        self.partition.push(partition);
         self.enters.push(0);
         self.ends_ok.push(0);
         self.ends_err.push(0);
@@ -114,14 +131,14 @@ impl CctFold {
 /// Per-epoch accumulation state (segment-local node ids).
 #[derive(Default)]
 struct Epoch {
-    /// node id → (parent id, function, thread).
-    births: FxHashMap<u32, (u32, u32, u64)>,
+    /// node id → (parent id, function, thread, partition).
+    births: FxHashMap<u32, (u32, u32, u64, u32)>,
     /// node id → checkpointed absolute totals (from the last `node_total`).
     checkpoint: FxHashMap<u32, NodeTotals>,
     /// node id → deltas accumulated AFTER the last checkpoint.
     delta: FxHashMap<u32, NodeTotals>,
     hist: FxHashMap<u32, [u32; HIST_BUCKETS]>,
-    llm: FxHashMap<u32, (u64, u64, u64)>,
+    llm: FxHashMap<(u32, u32), (u64, u64, u64, u64, u64)>,
     /// edge_id → (parent_node, entry_fn, spawns, completed, errored, cancelled).
     spawns: FxHashMap<u32, (u32, u32, u64, u64, u64, u64)>,
 }
@@ -238,7 +255,12 @@ fn apply_block(
                 for b in births {
                     epoch.births.insert(
                         b.node_id,
-                        (b.parent_node_id, b.function_id, b.logical_thread_id),
+                        (
+                            b.parent_node_id,
+                            b.function_id,
+                            b.logical_thread_id,
+                            b.partition_id,
+                        ),
                     );
                 }
             }
@@ -254,7 +276,7 @@ fn apply_block(
                         .entry(d.node_id)
                         .or_default()
                         .add(&NodeTotals::from_row(d));
-                    if let Some(&(_, function, thread)) = epoch.births.get(&d.node_id) {
+                    if let Some(&(_, function, thread, _)) = epoch.births.get(&d.node_id) {
                         if function == 0 {
                             // Partition-root/unattributable nodes are
                             // shared across threads — no lane to charge.
@@ -310,10 +332,12 @@ fn apply_block(
         k if k == segment::BlockKind::LlmDelta as u8 => {
             if let Some(llm_rows) = blocks::decode_llm_delta(block.payload, rows) {
                 for l in llm_rows {
-                    let slot = epoch.llm.entry(l.node_id).or_default();
+                    let slot = epoch.llm.entry((l.node_id, l.model_id)).or_default();
                     slot.0 += u64::from(l.llm_calls_delta);
                     slot.1 += l.tokens_in_delta;
                     slot.2 += l.tokens_out_delta;
+                    slot.3 += u64::from(l.provider_errs_delta);
+                    slot.4 += u64::from(l.parse_errs_delta);
                 }
             }
         }
@@ -332,6 +356,21 @@ fn apply_block(
                     slot.3 += u64::from(e.completed_delta);
                     slot.4 += u64::from(e.errored_delta);
                     slot.5 += u64::from(e.cancelled_delta);
+                }
+            }
+        }
+        k if k == segment::BlockKind::PartitionBind as u8 => {
+            if let Some(binds) = blocks::decode_partition_bind(block.payload, rows) {
+                for bind in binds {
+                    fold.partition_binds
+                        .push((bind.partition_id, bind.boundary_id));
+                }
+            }
+        }
+        k if k == segment::BlockKind::ModelBirth as u8 => {
+            if let Some(models) = blocks::decode_model_birth(block.payload, rows) {
+                for m in models {
+                    fold.models.entry(m.model_id).or_insert(m.name);
                 }
             }
         }
@@ -374,7 +413,7 @@ fn merge_epoch(fold: &mut CctFold, epoch: Epoch) {
         if let Some(&g) = memo.get(&local) {
             return g;
         }
-        let Some(&(parent, function, thread)) = epoch.births.get(&local) else {
+        let Some(&(parent, function, thread, partition)) = epoch.births.get(&local) else {
             return 0; // unannounced node: charge to root rather than drop
         };
         let parent_global = resolve(parent, epoch, fold, memo, guard + 1);
@@ -385,7 +424,7 @@ fn merge_epoch(fold: &mut CctFold, epoch: Epoch) {
             Some(&id) if id != 0 => id,
             _ => {
                 let depth = fold.depth[parent_global as usize] + 1;
-                fold.push_node(parent_global, function, thread, depth)
+                fold.push_node(parent_global, function, thread, depth, partition)
             }
         };
         memo.insert(local, global);
@@ -417,12 +456,15 @@ fn merge_epoch(fold: &mut CctFold, epoch: Epoch) {
                 *a = a.saturating_add(*b);
             }
         }
-        if let Some(&(calls, tin, tout)) = epoch.llm.get(&local) {
-            let slot = fold.llm.entry(global).or_default();
-            slot.0 += calls;
-            slot.1 += tin;
-            slot.2 += tout;
-        }
+    }
+    for (&(local, model_id), &(calls, tin, tout, perr, parse)) in &epoch.llm {
+        let global = memo.get(&local).copied().unwrap_or(0);
+        let slot = fold.llm.entry((global, model_id)).or_default();
+        slot.0 += calls;
+        slot.1 += tin;
+        slot.2 += tout;
+        slot.3 += perr;
+        slot.4 += parse;
     }
     for (_, (parent_local, entry_fn, s, c, e, x)) in epoch.spawns {
         let parent_global = memo.get(&parent_local).copied().unwrap_or(0);

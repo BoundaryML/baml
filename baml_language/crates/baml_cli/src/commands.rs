@@ -142,6 +142,10 @@ pub(crate) enum Commands {
     #[command(about = "Query observability data with BQL (e.g. 'ctx() | top(10, by=total_ns)')")]
     Q(crate::q_command::QArgs),
 
+    /// Portable Project Studio SQL over the versioned logical catalog
+    /// (see `baml query --schema`).
+    Query(crate::query_command::QueryArgs),
+
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -380,6 +384,7 @@ impl RuntimeCli {
             Commands::Check(args) => args.run(),
             Commands::Clean(args) => args.run(),
             Commands::Q(args) => args.run(),
+            Commands::Query(args) => std::process::exit(args.run()),
             Commands::Run(args) => args.run(),
             Commands::Playground(args) => args.run(),
             Commands::Studio(args) => args.run(),

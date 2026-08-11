@@ -33,6 +33,9 @@ bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
 bex_query = { path = "../bex_query" }
+baml_query = { workspace = true }
+baml_query_local = { workspace = true }
+datafusion = { workspace = true }
 bex_vm_types = { workspace = true }
 sdkgen_cpp = { workspace = true }
 sdkgen_csharp = { workspace = true }

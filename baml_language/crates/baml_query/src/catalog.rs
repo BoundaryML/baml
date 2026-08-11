@@ -434,10 +434,12 @@ fn retained_calls_v1() -> RelationDef {
                 DataType::UInt64,
                 "Exact monotonic (or so-far) duration.",
             ),
-            col(
+            nullable(
                 "status",
                 DataType::Utf8,
-                "pending|running|waiting|succeeded|failed|cancelled|panicked|abandoned.",
+                "pending|running|waiting|succeeded|failed|cancelled|panicked|abandoned; \
+                 NULL when this call's own terminal state was not individually recorded \
+                 (the run status and population aggregates remain available).",
             ),
             id_list(
                 "retention_reasons",
@@ -833,15 +835,17 @@ fn spawn_edges_v1() -> RelationDef {
                 DataType::UInt64,
                 "Parent wait time; absent until its accounting is exact.",
             ),
-            col(
+            nullable(
                 "retained_instances",
                 DataType::UInt64,
-                "How many exact spawn examples are inspectable.",
+                "How many exact spawn examples are inspectable; NULL when no \
+                 instance ledger exists for this run.",
             ),
-            col(
+            nullable(
                 "instances_dropped",
                 DataType::UInt64,
-                "Prevents mistaking the selective instance set for complete history.",
+                "Prevents mistaking the selective instance set for complete \
+                 history; NULL when no instance ledger exists.",
             ),
         ],
     }
@@ -979,7 +983,7 @@ mod tests {
                 "started_at:Timestamp(Nanosecond, Some(\"UTC\"))?",
                 "ended_at:Timestamp(Nanosecond, Some(\"UTC\"))?",
                 "duration_ns:UInt64?",
-                "status:Utf8",
+                "status:Utf8?",
                 "retention_reasons:List(Field { data_type: Utf8 })",
                 "exact_window_ids:List(Field { data_type: Utf8 })",
                 "evidence_ids:List(Field { data_type: Utf8 })",
