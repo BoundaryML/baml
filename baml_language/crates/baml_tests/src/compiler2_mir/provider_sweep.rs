@@ -204,26 +204,75 @@ fn aligned_events(tir: &str, hir: &str) -> Vec<AlignEvent> {
 fn classify_diff(tir: &str, hir: &str) -> Option<String> {
     let mut buckets: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
     let mut renumber_only = false;
+    // Swapped runtime tests (canonical arm ORDER, ruled 2026-08-11):
+    // failing is_type pairs collect and admit at the end when the two
+    // sides' payload multisets are equal - the same tests in a
+    // different order over disjoint classes.
+    let mut swapped_tir: Vec<String> = Vec::new();
+    let mut swapped_hir: Vec<String> = Vec::new();
+    // TIR-only structural lines (decls, load_type temps, block glue)
+    // collect and admit at the end ONLY when the diff also shows the
+    // canonical-absorption pair (ruled 2026-08-11): TIR's unabsorbed
+    // `Super | Sub` union drives extra match machinery hir's absorbed
+    // union never emits.
+    let mut tir_only_structural = 0usize;
+    let mut absorption_pair = false;
     for event in aligned_events(tir, hir) {
         match event {
-            AlignEvent::Pair(tl, hl) => match classify_pair(&tl, &hl)? {
-                Some(bucket) => {
-                    buckets.insert(bucket);
+            AlignEvent::Pair(tl, hl) => {
+                let t_test = tl.trim_start().starts_with("_ = is_type(");
+                let h_test = hl.trim_start().starts_with("_ = is_type(");
+                match classify_pair(&tl, &hl) {
+                    Some(Some(bucket)) => {
+                        buckets.insert(bucket);
+                    }
+                    Some(None) => renumber_only = true,
+                    None if t_test && h_test => {
+                        swapped_tir.push(normalize_line(&tl));
+                        swapped_hir.push(normalize_line(&hl));
+                    }
+                    None => {
+                        if let Some(true) = load_type_superset_pair(&tl, &hl) {
+                            absorption_pair = true;
+                            buckets.insert("canonical-absorption");
+                        } else {
+                            return None;
+                        }
+                    }
                 }
-                None => renumber_only = true,
-            },
+            }
             AlignEvent::HirOnly(hl) => {
                 if !seeding_insertion(&hl) {
                     return None;
                 }
                 buckets.insert("receiver-seeding");
             }
-            AlignEvent::TirOnly(_) => return None,
+            AlignEvent::TirOnly(tl) => {
+                if structural_line(&tl) {
+                    tir_only_structural += 1;
+                } else {
+                    return None;
+                }
+            }
         }
     }
+    if !swapped_tir.is_empty() {
+        let mut t_sorted = swapped_tir.clone();
+        let mut h_sorted = swapped_hir.clone();
+        t_sorted.sort_unstable();
+        h_sorted.sort_unstable();
+        if t_sorted != h_sorted {
+            return None;
+        }
+        buckets.insert("canonical-order");
+    }
+    if tir_only_structural > 0 && !absorption_pair {
+        return None;
+    }
     // A pure-renumbering pair is only admissible as the CONSEQUENCE of
-    // an accepted insertion; renumbering with no cause stays itemized.
-    if renumber_only && !buckets.contains("receiver-seeding") {
+    // an accepted insertion or removal; renumbering with no cause stays
+    // itemized.
+    if renumber_only && !buckets.contains("receiver-seeding") && !absorption_pair {
         return None;
     }
     (!buckets.is_empty()).then(|| {
@@ -233,6 +282,37 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
             .collect::<Vec<_>>()
             .join("+")
     })
+}
+
+/// A load_type pair where the TIR payload's members are a STRICT
+/// superset of hir's (the unabsorbed `Super | Sub` vs the absorbed
+/// `Super` - the ruled canonical absorption).
+fn load_type_superset_pair(tir: &str, hir: &str) -> Option<bool> {
+    let t = tir.trim_start().strip_prefix("_ = load_type(")?;
+    let h = hir.trim_start().strip_prefix("_ = load_type(")?;
+    let t_members: std::collections::BTreeSet<&str> =
+        t.trim_end_matches(");").split(" | ").map(str::trim).collect();
+    let h_members: std::collections::BTreeSet<&str> =
+        h.trim_end_matches(");").split(" | ").map(str::trim).collect();
+    Some(h_members.is_subset(&t_members) && h_members.len() < t_members.len())
+}
+
+/// TIR-only lines the canonical-absorption allowance admits: pure
+/// structure (decls, load_type temps, block glue) - never operations.
+fn structural_line(line: &str) -> bool {
+    let line = line.trim();
+    line.is_empty()
+        || line == "}"
+        || line == "unreachable;"
+        || line.starts_with("let _:")
+        || line.starts_with("_ = load_type(")
+        || line.starts_with("bb")
+        || line.starts_with("goto -> ")
+        || line.starts_with("switch ")
+        || line.starts_with("_ = type_tag(")
+        || line.starts_with("_ = is_type(")
+        || line.starts_with("_ = copy _;")
+        || line.starts_with("branch ")
 }
 
 /// A line the receiver-seeding ruling INSERTS on the hir side: a
@@ -257,12 +337,8 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
             None
         });
     }
-    let t_norm = normalize_union_payloads(&dedup_union_members(&collapse_json_alias(
-        &normalize_type_literals(&t_ids),
-    )));
-    let h_norm = normalize_union_payloads(&dedup_union_members(&collapse_json_alias(
-        &normalize_type_literals(&h_ids),
-    )));
+    let t_norm = normalize_line(&t_ids);
+    let h_norm = normalize_line(&h_ids);
     if t_norm == h_norm {
         return Some(Some("literal-widening"));
     }
@@ -310,6 +386,17 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     }
     if throws_rigid_var_pair(&t_norm, &h_norm) {
         return Some(Some("throws-precision"));
+    }
+    // chain-callee-peel (ruled 2026-08-11, "do what TS does"): an
+    // optional-chain link's callee temp types as the PEELED function
+    // (TS short-circuit semantics - intermediate links see the
+    // non-null type); TIR includes the link's null. Scoped to fn-typed
+    // decls where stripping one `null | ` from the TIR side matches.
+    if t_norm.contains("->")
+        && (t_norm.replacen("null | (", "(", 1) == h_norm
+            || t_norm.replacen("null | ", "", 1) == h_norm)
+    {
+        return Some(Some("chain-callee-peel"));
     }
     None
 }
@@ -408,54 +495,197 @@ fn dedup_union_members(line: &str) -> String {
     out
 }
 
-/// Canonicalizes the union payload of `load_type(...)`/`is_type(_, ...)`
-/// operands: members SORT (the S15 canonical-order ruling - TIR renders
-/// written order) and an enum's variant member is ABSORBED by the enum
-/// itself (`E | E.V` is `E`, the S15 canonical-union absorption ruling).
-/// Depth-aware split so generics carrying `|` inside `<>` stay intact.
-fn normalize_union_payloads(line: &str) -> String {
+/// THE central line normalizer (ruled 2026-08-11: "normalize nigh
+/// everywhere, and this system should be centralized"): every aligned
+/// pair passes through ONE pipeline - local ids strip, literal tokens in
+/// type position map to bases, the json alias collapses (canonical AND
+/// Debug-template spellings), duplicate union members dedup, and union
+/// TYPE REGIONS canonicalize (member sort per the S15 canonical-order
+/// ruling + variant absorption per the canonical-union ruling) wherever
+/// a type can appear: load_type / is_type operands, local decls, array
+/// annotations, narrow_bind templates.
+fn normalize_line(line: &str) -> String {
+    let out = strip_local_ids(line);
+    let out = normalize_type_literals(&out);
+    let out = collapse_json_alias(&out);
+    let out = collapse_json_alias_debug(&out);
+    let out = dedup_union_members(&out);
+    canonicalize_type_regions(&out)
+}
+
+/// Type-region openers and how each region ENDS. One table, one
+/// canonicalizer - adding a position means adding a row.
+const TYPE_REGIONS: &[(&str, RegionEnd)] = &[
+    ("load_type(", RegionEnd::MatchingParen),
+    ("is_type(copy _, ", RegionEnd::MatchingParen),
+    ("let _: ", RegionEnd::LineTail),
+    ("]: ", RegionEnd::Semicolon),
+    (" as ", RegionEnd::Arrow),
+];
+
+#[derive(Clone, Copy)]
+enum RegionEnd {
+    MatchingParen,
+    /// Up to `;` (array-literal annotations: `[...]: T;`).
+    Semicolon,
+    /// Up to ` -> [` (narrow_bind templates).
+    Arrow,
+    /// To end of line, minus a trailing ` // comment`.
+    LineTail,
+}
+
+fn canonicalize_type_regions(line: &str) -> String {
     let mut out = line.to_string();
-    for opener in ["load_type(", "is_type(copy _, "] {
+    for &(opener, end) in TYPE_REGIONS {
         let Some(start) = out.find(opener) else { continue };
-        let payload_start = start + opener.len();
-        let Some(rel_end) = out[payload_start..].find(')') else { continue };
-        let payload = &out[payload_start..payload_start + rel_end];
-        let mut members: Vec<&str> = Vec::new();
-        let (mut depth, mut last) = (0usize, 0usize);
-        for (index, c) in payload.char_indices() {
-            match c {
-                '<' | '[' => depth += 1,
-                '>' | ']' => depth = depth.saturating_sub(1),
-                '|' if depth == 0 => {
-                    members.push(payload[last..index].trim());
-                    last = index + 1;
+        let region_start = start + opener.len();
+        let region_len = match end {
+            RegionEnd::MatchingParen => {
+                let mut depth = 0usize;
+                let mut len = None;
+                for (index, c) in out[region_start..].char_indices() {
+                    match c {
+                        '(' | '<' | '[' => depth += 1,
+                        ')' if depth == 0 => {
+                            len = Some(index);
+                            break;
+                        }
+                        // `->` arrows put a stray `>` at depth 0.
+                        ')' | '>' | ']' => depth = depth.saturating_sub(1),
+                        _ => {}
+                    }
                 }
-                _ => {}
+                match len {
+                    Some(len) => len,
+                    None => continue,
+                }
             }
-        }
-        members.push(payload[last..].trim());
-        if members.len() < 2 {
-            continue;
-        }
-        let absorbed: Vec<&str> = members
-            .iter()
-            .copied()
-            .filter(|member| {
-                !members
-                    .iter()
-                    .any(|other| member.strip_prefix(other).is_some_and(|rest| rest.starts_with('.')))
-            })
-            .collect();
-        let mut sorted = absorbed;
-        sorted.sort_unstable();
-        sorted.dedup();
-        let canonical = sorted.join(" | ");
+            RegionEnd::Semicolon => match out[region_start..].find(';') {
+                Some(len) => len,
+                None => continue,
+            },
+            RegionEnd::Arrow => match out[region_start..].find(" -> [") {
+                Some(len) => len,
+                None => continue,
+            },
+            RegionEnd::LineTail => {
+                let tail = &out[region_start..];
+                tail.find(" //").unwrap_or(tail.len())
+            }
+        };
+        let region = out[region_start..region_start + region_len].to_string();
+        let canonical = if matches!(end, RegionEnd::Semicolon) && region.ends_with("[]") {
+            // The array-literal annotation position: the whole region is
+            // the ARRAY type and the printer attaches `[]` to the last
+            // union member without parens - lift the suffix, canonicalize
+            // the element union, re-suffix.
+            format!(
+                "{}[]",
+                canonicalize_union(region.strip_suffix("[]").expect("checked"))
+            )
+        } else {
+            canonicalize_union(&region)
+        };
         out = format!(
             "{}{}{}",
-            &out[..payload_start],
+            &out[..region_start],
             canonical,
-            &out[payload_start + rel_end..]
+            &out[region_start + region_len..]
         );
+    }
+    out
+}
+
+/// Sorts a union's DEPTH-0 members, absorbs `X.Y` into a sibling `X`
+/// (enum variants into their enum), dedups. Non-union regions pass
+/// through untouched.
+fn canonicalize_union(payload: &str) -> String {
+    let mut members: Vec<&str> = Vec::new();
+    let (mut depth, mut last) = (0usize, 0usize);
+    for (index, c) in payload.char_indices() {
+        match c {
+            '<' | '[' | '(' => depth += 1,
+            '>' | ']' | ')' => depth = depth.saturating_sub(1),
+            '|' if depth == 0 => {
+                members.push(payload[last..index].trim());
+                last = index + 1;
+            }
+            _ => {}
+        }
+    }
+    members.push(payload[last..].trim());
+    if members.len() < 2 {
+        return payload.to_string();
+    }
+    // A BTreeSet IS the canonical form: sorted and deduplicated by
+    // construction; absorption then filters variant members whose enum
+    // is present.
+    let set: std::collections::BTreeSet<&str> = members.into_iter().collect();
+    set.iter()
+        .copied()
+        .filter(|member| {
+            !set.iter()
+                .any(|other| member.strip_prefix(other).is_some_and(|rest| rest.starts_with('.')))
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+/// The Debug-template spelling of the json alias expansion (narrow_bind
+/// templates print `TyTemplate` Debug). The attr blob is uniform, so it
+/// compresses first; both observed member orders collapse.
+fn collapse_json_alias_debug(line: &str) -> String {
+    const ATTR: &str =
+        "TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }";
+    if !line.contains(ATTR) {
+        return line.to_string();
+    }
+    let mut out = line.replace(ATTR, "@A");
+    const Q: &str = r#"QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }"#;
+    let json = format!("TypeAlias({Q}, @A)");
+    // Bracket-scan every `Union([...], @A)` whose member list is the json
+    // expansion (signature members present, any order) and collapse it to
+    // the alias - innermost first via repeated passes.
+    loop {
+        let mut changed = false;
+        let mut search = 0usize;
+        while let Some(rel) = out[search..].find("Union([") {
+            let start = search + rel;
+            let list_start = start + "Union([".len();
+            let mut depth = 1usize;
+            let mut list_end = None;
+            for (index, c) in out[list_start..].char_indices() {
+                match c {
+                    '[' | '(' | '{' => depth += 1,
+                    ']' if depth == 1 => {
+                        list_end = Some(list_start + index);
+                        break;
+                    }
+                    ']' | ')' | '}' => depth -= 1,
+                    _ => {}
+                }
+            }
+            let Some(list_end) = list_end else { break };
+            let members = &out[list_start..list_end];
+            let is_json = members.contains("Int { attr: @A }")
+                && members.contains("Float { attr: @A }")
+                && members.contains("Null { attr: @A }")
+                && members.contains(&format!("List({json}, @A)"))
+                && members.contains(&format!("value: {json}"))
+                && !members[..members.len()].contains("Union([");
+            let close = ", @A)";
+            if is_json && out[list_end..].starts_with(&format!("]{close}")) {
+                let end = list_end + 1 + close.len();
+                out = format!("{}{}{}", &out[..start], json, &out[end..]);
+                changed = true;
+                search = 0;
+            } else {
+                search = start + "Union([".len();
+            }
+        }
+        if !changed {
+            break;
+        }
     }
     out
 }

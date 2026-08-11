@@ -6,11 +6,14 @@ functions compared: 2823
 agreements: 2518
 O2 agreements (informational; optimizer parity deferred): 2518
 ruled bigint-context: 1
+ruled canonical-absorption+literal-widening+tir-unknown: 2
+ruled canonical-absorption+tir-unknown: 1
+ruled canonical-order: 2
 ruled literal-widening: 70
 ruled literal-widening+receiver-seeding+void-union: 1
 ruled literal-widening+tir-never-test: 2
 ruled literal-widening+tir-never-test+tir-unknown: 1
-ruled literal-widening+tir-unknown: 13
+ruled literal-widening+tir-unknown: 15
 ruled receiver-seeding: 35
 ruled receiver-seeding+throws-precision: 3
 ruled receiver-seeding+void-union: 5
@@ -18,7 +21,7 @@ ruled throws-precision: 33
 ruled throws-precision+tir-unknown: 1
 ruled tir-never-test: 4
 ruled tir-unknown: 93
-differing: 43
+differing: 36
 panics: 0
 top-level lets: not diffed (no body renderer yet)
 
@@ -29,15 +32,6 @@ top-level lets: not diffed (no body renderer yet)
 [7x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: }
     hir: <absent>
-[2x] e.g. ns_control_flow/control_flow.baml :: $init_test_ns_control_flow_control_flow
-    tir: _ = [copy _, copy _, copy _]: control_flow.Ok | control_flow.Err[];
-    hir: _ = [copy _, copy _, copy _]: control_flow.Err | control_flow.Ok[];
-[2x] e.g. ns_exceptions/exceptions.baml :: mixed_union_alias_plus_wildcard_handles_both_domains_fn
-    tir: _ = is_type(copy _, baml.panics.DivisionByZero);
-    hir: _ = is_type(copy _, exceptions.AppError);
-[2x] e.g. ns_exceptions/exceptions.baml :: mixed_union_alias_plus_wildcard_handles_both_domains_fn
-    tir: _ = is_type(copy _, exceptions.AppError);
-    hir: _ = is_type(copy _, baml.panics.DivisionByZero);
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: _ = load_type(generic_match_subtype.Shape | generic_match_subtype.Sq);
     hir: <absent>
@@ -149,36 +143,9 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_interfaces/interfaces_3.baml :: w3um_describe
     tir: _ = is_type(copy _, interfaces.W3umDog);
     hir: _ = is_type(copy _, interfaces.W3umCat);
-[1x] e.g. ns_ops_bitwise/ops_bitwise.baml :: $init_test_ns_ops_bitwise_ops_bitwise
-    tir: _ = load_type((bigint as baml.ops.BitAnd<int>).Output | bigint);
-    hir: _ = load_type(bigint);
-[1x] e.g. ns_ops_bitwise/ops_bitwise.baml :: $init_test_ns_ops_bitwise_ops_bitwise
-    tir: _ = load_type((bigint as baml.ops.ShiftLeft<int>).Output | bigint);
-    hir: _ = load_type(bigint);
-[1x] e.g. ns_typed_outputs/typed_outputs.baml :: $init_test_ns_typed_outputs_typed_outputs
-    tir: _ = load_type((int | bool)[] | string);
-    hir: _ = load_type(string | (int | bool)[]);
 [1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: f
     tir: _ = load_type(baml.json.JsonSerializationError);
     hir: _ = load_type(baml.json.JsonParseError | baml.json.JsonSerializationError);
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: $init_test_ns_json_auto_derive_json_auto_derive
-    tir: _ = load_type(baml.json.json | bool);
-    hir: _ = load_type(baml.json.json);
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: $init_test_ns_json_auto_derive_json_auto_derive
-    tir: _ = load_type(baml.json.json | float);
-    hir: _ = load_type(baml.json.json);
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: $init_test_ns_json_auto_derive_json_auto_derive
-    tir: _ = load_type(baml.json.json | int);
-    hir: _ = load_type(baml.json.json);
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: $init_test_ns_json_auto_derive_json_auto_derive
-    tir: _ = load_type(baml.json.json | string);
-    hir: _ = load_type(baml.json.json);
-[1x] e.g. ns_floats/floats.baml :: $init_test_ns_floats_floats
-    tir: _ = load_type(float | 1234.5678e10);
-    hir: _ = load_type(float);
-[1x] e.g. ns_floats/floats.baml :: $init_test_ns_floats_floats
-    tir: _ = load_type(float | 1e10);
-    hir: _ = load_type(float);
 [1x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
     tir: _ = load_type(string);
     hir: _ = load_type("bad value");
@@ -342,22 +309,10 @@ ns_bigints/bigints.baml :: bigint_compound_assign_nonliteral_fn
     ...     let _1: bigint // x
     tir:     let _2: bigint
     hir:     let _2: -7
-ns_control_flow/control_flow.baml :: $init_test_ns_control_flow_control_flow
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
 ns_exceptions/exceptions.baml :: catch_integer_overflow_via_panic_union_fn
     ...         _3 = type_tag(_1);
     tir:         switch copy _3 [AllocFailure: bb4, AssertionFailed: bb4, Cancelled: bb4, DivisionByZero: bb4, Exit: bb4, HostContractViolation: bb4, HostUnavailable: bb4, IndexOutOfBounds: bb4, IntegerOverflow: bb4, InvalidFieldAccess: bb4, MapKeyNotFound: bb4, NegativeBitShift: bb4, SdkPanic: bb4, StackOverflow: bb4, Unreachable: bb4, UserPanic: bb4, otherwise: bb3];
     hir:         switch copy _3 [DivisionByZero: bb4, IndexOutOfBounds: bb4, InvalidFieldAccess: bb4, MapKeyNotFound: bb4, StackOverflow: bb4, AssertionFailed: bb4, Unreachable: bb4, Cancelled: bb4, UserPanic: bb4, Exit: bb4, AllocFailure: bb4, HostUnavailable: bb4, NegativeBitShift: bb4, SdkPanic: bb4, HostContractViolation: bb4, IntegerOverflow: bb4, otherwise: bb3];
-ns_exceptions/exceptions.baml :: mixed_union_alias_plus_wildcard_handles_both_domains_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, baml.panics.DivisionByZero);
-    hir:         _2 = is_type(copy _1, exceptions.AppError);
-ns_exceptions/exceptions.baml :: mixed_union_alias_plus_wildcard_error_fires_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, baml.panics.DivisionByZero);
-    hir:         _2 = is_type(copy _1, exceptions.AppError);
 ns_exceptions/exceptions.baml :: panic_alias_catches_any_panic_fn
     ...         _2 = type_tag(_1);
     tir:         switch copy _2 [AllocFailure: bb3, AssertionFailed: bb3, Cancelled: bb3, DivisionByZero: bb3, Exit: bb3, HostContractViolation: bb3, HostUnavailable: bb3, IndexOutOfBounds: bb3, IntegerOverflow: bb3, InvalidFieldAccess: bb3, MapKeyNotFound: bb3, NegativeBitShift: bb3, SdkPanic: bb3, StackOverflow: bb3, Unreachable: bb3, UserPanic: bb3, otherwise: bb2];
@@ -366,10 +321,6 @@ ns_exceptions/exceptions.baml :: panic_alias_plus_wildcard_dispatch_fn
     ...         _2 = type_tag(_1);
     tir:         switch copy _2 [AllocFailure: bb4, AssertionFailed: bb4, Cancelled: bb4, DivisionByZero: bb4, Exit: bb4, HostContractViolation: bb4, HostUnavailable: bb4, IndexOutOfBounds: bb4, IntegerOverflow: bb4, InvalidFieldAccess: bb4, MapKeyNotFound: bb4, NegativeBitShift: bb4, SdkPanic: bb4, StackOverflow: bb4, Unreachable: bb4, UserPanic: bb4, otherwise: bb2];
     hir:         switch copy _2 [DivisionByZero: bb4, IndexOutOfBounds: bb4, InvalidFieldAccess: bb4, MapKeyNotFound: bb4, StackOverflow: bb4, AssertionFailed: bb4, Unreachable: bb4, Cancelled: bb4, UserPanic: bb4, Exit: bb4, AllocFailure: bb4, HostUnavailable: bb4, NegativeBitShift: bb4, SdkPanic: bb4, HostContractViolation: bb4, IntegerOverflow: bb4, otherwise: bb2];
-ns_floats/floats.baml :: $init_test_ns_floats_floats
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
 ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     ...     let _7: type
     tir:     let _8: generic_match_subtype.Shape
@@ -426,10 +377,6 @@ ns_json_alias/json_alias.baml :: json_map_has_key
     ...     let _0: bool // _0 // return
     tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // m
     hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // m
-ns_json_auto_derive/json_auto_derive.baml :: $init_test_ns_json_auto_derive_json_auto_derive
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws baml.json.JsonDecodeError | baml.json.JsonSerializationError
 ns_json_auto_derive/json_auto_derive.baml :: f
     ...     let _1: json_auto_derive.G // self // param
     tir:     let _2: (T[], (T) -> U throws E) -> U[] throws E
@@ -454,10 +401,6 @@ ns_lambdas/lambdas.baml :: lambda_contextual_main
     ...     let _1: unknown // e
     tir:     let _2: (int) -> int throws int | string
     hir:     let _2: (int) -> int throws "contextual"
-ns_ops_bitwise/ops_bitwise.baml :: $init_test_ns_ops_bitwise_ops_bitwise
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
 ns_patterns_new_runtime/patterns_new_runtime.baml :: test_fn_is_matching
     ...         _1 = make_closure lambda[0]();
     tir:         _2 = is_type(copy _1, (int) -> int throws never);
@@ -502,7 +445,3 @@ ns_spawn_basic/spawn_basic.baml :: spawn_returning_string
     ... // lambda[0]
     tir: fn .<lambda(spawn_returning_string, 0)>() -> "hello from spawn" {
     hir: fn .<lambda(spawn_returning_string, 0)>() -> string {
-ns_typed_outputs/typed_outputs.baml :: $init_test_ns_typed_outputs_typed_outputs
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
