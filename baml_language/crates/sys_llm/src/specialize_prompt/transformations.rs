@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::{AllowedMetadata, ModelFeatures};
 
 /// Normalize template boundary whitespace before provider-specific transforms.
+#[allow(clippy::needless_pass_by_value)]
 pub(super) fn trim_prompt_text(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
     fn trim_simple(content: &Arc<PromptAstSimple>) -> Arc<PromptAstSimple> {
         Arc::new(match content.as_ref() {

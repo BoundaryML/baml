@@ -3032,7 +3032,7 @@ function Summarize(input: string) -> string {
 "##;
         db.add_or_update_file(path, source);
 
-        for needle in ["client", "GPT4", "prompt", "Summarize {{ input }}"] {
+        for needle in ["client", "GPT4", "prompt", "Summarize ${input}"] {
             let offset = u32::try_from(source.find(needle).expect("needle exists")).unwrap();
             let ctx = db.playground_cursor_context(path.to_str().unwrap(), offset);
 
