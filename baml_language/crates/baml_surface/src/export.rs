@@ -76,9 +76,11 @@ impl TyRef {
             Some(TyHead::Nominal(qtn)) => Some(
                 SymbolId {
                     kind: crate::ids::IdKind::Type,
-                    package: qtn.package().to_string(),
-                    namespace: qtn.namespace().iter().map(ToString::to_string).collect(),
-                    name: qtn.name().to_string(),
+                    owner: crate::ids::Owner::Path {
+                        package: qtn.package().to_string(),
+                        namespace: qtn.namespace().iter().map(ToString::to_string).collect(),
+                        name: qtn.name().to_string(),
+                    },
                     member: None,
                 }
                 .to_string(),
@@ -363,13 +365,9 @@ struct ImplIndex<'db> {
 
 impl<'db> ImplIndex<'db> {
     fn build(db: &'db dyn Db) -> Self {
-        // Deterministic id assignment: file order (builtins first, then
-        // project files), `#n` suffixes for same-headed duplicates.
-        let mut seen_bases: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
         let mut exports = Vec::new();
         for imp in crate::handles::project_impls(db) {
-            let Some(export) = export_impl(db, imp, &mut seen_bases) else {
+            let Some(export) = export_impl(db, imp) else {
                 continue;
             };
             exports.push((imp, export));
@@ -531,25 +529,33 @@ fn required_method_export(
     }
 }
 
-fn export_impl(
-    db: &dyn Db,
-    imp: Impl<'_>,
-    seen_bases: &mut std::collections::HashMap<String, u32>,
-) -> Option<ImplExport> {
+/// The interface an impl names, with its arguments: `baml.ops.Add<bigint>`.
+///
+fn export_impl(db: &dyn Db, imp: Impl<'_>) -> Option<ImplExport> {
     let data = crate::facts::impl_data(db, imp.loc())?;
     let iface: crate::Interface<'_> = data.interface.into();
     let iface_qtn = iface.qualified_name(db);
     let pkg = baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package;
 
     let for_ty = TyRef::of(&data.for_ty_pattern);
-    let base = format!(
-        "X:{pkg}.impl[{} for {}]",
-        iface_qtn.render_dotted(false),
-        for_ty.display
-    );
-    let n = seen_bases.entry(base.clone()).or_insert(0);
-    let id = if *n == 0 { base } else { format!("{base}#{n}") };
-    *n += 1;
+    // Destructured from the one renderer rather than rebuilt here, so a block's
+    // id and the ids of the methods it contributes can never disagree about
+    // what identifies it.
+    let crate::ids::Owner::Impl {
+        interface: iface_display,
+        ..
+    } = SymbolId::impl_owner(db, imp)?
+    else {
+        unreachable!("impl_owner always yields the impl form")
+    };
+    // No positional `#n` suffix. It used to disambiguate same-headed blocks,
+    // which meant twenty ids in `baml` alone were determined by declaration
+    // order — the one thing this module promises an id never depends on.
+    // Reordering two `impl Add for int` blocks silently rebound every consumer
+    // keyed on them. The arguments distinguish those blocks honestly, and if
+    // two blocks still collide they overlap, which coherence must reject
+    // rather than an id scheme paper over.
+    let id = format!("X:{pkg}.impl[{iface_display} for {}]", for_ty.display);
 
     let mut methods: Vec<FunctionExport> = imp
         .all_methods(db)
@@ -592,7 +598,12 @@ fn export_item<'db>(
 ) -> Option<ItemExport> {
     let id = SymbolId::of_symbol(db, symbol)?;
     let name = symbol.name(db)?;
-    let namespace = id.namespace.clone();
+    // An item always has a path owner; only impl-contributed methods do not,
+    // and those are not exported as items.
+    let namespace = match &id.owner {
+        crate::ids::Owner::Path { namespace, .. } => namespace.clone(),
+        crate::ids::Owner::Impl { .. } => Vec::new(),
+    };
 
     let detail = match symbol {
         Symbol::Class(class) => {
