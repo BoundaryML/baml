@@ -423,11 +423,13 @@ pub fn rewrite_bare_value_columns(
                 }
                 changed = true;
                 let role = meta.get(VALUE_ROLE_KEY).cloned().unwrap_or_default();
+                // Keep the relation qualifier: parent plan nodes may
+                // reference this projection output as `c.args`.
                 Expr::ScalarFunction(ScalarFunction::new_udf(
                     functions.path.clone(),
                     vec![expr.clone(), utf8_lit("[]"), utf8_lit(role)],
                 ))
-                .alias(column.name.clone())
+                .alias_qualified(column.relation.clone(), column.name.clone())
             })
             .collect();
         if !changed {

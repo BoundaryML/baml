@@ -956,3 +956,55 @@ fn core_dependencies_stay_backend_neutral() {
         );
     }
 }
+
+/// Regression: a QUALIFIED bare value column (`c.args`) in a projection
+/// with a parent node referencing it (ORDER BY) must keep its qualifier
+/// through the rendering rewrite.
+#[tokio::test]
+async fn qualified_value_columns_survive_projection_rewrite() {
+    let fx = fixture(
+        vec![
+            CallRow {
+                run_id: "r1",
+                call_id: 2,
+                status: "succeeded",
+                args_state: "available",
+                args_handle: Some(b"h-b"),
+                ..CallRow::default()
+            },
+            CallRow {
+                run_id: "r1",
+                call_id: 1,
+                status: "succeeded",
+                args_state: "available",
+                args_handle: Some(b"h-a"),
+                ..CallRow::default()
+            },
+        ],
+        FixtureResolver {
+            values: vec![(b"h-a", CanonValue::Int(1)), (b"h-b", CanonValue::Int(2))],
+            ..FixtureResolver::default()
+        },
+    );
+    let mut run = fx
+        .session
+        .execute("SELECT c.call_id, c.args FROM retained_calls_v1 c ORDER BY c.call_id")
+        .await
+        .expect("qualified value projection plans");
+    use datafusion::arrow::array::StringArray;
+    let mut rendered = Vec::new();
+    while let Some(batch) = run.next_batch().await {
+        let col = batch
+            .column_by_name("args")
+            .expect("args column")
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .expect("rendered as text")
+            .clone();
+        for i in 0..col.len() {
+            rendered.push(col.value(i).to_string());
+        }
+    }
+    assert_eq!(rendered, vec!["1", "2"]);
+    assert_eq!(run.finish().result_state, ResultState::Complete);
+}
