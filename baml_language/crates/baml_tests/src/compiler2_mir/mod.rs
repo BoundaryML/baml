@@ -684,3 +684,52 @@ fn array_rest_wildcard_skips_slice_projection() {
         "wildcard rest must not pay for a slice copy:\n{output}"
     );
 }
+
+/// S16 smoke test for the dual inference provider: the same function
+/// lowered under the TIR-backed and hir_ty-backed accessors must produce
+/// identical MIR on shapes the recorded tables already cover. The
+/// corpus-scale version of this diff is the differential MIR gate; this
+/// pins the seam itself. Separate DBs per provider so neither engine's
+/// salsa state can leak into the other's run.
+#[test]
+fn dual_provider_agrees_on_simple_bodies() {
+    use baml_compiler2_mir::{InferenceProvider, lower_function_with};
+    let source = r#"
+class Person {
+    name string
+    function get_name(self) -> string throws never {
+        self.name
+    }
+}
+enum Status {
+    Active
+    Done
+}
+function dp_free(x: int) -> int throws never {
+    x
+}
+function dp_main(p: Person) -> string throws never {
+    let n = dp_free(1);
+    let s = Status.Active;
+    p.get_name()
+}
+"#;
+    let render = |provider: InferenceProvider| {
+        let mut db = make_db();
+        let file = db.add_file("test.baml", source);
+        let mut functions = file_functions(&db, file).to_vec();
+        functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
+        let mut output = String::new();
+        for func_loc in functions {
+            let mir = lower_function_with(&db, func_loc, OptLevel::Two, provider);
+            writeln!(output, "{}", display_function(&mir)).unwrap();
+        }
+        output
+    };
+    let tir = render(InferenceProvider::Tir);
+    let hir = render(InferenceProvider::HirTy);
+    assert_eq!(
+        tir, hir,
+        "providers diverge on a body the recorded tables fully cover"
+    );
+}

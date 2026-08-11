@@ -1339,6 +1339,11 @@ struct LoweringContext<'db> {
     // (`try_lower_to_string_fallback`) keys behavior on that absence.
     scope_inference:
         FxHashMap<FileScopeId, &'db baml_compiler2_tir::inference::ScopeInference<'db>>,
+    // The S16 dual provider: when hir_ty backs this run, its converted
+    // tables live here, `scope_inference` stays empty (TIR unconsulted),
+    // and the `tir_*` accessors read these first. Same TIR-shaped views,
+    // one seam (rustc's -Z borrowck=compare migration playbook).
+    hir_tables: Option<crate::inference_provider::HirTables<'db>>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
     // access through the interface dispatch machinery.
@@ -1870,6 +1875,7 @@ impl<'db> LoweringContext<'db> {
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
         opt: crate::OptLevel,
+        provider: crate::InferenceProvider,
     ) -> Self {
         let file = func_loc.file(db);
 
@@ -1887,19 +1893,29 @@ impl<'db> LoweringContext<'db> {
         // deep-copying every table into merged per-function maps (the old
         // scheme cloned the whole inference output of every function on each
         // construction). Lookups dispatch through the `tir_*` accessors.
-        let func_scope = &index.scopes[func_scope_id.index() as usize];
-        let desc_start = func_scope.descendants.start.index();
-        let desc_end = func_scope.descendants.end.index();
+        // Under the hir_ty provider this map stays EMPTY (TIR unconsulted);
+        // the accessors read the converted tables instead.
         let mut scope_inference: FxHashMap<
             FileScopeId,
             &'db baml_compiler2_tir::inference::ScopeInference<'db>,
         > = FxHashMap::default();
-        for fsi in
-            std::iter::once(func_scope_id).chain((desc_start..desc_end).map(FileScopeId::new))
-        {
-            let scope_id = index.scope_ids[fsi.index() as usize];
-            scope_inference.insert(fsi, infer_scope_types(db, scope_id));
-        }
+        let func_scope = &index.scopes[func_scope_id.index() as usize];
+        let hir_tables = match provider {
+            crate::InferenceProvider::Tir => {
+                let desc_start = func_scope.descendants.start.index();
+                let desc_end = func_scope.descendants.end.index();
+                for fsi in std::iter::once(func_scope_id)
+                    .chain((desc_start..desc_end).map(FileScopeId::new))
+                {
+                    let scope_id = index.scope_ids[fsi.index() as usize];
+                    scope_inference.insert(fsi, infer_scope_types(db, scope_id));
+                }
+                None
+            }
+            crate::InferenceProvider::HirTy => Some(
+                crate::inference_provider::HirTables::for_function(db, func_loc),
+            ),
+        };
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
@@ -2110,6 +2126,7 @@ impl<'db> LoweringContext<'db> {
             catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
             scope_inference,
+            hir_tables,
             generic_param_bounds,
             lambda_param_tir_types: FxHashMap::default(),
             match_scrutinee: None,
@@ -2151,6 +2168,7 @@ impl<'db> LoweringContext<'db> {
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
         opt: crate::OptLevel,
+        provider: crate::InferenceProvider,
     ) -> Self {
         let file = let_loc.file(db);
 
@@ -2167,18 +2185,28 @@ impl<'db> LoweringContext<'db> {
         // deep-copying every table into merged per-function maps (the old
         // scheme cloned the whole inference output of every let initializer on each
         // construction). Lookups dispatch through the `tir_*` accessors.
-        let let_owner_scope = &index.scopes[let_scope_id.index() as usize];
-        let desc_start = let_owner_scope.descendants.start.index();
-        let desc_end = let_owner_scope.descendants.end.index();
+        // Under the hir_ty provider this map stays EMPTY (TIR unconsulted).
         let mut scope_inference: FxHashMap<
             FileScopeId,
             &'db baml_compiler2_tir::inference::ScopeInference<'db>,
         > = FxHashMap::default();
-        for fsi in std::iter::once(let_scope_id).chain((desc_start..desc_end).map(FileScopeId::new))
-        {
-            let scope_id = index.scope_ids[fsi.index() as usize];
-            scope_inference.insert(fsi, infer_scope_types(db, scope_id));
-        }
+        let hir_tables = match provider {
+            crate::InferenceProvider::Tir => {
+                let let_owner_scope = &index.scopes[let_scope_id.index() as usize];
+                let desc_start = let_owner_scope.descendants.start.index();
+                let desc_end = let_owner_scope.descendants.end.index();
+                for fsi in std::iter::once(let_scope_id)
+                    .chain((desc_start..desc_end).map(FileScopeId::new))
+                {
+                    let scope_id = index.scope_ids[fsi.index() as usize];
+                    scope_inference.insert(fsi, infer_scope_types(db, scope_id));
+                }
+                None
+            }
+            crate::InferenceProvider::HirTy => {
+                Some(crate::inference_provider::HirTables::for_let(db, let_loc))
+            }
+        };
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_id = PackageId::new(db, file_package(db, file).package);
@@ -2202,6 +2230,7 @@ impl<'db> LoweringContext<'db> {
             catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
             scope_inference,
+            hir_tables,
             generic_param_bounds: FxHashMap::default(),
             lambda_param_tir_types: FxHashMap::default(),
             match_scrutinee: None,
@@ -2507,7 +2536,10 @@ impl<'db> LoweringContext<'db> {
         self.scope_inference.get(&fsi).copied()
     }
 
-    fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
+    fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.scope).expr_type(key.expr);
+        }
         match key.scope {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.expression_type(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
@@ -2516,7 +2548,10 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn tir_pat_type(&self, key: PatMetadataKey) -> Option<&'db Tir2Ty> {
+    fn tir_pat_type(&self, key: PatMetadataKey) -> Option<&Tir2Ty> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.0).pat_type(key.1);
+        }
         match key.0 {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.binding_type(key.1),
             MetadataScope::ParameterDefault(fsi) => {
@@ -2528,7 +2563,10 @@ impl<'db> LoweringContext<'db> {
     fn tir_resolution(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&'db baml_compiler2_tir::inference::MemberResolution<'db>> {
+    ) -> Option<&baml_compiler2_tir::inference::MemberResolution<'db>> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.scope).resolution(key.expr);
+        }
         match key.scope {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.resolution(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
@@ -2561,6 +2599,9 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.scope).is_exhaustive_match(key.expr);
+        }
         match key.scope {
             MetadataScope::Body(fsi) => self
                 .inference_for(fsi)
@@ -2571,7 +2612,10 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
+    fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.scope).path_root_type(key.expr);
+        }
         match key.scope {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_root_type(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
@@ -2580,7 +2624,10 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn tir_path_segment_type(&self, key: (MetadataScope, AstExprId, usize)) -> Option<&'db Tir2Ty> {
+    fn tir_path_segment_type(&self, key: (MetadataScope, AstExprId, usize)) -> Option<&Tir2Ty> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.0).path_segment_type(key.1, key.2);
+        }
         match key.0 {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_segment_type(key.1, key.2),
             MetadataScope::ParameterDefault(fsi) => self
@@ -2592,7 +2639,10 @@ impl<'db> LoweringContext<'db> {
     fn tir_path_member_resolutions(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&'db [baml_compiler2_tir::inference::MemberResolution<'db>]> {
+    ) -> Option<&[baml_compiler2_tir::inference::MemberResolution<'db>]> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.scope).path_member_resolutions(key.expr);
+        }
         match key.scope {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_member_resolution(key.expr),
             MetadataScope::ParameterDefault(fsi) => self
@@ -2604,7 +2654,10 @@ impl<'db> LoweringContext<'db> {
     fn tir_call_plan(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&'db baml_compiler2_tir::inference::CallPlan> {
+    ) -> Option<&baml_compiler2_tir::inference::CallPlan> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.scope).call_plan(key.expr);
+        }
         match key.scope {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.call_plan(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
@@ -2616,7 +2669,10 @@ impl<'db> LoweringContext<'db> {
     fn tir_function_coercion(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&'db baml_compiler2_tir::inference::FunctionCoercion> {
+    ) -> Option<&baml_compiler2_tir::inference::FunctionCoercion> {
+        if let Some(tables) = &self.hir_tables {
+            return tables.for_scope(key.scope).function_coercion(key.expr);
+        }
         match key.scope {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.function_coercion(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
@@ -4039,18 +4095,22 @@ impl<'db> LoweringContext<'db> {
         // this reads the enclosing metadata scope — `current_metadata_scope` has
         // already switched to the lambda's own body, whose table holds the
         // expressions *inside* the lambda and not the lambda itself.
-        let inferred_sig =
-            match self.tir_expr_type(ExprMetadataKey::new(saved_metadata_scope, expr_id)) {
-                Some(Tir2Ty::Function {
-                    params,
-                    ret,
-                    throws,
-                    ..
-                }) => Some((params.as_slice(), &**ret, &**throws)),
-                // No recorded type: the lambda failed to type-check and is already
-                // diagnosed. Keep the syntactic shape rather than invent one.
-                _ => None,
-            };
+        // Cloned out: the accessor's borrow is tied to `self` since the
+        // dual provider, and the signature pieces outlive mutations below.
+        let inferred_sig = match self
+            .tir_expr_type(ExprMetadataKey::new(saved_metadata_scope, expr_id))
+            .cloned()
+        {
+            Some(Tir2Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            }) => Some((params, *ret, *throws)),
+            // No recorded type: the lambda failed to type-check and is already
+            // diagnosed. Keep the syntactic shape rather than invent one.
+            _ => None,
+        };
         let inferred_template = |this: &Self, tir_ty: &Tir2Ty| {
             tir2_to_template_in_frame(tir_ty, this.resolved_aliases, &sig_frame_params)
         };
@@ -4067,6 +4127,7 @@ impl<'db> LoweringContext<'db> {
                 )
             }
             None => match inferred_sig
+                .as_ref()
                 .and_then(|(_, ret, _)| inferred_template(self, ret).map(|t| (ret, t)))
             {
                 Some((tir_ty, template)) => (
@@ -4108,6 +4169,7 @@ impl<'db> LoweringContext<'db> {
                     )
                 }
                 None => match inferred_sig
+                    .as_ref()
                     .and_then(|(params, _, _)| params.get(param_idx))
                     .and_then(|p| inferred_template(self, &p.ty).map(|t| (&p.ty, t)))
                 {
@@ -4147,6 +4209,7 @@ impl<'db> LoweringContext<'db> {
                 sig_template(self, &tir_ty)
             }
             None => inferred_sig
+                .as_ref()
                 .and_then(|(_, _, throws)| inferred_template(self, throws))
                 .unwrap_or_else(|| baml_type::TyTemplate::BuiltinUnknown {
                     attr: baml_type::TyAttr::default(),
@@ -13921,13 +13984,30 @@ pub fn lower_let_body<'db>(
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
+    lower_let_body_with(db, let_loc, opt, crate::InferenceProvider::Tir)
+}
+
+/// [`lower_let_body`] with an explicit inference provider (see
+/// [`lower_function_with`]).
+pub fn lower_let_body_with<'db>(
+    db: &'db dyn crate::Db,
+    let_loc: LetLoc<'db>,
+    opt: crate::OptLevel,
+    provider: crate::InferenceProvider,
+) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
-            let mut ctx =
-                LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
+            let mut ctx = LoweringContext::new_for_let(
+                db,
+                let_loc,
+                expr_body.clone(),
+                source_map,
+                opt,
+                provider,
+            );
             let mir_body = ctx.lower_let_body_inner();
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
             Some((mir_body, lambdas))
@@ -13941,6 +14021,18 @@ pub fn lower_function<'db>(
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> MirFunction {
+    lower_function_with(db, func_loc, opt, crate::InferenceProvider::Tir)
+}
+
+/// [`lower_function`] with an explicit inference provider - the S16
+/// differential gate lowers each function under BOTH providers and diffs
+/// the pretty-printed bodies.
+pub fn lower_function_with<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: FunctionLoc<'db>,
+    opt: crate::OptLevel,
+    provider: crate::InferenceProvider,
+) -> MirFunction {
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(
@@ -13952,7 +14044,8 @@ pub fn lower_function<'db>(
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
+            let mut ctx =
+                LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt, provider);
             let mut mir = ctx.lower_function_body();
             mir.item_ref = item_ref;
             mir
