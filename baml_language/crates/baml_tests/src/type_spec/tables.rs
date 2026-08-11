@@ -297,3 +297,37 @@ function cp_use() -> int throws never {
         "call plans record solved instantiations and param-ordered bindings"
     );
 }
+
+#[test]
+fn records_function_adapter() {
+    let source = r#"
+function ea_flex(a: int, b: int = 2) -> int throws never {
+    a
+}
+function ea_take(f: (x: int, y: int = 9) -> int throws never) -> int throws never {
+    f(1)
+}
+function ea_use() -> int throws never {
+    ea_take(ea_flex)
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut adjustments = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        for (&expr, steps) in &result.expr_adjustments {
+            let range = source_map.expr_span(expr);
+            adjustments.push((source[range].to_string(), steps.len()));
+        }
+    }
+    adjustments.sort();
+    assert_eq!(
+        adjustments,
+        vec![("ea_flex".to_string(), 1)],
+        "optional-param name drift records a FunctionAdapter at the checked expr"
+    );
+}

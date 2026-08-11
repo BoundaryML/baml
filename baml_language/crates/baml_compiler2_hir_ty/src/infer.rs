@@ -325,6 +325,22 @@ fn syntactic_union(members: &[Ty]) -> Ty {
     }
 }
 
+/// TIR's `function_params_runtime_compatible`, verbatim: same arity,
+/// same modes, and OPTIONAL parameters keep their names (named at the
+/// call site and in the runtime's defaulted-slot filling); required
+/// parameters may rename freely.
+fn function_params_runtime_compatible(
+    source: &[baml_type::interned::FunctionParam],
+    target: &[baml_type::interned::FunctionParam],
+) -> bool {
+    source.len() == target.len()
+        && source.iter().zip(target).all(|(source, target)| {
+            source.mode == target.mode
+                && (source.mode == baml_type::FunctionParamMode::Required
+                    || source.name == target.name)
+        })
+}
+
 /// Reduction budget for the finalize-time projection pass: bounds a
 /// reduction CHAIN (`(A as I).X` -> `(B as J).Y` -> ...), the same
 /// discipline as the canonical walk's fuel. Any real chain is far
@@ -413,6 +429,29 @@ pub struct ResolvedPathSegment<'db> {
     pub resolution: Option<MemberResolution<'db>>,
 }
 
+/// A recorded coercion step at an expression, consumed structurally by
+/// MIR lowering - rust-analyzer's `Adjustment { kind, target }` exactly
+/// (their infer.rs Adjust family: NeverToAny/Deref/Borrow/Pointer; BAML
+/// has ONE adjustment kind today). The source shape is `type_of_expr`;
+/// the target shape is here - TIR's bespoke FunctionCoercion struct
+/// carried both redundantly.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Adjustment {
+    pub kind: Adjust,
+    /// The post-adjustment type (the expectation the value was adapted
+    /// to).
+    pub target: Ty,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Adjust {
+    /// The optional-parameter adapter: a function value satisfies its
+    /// expectation by SUBTYPING but not by RUNTIME SHAPE (arity, mode,
+    /// or optional-parameter names drift), so lowering synthesizes an
+    /// adapter closure (TIR's `function_coercion_for` rule).
+    FunctionAdapter,
+}
+
 /// One call's argument-to-parameter matching and solved instantiation -
 /// TIR's `CallPlan` minus its dead fields (`instantiated_throws` was
 /// TIR-internal; `call_type_instantiations` had no consumer). Rust needs
@@ -476,6 +515,9 @@ pub struct InferenceResult<'db> {
     /// CALL expression. S16: MIR's argument emission and `LoadType`
     /// operands read this instead of re-planning.
     pub call_plans: FxHashMap<ExprId, CallPlan>,
+    /// Coercion steps per expression (r-a's `expr_adjustments` shape).
+    /// S16: MIR synthesizes the recorded adapters instead of re-deciding.
+    pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment]>>,
 }
 
 impl Default for InferenceResult<'_> {
@@ -489,6 +531,7 @@ impl Default for InferenceResult<'_> {
             member_resolutions: FxHashMap::default(),
             path_resolutions: FxHashMap::default(),
             call_plans: FxHashMap::default(),
+            expr_adjustments: FxHashMap::default(),
         }
     }
 }
@@ -908,8 +951,41 @@ impl<'db> InferenceContext<'db> {
             self.result
                 .type_mismatches
                 .insert(expr, (expected.clone(), ty.clone()));
+        } else {
+            self.record_function_adapter(expr, &ty, expected);
         }
         ty
+    }
+
+    /// rustc/r-a record coercions as per-expression adjustments consumed
+    /// structurally at MIR lowering; every checked position funnels
+    /// through `check_expr`, so this one probe covers TIR's five
+    /// recording sites. Fires only on an ACCEPTED check whose value and
+    /// expectation are both function-shaped but runtime-incompatible
+    /// (TIR's `function_coercion_for`): lowering must synthesize an
+    /// adapter closure. Read-only on inference state (no var forcing -
+    /// alias expansion only), so recording cannot perturb typing.
+    fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
+        let got = self.table.resolve_completely(got);
+        let got = self.expand_alias_ty(&got);
+        let TyKind::Function { params: source, .. } = got.kind() else {
+            return;
+        };
+        let target_fn = self.table.resolve_completely(expected);
+        let target_fn = self.expand_alias_ty(&target_fn);
+        let TyKind::Function { params: target, .. } = target_fn.kind() else {
+            return;
+        };
+        if function_params_runtime_compatible(source, target) {
+            return;
+        }
+        self.result.expr_adjustments.insert(
+            expr,
+            Box::new([Adjustment {
+                kind: Adjust::FunctionAdapter,
+                target: target_fn.clone(),
+            }]),
+        );
     }
 
     fn infer_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Expectation) -> Ty {
@@ -4628,6 +4704,11 @@ impl<'db> InferenceContext<'db> {
         for plan in result.call_plans.values_mut() {
             for ty in &mut plan.type_args {
                 *ty = self.finalize_ty(ty);
+            }
+        }
+        for adjustments in result.expr_adjustments.values_mut() {
+            for adjustment in adjustments.iter_mut() {
+                adjustment.target = self.finalize_ty(&adjustment.target);
             }
         }
         result
