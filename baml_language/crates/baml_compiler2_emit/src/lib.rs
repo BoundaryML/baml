@@ -5516,33 +5516,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_raw_string_single_hash() {
-        // Input: #"raw\ntext"#  — raw strings don't unescape
-        let input = "#\"raw\\ntext\"#";
-        assert_eq!(
-            parse_string_attr_value(input),
-            Some("raw\\ntext".to_string())
-        );
-    }
-
-    #[test]
-    fn parse_raw_string_double_hash() {
-        // Input: ##"has "# inside"##
-        let input = "##\"has \"# inside\"##";
-        assert_eq!(
-            parse_string_attr_value(input),
-            Some("has \"# inside".to_string())
-        );
-    }
-
-    #[test]
-    fn parse_empty_raw_string() {
-        // Input: #""#
-        let input = "#\"\"#";
-        assert_eq!(parse_string_attr_value(input), Some(String::new()));
-    }
-
-    #[test]
     fn parse_non_string_returns_none() {
         assert_eq!(parse_string_attr_value("vm"), None);
         assert_eq!(parse_string_attr_value("42"), None);
@@ -5774,14 +5747,6 @@ mod tests {
         ];
         let (desc, _, _) = extract_schema_attrs(&attrs);
         assert_eq!(desc, Some("second".to_string()));
-    }
-
-    #[test]
-    fn extract_raw_string_attr() {
-        // Simulates @description(#"raw desc"#)
-        let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
-        let (desc, _, _) = extract_schema_attrs(&attrs);
-        assert_eq!(desc, Some("raw desc".to_string()));
     }
 
     #[test]

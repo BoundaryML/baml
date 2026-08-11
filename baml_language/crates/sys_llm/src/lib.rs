@@ -19,14 +19,13 @@ pub(crate) mod types;
 use std::{str::FromStr, sync::Arc};
 
 use bex_external_types::BexExternalValue;
-pub use types::OutputFormatContent;
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
 // Used by sys_types (From<LlmOpError> for VmBamlError)
 pub use provider::LlmProvider;
-pub use types::LlmOpError;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
 pub use types::SapStreamCache;
+pub use types::{LlmOpError, OutputFormatContent};
 
 // Selects the rustls crypto provider for the crate. No longer called directly
 // now that all HTTPS flows through `RuntimeIo` (sys_native installs its own
