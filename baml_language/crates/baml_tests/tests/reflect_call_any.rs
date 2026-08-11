@@ -507,8 +507,10 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
         }
 
         function main() -> string {
-            let left = reflect.enum.new("Category", ["RED", "BLUE"])
-            let right = reflect.enum.new("Category", ["RED", "BLUE"])
+            // Widen explicitly to select `type.meta(...)`, rather than the
+            // enum-kind view's zero-argument metadata reader.
+            let left: type = reflect.enum.new("Category", ["RED", "BLUE"])
+            let right: type = reflect.enum.new("Category", ["RED", "BLUE"])
             let left_prompt = Classify$render_prompt<unreflect(left)>("sample").text()
             let right_prompt = Classify$render_prompt<unreflect(right)>("sample").text()
             let tagged = left.meta(
