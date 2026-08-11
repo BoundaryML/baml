@@ -264,6 +264,27 @@ yet built; the no-pushdown reference comparison is currently trivial
 (the in-memory provider accepts no pushdown) and becomes a real gate
 when a pushdown-capable local provider (SQLite/Parquet) is measured in.
 
+## Q3/U1 — status at this ledger entry (2026-08-11)
+
+Q3 is deliberately NOT closed: the gate requires a golden parity corpus
+mapping every supported BQL/BQF1/UI question to SQL or the private RPC
+BEFORE `baml q`/BQL/`baml studio` may be removed, and that corpus does
+not exist yet. `baml q` and `baml studio` therefore remain fully
+supported compatibility surfaces. Groundwork already in place: every BQL
+ctx/top/stats question has a direct catalog equivalent (verified by hand
+on real artifacts — `baml q "ctx() | top(...)"` and
+`SELECT … FROM cct_population ORDER BY self_ns DESC` agree), and the
+fold reader is the single shared substrate on both paths, so agreement
+is structural rather than coincidental.
+
+U1 partially exists through the current playground (runs list, run
+detail with timeline/flame/top-functions/captured values, live updates)
+and the new `baml query` machine surface; the loss-marker footer now
+flows through BQL. Remaining U1 work: surface the new evidence-state
+axes and loss markers as UI badges, a copy-portable-SQL affordance with
+outcome display, `baml playground <runs|values|source>` machine
+subcommands, and the shared UI/CLI/RPC/SQL conformance fixtures.
+
 ## Build environment
 
 - `RUSTC_WRAPPER=baml-sccache` requires `/root/tmp-build` to exist; a stale sccache server whose temp dir was deleted fails every compile with exit 254. Recreating the directory (or `sccache --stop-server`) fixes it.
