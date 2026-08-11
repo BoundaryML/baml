@@ -1677,20 +1677,6 @@ impl BexVm {
             .get(&local)
     }
 
-    /// Every class and enum object across all loaded packages.
-    pub fn all_class_and_enum_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
-        self.packages
-            .package_ptrs()
-            .filter_map(move |p| self.get_object(p).as_package())
-            .flat_map(|package| {
-                package
-                    .classes
-                    .values()
-                    .chain(package.enums.values())
-                    .copied()
-            })
-    }
-
     /// Get mutable access to an object via `HeapPtr`.
     ///
     /// # Safety

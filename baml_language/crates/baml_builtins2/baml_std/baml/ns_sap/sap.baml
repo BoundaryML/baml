@@ -5,7 +5,7 @@
 
 /// Cached type and assertion data used by incremental schema-aligned parsing.
 class ParseCache<TStream, TFinal> {
-    _data $rust_type
+    _data: $rust_type,
 
     /// Internal constructor. Callers normally use `__new_parse_cache` so the
     /// type arguments determine both runtime type descriptors.
@@ -15,14 +15,12 @@ class ParseCache<TStream, TFinal> {
 }
 
 /// Internal sentinel returned when an incremental parse needs more text.
-class NoYield {}
+class NoYield {
+}
 
 /// Internal typed cache constructor shared by `ai.stream` and public SAP.
 function __new_parse_cache<TStream, TFinal>() -> ParseCache<TStream, TFinal> throws never {
-    let cache: ParseCache<TStream, TFinal> = ParseCache.new(
-        reflect.type_of<TStream>(),
-        reflect.type_of<TFinal>(),
-    )
+    let cache: ParseCache<TStream, TFinal> = ParseCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
     cache
 }
 

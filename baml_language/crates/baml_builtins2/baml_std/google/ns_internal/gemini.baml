@@ -85,7 +85,11 @@ function google_lower_prompt(prompt: ai.Prompt) -> GooglePrompt {
             system_parts.push(part);
             null
         } else {
-            let role = if (message.role == "assistant") { "model" } else { "user" };
+            let role = if (message.role == "assistant") {
+                "model"
+            } else {
+                "user"
+            };
             if (first_role == "") {
                 first_role = role;
                 null
@@ -208,10 +212,7 @@ function google_lower_journal(j: ai.Journal) -> map<string, unknown>[] {
 }
 
 // ai.ModelTurnInput -> one generateContent request.
-function google_render(
-    c: root.GoogleClient,
-    input: ai.ModelTurnInput,
-) -> baml.http.Request {
+function google_render(c: root.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
     _google_request(c, input, false)
 }
 
@@ -388,7 +389,12 @@ function _google_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
                 let blocked = resp.promptFeedback?.blockReason != null;
                 let stop: ai.content.StopReason? = if (finish == "MAX_TOKENS") {
                     ai.content.StopReason.MaxTokens
-                } else if (blocked || finish == "SAFETY" || finish == "RECITATION" || finish == "PROHIBITED_CONTENT") {
+                } else if (
+                    blocked
+                        || finish == "SAFETY"
+                        || finish == "RECITATION"
+                        || finish == "PROHIBITED_CONTENT"
+                ) {
                     ai.content.StopReason.Refused
                 } else if (finish != "") {
                     ai.content.StopReason.Complete

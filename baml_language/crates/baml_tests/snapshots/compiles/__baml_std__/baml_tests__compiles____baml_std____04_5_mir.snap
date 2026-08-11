@@ -848,8 +848,6 @@ fn baml._from_json_shim = builtin(vm)
 
 fn baml.deep_copy = builtin(vm)
 
-fn baml.deep_equals = builtin(vm)
-
 fn baml.Float.is_nan = builtin(vm)
 
 fn baml.Float.is_infinite = builtin(vm)
@@ -10237,8 +10235,6 @@ fn baml.TypeValue._to_string_impl = builtin(vm)
 fn baml.TypeValue.implements = builtin(vm)
 
 fn baml.TypeValue.implemented_by = builtin(vm)
-
-fn baml.TypeValue.implementors = builtin(vm)
 
 fn baml.Uint8Array.length = builtin(vm)
 

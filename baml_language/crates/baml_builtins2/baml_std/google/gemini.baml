@@ -10,11 +10,7 @@ class GoogleClient {
         api_key: string? = null,
         base_url: string? = null,
     ) -> GoogleClient {
-        GoogleClient {
-            model: model,
-            api_key: api_key,
-            base_url: base_url,
-        }
+        GoogleClient { model: model, api_key: api_key, base_url: base_url }
     }
 
     implements ai.Client {

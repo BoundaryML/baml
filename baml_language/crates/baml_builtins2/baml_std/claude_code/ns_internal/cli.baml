@@ -224,10 +224,7 @@ function allowed_mcp_tools(c: root.ClaudeCodeClient) -> string {
 }
 
 // One model turn = one CLI run: assemble the prompt, exec, normalize.
-function invoke(
-    c: root.ClaudeCodeClient,
-    input: ai.ModelTurnInput,
-) -> ai.ModelTurn {
+function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // the contract travels via --json-schema, so the prompt's schema slot
     // renders empty
     // The CLI accepts one string rather than a chat-message array. Keep the

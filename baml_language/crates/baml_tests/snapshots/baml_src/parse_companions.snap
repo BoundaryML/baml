@@ -188,11 +188,10 @@ function parse_companions.parse_companions_missing_alias_fn() -> bool {
     load_const "{}"
     call user.parse_companions.ParseCompanionsParseAliasPayload$parse
     store_var parsed
-    load_type parse_companions.ParseCompanionsAliasPayload
     load_var parsed
     load_const null
     init_instance user.parse_companions.ParseCompanionsAliasPayload .text
-    call baml.deep_equals
+    call baml.ops.equals_equals
     return
 }
 
@@ -200,10 +199,9 @@ function parse_companions.parse_companions_missing_optional_fn() -> bool {
     load_const "{}"
     call user.parse_companions.ParseCompanionsParseOptPayload$parse
     store_var parsed
-    load_type parse_companions.ParseCompanionsOptPayload
     load_var parsed
     load_const null
     init_instance user.parse_companions.ParseCompanionsOptPayload .text
-    call baml.deep_equals
+    call baml.ops.equals_equals
     return
 }

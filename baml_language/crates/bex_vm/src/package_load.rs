@@ -118,11 +118,6 @@ impl PackageIndex {
         self.by_name.get(name).copied()
     }
 
-    /// Every loaded package's `Object::Package` pointer.
-    pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
-        self.by_name.values().copied()
-    }
-
     /// Every loaded package, by name.
     pub fn iter(&self) -> impl Iterator<Item = (&Name, HeapPtr)> + '_ {
         self.by_name.iter().map(|(name, &ptr)| (name, ptr))

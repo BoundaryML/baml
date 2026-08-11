@@ -155,7 +155,7 @@ test "sort_ints_in_place_returns_self" {
     let result = xs.sort();
     let expected = [1, 2, 3];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_empty_is_noop" {
@@ -163,28 +163,28 @@ test "sort_empty_is_noop" {
     let result = xs.sort();
     let expected: int[] = [];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_duplicates" {
     let xs = [3, 1, 2, 1, 3];
     xs.sort();
     let expected = [1, 1, 2, 3, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_strings_match_sort" {
     let xs = ["b", "a", "aa"];
     xs.sort();
     let expected = ["a", "aa", "b"];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_bigints_match_sort" {
     let xs = [3n, 1n, 2n];
     xs.sort();
     let expected = [1n, 2n, 3n];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // float's SortError is `never` (total_cmp decision) — infallible like int.
@@ -196,7 +196,7 @@ test "sort_floats_match_sort" {
     let xs = [2.5, 0.5, 1.5];
     xs.sort();
     let expected = [0.5, 1.5, 2.5];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // DECISION TEST (02-plan Phase 3): NaN no longer throws — `total_cmp` is a
@@ -204,7 +204,7 @@ test "sort_floats_match_sort" {
 test "sort_floats_nan_sorts_last" {
     let xs = [1.0, float.nan(), 0.5];
     xs.sort();
-    assert.is_true(baml.deep_equals(xs.length(), 3));
+    assert.equal(xs.length(), 3);
     assert.equal(xs.at(0), 0.5);
     assert.equal(xs.at(1), 1.0);
     // NaN != NaN under `==`; assert positionally via is_nan.
@@ -246,7 +246,7 @@ test "sort_user_class_sorts_by_compare" {
     assert.is_true(result == xs);
     let labels = xs.map((x: SortableItem) -> string { x.label });
     let expected = ["a", "b", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 test "sort_user_class_is_stable" {
@@ -259,7 +259,7 @@ test "sort_user_class_is_stable" {
     xs.sort();
     let labels = xs.map((x: SortableItem) -> string { x.label });
     let expected = ["b", "d", "a", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 // Fallible comparator (CompareError = ComparableCompareError): the call site must
@@ -286,7 +286,7 @@ test "sort_fallible_comparator_throw_rolls_back" {
         if let v: int = x.value { v } else { -1 }
     });
     let expected = [3, -1, 1];
-    assert.is_true(baml.deep_equals(vals, expected))
+    assert.equal(vals, expected)
 }
 
 test "sort_fallible_comparator_happy_path" {
@@ -308,7 +308,7 @@ test "sort_fallible_comparator_happy_path" {
         if let v: int = x.value { v } else { -1 }
     });
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(vals, expected))
+    assert.equal(vals, expected)
 }
 
 // Generic propagation: a function over `U extends Comparable` may call
@@ -328,7 +328,7 @@ function run_sort_generic_ints() -> int[] throws never {
 test "sort_generic_propagation" {
     let result = run_sort_generic_ints();
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // ─── out-of-body `implements baml.Comparable for <class>` ───────────────────
@@ -358,5 +358,5 @@ test "sort_user_class_out_of_body_impl" {
     xs.sort();
     let pts = xs.map((x: OutOfBodyScore) -> int { x.points });
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(pts, expected))
+    assert.equal(pts, expected)
 }

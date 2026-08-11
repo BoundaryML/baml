@@ -11,7 +11,7 @@
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `ops_math` — `BamlClassOps*` (`Add`/`Subtract`/`Multiply`/`Divide`/
 //!   `Remainder`/`Negate` for the numeric primitives)
-//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, the numeric-array
+//! - `root` — `BamlPackageBaml` (`deep_copy`, the numeric-array
 //!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
 //!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
 //!   `_compare_shim` / `_is_primitive_array` / `_rust_sort` / `_float_total_cmp`)

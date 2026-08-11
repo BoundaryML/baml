@@ -929,9 +929,6 @@ function baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string 
 function baml.TypeValue.implemented_by(self: baml.TypeValue, other: type) -> bool {
 }
 
-function baml.TypeValue.implementors(self: baml.TypeValue) -> type[] {
-}
-
 function baml.TypeValue.implements(self: baml.TypeValue, other: type) -> bool {
 }
 
@@ -2140,9 +2137,6 @@ function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | n
 }
 
 function baml.deep_copy(value: #0) -> #0 {
-}
-
-function baml.deep_equals(a: #0, b: #0) -> bool {
 }
 
 function baml.env.get(key: string) -> string | null {

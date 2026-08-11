@@ -58,10 +58,12 @@ function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
             system.push(block);
             null
         } else {
-            let role = if (message.role == "assistant") { "assistant" } else { "user" };
-            messages.push(
-                AnthropicMessage { role: role, tool_results: false, blocks: [block] },
-            );
+            let role = if (message.role == "assistant") {
+                "assistant"
+            } else {
+                "user"
+            };
+            messages.push(AnthropicMessage { role: role, tool_results: false, blocks: [block] });
             null
         };
     }
@@ -146,7 +148,9 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
                 );
                 null
             },
-            let c: ai.events.ToolCompleted => _anthropic_push_tool_result(msgs, c.id, c.output, false),
+            let c: ai.events.ToolCompleted => {
+                _anthropic_push_tool_result(msgs, c.id, c.output, false)
+            },
             let f: ai.events.ToolFailed => _anthropic_push_tool_result(msgs, f.id, f.message, true),
             _ => null,
         };
@@ -193,11 +197,7 @@ function _anthropic_request(
     // an otherwise well-formed multi-message prompt.
     let first_role = lowered.at(0)?.role ?? "";
     if (first_role != "user" && system.length() > 0) {
-        let first = AnthropicMessage {
-            role: "user",
-            tool_results: false,
-            blocks: system,
-        };
+        let first = AnthropicMessage { role: "user", tool_results: false, blocks: system };
         let _ = body.set("messages", _anthropic_render_messages([first].concat(lowered)));
         null
     } else {
@@ -262,10 +262,7 @@ function _anthropic_stop_reason(s: string) -> ai.content.StopReason {
 }
 
 // The one internal entry point: render, send, normalize — one model turn.
-function invoke(
-    c: root.AnthropicClient,
-    input: ai.ModelTurnInput,
-) -> ai.ModelTurn {
+function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = _anthropic_request(c, input, false);
     let resp = ai.wire.send_as<AnthropicResponse>(req, "anthropic");
 
@@ -280,7 +277,11 @@ function invoke(
         } else if (b.type == "tool_use") {
             let empty_args: map<string, unknown> = {};
             content.push(
-                ai.content.ToolUse { id: b.id ?? "", name: b.name ?? "", args: b.input ?? empty_args },
+                ai.content.ToolUse {
+                    id: b.id ?? "",
+                    name: b.name ?? "",
+                    args: b.input ?? empty_args,
+                },
             );
             null
         } else {
@@ -391,7 +392,7 @@ function _anthropic_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
                     );
                     null
                 } else if (t == "message_stop") {
-                    out.push(ai.stream.TurnDone {});
+                    out.push(ai.stream.TurnDone {  });
                     null
                 } else {
                     null
@@ -410,10 +411,7 @@ function _anthropic_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
 
 // The streaming entry point: the same request as `invoke` with
 // `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
-function invoke_stream(
-    c: root.AnthropicClient,
-    input: ai.ModelTurnInput,
-) -> ai.stream.TurnStream {
+function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _anthropic_request(c, input, true);
     let sse = baml.http.fetch_sse(req) catch_all (e) {
         _ => {

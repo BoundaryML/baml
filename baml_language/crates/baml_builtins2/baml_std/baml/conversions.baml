@@ -37,7 +37,7 @@ interface ToString {
 //baml:mut_vm
 //baml:may_yield
 function _to_string_default<T>(value: T) -> string throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Internal: dispatch `to_string` on `value`'s *runtime* class, honoring a
@@ -55,7 +55,7 @@ function _to_string_default<T>(value: T) -> string throws never {
 //baml:mut_vm
 //baml:may_yield
 function _to_string_shim<T>(value: T) -> string throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Internal: BEP-042 `cleanup` run-once guard. Compiled into the prologue of a
@@ -70,7 +70,7 @@ function _to_string_shim<T>(value: T) -> string throws never {
 /// `cleanup` methods, whose `self` is always an instance).
 //baml:vm
 function _cleanup_begin<T>(value: T) -> bool throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Opt-in JSON conversion.
@@ -115,7 +115,7 @@ interface ToJson {
 //baml:mut_vm
 //baml:may_yield
 function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.JsonSerializationError {
-  $rust_function
+    $rust_function
 }
 
 /// Internal: dispatch `to_json` on `value`'s *runtime* class, honoring a
@@ -133,7 +133,7 @@ function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.JsonSe
 //baml:mut_vm
 //baml:may_yield
 function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSerializationError {
-  $rust_function
+    $rust_function
 }
 
 /// Opt-in JSON deserialization — the inverse of `baml.ToJson`.
@@ -182,5 +182,5 @@ interface FromJson {
 //baml:mut_vm
 //baml:may_yield
 function _from_json_shim<T>(j: baml.json.json) -> T throws baml.json.JsonDecodeError {
-  $rust_function
+    $rust_function
 }

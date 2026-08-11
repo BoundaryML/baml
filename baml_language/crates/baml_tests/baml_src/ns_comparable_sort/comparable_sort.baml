@@ -470,10 +470,20 @@ class ParityItem {
     }
 }
 
+// Element-wise `compare(...) == 0` rather than `xs == ys`. The float domain
+// below includes NaN, and `==` is IEEE — `NaN != NaN`, so an array holding one
+// is not even equal to itself. `Comparable for float` is `total_cmp`, which is
+// both total and the very ordering these two sort paths are being compared on.
 function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.CompareError {
     xs.sort();
     ys.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) });
-    return baml.deep_equals(xs, ys)
+    if (xs.length() != ys.length()) { return false }
+    let i = 0;
+    while (i < xs.length()) {
+        if (xs[i].compare(ys[i]) != 0) { return false }
+        i = i + 1;
+    }
+    return true
 }
 
 function parity_main() -> int throws never {

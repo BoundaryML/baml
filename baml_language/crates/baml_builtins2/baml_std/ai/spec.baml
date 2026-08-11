@@ -16,7 +16,7 @@ class PromptMessage {
 /// prompt into messages and media remains structural until a provider lowers
 /// it to its wire format.
 class Prompt {
-    _data $rust_type
+    _data: $rust_type,
 
     /// Render the prompt as readable text. Message roles are emitted as headers.
     //baml:vm
@@ -47,9 +47,9 @@ function prompt(
     ) -> baml.TaggedString throws never,
 ) -> (baml.prompt.Context) -> Prompt throws never {
     let render = (ctx: baml.prompt.Context) -> {
-        let tagged = body(baml.prompt.make_role, ctx)
+        let tagged = body(baml.prompt.make_role, ctx);
         root.internal.assemble_prompt(tagged.parts, tagged.values)
-    }
+    };
     render
 }
 

@@ -35,14 +35,10 @@ function property_shorthand_class(
 }
 
 test "class properties use shorthand" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         property_shorthand_class("safe", 2, "primary"),
-        PropertyShorthandRequest {
-            options: { "mode": "safe" },
-            retries: 2,
-            label: "primary",
-        },
-    ))
+        PropertyShorthandRequest { options: { "mode": "safe" }, retries: 2, label: "primary"},
+    )
 }
 
 function property_shorthand_map(count: int, retries: int) -> map<string, int> {
@@ -70,16 +66,10 @@ function property_shorthand_mixed(
 }
 
 test "shorthand mixes with explicit properties and nests" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         property_shorthand_mixed("fast", 4, "nested"),
-        PropertyShorthandEnvelope {
-            request: PropertyShorthandRequest {
-                options: { "mode": "fast" },
-                retries: 5,
-                label: "nested",
-            },
-        },
-    ))
+        PropertyShorthandEnvelope { request: PropertyShorthandRequest { options: { "mode": "fast" }, retries: 5, label: "nested"}},
+    )
 }
 
 function property_shorthand_multi_nested(value: string) -> PropertyShorthandOuter {
@@ -89,14 +79,8 @@ function property_shorthand_multi_nested(value: string) -> PropertyShorthandOute
 }
 
 test "shorthand works across multiple nested classes" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         property_shorthand_multi_nested("deep"),
-        PropertyShorthandOuter {
-            middle: PropertyShorthandMiddle {
-                leaf: PropertyShorthandLeaf {
-                    value: "deep",
-                },
-            },
-        },
-    ))
+        PropertyShorthandOuter { middle: PropertyShorthandMiddle { leaf: PropertyShorthandLeaf { value: "deep"}}},
+    )
 }

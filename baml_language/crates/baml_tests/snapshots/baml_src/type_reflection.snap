@@ -30,20 +30,6 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
-    load_var registry
-    load_const "root.type_reflection"
-    load_const "deep_equals_type_values_same"
-    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 4)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.type_reflection"
-    load_const "deep_equals_type_values_different"
-    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 5)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
     load_const null
     return
 }
@@ -209,32 +195,6 @@ function type_reflection.GetFoo$stream(client: ai.stream.StreamingClient | null)
     load_type type_reflection.Foo
     load_var2 2 1
     call ai.stream.from_spec
-    return
-}
-
-function type_reflection.deep_equals_type_values_different_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
-    store_var a
-    load_const "GetBar"
-    sys_op baml.prompt.get_return_type
-    store_var b
-    load_type type
-    load_var2 1 2
-    call baml.deep_equals
-    return
-}
-
-function type_reflection.deep_equals_type_values_same_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
-    store_var a
-    load_const "GetFoo"
-    sys_op baml.prompt.get_return_type
-    store_var b
-    load_type type
-    load_var2 1 2
-    call baml.deep_equals
     return
 }
 

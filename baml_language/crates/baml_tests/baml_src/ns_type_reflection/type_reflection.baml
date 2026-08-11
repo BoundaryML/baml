@@ -38,7 +38,7 @@ function eq_type_values_same_fn() -> bool {
 }
 
 test "eq_type_values_same" {
-    assert.is_true(baml.deep_equals(eq_type_values_same_fn(), true))
+    assert.is_true(eq_type_values_same_fn())
 }
 
 function eq_type_values_different_fn() -> bool {
@@ -48,7 +48,7 @@ function eq_type_values_different_fn() -> bool {
 }
 
 test "eq_type_values_different" {
-    assert.is_true(baml.deep_equals(eq_type_values_different_fn(), false))
+    assert.is_true(!eq_type_values_different_fn())
 }
 
 function neq_type_values_same_fn() -> bool {
@@ -58,7 +58,7 @@ function neq_type_values_same_fn() -> bool {
 }
 
 test "neq_type_values_same" {
-    assert.is_true(baml.deep_equals(neq_type_values_same_fn(), false))
+    assert.is_true(!neq_type_values_same_fn())
 }
 
 function neq_type_values_different_fn() -> bool {
@@ -68,25 +68,5 @@ function neq_type_values_different_fn() -> bool {
 }
 
 test "neq_type_values_different" {
-    assert.is_true(baml.deep_equals(neq_type_values_different_fn(), true))
-}
-
-function deep_equals_type_values_same_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetFoo");
-    baml.deep_equals(a, b)
-}
-
-test "deep_equals_type_values_same" {
-    assert.is_true(baml.deep_equals(deep_equals_type_values_same_fn(), true))
-}
-
-function deep_equals_type_values_different_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetBar");
-    baml.deep_equals(a, b)
-}
-
-test "deep_equals_type_values_different" {
-    assert.is_true(baml.deep_equals(deep_equals_type_values_different_fn(), false))
+    assert.is_true(neq_type_values_different_fn())
 }

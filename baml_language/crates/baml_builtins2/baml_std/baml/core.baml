@@ -1,13 +1,7 @@
 /// Returns a deep copy of `value` — all nested structures are recursively cloned.
 //baml:mut_vm
 function deep_copy<T>(value: T) -> T throws never {
-  $rust_function
-}
-
-/// Returns `true` if `a` and `b` are deeply equal — recursively comparing all nested values.
-//baml:vm
-function deep_equals<T>(a: T, b: T) -> bool throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Implemented by all concrete types.
@@ -40,9 +34,9 @@ interface AnyFunction {
 /// ending with a literal — empty strings fill the leading/trailing slot when the
 /// template begins or ends with an interpolation).
 class TaggedString {
-  /// Literal text segments between interpolations, in source order.
-  parts string[]
-  /// Interpolated values, in source order. Heterogeneous: each entry has the
-  /// type of its `${expr}` site; tags inspect element types at runtime.
-  values unknown[]
+    /// Literal text segments between interpolations, in source order.
+    parts: string[],
+    /// Interpolated values, in source order. Heterogeneous: each entry has the
+    /// type of its `${expr}` site; tags inspect element types at runtime.
+    values: unknown[],
 }

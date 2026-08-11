@@ -21,7 +21,7 @@ namespace baml:
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_string] }
+  class TypeValue { methods: [_to_string_impl, implements, implemented_by, to_string] }
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
@@ -39,7 +39,6 @@ namespace baml:
   function _to_string_shim<T>
   function _trunc_to_int
   function deep_copy<T>
-  function deep_equals<T>
 namespace baml.csv:
   class CsvError { methods: [] }
   enum CsvErrorKind

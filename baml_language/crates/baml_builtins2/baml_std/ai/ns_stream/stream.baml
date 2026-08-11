@@ -46,14 +46,16 @@ class TurnMeta {
 
 // The provider's explicit end-of-turn marker. Optional: a stream that simply
 // ends (SSE close) also completes the turn.
-class TurnDone {}
+class TurnDone {
+}
 
 type StreamEvent = TextDelta | TurnMeta | TurnDone;
 
 // The single end-of-stream marker returned by both raw turn streams and typed
 // function streams. A nominal sentinel is required because null may itself be
 // a valid partial value.
-class Done {}
+class Done {
+}
 
 // The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 // from the wire until `next()` or `final_turn()` is called.
@@ -136,7 +138,7 @@ class TurnStream {
     function next(self) -> string | Done {
         while (true) {
             if (self._done) {
-                return Done {};
+                return Done {  };
             }
             // deliver decoded events before pulling more from the wire
             if (self._pcursor < self._pending.length()) {
@@ -161,7 +163,7 @@ class TurnStream {
                     },
                     let d: TurnDone => {
                         let _ = self._finish();
-                        return Done {};
+                        return Done {  };
                     },
                     null => null,
                 };
@@ -172,7 +174,7 @@ class TurnStream {
                     match (sse.next()) {
                         null => {
                             let _ = self._finish();
-                            return Done {};
+                            return Done {  };
                         },
                         let batch: string => {
                             if let decode: (string) -> StreamEvent[] throws unknown = self._decode {
@@ -198,7 +200,7 @@ class TurnStream {
                         },
                         null => {
                             let _ = self._finish();
-                            return Done {};
+                            return Done {  };
                         },
                     }
                 },
@@ -249,21 +251,20 @@ class Stream<TStream, TFinal> {
     function next(self) -> TStream | Done {
         while (true) {
             if (self._finished) {
-                return Done {}
+                return Done {  };
             }
             match (self._next_text()) {
                 null => {
                     self._finished = true;
-                    return Done {}
+                    return Done {  };
                 },
                 let s: string => {
                     self._text = self._text + s;
-                    let parsed: TStream | baml.sap.NoYield =
-                        baml.sap.__parse_partial<TStream, TFinal>(self._text, self._cache);
+                    let parsed: TStream | baml.sap.NoYield = baml.sap.__parse_partial<TStream, TFinal>(self._text, self._cache);
                     match (parsed) {
                         baml.sap.NoYield => {},
                         let p: TStream => {
-                            return p
+                            return p;
                         },
                     }
                 },

@@ -47,12 +47,19 @@ class Agent<Out> {
 
     // Execute one call: validate, dispatch, append the correlated result.
     // A Raise-mode failure throws ToolFailedError after ToolFailed lands.
-    function _run_one_tool(self, tb: root.tools.Toolbox, call: root.content.ToolUse, j: Journal) -> null {
+    function _run_one_tool(
+        self,
+        tb: root.tools.Toolbox,
+        call: root.content.ToolUse,
+        j: Journal,
+    ) -> null {
         match (tb.get(call.name)) {
             let t: root.tools.Tool => {
                 let outcome: string? = t.call(call.args) catch_all (e) {
                     _ => {
-                        j.append_all([root.events.ToolFailed { id: call.id, message: e.to_string() }]);
+                        j.append_all(
+                            [root.events.ToolFailed { id: call.id, message: e.to_string() }],
+                        );
                         // the per-tool setting wins; null inherits the run's mode
                         if ((t.on_error ?? self.tool_errors) == root.tools.ErrorMode.Raise) {
                             let classified = match (e) {
@@ -253,11 +260,7 @@ class Agent<Out> {
                         },
                     };
                     j.append_all(
-                        [
-                            root.events.FinalProduced {
-                                value_json: baml.json.stringify(value_json),
-                            },
-                        ],
+                        [root.events.FinalProduced { value_json: baml.json.stringify(value_json) }],
                     );
                     seen = self._emit_from(j, seen);
                     return RunResult { value: value, journal: j, usage: total };

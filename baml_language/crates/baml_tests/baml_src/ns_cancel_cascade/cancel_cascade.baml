@@ -38,7 +38,7 @@ function cancel_from_handle_then_await_catches_cancelled() -> int {
 }
 
 test "cancel_from_handle_then_await_catches_cancelled" {
-    assert.is_true(baml.deep_equals(cancel_from_handle_then_await_catches_cancelled(), 0))
+    assert.equal(cancel_from_handle_then_await_catches_cancelled(), 0)
 }
 
 // B-665 regression: `f.cancel()` must still settle a spawn whose heap `Future`
@@ -75,7 +75,7 @@ function cancel_after_gc_relocation_still_settles() -> int {
 }
 
 test "cancel_after_gc_relocation_still_settles" {
-    assert.is_true(baml.deep_equals(cancel_after_gc_relocation_still_settles(), 0))
+    assert.equal(cancel_after_gc_relocation_still_settles(), 0)
 }
 
 // State observation: after `waiter` is cancelled mid-await, its Future state
@@ -95,5 +95,5 @@ function cancelled_child_future_state_is_cancelled() -> baml.future.FutureState 
 }
 
 test "cancelled_child_future_state_is_cancelled" {
-    assert.is_true(baml.deep_equals(cancelled_child_future_state_is_cancelled(), baml.future.FutureState.Cancelled))
+    assert.equal(cancelled_child_future_state_is_cancelled(), baml.future.FutureState.Cancelled)
 }
