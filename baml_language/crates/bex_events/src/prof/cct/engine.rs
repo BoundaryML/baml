@@ -27,6 +27,10 @@ use crate::prof::record::{FunctionEndStatus, RawRecord, ThreadEndStatus};
 /// §5.2: a deferral surviving this many sweeps triggers synthesized
 /// recovery instead of waiting forever.
 pub const DEFER_MAX_SWEEPS: u32 = 1024;
+/// Defer-list size bound: beyond this many pending records the engine
+/// resolves every unprovided dependency immediately (declared synthesis)
+/// instead of growing without limit.
+pub const DEFER_MAX_PENDING: usize = 64 * 1024;
 
 /// An owned copy of a ring record held by the defer machinery (≤ ~54 B;
 /// the hot loop on one ring never defers).
@@ -186,6 +190,9 @@ pub struct CctEngine {
     /// Thread slab + id index; `thread_cache` short-circuits the index for
     /// the common run of records from one thread.
     threads: Vec<ThreadState>,
+    /// Recycled slab slots (freed by `free_partition`), reused by
+    /// `new_thread_state` so thread-churning servers stay O(live threads).
+    free_thread_slots: Vec<u32>,
     thread_index: FxHashMap<u64, u32>,
     thread_cache: (u64, u32),
     partitions: Vec<Partition>,
@@ -226,6 +233,9 @@ pub struct CctEngine {
 }
 
 const NO_THREAD: u32 = u32::MAX;
+/// Tombstone `thread_id` for a reclaimed slab slot (real ids are dense
+/// runtime-assigned values that never reach `u64::MAX`).
+const FREED_THREAD: u64 = u64::MAX;
 
 impl Default for CctEngine {
     fn default() -> Self {
@@ -239,6 +249,7 @@ impl CctEngine {
         CctEngine {
             nodes: Nodes::with_function_capacity(function_count),
             threads: Vec::new(),
+            free_thread_slots: Vec::new(),
             thread_index: FxHashMap::default(),
             thread_cache: (u64::MAX, NO_THREAD),
             partitions: Vec::new(),
@@ -361,6 +372,13 @@ impl CctEngine {
         // anything).
         if !self.pending.is_empty() && self.applied_since_retry {
             self.retry_pending(to_ns);
+        }
+        // Defer-list bound: pathological cross-ring gaps must not grow the
+        // pending list without limit. At the cap, resolve everything
+        // resolvable immediately — declared synthesis + degradation, the
+        // same semantics as the timeout, just now instead of later.
+        if self.pending.len() > DEFER_MAX_PENDING {
+            self.resolve_expired(to_ns, 0);
         }
     }
 
@@ -776,8 +794,7 @@ impl CctEngine {
         let partition_thread_idx = part.thread_count;
         part.thread_count += 1;
         part.live_threads += 1;
-        let slot = u32::try_from(self.threads.len()).expect("thread slab exceeds u32");
-        self.threads.push(ThreadState {
+        let state = ThreadState {
             thread_id,
             partition,
             partition_thread_idx,
@@ -790,7 +807,18 @@ impl CctEngine {
             pending_edge_ctx,
             pending_end: None,
             alive: true,
-        });
+        };
+        let slot = match self.free_thread_slots.pop() {
+            Some(slot) => {
+                self.threads[slot as usize] = state;
+                slot
+            }
+            None => {
+                let slot = u32::try_from(self.threads.len()).expect("thread slab exceeds u32");
+                self.threads.push(state);
+                slot
+            }
+        };
         self.thread_index.insert(thread_id, slot);
         self.thread_cache = (thread_id, slot);
         self.applied_since_retry = true;
@@ -1159,6 +1187,30 @@ impl CctEngine {
         if !self.pending.is_empty() {
             self.retry_pending(to_ns);
         }
+        self.resolve_expired(to_ns, DEFER_MAX_SWEEPS);
+        // Quiescent EndThread finalization (§5.2 lifecycle deferral).
+        let ready: Vec<(u32, ThreadEndStatus, u64)> = self
+            .threads
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, t)| {
+                t.pending_end.and_then(|(status, ts)| {
+                    (t.alive && t.stack.is_empty() && !self.thread_has_waiters(t.thread_id))
+                        .then_some((u32::try_from(slot).unwrap(), status, ts))
+                })
+            })
+            .collect();
+        for (slot, status, ts) in ready {
+            self.finalize_thread(slot, status, ts);
+        }
+    }
+
+    /// Synthesize-and-replay every deferral of at least `min_age` whose
+    /// dependency nothing pending can provide. `DEFER_MAX_SWEEPS` is the
+    /// ordinary timeout path; `0` is the overload path — the defer list is
+    /// bounded, and hitting the bound resolves everything resolvable now
+    /// (declared, synthesized, degraded) instead of growing without limit.
+    fn resolve_expired(&mut self, to_ns: &mut impl FnMut(u64) -> u64, min_age: u32) {
         loop {
             // A key is "provided" when a pending record would create it on
             // apply — synthesizing those would fork reality; they resolve
@@ -1183,7 +1235,7 @@ impl CctEngine {
                 .pending
                 .iter()
                 .filter(|(key, _, age)| {
-                    *age >= DEFER_MAX_SWEEPS
+                    *age >= min_age
                         && match *key {
                             WaitKey::Call(t, c) => !provided_calls.contains(&(t, c)),
                             WaitKey::Thread(t) => !provided_threads.contains(&t),
@@ -1206,21 +1258,6 @@ impl CctEngine {
                 self.synthesize_key(key);
             }
             self.retry_pending(to_ns);
-        }
-        // Quiescent EndThread finalization (§5.2 lifecycle deferral).
-        let ready: Vec<(u32, ThreadEndStatus, u64)> = self
-            .threads
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, t)| {
-                t.pending_end.and_then(|(status, ts)| {
-                    (t.alive && t.stack.is_empty() && !self.thread_has_waiters(t.thread_id))
-                        .then_some((u32::try_from(slot).unwrap(), status, ts))
-                })
-            })
-            .collect();
-        for (slot, status, ts) in ready {
-            self.finalize_thread(slot, status, ts);
         }
     }
 
@@ -1514,10 +1551,37 @@ impl CctEngine {
         if let Some(part) = self.partitions.get_mut(partition as usize) {
             part.recent = RecentRing::new(2);
         }
-        for thread in &mut self.threads {
-            if thread.partition == partition && !thread.alive {
-                thread.stack = Vec::new();
+        // Reclaim the partition's dead thread slots: tombstone the slab
+        // entry and recycle it through the free list, so thread-churning
+        // servers stay O(live threads) instead of growing per boundary.
+        // (finalize_thread already unlinked the id index and cache; the
+        // removes below are defensive no-ops for that path.)
+        for slot in 0..self.threads.len() {
+            let thread = &self.threads[slot];
+            if thread.partition != partition || thread.alive || thread.thread_id == FREED_THREAD {
+                continue;
             }
+            let thread_id = thread.thread_id;
+            self.thread_index.remove(&thread_id);
+            if self.thread_cache.0 == thread_id {
+                self.thread_cache = (u64::MAX, NO_THREAD);
+            }
+            self.threads[slot] = ThreadState {
+                thread_id: FREED_THREAD,
+                partition,
+                partition_thread_idx: 0,
+                spawn_ctx_node: 0,
+                stack: Vec::new(),
+                last_charge_ns: 0,
+                suspended: None,
+                last_resume_seq: 0,
+                entry_edge: None,
+                pending_edge_ctx: None,
+                pending_end: None,
+                alive: false,
+            };
+            self.free_thread_slots
+                .push(u32::try_from(slot).unwrap_or(u32::MAX));
         }
     }
 
@@ -1525,6 +1589,21 @@ impl CctEngine {
     #[must_use]
     pub fn max_seen_ns(&self) -> u64 {
         self.max_seen_ns
+    }
+
+    /// Resident thread-slab occupancy `(total_slots, free_slots)` — the
+    /// observable half of the "server memory stays O(live threads)"
+    /// claim: after `free_partition`, churned threads return as free.
+    #[must_use]
+    pub fn thread_slab_occupancy(&self) -> (usize, usize) {
+        (self.threads.len(), self.free_thread_slots.len())
+    }
+
+    /// Current defer-list length (bounded by [`DEFER_MAX_PENDING`] plus
+    /// one range's arrivals).
+    #[must_use]
+    pub fn pending_deferrals(&self) -> usize {
+        self.pending.len()
     }
 
     /// §6.1 session-epoch rotation: fresh node table (ids restart), live

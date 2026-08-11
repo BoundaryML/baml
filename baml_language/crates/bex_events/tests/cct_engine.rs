@@ -526,3 +526,58 @@ fn epoch_rotation_reinterns_live_stacks() {
         "no defers across rotation"
     );
 }
+
+/// §5.7 memory bound: freeing a completed partition recycles its dead
+/// thread slots — a thread-churning engine stays O(live threads), not
+/// O(threads ever).
+#[test]
+fn free_partition_recycles_thread_slots() {
+    let mut engine = CctEngine::new(16);
+    for round in 0..64u64 {
+        let tid = round + 1;
+        consume(
+            &mut engine,
+            &encode(&[
+                start_thread(tid, 0, 0, round * 100),
+                call(tid, 1, 0, 100, round * 100 + 10),
+                end(tid, 1, FunctionEndStatus::Ok, round * 100 + 20),
+                end_thread(tid, ThreadEndStatus::Completed, round * 100 + 30),
+            ]),
+        );
+        let partition = engine
+            .partition_of_thread(tid)
+            .expect("root thread has a partition");
+        engine.free_partition(partition);
+    }
+    let (total, free) = engine.thread_slab_occupancy();
+    assert!(
+        total <= 2,
+        "64 sequential boundaries must reuse slots, got {total} total ({free} free)"
+    );
+}
+
+/// The defer list is bounded: a flood of records whose dependencies never
+/// arrive resolves through declared synthesis at the cap instead of
+/// growing without limit.
+#[test]
+fn defer_list_is_bounded_via_declared_synthesis() {
+    use bex_events::prof::cct::DEFER_MAX_PENDING;
+    let mut engine = CctEngine::new(16);
+    // Ends for calls that never started, across distinct threads that
+    // never started either: every record defers.
+    let flood = u64::try_from(DEFER_MAX_PENDING).unwrap() + 4_096;
+    let mut records = Vec::new();
+    for i in 0..flood {
+        records.push(end(i + 10, 999, FunctionEndStatus::Ok, i));
+    }
+    consume(&mut engine, &encode(&records));
+    assert!(
+        engine.pending_deferrals() <= DEFER_MAX_PENDING,
+        "defer list must stay bounded, got {}",
+        engine.pending_deferrals()
+    );
+    assert!(
+        engine.diagnostics().synthesized_parents > 0,
+        "overflow resolves through declared synthesis"
+    );
+}

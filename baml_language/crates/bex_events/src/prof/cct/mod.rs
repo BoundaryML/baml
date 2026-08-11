@@ -21,7 +21,9 @@ pub mod segment;
 pub mod session;
 pub mod spawn;
 
-pub use engine::{CctDiagnostics, CctEngine, DEFER_MAX_SWEEPS, LlmCounters, WindowSnapshot};
+pub use engine::{
+    CctDiagnostics, CctEngine, DEFER_MAX_PENDING, DEFER_MAX_SWEEPS, LlmCounters, WindowSnapshot,
+};
 pub use nodes::{HIST_BUCKETS, Nodes, RECURSION_FOLD_DEPTH};
 pub use recent::{RECENT_RING_SLOTS, RecentCall, RecentRing};
 pub use spawn::{INSTANCES_EXCEPTIONAL, INSTANCES_FIRST, SpawnEdges};
