@@ -52,7 +52,7 @@
 | Initial hosted topology | Single cell per v1 project |
 | Hosted infrastructure | Terraform, ECS/Fargate, S3, SQS, PostgreSQL, ClickHouse Cloud, static SPA, OIDC |
 
-The structural-exhaustion row is a target policy. Current ring overflow still aborts unconditionally.
+The structural-exhaustion policy is implemented: **BAML_PROFILE_EXHAUSTION** selects fail_run (default) / abort_process (strict opt-in) / continue_incomplete, with every shed persisted as declared loss evidence. Exact per-environment defaults remain X1 policy work.
 
 ## Explicit supersessions
 
@@ -78,9 +78,9 @@ The structural-exhaustion row is a target policy. Current ring overflow still ab
 | BCCT header is 32 bytes | Current header is 112 bytes |
 | Positive and negative zero canonicalize together | Current canonical codec keeps them distinct |
 | index.jsonl is current run discovery | No implementation; current reader scans boundary meta files |
-| Server shedding ladder is shipped | Current cap aborts; policy is target work |
-| Full-trace writer is shipped | Not implemented |
-| Continuous value drain/promotion path is fully shipped | Components exist, but CLI drains synchronously and production staging is not wired |
+| Server shedding ladder is shipped | The fail_run/abort_process/continue_incomplete policy is implemented (C1); the multi-step server ladder beyond it remains hosted work |
+| Full-trace writer is shipped | Not implemented; explicitly absent for v1 (deferred) |
+| Continuous value drain/promotion path is fully shipped | The CLI drains continuously off-thread (C1); production helper staging/promotion wiring remains deferred |
 
 ## Rejected v1 alternatives
 

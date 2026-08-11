@@ -21,6 +21,74 @@ The C0 gate was verified mechanically:
 
 The validator lives at [tools/validate_docs.py](../tools/validate_docs.py) and must stay green when canonical documents change.
 
+## C1 — profiler hardening decisions
+
+### IN-C1-1 — Root-pin durability protocol (**impl**, invariant-affirming)
+
+One crash-safe barrier: value-segment fsync → pack fsync (data + one-time
+packs-dir entry) → manifest append fsync (file + boundary dir). Renames
+(pack seal idx, GC compaction, dictionary publish, flight dumps) are
+durable tmp-fsync → rename → dir-fsync. Dedupe trusts only provably
+durable chunks: sealed idx ⇒ durable (seal fsyncs first); a crashed
+writer's pack is recovered durably at open (single-shot, dead-lease
+cleanup); a live writer's unsealed pack is readable but never absorbs
+another writer's put (same-process ownership resolved exactly via an
+active-writer registry, foreign pids via a conservative `kill(0)` probe).
+
+### IN-C1-2 — Structural-exhaustion policy (**freeze** of mechanism; default remains X1-overridable)
+
+`BAML_PROFILE_EXHAUSTION` = `fail_run` (default, per the decision
+register's recommendation) | `abort_process` (strict opt-in, the historic
+abort) | `continue_incomplete` (diagnostic admission: shed under
+pressure, resume when drained). All modes count drops per ring; the
+consumer persists SHED markers, degrades partitions, and boundary
+completion carries the delta plus a `BoundaryLoss` record. `fail_run`
+does not kill or fail the user's process locally — it fails the *run's
+structural evidence* explicitly; hosted delivery-required semantics
+remain H-milestone work.
+
+### IN-C1-3 — Counter overflow: persist saturation, don't widen the wire (**impl**)
+
+BCCT v1 wire stays u32 for count deltas. In-memory histograms saturate
+(drops counted); every engaged wire clamp is counted; a fold that
+clamped embeds a SATURATED marker in the sealed snapshot. Rationale:
+overflow needs >4.29 G calls per node per boundary locally — explicit
+lower-bound evidence is honest and format-stable; widening can ride a
+future BCCT major version if hosted scale ever demands it.
+
+### IN-C1-4 — Full trace and helper staging (**decision recorded**)
+
+Full-trace writer: **not required for v1**, stays explicitly absent
+(already canon-deferred). Speculative helper staging/promotion: machinery
+and tests stay, production wiring stays deferred (canon-deferred); the
+root-error `promote_staged` call remains a structural no-op and no user
+surface may imply retroactive helper capture ships.
+
+### IN-C1-5 — Continuous CLI value drain (**impl**)
+
+A per-boundary `baml-value-drain` thread drains captured drafts every
+250 ms (encode + segment append + CAS put off the application threads)
+and runs the IN-C1-1 barrier at stop; inline drain remains the
+spawn-failure fallback. The value segment is created lazily at the first
+draft (no more header-only files). wasm/playground hosts still drain
+inline — host parity is tracked, not pretended.
+
+### IN-C1-6 — Memory bounds (**impl**)
+
+`free_partition` recycles dead thread slots (free list, tombstoned
+`thread_id`); the defer list is bounded by `DEFER_MAX_PENDING` (64 Ki) —
+at the cap the engine resolves everything resolvable through the
+existing declared-synthesis path immediately. Residuals per completed
+boundary: one small `Partition` stub; node rows remain epoch-bounded.
+`thread_slab_occupancy`/`pending_deferrals` expose the bounds.
+
+### IN-C1-7 — Hot-path budget re-measured
+
+cct_engine bench after C1: hotloop 48.6 ns/pair (baseline 47.9; gate
+≤50), p99 shape 54.4 (baseline 54.1; pre-existing >50, within the 60
+never-exceed), migration unchanged. The +0.7 ns is the histogram
+saturation branch on the call-end path.
+
 ## Q1 — catalog and query-core freeze resolutions
 
 ### IN-Q1-1 — `args` root shape: named-argument object (**freeze**)

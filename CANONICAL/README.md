@@ -171,7 +171,7 @@ flowchart LR
 
 | Area | User outcome | Current state | Canonical document | V1 gate |
 |---|---|---|---|---|
-| Profiler and local artifacts | Always-on population profiling plus bounded exact evidence and captured values | **Built core**; root/flight pin durability, memory reclamation, counter overflow, and exhaustion-policy gaps are explicit | [Profiler](design/03-profiler.md), [Local artifacts](design/storage/local-artifacts.md) | Close correctness gaps and keep performance gates green |
+| Profiler and local artifacts | Always-on population profiling plus bounded exact evidence and captured values | **Built and C1-hardened**: crash-safe root-pin barrier, exhaustion-policy ladder, explicit saturation evidence, persisted loss diagnostics, bounded slab/defer memory, continuous CLI value drain | [Profiler](design/03-profiler.md), [Local artifacts](design/storage/local-artifacts.md) | Keep crash/perf gates green while the SQL layer lands |
 | Playground fold engine | Open runs, CCTs, and captured values at interactive latency | **Built core**; full Studio experience remains target work | [Studio experience](design/06-studio-experience.md) | RPC/CLI/SQL semantic agreement |
 | Public SQL | One portable SQL contract, locally and hosted | **Designed; not built on this branch** | [Query system](design/04-query-system.md) | Catalog freeze, streaming engine, conformance corpus |
 | Hosted value queries | Filter resident metadata in ClickHouse, hydrate from S3/CAS, finish value work in DataFusion | **Designed; prototype evidence exists; hosted provider not built** | [Query system](design/04-query-system.md), [ClickHouse](design/storage/clickhouse.md) | Pushdown parity, global budgets, authz, cancellation |

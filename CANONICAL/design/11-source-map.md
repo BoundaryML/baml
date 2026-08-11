@@ -88,6 +88,27 @@ The audit found no DataFusion or chDB dependency, no **baml_query** crate, no **
 
 GitHub PR [BoundaryML/baml#4343](https://github.com/BoundaryML/baml/pull/4343) was an open, unmerged draft at the audit date. It is evidence that DataFusion/SQLite/hydration integration is feasible, not the canonical schema, store, budgeting model, or merge plan. The [Delivery plan](09-delivery-plan.md#starting-point) records the parts that must not be adopted unchanged.
 
+## Post-audit implementation changes (2026-08-11, C1)
+
+The current-implementation corrections above describe the branch **as
+audited on 2026-08-10**. The C1 hardening pass then changed the following
+audited facts; the component documents are updated, and this addendum
+keeps the audit trail honest without rewriting it:
+
+| Audited 2026-08-10 | Since C1 (2026-08-11) |
+|---|---|
+| Boundary manifest append not fsynced in the pack barrier | One crash-safe root-pin barrier: pack + manifest + directory fsyncs; dedupe trusts only provably durable chunks |
+| Ring exhaustion hard-aborts; shed policy unwired | fail_run / abort_process / continue_incomplete implemented; shed persists as markers, boundary diagnostics, and BoundaryLoss |
+| Folded counters saturate and histograms wrap without a marker | Saturation counted and persisted (SATURATED marker, diagnostics); histogram buckets saturate instead of wrapping |
+| Corruption degradation not consistently persisted | Corrupt ranges counted, marked DEGRADED, reported in completion diagnostics, and surfaced through the fold reader |
+| CLI drains values once synchronously at finish | CLI drains continuously off-thread (250 ms worker) with the durable commit barrier at stop |
+| free_partition retains dead thread slabs | Dead thread slots recycle through a free list; the defer list is size-bounded |
+
+Unchanged from the audit: BQL/**baml q** remain the compatibility query
+surface, DataFusion/**baml_query**/**baml query** remain absent, the
+full-trace writer stays deliberately absent, and helper staging/promotion
+wiring stays deferred.
+
 ## Maintenance rule
 
 When implementation changes:

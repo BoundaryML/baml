@@ -1,6 +1,6 @@
 # Profiler
 
-**Status:** The core capture, CCT, canonical value store, local history, fold reader, retention, and GC are built. The public DataFusion SQL layer is not. The server shedding policy and full-trace writer described in older documents are not implemented.
+**Status:** The core capture, CCT, canonical value store, local history, fold reader, retention, and GC are built, and the C1 hardening pass closed the durability, exhaustion-policy, saturation, diagnostics-persistence, and memory-bound gaps recorded below. The public DataFusion SQL layer is not built. The full-trace writer remains deliberately absent.
 
 This document is the refresher for how profiling works and what the current branch actually does.
 
@@ -20,7 +20,7 @@ The replacement avoids traffic-proportional structural storage for repeated call
 | **Tape** | Bounded recent calls, flight dumps, and optional raw firehose | What exactly happened inside the retained window? |
 | **Values** | Selected inputs/outputs/errors/logs as canonical content-addressed DAGs | What data flowed through a retained call? |
 
-Every call contributes to the CCT. Only calls retained by an exact window or capture policy are individually discoverable. This distinction is the foundation of the query model. Current resident-memory reclamation does not yet fully match the shape-bound goal: completed-partition and dead-thread metadata persist for the engine lifetime. Epoch rotation rebuilds the node namespace but is not full reclamation.
+Every call contributes to the CCT. Only calls retained by an exact window or capture policy are individually discoverable. This distinction is the foundation of the query model. Completing a boundary now recycles its dead thread slots through a free list (`thread_slab_occupancy` exposes the bound); node rows remain session-scoped and are bounded by epoch rotation, and a small per-partition stub persists per boundary for the engine lifetime.
 
 ## Hot-path data flow
 
@@ -46,7 +46,7 @@ flowchart LR
   CALL --> VALUEQ --> CAS
 ~~~
 
-The producer does no SQL, filesystem write, network request, canonical encoding, or value hashing on function entry. A reusable off-thread ValueDrainService exists, but the current CLI does not use it: it drains and canonicalizes captured drafts synchronously at boundary finish.
+The producer does no SQL, filesystem write, network request, canonical encoding, or value hashing on function entry. The CLI drains continuously off-thread: a per-boundary drain worker encodes and persists captured drafts every 250 ms and runs the root-commit barrier at finish. (The reusable mpsc ValueDrainService also exists for hosts that prefer a store-owning service thread.)
 
 ## Structural records
 
@@ -84,8 +84,9 @@ These are code-verified local defaults, not hosted policy:
 | Flight dump rate | At least 5 seconds apart, at most 16 per engine |
 | Speculative value staging | 32 MiB native, 8 MiB wasm |
 | Raw firehose | Off; **BAML_PROFILE_RAW=1** enables it |
+| Structural exhaustion | **fail_run** default; **BAML_PROFILE_EXHAUSTION** selects fail_run / abort_process / continue_incomplete |
 
-The current hard ring-memory cap aborts the process when exceeded. Marker types for shedding exist, but the documented abort-or-shed policy and multi-step server shedding ladder are not wired. The desired **fail_run / abort_process / continue_incomplete** product policy remains target work; current behavior must not be described as graceful shedding.
+Exceeding the ring-memory cap applies the selected structural-exhaustion policy: **fail_run** (default) latches capture off for the process and the application continues; **continue_incomplete** sheds while over the cap and resumes; **abort_process** (strict opt-in) keeps the historical hard abort. Every shed is a counted drop that becomes a session SHED marker, degraded partitions, boundary diagnostics, and a BoundaryLoss record — never a silent gap. Exact per-environment defaults remain X1 policy work.
 
 The bounded full-trace writer is also not implemented. Today exact tape comes from the recent-call ring, flight-recorder dumps, captured values, and the opt-in raw firehose.
 
@@ -93,7 +94,7 @@ The bounded full-trace writer is also not implemented. Today exact tape comes fr
 
 ### Structural capture
 
-Structural profiling is default-on locally. The CLI creates a boundary directory and writes a durable begin record before execution. After the call, it flushes the profiler, drains values, binds the root partition, requests completion—which folds the snapshot before appending completion metadata—then performs a final flush. CLI boundary persistence/control failures are currently best-effort and verbose-gated. Structural ring exhaustion is different: the current 1 GiB cap aborts the process.
+Structural profiling is default-on locally. The CLI creates a boundary directory and writes a durable begin record before execution. After the call, it flushes the profiler, drains values, binds the root partition, requests completion—which folds the snapshot before appending completion metadata—then performs a final flush. CLI boundary persistence/control failures are currently best-effort and verbose-gated. Structural ring exhaustion follows the configured policy above (fail_run by default); only the strict abort_process opt-in terminates the process.
 
 This current host behavior is intentionally recorded because the v1 hosted guarantee work will strengthen some failure semantics.
 
@@ -117,7 +118,7 @@ A capture draft contains:
 - a handle into the copied trace snapshot; and
 - an optional promotion trigger.
 
-Values are reserved and copied into a trace-owned heap before later processing. Canonical encoding never runs in the profiler consumer. The reusable value drain service is implemented, but the current CLI drains once, synchronously, after the boundary call resolves.
+Values are reserved and copied into a trace-owned heap before later processing. Canonical encoding never runs in the profiler consumer or on application threads: the CLI's drain worker encodes and persists drafts continuously at a 250 ms cadence and finishes with the durable root-commit barrier.
 
 ### Speculative promotion
 
@@ -153,7 +154,7 @@ This is runtime self/await accounting, not operating-system CPU sampling.
 
 Per-thread rings do not impose a global order. A record whose causal parent has not arrived is deferred. After 1,024 defer sweeps, the engine synthesizes an unattributable parent under function 0, replays dependents, and marks the affected partition degraded. An explicit lost/corrupt range is a different path: it marks currently live partitions degraded and discards the remainder of that range; it does not itself synthesize the missing parent.
 
-The v1 target invariant is: aggregation may lose attribution after declared structural loss, but it must not wedge or silently drop time. Current corruption degradation is not consistently persisted, so the implementation does not yet satisfy that invariant on every path.
+The v1 invariant holds: aggregation may lose attribution after declared structural loss, but it does not wedge or silently drop time. Corrupt ranges and shed records are counted in engine diagnostics, persisted as DEGRADED/SHED markers in the session stream, and reported as per-boundary deltas in the completion record. The defer list itself is bounded (**DEFER_MAX_PENDING**); hitting the bound resolves through the same declared synthesis as the timeout path.
 
 ### Recursion and spawning
 
@@ -162,7 +163,7 @@ The v1 target invariant is: aggregation may lose attribution after declared stru
 - Spawn edges aggregate by spawning context and child entry function.
 - The instance table retains the first 64 instances plus up to 256 exceptional instances per edge; in-memory aggregate counters remain **u64** and complete within their representable range.
 
-Current folded BCCT enters/terminal/LLM/spawn totals saturate to **u32::MAX** without an overflow marker. Duration histogram buckets are already **u32** in memory and unchecked increments wrap in release builds or panic in debug builds at overflow. Thus “population-true” is the logical contract, but extraordinarily large boundaries can lose exact folded counts today. Widening or explicitly marking overflow/saturation is a v1 correctness gate.
+Folded BCCT enters/terminal/LLM/spawn totals still saturate to **u32::MAX** on the wire, but every engaged clamp is now counted and a fold that clamped anything embeds an explicit **SATURATED** marker (kind-12, marker 6) in the sealed snapshot: totals become declared lower bounds, never silently wrong exact counts. In-memory histogram buckets saturate (counted in **hist_saturated_drops**) instead of wrapping/panicking, and window deltas subtract saturating so a held bucket cannot underflow its shadow.
 
 ### Epochs and files
 
@@ -257,7 +258,7 @@ The local store writes append-only **.bamlpack** files. Pack magic remains **BPK
 
 The local CAS is shared across runs and deduplicates logically by CID. A writer skips CIDs already visible in its opened store or active writer. Concurrent processes can still append semantically harmless duplicate physical records before either sees the other’s new index. Current GC keeps every physical copy of a live CID; live-duplicate compaction is not implemented.
 
-The intended invariant is that a root is not reclaimable before its pack bytes and boundary pin are durable. The current CLI syncs the pack and then appends **manifest.bamlcids**, but that manifest append is not fsynced in the same barrier. Treat the stronger “never durable without its root pin” statement as an implementation gap, not an as-built guarantee.
+The root-pin barrier is crash-safe as built: the pack fsync (data and, once, the packs-directory entry) precedes the manifest append, and the append itself fsyncs the manifest and the boundary directory. A pinned root either survives a crash together with its pack bytes or is absent, in which case the durable unpinned chunks age out through the GC grace window. Dedupe additionally trusts only provably durable chunks: a sealed idx implies durability, a crashed writer's pack is recovered durably at open, and a live foreign writer's unsealed pack stays readable but never absorbs another writer's put.
 
 Current **.bamlvalue** capture records may also retain an inline legacy body alongside the canonical DAG reference; a general boundary writer externalizes larger legacy bodies to per-boundary SHA-256 blobs. Query readers prefer canonical DAG/CAS, then inline, then legacy blob. “Bodies live only in CAS” is the v1 target, not a complete description of existing artifacts.
 
@@ -297,7 +298,7 @@ Local retention is distinct from hosted retention. Accepted hosted S3 evidence i
 - A boundary begin without completion under a dead/stale session is read as crashed/partial; no daemon invents an outcome.
 - Unknown additive BCCT/BMET kinds can be skipped; unsupported major versions fail explicitly. An unknown raw profiler tag terminates/discards the remainder of that decoded range.
 - Missing dictionaries degrade labels to numeric identities, not fabricated names.
-- Several declared-loss paths emit counters/markers today, but corruption degradation is not consistently persisted into boundary diagnostics. V1 requires every material loss/degradation path to become queryable evidence.
+- Every material loss/degradation path is queryable evidence: shed, corrupt-range, saturation, and synthesis counters persist as session markers, per-boundary completion diagnostics, and BoundaryLoss records, and the fold reader carries them into the mandatory query footer.
 
 ## Measured evidence, not protocol guarantees
 
@@ -336,13 +337,9 @@ These numbers justify the architecture and seed regression gates. They are not c
 
 ## Remaining profiler work relevant to v1
 
-- Implement the predeclared structural-exhaustion policy; do not claim the current abort is **fail_run**.
-- Decide and implement the full-trace contract, or keep it explicitly absent.
-- Preserve SDK/pack/playground host parity for boundary/dictionary/value wiring.
-- Add the policy/config surface without changing hot-path semantics.
-- Ensure flight/CAS pin edge cases and automatic cleanup invocation are correct.
-- Write flight CID sidecars if flight artifacts can reference values; GC recognizes such sidecars, but the current flight writer does not create them.
-- Make boundary root-pin durability match the stated CAS invariant.
-- Reclaim completed partition/thread metadata or otherwise prove the server memory bound; current free_partition does not remove the retained slabs/nodes that old prose claimed it did.
-- Widen folded totals/histograms or persist explicit saturation/overflow evidence before claiming population-exact results at extreme scale.
-- Keep the raw oracle, golden fixtures, differential fold tests, crash tests, and performance gates active while the SQL/provider layer is added.
+- Done in C1: the structural-exhaustion policy ladder (fail_run default), the crash-safe root-pin durability barrier, thread-slot reclamation at partition free plus the bounded defer list, explicit saturation/overflow evidence, and consistent loss/degradation persistence through markers, boundary diagnostics, and the fold reader.
+- The full-trace writer stays explicitly absent (deferred); recent, flight, values, and opt-in raw remain the exact evidence paths.
+- Speculative helper staging/promotion machinery exists but production wiring stays deferred (see [Deferred](10-deferred.md#languageruntime-dependent-depth)); no surface may imply it ships.
+- Preserve SDK/pack/playground host parity for boundary/dictionary/value wiring (the continuous drain worker currently serves the CLI host; wasm/playground drain inline).
+- Flight dumps write durably (tmp+rename) and carry no CID references today; if the transcoder ever emits value references it must write the `.bamlcids` pin (GC already honors it) in the same barrier.
+- Keep the raw oracle, golden fixtures, differential fold tests, crash tests, and performance gates active while the SQL/provider layer is added (hot-loop gate re-measured at 48.6 ns/pair after C1).

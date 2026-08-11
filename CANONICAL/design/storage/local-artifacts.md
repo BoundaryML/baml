@@ -55,10 +55,10 @@ Not every optional directory exists in every run. In particular:
 
 - raw exists only when the firehose is enabled;
 - flight appears only after a trigger/manual dump;
-- the current flight writer does not emit the optional matching CID pin manifest even though GC recognizes such roots; this is a correctness gap if a dump references captured values;
+- flight dumps carry only structural events (no CID references), so no pin manifest is owed today; GC honors `flight/*.bamlcids` the moment a future transcoder emits value references, and the dump write itself is durable tmp+rename;
 - the full-trace writer is not implemented;
 - stack files are reader compatibility artifacts; current live writers do not emit them;
-- the current CLI creates the root thread’s **value-0.bamlvalue** and writes its header before draining, so a header-only file may exist even when no value capture record follows;
+- the CLI's continuous drain worker creates **value-0.bamlvalue** lazily at the first captured draft (under that draft's thread dir), so an uncaptured run leaves no header-only file;
 - **manifest.bamlcids** appears only when canonical roots were actually persisted;
 - the active general boundary writer can still place a legacy body larger than 4 KiB under **blobs/sha256** as a fallback; and
 - GC recognizes **uploads.pin**, but the new Project Studio hosted synchronizer that would write it does not exist on this branch.
@@ -187,7 +187,7 @@ Index:
 | BMET | Append-only, per-record CRC; torn last record tolerated |
 | BAML pack | Append-only while leased; sealed/indexed at explicit/graceful shutdown; crash recovery scans an unsealed pack |
 | Pack index | Rebuildable, published atomically |
-| Boundary CID manifest | Appended after CAS sync; not currently fsynced in the same barrier |
+| Boundary CID manifest | Appended after CAS sync, fsynced (file + boundary dir) in the same barrier |
 | Retention log | Append-only tombstones |
 | Provider cache/index | Rebuildable; never evidence |
 
