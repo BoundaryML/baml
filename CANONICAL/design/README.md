@@ -8,6 +8,7 @@ This folder is organized by the question a reader is trying to answer. It is not
 2. [System architecture](02-system-architecture.md) — components, authorities, local and hosted data flow.
 3. [Profiler](03-profiler.md) — capture records, CCT aggregation, identity, values, formats, performance, code map.
 4. [Query system](04-query-system.md) — DataFusion/BAML SQL, public catalog, snapshots, pushdown, hydration, budgets, outcomes, examples.
+   For the proposed schemas and concrete review queries, see [Data model and query examples](../PROJECT_STUDIO_QUERY_EXAMPLES.md).
 5. [Capture and ingest](05-capture-and-ingest.md) — host modes, spool, chunks, receipts, outbox, projectors, reconciliation.
 6. [Studio experience](06-studio-experience.md) — commands, UI, private RPC, HTTP API, live updates.
 7. [Security and reliability](07-security-and-reliability.md) — tenancy, authorization, audit, deletion, failure semantics, validation.

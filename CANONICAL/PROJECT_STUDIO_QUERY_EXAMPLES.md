@@ -940,12 +940,12 @@ uses them.
 
 ## References
 
-- [Canonical Project Studio ledger](CANONICAL/README.md)
-- [Query semantics](CANONICAL/design/04-query-system.md)
-- [Profiler](CANONICAL/design/03-profiler.md)
-- [Local artifacts and value store](CANONICAL/design/storage/local-artifacts.md)
-- [Hosted ClickHouse boundary](CANONICAL/design/storage/clickhouse.md)
-- [Delivery milestones](CANONICAL/design/09-delivery-plan.md)
+- [Canonical Project Studio ledger](README.md)
+- [Query semantics](design/04-query-system.md)
+- [Profiler](design/03-profiler.md)
+- [Local artifacts and value store](design/storage/local-artifacts.md)
+- [Hosted ClickHouse boundary](design/storage/clickhouse.md)
+- [Delivery milestones](design/09-delivery-plan.md)
 
 # Readers, Ignore:
 

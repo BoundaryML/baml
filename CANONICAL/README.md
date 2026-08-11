@@ -33,6 +33,9 @@ on this branch today. Names omit version suffixes for readability. Exact
 columns/types/nullability, lifecycle enum spellings, parameter binding,
 value-helper names, and the outcome wire shape freeze with catalog v1.
 
+For the complete proposed relation schemas, growth model, physical storage
+patterns, and review query set, see [Data model and query examples](PROJECT_STUDIO_QUERY_EXAMPLES.md).
+
 ### Which recent runs recorded errors?
 
 ~~~sql
@@ -184,6 +187,7 @@ flowchart LR
 - “How do the components and authorities fit together?” → [System architecture](design/02-system-architecture.md)
 - “How does the profiler work, and what is already built?” → [Profiler](design/03-profiler.md)
 - “What SQL is public, what gets pushed down, and how are values handled?” → [Query system](design/04-query-system.md)
+- “What tables exist, why does each row exist, and which queries are viable?” → [Data model and query examples](PROJECT_STUDIO_QUERY_EXAMPLES.md)
 - “How do bytes get from a runtime into hosted storage?” → [Capture and ingest](design/05-capture-and-ingest.md)
 - “What screens, commands, APIs, and live-update semantics exist?” → [Studio experience](design/06-studio-experience.md)
 - “What is stored where?” → [Storage index](design/storage/README.md)
