@@ -98,23 +98,23 @@ Still unresolved:
 
 ### Proposed schema
 
-```text
-run_id             id          primary key
-started_at         timestamp
-ended_at           timestamp?  absent while running
-duration_ns        duration_ns exact elapsed or so-far time
-status             enum        pending/running/waiting/succeeded/failed/cancelled/panicked/abandoned
-revision_id        id          joins revisions
-entry_function_id  id?         root BAML function, when applicable
-entrypoint         string      command/test/function shown to the user
-total_calls        count       all function invocations
-total_errors       count       all errored invocations
-structure_state    enum        complete/incomplete/pending/lost
-value_state        enum        complete/partial/pending/not_captured/lost
-integrity_state    enum        verified/unverified/corrupt/conflicting
-projection_state   enum        pending/active/delayed/failed/rebuilding
-retention_state    enum        retained/partially_retained/erased
-```
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `run_id` | `id`; primary key | Gives the run a stable identity and joins every run-scoped relation. |
+| `started_at` | `timestamp` | Supports time-range filters and chronological run lists. |
+| `ended_at` | `timestamp?`; absent while running | Distinguishes open from closed runs and records the wall-clock interval. |
+| `duration_ns` | `duration_ns`; exact elapsed or so-far time | Preserves monotonic elapsed time; subtracting wall-clock timestamps is not reliably exact. |
+| `status` | `enum`; pending/running/waiting/succeeded/failed/cancelled/panicked/abandoned | Answers where the run is in its execution lifecycle without inferring from timestamps or errors. |
+| `revision_id` | `id`; joins `revisions` | Connects observed behavior to the exact compiled program and its function dictionary. |
+| `entry_function_id` | `id?` | Provides a stable root-function join when the entrypoint is a BAML function. |
+| `entrypoint` | `string` | Gives users a readable command, test, or function name, including entrypoints that are not functions. |
+| `total_calls` | `count` | Makes run-list call volume cheap to read without scanning call-tree summaries. |
+| `total_errors` | `count` | Makes runs with any errored calls cheap to find without scanning call-tree summaries. |
+| `structure_state` | `enum`; complete/incomplete/pending/lost | Says whether the call structure is complete; execution success does not prove structural evidence is complete. |
+| `value_state` | `enum`; complete/partial/pending/not_captured/lost | Says whether arguments, returns, and errors can be inspected; missing values must not look like ordinary SQL `NULL`. |
+| `integrity_state` | `enum`; verified/unverified/corrupt/conflicting | Separates trustworthy evidence from evidence that arrived corrupt or disagreed across sources. |
+| `projection_state` | `enum`; pending/active/delayed/failed/rebuilding | Tells users whether ClickHouse is current; a healthy run can still be absent from or delayed in the projection. |
+| `retention_state` | `enum`; retained/partially_retained/erased | Explains whether previously captured evidence remains available after retention or deletion. |
 
 ### Why it exists
 
@@ -173,26 +173,26 @@ The historical name means **call-tree summaries**.
 
 ### Proposed schema
 
-```text
-run_id              id           primary key with node_id
-node_id             id           call-tree location within the run
-parent_node_id      id?          absent for the root
-depth               integer      avoids recursive work for common tree views
-function_id         id           identity within one revision
-revision_id         id           repeated for fast grouping
-definition_key      string?      stable identity; absent for synthetic functions
-definition_hash     bytes?       distinguishes changed implementations
-fqn                  string       full function name
-calls_started       count
-calls_succeeded     count
-calls_errored       count
-calls_cancelled     count
-calls_exited        count        other explicit terminal exits
-inclusive_ns        duration_ns  function plus nested calls
-self_ns             duration_ns  direct execution only
-await_ns            duration_ns  suspended/waiting time
-duration_histogram  list<count>  fixed catalog-owned duration buckets
-```
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `run_id` | `id`; primary key with `node_id` | Scopes the call-tree location to one run and joins run lifecycle and revision data. |
+| `node_id` | `id`; call-tree location within the run | Gives each distinct call path a stable identity for parent links and retained-call joins. |
+| `parent_node_id` | `id?`; absent for the root | Reconstructs the call tree and attributes nested work to its caller. |
+| `depth` | `integer` | Makes indentation, depth filters, and bounded tree views cheap without recursive traversal. |
+| `function_id` | `id`; identity within one revision | Joins the location to its compiled function metadata. |
+| `revision_id` | `id`; repeated for fast grouping | Allows hot cross-run and cross-revision grouping without joining through `runs`, which is the reason to accept this duplication. |
+| `definition_key` | `string?`; absent for synthetic functions | Groups the same logical function across revisions without a dimension join. |
+| `definition_hash` | `bytes?` | Separates observations of changed implementations that share a logical function identity. |
+| `fqn` | `string`; full function name | Supports common display and name grouping without a dimension join. |
+| `calls_started` | `count` | Provides total demand and is the base denominator for rates and average time. |
+| `calls_succeeded` | `count` | Separates successful terminal calls from failures, cancellation, and other exits. |
+| `calls_errored` | `count` | Finds failing locations and computes error rates over all calls. |
+| `calls_cancelled` | `count` | Keeps cancellation distinct from application failure. |
+| `calls_exited` | `count`; other explicit terminal exits | Accounts for terminal outcomes not represented by success, error, or cancellation, so outstanding work is not overstated. |
+| `inclusive_ns` | `duration_ns`; function plus nested calls | Finds call paths responsible for end-to-end run time. |
+| `self_ns` | `duration_ns`; direct execution only | Finds functions doing work themselves rather than merely containing slow descendants. |
+| `await_ns` | `duration_ns`; suspended/waiting time | Separates waiting from active execution when diagnosing latency. |
+| `duration_histogram` | `list<count>`; fixed catalog-owned buckets | Enables approximate tail and percentile questions. Remove it if those questions are not P0, because totals and means do not require it. |
 
 ### Why it exists
 
@@ -273,31 +273,31 @@ The mean is directional, not a percentile or proof of a regression.
 
 ### Proposed schema
 
-```text
-run_id                  id          primary key with call_id
-call_id                 id
-parent_call_id          id?         parent may not itself be retained
-node_id                 id          joins cct_population
-process_id              id          retain only if required by identity scope
-engine_id               id          retain only if required by identity scope
-thread_id               id          logical execution thread
-definition_key          string?     duplicated for common function filtering
-call_site_id            id?         joins call_sites through the run revision
-started_at              timestamp
-ended_at                timestamp?  absent while running
-duration_ns             duration_ns exact monotonic or so-far duration
-status                  enum        pending/running/waiting/succeeded/failed/cancelled/panicked/abandoned
-retention_reasons       list<enum>  policy/incident/promotion/explicit
-exact_window_ids        list<id>    a call may appear in multiple windows
-evidence_ids            list<id>    logical authoritative-evidence references
-capture_policy_version  integer
-args_state              enum        available/pending/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported
-return_state            enum        available/pending/not_applicable/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported
-error_state             enum        available/pending/not_applicable/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported
-args                     value?      loaded on demand
-return                   value?      loaded on demand
-error                    value?      loaded on demand
-```
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `run_id` | `id`; primary key with `call_id` | Scopes the retained invocation to one run and joins run/revision context. |
+| `call_id` | `id` | Gives the exact invocation a stable identity for lookup and causal links. |
+| `parent_call_id` | `id?`; parent may not be retained | Preserves exact parentage when known without requiring the parent itself to have been retained. |
+| `node_id` | `id`; joins `cct_population` | Connects the retained example to the complete call-tree summary that led the user to inspect it. |
+| `process_id` | `id`; conditional | Prevents identity collisions only if process scope is not already encoded by `run_id` and `call_id`; otherwise remove it. |
+| `engine_id` | `id`; conditional | Prevents identity collisions only if engine scope is not already encoded by the other IDs; otherwise remove it. |
+| `thread_id` | `id`; logical execution thread | Supports per-thread ordering and concurrency diagnosis for retained calls. |
+| `definition_key` | `string?`; duplicated for common filters | Lets value and exact-call queries narrow by logical function before loading evidence. |
+| `call_site_id` | `id?`; joins `call_sites` through the run revision | Navigates an invocation to the source expression that made the call. |
+| `started_at` | `timestamp` | Orders retained calls and places them on the run timeline. |
+| `ended_at` | `timestamp?`; absent while running | Indicates whether the invocation is still open and bounds its wall-clock interval. |
+| `duration_ns` | `duration_ns`; exact monotonic or so-far duration | Supplies exact elapsed time even when wall clocks shift or the call is still running. |
+| `status` | `enum`; pending/running/waiting/succeeded/failed/cancelled/panicked/abandoned | Selects exact examples by lifecycle outcome without inferring state from optional values. |
+| `retention_reasons` | `list<enum>`; policy/incident/promotion/explicit | Explains why this call exists in a selective table; a call may have more than one reason. |
+| `exact_window_ids` | `list<id>` | Links the call to every retained incident window that contains it. |
+| `evidence_ids` | `list<id>` | Locates authoritative local/S3 evidence; multiple sources or sealed ranges may contribute to one call. |
+| `capture_policy_version` | `integer` | Explains which capture rules decided whether values should exist. |
+| `args_state` | `enum`; available/pending/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported | Distinguishes a real null argument from every reason arguments cannot be returned. |
+| `return_state` | `enum`; available/pending/not_applicable/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported | Distinguishes a real null return from no return, capture policy, loss, or corruption. |
+| `error_state` | `enum`; available/pending/not_applicable/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported | Distinguishes a real null error payload from a successful call or unavailable evidence. |
+| `args` | `value?`; loaded on demand | Exposes captured inputs for exact inspection and bounded value predicates. |
+| `return` | `value?`; loaded on demand | Exposes captured output for exact inspection and bounded value predicates. |
+| `error` | `value?`; loaded on demand | Exposes captured error detail for diagnosis. |
 
 ### Why it exists
 
@@ -385,19 +385,19 @@ batches, and the limit applies only after the value condition.
 
 ### Proposed schema
 
-```text
-issue_id        id          primary key for one sealed summary
-run_id          id?         absent before run binding
-session_id      id?         absent for non-runtime issues
-evidence_id     id?         sealed evidence range summarized
-source          enum        profiler/value_capture/uploader/projector/retention
-kind            enum        evidence affected
-reason          enum        typed cause of the issue
-count           count       affected facts
-first_seen_at   timestamp
-last_seen_at    timestamp
-policy_version  integer?
-```
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `issue_id` | `id`; primary key for one sealed summary | Gives an immutable grouped issue a stable identity for deduplication and audit. |
+| `run_id` | `id?`; absent before run binding | Attributes the issue to a user-visible run when that association is known. |
+| `session_id` | `id?`; absent for non-runtime issues | Scopes runtime evidence that exists before or outside a single run association. |
+| `evidence_id` | `id?`; sealed evidence range summarized | Points to the exact retained evidence whose completeness or integrity is affected. |
+| `source` | `enum`; profiler/value_capture/uploader/projector/retention | Identifies which stage reported the problem, which determines ownership and remediation. |
+| `kind` | `enum`; evidence affected | Says whether structure, values, detailed events, or another evidence class is incomplete. |
+| `reason` | `enum`; typed cause | Makes causes groupable and queryable without parsing free-form messages. |
+| `count` | `count`; affected facts | Compresses repeated identical problems so the table does not grow one row per failed event. |
+| `first_seen_at` | `timestamp` | Marks when the grouped issue began and supports incident ordering. |
+| `last_seen_at` | `timestamp` | Marks the observed extent of the grouped issue and whether it persisted. |
+| `policy_version` | `integer?` | Explains policy-caused omissions; it may be absent for integrity or infrastructure failures unrelated to capture policy. |
 
 ### Why it exists
 
@@ -438,42 +438,49 @@ that final record are not a completed answer.
 
 ### Proposed schemas
 
-```text
-functions
-  revision_id      id      primary key with function_id
-  function_id      id
-  definition_key   string? absent for synthetic/internal functions
-  definition_hash  bytes?
-  fqn              string
-  display_name     string
-  source_path      string?
-  source_start     integer?
-  source_end       integer?
-  source_line      integer?
-  kind             enum    bytecode/native/system operation
-  origin           enum    user/companion/internal/builtin/generated
-  capture_inputs   enum    disabled/auto/enabled
-  capture_output   enum    disabled/auto/enabled
-  capture_error    enum    disabled/auto/enabled
-  promote_on_error enum    disabled/auto/enabled
+#### `functions`
 
-call_sites
-  revision_id  id       primary key with call_site_id
-  call_site_id id
-  source_path  string
-  source_start integer
-  source_end   integer
-  source_line  integer
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `revision_id` | `id`; primary key with `function_id` | Scopes revision-local function IDs and joins the function to its compiled artifact. |
+| `function_id` | `id` | Provides the compact runtime identity emitted in call evidence. |
+| `definition_key` | `string?`; absent for synthetic/internal functions | Connects the same logical user function across revisions. |
+| `definition_hash` | `bytes?` | Detects when the implementation behind a stable definition key changed. |
+| `fqn` | `string`; fully qualified name | Gives an unambiguous user-facing name for display and grouping. |
+| `display_name` | `string` | Gives a concise label for tree and list views where the full name is too noisy. |
+| `source_path` | `string?` | Navigates user-defined functions to their source file; it is absent for functions without source. |
+| `source_start` | `integer?` | Locates the exact start of the definition for editor navigation. |
+| `source_end` | `integer?` | Bounds the definition for highlighting and disambiguating multiple definitions in one file. |
+| `source_line` | `integer?` | Supports cheap human-readable display without converting byte offsets on every query. Remove it if clients can do that conversion reliably. |
+| `kind` | `enum`; bytecode/native/system operation | Distinguishes execution kinds whose timing and behavior should not be compared as if they were identical. |
+| `origin` | `enum`; user/companion/internal/builtin/generated | Lets users include or exclude framework-generated and internal work from analysis. |
+| `capture_inputs` | `enum`; disabled/auto/enabled | Explains the effective input-capture intent for this function. |
+| `capture_output` | `enum`; disabled/auto/enabled | Explains the effective output-capture intent for this function. |
+| `capture_error` | `enum`; disabled/auto/enabled | Explains the effective error-capture intent for this function. |
+| `promote_on_error` | `enum`; disabled/auto/enabled | Explains whether a failure should cause otherwise unretained call evidence to be promoted. |
 
-revisions
-  revision_id            id         primary key
-  source_snapshot_id     id
-  compiler_id            string
-  compiler_options_hash  bytes?
-  capture_policy_version integer
-  identity_state         enum       verified/fallback_legacy
-  first_seen_at          timestamp
-```
+#### `call_sites`
+
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `revision_id` | `id`; primary key with `call_site_id` | Scopes revision-local call-site IDs and connects them to the correct source snapshot. |
+| `call_site_id` | `id` | Provides the compact identity emitted by retained calls for source navigation. |
+| `source_path` | `string` | Identifies the file containing the call expression. |
+| `source_start` | `integer` | Locates the start of the call expression for exact editor navigation. |
+| `source_end` | `integer` | Bounds the expression for highlighting and disambiguation. |
+| `source_line` | `integer` | Supports cheap human-readable display. Remove it if line lookup from offsets is reliably available to every client. |
+
+#### `revisions`
+
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `revision_id` | `id`; primary key | Gives compiled program structure a stable identity and scopes runtime function/call-site IDs. |
+| `source_snapshot_id` | `id` | Connects observations to the exact source snapshot users need to inspect. |
+| `compiler_id` | `string` | Records which compiler produced the artifact so behavior can be reproduced and version differences investigated. |
+| `compiler_options_hash` | `bytes?`; conditional | Distinguishes behavior-affecting compiler options only if `revision_id` does not already commit to them; otherwise remove it. |
+| `capture_policy_version` | `integer` | Connects the revision to the policy semantics used by decoded function capture fields. |
+| `identity_state` | `enum`; verified/fallback_legacy | Warns when cross-revision identity used a legacy fallback rather than verified artifact identity. |
+| `first_seen_at` | `timestamp` | Supports revision discovery and ordering when source or deployment metadata is unavailable. |
 
 ### Why they exist
 
@@ -516,18 +523,18 @@ This is an investigation signal, not statistical proof of a regression.
 
 ### Proposed schema
 
-```text
-run_id          id      primary key with node_id/provider/model
-node_id         id      joins cct_population
-provider        string  model name alone is ambiguous
-model           string
-llm_calls       count
-token_state     enum    available/partial/unavailable
-input_tokens    count?  absent differs from zero
-output_tokens   count?  absent differs from zero
-provider_errors count
-parse_errors    count
-```
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `run_id` | `id`; primary key with `node_id`, `provider`, and `model` | Scopes usage to one run and supports run-level token accounting. |
+| `node_id` | `id`; joins `cct_population` | Attributes LLM activity to the call-tree location that caused it. |
+| `provider` | `string`; provisional | Disambiguates identical model names across providers. Remove it if Aaron's model supplies a single stable model identity instead. |
+| `model` | `string` | Groups usage and errors by the model users selected. |
+| `llm_calls` | `count` | Provides the invocation denominator for average usage and error rates. |
+| `token_state` | `enum`; available/partial/unavailable | Distinguishes true zero-token usage from incomplete or missing provider measurements. |
+| `input_tokens` | `count?` | Answers input-usage and cost questions when available; absence must remain distinct from zero. |
+| `output_tokens` | `count?` | Answers output-usage and cost questions when available; absence must remain distinct from zero. |
+| `provider_errors` | `count` | Separates failures returned by the provider from local parsing failures. |
+| `parse_errors` | `count` | Measures calls whose provider response arrived but could not be parsed into the expected result. |
 
 ### Why it exists
 
@@ -571,35 +578,39 @@ those rows separately.
 
 ### Proposed schemas
 
-```text
-spawn_edges
-  run_id             id          primary key with edge_id
-  edge_id            id
-  parent_node_id     id
-  child_function_id  id
-  spawned            count
-  completed          count
-  errored            count
-  cancelled          count
-  running_ns         duration_ns
-  awaiting_ns        duration_ns
-  retained_instances count
-  instances_dropped  count
+#### `spawn_edges`
 
-spawn_instances
-  run_id           id          primary key with spawn_id
-  spawn_id         id
-  edge_id          id          joins spawn_edges
-  thread_id        id
-  parent_call_id   id?
-  child_call_id    id?
-  status           enum        pending/running/waiting/succeeded/failed/cancelled/panicked/abandoned
-  started_at       timestamp
-  ended_at         timestamp?
-  exact_window_ids list<id>
-  evidence_ids     list<id>
-  evidence_state   enum        available/incomplete/pending/lost/corrupt
-```
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `run_id` | `id`; primary key with `edge_id` | Scopes the aggregate relationship to one run. |
+| `edge_id` | `id` | Gives the parent-location/child-function relationship a stable join key for retained examples. |
+| `parent_node_id` | `id` | Identifies which call-tree location initiated the child work. |
+| `child_function_id` | `id` | Identifies the function being spawned through the run's revision dictionary. |
+| `spawned` | `count` | Measures total fan-out and is the denominator for completion and error rates. |
+| `completed` | `count` | Measures work that reached successful completion. |
+| `errored` | `count` | Finds child relationships producing failures. |
+| `cancelled` | `count` | Keeps cancelled work distinct from application errors. |
+| `running_ns` | `duration_ns` | Measures time child work spent executing. Keep only if its accounting semantics can be made exact. |
+| `awaiting_ns` | `duration_ns` | Measures time the parent spent waiting for child work, which is distinct from child execution time. |
+| `retained_instances` | `count` | States how many exact spawn examples can actually be inspected. |
+| `instances_dropped` | `count` | Prevents a selective exact-instance table from being mistaken for complete spawn history. |
+
+#### `spawn_instances`
+
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `run_id` | `id`; primary key with `spawn_id` | Scopes the retained spawn to one run and joins run/revision context. |
+| `spawn_id` | `id` | Gives the exact spawn a stable identity for inspection and causal links. |
+| `edge_id` | `id`; joins `spawn_edges` | Connects the retained example to its complete aggregate relationship. |
+| `thread_id` | `id` | Places the spawn on its logical execution thread for ordering and concurrency diagnosis. |
+| `parent_call_id` | `id?` | Links to the exact initiating call when that call was retained. |
+| `child_call_id` | `id?` | Links to the exact child call when that call was retained. |
+| `status` | `enum`; pending/running/waiting/succeeded/failed/cancelled/panicked/abandoned | Selects retained examples by lifecycle outcome. |
+| `started_at` | `timestamp` | Orders retained spawns and places them on the run timeline. |
+| `ended_at` | `timestamp?` | Distinguishes open from closed work and bounds its wall-clock interval. |
+| `exact_window_ids` | `list<id>` | Links the spawn to every retained incident window that contains it. |
+| `evidence_ids` | `list<id>` | Locates the authoritative detailed evidence used to reconstruct the spawn. |
+| `evidence_state` | `enum`; available/incomplete/pending/lost/corrupt | Says whether the exact instance is trustworthy and inspectable rather than merely present as a row. |
 
 ### Why they exist
 
@@ -638,21 +649,21 @@ ORDER BY failed DESC, cancelled DESC;
 
 ### Proposed schema
 
-```text
-run_id              id          primary key with window_id
-window_id           id
-session_id          id
-source              enum        recent_ring/flight_dump/raw/explicit
-trigger             enum        error/manual/policy/other
-trigger_node_id     id?
-trigger_call_id     id?
-started_at          timestamp
-ended_at            timestamp
-event_count         count
-evidence_state      enum        available/incomplete/pending/lost/corrupt
-incomplete_reasons  list<enum>  evicted/budget_exhausted/truncated/unsupported
-evidence_id         id          logical reference to local/S3 bytes
-```
+| Column | Type / rule | Why this row field is necessary |
+| --- | --- | --- |
+| `run_id` | `id`; primary key with `window_id` | Scopes the retained evidence region to the run users are investigating. |
+| `window_id` | `id` | Gives the retained region a stable identity for links from calls and spawns. |
+| `session_id` | `id` | Connects the window to profiler-session evidence and supports recovery before all events bind cleanly to a run. |
+| `source` | `enum`; recent_ring/flight_dump/raw/explicit | Explains which capture mechanism produced the window and what guarantees it can provide. |
+| `trigger` | `enum`; error/manual/policy/other | Explains why detailed evidence was retained instead of discarded. |
+| `trigger_node_id` | `id?` | Jumps from a policy/error trigger to the aggregate call-tree location that caused retention. |
+| `trigger_call_id` | `id?` | Jumps to the exact triggering call when it was retained. |
+| `started_at` | `timestamp` | Bounds the beginning of the retained event interval. |
+| `ended_at` | `timestamp` | Bounds the end of the retained event interval. |
+| `event_count` | `count` | Communicates evidence size and enables cost/budget checks without opening the detailed bytes. |
+| `evidence_state` | `enum`; available/incomplete/pending/lost/corrupt | Tells users whether the detailed evidence can be trusted and read. |
+| `incomplete_reasons` | `list<enum>`; evicted/budget_exhausted/truncated/unsupported | Explains every known reason a present window is incomplete. |
+| `evidence_id` | `id`; logical reference to local/S3 bytes | Locates the detailed payload without storing high-volume events in ClickHouse. |
 
 ### Why it exists
 
@@ -685,21 +696,24 @@ ORDER BY started_at;
 
 ### Previously proposed schema
 
-```text
-session_id         id
-epoch_id           id
-run_id             id?
-node_id            id
-window_started_at  timestamp
-window_ended_at    timestamp
-calls_started      count       bucket delta
-calls_errored      count       bucket delta
-inclusive_ns       duration_ns bucket delta
-self_ns            duration_ns bucket delta
-await_ns           duration_ns bucket delta
-duration_histogram list<count> bucket delta
-measured_through   timestamp
-```
+The table is rejected as a whole, but these were the intended roles of its
+fields:
+
+| Column | Type / rule | Why it was proposed |
+| --- | --- | --- |
+| `session_id` | `id` | Would scope buckets to one profiler session. |
+| `epoch_id` | `id` | Would distinguish resets or counter epochs within a session. |
+| `run_id` | `id?` | Would connect a bucket to a user-visible run when known. |
+| `node_id` | `id` | Would identify the call-tree location measured by the bucket. |
+| `window_started_at` | `timestamp` | Would define the beginning of the chart interval. |
+| `window_ended_at` | `timestamp` | Would define the nominal end of the chart interval. |
+| `calls_started` | `count`; bucket delta | Would show changes in call volume over time. |
+| `calls_errored` | `count`; bucket delta | Would show changes in failures over time. |
+| `inclusive_ns` | `duration_ns`; bucket delta | Would show changes in end-to-end time attributed to the location. |
+| `self_ns` | `duration_ns`; bucket delta | Would show changes in direct execution time. |
+| `await_ns` | `duration_ns`; bucket delta | Would show changes in waiting time. |
+| `duration_histogram` | `list<count>`; bucket delta | Would support time-bounded tail-latency estimates. |
+| `measured_through` | `timestamp` | Would distinguish the bucket's measurement watermark from its nominal end while the bucket was still open. |
 
 ### Why it is not justified
 
