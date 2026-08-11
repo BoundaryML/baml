@@ -23,7 +23,7 @@ function TestFunc(input: string) -> string {
 //
 //- semantic_tokens
 // stream_llm_inferred_typeargs.baml:1:1 (comment) len=76 "// TODO(stream-migration): this fixture pinned the call shape of the removed"
-// stream_llm_inferred_typeargs.baml:2:1 (comment) len=79 "// `baml.prompt.stream_llm_function<TStream, TFinal>` machinery (inference-reliant"
+// stream_llm_inferred_typeargs.baml:2:1 (comment) len=82 "// `baml.prompt.stream_llm_function<TStream, TFinal>` machinery (inference-reliant"
 // stream_llm_inferred_typeargs.baml:3:1 (comment) len=72 "// call sites without explicit type args). The `$stream`/`$parse_stream`"
 // stream_llm_inferred_typeargs.baml:4:1 (comment) len=78 "// companions and `stream_llm_function` were removed with the legacy LLM path."
 // stream_llm_inferred_typeargs.baml:5:1 (comment) len=76 "// When streaming returns, restore the inferred-typeargs call-shape pin from"

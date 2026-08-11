@@ -39,7 +39,7 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 ///
 /// Stdlib symbols TODO (decode to bare BamlPyHandle today):
 ///   - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
-///   - baml.glob.Glob, baml.llm.{StreamAccumulator,StreamCache}
+///   - baml.glob.Glob, baml.sap.ParseCache
 ///
 /// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.CaseIterable {

@@ -124,8 +124,7 @@ fn write_entries(out: &mut String, name: &str, entries: &[(String, String, Strin
 
 #[cfg(test)]
 mod tests {
-    use baml_base::Name as BaseName;
-    use baml_base::qualified_name::AI_STREAM_STREAM;
+    use baml_base::{Name as BaseName, qualified_name::AI_STREAM_STREAM};
     use baml_codegen_types::Name;
 
     use super::*;
