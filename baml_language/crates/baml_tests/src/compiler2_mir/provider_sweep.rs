@@ -191,6 +191,19 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     {
         return Some(Some("void-union"));
     }
+    // bigint-context (ruled 2026-08-11): an int expression in a bigint
+    // slot KEEPS int - TS has no int-to-bigint literal adoption (the `n`
+    // suffix exists for exactly that), mixing is legal through the
+    // declared `Add<int>` ops rule, and the VM's mixed opcodes take the
+    // int operand directly, so TIR's contextual `bigint` describes an
+    // allocation that never happens.
+    if t_norm.contains("bigint")
+        && wildcard_match(&t_norm, "bigint", &h_norm, &|filled| {
+            filled == "int" || filled == "bigint"
+        })
+    {
+        return Some(Some("bigint-context"));
+    }
     if thrown_literal_narrow_pair(&t_ids, &h_ids) {
         return Some(Some("thrown-literal"));
     }

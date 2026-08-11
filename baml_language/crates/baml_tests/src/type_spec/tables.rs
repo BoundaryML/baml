@@ -426,3 +426,4 @@ function de_probe() -> bool throws never {
         "solver committed a var while a sibling in its deferred lowers was still solvable"
     );
 }
+

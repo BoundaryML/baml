@@ -5,6 +5,7 @@ source: crates/baml_tests/src/compiler2_mir/provider_sweep.rs
 functions compared: 2823
 agreements: 2486
 O2 agreements (informational; optimizer parity deferred): 2486
+ruled bigint-context: 1
 ruled literal-widening: 39
 ruled literal-widening+thrown-literal: 2
 ruled literal-widening+tir-unknown: 3
@@ -15,7 +16,7 @@ ruled thrown-literal: 1
 ruled throws-precision: 31
 ruled throws-precision+tir-unknown: 1
 ruled tir-unknown: 92
-differing: 129
+differing: 128
 panics: 1
 top-level lets: not diffed (no body renderer yet)
 
@@ -35,10 +36,6 @@ ns_bigints/bigints.baml :: bigint_compound_assign_nonliteral_fn
     ...     let _1: bigint // x
     tir:     let _2: bigint
     hir:     let _2: -7
-ns_bigints/bigints.baml :: bigint_compound_assign_lambda_fn
-    ...     let _1: bigint // local_big
-    tir:     let _2: bigint
-    hir:     let _2: int
 ns_cancel_cascade/cancel_cascade.baml :: $init_test_ns_cancel_cascade_cancel_cascade
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
