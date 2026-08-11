@@ -1,8 +1,0 @@
-[package]
-name = "bep_phase1"
-
-[generator.go]
-output_type = "go"
-output_dir = "go"
-naming_convention = "language"
-sdk_import_path = "baml.local/planv2/baml_sdk"
