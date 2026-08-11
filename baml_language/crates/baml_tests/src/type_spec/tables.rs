@@ -428,3 +428,44 @@ function de_probe() -> bool throws never {
 }
 
 
+
+#[test]
+fn call_plan_effect_solves_from_deferred_lambda() {
+    // Goals before solving (rustc's fulfillment-before-defaults, round
+    // ordering): E's only REGISTERED bound is the declared-throws upper
+    // (`throws unknown`), while the lambda argument's `throws never`
+    // lower rides a deferred sub - draining goals first lands the lower
+    // before E commits, so E = never, not the minimum-upper unknown.
+    let source = r#"
+function ir_probe() -> int throws unknown {
+    let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
+    it.reduce((a: int, x: int) -> int { a + x }, 0)
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut plans = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        for (&call, plan) in &result.call_plans {
+            let snippet = &source[source_map.expr_span(call)];
+            if !snippet.starts_with("it.reduce") {
+                continue;
+            }
+            plans.push(
+                plan.type_args[plan.own_offset..]
+                    .iter()
+                    .map(|ty| ty.to_plain().render_canonical())
+                    .collect::<Vec<_>>(),
+            );
+        }
+    }
+    assert_eq!(
+        plans,
+        vec![vec!["int".to_string(), "never".to_string()]],
+        "reduce's own args must solve A = int, E = never"
+    );
+}

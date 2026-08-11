@@ -342,9 +342,18 @@ const JSON_DEF: &str =
     "int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>";
 
 fn collapse_json_alias(line: &str) -> String {
+    // Joint fixpoint: collapsing an inner expansion leaves the outer one
+    // spelled with parens in list position (`(baml.json.json)[]`), and
+    // stripping those parens re-creates the definition form - so the two
+    // rewrites must interleave until neither applies.
     let mut out = line.to_string();
-    while out.contains(JSON_DEF) {
+    loop {
+        let before = out.len();
         out = out.replace(JSON_DEF, "baml.json.json");
+        out = out.replace("(baml.json.json)", "baml.json.json");
+        if out.len() == before {
+            break;
+        }
     }
     out
 }

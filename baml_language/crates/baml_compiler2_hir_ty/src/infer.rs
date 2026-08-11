@@ -4901,6 +4901,14 @@ impl<'db> InferenceContext<'db> {
             ty.kind()
                 .map_children(|child| self.reduce_projections(child, fuel)),
         );
+        // Node-local normalization (rustc's lazy normalize): a projection
+        // reduces when ITS OWN subtree is ground - var-carrying siblings
+        // elsewhere in the type are irrelevant to this lookup. A
+        // var-carrying projection stays (the oracle's plain conversion
+        // erases inference vars).
+        if rebuilt.has_infer() {
+            return rebuilt;
+        }
         if let TyKind::AssociatedTypeProjection {
             base,
             interface,
@@ -5095,6 +5103,14 @@ impl<'db> InferenceContext<'db> {
             .uppers
             .iter()
             .map(|ty| self.table.resolve_completely(ty))
+            // A TOP-TYPE upper is no constraint (everything satisfies
+            // it) and therefore no EVIDENCE: the minimum-upper meet must
+            // not commit a class to `unknown` from a vacuous bound while
+            // real evidence is still en route (`reduce`'s ?E2 carries
+            // only the declared `throws unknown` check when the lambda's
+            // `never` has not landed yet). Informative uppers keep the
+            // meet (B-898's `?D <= Generate<int>` solves the class).
+            .filter(|ty| !matches!(ty.kind(), TyKind::Unknown { .. }))
             .partition(|ty| !ty.has_infer());
         if lowers.is_empty() && uppers.is_empty() {
             // GENERALIZATION (rustc's combine/generalize shape):
@@ -5253,9 +5269,10 @@ impl<'db> InferenceContext<'db> {
         // projection is no impl subject) - the base must resolve before
         // the oracle can reduce. Force the occurring vars from their
         // accumulated bounds: the same demand-point commitment head
-        // vars get (rustc would have unified them already).
-        // Class-headed var-carrying receivers never enter (no
-        // projection) - they keep the probe road.
+        // vars get (rustc would have unified them already). Commits draw
+        // on EVIDENCE - lowers, aliasing, informative uppers; top-type
+        // uppers are filtered in the solve itself, so a vacuous
+        // declared-throws check cannot decide an effect class here.
         if resolved.has_infer() && resolved.has_projection() {
             resolved = self.force_occurring_vars(&resolved);
         }

@@ -138,6 +138,39 @@ impl InferenceTable {
         }
     }
 
+    /// The fixpoint-tier slice of the effect default (rustc runs
+    /// fallback at quiescence and fulfillment RE-RUNS after it): only
+    /// effect classes with NO accumulated bounds default here - a
+    /// bounded effect class still solves from its evidence once this
+    /// default grounds it. Returns whether anything defaulted.
+    pub fn default_unbounded_effects_to_never(&mut self) -> bool {
+        let indices: Vec<u32> = self.effect_vars.iter().copied().collect();
+        // Bounds may be keyed under a non-root alias; compare by ROOT.
+        let bound_keys: Vec<u32> = self
+            .bounds
+            .iter()
+            .filter(|(_, bounds)| !bounds.lowers.is_empty() || !bounds.uppers.is_empty())
+            .map(|(&key, _)| key)
+            .collect();
+        let bound_roots: Vec<VarKey> = bound_keys
+            .into_iter()
+            .map(|key| self.vars.find(VarKey(InferVar::new(key))))
+            .collect();
+        let mut any = false;
+        for index in indices {
+            let root = self.vars.find(VarKey(InferVar::new(index)));
+            if !matches!(self.vars.probe_value(root), VarValue::Unknown) {
+                continue;
+            }
+            if bound_roots.contains(&root) {
+                continue;
+            }
+            self.vars.union_value(root, VarValue::Known(Ty::never()));
+            any = true;
+        }
+        any
+    }
+
     /// Replaces a solved variable at the ROOT of `ty` with its solution,
     /// repeatedly; never descends into children.
     pub fn shallow_resolve(&mut self, ty: &Ty) -> Ty {

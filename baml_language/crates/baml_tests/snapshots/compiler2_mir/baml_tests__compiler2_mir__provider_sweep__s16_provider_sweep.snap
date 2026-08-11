@@ -6,28 +6,22 @@ functions compared: 2823
 agreements: 2508
 O2 agreements (informational; optimizer parity deferred): 2508
 ruled bigint-context: 1
-ruled literal-widening: 41
+ruled literal-widening: 77
 ruled literal-widening+receiver-seeding+void-union: 1
 ruled literal-widening+thrown-literal: 2
-ruled literal-widening+tir-unknown: 8
+ruled literal-widening+tir-unknown: 9
 ruled receiver-seeding: 23
-ruled receiver-seeding+throws-precision: 1
+ruled receiver-seeding+throws-precision: 2
 ruled receiver-seeding+void-union: 3
 ruled thrown-literal: 1
-ruled throws-precision: 31
+ruled throws-precision: 33
 ruled throws-precision+tir-unknown: 1
 ruled tir-unknown: 93
-differing: 109
+differing: 69
 panics: 0
 top-level lets: not diffed (no body renderer yet)
 
 == residual pair census (all shapes, by count) ==
-[43x] e.g. ns_from_json_interface/from_json_interface.baml :: from_to_roundtrip_with_override_fn
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-[36x] e.g. ns_from_json_interface/from_json_interface.baml :: from_to_roundtrip_with_override_fn
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
 [9x] e.g. ns_array_rest_binding/array_rest_binding.baml :: arb_pushing_to_rest_does_not_mutate_source
     tir: <absent>
     hir: let _: int
@@ -46,9 +40,6 @@ top-level lets: not diffed (no body renderer yet)
 [7x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
     tir: let _: int
     hir: let _: int // x
-[6x] e.g. ns_iter/iter.baml :: iter_reduce
-    tir: _ = load_type(never);
-    hir: _ = load_type(unknown);
 [5x] e.g. ns_csv/csv.baml :: csv_record_api
     tir: let _: bool
     hir: let _: string
@@ -202,9 +193,6 @@ top-level lets: not diffed (no body renderer yet)
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: let _: generic_match_subtype.Sq
     hir: <absent>
-[2x] e.g. ns_generic_union_returns/generic_union_returns.baml :: sap_parses_optional_json_null
-    tir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // parsed
-    hir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // parsed
 [2x] e.g. ns_generic_union_returns/generic_union_returns.baml :: sap_nullable_container_types_are_preserved
     tir: let _: null | ((generic_union_returns.ParsedChild[], int) -> null | generic_union_returns.ParsedChild throws never)
     hir: let _: (generic_union_returns.ParsedChild[], int) -> null | generic_union_returns.ParsedChild throws never
@@ -697,33 +685,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_iter/iter.baml :: iter_peekable
     tir: let _: int | baml.iter.Done
     hir: let _: type
-[1x] e.g. ns_generic_union_returns/generic_union_returns.baml :: sap_parses_optional_json_null
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
-    hir: let _: int | float | string | bool | null | (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>
-[1x] e.g. ns_json_alias/json_alias.baml :: json_array_len
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // arr
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // arr
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: optional_primitive_field_from_json_sum
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j1
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j1
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: optional_primitive_field_from_json_sum
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j2
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j2
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: round_trip_with_overrides_both_directions_val
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // json_val
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // json_val
-[1x] e.g. ns_json_alias/json_alias.baml :: json_map_has_key
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // m
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // m
-[1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: round_trip_with_overrides_both_directions_val
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // parsed_json
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // parsed_json
-[1x] e.g. ns_provider_stdlib/provider_stdlib.baml :: $init_test_ns_provider_stdlib_provider_stdlib
-    tir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // value
-    hir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // value
-[1x] e.g. ns_generic_union_returns/generic_union_returns.baml :: sap_parses_optional_json_value
-    tir: let _: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    hir: let _: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
 [1x] e.g. ns_iter_impl_generics_only/iter.baml :: iter_peekable
     tir: let _: int | iter_impl_generics_only.core.Done
     hir: let _: int
@@ -871,10 +832,6 @@ ns_floats/floats.baml :: $init_test_ns_floats_floats
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_from_json_interface/from_json_interface.baml :: from_to_roundtrip_with_override_fn
-    ...     let _1: from_json_interface.TempCelsius // original
-    tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
 ns_future_methods/future_methods.baml :: $init_test_ns_future_methods_future_methods
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
@@ -899,14 +856,6 @@ ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_falls_throu
     ...     let _5: type
     tir:     let _6: generic_match_subtype.Shape
     hir: 
-ns_generic_union_returns/generic_union_returns.baml :: sap_parses_optional_json_null
-    ...     let _0: bool // _0 // return
-    tir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // parsed
-    hir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // parsed
-ns_generic_union_returns/generic_union_returns.baml :: sap_parses_optional_json_value
-    ...     let _0: bool // _0 // return
-    tir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // parsed
-    hir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // parsed
 ns_generic_union_returns/generic_union_returns.baml :: sap_nullable_container_types_are_preserved
     ...     let _10: int | null
     tir:     let _11: null | (((int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[]) -> int throws never)
@@ -951,14 +900,6 @@ ns_is_operator/is_operator.baml :: is_evaluates_scrutinee_exactly_once_fn
     ...     bb2: {
     tir:         _6 = is_type(copy _3, never);
     hir:         _6 = is_type(copy _3, string);
-ns_iter/iter.baml :: iter_reduce
-    ...     let _3: type
-    tir:     let _4: (int, int) -> int throws E2
-    hir:     let _4: (int, int) -> int throws never
-ns_iter/iter.baml :: iter_some_every_find
-    ...     let _4: type
-    tir:     let _5: (int) -> bool throws E2
-    hir:     let _5: (int) -> bool throws never
 ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
     ...     let _4: baml.iter.Iterator<Error = never, Item = int>
     tir:     let _5: (int) -> bool throws E2
@@ -971,10 +912,6 @@ ns_iter/iter.baml :: iter_for_loop_pop_during_iteration
     ...     let _10: int
     tir:     let _11: int | null
     hir:     let _11: type
-ns_iter/iter.baml :: iter_array_first_adapter_defaults
-    ...     let _6: type
-    tir:     let _7: (int) -> bool throws E2
-    hir:     let _7: (int) -> bool throws never
 ns_iter/iter.baml :: iter_peekable
     ...     let _5: int[] // out
     tir:     let _6: void
@@ -1003,138 +940,14 @@ ns_json_auto_derive/json_auto_derive.baml :: $init_test_ns_json_auto_derive_json
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws baml.json.JsonDecodeError | baml.json.JsonSerializationError
-ns_json_auto_derive/json_auto_derive.baml :: simple_class_to_json_roundtrip_name
-    ...     let _1: json_auto_derive.User // u
-    tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
 ns_json_auto_derive/json_auto_derive.baml :: f
     ...     let _1: json_auto_derive.G // self // param
     tir:     let _2: (T[], (T) -> U throws E) -> U[] throws E
     hir:     let _2: (T[], (T) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> throws baml.json.JsonParseError | baml.json.JsonSerializationError) -> (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] throws baml.json.JsonParseError | baml.json.JsonSerializationError
-ns_json_auto_derive/json_auto_derive.baml :: primitive_field_to_json_str
-    ...     let _1: json_auto_derive.C1 // c
-    tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: array_of_primitive_to_json_str
-    ...     let _2: int[]
-    tir:     let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: nested_class_override_direct_str
-    ...     let _2: json_auto_derive.BSecret
-    tir:     let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: nested_class_override_in_array_str
-    ...     let _4: json_auto_derive.BZero
-    tir:     let _5: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _5: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: nested_class_override_in_map_str
-    ...     let _4: json_auto_derive.BStr
-    tir:     let _5: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _5: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: recursive_class_to_json_str
-    ...     let _5: json_auto_derive.Tree
-    tir:     let _6: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _6: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_to_json_concrete_str
-    ...     let _1: json_auto_derive.Box1<int> // b
-    tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_to_json_array_typearg_str
-    ...     let _2: int[]
-    tir:     let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_honors_override_str
-    ...     let _2: json_auto_derive.SecretRedact
-    tir:     let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_optional_typevar_str
-    ...     let _1: json_auto_derive.Box4<int> // b
-    tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_optional_typevar_null_str
-    ...     let _1: json_auto_derive.Box4<int> // b
-    tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_optional_override_str
-    ...     let _2: json_auto_derive.SecretRedact2
-    tir:     let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: primitive_field_from_json_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: array_of_primitive_from_json_sum
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: nested_class_override_direct_from_json_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: nested_class_override_array_from_json_sum
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: nested_class_override_map_from_json_sum
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: recursive_class_from_json_sum
-    ...     let _8: type
-    tir:     let _9: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _9: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_from_json_concrete_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: generic_class_honors_override_from_json_val
-    ...     let _0: string // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: optional_class_override_non_null_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: optional_class_override_null_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: optional_primitive_field_from_json_sum
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j1
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j1
-ns_json_auto_derive/json_auto_derive.baml :: map_of_primitive_from_json_sum
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: top_level_from_json_call_concrete_class_name
-    ...     let _0: string // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: top_level_from_json_call_primitive_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: independent_synthesis_only_to_json_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: round_trip_with_overrides_both_directions_val
-    ...     let _1: json_auto_derive.SecretBoth // s
-    tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // json_val
-    hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // json_val
 ns_json_auto_derive/json_auto_derive.baml :: alias_chain_dispatch_to_json_val
     ...     let _1: json_auto_derive.BAliasTo // b
     tir:     let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
     hir:     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: alias_chain_dispatch_from_json_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_auto_derive/json_auto_derive.baml :: from_json_wrapper_body_fallback_val
-    ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
 ns_json_parse_stringify/json_parse_stringify.baml :: parse_array_len
     ...     let _0: int // _0 // return
     tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
@@ -1143,16 +956,8 @@ ns_json_parse_stringify/json_parse_stringify.baml :: parse_then_match_array_len
     ...     let _0: int // _0 // return
     tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
     hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_to_from_string/json_to_from_string.baml :: from_string_json_passthrough_int_match
-    ...     let _0: bool // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
 ns_json_to_from_string/json_to_from_string.baml :: from_string_json_passthrough_object_len
     ...     let _0: int // _0 // return
-    tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
-ns_json_to_from_string/json_to_from_string.baml :: to_string_json_passthrough_str
-    ...     let _0: string // _0 // return
     tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
     hir:     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
 ns_lambdas/lambdas.baml :: lambda_contextual_main
@@ -1215,10 +1020,6 @@ ns_projection_patterns/projection_patterns.baml :: is_label_of
     ...     bb0: {
     tir:         _3 = is_type(copy _2, (#0 as projection_patterns.Labeled).Label);
     hir:         _3 = is_type(copy _2, string);
-ns_provider_stdlib/provider_stdlib.baml :: $init_test_ns_provider_stdlib_provider_stdlib
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws baml.errors.Unsupported | baml.json.JsonPathError
 ns_reflect_type_of_generic/reflect_type_of_generic.baml :: type_of_depth3_path_in_method_fn
     ...     let _2: reflect_type_of_generic.Box<int>
     tir:     let _3: () -> string throws never
