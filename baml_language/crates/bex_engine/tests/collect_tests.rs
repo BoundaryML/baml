@@ -917,10 +917,10 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         function ClassifySentiment(text: string) -> Sentiment {
             client GPT4o
             prompt `
-                ${role('system')}
+                ${role("system")}
                 Classify the sentiment of the following text.
                 ${ctx.output_format}
-                ${role('assistant')}
+                ${role("assistant")}
                 Text: ${text}
             `
         }
