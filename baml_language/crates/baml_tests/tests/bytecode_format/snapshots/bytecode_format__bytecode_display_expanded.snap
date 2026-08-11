@@ -33,19 +33,19 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> null
   81   24   jump +32               (to 56)
 
   84   25   load_var 4             (delta)
-       26   call 872 ntypeargs=0   (assert.format_operand)
+       26   call 873 ntypeargs=0   (assert.format_operand)
        27   store_var 5            (_18)
 
   86   28   load_var 3             (eps)
-       29   call 872 ntypeargs=0   (assert.format_operand)
+       29   call 873 ntypeargs=0   (assert.format_operand)
        30   store_var 6            (_20)
 
   88   31   load_var 1             (actual)
-       32   call 872 ntypeargs=0   (assert.format_operand)
+       32   call 873 ntypeargs=0   (assert.format_operand)
        33   store_var 7            (_21)
 
   90   34   load_var 2             (expected)
-       35   call 872 ntypeargs=0   (assert.format_operand)
+       35   call 873 ntypeargs=0   (assert.format_operand)
        36   store_var 8            (_22)
 
   84   37   load_const 2           ("assertion failed: |left - right| = ")
@@ -100,11 +100,11 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
   50   6    jump +15               (to 21)
 
   53   7    load_var 1             (actual)
-       8    call 872 ntypeargs=0   (assert.format_operand)
+       8    call 873 ntypeargs=0   (assert.format_operand)
        9    store_var 3            (_8)
 
   55   10   load_var 2             (expected)
-       11   call 872 ntypeargs=0   (assert.format_operand)
+       11   call 873 ntypeargs=0   (assert.format_operand)
        12   store_var 4            (_9)
 
   53   13   load_const 1           ("assertion failed: left = ")
@@ -173,7 +173,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  102   0   make_closure 1635 0   
+  102   0   make_closure 1636 0   
         1   return                
 }
 
@@ -198,7 +198,7 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
        15   pop 1                  
 
   74   16   load_var 1             (threshold)
-       17   make_closure 1630 1    
+       17   make_closure 1631 1    
        18   return                 
 }
 
@@ -237,7 +237,7 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
        27   pop 1                  
 
   10   28   load_var2 1 2          
-       29   make_closure 1614 2    
+       29   make_closure 1615 2    
        30   return                 
 }
 
@@ -256,12 +256,12 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
        9    pop 1                  
 
   41   10   load_var 1             (max_attempts)
-       11   make_closure 1624 1    
+       11   make_closure 1625 1    
        12   return                 
 }
 
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  96   0   make_closure 1633 0   
+  96   0   make_closure 1634 0   
        1   return                
 }
 
@@ -458,7 +458,7 @@ function testing.TestCollector.register_test_at(self: testing.TestCollector, own
        5   load_var2 3 4          
        6   load_var 5             (runner)
 
-  62   7   call 814 ntypeargs=0   (testing.TestCollector.register_test)
+  62   7   call 815 ntypeargs=0   (testing.TestCollector.register_test)
        8   return                 
 }
 
@@ -579,7 +579,7 @@ function testing.TestCollector.register_test_set_at(self: testing.TestCollector,
        5   load_var2 3 4          
        6   load_var 5             (runner)
 
-  67   7   call 815 ntypeargs=0   (testing.TestCollector.register_test_set)
+  67   7   call 816 ntypeargs=0   (testing.TestCollector.register_test_set)
        8   return                 
 }
 
@@ -609,11 +609,11 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         21   pop_jump_if_false -14              (to 7)
 
   224   22   load_var2 1 5                      
-        23   call 830 ntypeargs=0               (testing.TestRegistry.expand_testset_registry)
+        23   call 831 ntypeargs=0               (testing.TestRegistry.expand_testset_registry)
         24   pop 1                              
 
   225   25   load_var 1                         (self)
-        26   call 822 ntypeargs=0               (testing.TestRegistry.serialize)
+        26   call 823 ntypeargs=0               (testing.TestRegistry.serialize)
         27   jump +33                           (to 60)
 
   229   28   load_type 5                        
@@ -650,7 +650,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         57   pop_jump_if_false -20              (to 37)
 
   232   58   load_var2 9 2                      
-        59   call 829 ntypeargs=0               (testing.TestRegistry.expand_set)
+        59   call 830 ntypeargs=0               (testing.TestRegistry.expand_set)
         60   return                             
 
   235   61   load_const 12                      ("TestSet not found for expansion: ")
@@ -743,7 +743,7 @@ function testing.TestRegistry.list_filtered(self: testing.TestRegistry, profile_
   215   0   load_var2 1 2          
         1   load_var2 3 4          
         2   load_var 5             (cli_exclude)
-        3   call 850 ntypeargs=0   (testing.select_names_layered)
+        3   call 851 ntypeargs=0   (testing.select_names_layered)
         4   return                 
 }
 
@@ -760,9 +760,9 @@ function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.T
 
 function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetReport {
   188   0   load_var 1             (self)
-        1   call 831 ntypeargs=0   (testing.testset_children)
+        1   call 832 ntypeargs=0   (testing.testset_children)
         2   load_const 0           (null)
-        3   call 841 ntypeargs=0   (testing.run_testset)
+        3   call 842 ntypeargs=0   (testing.run_testset)
         4   return                 
 }
 
@@ -770,7 +770,7 @@ function testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_i
   204   0    load_var2 1 2          
         1    load_var2 3 4          
         2    load_var 5             (cli_exclude)
-        3    call 850 ntypeargs=0   (testing.select_names_layered)
+        3    call 851 ntypeargs=0   (testing.select_names_layered)
         4    store_var 6            (selected_names)
 
   205   5    load_var 2             (profile_include)
@@ -807,22 +807,22 @@ function testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_i
         36   jump +4                (to 40)
 
   208   37   load_var2 1 6          
-        38   call 826 ntypeargs=0   (testing.TestRegistry.run_selected)
+        38   call 827 ntypeargs=0   (testing.TestRegistry.run_selected)
         39   jump +3                (to 42)
 
   206   40   load_var 1             (self)
-        41   call 825 ntypeargs=0   (testing.TestRegistry.run_all)
+        41   call 826 ntypeargs=0   (testing.TestRegistry.run_all)
 
   210   42   load_var 6             (selected_names)
-        43   call 856 ntypeargs=0   (testing.flatten_with_tolerated)
+        43   call 857 ntypeargs=0   (testing.flatten_with_tolerated)
         44   return                 
 }
 
 function testing.TestRegistry.run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport {
   192   0   load_var2 1 2          
-        1   call 832 ntypeargs=0   (testing.testset_children_selected)
+        1   call 833 ntypeargs=0   (testing.testset_children_selected)
         2   load_const 0           (null)
-        3   call 841 ntypeargs=0   (testing.run_testset)
+        3   call 842 ntypeargs=0   (testing.run_testset)
         4   return                 
 }
 
@@ -855,7 +855,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         23   load_field 1                       (body)
         24   load_var 5                         (t)
         25   load_field 2                       (runner)
-        26   call 840 ntypeargs=0               (testing.run_test)
+        26   call 841 ntypeargs=0               (testing.run_test)
         27   jump +33                           (to 60)
 
   162   28   load_type 5                        
@@ -892,7 +892,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         57   pop_jump_if_false -20              (to 37)
 
   166   58   load_var2 9 2                      
-        59   call 823 ntypeargs=0               (testing.TestRegistry.run_test)
+        59   call 824 ntypeargs=0               (testing.TestRegistry.run_test)
         60   return                             
 
   169   61   load_const 12                      ("Test not found: ")
@@ -927,11 +927,11 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
         21   pop_jump_if_false -14              (to 7)
 
   175   22   load_var2 1 5                      
-        23   call 830 ntypeargs=0               (testing.TestRegistry.expand_testset_registry)
-        24   call 831 ntypeargs=0               (testing.testset_children)
+        23   call 831 ntypeargs=0               (testing.TestRegistry.expand_testset_registry)
+        24   call 832 ntypeargs=0               (testing.testset_children)
         25   load_var 5                         (ts)
         26   load_field 2                       (runner)
-        27   call 841 ntypeargs=0               (testing.run_testset)
+        27   call 842 ntypeargs=0               (testing.run_testset)
         28   jump +33                           (to 61)
 
   178   29   load_type 5                        
@@ -968,7 +968,7 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
         58   pop_jump_if_false -20              (to 38)
 
   181   59   load_var2 9 2                      
-        60   call 824 ntypeargs=0               (testing.TestRegistry.run_testset)
+        60   call 825 ntypeargs=0               (testing.TestRegistry.run_testset)
         61   return                             
 
   184   62   load_const 12                      ("TestSet not found: ")
@@ -1060,7 +1060,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         69   store_var 10                       (_27)
 
   141   70   load_var 9                         (sub)
-        71   call 822 ntypeargs=0               (testing.TestRegistry.serialize)
+        71   call 823 ntypeargs=0               (testing.TestRegistry.serialize)
         72   store_var 11                       (_28)
 
   139   73   load_var2 2 10                     
@@ -1348,7 +1348,7 @@ function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bo
         13   jump +6                            (to 19)
 
   521   14   load_var2 2 4                      
-        15   call 843 ntypeargs=0               (testing.glob_match)
+        15   call 844 ntypeargs=0               (testing.glob_match)
         16   pop_jump_if_false -11              (to 5)
 
   522   17   load_const 5                       (true)
@@ -1386,7 +1386,7 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
         23   store_var_load_var 7               (name)
 
   764   24   load_var 3                         (all_failed_names)
-        25   call 859 ntypeargs=0               (testing.failure_matches_selected)
+        25   call 860 ntypeargs=0               (testing.failure_matches_selected)
         26   pop_jump_if_false +2               (to 28)
         27   jump +8                            (to 35)
 
@@ -1399,7 +1399,7 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
         34   jump -21                           (to 13)
 
   765   35   load_var2 7 2                      
-        36   call 859 ntypeargs=0               (testing.failure_matches_selected)
+        36   call 860 ntypeargs=0               (testing.failure_matches_selected)
         37   pop_jump_if_false +2               (to 39)
         38   jump +8                            (to 46)
 
@@ -1443,7 +1443,7 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
         16   store_var_load_var 5               (name)
 
   835   17   load_var 2                         (out)
-        18   call 858 ntypeargs=0               (testing.name_in)
+        18   call 859 ntypeargs=0               (testing.name_in)
         19   unary_op !                         
         20   pop_jump_if_false -14              (to 6)
         21   load_var2 2 5                      
@@ -1474,7 +1474,7 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
         44   jump -13                           (to 31)
         45   load_var2 8 2                      
 
-  840   46   call 861 ntypeargs=0               (testing.collect_all_failed_names)
+  840   46   call 862 ntypeargs=0               (testing.collect_all_failed_names)
         47   pop 1                              
         48   jump -17                           (to 31)
 
@@ -1575,7 +1575,7 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
         79    store_var_load_var 17   (sentinel)
 
   819   80    load_var 3              (selected_names)
-        81    call 858 ntypeargs=0    (testing.name_in)
+        81    call 859 ntypeargs=0    (testing.name_in)
         82    pop_jump_if_false +2    (to 84)
         83    jump +21                (to 104)
         84    load_var 14             (nested)
@@ -1621,7 +1621,7 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
 
   816   123   load_var2 14 15         
         124   load_var2 3 4           
-        125   call 860 ntypeargs=0    (testing.collect_leaf_identities)
+        125   call 861 ntypeargs=0    (testing.collect_leaf_identities)
         126   pop 1                   
         127   jump +30                (to 157)
 
@@ -1698,7 +1698,7 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
         23   load_field 5                       (results)
         24   load_var 2                         (out)
 
-  860   25   call 862 ntypeargs=0               (testing.collect_leaf_messages)
+  860   25   call 863 ntypeargs=0               (testing.collect_leaf_messages)
         26   pop 1                              
         27   jump -22                           (to 5)
 
@@ -1791,7 +1791,7 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
         39   jump +20                           (to 59)
 
   629   40   load_var2 1 6                      
-        41   call 853 ntypeargs=0               (testing.collect_subtree_names)
+        41   call 854 ntypeargs=0               (testing.collect_subtree_names)
         42   load_type 10                       
         43   load_const 11                      ("iter")
         44   virtual_call nargs=1 ntypeargs=0   
@@ -1817,8 +1817,8 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
 
 function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] {
   642   0    load_var2 1 2          
-        1    call 830 ntypeargs=0   (testing.TestRegistry.expand_testset_registry)
-        2    call 852 ntypeargs=0   (testing.collect_leaf_names)
+        1    call 831 ntypeargs=0   (testing.TestRegistry.expand_testset_registry)
+        2    call 853 ntypeargs=0   (testing.collect_leaf_names)
         3    jump +89               (to 92)
         4    load_var 3             (e)
         5    store_var 4            (_5)
@@ -1917,10 +1917,10 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
 
 function testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: testing.TestSetRegistration, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
   650   0     load_var2 1 2           
-        1     call 830 ntypeargs=0    (testing.TestRegistry.expand_testset_registry)
+        1     call 831 ntypeargs=0    (testing.TestRegistry.expand_testset_registry)
         2     load_var2 3 4           
         3     load_var2 5 6           
-        4     call 850 ntypeargs=0    (testing.select_names_layered)
+        4     call 851 ntypeargs=0    (testing.select_names_layered)
         5     jump +109               (to 114)
         6     load_var 7              (e)
         7     store_var 8             (_9)
@@ -2003,7 +2003,7 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
 
   658   83    load_var2 3 4           
         84    load_var2 5 6           
-        85    call 846 ntypeargs=0    (testing.leaf_selected_layered)
+        85    call 847 ntypeargs=0    (testing.leaf_selected_layered)
         86    pop_jump_if_false +2    (to 88)
         87    jump +4                 (to 91)
         88    load_type 18            
@@ -2022,7 +2022,7 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
 
   654   100   load_var2 3 4           
         101   load_var2 5 6           
-        102   call 846 ntypeargs=0    (testing.leaf_selected_layered)
+        102   call 847 ntypeargs=0    (testing.leaf_selected_layered)
         103   pop_jump_if_false +2    (to 105)
         104   jump +4                 (to 108)
         105   load_type 18            
@@ -2129,7 +2129,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
   699   74    load_var 12                        (tsr)
         75    load_field 5                       (results)
         76    load_var 13                        (ft)
-        77    call 855 ntypeargs=0               (testing.count_leaves)
+        77    call 856 ntypeargs=0               (testing.count_leaves)
         78    store_var 10                       (delta)
         79    jump +30                           (to 109)
 
@@ -2221,7 +2221,7 @@ function testing.expansion_error_report(name: string) -> testing.TestSetReport {
 
 function testing.failure_matches_selected(selected: string, failed_names: string[]) -> bool {
   785   0    load_var2 1 2                      
-        1    call 858 ntypeargs=0               (testing.name_in)
+        1    call 859 ntypeargs=0               (testing.name_in)
         2    pop_jump_if_false +2               (to 4)
         3    jump +40                           (to 43)
 
@@ -2326,7 +2326,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
   722   37    load_var 1             (report)
         38    load_field 5           (results)
         39    load_var 3             (top_tolerated)
-        40    call 855 ntypeargs=0   (testing.count_leaves)
+        40    call 856 ntypeargs=0   (testing.count_leaves)
         41    store_var 4            (counts)
 
   728   42    load_type 2            
@@ -2336,7 +2336,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
   729   45    load_var 1             (report)
         46    load_field 5           (results)
         47    load_var 6             (messages)
-        48    call 862 ntypeargs=0   (testing.collect_leaf_messages)
+        48    call 863 ntypeargs=0   (testing.collect_leaf_messages)
         49    pop 1                  
 
   730   50    load_type 2            
@@ -2344,7 +2344,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
         52    store_var 7            (all_failed_names)
 
   731   53    load_var2 1 7          
-        54    call 861 ntypeargs=0   (testing.collect_all_failed_names)
+        54    call 862 ntypeargs=0   (testing.collect_all_failed_names)
         55    pop 1                  
 
   732   56    load_type 2            
@@ -2358,7 +2358,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
 
   733   64    load_var2 1 3          
         65    load_var2 2 8          
-        66    call 860 ntypeargs=0   (testing.collect_leaf_identities)
+        66    call 861 ntypeargs=0   (testing.collect_leaf_identities)
         67    pop 1                  
 
   738   68    load_var 8             (executed)
@@ -2412,7 +2412,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
   741   112   load_var2 2 1          
         113   load_field 4           (failed_names)
         114   load_var 7             (all_failed_names)
-        115   call 857 ntypeargs=0   (testing.classify_selected_names)
+        115   call 858 ntypeargs=0   (testing.classify_selected_names)
         116   store_var 9            (identities)
         117   jump +3                (to 120)
 
@@ -2579,7 +2579,7 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
 
 function testing.leaf_selected(name: string, include: string[], exclude: string[]) -> bool {
   531   0    load_var2 3 1          
-        1    call 844 ntypeargs=0   (testing.any_pattern_matches)
+        1    call 845 ntypeargs=0   (testing.any_pattern_matches)
         2    pop_jump_if_false +2   (to 4)
         3    jump +14               (to 17)
 
@@ -2593,7 +2593,7 @@ function testing.leaf_selected(name: string, include: string[], exclude: string[
         11   jump +4                (to 15)
 
   537   12   load_var2 2 1          
-        13   call 844 ntypeargs=0   (testing.any_pattern_matches)
+        13   call 845 ntypeargs=0   (testing.any_pattern_matches)
         14   jump +4                (to 18)
 
   535   15   load_const 1           (true)
@@ -2606,12 +2606,12 @@ function testing.leaf_selected(name: string, include: string[], exclude: string[
 function testing.leaf_selected_layered(name: string, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> bool {
   544   0   load_var2 1 2          
         1   load_var 3             (profile_exclude)
-        2   call 845 ntypeargs=0   (testing.leaf_selected)
+        2   call 846 ntypeargs=0   (testing.leaf_selected)
         3   jump_if_false +5       (to 8)
         4   pop 1                  
         5   load_var2 1 4          
         6   load_var 5             (cli_exclude)
-        7   call 845 ntypeargs=0   (testing.leaf_selected)
+        7   call 846 ntypeargs=0   (testing.leaf_selected)
         8   return                 
 }
 
@@ -2708,7 +2708,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         24   store_deref 5                      
 
   405   25   load_var 5                         (child)
-        26   make_closure 1514 1                
+        26   make_closure 1515 1                
         27   load_const 6                       (null)
         28   load_const 6                       (null)
         29   load_type 7                        
@@ -2726,7 +2726,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         40   call 537 ntypeargs=2               (baml.future.all_complete)
         41   await                              
 
-  412   42   call 838 ntypeargs=0               (testing.aggregate_reports)
+  412   42   call 839 ntypeargs=0               (testing.aggregate_reports)
         43   return                             
 }
 
@@ -2787,11 +2787,11 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
         48   pop_jump_if_false -40              (to 8)
 
   117   49   load_var 3                         (named_results)
-        50   call 838 ntypeargs=0               (testing.aggregate_reports)
+        50   call 839 ntypeargs=0               (testing.aggregate_reports)
         51   jump +3                            (to 54)
 
   122   52   load_var 3                         (named_results)
-        53   call 838 ntypeargs=0               (testing.aggregate_reports)
+        53   call 839 ntypeargs=0               (testing.aggregate_reports)
         54   return                             
 }
 
@@ -2801,7 +2801,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   417   3    load_var 1             (body)
-        4    make_closure 1526 1    
+        4    make_closure 1527 1    
         5    store_var 3            (base_run)
 
   446   6    load_var 2             (runner)
@@ -2833,7 +2833,7 @@ function testing.run_testset(children: testing.TestSetChild[], runner: ((testing
         7    jump +3                (to 10)
 
   458   8    load_var 1             (children)
-        9    call 839 ntypeargs=0   (testing.run_children_parallel)
+        9    call 840 ntypeargs=0   (testing.run_children_parallel)
         10   return                 
 }
 
@@ -2844,7 +2844,7 @@ function testing.select_names(registry: testing.TestRegistry, include: string[],
         3   load_type 0            
         4   alloc_array 0          
         5   load_var2 2 3          
-        6   call 850 ntypeargs=0   (testing.select_names_layered)
+        6   call 851 ntypeargs=0   (testing.select_names_layered)
         7   return                 
 }
 
@@ -2875,7 +2875,7 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
   602   21   load_field 0                       (name)
         22   load_var2 2 3                      
         23   load_var2 4 5                      
-        24   call 846 ntypeargs=0               (testing.leaf_selected_layered)
+        24   call 847 ntypeargs=0               (testing.leaf_selected_layered)
         25   pop_jump_if_false -15              (to 10)
 
   603   26   load_var2 6 9                      
@@ -2905,19 +2905,19 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
 
   609   49   load_field 0                       (name)
         50   load_var2 2 3                      
-        51   call 849 ntypeargs=0               (testing.subtree_may_be_selected)
+        51   call 850 ntypeargs=0               (testing.subtree_may_be_selected)
         52   jump_if_false +6                   (to 58)
         53   pop 1                              
         54   load_var 12                        (ts)
         55   load_field 0                       (name)
         56   load_var2 4 5                      
-        57   call 849 ntypeargs=0               (testing.subtree_may_be_selected)
+        57   call 850 ntypeargs=0               (testing.subtree_may_be_selected)
         58   pop_jump_if_false -20              (to 38)
 
   610   59   load_var2 1 12                     
         60   load_var2 2 3                      
         61   load_var2 4 5                      
-        62   call 854 ntypeargs=0               (testing.collect_subtree_names_layered)
+        62   call 855 ntypeargs=0               (testing.collect_subtree_names_layered)
 
   611   63   load_type 10                       
         64   load_const 11                      ("iter")
@@ -2985,7 +2985,7 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
         37   jump_if_false +4                   (to 41)
         38   pop 1                              
         39   load_var2 3 6                      
-        40   call 843 ntypeargs=0               (testing.glob_match)
+        40   call 844 ntypeargs=0               (testing.glob_match)
         41   pop_jump_if_false -32              (to 9)
 
   561   42   load_const 9                       (true)
@@ -3000,7 +3000,7 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
 
 function testing.subtree_may_be_selected(prefix: string, include: string[], exclude: string[]) -> bool {
   583   0    load_var2 1 3                      
-        1    call 847 ntypeargs=0               (testing.subtree_excluded)
+        1    call 848 ntypeargs=0               (testing.subtree_excluded)
         2    pop_jump_if_false +2               (to 4)
         3    jump +32                           (to 35)
 
@@ -3029,7 +3029,7 @@ function testing.subtree_may_be_selected(prefix: string, include: string[], excl
         25   jump +6                            (to 31)
         26   load_var2 6 1                      
 
-  590   27   call 848 ntypeargs=0               (testing.pattern_may_match_descendant)
+  590   27   call 849 ntypeargs=0               (testing.pattern_may_match_descendant)
         28   pop_jump_if_false -11              (to 17)
 
   591   29   load_const 6                       (true)
@@ -3056,7 +3056,7 @@ function testing.test_child(name: string, body: () -> void throws unknown, runne
   300   6    load_var2 1 2         
 
   302   7    load_var 3            (runner)
-        8    make_closure 1491 2   
+        8    make_closure 1492 2   
         9    init_instance 0       (testing.TestSetChild .name, .run)
         10   return                
 }
@@ -3073,7 +3073,7 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
         7    load_field 0          (name)
 
   309   8    load_var2 1 2         
-        9    make_closure 1493 2   
+        9    make_closure 1494 2   
         10   init_instance 0       (testing.TestSetChild .name, .run)
         11   return                
 }
@@ -3094,7 +3094,7 @@ function testing.testset_child_selected(registry: testing.TestRegistry, ts: test
 
   321   11   load_var2 1 2         
         12   load_var 3            (names)
-        13   make_closure 1495 3   
+        13   make_closure 1496 3   
         14   init_instance 0       (testing.TestSetChild .name, .run)
         15   return                
 }
@@ -3128,7 +3128,7 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
         23   load_field 1                       (body)
         24   load_var 5                         (t)
         25   load_field 2                       (runner)
-        26   call 833 ntypeargs=0               (testing.test_child)
+        26   call 834 ntypeargs=0               (testing.test_child)
         27   store_var 6                        (_10)
         28   load_var2 2 6                      
         29   call 4 ntypeargs=0                 (baml.Array.push)
@@ -3153,7 +3153,7 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
         47   jump +8                            (to 55)
 
   270   48   load_var2 1 8                      
-        49   call 834 ntypeargs=0               (testing.testset_child)
+        49   call 835 ntypeargs=0               (testing.testset_child)
         50   store_var 9                        (_21)
         51   load_var2 2 9                      
         52   call 4 ntypeargs=0                 (baml.Array.push)
@@ -3190,7 +3190,7 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
 
   278   21   load_field 0                       (name)
         22   load_var 2                         (names)
-        23   call 836 ntypeargs=0               (testing._name_selected)
+        23   call 837 ntypeargs=0               (testing._name_selected)
         24   pop_jump_if_false -14              (to 10)
 
   279   25   load_var 6                         (t)
@@ -3199,7 +3199,7 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
         28   load_field 1                       (body)
         29   load_var 6                         (t)
         30   load_field 2                       (runner)
-        31   call 833 ntypeargs=0               (testing.test_child)
+        31   call 834 ntypeargs=0               (testing.test_child)
         32   store_var 7                        (_13)
         33   load_var2 3 7                      
         34   call 4 ntypeargs=0                 (baml.Array.push)
@@ -3227,12 +3227,12 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
 
   290   55   load_field 0                       (name)
         56   load_var 2                         (names)
-        57   call 837 ntypeargs=0               (testing._has_selected_descendant)
+        57   call 838 ntypeargs=0               (testing._has_selected_descendant)
         58   pop_jump_if_false -14              (to 44)
 
   291   59   load_var2 1 10                     
         60   load_var 2                         (names)
-        61   call 835 ntypeargs=0               (testing.testset_child_selected)
+        61   call 836 ntypeargs=0               (testing.testset_child_selected)
         62   store_var 11                       (_26)
         63   load_var2 3 11                     
         64   call 4 ntypeargs=0                 (baml.Array.push)
@@ -3252,7 +3252,7 @@ function user.User.promote(self: User, bonus: int) -> Report {
        5    store_field 1          (age)
 
   10   6    load_var2 1 2          
-       7    call 877 ntypeargs=0   (user.score)
+       7    call 878 ntypeargs=0   (user.score)
        8    store_var 3            (base)
 
   11   9    load_var 3             (base)

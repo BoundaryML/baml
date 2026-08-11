@@ -3023,6 +3023,11 @@ class baml.reflect.class.Builder {
   _neighbors: baml.reflect.class.Builder[]
   _resolved: type | null
 }
+function baml.reflect.class.Builder.build(self: baml.reflect.class.Builder, implementations: baml.reflect.interface.Implementation[] = ...) -> baml.reflect.class.Type throws baml.reflect.errors.CompilationError {
+  { : baml.reflect.class.Type
+    self._build(implementations) : baml.reflect.class.Type
+  }
+}
 class baml.reflect.class.PendingType {
   _handle: $rust_type
   _roots: unknown[]

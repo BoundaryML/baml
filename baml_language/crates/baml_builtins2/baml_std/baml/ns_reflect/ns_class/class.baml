@@ -59,8 +59,19 @@ class Builder {
   }
 
   /// Validate and freeze this builder's complete connected recursive group.
+  function build(
+    self,
+    implementations: baml.reflect.interface.Implementation[] = [],
+  ) -> Type throws baml.reflect.errors.CompilationError {
+    self._build(implementations)
+  }
+
+  /// Internal native backing `build`; all arguments have been materialized.
   //baml:mut_vm
-  function build(self) -> Type throws baml.reflect.errors.CompilationError {
+  function _build(
+    self,
+    implementations: baml.reflect.interface.Implementation[],
+  ) -> Type throws baml.reflect.errors.CompilationError {
     $rust_function
   }
 }

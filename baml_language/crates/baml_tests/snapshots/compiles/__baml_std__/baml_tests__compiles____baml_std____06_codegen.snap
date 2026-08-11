@@ -6502,7 +6502,22 @@ function baml.reflect.array.Type.element_type(self: baml.reflect.array.Type) -> 
 function baml.reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
-function baml.reflect.class.Builder.build(self: baml.reflect.class.Builder) -> baml.reflect.class.Type {
+function baml.reflect.class.Builder._build(self: baml.reflect.class.Builder, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+}
+
+function baml.reflect.class.Builder.build(self: baml.reflect.class.Builder, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+    load_var implementations
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type baml.reflect.interface.Implementation
+    alloc_array 0
+    store_var implementations
+
+  L0:
+    load_var2 1 2
+    call baml.reflect.class.Builder._build
+    return
 }
 
 function baml.reflect.class.Builder.field(self: baml.reflect.class.Builder, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType) -> baml.reflect.class.Builder {

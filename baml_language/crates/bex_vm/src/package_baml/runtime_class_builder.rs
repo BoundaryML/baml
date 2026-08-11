@@ -29,8 +29,8 @@ use indexmap::IndexMap;
 use super::{
     BamlClassReflectClassBuilder, BamlClassReflectClassPendingType, PackageBamlImpl,
     type_kinds::{
-        ReflectedTypeRow, alloc_compilation_error, compiler_diagnostic, is_baml_identifier,
-        reflected_type_row,
+        ReflectedTypeRow, WitnessField, alloc_compilation_error, compiler_diagnostic,
+        is_baml_identifier, reflected_type_row, register_class_witnesses, validate_class_witnesses,
     },
 };
 use crate::{BexVm, errors::VmRustFnError};
@@ -84,6 +84,12 @@ struct BuilderNode {
 struct ClassPlan {
     name: baml_type::QualifiedTypeName,
     ptr: HeapPtr,
+    mint: MintId,
+    ty: baml_type::RealizedTy,
+}
+
+struct ClassIdentityPlan {
+    name: baml_type::QualifiedTypeName,
     mint: MintId,
     ty: baml_type::RealizedTy,
 }
@@ -280,35 +286,43 @@ impl BamlClassReflectClassBuilder for PackageBamlImpl {
             }
         }
 
-        let pending_builders = if class_name(vm, *ty).as_deref() == Some(PENDING_FQN) {
-            direct_builders(vm, *ty)
+        let (stored_type, pending_builders) = if class_name(vm, *ty).as_deref() == Some(PENDING_FQN)
+        {
+            match resolve_pending_if_ready(vm, *ty)
                 .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?
+            {
+                Some(resolved) => {
+                    reflected_type_row(vm, resolved).map_err(|message| {
+                        compilation_error(vm, DiagnosticId::TypeMismatch, message)
+                    })?;
+                    (resolved, Vec::new())
+                }
+                None => {
+                    let builders = direct_builders(vm, *ty).map_err(|message| {
+                        compilation_error(vm, DiagnosticId::TypeMismatch, message)
+                    })?;
+                    let mut unfrozen = Vec::with_capacity(builders.len());
+                    for target in builders {
+                        let (_, target_handle) = builder_parts(vm, target).map_err(|message| {
+                            compilation_error(vm, DiagnosticId::TypeMismatch, message)
+                        })?;
+                        if !lock_state(&target_handle).frozen {
+                            unfrozen.push(target);
+                        }
+                    }
+                    (*ty, unfrozen)
+                }
+            }
         } else {
             reflected_type_row(vm, *ty)
                 .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
-            Vec::new()
+            (*ty, Vec::new())
         };
-
-        for target in &pending_builders {
-            let (_, target_handle) = builder_parts(vm, *target)
-                .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
-            let target_state = lock_state(&target_handle);
-            if target_state.frozen {
-                return Err(compilation_error(
-                    vm,
-                    DiagnosticId::TypeMismatch,
-                    format!(
-                        "class builder `{builder_name}` cannot reference frozen builder `{}`",
-                        target_state.name
-                    ),
-                ));
-            }
-        }
 
         let mut roots = instance_array_field(vm, *builder, 1)
             .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
         let root_index = roots.len();
-        roots.push(*ty);
+        roots.push(stored_type);
         replace_array_field(vm, *builder, 1, roots)
             .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
         lock_state(&handle).fields.push(BuilderField {
@@ -330,8 +344,12 @@ impl BamlClassReflectClassBuilder for PackageBamlImpl {
         alloc_pending(vm, PendingOp::Direct, vec![*builder])
     }
 
-    fn build(vm: &mut BexVm, builder: &Value) -> Result<Value, VmRustFnError> {
-        build_group(vm, *builder)
+    fn _build(
+        vm: &mut BexVm,
+        builder: &Value,
+        implementations: &[Value],
+    ) -> Result<Value, VmRustFnError> {
+        build_group(vm, *builder, implementations)
     }
 }
 
@@ -551,7 +569,8 @@ fn validate_pending(
                 }
                 let (_, builder) = builder_parts(vm, roots[0])?;
                 let state = lock_state(&builder);
-                if !group.contains_key(&state.id) {
+                let resolved = instance_field(vm, roots[0], 3)?;
+                if !group.contains_key(&state.id) && (!state.frozen || resolved.is_null()) {
                     return Err(format!(
                         "pending type references builder `{}` outside its connected group",
                         state.name
@@ -601,7 +620,12 @@ fn collect_external_defs(
         for root in instance_array_field(vm, pending, 1)? {
             if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
                 from_pending(vm, root, defs, seen)?;
-            } else if class_name(vm, root).as_deref() != Some(BUILDER_FQN) {
+            } else if class_name(vm, root).as_deref() == Some(BUILDER_FQN) {
+                let resolved = instance_field(vm, root, 3)?;
+                if !resolved.is_null() {
+                    defs.merge_from(reflected_type_row(vm, resolved)?.type_value.defs());
+                }
+            } else {
                 defs.merge_from(reflected_type_row(vm, root)?.type_value.defs());
             }
         }
@@ -623,7 +647,111 @@ fn collect_external_defs(
     Ok(defs)
 }
 
-fn build_group(vm: &mut BexVm, start: Value) -> Result<Value, VmRustFnError> {
+fn planned_pending_type(
+    vm: &BexVm,
+    pending: Value,
+    plans: &IndexMap<u64, ClassIdentityPlan>,
+) -> Result<baml_type::RealizedTy, String> {
+    let prior = instance_field(vm, pending, 2)?;
+    if !prior.is_null() {
+        return cloned_type_value(vm, prior)
+            .map(|value| value.ty)
+            .ok_or_else(|| "pending type resolved to a non-type value".to_string());
+    }
+
+    let (_, handle) = pending_parts(vm, pending)?;
+    let roots = instance_array_field(vm, pending, 1)?;
+    match handle.op {
+        PendingOp::Direct => {
+            if roots.len() != 1 {
+                return Err("a direct pending type has invalid native state".into());
+            }
+            let (_, builder) = builder_parts(vm, roots[0])?;
+            let id = lock_state(&builder).id;
+            if let Some(plan) = plans.get(&id) {
+                return Ok(plan.ty.clone());
+            }
+            let resolved = instance_field(vm, roots[0], 3)?;
+            if resolved.is_null() {
+                return Err("pending type references a builder outside its planned group".into());
+            }
+            cloned_type_value(vm, resolved)
+                .map(|value| value.ty)
+                .ok_or_else(|| "class builder resolved to a non-type value".to_string())
+        }
+        PendingOp::Array => {
+            if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
+                return Err("a pending type composite has invalid native state".into());
+            }
+            Ok(baml_type::RealizedTy::List(
+                Box::new(planned_pending_type(vm, roots[0], plans)?),
+                baml_type::TyAttr::default(),
+            ))
+        }
+        PendingOp::Optional => {
+            if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
+                return Err("a pending type composite has invalid native state".into());
+            }
+            let base = planned_pending_type(vm, roots[0], plans)?;
+            let mut members = match base {
+                baml_type::RealizedTy::Union(members, _) => members,
+                other => vec![other],
+            };
+            if !members.iter().any(baml_type::RealizedTy::is_null) {
+                members.push(baml_type::RealizedTy::null());
+            }
+            Ok(baml_type::RealizedTy::Union(
+                members,
+                baml_type::TyAttr::default(),
+            ))
+        }
+        PendingOp::Union => {
+            if roots.is_empty() {
+                return Err("a pending union must contain at least one member".into());
+            }
+            let members = roots
+                .into_iter()
+                .map(|root| {
+                    if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
+                        planned_pending_type(vm, root, plans)
+                    } else {
+                        reflected_type_row(vm, root).map(|row| row.type_value.ty)
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(baml_type::RealizedTy::Union(
+                members,
+                baml_type::TyAttr::default(),
+            ))
+        }
+    }
+}
+
+fn planned_witness_fields(
+    vm: &BexVm,
+    fields: &[PreparedField],
+    plans: &IndexMap<u64, ClassIdentityPlan>,
+) -> Result<Vec<WitnessField>, String> {
+    fields
+        .iter()
+        .map(|field| {
+            let ty = match &field.field_type {
+                PreparedFieldType::Concrete(value) => value.ty.clone(),
+                PreparedFieldType::Pending(value) => planned_pending_type(vm, *value, plans)?,
+            };
+            Ok(WitnessField {
+                name: field.name.clone(),
+                ty,
+            })
+        })
+        .collect()
+}
+
+fn build_group(
+    vm: &mut BexVm,
+    start: Value,
+    implementations: &[Value],
+) -> Result<Value, VmRustFnError> {
     let group = collect_group(vm, start)
         .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
     let (_, start_handle) = builder_parts(vm, start)
@@ -657,7 +785,7 @@ fn build_group(vm: &mut BexVm, start: Value) -> Result<Value, VmRustFnError> {
     let mut defs = collect_external_defs(vm, &prepared)
         .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
 
-    let mut plans = IndexMap::new();
+    let mut identities = IndexMap::new();
     for node in group.values() {
         let mint = vm.tlab.heap().mint_runtime_id();
         let MintId::Runtime(mint_number) = mint else {
@@ -669,27 +797,53 @@ fn build_group(vm: &mut BexVm, start: Value) -> Result<Value, VmRustFnError> {
         );
         let ty =
             baml_type::RealizedTy::Class(name.clone(), Vec::new(), baml_type::TyAttr::default());
+        identities.insert(node.id, ClassIdentityPlan { name, mint, ty });
+    }
+
+    let witness_fields = planned_witness_fields(vm, &prepared[&start_id], &identities)
+        .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
+    let mut witness_diagnostics = Vec::new();
+    let witnesses = validate_class_witnesses(
+        vm,
+        &witness_fields,
+        implementations,
+        &mut witness_diagnostics,
+    );
+    if !witness_diagnostics.is_empty() {
+        return Err(VmRustFnError::Thrown(alloc_compilation_error(
+            vm,
+            &witness_diagnostics,
+        )));
+    }
+    defs.witnesses = witnesses
+        .iter()
+        .map(|witness| witness.definition.clone())
+        .collect();
+
+    let mut plans = IndexMap::new();
+    for node in group.values() {
+        let identity = &identities[&node.id];
         let ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: name.clone(),
+            name: identity.name.clone(),
             fields: Vec::new(),
             description: None,
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            type_tag: baml_type::typetag::class_type_tag(&name.to_string()),
+            type_tag: baml_type::typetag::class_type_tag(&identity.name.to_string()),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             runtime_type: None,
         })));
-        defs.classes.insert(name.clone(), ptr);
+        defs.classes.insert(identity.name.clone(), ptr);
         plans.insert(
             node.id,
             ClassPlan {
-                name,
+                name: identity.name.clone(),
                 ptr,
-                mint,
-                ty,
+                mint: identity.mint,
+                ty: identity.ty.clone(),
             },
         );
     }
@@ -751,6 +905,13 @@ fn build_group(vm: &mut BexVm, start: Value) -> Result<Value, VmRustFnError> {
             owner: HeapPtr::null(),
         });
     }
+
+    for plan in plans.values() {
+        vm.dynamic_dispatch
+            .register_class(plan.name.clone(), plan.ptr);
+    }
+    let start_plan = &plans[&start_id];
+    register_class_witnesses(vm, start_plan.ptr, &start_plan.ty, witnesses);
 
     for node in group.values() {
         lock_state(&node.handle).frozen = true;
