@@ -196,7 +196,7 @@ mod object_spread_tests {
 
     /// Struct-update spread (`Type { ...base, field: v }`) compiles, but the
     /// object printer used to reject it outright: "Expected token/node
-    /// OBJECT_FIELD or R_BRACE, but found SPREAD_ELEMENT".
+    /// `OBJECT_FIELD` or `R_BRACE`, but found `SPREAD_ELEMENT`".
     #[test]
     fn test_spread_formats_and_is_idempotent() {
         let source = concat!(
