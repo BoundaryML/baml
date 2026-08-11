@@ -1,23 +1,5 @@
 # Project Studio data model and query examples
 
-This document derives the smallest useful Project Studio table model from the
-questions users need to answer. Each table includes its proposed public schema,
-why it exists, how it grows, and the queries it makes possible.
-
-The query presentation follows the local query-engine
-[example](https://github.com/BoundaryML/baml/blob/codex/local-query-engine/baml_language/crates/baml_query/EXAMPLE.md),
-but the tables below follow Project Studio's aggregate-plus-retained-evidence
-model rather than the prototype's all-call table. The prototype exposes
-hydrated JSON through helper chains such as `value_string(value_field(...))`.
-Studio instead makes canonical BAML values behave like values in SQL; any
-helper expressions used by DataFusion are internal lowering details.
-
-> **Status:** this is a proposed target SQL model, not a command surface on this
-> branch today. Names omit version suffixes for readability. Exact SQL types,
-> enum spellings, parameter binding, argument root shape, subscript grammar and
-> index base, and absent-path/type mismatch behavior freeze in milestone Q1.
-> `:name` means a typed value supplied by the caller.
-
 ## Start with four questions
 
 1. What happened across every call?
@@ -40,10 +22,46 @@ them.
 | PostgreSQL | Ownership, upload, projection, audit, retention, and deletion workflow |
 | Public SQL | Resident fields plus explicitly marked virtual fields, independent of physical table names |
 
-The proposed-schema tables below contain query-visible fields that are
-resident in ClickHouse for hosted queries. Provider-private scope, projection,
-provenance, and storage-handle columns are omitted. Virtual fields are listed
-separately and never imply a ClickHouse column.
+The proposed schemas below are **logical public relations**, not promises of
+one physical ClickHouse table per relation. Hosted relations combine immutable
+ClickHouse facts with small control-plane or active-state overlays where noted.
+Provider-private scope, projection, provenance, relationship-link, and
+storage-handle columns are omitted. Virtual fields are listed separately and
+never imply a ClickHouse column.
+
+## How this maps to columnar, immutable storage
+
+ClickHouse stores and compresses physical columns independently. These
+relations therefore favor typed scalar columns used for filtering, grouping,
+and ordering; large values and detailed event bodies remain in local evidence
+or S3. Repeating stable function identity in the hottest aggregate relation is
+deliberate: it compresses well and avoids a dimension join on common queries.
+
+ClickHouse is the rebuildable analytical projection. Normal ingestion writes
+deterministic immutable facts in batches; it does not repeatedly update one
+ClickHouse row as a run advances. The public relation resolves those facts at
+the query's fixed watermark.
+
+| Logical row kind | Physical pattern |
+| --- | --- |
+| Compiled metadata: `functions`, `call_sites`, `revisions` | Insert once per revision; immutable |
+| Sealed evidence: terminal `runs`, `retained_calls`, `spawn_instances`, `exact_windows`, `evidence_issues` | Insert only after the source scope is sealed; immutable |
+| Running state | Small active overlay or immutable state snapshots; never an in-place rewrite of the terminal fact |
+| Population totals: `cct_population`, `llm_population`, `spawn_edges` | Immutable batched deltas while active, then one immutable final aggregate per logical key |
+| Growing relationships such as call-to-window or call-to-evidence | Append-only link facts; bounded public lists are assembled by the query provider |
+
+For an aggregate that has both active deltas and a final row, the provider uses
+the final row when it is visible at the bound watermark; otherwise it sums the
+verified deltas. It never adds both. Private active/delta facts may be compacted
+or expired after finalization; they are not an indefinite public time series.
+
+Corrections and integrity conflicts append explicit issue/tombstone facts or
+build a new projection generation. They do not use latest-arrival-wins.
+Authorized erasure is an exceptional controlled delete/rewrite path, not the
+normal ingestion mechanism. Common queries must not depend on mutation
+completion, background deduplication, `FINAL`, or `ReplacingMergeTree` merge
+timing. This follows ClickHouse's
+[immutable-data guidance](https://clickhouse.com/docs/concepts/best-practices/avoid-mutations).
 
 ## Schema rules
 
@@ -55,65 +73,21 @@ Logical types used below:
 - `duration_ns` — non-negative nanosecond duration;
 - `enum` — documented closed set;
 - `value` — virtual BAML value loaded from local evidence or S3 on demand;
-- `list<T>` — bounded list of `T`; and
-- `?` — nullable.
+- `list<T>` — bounded logical list of `T`; incrementally discovered membership
+  is backed by immutable link facts rather than array updates; and
+- `?` — logically nullable; it does not require a physical ClickHouse
+  `Nullable` when an explicit state plus a non-null value column is clearer.
 
 Physical tables still need tenant/project scope, projection generation, row
 hashes, source ranges, and opaque value handles. Those are provider machinery,
 not public query columns. Query snapshot and projection-watermark information
 belongs in `query_outcome` rather than every row.
 
-## Decisions from this column pass
-
-Remove:
-
-- `runs.degraded` and free-form `runs.diagnostics`; typed evidence states and
-  `evidence_issues` explain the problem.
-- LLM/token totals from `runs`; `llm_population` is their one aggregate home.
-- Precomputed display paths from `cct_population`; parent IDs and depth preserve
-  the tree.
-- Public physical value handles, artifact offsets, projection generations, and
-  row hashes.
-- `retained_calls.args`, `retained_calls.return`, and `retained_calls.error`
-  from the resident schema; they remain virtual query fields resolved from
-  local evidence or S3.
-- Required public helper chains such as
-  `baml_value_int(baml_value_at_path(...))`; DataFusion may use internal
-  functions after lowering ordinary SQL syntax.
-- Physical sequence/byte ranges from `exact_windows`; `evidence_id` hides that
-  layout.
-
-Add:
-
-- Run entrypoint identity and exact duration.
-- `retained_calls.node_id` to connect an exact call to its complete summary.
-- `call_sites` because `retained_calls.call_site_id` otherwise has no public
-  target once call-site IDs are emitted; the current dictionary section is
-  present but empty.
-- First/last timestamps on grouped loss summaries.
-- LLM provider identity and token-availability state.
-- Stable IDs on spawn instances and exact-evidence windows.
-- Whole-value equality and nested value traversal through ordinary SQL
-  operators and subscripts.
-- The public name `local_definition_hash` for the artifact's existing
-  `def_content_hash`, so an implementation-local signal is not mistaken for a
-  dependency-aware behavior version.
-
-Still unresolved:
-
-- Remove `process_id` or `engine_id` from `retained_calls` if Q1 proves
-  `run_id` already scopes call identity.
-- Aaron's LLM work will change `llm_population`.
-- Release, deployment, service, git, and bounded application-tag filters need a
-  proper dimension model—not a free-form metadata blob.
-- Logs are one-to-many with calls. Add a bounded `retained_logs` relation or
-  remove public SQL log inspection from P0.
-- `exact_windows` is an evidence ledger, not an event table. Keep detailed
-  event reads on the bounded private RPC unless `retained_events` is designed.
-- Q1 must freeze how an available value with an absent path or incompatible
-  leaf type evaluates. It must remain distinct from unavailable evidence.
-- Q1 must freeze whether `args` is a positional list, a named-argument object,
-  or another canonical shape, plus the numeric subscript base.
+Every key named below is a **logical uniqueness key**. ClickHouse
+[primary keys are sparse ordering indexes](https://clickhouse.com/docs/concepts/best-practices/choosing-a-primary-key),
+not uniqueness constraints; physical `ORDER BY`, partitioning, codecs, and
+secondary projections freeze from measured query workloads rather than from
+these logical keys.
 
 ## 1. `runs`
 
@@ -121,7 +95,7 @@ Still unresolved:
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `run_id` | `id`; primary key | Gives the run a stable identity and joins every run-scoped relation. |
+| `run_id` | `id`; logical key | Gives the run a stable identity and joins every run-scoped relation. |
 | `started_at` | `timestamp` | Supports time-range filters and chronological run lists. |
 | `ended_at` | `timestamp?`; absent while running | Distinguishes open from closed runs and records the wall-clock interval. |
 | `duration_ns` | `duration_ns`; exact elapsed or so-far time | Preserves monotonic elapsed time; subtracting wall-clock timestamps is not reliably exact. |
@@ -149,6 +123,13 @@ Still unresolved:
 keeping them avoids scanning another table for each run-list page.
 `entry_function_id` is the stable join; `entrypoint` also handles tests and
 commands that are not functions.
+
+The terminal ClickHouse fact is immutable. Before terminal evidence exists,
+`status`, so-far duration/totals, and pending evidence states come from the
+bound active-state overlay. `projection_state` and `retention_state` come from
+PostgreSQL control state because a failed or erased ClickHouse projection
+cannot authoritatively describe itself. The public `runs` relation composes
+those sources without rewriting the terminal row.
 
 ### Which recent runs had problems?
 
@@ -196,7 +177,7 @@ The historical name means **call-tree summaries**.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `run_id` | `id`; primary key with `node_id` | Scopes the call-tree location to one run and joins run lifecycle and revision data. |
+| `run_id` | `id`; logical key with `node_id` | Scopes the call-tree location to one run and joins run lifecycle and revision data. |
 | `node_id` | `id`; call-tree location within the run | Gives each distinct call path a stable identity for parent links and retained-call joins. |
 | `parent_node_id` | `id?`; absent for the root | Reconstructs the call tree and attributes nested work to its caller. |
 | `depth` | `integer` | Makes indentation, depth filters, and bounded tree views cheap without recursive traversal. |
@@ -224,9 +205,12 @@ The historical name means **call-tree summaries**.
 - **Enables:** complete call/error counts, inclusive/direct/waiting time, and
   duration distributions.
 
-One million calls from the same parent to the same function update one row. A
-different parent creates another row. Highly dynamic paths can still grow the
-table, so path-count and memory tests remain release gates.
+One million calls from the same parent to the same function contribute to one
+logical aggregate key. They do not cause one million ClickHouse updates: the
+profiler folds them in memory, the projector writes immutable batched deltas,
+and run finalization writes one immutable final aggregate. A different parent
+creates another logical key. Highly dynamic paths can still grow the table, so
+path-count and memory tests remain release gates.
 
 Function identity is duplicated from `functions` deliberately: these are the
 hottest aggregate queries, and avoiding a dimension join is worth the small
@@ -296,7 +280,7 @@ The mean is directional, not a percentile or proof of a regression.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `run_id` | `id`; primary key with `call_id` | Scopes the retained invocation to one run and joins run/revision context. |
+| `run_id` | `id`; logical key with `call_id` | Scopes the retained invocation to one run and joins run/revision context. |
 | `call_id` | `id` | Gives the exact invocation a stable identity for lookup and causal links. |
 | `parent_call_id` | `id?`; parent may not be retained | Preserves exact parentage when known without requiring the parent itself to have been retained. |
 | `node_id` | `id`; joins `cct_population` | Connects the retained example to the complete call-tree summary that led the user to inspect it. |
@@ -377,6 +361,13 @@ clock. Q1 should remove `process_id` or `engine_id` if `run_id` already prevents
 identity collisions. The physical provider also needs private opaque handles
 for each captured role; `evidence_ids` is the public evidence link, not the S3
 object key or byte range.
+
+The terminal call fact is immutable. A retained call still executing appears
+through the active-state overlay; terminal status, duration, and value states
+are inserted only when their source scope seals. `retention_reasons`,
+`exact_window_ids`, and `evidence_ids` are bounded public lists assembled from
+append-only provider link facts, so discovering another containing window does
+not rewrite the call row.
 
 The three value-state columns are required: unavailable must not silently mean
 ordinary SQL `NULL` or predicate non-match. The exact “could not evaluate”
@@ -469,7 +460,7 @@ comparison, and the limit applies only after that value condition.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `issue_id` | `id`; primary key for one sealed summary | Gives an immutable grouped issue a stable identity for deduplication and audit. |
+| `issue_id` | `id`; logical key for one sealed summary | Gives an immutable grouped issue a stable identity for deduplication and audit. |
 | `run_id` | `id?`; absent before run binding | Attributes the issue to a user-visible run when that association is known. |
 | `session_id` | `id?`; absent for non-runtime issues | Scopes runtime evidence that exists before or outside a single run association. |
 | `evidence_id` | `id?`; sealed evidence range summarized | Identifies the retained evidence whose completeness or integrity is affected; provider-private metadata resolves its storage location. |
@@ -493,6 +484,11 @@ If each affected call becomes a row, this table recreates traffic-proportional
 growth. The grouped-row contract must freeze in Q1. Current capture-loss
 records are one input; integrity, projection, and retention diagnostics use the
 same typed issue shape instead of a free-form run message.
+
+An issue row is emitted only when its source range is sealed, so `count`,
+`first_seen_at`, and `last_seen_at` never increment in place. If a run binding
+is discovered later, an immutable provider link associates the issue with the
+run; the sealed summary is not rewritten.
 
 ### Is the evidence complete enough to trust?
 
@@ -551,7 +547,7 @@ behavior across revisions.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `revision_id` | `id`; primary key with `function_id` | Scopes revision-local function IDs and joins the function to its compiled artifact. |
+| `revision_id` | `id`; logical key with `function_id` | Scopes revision-local function IDs and joins the function to its compiled artifact. |
 | `function_id` | `id` | Provides the compact runtime identity emitted in call evidence. |
 | `definition_key` | `string?`; absent for synthetic/internal functions | Connects the same logical user function across revisions. |
 | `local_definition_hash` | `bytes?`; artifact field `def_content_hash` | Detects a change to this function's own compiled signature or body without claiming that its dependency closure is unchanged. |
@@ -577,7 +573,7 @@ population land together.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `revision_id` | `id`; primary key with `call_site_id` | Scopes revision-local call-site IDs and connects them to the correct source snapshot. |
+| `revision_id` | `id`; logical key with `call_site_id` | Scopes revision-local call-site IDs and connects them to the correct source snapshot. |
 | `call_site_id` | `id` | Provides the compact identity emitted by retained calls for source navigation. |
 | `source_path` | `string` | Identifies the file containing the call expression. |
 | `source_start` | `integer` | Locates the start of the call expression for exact editor navigation. |
@@ -588,7 +584,7 @@ population land together.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `revision_id` | `id`; primary key | Gives compiled program structure a stable identity and scopes runtime function/call-site IDs. |
+| `revision_id` | `id`; logical key | Gives compiled program structure a stable identity and scopes runtime function/call-site IDs. |
 | `source_snapshot_id` | `id` | Connects observations to the exact source snapshot users need to inspect. |
 | `compiler_id` | `string` | Records which compiler produced the artifact so behavior can be reproduced and version differences investigated. |
 | `capture_policy_version` | `integer` | Connects the revision to the policy semantics used by decoded function capture fields. |
@@ -609,6 +605,10 @@ population land together.
 The artifact dictionary also contains declared names, owner/lambda identity,
 package/namespace parts, and a raw capture bitfield. P0 omits display-only
 identity parts and exposes only decoded policy fields with a user question.
+
+All three metadata relations are immutable. Reprocessing the same revision
+must reproduce the same logical rows and hashes; a different row for the same
+logical identity is an integrity conflict, not an update.
 
 Do not add a public `compiler_options_hash` merely to duplicate identity. The
 revision constructor currently commits to optimization level and
@@ -661,7 +661,7 @@ different whole-program contexts.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `run_id` | `id`; primary key with `node_id`, `provider`, and `model` | Scopes usage to one run and supports run-level token accounting. |
+| `run_id` | `id`; logical key with `node_id`, `provider`, and `model` | Scopes usage to one run and supports run-level token accounting. |
 | `node_id` | `id`; joins `cct_population` | Attributes LLM activity to the call-tree location that caused it. |
 | `provider` | `string`; provisional | Disambiguates identical model names across providers. Remove it if Aaron's model supplies a single stable model identity instead. |
 | `model` | `string` | Groups usage and errors by the model users selected. |
@@ -685,6 +685,10 @@ Aaron's work. Do not freeze additional token classes or attempt/call semantics
 before that lands. Current model evidence also does not cleanly expose a
 separate provider identity, so `provider` is a required addition only if
 Aaron's model retains provider/model as the public grouping.
+
+Like `cct_population`, active usage arrives as immutable batched deltas and a
+sealed run produces one immutable final row per logical key. The public
+relation selects the final row or sums active deltas, never both.
 
 ### Which models used tokens or produced errors?
 
@@ -718,7 +722,7 @@ those rows separately.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `run_id` | `id`; primary key with `edge_id` | Scopes the aggregate relationship to one run. |
+| `run_id` | `id`; logical key with `edge_id` | Scopes the aggregate relationship to one run. |
 | `edge_id` | `id` | Gives the parent-location/child-function relationship a stable join key for retained examples. |
 | `parent_node_id` | `id` | Identifies which call-tree location initiated the child work. |
 | `child_function_id` | `id` | Identifies the function being spawned through the run's revision dictionary. |
@@ -735,7 +739,7 @@ those rows separately.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `run_id` | `id`; primary key with `spawn_id` | Scopes the retained spawn to one run and joins run/revision context. |
+| `run_id` | `id`; logical key with `spawn_id` | Scopes the retained spawn to one run and joins run/revision context. |
 | `spawn_id` | `id` | Gives the exact spawn a stable identity for inspection and causal links. |
 | `edge_id` | `id`; joins `spawn_edges` | Connects the retained example to its complete aggregate relationship. |
 | `thread_id` | `id` | Places the spawn on its logical execution thread for ordering and concurrency diagnosis. |
@@ -756,6 +760,11 @@ those rows separately.
 - **Keep:** only if concurrency diagnosis is P0.
 - **Enables:** fan-out, failed/cancelled child work, outstanding work, and
   links to retained child evidence.
+
+`spawn_edges` follows the same immutable delta/final pattern as
+`cct_population`. A terminal `spawn_instances` row is immutable; a still-open
+instance comes from the active overlay. Its window and evidence lists are
+assembled from append-only provider link facts rather than updated arrays.
 
 ### Which child functions produced failed work?
 
@@ -806,7 +815,7 @@ cover some of the same events.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
-| `run_id` | `id`; primary key with `window_id` | Scopes the retained evidence region to the run users are investigating. |
+| `run_id` | `id`; logical key with `window_id` | Scopes the retained evidence region to the run users are investigating. |
 | `window_id` | `id` | Gives the retained region a stable identity for links from calls and spawns. |
 | `session_id` | `id` | Connects the window to profiler-session evidence and supports recovery before all events bind cleanly to a run. |
 | `source` | `enum`; recent_ring/flight_dump/raw/explicit | Explains which capture mechanism produced the window and what guarantees it can provide. |
@@ -830,6 +839,12 @@ cover some of the same events.
   table.
 - **Enables:** whether incident evidence exists, why it was retained, and
   whether it is complete.
+
+The ClickHouse window row is inserted after the dump seals and is immutable.
+`pending` can appear only through the active/control overlay before that row
+exists. Later corruption, loss, or authorized erasure is represented by issue
+or tombstone facts composed into the public `evidence_state`; it does not
+rewrite the sealed window metadata.
 
 ### What detailed incident evidence was retained?
 
@@ -906,6 +921,11 @@ authoritative or indefinite evidence.
 | `spawn_instances` | Conditional on concurrency P0 | Retained child tasks |
 | `cct_windows` | Excluded from minimal v1 | Active locations multiplied by time |
 
+This is the public catalog. Provider-private active snapshots, aggregate
+deltas, immutable relationship links, batch ledgers, and projection provenance
+do not become additional public relations merely because the physical provider
+uses them.
+
 ## Query rules
 
 1. Use `runs` to find a run.
@@ -926,3 +946,57 @@ authoritative or indefinite evidence.
 - [Local artifacts and value store](CANONICAL/design/storage/local-artifacts.md)
 - [Hosted ClickHouse boundary](CANONICAL/design/storage/clickhouse.md)
 - [Delivery milestones](CANONICAL/design/09-delivery-plan.md)
+
+# Readers, Ignore:
+
+## Decisions from this column pass
+
+Remove:
+
+- `runs.degraded` and free-form `runs.diagnostics`; typed evidence states and
+  `evidence_issues` explain the problem.
+- LLM/token totals from `runs`; `llm_population` is their one aggregate home.
+- Precomputed display paths from `cct_population`; parent IDs and depth preserve
+  the tree.
+- Public physical value handles, artifact offsets, projection generations, and
+  row hashes.
+- `retained_calls.args`, `retained_calls.return`, and `retained_calls.error`
+  from the resident schema; they remain virtual query fields resolved from
+  local evidence or S3.
+- Required public helper chains such as
+  `baml_value_int(baml_value_at_path(...))`; DataFusion may use internal
+  functions after lowering ordinary SQL syntax.
+- Physical sequence/byte ranges from `exact_windows`; `evidence_id` hides that
+  layout.
+
+Add:
+
+- Run entrypoint identity and exact duration.
+- `retained_calls.node_id` to connect an exact call to its complete summary.
+- `call_sites` because `retained_calls.call_site_id` otherwise has no public
+  target once call-site IDs are emitted; the current dictionary section is
+  present but empty.
+- First/last timestamps on grouped loss summaries.
+- LLM provider identity and token-availability state.
+- Stable IDs on spawn instances and exact-evidence windows.
+- Whole-value equality and nested value traversal through ordinary SQL
+  operators and subscripts.
+- The public name `local_definition_hash` for the artifact's existing
+  `def_content_hash`, so an implementation-local signal is not mistaken for a
+  dependency-aware behavior version.
+
+Still unresolved:
+
+- Remove `process_id` or `engine_id` from `retained_calls` if Q1 proves
+  `run_id` already scopes call identity.
+- Aaron's LLM work will change `llm_population`.
+- Release, deployment, service, git, and bounded application-tag filters need a
+  proper dimension model—not a free-form metadata blob.
+- Logs are one-to-many with calls. Add a bounded `retained_logs` relation or
+  remove public SQL log inspection from P0.
+- `exact_windows` is an evidence ledger, not an event table. Keep detailed
+  event reads on the bounded private RPC unless `retained_events` is designed.
+- Q1 must freeze how an available value with an absent path or incompatible
+  leaf type evaluates. It must remain distinct from unavailable evidence.
+- Q1 must freeze whether `args` is a positional list, a named-argument object,
+  or another canonical shape, plus the numeric subscript base.
