@@ -113,6 +113,16 @@ class Package {
     $rust_function
   }
 
+  //baml:mut_vm
+  function get_enum(self, name: string) -> baml.reflect.enum.Type? throws never {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function get_interface(self, name: string) -> baml.reflect.interface.Type? throws never {
+    $rust_function
+  }
+
   /// Return a derived package view that exports exact runtime type values
   /// under source-visible names for subsequent Package.compile calls.
   //baml:mut_vm
@@ -127,6 +137,16 @@ class Package {
 
   //baml:mut_vm
   function classes(self) -> map<string, baml.reflect.class.Type> throws never {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function enums(self) -> map<string, baml.reflect.enum.Type> throws never {
+    $rust_function
+  }
+
+  //baml:mut_vm
+  function interfaces(self) -> map<string, baml.reflect.interface.Type> throws never {
     $rust_function
   }
 

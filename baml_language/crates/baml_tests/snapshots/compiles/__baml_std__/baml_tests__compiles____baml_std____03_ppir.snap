@@ -2208,12 +2208,16 @@ function baml.reflect.compile(files: map<string, string>, packages: map<string, 
 function baml.reflect.current() -> baml.reflect.Package  [builtin]
 function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
 function baml.reflect.diagnostics(self: ?) -> baml.reflect.Diagnostic[]  [builtin]
+function baml.reflect.enums(self: ?) -> map<string, baml.reflect.enum.Type>  [builtin]
 function baml.reflect.eval(self: ?, source: string) -> T  [expr] {
   { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => throw baml.reflect.errors.EvaluationError { message: "session evaluatio..." } }
 }
 function baml.reflect.functions(self: ?) -> map<string, baml.reflect.function.Type>  [builtin]
 function baml.reflect.get_class(self: ?, name: string) -> baml.reflect.class.Type?  [builtin]
+function baml.reflect.get_enum(self: ?, name: string) -> baml.reflect.enum.Type?  [builtin]
 function baml.reflect.get_function(self: ?, name: string) -> F?  [builtin]
+function baml.reflect.get_interface(self: ?, name: string) -> baml.reflect.interface.Type?  [builtin]
+function baml.reflect.interfaces(self: ?) -> map<string, baml.reflect.interface.Type>  [builtin]
 function baml.reflect.new(packages: map<string, baml.reflect.Package> = ...) -> baml.reflect.Session  [expr] {
   {  } Session._new(packages)
 }

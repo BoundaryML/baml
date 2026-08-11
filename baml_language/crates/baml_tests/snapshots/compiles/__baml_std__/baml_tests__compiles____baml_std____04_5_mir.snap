@@ -9230,11 +9230,19 @@ fn baml.reflect.Package._finish = builtin(vm)
 
 fn baml.reflect.Package.get_class = builtin(vm)
 
+fn baml.reflect.Package.get_enum = builtin(vm)
+
+fn baml.reflect.Package.get_interface = builtin(vm)
+
 fn baml.reflect.Package.with_types = builtin(vm)
 
 fn baml.reflect.Package.get_function = builtin(vm)
 
 fn baml.reflect.Package.classes = builtin(vm)
+
+fn baml.reflect.Package.enums = builtin(vm)
+
+fn baml.reflect.Package.interfaces = builtin(vm)
 
 fn baml.reflect.Package.functions = builtin(vm)
 

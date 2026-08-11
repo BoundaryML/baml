@@ -122,7 +122,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
                 global_names: IndexMap::new(),
-                class_types: IndexMap::new(),
+                type_values: IndexMap::new(),
                 diagnostics: Vec::new(),
                 dependencies: Box::new([]),
                 dependency_names: IndexMap::new(),
@@ -176,7 +176,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         let runtime = package.runtime.as_mut().expect("runtime image");
         runtime.objects = vec![type_ptr, function_ptr, class_ptr].into_boxed_slice();
         runtime
-            .class_types
+            .type_values
             .insert("RuntimeClass".to_string(), type_ptr);
         (tlab, package_ptr, function_ptr)
     }
@@ -196,7 +196,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
     let Object::Package(package) = (unsafe { moved_package.get() }) else {
         panic!("root ceased to be a package")
     };
-    let moved_type = package.runtime.as_ref().unwrap().class_types["RuntimeClass"];
+    let moved_type = package.runtime.as_ref().unwrap().type_values["RuntimeClass"];
     let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
         panic!("package mint ceased to be a type")
     };

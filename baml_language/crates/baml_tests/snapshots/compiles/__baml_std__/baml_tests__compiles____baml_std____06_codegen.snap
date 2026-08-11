@@ -6413,13 +6413,25 @@ function baml.reflect.Package.compile(files: map<string, string>, packages: map<
 function baml.reflect.Package.diagnostics(self: baml.reflect.Package) -> baml.reflect.Diagnostic[] {
 }
 
+function baml.reflect.Package.enums(self: baml.reflect.Package) -> map<string, baml.reflect.enum.Type> {
+}
+
 function baml.reflect.Package.functions(self: baml.reflect.Package) -> map<string, baml.reflect.function.Type> {
 }
 
 function baml.reflect.Package.get_class(self: baml.reflect.Package, name: string) -> baml.reflect.class.Type | null {
 }
 
+function baml.reflect.Package.get_enum(self: baml.reflect.Package, name: string) -> baml.reflect.enum.Type | null {
+}
+
 function baml.reflect.Package.get_function(self: baml.reflect.Package, name: string) -> #0 | null {
+}
+
+function baml.reflect.Package.get_interface(self: baml.reflect.Package, name: string) -> baml.reflect.interface.Type | null {
+}
+
+function baml.reflect.Package.interfaces(self: baml.reflect.Package) -> map<string, baml.reflect.interface.Type> {
 }
 
 function baml.reflect.Package.tests(self: baml.reflect.Package) -> map<string, () -> null throws unknown> {
