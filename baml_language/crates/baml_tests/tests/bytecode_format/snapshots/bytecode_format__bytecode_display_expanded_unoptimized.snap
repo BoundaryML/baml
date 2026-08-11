@@ -1734,65 +1734,39 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
        43   pop 1                              
        44   jump -28                           (to 16)
 
-  13   45   load_type 0                        
-       46   load_type 1                        
-       47   alloc_map 0                        
-       48   store_var 11                       (schema)
+  13   45   load_const 7                       ("object")
 
-  14   49   load_type 0                        
-       50   load_type 1                        
-       51   load_var 11                        (schema)
-       52   load_const 7                       ("type")
-       53   load_const 8                       ("object")
-       54   call 37 ntypeargs=2                (baml.Map.set)
-       55   pop 1                              
+  15   46   load_var2 4 5                      
 
-  15   56   load_type 0                        
-       57   load_type 1                        
-       58   load_var 11                        (schema)
-       59   load_const 9                       ("properties")
-       60   load_var 4                         (props)
-       61   call 37 ntypeargs=2                (baml.Map.set)
-       62   pop 1                              
-
-  16   63   load_type 0                        
-       64   load_type 1                        
-       65   load_var 11                        (schema)
-       66   load_const 10                      ("required")
-       67   load_var 5                         (required)
-       68   call 37 ntypeargs=2                (baml.Map.set)
-       69   pop 1                              
-
-  17   70   load_type 0                        
-       71   load_type 1                        
-       72   load_var 11                        (schema)
-       73   load_const 11                      ("additionalProperties")
-       74   load_const 12                      (false)
-       75   call 37 ntypeargs=2                (baml.Map.set)
-       76   pop 1                              
-
-  18   77   load_var 11                        (schema)
-       78   store_var 2                        (_0)
-       79   load_var 2                         (_0)
-       80   return                             
+  16   47   load_const 8                       (false)
+       48   load_const 9                       ("type")
+       49   load_const 10                      ("properties")
+       50   load_const 11                      ("required")
+       51   load_const 12                      ("additionalProperties")
+       52   load_type 0                        
+       53   load_type 1                        
+       54   alloc_map 4                        
+       55   store_var 2                        (_0)
+       56   load_var 2                         (_0)
+       57   return                             
 }
 
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
 }
 
 function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> baml.json.json {
-  105   0     load_var 1                         (self)
+  106   0     load_var 1                         (self)
         1     load_field 2                       (next_id)
         2     store_var 4                        (id)
 
-  106   3     load_var 1                         (self)
+  107   3     load_var 1                         (self)
         4     copy 0                             
         5     load_field 2                       (next_id)
         6     load_const 0                       (1)
         7     bin_op +                           
         8     store_field 2                      (next_id)
 
-  107   9     load_var2 4 2                      
+  108   9     load_var2 4 2                      
         10    load_var 3                         (params)
         11    call 882 ntypeargs=0               (ai.mcp.rpc_line)
         12    store_var 5                        (_6)
@@ -1800,33 +1774,33 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
         14    call 884 ntypeargs=0               (ai.mcp.McpConnection._send)
         15    pop 1                              
 
-  108   16    load_const 1                       (true)
+  109   16    load_const 1                       (true)
         17    pop_jump_if_false +2               (to 19)
         18    jump +19                           (to 37)
 
-  151   19    load_type 2                        
+  152   19    load_type 2                        
         20    load_var 1                         (self)
         21    load_field 0                       (server_name)
         22    call 139 ntypeargs=1               (baml.String.from)
         23    store_var 23                       (_66)
 
-  152   24    load_type 2                        
+  153   24    load_type 2                        
         25    load_var 2                         (method)
         26    call 139 ntypeargs=1               (baml.String.from)
         27    store_var 24                       (_70)
 
-  151   28    load_const 3                       ("mcp/")
+  152   28    load_const 3                       ("mcp/")
         29    load_var 23                        (_66)
         30    bin_op +                           
 
-  152   31    load_const 4                       ("no response for ")
+  153   31    load_const 4                       ("no response for ")
         32    load_var 24                        (_70)
         33    bin_op +                           
         34    load_const 5                       (null)
         35    init_instance 0                    (ai.errors.NetworkFailure .provider, .detail, .raw_body)
         36    throw                              
 
-  109   37    load_var 1                         (self)
+  110   37    load_var 1                         (self)
         38    load_field 1                       (p)
         39    load_field 0                       (stdout)
         40    load_type 6                        
@@ -1837,13 +1811,13 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
         45    load_var 7                         (e)
         46    throw_if_panic                     
 
-  112   47    load_type 2                        
+  113   47    load_type 2                        
         48    load_var 1                         (self)
         49    load_field 0                       (server_name)
         50    call 139 ntypeargs=1               (baml.String.from)
         51    store_var 8                        (_13)
 
-  113   52    load_type 8                        
+  114   52    load_type 8                        
         53    load_var 7                         (e)
         54    call 139 ntypeargs=1               (baml.String.from)
         55    store_var 10                       (_18)
@@ -1852,70 +1826,70 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
         58    call 139 ntypeargs=1               (baml.String.from)
         59    store_var 9                        (_17)
 
-  112   60    load_const 9                       ("mcp/")
+  113   60    load_const 9                       ("mcp/")
         61    load_var 8                         (_13)
         62    bin_op +                           
 
-  113   63    load_const 10                      ("reading from the MCP server failed: ")
+  114   63    load_const 10                      ("reading from the MCP server failed: ")
         64    load_var 9                         (_17)
         65    bin_op +                           
         66    load_const 5                       (null)
         67    init_instance 1                    (ai.errors.NetworkFailure .provider, .detail, .raw_body)
         68    throw                              
 
-  118   69    load_var 6                         (next)
+  119   69    load_var 6                         (next)
         70    store_var 11                       (_21)
         71    load_var 11                        (_21)
         72    narrow_bind 0 11                   
         73    pop_jump_if_false +2               (to 75)
         74    jump +19                           (to 93)
 
-  142   75    load_type 2                        
+  143   75    load_type 2                        
         76    load_var 1                         (self)
         77    load_field 0                       (server_name)
         78    call 139 ntypeargs=1               (baml.String.from)
         79    store_var 21                       (_58)
 
-  143   80    load_type 2                        
+  144   80    load_type 2                        
         81    load_var 2                         (method)
         82    call 139 ntypeargs=1               (baml.String.from)
         83    store_var 22                       (_62)
 
-  142   84    load_const 11                      ("mcp/")
+  143   84    load_const 11                      ("mcp/")
         85    load_var 21                        (_58)
         86    bin_op +                           
 
-  143   87    load_const 12                      ("the MCP server stream ended before answering ")
+  144   87    load_const 12                      ("the MCP server stream ended before answering ")
         88    load_var 22                        (_62)
         89    bin_op +                           
         90    load_const 5                       (null)
         91    init_instance 2                    (ai.errors.NetworkFailure .provider, .detail, .raw_body)
         92    throw                              
 
-  118   93    load_var 11                        (_21)
+  119   93    load_var 11                        (_21)
         94    store_var 12                       (line)
 
-  120   95    load_var 12                        (line)
+  121   95    load_var 12                        (line)
         96    call 145 ntypeargs=0               (baml.String.trim)
         97    store_var 13                       (trimmed)
 
-  121   98    load_var 13                        (trimmed)
+  122   98    load_var 13                        (trimmed)
         99    call 140 ntypeargs=0               (baml.String.length)
         100   load_const 13                      (0)
         101   cmp_int_op >                       
         102   pop_jump_if_false -86              (to 16)
 
-  123   103   load_var 13                        (trimmed)
+  124   103   load_var 13                        (trimmed)
         104   call 329 ntypeargs=0               (baml.json.parse)
         105   store_var 14                       (msg)
         106   jump +5                            (to 111)
         107   load_var 15                        (e)
         108   throw_if_panic                     
 
-  124   109   load_const 5                       (null)
+  125   109   load_const 5                       (null)
         110   store_var 14                       (msg)
 
-  126   111   load_type 14                       
+  127   111   load_type 14                       
         112   load_var 14                        (msg)
         113   load_const 15                      (".id")
         114   load_const 0                       (1)
@@ -1925,52 +1899,52 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
         118   cmp_int_op ==                      
         119   pop_jump_if_false -103             (to 16)
 
-  127   120   load_type 16                       
+  128   120   load_type 16                       
         121   load_var 14                        (msg)
         122   load_const 17                      (".error")
         123   load_const 5                       (null)
         124   call 342 ntypeargs=1               (baml.json.path_or)
         125   store_var 16                       (err)
 
-  128   126   load_var 16                        (err)
+  129   126   load_var 16                        (err)
         127   load_const 5                       (null)
         128   call 614 ntypeargs=0               (baml.ops.equals_equals)
         129   unary_op !                         
         130   pop_jump_if_false +2               (to 132)
         131   jump +7                            (to 138)
 
-  136   132   load_type 16                       
+  137   132   load_type 16                       
         133   load_var 14                        (msg)
         134   load_const 18                      (".result")
         135   load_const 5                       (null)
         136   call 342 ntypeargs=1               (baml.json.path_or)
         137   return                             
 
-  130   138   load_type 2                        
+  131   138   load_type 2                        
         139   load_var 1                         (self)
         140   load_field 0                       (server_name)
         141   call 139 ntypeargs=1               (baml.String.from)
         142   store_var 17                       (_43)
 
-  131   143   load_type 19                       
+  132   143   load_type 19                       
         144   load_var 16                        (err)
         145   load_const 20                      (".code")
         146   load_const 5                       (null)
         147   call 342 ntypeargs=1               (baml.json.path_or)
         148   store_var 18                       (_46)
 
-  132   149   load_type 2                        
+  133   149   load_type 2                        
         150   load_var 16                        (err)
         151   load_const 21                      (".message")
         152   load_const 22                      ("MCP error")
         153   call 342 ntypeargs=1               (baml.json.path_or)
         154   store_var 19                       (_49)
 
-  133   155   load_var 16                        (err)
+  134   155   load_var 16                        (err)
         156   call 330 ntypeargs=0               (baml.json.stringify)
         157   store_var 20                       (_52)
 
-  130   158   load_const 23                      ("mcp/")
+  131   158   load_const 23                      ("mcp/")
         159   load_var 17                        (_43)
         160   bin_op +                           
         161   load_var2 18 19                    
@@ -1980,307 +1954,260 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
 }
 
 function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> null {
-  89   0    load_type 0            
-       1    load_var 2             (line)
-       2    load_const 1           ("\n")
-       3    load_type 0            
-       4    alloc_array 2          
-       5    load_const 2           ("")
-       6    call 15 ntypeargs=1    (baml.Array.join)
-       7    store_var 4            (framed)
+  90    0    load_type 0            
+        1    load_var 2             (line)
+        2    load_const 1           ("\n")
+        3    load_type 0            
+        4    alloc_array 2          
+        5    load_const 2           ("")
+        6    call 15 ntypeargs=1    (baml.Array.join)
+        7    store_var 4            (framed)
 
-  90   8    load_var 1             (self)
-       9    load_field 1           (p)
-       10   load_var 4             (framed)
-       11   sys_op 249             (baml.sys.Process.write_stdin)
-       12   pop 1                  
-       13   jump +25               (to 38)
-       14   load_var 5             (e)
-       15   throw_if_panic         
+  91    8    load_var 1             (self)
+        9    load_field 1           (p)
+        10   load_var 4             (framed)
+        11   sys_op 249             (baml.sys.Process.write_stdin)
+        12   pop 1                  
+        13   jump +25               (to 38)
+        14   load_var 5             (e)
+        15   throw_if_panic         
 
-  93   16   load_type 0            
-       17   load_var 1             (self)
-       18   load_field 0           (server_name)
-       19   call 139 ntypeargs=1   (baml.String.from)
-       20   store_var 6            (_12)
+  94    16   load_type 0            
+        17   load_var 1             (self)
+        18   load_field 0           (server_name)
+        19   call 139 ntypeargs=1   (baml.String.from)
+        20   store_var 6            (_12)
 
-  94   21   load_type 3            
-       22   load_var 5             (e)
-       23   call 139 ntypeargs=1   (baml.String.from)
-       24   store_var 8            (_17)
-       25   load_type 0            
-       26   load_var 8             (_17)
-       27   call 139 ntypeargs=1   (baml.String.from)
-       28   store_var 7            (_16)
+  95    21   load_type 3            
+        22   load_var 5             (e)
+        23   call 139 ntypeargs=1   (baml.String.from)
+        24   store_var 8            (_17)
+        25   load_type 0            
+        26   load_var 8             (_17)
+        27   call 139 ntypeargs=1   (baml.String.from)
+        28   store_var 7            (_16)
 
-  93   29   load_const 4           ("mcp/")
-       30   load_var 6             (_12)
-       31   bin_op +               
+  94    29   load_const 4           ("mcp/")
+        30   load_var 6             (_12)
+        31   bin_op +               
 
-  94   32   load_const 5           ("writing to the MCP server failed: ")
-       33   load_var 7             (_16)
-       34   bin_op +               
-       35   load_const 6           (null)
-       36   init_instance 0        (ai.errors.NetworkFailure .provider, .detail, .raw_body)
-       37   throw                  
+  95    32   load_const 5           ("writing to the MCP server failed: ")
+        33   load_var 7             (_16)
+        34   bin_op +               
+        35   load_const 6           (null)
+        36   init_instance 0        (ai.errors.NetworkFailure .provider, .detail, .raw_body)
+        37   throw                  
 
-  99   38   load_const 6           (null)
-       39   store_var 3            (_0)
-       40   load_var 3             (_0)
-       41   return                 
+  100   38   load_const 6           (null)
+        39   store_var 3            (_0)
+        40   load_var 3             (_0)
+        41   return                 
 }
 
 function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args: map<string, unknown>) -> string {
-  188   0    load_type 0                        
-        1    load_type 1                        
-        2    alloc_map 0                        
-        3    store_var 5                        (params)
+  189   0    load_var2 2 3                      
+        1    load_const 0                       ("name")
+        2    load_const 1                       ("arguments")
+        3    load_type 2                        
+        4    load_type 3                        
+        5    alloc_map 2                        
+        6    store_var 5                        (params)
 
-  189   4    load_type 0                        
-        5    load_type 1                        
-        6    load_var 5                         (params)
-        7    load_const 2                       ("name")
-        8    load_var 2                         (name)
-        9    call 37 ntypeargs=2                (baml.Map.set)
-        10   pop 1                              
+  193   7    load_var 1                         (self)
+        8    load_const 4                       ("tools/call")
+        9    load_var 5                         (params)
+        10   call 885 ntypeargs=0               (ai.mcp.McpConnection._request)
+        11   store_var 6                        (result)
 
-  190   11   load_type 0                        
-        12   load_type 1                        
-        13   load_var 5                         (params)
-        14   load_const 3                       ("arguments")
-        15   load_var 3                         (args)
-        16   call 37 ntypeargs=2                (baml.Map.set)
-        17   pop 1                              
+  194   12   load_type 2                        
+        13   alloc_array 0                      
+        14   store_var 7                        (texts)
 
-  191   18   load_var 1                         (self)
-        19   load_const 4                       ("tools/call")
-        20   load_var 5                         (params)
-        21   call 885 ntypeargs=0               (ai.mcp.McpConnection._request)
-        22   store_var 6                        (result)
+  195   15   load_type 5                        
+        16   load_var 6                         (result)
+        17   load_const 6                       (".content")
+        18   load_type 7                        
+        19   alloc_array 0                      
+        20   call 342 ntypeargs=1               (baml.json.path_or)
+        21   load_type 8                        
+        22   load_const 9                       ("iter")
+        23   virtual_call nargs=1 ntypeargs=0   
+        24   store_var 8                        (_12)
+        25   load_var 8                         (_12)
+        26   load_type 10                       
+        27   load_const 11                      ("next")
+        28   virtual_call nargs=1 ntypeargs=0   
+        29   store_var 9                        (_13)
+        30   load_var 9                         (_13)
+        31   is_type 12                         
+        32   pop_jump_if_false +2               (to 34)
+        33   jump +21                           (to 54)
+        34   load_var 9                         (_13)
+        35   store_var 10                       (item)
 
-  192   23   load_type 0                        
-        24   alloc_array 0                      
-        25   store_var 7                        (texts)
+  196   36   load_type 2                        
+        37   load_var 10                        (item)
+        38   load_const 13                      (".type")
+        39   load_const 14                      ("")
+        40   call 342 ntypeargs=1               (baml.json.path_or)
+        41   load_const 15                      ("text")
+        42   cmp_op ==                          
+        43   pop_jump_if_false -18              (to 25)
 
-  193   26   load_type 5                        
-        27   load_var 6                         (result)
-        28   load_const 6                       (".content")
-        29   load_type 7                        
-        30   alloc_array 0                      
-        31   call 342 ntypeargs=1               (baml.json.path_or)
-        32   load_type 8                        
-        33   load_const 9                       ("iter")
-        34   virtual_call nargs=1 ntypeargs=0   
-        35   store_var 8                        (_18)
-        36   load_var 8                         (_18)
-        37   load_type 10                       
-        38   load_const 11                      ("next")
-        39   virtual_call nargs=1 ntypeargs=0   
-        40   store_var 9                        (_19)
-        41   load_var 9                         (_19)
-        42   is_type 12                         
-        43   pop_jump_if_false +2               (to 45)
-        44   jump +21                           (to 65)
-        45   load_var 9                         (_19)
-        46   store_var 10                       (item)
+  197   44   load_type 2                        
+        45   load_var 10                        (item)
+        46   load_const 16                      (".text")
+        47   load_const 17                      ("")
+        48   call 342 ntypeargs=1               (baml.json.path_or)
+        49   store_var 11                       (_22)
+        50   load_var2 7 11                     
+        51   call 4 ntypeargs=0                 (baml.Array.push)
+        52   pop 1                              
+        53   jump -28                           (to 25)
 
-  194   47   load_type 0                        
-        48   load_var 10                        (item)
-        49   load_const 13                      (".type")
-        50   load_const 14                      ("")
-        51   call 342 ntypeargs=1               (baml.json.path_or)
-        52   load_const 15                      ("text")
-        53   cmp_op ==                          
-        54   pop_jump_if_false -18              (to 36)
+  200   54   load_type 2                        
+        55   load_var 7                         (texts)
+        56   load_const 18                      ("\n")
+        57   call 15 ntypeargs=1                (baml.Array.join)
+        58   store_var 12                       (joined)
 
-  195   55   load_type 0                        
-        56   load_var 10                        (item)
-        57   load_const 16                      (".text")
-        58   load_const 17                      ("")
-        59   call 342 ntypeargs=1               (baml.json.path_or)
-        60   store_var 11                       (_28)
-        61   load_var2 7 11                     
-        62   call 4 ntypeargs=0                 (baml.Array.push)
-        63   pop 1                              
-        64   jump -28                           (to 36)
+  201   59   load_type 19                       
+        60   load_var 6                         (result)
+        61   load_const 20                      (".isError")
+        62   load_const 21                      (false)
+        63   call 342 ntypeargs=1               (baml.json.path_or)
+        64   pop_jump_if_false +2               (to 66)
+        65   jump +5                            (to 70)
 
-  198   65   load_type 0                        
-        66   load_var 7                         (texts)
-        67   load_const 18                      ("\n")
-        68   call 15 ntypeargs=1                (baml.Array.join)
-        69   store_var 12                       (joined)
+  204   66   load_var 12                        (joined)
+        67   store_var 4                        (_0)
+        68   load_var 4                         (_0)
+        69   return                             
 
-  199   70   load_type 19                       
-        71   load_var 6                         (result)
-        72   load_const 20                      (".isError")
-        73   load_const 21                      (false)
-        74   call 342 ntypeargs=1               (baml.json.path_or)
-        75   pop_jump_if_false +2               (to 77)
-        76   jump +5                            (to 81)
-
-  202   77   load_var 12                        (joined)
-        78   store_var 4                        (_0)
-        79   load_var 4                         (_0)
-        80   return                             
-
-  200   81   load_type 0                        
-        82   load_var 2                         (name)
-        83   call 139 ntypeargs=1               (baml.String.from)
-        84   store_var 13                       (_40)
-        85   load_type 0                        
-        86   load_var 12                        (joined)
-        87   call 139 ntypeargs=1               (baml.String.from)
-        88   store_var 14                       (_42)
-        89   load_const 22                      ("mcp tool ")
-        90   load_var 13                        (_40)
-        91   bin_op +                           
-        92   load_const 23                      (" failed: ")
-        93   bin_op +                           
-        94   load_var 14                        (_42)
-        95   bin_op +                           
-        96   init_instance 0                    (baml.errors.InvalidArgument .message)
-        97   throw                              
+  202   70   load_type 2                        
+        71   load_var 2                         (name)
+        72   call 139 ntypeargs=1               (baml.String.from)
+        73   store_var 13                       (_34)
+        74   load_type 2                        
+        75   load_var 12                        (joined)
+        76   call 139 ntypeargs=1               (baml.String.from)
+        77   store_var 14                       (_36)
+        78   load_const 22                      ("mcp tool ")
+        79   load_var 13                        (_34)
+        80   bin_op +                           
+        81   load_const 23                      (" failed: ")
+        82   bin_op +                           
+        83   load_var 14                        (_36)
+        84   bin_op +                           
+        85   init_instance 0                    (baml.errors.InvalidArgument .message)
+        86   throw                              
 }
 
 function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> null {
-  206   0   load_var 1     (self)
+  208   0   load_var 1     (self)
         1   load_field 1   (p)
         2   sys_op 253     (baml.sys.Process.close)
         3   return         
 }
 
 function ai.mcp.McpConnection.connect(name: string, command: string, args: string[], timeout_ms: int) -> ai.mcp.McpConnection {
-       0     load_var 4             (timeout_ms)
-       1     load_const 0           (<omitted>)
-       2     cmp_op ==              
-       3     pop_jump_if_false +3   (to 6)
+       0    load_var 4             (timeout_ms)
+       1    load_const 0           (<omitted>)
+       2    cmp_op ==              
+       3    pop_jump_if_false +3   (to 6)
 
-  50   4     load_const 1           (30000)
-       5     store_var 4            (timeout_ms)
+  51   4    load_const 1           (30000)
+       5    store_var 4            (timeout_ms)
 
-  52   6     load_var2 2 3          
+  53   6    load_var2 2 3          
 
-  55   7     load_const 2           (null)
-       8     load_const 2           (null)
-       9     load_var 4             (timeout_ms)
-       10    load_const 2           (null)
-       11    load_const 3           (true)
-       12    init_instance 0        (baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin, .keep_stdin_open)
-       13    sys_op 255             (baml.sys.start_process)
-       14    store_var 6            (p)
-       15    jump +24               (to 39)
+  56   7    load_const 2           (null)
+       8    load_const 2           (null)
+       9    load_var 4             (timeout_ms)
+       10   load_const 2           (null)
+       11   load_const 3           (true)
+       12   init_instance 0        (baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin, .keep_stdin_open)
+       13   sys_op 255             (baml.sys.start_process)
+       14   store_var 6            (p)
+       15   jump +24               (to 39)
 
-  52   16    load_var 7             (e)
-       17    throw_if_panic         
+  53   16   load_var 7             (e)
+       17   throw_if_panic         
 
-  65   18    load_type 4            
-       19    load_var 1             (name)
-       20    call 139 ntypeargs=1   (baml.String.from)
-       21    store_var 8            (_11)
+  66   18   load_type 4            
+       19   load_var 1             (name)
+       20   call 139 ntypeargs=1   (baml.String.from)
+       21   store_var 8            (_11)
 
-  66   22    load_type 5            
-       23    load_var 7             (e)
-       24    call 139 ntypeargs=1   (baml.String.from)
-       25    store_var 10           (_15)
-       26    load_type 4            
-       27    load_var 10            (_15)
-       28    call 139 ntypeargs=1   (baml.String.from)
-       29    store_var 9            (_14)
+  67   22   load_type 5            
+       23   load_var 7             (e)
+       24   call 139 ntypeargs=1   (baml.String.from)
+       25   store_var 10           (_15)
+       26   load_type 4            
+       27   load_var 10            (_15)
+       28   call 139 ntypeargs=1   (baml.String.from)
+       29   store_var 9            (_14)
 
-  65   30    load_const 6           ("mcp/")
-       31    load_var 8             (_11)
-       32    bin_op +               
+  66   30   load_const 6           ("mcp/")
+       31   load_var 8             (_11)
+       32   bin_op +               
 
-  66   33    load_const 7           ("the MCP server could not start: ")
-       34    load_var 9             (_14)
-       35    bin_op +               
-       36    load_const 2           (null)
-       37    init_instance 1        (ai.errors.NetworkFailure .provider, .detail, .raw_body)
-       38    throw                  
+  67   33   load_const 7           ("the MCP server could not start: ")
+       34   load_var 9             (_14)
+       35   bin_op +               
+       36   load_const 2           (null)
+       37   init_instance 1        (ai.errors.NetworkFailure .provider, .detail, .raw_body)
+       38   throw                  
 
-  71   39    load_var2 1 6          
-       40    load_const 8           (1)
-       41    init_instance 2        (ai.mcp.McpConnection .server_name, .p, .next_id)
-       42    store_var 11           (conn)
+  72   39   load_var2 1 6          
+       40   load_const 8           (1)
+       41   init_instance 2        (ai.mcp.McpConnection .server_name, .p, .next_id)
+       42   store_var 11           (conn)
 
-  72   43    load_type 4            
-       44    load_type 9            
-       45    alloc_map 0            
-       46    store_var 12           (init)
+  73   43   load_const 9           ("2025-06-18")
 
-  73   47    load_type 4            
-       48    load_type 9            
-       49    load_var 12            (init)
-       50    load_const 10          ("protocolVersion")
-       51    load_const 11          ("2025-06-18")
-       52    call 37 ntypeargs=2    (baml.Map.set)
-       53    pop 1                  
+  75   44   load_type 10           
+       45   load_type 10           
+       46   alloc_map 0            
 
-  74   54    load_type 4            
-       55    load_type 9            
-       56    alloc_map 0            
-       57    store_var 13           (caps)
+  76   47   load_const 11          ("baml-mcp")
+       48   load_const 12          ("0.1")
+       49   load_const 13          ("name")
+       50   load_const 14          ("version")
+       51   load_type 4            
+       52   load_type 4            
+       53   alloc_map 2            
+       54   load_const 15          ("protocolVersion")
+       55   load_const 16          ("capabilities")
+       56   load_const 17          ("clientInfo")
+       57   load_type 4            
+       58   load_type 18           
+       59   alloc_map 3            
+       60   store_var 12           (init)
 
-  75   58    load_type 4            
-       59    load_type 9            
-       60    load_var 12            (init)
-       61    load_const 12          ("capabilities")
-       62    load_var 13            (caps)
-       63    call 37 ntypeargs=2    (baml.Map.set)
-       64    pop 1                  
+  81   61   load_var 11            (conn)
+       62   load_const 19          ("initialize")
+       63   load_var 12            (init)
+       64   call 885 ntypeargs=0   (ai.mcp.McpConnection._request)
+       65   pop 1                  
 
-  76   65    load_type 4            
-       66    load_type 9            
-       67    alloc_map 0            
-       68    store_var 14           (info)
+  82   66   load_const 2           (null)
+       67   load_const 20          ("notifications/initialized")
+       68   load_const 2           (null)
+       69   call 882 ntypeargs=0   (ai.mcp.rpc_line)
+       70   store_var 13           (_26)
+       71   load_var2 11 13        
+       72   call 884 ntypeargs=0   (ai.mcp.McpConnection._send)
+       73   pop 1                  
 
-  77   69    load_type 4            
-       70    load_type 9            
-       71    load_var 14            (info)
-       72    load_const 13          ("name")
-       73    load_const 14          ("baml-mcp")
-       74    call 37 ntypeargs=2    (baml.Map.set)
-       75    pop 1                  
-
-  78   76    load_type 4            
-       77    load_type 9            
-       78    load_var 14            (info)
-       79    load_const 15          ("version")
-       80    load_const 16          ("0.1")
-       81    call 37 ntypeargs=2    (baml.Map.set)
-       82    pop 1                  
-
-  79   83    load_type 4            
-       84    load_type 9            
-       85    load_var 12            (init)
-       86    load_const 17          ("clientInfo")
-       87    load_var 14            (info)
-       88    call 37 ntypeargs=2    (baml.Map.set)
-       89    pop 1                  
-
-  80   90    load_var 11            (conn)
-       91    load_const 18          ("initialize")
-       92    load_var 12            (init)
-       93    call 885 ntypeargs=0   (ai.mcp.McpConnection._request)
-       94    pop 1                  
-
-  81   95    load_const 2           (null)
-       96    load_const 19          ("notifications/initialized")
-       97    load_const 2           (null)
-       98    call 882 ntypeargs=0   (ai.mcp.rpc_line)
-       99    store_var 15           (_43)
-       100   load_var2 11 15        
-       101   call 884 ntypeargs=0   (ai.mcp.McpConnection._send)
-       102   pop 1                  
-
-  82   103   load_var 11            (conn)
-       104   store_var 5            (_0)
-       105   load_var 5             (_0)
-       106   return                 
+  83   74   load_var 11            (conn)
+       75   store_var 5            (_0)
+       76   load_var 5             (_0)
+       77   return                 
 }
 
 function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool[] {
-  161   0    load_var 1                         (self)
+  162   0    load_var 1                         (self)
         1    load_const 0                       ("tools/list")
         2    load_type 1                        
         3    load_type 2                        
@@ -2288,11 +2215,11 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
         5    call 885 ntypeargs=0               (ai.mcp.McpConnection._request)
         6    store_var 3                        (result)
 
-  162   7    load_type 3                        
+  163   7    load_type 3                        
         8    alloc_array 0                      
         9    store_var 4                        (out)
 
-  163   10   load_type 4                        
+  164   10   load_type 4                        
         11   load_var 3                         (result)
         12   load_const 5                       (".tools")
         13   load_type 6                        
@@ -2314,14 +2241,14 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
         29   load_var 6                         (_10)
         30   store_var 7                        (t)
 
-  164   31   load_type 1                        
+  165   31   load_type 1                        
         32   load_var 7                         (t)
         33   load_const 12                      (".name")
         34   load_const 13                      ("")
         35   call 342 ntypeargs=1               (baml.json.path_or)
         36   store_var 8                        (tool_name)
 
-  166   37   load_type 6                        
+  167   37   load_type 6                        
         38   load_var 7                         (t)
         39   load_const 14                      (".inputSchema")
         40   load_type 1                        
@@ -2330,7 +2257,7 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
         43   call 342 ntypeargs=1               (baml.json.path_or)
         44   store_var 11                       (_19)
 
-  165   45   load_type 15                       
+  166   45   load_type 15                       
         46   load_var 11                        (_19)
         47   call 336 ntypeargs=1               (baml.json.from_json)
         48   store_var 9                        (schema)
@@ -2338,40 +2265,40 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
         50   load_var 10                        (e)
         51   throw_if_panic                     
 
-  169   52   load_type 1                        
+  170   52   load_type 1                        
         53   load_type 2                        
         54   alloc_map 0                        
         55   store_var 12                       (empty)
 
-  170   56   load_var 12                        (empty)
+  171   56   load_var 12                        (empty)
         57   store_var 9                        (schema)
 
-  176   58   load_type 1                        
+  177   58   load_type 1                        
         59   load_var 7                         (t)
         60   load_const 16                      (".description")
         61   load_const 17                      ("")
         62   call 342 ntypeargs=1               (baml.json.path_or)
         63   store_var 14                       (_28)
 
-  177   64   load_var 9                         (schema)
+  178   64   load_var 9                         (schema)
         65   store_var 15                       (_31)
 
-  178   66   load_var2 1 8                      
+  179   66   load_var2 1 8                      
         67   call 881 ntypeargs=0               (ai.mcp._proxy)
         68   store_var 16                       (_32)
 
-  175   69   load_var2 8 14                     
+  176   69   load_var2 8 14                     
         70   load_var2 15 16                    
         71   load_const 18                      (<omitted>)
         72   call 776 ntypeargs=0               (ai.tools.raw_tool)
         73   store_var 13                       (_26)
 
-  173   74   load_var2 4 13                     
+  174   74   load_var2 4 13                     
         75   call 4 ntypeargs=0                 (baml.Array.push)
         76   pop 1                              
         77   jump -57                           (to 20)
 
-  182   78   load_var 4                         (out)
+  183   78   load_var 4                         (out)
         79   store_var 2                        (_0)
         80   load_var 2                         (_0)
         81   return                             
@@ -2393,64 +2320,52 @@ function ai.mcp._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string,
 }
 
 function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unknown> | null) -> string {
-  27   0    load_type 0             
-       1    load_type 1             
-       2    alloc_map 0             
-       3    store_var 4             (m)
+  27   0    load_const 0            ("2.0")
+       1    load_var 2              (method)
+       2    load_const 1            ("jsonrpc")
+       3    load_const 2            ("method")
+       4    load_type 3             
+       5    load_type 4             
+       6    alloc_map 2             
+       7    store_var 4             (m)
 
-  28   4    load_type 0             
-       5    load_type 1             
-       6    load_var 4              (m)
-       7    load_const 2            ("jsonrpc")
-       8    load_const 3            ("2.0")
-       9    call 37 ntypeargs=2     (baml.Map.set)
-       10   pop 1                   
+  31   8    load_var 1              (id)
+       9    store_var 5             (_5)
+       10   load_var 5              (_5)
+       11   narrow_bind 5 5         
+       12   pop_jump_if_false +10   (to 22)
+       13   load_var 5              (_5)
+       14   store_var 6             (i)
 
-  29   11   load_var 1              (id)
-       12   store_var 5             (_8)
-       13   load_var 5              (_8)
-       14   narrow_bind 4 5         
-       15   pop_jump_if_false +10   (to 25)
-       16   load_var 5              (_8)
-       17   store_var 6             (i)
+  32   15   load_type 3             
+       16   load_type 4             
+       17   load_var 4              (m)
+       18   load_const 6            ("id")
+       19   load_var 6              (i)
+       20   call 37 ntypeargs=2     (baml.Map.set)
+       21   pop 1                   
 
-  30   18   load_type 0             
-       19   load_type 1             
-       20   load_var 4              (m)
-       21   load_const 5            ("id")
-       22   load_var 6              (i)
-       23   call 37 ntypeargs=2     (baml.Map.set)
-       24   pop 1                   
+  34   22   load_var 3              (params)
+       23   store_var 7             (_11)
+       24   load_var 7              (_11)
+       25   narrow_bind 7 7         
+       26   pop_jump_if_false +10   (to 36)
+       27   load_var 7              (_11)
+       28   store_var 8             (p)
 
-  32   25   load_type 0             
-       26   load_type 1             
-       27   load_var 4              (m)
-       28   load_const 6            ("method")
-       29   load_var 2              (method)
-       30   call 37 ntypeargs=2     (baml.Map.set)
-       31   pop 1                   
+  35   29   load_type 3             
+       30   load_type 4             
+       31   load_var 4              (m)
+       32   load_const 8            ("params")
+       33   load_var 8              (p)
+       34   call 37 ntypeargs=2     (baml.Map.set)
+       35   pop 1                   
 
-  33   32   load_var 3              (params)
-       33   store_var 7             (_17)
-       34   load_var 7              (_17)
-       35   narrow_bind 7 7         
-       36   pop_jump_if_false +10   (to 46)
-       37   load_var 7              (_17)
-       38   store_var 8             (p)
-
-  34   39   load_type 0             
-       40   load_type 1             
-       41   load_var 4              (m)
-       42   load_const 8            ("params")
-       43   load_var 8              (p)
-       44   call 37 ntypeargs=2     (baml.Map.set)
-       45   pop 1                   
-
-  36   46   load_type 7             
-       47   load_var 4              (m)
-       48   call 333 ntypeargs=1    (baml.json.to_json)
-       49   call 330 ntypeargs=0    (baml.json.stringify)
-       50   return                  
+  37   36   load_type 7             
+       37   load_var 4              (m)
+       38   call 333 ntypeargs=1    (baml.json.to_json)
+       39   call 330 ntypeargs=0    (baml.json.stringify)
+       40   return                  
 }
 
 function ai.prompt(body: ((string) -> baml.prompt.Role throws never, baml.prompt.Context) -> baml.TaggedString throws never) -> (baml.prompt.Context) -> ai.Prompt throws never {
