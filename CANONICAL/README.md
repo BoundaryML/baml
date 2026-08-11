@@ -27,17 +27,29 @@ Project Studio is the initiative name. The target user-facing local product rema
 
 ## Start with a question
 
-The query snippets below are illustrative v1 usage, not commands that work on this branch today. The versioned core relation names and grain rules are settled. Exact columns/types/nullability, lifecycle enum spellings, parameter binding, value-helper names, and the outcome wire shape freeze with catalog v1.
+The query snippets below are illustrative target usage, not commands that work
+on this branch today. Names omit version suffixes for readability. Exact
+columns/types/nullability, lifecycle enum spellings, parameter binding,
+value-helper names, and the outcome wire shape freeze with catalog v1.
 
 ### Which recent runs recorded errors?
 
 ~~~sql
--- :from_ms is illustrative; binding syntax freezes with the CLI/API contract.
-SELECT run_id, status, revision_id, total_errors, degraded
-FROM runs_v1
-WHERE created_ms >= :from_ms
+-- :from_time is illustrative; binding syntax freezes with the CLI/API contract.
+SELECT
+  run_id,
+  started_at,
+  status,
+  revision_id,
+  total_errors,
+  structure_state,
+  value_state,
+  integrity_state,
+  projection_state
+FROM runs
+WHERE started_at >= :from_time
   AND total_errors > 0
-ORDER BY created_ms DESC
+ORDER BY started_at DESC
 LIMIT 100;
 ~~~
 
@@ -49,14 +61,15 @@ This is a run-grain question. It does not depend on retained per-call instances.
 SELECT
   definition_key,
   revision_id,
-  sum(enters) AS calls,
+  sum(calls_started) AS calls,
   sum(self_ns) AS self_ns,
   sum(await_ns) AS await_ns
-FROM cct_population_v1
+FROM cct_population
 WHERE run_id IN (
   SELECT run_id
-  FROM runs_v1
-  WHERE created_ms BETWEEN :from_ms AND :to_ms
+  FROM runs
+  WHERE started_at >= :from_time
+    AND started_at < :to_time
 )
 GROUP BY definition_key, revision_id
 ORDER BY self_ns DESC
@@ -70,7 +83,7 @@ This produces population-true totals by revision; it does not, by itself, prove 
 ~~~sql
 -- Target v1 spelling; helper names freeze with catalog v1.
 SELECT call_id, run_id, definition_key
-FROM retained_calls_v1
+FROM retained_calls
 WHERE baml_value_int(
         baml_value_at_path(args, baml_path('arg[0].customer.age'))
       ) >= 30
@@ -78,6 +91,10 @@ LIMIT 100;
 ~~~
 
 This means “matching retained instances,” not “30% of all calls.” The planner first pushes safe metadata predicates to the resident store, then hydrates distinct values from the canonical CAS, evaluates the BAML predicate, and applies the final limit. See [Query system](design/04-query-system.md#value-query-execution).
+
+`args` is a virtual query field in this example, not a ClickHouse column. The
+resident row contains availability metadata and a private lookup handle; the
+captured body remains in local evidence or S3/CAS.
 
 ### Is the answer complete?
 

@@ -86,7 +86,7 @@ Every runtime call contributes to population CCT aggregates. Relations named **\
 Example:
 
 ~~~sql
-SELECT definition_key, sum(ends_err) AS failures
+SELECT definition_key, sum(calls_errored) AS failures
 FROM cct_population_v1
 GROUP BY definition_key
 ORDER BY failures DESC;
@@ -99,7 +99,7 @@ Only calls retained by capture policy, exact windows, promotion, or another expl
 ~~~sql
 SELECT count(*) AS retained_failures
 FROM retained_calls_v1
-WHERE status = 'errored';
+WHERE status IN ('failed', 'panicked');
 ~~~
 
 This count is “retained failures,” not “all failures.” The population total lives in a population relation.
@@ -122,34 +122,59 @@ The following is the reconciled relation inventory. A relation marked **freeze r
 
 | Relation | Grain | Known required columns | Status |
 |---|---|---|---|
-| **runs_v1** | one boundary/run | run_id, created_ms, status/execution_state, revision_id, duration/so-far duration, total_calls, total_errors, LLM/token totals, degraded, diagnostics; structural/value/integrity/projection/retention states; projected-through watermark | Preserve v1 name; lifecycle column aliases/types freeze required |
-| **cct_population_v1** | run × context node at bound snapshot | run_id, node_id, parent_node_id, depth, function_id, revision_id, fqn, definition_key, def_content_hash, path/display identity, enters, terminal counts, total_ns, self_ns, await_ns, hist[16], snapshot/terminal semantics | Required |
-| **cct_windows_v1** | session × epoch × node × window | session, epoch, node, window bounds, delta counters/timing/histogram, watermark | Fast-follow/lazy provider; never summed with final population rows |
-| **llm_population_v1** | run × context node × model | run/node/model identity, llm_calls, tokens_in, tokens_out, provider_errors, parse_errors | Required where evidence exists |
-| **spawn_edges_v1** | aggregate spawn edge | run/context/child-function identity, spawned/completed/errored/cancelled counts, running/awaiting totals, retained-instance count/drop state | Required |
-| **spawn_instances_v1** | retained spawn instance | run, edge, thread, status, start/end, dump/evidence reference | Retained-instance grain |
-| **exact_windows_v1** | one retained exact-evidence window | run/source/trigger/window identity, time bounds, event count, eviction/budget state, evidence availability | Required evidence ledger |
-| **capture_losses_v1** | one loss/diagnostic fact | run/session, kind, reason/detail, count, timestamp, source/provider scope | Required |
-| **functions_v1** | revision × function | function_id, revision_id, fqn/display/declaration, file/span, kind/origin, definition_key, owner/lambda/package/namespace, capture flags, def_content_hash | Required |
-| **revisions_v1** | one compiled revision | revision_id, source_snapshot_id, compiler identity/options, created/first-seen facts | Required |
+| **runs_v1** | one boundary/run | run_id, started_at, ended_at, duration_ns, status, revision_id, entry function/entrypoint, total_calls, total_errors, structural/value/integrity/projection/retention states | Required; no run-level LLM totals or free-form degraded/diagnostic columns |
+| **cct_population_v1** | run × call-tree location at bound snapshot | run/node/parent/depth, function/revision/definition identity, started and terminal counts, inclusive/self/await time, optional fixed histogram | Required; no precomputed display path |
+| **llm_population_v1** | run × call-tree location × provider × model | run/node/provider/model identity, llm_calls, token availability, nullable input/output tokens, provider_errors, parse_errors | Provisional pending Aaron's LLM changes |
+| **spawn_edges_v1** | aggregate spawn edge | run/parent-location/child-function identity, spawned/completed/errored/cancelled counts, running/awaiting totals, retained-instance and dropped counts | Conditional on concurrency diagnosis being P0 |
+| **spawn_instances_v1** | retained spawn instance | run/edge/spawn/thread identity, optional retained parent/child calls, status, start/end, exact-window/evidence references and state | Conditional retained-instance grain |
+| **exact_windows_v1** | one retained exact-evidence region | run/window/session identity, source/trigger, optional trigger node/call, time bounds, event count, evidence state/reasons and logical evidence ID | Required evidence ledger; event bodies stay outside ClickHouse |
+| **evidence_issues_v1** | one immutable grouped issue summary | issue/run/session/evidence identity, source, affected kind, typed reason, count, first/last seen, optional policy version | Required; not one row per affected event |
+| **functions_v1** | revision × function | revision/function/definition identity, names, source span, kind/origin, decoded capture policy | Required |
+| **call_sites_v1** | revision × call site | revision/call-site identity and source path/span/line | Required for retained-call source navigation |
+| **revisions_v1** | one compiled revision | revision/source-snapshot/compiler identity, conditional compiler-options hash, capture-policy version, identity state, first seen | Required |
+
+**cct_windows_v1 is not in the minimal v1 catalog.** It grows with active
+call-tree locations multiplied by elapsed time buckets and has mutable open
+buckets. Complete totals come from **cct_population_v1**, current updates use
+the bounded private live path, and retained incident detail is represented by
+**exact_windows_v1**. Add a coarse, retention-limited derived time series only
+after a measured historical-chart workflow justifies it.
 
 ### Retained-call relation
 
 **retained_calls_v1** is the primary retained-instance relation named by the latest decision log.
 
-Its minimum logical contract is:
+Its contract has three deliberately separate layers.
 
-| Column family | Required logical fields |
+Query-visible resident fields:
+
+| Column family | Required fields |
 |---|---|
-| Scope | tenant/project/environment when hosted; bound query scope locally implicit |
-| Identity | run_id, process_id, engine_id, thread_id, call_id, parent_call_id |
-| Function | function_id, revision_id, fqn, definition_key, def_content_hash, call-site reference |
-| Lifecycle | start/end, duration, status/execution_state, source exact-window/capture mechanism |
-| Value roles | logical args, return, error handles/values |
-| Availability | per-role pending/available/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported and policy/version |
-| Provenance | source artifact/range/record, projection generation, durable watermark |
+| Identity | run_id, thread_id, call_id, parent_call_id, aggregate node reference |
+| Function | definition key and call-site reference; other function metadata joins through the run revision and function dictionary |
+| Lifecycle | start/end, monotonic duration, status/execution state |
+| Retention | retention reasons and exact-window/evidence references |
+| Availability | per-role pending/available/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported and policy version |
 
-Hosted ClickHouse may persist the non-value fields plus authorization-gated opaque role handles and availability metadata. The logical **args/return/error** columns are hydrated by ValueResolver; customer content does not live in ClickHouse.
+Provider-private resident fields:
+
+| Column family | Required fields |
+|---|---|
+| Scope | tenant/project/environment, projection generation |
+| Value lookup | authorization-gated opaque role handles; never value bodies, CIDs, S3 keys, or byte ranges in the public schema |
+| Provenance | source artifact/range/record, durable watermark, deterministic row/batch identity and hash |
+
+Virtual query fields:
+
+| Field | Source |
+|---|---|
+| **args** | Captured input value resolved from authorized local evidence or S3/CAS after resident filtering |
+| **return** | Captured output value resolved from authorized local evidence or S3/CAS after resident filtering |
+| **error** | Captured error value resolved from authorized local evidence or S3/CAS after resident filtering |
+
+The virtual **args/return/error** fields are part of public SQL, not physical
+ClickHouse columns. The query engine supplies them only when a statement needs
+them. Customer content never lives in ClickHouse.
 
 The exact Arrow types, nullability, role-column spelling, and carrier for a predicate that is unknown because a value is unavailable must be frozen before v1 DDL/API publication. The normative rule is already fixed: unavailability cannot become an ordinary NULL or silent non-match, and the terminal outcome must reconcile it.
 

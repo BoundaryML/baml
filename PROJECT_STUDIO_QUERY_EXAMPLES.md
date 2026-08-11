@@ -34,11 +34,12 @@ them.
 | S3 | Authoritative uploaded evidence and value/log bodies |
 | ClickHouse | Rebuildable small facts for filters, joins, counts, grouping, and ordering |
 | PostgreSQL | Ownership, upload, projection, audit, retention, and deletion workflow |
-| Public SQL | The logical tables below, independent of physical storage |
+| Public SQL | Resident fields plus explicitly marked virtual fields, independent of physical table names |
 
-Selecting `args`, `return`, or `error` does not mean the value lives in
-ClickHouse. The query narrows candidates using small columns, then loads the
-requested value from local files or S3.
+The proposed-schema tables below contain query-visible fields that are
+resident in ClickHouse for hosted queries. Provider-private scope, projection,
+provenance, and storage-handle columns are omitted. Virtual fields are listed
+separately and never imply a ClickHouse column.
 
 ## Schema rules
 
@@ -49,7 +50,7 @@ Logical types used below:
 - `count` — non-negative 64-bit counter;
 - `duration_ns` — non-negative nanosecond duration;
 - `enum` — documented closed set;
-- `value` — BAML value loaded on demand;
+- `value` — virtual BAML value loaded from local evidence or S3 on demand;
 - `list<T>` — bounded list of `T`; and
 - `?` — nullable.
 
@@ -69,6 +70,9 @@ Remove:
   the tree.
 - Public physical value handles, artifact offsets, projection generations, and
   row hashes.
+- `retained_calls.args`, `retained_calls.return`, and `retained_calls.error`
+  from the resident schema; they remain virtual query fields resolved from
+  local evidence or S3.
 - Physical sequence/byte ranges from `exact_windows`; `evidence_id` hides that
   layout.
 
@@ -290,14 +294,23 @@ The mean is directional, not a percentile or proof of a regression.
 | `status` | `enum`; pending/running/waiting/succeeded/failed/cancelled/panicked/abandoned | Selects exact examples by lifecycle outcome without inferring state from optional values. |
 | `retention_reasons` | `list<enum>`; policy/incident/promotion/explicit | Explains why this call exists in a selective table; a call may have more than one reason. |
 | `exact_window_ids` | `list<id>` | Links the call to every retained incident window that contains it. |
-| `evidence_ids` | `list<id>` | Locates authoritative local/S3 evidence; multiple sources or sealed ranges may contribute to one call. |
+| `evidence_ids` | `list<id>` | Identifies authoritative evidence that contributed to the call; these are joinable logical IDs, not S3 keys, CIDs, or byte ranges. |
 | `capture_policy_version` | `integer` | Explains which capture rules decided whether values should exist. |
 | `args_state` | `enum`; available/pending/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported | Distinguishes a real null argument from every reason arguments cannot be returned. |
 | `return_state` | `enum`; available/pending/not_applicable/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported | Distinguishes a real null return from no return, capture policy, loss, or corruption. |
 | `error_state` | `enum`; available/pending/not_applicable/not_captured/omitted/redacted/lost/truncated/corrupt/unsupported | Distinguishes a real null error payload from a successful call or unavailable evidence. |
-| `args` | `value?`; loaded on demand | Exposes captured inputs for exact inspection and bounded value predicates. |
-| `return` | `value?`; loaded on demand | Exposes captured output for exact inspection and bounded value predicates. |
-| `error` | `value?`; loaded on demand | Exposes captured error detail for diagnosis. |
+
+### Virtual query fields — not ClickHouse columns
+
+These fields exist in the public SQL relation only. After resident filters
+narrow the candidate calls, the query engine follows the call's private
+evidence handles and resolves the requested values from local evidence or S3.
+
+| Field | Type | Why expose it in SQL |
+| --- | --- | --- |
+| `args` | `value?`; resolved on demand | Lets users inspect captured inputs and apply bounded value predicates without exposing storage layout. |
+| `return` | `value?`; resolved on demand | Lets users inspect captured outputs and apply bounded value predicates without copying output bodies into ClickHouse. |
+| `error` | `value?`; resolved on demand | Lets users inspect captured error detail without copying error bodies into ClickHouse. |
 
 ### Why it exists
 
@@ -314,7 +327,9 @@ the run/node joins.
 
 `duration_ns` stays despite start/end timestamps because it uses a monotonic
 clock. Q1 should remove `process_id` or `engine_id` if `run_id` already prevents
-identity collisions.
+identity collisions. The physical provider also needs private opaque handles
+for each captured role; `evidence_ids` is the public evidence link, not the S3
+object key or byte range.
 
 The three value-state columns are required: unavailable must not silently mean
 ordinary SQL `NULL` or predicate non-match. The exact “could not evaluate”
@@ -357,7 +372,9 @@ WHERE run_id = :run_id
   AND call_id = :call_id;
 ```
 
-The IDs narrow the candidate set before local/S3 value loading.
+The IDs narrow the candidate set before local/S3 value loading. `args`,
+`return`, and `error` are virtual query fields in this statement, not resident
+ClickHouse columns.
 
 ### Which retained calls contain a particular value?
 
@@ -379,7 +396,8 @@ LIMIT 100;
 ```
 
 Cheap run/function filters execute first. Values load in bounded, deduplicated
-batches, and the limit applies only after the value condition.
+batches through the virtual `args` field, and the limit applies only after the
+value condition.
 
 ## 4. `evidence_issues`
 
@@ -390,7 +408,7 @@ batches, and the limit applies only after the value condition.
 | `issue_id` | `id`; primary key for one sealed summary | Gives an immutable grouped issue a stable identity for deduplication and audit. |
 | `run_id` | `id?`; absent before run binding | Attributes the issue to a user-visible run when that association is known. |
 | `session_id` | `id?`; absent for non-runtime issues | Scopes runtime evidence that exists before or outside a single run association. |
-| `evidence_id` | `id?`; sealed evidence range summarized | Points to the exact retained evidence whose completeness or integrity is affected. |
+| `evidence_id` | `id?`; sealed evidence range summarized | Identifies the retained evidence whose completeness or integrity is affected; provider-private metadata resolves its storage location. |
 | `source` | `enum`; profiler/value_capture/uploader/projector/retention | Identifies which stage reported the problem, which determines ownership and remediation. |
 | `kind` | `enum`; evidence affected | Says whether structure, values, detailed events, or another evidence class is incomplete. |
 | `reason` | `enum`; typed cause | Makes causes groupable and queryable without parsing free-form messages. |
@@ -609,7 +627,7 @@ those rows separately.
 | `started_at` | `timestamp` | Orders retained spawns and places them on the run timeline. |
 | `ended_at` | `timestamp?` | Distinguishes open from closed work and bounds its wall-clock interval. |
 | `exact_window_ids` | `list<id>` | Links the spawn to every retained incident window that contains it. |
-| `evidence_ids` | `list<id>` | Locates the authoritative detailed evidence used to reconstruct the spawn. |
+| `evidence_ids` | `list<id>` | Identifies the authoritative evidence used to reconstruct the spawn without exposing its storage location. |
 | `evidence_state` | `enum`; available/incomplete/pending/lost/corrupt | Says whether the exact instance is trustworthy and inspectable rather than merely present as a row. |
 
 ### Why they exist
@@ -663,7 +681,7 @@ ORDER BY failed DESC, cancelled DESC;
 | `event_count` | `count` | Communicates evidence size and enables cost/budget checks without opening the detailed bytes. |
 | `evidence_state` | `enum`; available/incomplete/pending/lost/corrupt | Tells users whether the detailed evidence can be trusted and read. |
 | `incomplete_reasons` | `list<enum>`; evicted/budget_exhausted/truncated/unsupported | Explains every known reason a present window is incomplete. |
-| `evidence_id` | `id`; logical reference to local/S3 bytes | Locates the detailed payload without storing high-volume events in ClickHouse. |
+| `evidence_id` | `id`; logical evidence identity | Gives the retained detail a stable public identity; a provider-private mapping locates local/S3 bytes without putting the payload or storage locator in ClickHouse's public schema. |
 
 ### Why it exists
 

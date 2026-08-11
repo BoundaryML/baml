@@ -37,7 +37,9 @@ The minimum stable logical core is:
 - **runs_v1**;
 - **cct_population_v1**;
 - **retained_calls_v1**;
-- the supporting population/window/loss/function/revision relations in [Query system](../04-query-system.md#logical-catalog).
+- the supporting LLM, conditional spawn, exact-window, evidence-issue,
+  function, call-site, and revision relations in
+  [Query system](../04-query-system.md#logical-catalog).
 
 The provider mapping must specify exact logical types/nullability, grain, keys, availability, resident/hydrated columns, capability requirements and catalog version. That mapping and the physical migrations remain v1 freeze work.
 
@@ -54,18 +56,15 @@ scope:
   tenant_id, project_id, environment_id, projection_generation
 
 identity/program:
-  run_id, boundary_id, revision_id/program_snapshot_id
+  run_id, revision_id, entry_function_id, entrypoint
 
 lifecycle:
-  created_ms/started_at, ended_at, status/execution_state
-  structural_completeness, value_completeness
+  started_at, ended_at, duration_ns, status
+  structure_state, value_state
   integrity_state, projection_state, retention_state
 
 population summaries:
   total_calls, total_errors
-  llm_calls, tokens_in, tokens_out
-  duration_or_so_far_duration
-  degraded, diagnostics/evidence summary
 
 snapshot/provenance:
   projected_through
@@ -74,7 +73,9 @@ snapshot/provenance:
   deterministic logical row/batch identity and hash
 ~~~
 
-Exact column spelling must preserve existing v1 compatibility while adding D15 running/pending semantics.
+There are no run-level LLM/token totals and no free-form degraded/diagnostic
+columns. LLM facts have one aggregate home, and typed state plus the evidence
+issue relation explains degraded evidence.
 
 ### CCT population
 
@@ -83,11 +84,10 @@ tenant_id, project_id, environment_id, projection_generation
 run_id
 node_id, parent_node_id, depth
 function_id, revision_id, fqn, definition_key, def_content_hash
-path/display identity
-enters
-ends_ok, ends_err, ends_cancel, ends_exit
-total_ns, self_ns, await_ns
-hist[16]
+calls_started
+calls_succeeded, calls_errored, calls_cancelled, calls_exited
+inclusive_ns, self_ns, await_ns
+optional fixed duration histogram
 snapshot/terminal-so-far semantics
 projected_through
 provenance + logical row/batch identity/hash
@@ -95,34 +95,35 @@ provenance + logical row/batch identity/hash
 
 **node_id** is run/session-epoch scoped, never global. Cross-revision grouping uses **definition_key**, not function_id.
 
-### CCT windows
+Precomputed display paths are not resident. Parent IDs and depth preserve the
+tree. The histogram is resident only if P0 includes tail/percentile questions
+and overflow correctness is closed.
 
-~~~text
-scope + generation
-session_id, epoch_id, node_id
-window_start, window_end
-counter/timing/histogram deltas
-durable watermark/reason
-provenance
-~~~
+### Excluded: CCT time buckets
 
-Window deltas are not summed with folded population totals.
+A CCT time-bucket relation is not required for v1. It grows with active
+call-tree locations multiplied by elapsed buckets and has a mutable open
+bucket. Complete totals live in CCT population, current updates use the bounded
+private live path, and retained incident detail uses exact windows. A coarse,
+retention-limited derived time series requires a measured later workflow.
 
 ### LLM population
 
 ~~~text
 scope + generation
 run_id, node_id
-function/revision identity
-model
+provider, model
 llm_calls
-tokens_in, tokens_out
+token_state
+nullable input_tokens, output_tokens
 provider_errors, parse_errors
 projected_through
 provenance
 ~~~
 
-Dollar cost is not stored as canonical fact; join emitted usage to an authorized price relation at query time.
+This relation is provisional for the current LLM functions and changes with
+Aaron's work. Dollar cost is not stored as canonical fact; join emitted usage
+to an authorized price relation at query time.
 
 ### Spawn aggregates and retained instances
 
@@ -135,10 +136,14 @@ spawn edge:
   provenance
 
 spawn instance:
-  scope, run_id, edge_id, logical_thread_id
+  scope, run_id, spawn_id, edge_id, logical_thread_id
+  optional retained parent_call_id, child_call_id
   status, start/end, exact-window/dump reference
+  evidence reference and state
   provenance
 ~~~
+
+Both spawn datasets are conditional on concurrency diagnosis being P0.
 
 ### Retained calls
 
@@ -147,7 +152,7 @@ Resident fields:
 ~~~text
 scope + generation
 run/process/engine/thread/call/parent identities
-function/revision/definition identity
+node_id, definition_key
 call-site reference
 start/end/duration/status
 retention source / exact-window identity
@@ -170,24 +175,32 @@ value paths/scalars
 
 DataFusion supplies logical hydrated columns through ValueResolver.
 
-### Exact-window and loss ledgers
+### Exact-window and evidence-issue ledgers
 
 ~~~text
 exact window:
-  scope, run_id, window_id, source, trigger
-  time/sequence bounds, event_count
-  evicted/budget/truncation state
+  scope, run_id, window_id, session_id, source, trigger
+  optional trigger_node_id, trigger_call_id
+  time bounds, event_count
+  evidence state and typed incomplete reasons
+  logical evidence ID; private provider mapping resolves object/range
   provenance
 
-capture loss:
-  scope, run/session
-  kind, reason/detail, count, timestamp
-  policy/source/provenance
+evidence issue:
+  scope, issue_id, optional run/session/evidence IDs
+  source, affected kind, typed reason, count
+  first_seen_at, last_seen_at, optional policy version
+  provenance
 ~~~
 
 ### Function and revision dimensions
 
-Function columns mirror the revision dictionary. Revision columns carry source snapshot/compiler identity and visibility scope. Function names and source paths remain classified tenant data.
+Function columns mirror the revision dictionary's required identity, name,
+source-span, kind/origin, and decoded capture-policy fields. Call-site columns
+map revision-local call-site IDs to source spans. Revision columns carry source
+snapshot/compiler identity, capture-policy version, identity state, first-seen
+time, and compiler-options identity only if revision identity does not already
+commit to it. Function names and source paths remain classified tenant data.
 
 ### Observation/run-detail projections
 

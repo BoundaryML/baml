@@ -307,7 +307,6 @@ outbox_id
 chunk_id
 projection_kind
 generation
-payload
 created_at
 claim_owner
 claim_expires_at
@@ -317,7 +316,10 @@ published_at
 last_error
 ~~~
 
-The older shorthand “tenant/project/environment/cell/lane” expands to the five explicit scope columns above.
+The older shorthand “tenant/project/environment/cell/lane” expands to the five
+explicit scope columns above. There is no free-form `payload` column: the
+outbox message is derived from these typed routing/work columns and carries a
+pointer to committed evidence, never artifact or value bodies.
 
 ### projection_stream_checkpoints
 
