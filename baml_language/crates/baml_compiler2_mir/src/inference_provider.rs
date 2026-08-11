@@ -193,7 +193,22 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                         },
                     })
                     .collect(),
-                type_args: plan.type_args.iter().map(|ty| ty.to_plain()).collect(),
+                // The runtime convention (TIR's runtime_call_type_args):
+                // only the OWN suffix threads as call operands - the
+                // receiver/impl frame supplies the owner prefix - and
+                // fresh literals WIDEN (class type args match invariantly
+                // at runtime; an escaped `literal "hi"` would never match
+                // `is Box<string>`). Turbofish calls carry NO plan args
+                // (MIR lowers the written types; TIR's
+                // `!explicit_args_used` gate).
+                type_args: if plan.explicit {
+                    Vec::new()
+                } else {
+                    plan.type_args[plan.own_offset..]
+                        .iter()
+                        .map(|ty| ty.to_plain().widen_fresh())
+                        .collect()
+                },
                 // Not consumed by MIR (TIR's throws machinery only).
                 instantiated_throws: None,
                 side_channels: CallSideChannels {

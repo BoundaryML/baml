@@ -20,5 +20,5 @@ pub(crate) mod harness;
 mod coherence;
 mod fixtures;
 mod pattern_corpus;
-mod sweep;
+pub(crate) mod sweep;
 mod tables;

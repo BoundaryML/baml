@@ -3,6 +3,8 @@
 //! Each test creates a minimal DB, adds a `.baml` file, lowers all functions
 //! to MIR, and snapshots the pretty-printed output.
 
+mod provider_sweep;
+
 use std::fmt::Write;
 
 use baml_compiler2_mir::{

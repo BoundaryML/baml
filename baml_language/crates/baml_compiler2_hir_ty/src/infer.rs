@@ -469,6 +469,19 @@ pub struct CallPlan {
     /// order (owner frame prefix + own suffix). Recorded raw at the
     /// instantiation site; ground after writeback.
     pub type_args: Vec<Ty>,
+    /// How many leading `type_args` are the OWNER frame's (receiver
+    /// class args for bound methods, the interface frame for virtual
+    /// calls). The runtime call convention threads only the suffix as
+    /// call operands - the receiver/impl frame supplies the prefix - so
+    /// consumers slice here (TIR records the suffix alone; recording the
+    /// full instantiation plus the split keeps the whole solution
+    /// available, r-a's node_args shape).
+    pub own_offset: usize,
+    /// Whether written turbofish filled the args. The runtime plan then
+    /// carries none: MIR lowers the WRITTEN types itself (TIR gates its
+    /// recording on `!explicit_args_used`), and a plan entry would
+    /// double-emit the operands.
+    pub explicit: bool,
     /// The trailing `$id = ...` side-channel argument (TIR's
     /// `CallSideChannels`, flattened until a second channel exists).
     pub runtime_id: Option<ExprId>,
@@ -3009,7 +3022,7 @@ impl<'db> InferenceContext<'db> {
                 let signature = function_signature(self.db, function);
                 let instantiation = self.instantiation_args(call, &signature.generic_params);
                 self.register_call_bounds(function, &instantiation, call);
-                self.write_call_type_args(call, &instantiation);
+                self.write_call_type_args(call, &instantiation, 0);
                 let fn_ty = function_value_ty(signature, &instantiation);
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
                 self.write_member_resolution(callee, MemberResolution::Free { func: function });
@@ -3213,7 +3226,7 @@ impl<'db> InferenceContext<'db> {
         let mut instantiation = candidate.class_args;
         instantiation.extend(self.instantiation_args(call, &own_params));
         self.register_call_bounds(candidate.method, &instantiation, call);
-        self.write_call_type_args(call, &instantiation);
+        self.write_call_type_args(call, &instantiation, class_count);
         let fn_ty = function_value_ty(signature, &instantiation);
         let bound = signature
             .params
@@ -3378,11 +3391,12 @@ impl<'db> InferenceContext<'db> {
     ) -> (Ty, bool) {
         if let Some(pending) = interface_member.pending_own {
             let signature = function_signature(self.db, pending.method);
-            let own_params = signature.generic_params[pending.prefix.len()..].to_vec();
+            let own_offset = pending.prefix.len();
+            let own_params = signature.generic_params[own_offset..].to_vec();
             let mut instantiation = pending.prefix;
             instantiation.extend(self.instantiation_args(call, &own_params));
             self.register_call_bounds(pending.method, &instantiation, call);
-            self.write_call_type_args(call, &instantiation);
+            self.write_call_type_args(call, &instantiation, own_offset);
             let fn_ty = function_value_ty(signature, &instantiation);
             return (fn_ty, interface_member.is_method);
         }
@@ -3563,7 +3577,7 @@ impl<'db> InferenceContext<'db> {
         let instantiation = self.own_instantiation(own, &signature.generic_params);
         self.register_call_bounds(method, &instantiation, anchor);
         if let OwnArgs::Call(call) = own {
-            self.write_call_type_args(call, &instantiation);
+            self.write_call_type_args(call, &instantiation, 0);
         }
         Some(function_value_ty(signature, &instantiation))
     }
@@ -3605,7 +3619,7 @@ impl<'db> InferenceContext<'db> {
         instantiation.extend(self.own_instantiation(own, &own_params));
         self.register_call_bounds(method, &instantiation, anchor);
         if let OwnArgs::Call(call) = own {
-            self.write_call_type_args(call, &instantiation);
+            self.write_call_type_args(call, &instantiation, 0);
         }
         if let Some(record_at) = record_at {
             self.write_member_resolution(
@@ -4651,12 +4665,17 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Records a call's solved instantiation vector (raw; ground after
-    /// writeback). The plan's two halves have two writers keyed by the
-    /// same call id - type args at the instantiation site, bindings in
-    /// `check_call_args` - the r-a shape of separate tables written where
-    /// each decision is made, co-located in one struct.
-    fn write_call_type_args(&mut self, call: ExprId, type_args: &[Ty]) {
-        self.result.call_plans.entry(call).or_default().type_args = type_args.to_vec();
+    /// writeback) with the owner-prefix split. The plan's two halves have
+    /// two writers keyed by the same call id - type args at the
+    /// instantiation site, bindings in `check_call_args` - the r-a shape
+    /// of separate tables written where each decision is made, co-located
+    /// in one struct.
+    fn write_call_type_args(&mut self, call: ExprId, type_args: &[Ty], own_offset: usize) {
+        let explicit = self.type_refs.expr_type_args.contains_key(&call);
+        let plan = self.result.call_plans.entry(call).or_default();
+        plan.type_args = type_args.to_vec();
+        plan.own_offset = own_offset;
+        plan.explicit = explicit;
     }
 
     /// Walks the MEMBER segments of a value-rooted path (everything after

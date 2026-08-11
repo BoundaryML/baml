@@ -30,11 +30,11 @@ use super::harness::{
     tir_error_diagnostics,
 };
 
-fn baml_src_dir() -> PathBuf {
+pub(crate) fn baml_src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")
 }
 
-fn read_corpus_files(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
+pub(crate) fn read_corpus_files(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
     for entry in std::fs::read_dir(dir).expect("read corpus dir") {
         let path = entry.expect("dir entry").path();
         if path.is_dir() {
