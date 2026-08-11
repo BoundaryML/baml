@@ -1,9 +1,14 @@
 # Query system
 
-**Status:** Settled v1 semantics; implementation is not present on this branch.
-Exact argument root shape, subscript grammar/index base,
-available-but-absent/type-mismatch behavior, row-level unavailable carrier
-details, and the full column/type catalog are freeze gates.
+**Status:** Settled v1 semantics; the backend-neutral **baml_query** core
+(catalog v1, DataFusion planning, D7 value lowering, budgets, outcomes)
+is built and gate-tested on this branch. The Q1 freeze resolutions —
+named `args` root, subscript grammar and zero-based index, absent-path/
+type-mismatch behavior, the row-level unavailable carrier, and the full
+column/type catalog — are recorded in the
+[implementation notes](12-implementation-notes.md) and pinned by
+`crates/baml_query` golden tests. Local providers (Q2) and the hosted
+system are still target work.
 
 ## Contract in one sentence
 
@@ -216,11 +221,11 @@ The public surface uses ordinary SQL expressions over the virtual BAML `value`
 type:
 
 ~~~sql
--- Exact whole-value equality against a typed parameter.
-WHERE args = :expected_args
+-- Exact whole-value equality against an observed canonical value.
+WHERE args = baml_value_cid('bamlv_1_…')
 
--- Nested scalar comparison.
-WHERE args[0]['customer']['age'] >= 30
+-- Nested scalar comparison (args is a named-argument object).
+WHERE args['customer']['age'] >= 30
 
 -- Returned-field comparison.
 WHERE "return"['status'] = 'rejected'
@@ -231,20 +236,23 @@ partial-object matching, serialized-byte equality, public CID equality, or
 opaque-handle equality. A provider may optimize equality using identity only
 when it proves that the optimization is equivalent to the public semantics.
 
-Numeric subscripts select argument/list positions and string subscripts select
-object/class/map fields. The examples show BAML-style zero-based intent, but Q1
-must freeze the canonical `args` root shape, index base, and exact grammar
-after parser/analyzer tests. DataFusion recognizes the virtual value type and
-lowers these expressions into internal hydration, traversal, runtime type
-checking, and comparison expressions. Internal UDF names are not a public or
-versioned contract. Platform-owned functions remain available only for value
-operations with no clear operator/subscript form.
+Frozen (IN-Q1-1/2): `args` is a named-argument object keyed by declared
+parameter name — a numeric subscript on the `args` root is a planning
+error with a remedy; string subscripts select object/class/map fields and
+integer subscripts select list elements, zero-based. DataFusion
+recognizes the virtual value type and lowers these expressions into
+internal hydration, traversal, runtime type checking, and comparison
+expressions. Internal UDF names are not a public or versioned contract.
+The platform-owned value functions are `baml_value_cid('bamlv_1_…')` and
+`baml_value_json('{…}')`, valid only as equality operands against value
+fields.
 
 An unavailable value produces the D12 typed-unknown evaluation and contributes
 to the terminal outcome; it is not SQL `NULL` or false. A captured BAML null is
-ordinary null-like data. Q1 must freeze the distinct behavior of an available
-value whose requested path is absent or whose leaf type is incompatible with
-the comparison.
+ordinary null-like data. Frozen (IN-Q1-3): over an AVAILABLE value, an
+absent path or an incompatible leaf comparison is an ordinary SQL-NULL-
+like non-match and the result stays complete — deliberately distinct
+from typed unavailability, which always reconciles in the outcome.
 
 ## Value-query execution
 
@@ -253,12 +261,11 @@ Consider:
 ~~~sql
 SELECT call_id
 FROM retained_calls_v1
-WHERE args[0]['customer']['age'] >= 30
+WHERE args['customer']['age'] >= 30
 LIMIT 100;
 ~~~
 
-The subscript spelling is target syntax until the Q1 grammar freeze. The
-execution contract is not:
+The execution contract is not:
 
 ~~~text
 ClickHouse LIMIT 100 -> hydrate those 100 -> hope they match
@@ -478,17 +485,22 @@ It does not define the production physical model. Specifically rejected:
 
 ## Freeze checklist
 
-Before calling the catalog implementable:
+Done in Q1 (each pinned by `crates/baml_query` golden tests and recorded
+in the [implementation notes](12-implementation-notes.md)):
 
-- enumerate every v1 relation and column;
-- assign Arrow/logical types and nullability;
-- define keys and identity scopes;
-- specify per-role availability columns;
-- define how an unavailable predicate preserves the affected row/evaluation without altering ordinary SQL row schemas;
-- freeze the `args` root shape, subscript grammar/index base, available-value
-  absent-path/type-mismatch behavior, and any remaining platform function
-  names/type behavior;
-- freeze the terminal outcome wire schema;
-- define saved-query/catalog compatibility;
-- declare local and hosted capability matrices; and
-- publish provider mappings and conformance fixtures.
+- every v1 relation and column enumerated with Arrow types, nullability,
+  keys, and identity scopes (`catalog::catalog_v1`, column golden test);
+- per-role availability columns (`args_state`/`return_state`/
+  `error_state`) plus the frozen unavailable carrier: an undecidable row
+  leaves the data stream and reconciles in `query_outcome` — ordinary
+  row schemas never change;
+- the `args` root shape, subscript grammar/index base, absent-path/
+  type-mismatch behavior, and the platform value functions
+  (`baml_value_cid`, `baml_value_json`);
+- the terminal outcome wire schema (`outcome::QueryOutcome`, camelCase
+  serialization) and saved-query guidance (versioned names portable;
+  unversioned aliases pinned to the session's bound catalog version).
+
+Remaining for Q2/H2: publish local/hosted provider mappings, the
+capability matrices as providers land, and the cross-backend conformance
+fixture corpus.

@@ -323,23 +323,33 @@ evidence handles and resolves the requested values from local evidence or S3.
 Users write ordinary operators and subscripts against virtual values:
 
 ```sql
--- Exact equality against one complete argument value supplied by the caller.
-WHERE args = :expected_args
+-- Exact equality against one complete canonical value.
+WHERE args = baml_value_cid('bamlv_1_…')
 
--- A predicate over a nested scalar.
-WHERE args[0]['customer']['age'] >= 30
+-- A predicate over a nested scalar (args is a named-argument object).
+WHERE args['customer']['age'] >= 30
 
 -- A predicate over a returned field.
 WHERE "return"['status'] = 'rejected'
 ```
 
-`args = :expected_args` means whole-value semantic equality, not partial object
-matching, serialized-byte equality, or storage-ID equality. `:expected_args`
-must be bound as a BAML value rather than JSON text. Numeric subscripts are
-shown with BAML-style zero-based intent in these examples; string subscripts
-select object/class/map fields. Q1 must freeze the argument root shape, index
-base, exact spelling, and behavior for an absent path or incompatible leaf
-type before this becomes a compatibility contract.
+Whole-value `=` means canonical semantic equality, not partial-object
+matching, serialized-byte equality, or storage-ID equality. The frozen
+operands are `baml_value_cid('bamlv_1_…')` (an observed canonical value,
+usually copied from a prior result's `cid`) and `baml_value_json('{…}')`
+(a JSON-built map/list/scalar; JSON cannot express classes/enums/media —
+compare those by CID or nested scalars).
+
+The Q1 freeze (IN-Q1-1/2/3): **`args` is a named-argument object keyed by
+declared parameter name** — the captured artifact stores arguments by
+name and the canonical codec orders map keys by bytes, so argument
+position is not part of the canonical value; a numeric subscript on the
+`args` root is a planning error with a remedy. String subscripts select
+object/class/map fields; integer subscripts select list elements,
+zero-based. Over an available value, an absent path or an incompatible
+leaf comparison is an ordinary SQL-NULL-like non-match (the result stays
+complete); unavailable evidence is a typed unknown reconciled in
+`query_outcome`, never a silent non-match.
 
 DataFusion recognizes expressions over the virtual BAML `value` type and
 lowers them to internal hydration, traversal, type checking, and comparison
@@ -422,7 +432,7 @@ ClickHouse columns.
 ### Which retained calls had exactly these arguments?
 
 **English:** Within one run and function, find retained calls whose complete
-captured argument value exactly equals the BAML value supplied by the caller.
+captured argument value exactly equals an observed canonical value.
 
 ```sql
 SELECT
@@ -432,7 +442,7 @@ SELECT
 FROM retained_calls
 WHERE run_id = :run_id
   AND definition_key = :definition_key
-  AND args = :expected_args
+  AND args = baml_value_cid('bamlv_1_…')
 LIMIT 100;
 ```
 
@@ -451,7 +461,7 @@ SELECT
 FROM retained_calls
 WHERE run_id = :run_id
   AND definition_key = :definition_key
-  AND args[0]['customer']['age'] >= 30
+  AND args['customer']['age'] >= 30
 LIMIT 100;
 ```
 
@@ -992,8 +1002,6 @@ Add:
 
 Still unresolved:
 
-- Remove `process_id` or `engine_id` from `retained_calls` if Q1 proves
-  `run_id` already scopes call identity.
 - Aaron's LLM work will change `llm_population`.
 - Release, deployment, service, git, and bounded application-tag filters need a
   proper dimension model—not a free-form metadata blob.
@@ -1001,7 +1009,11 @@ Still unresolved:
   remove public SQL log inspection from P0.
 - `exact_windows` is an evidence ledger, not an event table. Keep detailed
   event reads on the bounded private RPC unless `retained_events` is designed.
-- Q1 must freeze how an available value with an absent path or incompatible
-  leaf type evaluates. It must remain distinct from unavailable evidence.
-- Q1 must freeze whether `args` is a positional list, a named-argument object,
-  or another canonical shape, plus the numeric subscript base.
+
+Resolved by the Q1 freeze (see the
+[implementation notes](design/12-implementation-notes.md)): `args` is a
+named-argument object; subscripts are name-keyed for objects and
+zero-based for lists; an available value's absent path or incompatible
+leaf is an ordinary non-match distinct from typed unavailability; and
+`retained_calls` carries no `process_id`/`engine_id` — `run_id` +
+`call_id` is the frozen identity scope.

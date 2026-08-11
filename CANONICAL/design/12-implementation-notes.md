@@ -188,6 +188,39 @@ Local catalog v1 exposes: `runs_v1`, `cct_population_v1`, `retained_calls_v1`, `
 
 The `bex_query` (fold/BQL) crate is unchanged by Q1; renaming/merging remains a non-semantic later choice.
 
+### IN-Q1-9 — Core implementation shape and gate status (2026-08-11)
+
+`crates/baml_query` implements the Q1 core on DataFusion 54.1:
+
+- Lowering is an `ExprPlanner`: subscript chains fold into one internal
+  path expression at plan time (paths are plan-time constants; computed
+  subscripts are a planning error in v1); comparisons rewrite to
+  canonical-semantics evaluation; bare SELECTed value columns rewrite to
+  rendered form so opaque handles never leave the engine. Internal
+  `__baml_*` names are reserved and rejected in user SQL.
+- Rendering (**freeze**): a selected value renders as bare text for
+  scalar leaves (so `CAST`/string functions behave naturally) and
+  canonical JSON for structured values.
+- Value literals (**freeze**): `baml_value_cid('bamlv_1_…')` and
+  `baml_value_json('{…}')` are the whole-value equality operands; JSON
+  binding maps object→map/array→list/scalars and cannot express
+  classes/enums/media (use CID references or nested scalars). Ordering
+  over whole values is a planning error.
+- Local hydration is synchronous inside the value UDFs against the
+  bounded, deduplicating `HydrationContext` (**impl** — the hosted
+  provider will add an async batched operator behind the same
+  `ValueResolver` contract).
+- Aliases (**freeze**): unversioned relation names (`runs`) are pinned
+  to the session's bound catalog version; saved/portable queries should
+  use versioned names (`runs_v1`).
+- Gate status: all Q1 gates are pinned by `crates/baml_query` tests
+  (grammar/catalog goldens, equality-is-never-handle-bytes, capability
+  and forbidden constructs, outcome exactly-once, budgets/cancellation,
+  final-limit placement, dependency allowlist) plus the bex_vm_types
+  revision-identity and non-transitive local-hash tests. The
+  fixed-snapshot-under-ingest and running/pending conformance runs move
+  to Q2 where real providers bind real artifact universes.
+
 ## Build environment
 
 - `RUSTC_WRAPPER=baml-sccache` requires `/root/tmp-build` to exist; a stale sccache server whose temp dir was deleted fails every compile with exit 254. Recreating the directory (or `sccache --stop-server`) fixes it.

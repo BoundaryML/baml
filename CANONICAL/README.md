@@ -85,10 +85,10 @@ This produces population-true totals by revision; it does not, by itself, prove 
 ### Which retained calls contain a customer older than 30?
 
 ~~~sql
--- Target v1 intent; args shape/subscript grammar freezes with catalog v1.
+-- Frozen catalog-v1 syntax: args is a named-argument object.
 SELECT call_id, run_id, definition_key
 FROM retained_calls
-WHERE args[0]['customer']['age'] >= 30
+WHERE args['customer']['age'] >= 30
 LIMIT 100;
 ~~~
 
@@ -101,8 +101,8 @@ captured body remains in local evidence or S3/CAS.
 DataFusion lowers the ordinary subscript/comparison expression into internal
 hydration, traversal, type-checking, and comparison work. Users do not write
 those internal helper calls. Whole-value equality is also direct SQL—such as
-`args = :expected_args`—and means exact BAML-value equality, not partial-object
-or serialized-byte equality.
+`args = baml_value_cid('bamlv_1_…')`—and means exact BAML-value equality,
+not partial-object or serialized-byte equality.
 
 ### Is the answer complete?
 
@@ -173,7 +173,7 @@ flowchart LR
 |---|---|---|---|---|
 | Profiler and local artifacts | Always-on population profiling plus bounded exact evidence and captured values | **Built and C1-hardened**: crash-safe root-pin barrier, exhaustion-policy ladder, explicit saturation evidence, persisted loss diagnostics, bounded slab/defer memory, continuous CLI value drain | [Profiler](design/03-profiler.md), [Local artifacts](design/storage/local-artifacts.md) | Keep crash/perf gates green while the SQL layer lands |
 | Playground fold engine | Open runs, CCTs, and captured values at interactive latency | **Built core**; full Studio experience remains target work | [Studio experience](design/06-studio-experience.md) | RPC/CLI/SQL semantic agreement |
-| Public SQL | One portable SQL contract, locally and hosted | **Designed; not built on this branch** | [Query system](design/04-query-system.md) | Catalog freeze, streaming engine, conformance corpus |
+| Public SQL | One portable SQL contract, locally and hosted | **Core built (Q1)**: catalog v1 frozen, DataFusion engine, D7 value lowering, budgets/outcomes gate-tested; local providers and CLI are Q2 | [Query system](design/04-query-system.md) | Local provider conformance, then hosted parity |
 | Hosted value queries | Filter resident metadata in ClickHouse, hydrate from S3/CAS, finish value work in DataFusion | **Designed; prototype evidence exists; hosted provider not built** | [Query system](design/04-query-system.md), [ClickHouse](design/storage/clickhouse.md) | Pushdown parity, global budgets, authz, cancellation |
 | Capture-to-cloud delivery | Durable receipt-backed upload without runtime-network coupling | **Target v1** | [Capture and ingest](design/05-capture-and-ingest.md), [S3](design/storage/s3.md) | Failure injection and reconciliation |
 | Hosted control plane | Transactional tenancy, commitment, projection, policy, audit, deletion | **Target v1** | [PostgreSQL](design/storage/postgres.md) | Migrations, RLS, restore test |
