@@ -3,187 +3,54 @@ source: crates/baml_tests/src/compiler2_mir/provider_sweep.rs
 ---
 == S16 provider sweep ==
 functions compared: 2823
-agreements: 2508
-O2 agreements (informational; optimizer parity deferred): 2508
+agreements: 2515
+O2 agreements (informational; optimizer parity deferred): 2515
 ruled bigint-context: 1
 ruled literal-widening: 77
 ruled literal-widening+receiver-seeding+void-union: 1
 ruled literal-widening+thrown-literal: 2
-ruled literal-widening+tir-unknown: 9
-ruled receiver-seeding: 23
-ruled receiver-seeding+throws-precision: 2
-ruled receiver-seeding+void-union: 3
+ruled literal-widening+tir-never-test: 2
+ruled literal-widening+tir-unknown: 13
+ruled receiver-seeding: 35
+ruled receiver-seeding+throws-precision: 3
+ruled receiver-seeding+void-union: 5
 ruled thrown-literal: 1
 ruled throws-precision: 33
 ruled throws-precision+tir-unknown: 1
+ruled tir-never-test: 4
 ruled tir-unknown: 93
-differing: 69
+differing: 37
 panics: 0
 top-level lets: not diffed (no body renderer yet)
 
 == residual pair census (all shapes, by count) ==
-[9x] e.g. ns_array_rest_binding/array_rest_binding.baml :: arb_pushing_to_rest_does_not_mutate_source
-    tir: <absent>
-    hir: let _: int
-[9x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    tir: let _: (() -> int throws never)[]
-    hir: let _: () -> int throws never
-[9x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    tir: let _: () -> int throws never
-    hir: let _: int
-[8x] e.g. ns_array_rest_binding/array_rest_binding.baml :: arb_pushing_to_rest_does_not_mutate_source
-    tir: let _: int
-    hir: let _: type
-[7x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: int
-    hir: let _: bool
-[7x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: int
-    hir: let _: int // x
-[5x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: bool
-    hir: let _: string
-[5x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: int
-    hir: let _: string
-[5x] e.g. ns_defer/defer.baml :: defer_unwind_lifo_risky
-    tir: let _: void
-    hir: let _: type
-[4x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: <absent>
-    hir: _ = copy _.0;
-[4x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: let _: 0
-    hir: let _: void
-[4x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    tir: let _: bool
-    hir: let _: int[] // expected
-[4x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: int // x
-    hir: let _: bool
-[4x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    tir: let _: int[]
-    hir: let _: bool
-[4x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    tir: let _: int[] // expected
-    hir: let _: type
-[4x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: let _: null | null_handling.NhUser
-    hir: let _: null | null_handling.NhProfile
-[4x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: type
-    hir: let _: int
-[4x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    tir: let _: type
-    hir: let _: int[]
 [3x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: 
 [3x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: goto -> bb6;
-[3x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    tir: <absent>
-    hir: let _: 2
-[3x] e.g. ns_defer/defer.baml :: defer_unwind_lifo_risky
-    tir: <absent>
-    hir: let _: void
 [3x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: }
-[3x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    tir: _ = call const fn baml.deep_equals<copy _>(copy _, copy _) -> [bb5];
-    hir: _ = call const fn baml.deep_equals<copy _>(copy _, copy _) -> [bb5];
-[3x] e.g. ns_exceptions/exceptions.baml :: $init_test_ns_exceptions_exceptions
-    tir: _ = is_type(copy _, never);
-    hir: _ = is_type(copy _, exceptions.AppError);
-[3x] e.g. ns_enums/enums.baml :: $init_test_ns_enums_enums
-    tir: _ = load_type(enums.EnumsShape | enums.EnumsShape.Rectangle);
-    hir: _ = load_type(enums.EnumsShape);
-[3x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    tir: _ = load_type(int[] | string);
-    hir: _ = load_type(string | int[]);
-[3x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    tir: let _: 0
-    hir: let _: (() -> int throws never)[]
-[3x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    tir: let _: 1
-    hir: let _: (() -> int throws never)[]
-[3x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    tir: let _: 2
-    hir: let _: (() -> int throws never)[]
-[3x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: bool
-    hir: let _: int
-[3x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: string
-    hir: let _: type
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: 
     hir: <absent>
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
+[2x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
-    hir: _[_] = const "updated";
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: <absent>
-    hir: branch copy _ -> [bb3, bb2];
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: <absent>
-    hir: let _: bool
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: <absent>
-    hir: let _: null | null_handling.NhUser
-[2x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: <absent>
-    hir: let _: string[]
+    hir: _ = copy _.0;
 [2x] e.g. ns_control_flow/control_flow.baml :: $init_test_ns_control_flow_control_flow
     tir: _ = [copy _, copy _, copy _]: control_flow.Ok | control_flow.Err[];
     hir: _ = [copy _, copy _, copy _]: control_flow.Err | control_flow.Ok[];
-[2x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _ + copy _;
-    hir: _ = copy _[_];
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: _ = copy _ == const null;
-    hir: _ = copy _[_];
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: _ = copy _.1;
-    hir: _ = const "profile";
-[2x] e.g. ns_is_operator/is_operator.baml :: is_pattern_disjoint_from_scrutinee_type_returns_false_fn
-    tir: _ = is_type(copy _, never);
-    hir: _ = is_type(copy _, string);
-[2x] e.g. ns_cancel_cascade/cancel_cascade.baml :: $init_test_ns_cancel_cascade_cancel_cascade
-    tir: _ = load_type(baml.future.FutureState | baml.future.FutureState.Cancelled);
-    hir: _ = load_type(baml.future.FutureState);
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: _ = load_type(generic_match_subtype.Shape | generic_match_subtype.Sq);
     hir: <absent>
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: _ = load_type(generic_match_subtype.Shape | generic_match_subtype.Sq);
     hir: _ = load_type(generic_match_subtype.Shape);
-[2x] e.g. ns_operators/operators.baml :: $init_test_ns_operators_operators
-    tir: _ = load_type(operators.Meters | operators.Feet);
-    hir: _ = load_type(operators.Feet | operators.Meters);
-[2x] e.g. ns_typed_outputs/typed_outputs.baml :: $init_test_ns_typed_outputs_typed_outputs
-    tir: _ = load_type(typed_outputs.Success | typed_outputs.Failure);
-    hir: _ = load_type(typed_outputs.Failure | typed_outputs.Success);
 [2x] e.g. ns_json_parse_stringify/json_parse_stringify.baml :: parse_array_len
     tir: _ = narrow_bind copy _ as List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
     hir: _ = narrow_bind copy _ as List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: _.0 = const "updated";
-    hir: _ = const "name";
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: branch copy _ -> [bb3, bb2];
-    hir: _ = copy _ == const null;
-[2x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: bool
-    hir: let _: int | baml.iter.Done
-[2x] e.g. ns_iter_impl_generics_only/iter.baml :: iter_peekable
-    tir: let _: bool
-    hir: let _: int | iter_impl_generics_only.core.Done
-[2x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: bool
-    hir: let _: int | void
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: let _: generic_match_subtype.Non | generic_match_subtype.Opt<generic_match_subtype.Shape>
     hir: <absent>
@@ -196,45 +63,15 @@ top-level lets: not diffed (no body renderer yet)
 [2x] e.g. ns_generic_union_returns/generic_union_returns.baml :: sap_nullable_container_types_are_preserved
     tir: let _: null | ((generic_union_returns.ParsedChild[], int) -> null | generic_union_returns.ParsedChild throws never)
     hir: let _: (generic_union_returns.ParsedChild[], int) -> null | generic_union_returns.ParsedChild throws never
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_index_null
-    tir: let _: null | int[]
-    hir: let _: void
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: let _: null | null_handling.NhProfile
-    hir: let _: bool
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: let _: null | null_handling.NhProfile
-    hir: let _: null | null_handling.NhUser
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: let _: null | null_handling.NhProfile
-    hir: let _: void
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    tir: let _: null | null_handling.NhUser
-    hir: let _: void
-[2x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: string
-    hir: let _: int
-[2x] e.g. ns_csv/csv.baml :: csv_reader_resumes_after_throw
-    tir: let _: string[]
-    hir: let _: string
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: let _: type
     hir: <absent>
-[2x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: void
-    hir: let _: int
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: }
     hir: <absent>
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: _ = const null;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: <absent>
-    hir: _ = copy _ + copy _;
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: <absent>
-    hir: _ = short_circuit(&&) copy _ -> [eval: bb1, join: bb2];
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: bb4: {
@@ -244,27 +81,12 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: bb6: {
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
+[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
-    hir: let _: "first"
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: <absent>
-    hir: let _: "name"
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: <absent>
-    hir: let _: 0
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: <absent>
-    hir: let _: baml.time.Instant
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: <absent>
-    hir: let _: map<string, deep_copy.DeepInner>
+    hir: let _: int
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: let _: null | null_handling.NhCat | null_handling.NhDog
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: <absent>
-    hir: let _: string
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: <absent>
     hir: switch copy _ [NhCat: bb4, NhDog: bb3, otherwise: bb2] (exhaustive);
@@ -277,27 +99,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable
     tir: _ = [copy _, copy _, copy _]: int[] | never[][];
     hir: _ = [copy _, copy _, copy _]: int[][];
-[1x] e.g. ns_iter/iter.baml :: iter_for_loop_pop_during_iteration
-    tir: _ = call const fn baml.Array.pop<copy _>(copy _) -> [bb1];
-    hir: _ = call const fn baml.Array.pop<copy _>(copy _) -> [bb1];
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: _ = call const fn baml.csv.CsvRecord.get<copy _>(copy _, const "absent") -> [bb17];
-    hir: _ = call const fn baml.csv.CsvRecord.get<copy _>(copy _, const "absent") -> [bb17];
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: _ = call const fn baml.csv.CsvRecord.get<copy _>(copy _, const "name") -> [bb10];
-    hir: _ = call const fn baml.csv.CsvRecord.get<copy _>(copy _, const "name") -> [bb10];
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: _ = call const fn baml.csv.CsvRecord.get<copy _>(copy _, const "score") -> [bb14];
-    hir: _ = call const fn baml.csv.CsvRecord.get<copy _>(copy _, const "score") -> [bb14];
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: _ = call const fn baml.csv.CsvRecord.get_at<copy _>(copy _, const 99_i64) -> [bb21];
-    hir: _ = call const fn baml.csv.CsvRecord.get_at<copy _>(copy _, const 99_i64) -> [bb21];
-[1x] e.g. ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    tir: _ = call const fn baml.deep_equals<copy _>(copy _, copy _) -> [bb2];
-    hir: _ = call const fn baml.deep_equals<copy _>(copy _, copy _) -> [bb2];
-[1x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: _ = call const fn baml.iter.Peekable.peek<copy _, copy _>(copy _) -> [bb15];
-    hir: _ = call const fn baml.iter.Peekable.peek<copy _, copy _>(copy _) -> [bb15];
 [1x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_falls_through_on_non_fn
     tir: _ = call const fn user.generic_match_subtype.unwrap_or<copy _>(copy _, copy _) -> [bb2];
     hir: <absent>
@@ -322,60 +123,12 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_interfaces/interfaces_3.baml :: w3um_describe
     tir: _ = call const fn user.interfaces.W3umDog.W3umAnimal.speak(copy _) -> [bb5];
     hir: _ = call const fn user.interfaces.W3umCat.W3umAnimal.speak(copy _) -> [bb5];
-[1x] e.g. ns_iter_impl_generics_only/iter.baml :: iter_peekable
-    tir: _ = call const fn user.iter_impl_generics_only.core.Peekable.peek<copy _, copy _>(copy _) -> [bb15];
-    hir: _ = call const fn user.iter_impl_generics_only.core.Peekable.peek<copy _, copy _>(copy _) -> [bb15];
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = const "first";
-    hir: _ = copy _ + copy _;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = const "first";
-    hir: _.0.1[_][_] = const 200_i64;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = const 0_i64;
-    hir: _ = copy _.0.0.0;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: _ = const 0_i64;
-    hir: _ = copy _.1;
 [1x] e.g. ns_interfaces/interfaces.baml :: idmr_main
     tir: _ = const fn user.interfaces.IdmrDescribable.describe;
     hir: _ = const null;
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: _ = const null;
     hir: unreachable;
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: _ = copy _ + const 5_i64;
-    hir: _ = copy _.count#0 as interfaces.IfwCounter;
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: _ = copy _ == const 10_i64;
-    hir: _ = copy _.1;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _.0.0.0;
-    hir: _ = const "value";
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _.0.1;
-    hir: _.1[_][_] = const 300_i64;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _.0;
-    hir: _ = const "first";
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _.0;
-    hir: _ = const 0_i64;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: _ = copy _.0;
-    hir: _ = copy _[_];
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _.1;
-    hir: _ = copy _.0;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: _ = copy _.1;
-    hir: _.1[_][_] = const 99_i64;
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: _ = copy _.1;
-    hir: _[_] = const 10_i64;
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: _ = copy _.count#0 as interfaces.IfwCounter;
-    hir: _ = copy _ == const 10_i64;
 [1x] e.g. ns_interfaces/interfaces_3.baml :: describe
     tir: _ = copy _.name#0 as interfaces.W304Named;
     hir: _ = copy _.0;
@@ -388,18 +141,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: _ = copy _;
     hir: _ = virtual_call area as generic_match_subtype.Shape(copy _) -> [bb3];
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: _ = copy _;
-    hir: copy _.count#0 as interfaces.IfwCounter = copy _;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: _ = copy _[_];
-    hir: _ = const 0_i64;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _[_];
-    hir: _ = copy _.0.1;
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _ = copy _[_];
-    hir: _ = copy _.1;
 [1x] e.g. ns_projection_patterns/projection_patterns.baml :: is_label
     tir: _ = is_type(copy _, #1);
     hir: _ = is_type(copy _, string);
@@ -424,21 +165,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_interfaces/interfaces_3.baml :: w3um_describe
     tir: _ = is_type(copy _, interfaces.W3umDog);
     hir: _ = is_type(copy _, interfaces.W3umCat);
-[1x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_fn_is_mismatched
-    tir: _ = is_type(copy _, never);
-    hir: _ = is_type(copy _, (string) -> string throws unknown);
-[1x] e.g. ns_is_operator/is_operator.baml :: is_evaluates_scrutinee_exactly_once_fn
-    tir: _ = is_type(copy _, never);
-    hir: _ = is_type(copy _, bool);
-[1x] e.g. ns_future_types/future_types.baml :: throwing_future_is_non_throwing_future_fn
-    tir: _ = is_type(copy _, never);
-    hir: _ = is_type(copy _, future<int, never>);
-[1x] e.g. ns_future_types/future_types.baml :: wrong_future_array_fn
-    tir: _ = is_type(copy _, never);
-    hir: _ = is_type(copy _, future<int, never>[]);
-[1x] e.g. ns_future_types/future_types.baml :: int_future_is_string_future_fn
-    tir: _ = is_type(copy _, never);
-    hir: _ = is_type(copy _, future<string, never>);
 [1x] e.g. ns_exceptions/exceptions.baml :: $init_test_ns_exceptions_exceptions
     tir: _ = is_type(copy _, string);
     hir: _ = is_type(copy _, "not matched");
@@ -454,12 +180,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_typed_outputs/typed_outputs.baml :: $init_test_ns_typed_outputs_typed_outputs
     tir: _ = load_type((int | bool)[] | string);
     hir: _ = load_type(string | (int | bool)[]);
-[1x] e.g. ns_future_methods/future_methods.baml :: $init_test_ns_future_methods_future_methods
-    tir: _ = load_type(baml.future.FutureState | baml.future.FutureState.Error);
-    hir: _ = load_type(baml.future.FutureState);
-[1x] e.g. ns_future_methods/future_methods.baml :: $init_test_ns_future_methods_future_methods
-    tir: _ = load_type(baml.future.FutureState | baml.future.FutureState.Pending);
-    hir: _ = load_type(baml.future.FutureState);
 [1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: f
     tir: _ = load_type(baml.json.JsonSerializationError);
     hir: _ = load_type(baml.json.JsonParseError | baml.json.JsonSerializationError);
@@ -496,9 +216,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_json_to_from_string/json_to_from_string.baml :: from_string_json_passthrough_object_len
     tir: _ = narrow_bind copy _ as Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
     hir: _ = narrow_bind copy _ as Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: _ = short_circuit(&&) copy _ -> [eval: bb1, join: bb2];
-    hir: _ = copy _;
 [1x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: _ = user.generic_match_subtype.Sq { const 0_i64 };
     hir: <absent>
@@ -520,15 +237,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_json_auto_derive/json_auto_derive.baml :: alias_chain_dispatch_to_json_val
     tir: _ = virtual_call to_json as baml.ToJson(copy _) -> [bb1];
     hir: _ = call const fn user.json_auto_derive.BAliasTo.baml.ToJson.to_json(copy _) -> [bb1];
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _.0.1[_].0 = const 200_i64;
-    hir: _ = const "value";
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: _.1[_].0 = const 300_i64;
-    hir: _ = const "first";
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: _.1[_].0 = const 99_i64;
-    hir: _ = const "value";
 [1x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_falls_through_on_non_fn
     tir: bb3: {
     hir: <absent>
@@ -538,12 +246,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: branch copy _ -> [bb2, bb1];
     hir: branch copy _ -> [bb5, bb1];
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: copy _.count#0 as interfaces.IfwCounter = const 10_i64;
-    hir: _ = const "count";
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: copy _.count#0 as interfaces.IfwCounter = copy _;
-    hir: _ = copy _ + const 5_i64;
 [1x] e.g. ns_spawn_basic/spawn_basic.baml :: spawn_returning_string
     tir: fn .<lambda(spawn_returning_string, 0)>() -> "hello from spawn" {
     hir: fn .<lambda(spawn_returning_string, 0)>() -> string {
@@ -553,9 +255,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     tir: goto -> bb3;
     hir: _ = type_tag(_);
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: "first"
-    hir: let _: deep_copy.DeepInner
 [1x] e.g. ns_spawn_basic/spawn_basic.baml :: spawn_returning_string
     tir: let _: "hello from spawn" // _ // return
     hir: let _: string // _ // return
@@ -592,129 +291,12 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable
     tir: let _: (int[] | never[])[]
     hir: let _: int[][]
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: 0
-    hir: let _: deep_copy.DeepInner
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: let _: 0
-    hir: let _: deep_copy.Node[]
-[1x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: baml.iter.Iterator<Error = never, Item = int>
-    hir: let _: int[]
 [1x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable
     tir: let _: baml.iter.Iterator<Error = never, Item = int[] | never[]>
     hir: let _: baml.iter.Iterator<Error = never, Item = int[]>
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: baml.time.Instant
-    hir: let _: int
 [1x] e.g. ns_bigints/bigints.baml :: bigint_compound_assign_nonliteral_fn
     tir: let _: bigint
     hir: let _: -7
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: bigint
-    hir: let _: string
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: bool
-    hir: let _: float
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: bool
-    hir: let _: string | null
-[1x] e.g. ns_iter/iter.baml :: iter_for_loop_sees_push_during_iteration
-    tir: let _: bool
-    hir: let _: type
-[1x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: bool
-    hir: let _: unknown
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: let _: bool // after_assign
-    hir: let _: string
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: csv.Verdict
-    hir: let _: bool
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: deep_copy.DeepInner
-    hir: let _: 0
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: deep_copy.DeepInner
-    hir: let _: int
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: deep_copy.DeepInner[]
-    hir: let _: int
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: let _: deep_copy.Node
-    hir: let _: string
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    tir: let _: deep_copy.Node[]
-    hir: let _: deep_copy.Node
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: float
-    hir: let _: type
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: int
-    hir: let _: "Approve" | "Reject"
-[1x] e.g. ns_interfaces/interfaces.baml :: ifw_main
-    tir: let _: int
-    hir: let _: bool // after_assign
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: int
-    hir: let _: deep_copy.DeepInner[]
-[1x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: int
-    hir: let _: int[] // details
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: int
-    hir: let _: string[]
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: int
-    hir: let _: void
-[1x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: int // x
-    hir: let _: int
-[1x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: int // x
-    hir: let _: int | baml.iter.Done
-[1x] e.g. ns_iter_impl_generics_only/iter.baml :: iter_peekable
-    tir: let _: int // x
-    hir: let _: int | iter_impl_generics_only.core.Done
-[1x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: int | baml.iter.Done
-    hir: let _: int
-[1x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: int | baml.iter.Done
-    hir: let _: int | void
-[1x] e.g. ns_iter/iter.baml :: iter_peekable
-    tir: let _: int | baml.iter.Done
-    hir: let _: type
-[1x] e.g. ns_iter_impl_generics_only/iter.baml :: iter_peekable
-    tir: let _: int | iter_impl_generics_only.core.Done
-    hir: let _: int
-[1x] e.g. ns_iter_impl_generics_only/iter.baml :: iter_peekable
-    tir: let _: int | iter_impl_generics_only.core.Done
-    hir: let _: int | void
-[1x] e.g. ns_iter_impl_generics_only/iter.baml :: iter_peekable
-    tir: let _: int | iter_impl_generics_only.core.Done
-    hir: let _: type
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: int | null
-    hir: let _: type
-[1x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: int[]
-    hir: let _: int
-[1x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: int[] // details
-    hir: let _: int[] // out
-[1x] e.g. ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    tir: let _: int[] // out
-    hir: let _: type
-[1x] e.g. ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    tir: let _: map<string, deep_copy.DeepInner>
-    hir: let _: int
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: map<string, string>
-    hir: let _: int
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: map<string, string> // m
-    hir: let _: string | null
 [1x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable
     tir: let _: never[]
     hir: let _: int[]
@@ -727,55 +309,8 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_generic_union_returns/generic_union_returns.baml :: sap_nullable_container_types_are_preserved
     tir: let _: null | ((map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>) -> int throws never)
     hir: let _: (map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>) -> int throws never
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: string
-    hir: let _: bigint
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string
-    hir: let _: bool
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: string
-    hir: let _: csv.Verdict
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string
-    hir: let _: int | null
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string
-    hir: let _: map<string, string> // m
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string
-    hir: let _: string | null
-[1x] e.g. ns_csv/csv.baml :: csv_reader_resumes_after_throw
-    tir: let _: string
-    hir: let _: string[]
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string | null
-    hir: let _: bool
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string | null
-    hir: let _: int
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string | null
-    hir: let _: type
-[1x] e.g. ns_csv/csv.baml :: csv_decode_all_cell_types
-    tir: let _: string[]
-    hir: let _: int
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: string[]
-    hir: let _: map<string, string>
-[1x] e.g. ns_csv/csv.baml :: csv_record_api
-    tir: let _: type
-    hir: let _: string
 
 == differing functions ==
-ns_array_rest_binding/array_rest_binding.baml :: arb_pushing_to_rest_does_not_mutate_source
-    ...     let _11: int
-    tir:     let _12: int
-    hir:     let _12: type
-ns_array_rest_binding/array_rest_binding.baml :: arb_rest_bind_chain_aliases_same_slice
-    ...     let _6: int
-    tir:     let _7: int
-    hir:     let _7: type
 ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
@@ -784,43 +319,7 @@ ns_bigints/bigints.baml :: bigint_compound_assign_nonliteral_fn
     ...     let _1: bigint // x
     tir:     let _2: bigint
     hir:     let _2: -7
-ns_cancel_cascade/cancel_cascade.baml :: $init_test_ns_cancel_cascade_cancel_cascade
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws baml.errors.Io
 ns_control_flow/control_flow.baml :: $init_test_ns_control_flow_control_flow
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
-ns_csv/csv.baml :: csv_decode_all_cell_types
-    ...     let _11: string
-    tir:     let _12: int
-    hir:     let _12: type
-ns_csv/csv.baml :: csv_reader_resumes_after_throw
-    ...     let _17: string
-    tir:     let _18: string
-    hir:     let _18: type
-ns_csv/csv.baml :: csv_record_api
-    ...     let _8: int
-    tir:     let _9: int
-    hir:     let _9: type
-ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
-    ...     let _9: type
-    tir:     let _10: 0
-    hir:     let _10: void
-ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
-    ...     let _12: type
-    tir:     let _13: 0
-    hir:     let _13: void
-ns_defer/defer.baml :: defer_unwind_lifo_risky
-    ...     let _4: void
-    tir:     let _5: void
-    hir:     let _5: type
-ns_defer/defer.baml :: defer_armed_only_risky
-    ...     let _4: void
-    tir:     let _5: void
-    hir:     let _5: type
-ns_enums/enums.baml :: $init_test_ns_enums_enums
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
@@ -832,22 +331,6 @@ ns_floats/floats.baml :: $init_test_ns_floats_floats
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_future_methods/future_methods.baml :: $init_test_ns_future_methods_future_methods
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
-ns_future_types/future_types.baml :: int_future_is_string_future_fn
-    ...         _1 = copy _3;
-    tir:         _5 = is_type(copy _1, never);
-    hir:         _5 = is_type(copy _1, future<string, never>);
-ns_future_types/future_types.baml :: throwing_future_is_non_throwing_future_fn
-    ...         _1 = copy _3;
-    tir:         _5 = is_type(copy _1, never);
-    hir:         _5 = is_type(copy _1, future<int, never>);
-ns_future_types/future_types.baml :: wrong_future_array_fn
-    ...         _1 = [copy _2]: future<string, never>[];
-    tir:         _6 = is_type(copy _1, never);
-    hir:         _6 = is_type(copy _1, future<int, never>[]);
 ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     ...     let _7: type
     tir:     let _8: generic_match_subtype.Shape
@@ -864,10 +347,6 @@ ns_instantiation_expr/instantiation_expr.baml :: bound_method_value
     ...     let _2: (int) -> int throws never // f
     tir:     let _3: (T) -> T throws never
     hir:     let _3: (instantiation_expr.GenBox, int) -> int throws never
-ns_interfaces/interfaces.baml :: ifw_main
-    ...     let _2: interfaces.IfwCounter // c
-    tir:     let _3: bool // after_assign
-    hir:     let _3: string
 ns_interfaces/interfaces.baml :: idmr_main
     ...     let _1: interfaces.IdmrThing // t
     tir:     let _2: (Self) -> string throws never // describe
@@ -892,38 +371,10 @@ ns_interfaces_associated_types/interfaces_associated_types.baml :: adb_summarize
     ...     let _1: H // holder // param
     tir:     let _2: (H as interfaces_associated_types.AdbHolder<interfaces_associated_types.AdbUser>).Item
     hir:     let _2: interfaces_associated_types.AdbUser
-ns_is_operator/is_operator.baml :: is_pattern_disjoint_from_scrutinee_type_returns_false_fn
-    ...         _1 = const 42_i64;
-    tir:         _2 = is_type(copy _1, never);
-    hir:         _2 = is_type(copy _1, string);
-ns_is_operator/is_operator.baml :: is_evaluates_scrutinee_exactly_once_fn
-    ...     bb2: {
-    tir:         _6 = is_type(copy _3, never);
-    hir:         _6 = is_type(copy _3, string);
-ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    ...     let _4: baml.iter.Iterator<Error = never, Item = int>
-    tir:     let _5: (int) -> bool throws E2
-    hir:     let _5: (int) -> bool throws never
-ns_iter/iter.baml :: iter_for_loop_sees_push_during_iteration
-    ...     let _10: int
-    tir:     let _11: bool
-    hir:     let _11: type
-ns_iter/iter.baml :: iter_for_loop_pop_during_iteration
-    ...     let _10: int
-    tir:     let _11: int | null
-    hir:     let _11: type
-ns_iter/iter.baml :: iter_peekable
-    ...     let _5: int[] // out
-    tir:     let _6: void
-    hir:     let _6: int | void
 ns_iter_closure_elements/iter_closure_elements.baml :: closure_loop_sum
     ...     let _10: () -> void throws never
     tir:     let _11: (() -> void throws never)[]
     hir:     let _11: type
-ns_iter_impl_generics_only/iter.baml :: iter_peekable
-    ...     let _5: int[] // out
-    tir:     let _6: void
-    hir:     let _6: int | void
 ns_json_alias/json_alias.baml :: json_array_len
     ...     let _0: int // _0 // return
     tir:     let _1: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // arr
@@ -964,54 +415,18 @@ ns_lambdas/lambdas.baml :: lambda_contextual_main
     ...     let _1: unknown // e
     tir:     let _2: (int) -> int throws int | string
     hir:     let _2: (int) -> int throws "contextual"
-ns_null_handling/null_handling.baml :: nh_safe_assign_null
-    ...     let _1: null | null_handling.NhUser // user // param
-    tir:     let _2: null | null_handling.NhProfile
-    hir:     let _2: void
-ns_null_handling/null_handling.baml :: nh_safe_assign_non_null
-    ...     let _1: null | null_handling.NhUser // user // param
-    tir:     let _2: null | null_handling.NhProfile
-    hir:     let _2: void
-ns_null_handling/null_handling.baml :: nh_safe_assign_index_null
-    ...     let _1: null | int[] // items // param
-    tir:     let _2: null | int[]
-    hir:     let _2: void
-ns_null_handling/null_handling.baml :: nh_safe_assign_index_non_null
-    ...     let _1: null | int[] // items // param
-    tir:     let _2: null | int[]
-    hir:     let _2: void
 ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
     ...     let _2: bool
     tir: 
     hir:     let _3: null | null_handling.NhCat | null_handling.NhDog
-ns_operators/operators.baml :: $init_test_ns_operators_operators
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
 ns_ops_bitwise/ops_bitwise.baml :: $init_test_ns_ops_bitwise_ops_bitwise
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_fn_is_mismatched
-    ...         _1 = make_closure lambda[0]();
-    tir:         _2 = is_type(copy _1, never);
-    hir:         _2 = is_type(copy _1, (string) -> string throws unknown);
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    ...     let _10: () -> int throws never
-    tir:     let _11: int
-    hir:     let _11: type
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_rest_capture_fresh_cell
-    ...     let _13: () -> int throws never
-    tir:     let _14: int
-    hir:     let _14: type
 ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable
     ...     let _1: int // total
     tir:     let _2: (int[] | never[])[]
     hir:     let _2: int[][]
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_deep_class_capture_fresh
-    ...     let _22: () -> int throws never
-    tir:     let _23: int
-    hir:     let _23: type
 ns_projection_patterns/projection_patterns.baml :: is_label
     ...     bb0: {
     tir:         _3 = is_type(copy _2, #1);

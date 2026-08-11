@@ -145,7 +145,24 @@ enum AlignEvent {
 }
 
 fn aligned_events(tir: &str, hir: &str) -> Vec<AlignEvent> {
-    let diff = similar::TextDiff::from_lines(tir, hir);
+    // The diff runs over ID-STRIPPED lines: an accepted insertion
+    // renumbers every later local, and diffing raw text would split the
+    // declaration block into equal-length replace chunks that defeat
+    // insertion detection. Stripping before alignment means pairs that
+    // differ only by local ids are EQUAL here - the same admissibility
+    // the renumber rule already granted, applied at alignment; the
+    // runtime suite stays the behavioral gate for operand wiring.
+    let tir_stripped = tir
+        .lines()
+        .map(|line| strip_local_ids(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let hir_stripped = hir
+        .lines()
+        .map(|line| strip_local_ids(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let diff = similar::TextDiff::from_lines(&tir_stripped, &hir_stripped);
     let mut deletes: Vec<String> = Vec::new();
     let mut inserts: Vec<String> = Vec::new();
     let mut events = Vec::new();
@@ -240,8 +257,12 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
             None
         });
     }
-    let t_norm = dedup_union_members(&collapse_json_alias(&normalize_type_literals(&t_ids)));
-    let h_norm = dedup_union_members(&collapse_json_alias(&normalize_type_literals(&h_ids)));
+    let t_norm = normalize_union_payloads(&dedup_union_members(&collapse_json_alias(
+        &normalize_type_literals(&t_ids),
+    )));
+    let h_norm = normalize_union_payloads(&dedup_union_members(&collapse_json_alias(
+        &normalize_type_literals(&h_ids),
+    )));
     if t_norm == h_norm {
         return Some(Some("literal-widening"));
     }
@@ -272,6 +293,20 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     }
     if thrown_literal_narrow_pair(&t_ids, &h_ids) {
         return Some(Some("thrown-literal"));
+    }
+    // tir-never-test (ruled 2026-08-11): TIR records a catch-arm
+    // pattern's type as `never` (its residual-subtraction artifact on an
+    // unknown throw set) and emits an always-false arm test at O0; hir_ty
+    // records the pattern the source wrote. The optimized pipeline lowers
+    // these arms through tag switches, which is why the dead test never
+    // shipped. Scoped to the is_type spelling with `never` on the TIR
+    // side only.
+    if let (Some(t_at), Some(h_at)) = (t_norm.find("is_type(copy _, "), h_norm.find("is_type(copy _, "))
+        && t_norm[..t_at] == h_norm[..h_at]
+        && t_norm[t_at..].trim_end() == "is_type(copy _, never);"
+        && h_norm[h_at..].trim_end().ends_with(");")
+    {
+        return Some(Some("tir-never-test"));
     }
     if throws_rigid_var_pair(&t_norm, &h_norm) {
         return Some(Some("throws-precision"));
@@ -369,6 +404,58 @@ fn dedup_union_members(line: &str) -> String {
         while out.contains(&dup) {
             out = out.replace(&dup, base);
         }
+    }
+    out
+}
+
+/// Canonicalizes the union payload of `load_type(...)`/`is_type(_, ...)`
+/// operands: members SORT (the S15 canonical-order ruling - TIR renders
+/// written order) and an enum's variant member is ABSORBED by the enum
+/// itself (`E | E.V` is `E`, the S15 canonical-union absorption ruling).
+/// Depth-aware split so generics carrying `|` inside `<>` stay intact.
+fn normalize_union_payloads(line: &str) -> String {
+    let mut out = line.to_string();
+    for opener in ["load_type(", "is_type(copy _, "] {
+        let Some(start) = out.find(opener) else { continue };
+        let payload_start = start + opener.len();
+        let Some(rel_end) = out[payload_start..].find(')') else { continue };
+        let payload = &out[payload_start..payload_start + rel_end];
+        let mut members: Vec<&str> = Vec::new();
+        let (mut depth, mut last) = (0usize, 0usize);
+        for (index, c) in payload.char_indices() {
+            match c {
+                '<' | '[' => depth += 1,
+                '>' | ']' => depth = depth.saturating_sub(1),
+                '|' if depth == 0 => {
+                    members.push(payload[last..index].trim());
+                    last = index + 1;
+                }
+                _ => {}
+            }
+        }
+        members.push(payload[last..].trim());
+        if members.len() < 2 {
+            continue;
+        }
+        let absorbed: Vec<&str> = members
+            .iter()
+            .copied()
+            .filter(|member| {
+                !members
+                    .iter()
+                    .any(|other| member.strip_prefix(other).is_some_and(|rest| rest.starts_with('.')))
+            })
+            .collect();
+        let mut sorted = absorbed;
+        sorted.sort_unstable();
+        sorted.dedup();
+        let canonical = sorted.join(" | ");
+        out = format!(
+            "{}{}{}",
+            &out[..payload_start],
+            canonical,
+            &out[payload_start + rel_end..]
+        );
     }
     out
 }

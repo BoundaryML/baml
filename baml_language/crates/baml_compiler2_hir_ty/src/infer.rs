@@ -1753,10 +1753,23 @@ impl<'db> InferenceContext<'db> {
         }
         let binding = self.narrowable_binding(body, target);
         let declared = binding.map(|binding| self.binding_declared_ty(binding));
+        // A MEMBER/PLACE target (`a.b[i].f = v`) types as an ordinary
+        // place expression (r-a's `infer_assignee_expr` mirrors
+        // expression inference for assignee position): the chain's types
+        // and resolutions RECORD - MIR's field-slot road resolves the
+        // store through them instead of falling to the dynamic
+        // string-keyed store - and the place's type is the value's
+        // expectation (TIR checks the assigned value against the field
+        // type the same way).
+        let place_ty = (binding.is_none() && op.is_none())
+            .then(|| self.infer_expr(body, target, &Expectation::None));
         let assigned = match op {
-            None => match &declared {
-                Some(declared) if !declared.has_error() => {
+            None => match (&declared, &place_ty) {
+                (Some(declared), _) if !declared.has_error() => {
                     self.check_expr(body, value, declared)
+                }
+                (_, Some(place)) if !place.has_error() => {
+                    self.check_expr(body, value, place)
                 }
                 _ => self.infer_expr(body, value, &Expectation::None),
             },

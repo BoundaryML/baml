@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/type_spec/fixtures.rs
+assertion_line: 93
 expression: outcome.dump
 ---
 116..120 'next': hir_ty=[<missing>] tir=[throws E]
@@ -18,9 +19,9 @@ expression: outcome.dump
 526..531 'let v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
 534..548 'self.iter.next': hir_ty=[(self: user.IvIterator<T, E>) -> user.IvDone | T throws E] tir=[() -> T | user.IvDone throws E]
 534..550 'self.i...next()': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-559..570 'self.buffer': hir_ty=[<missing>] tir=[T | user.IvDone]
+559..570 'self.buffer': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
 573..574 'v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-583..598 'self.has_buffer': hir_ty=[<missing>] tir=[bool]
+583..598 'self.has_buffer': bool
 601..605 'true': true
 614..615 'v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
 674..678 'next': throws E
@@ -30,9 +31,9 @@ expression: outcome.dump
 743..899 '{\n   ...     }': never
 761..766 'let v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
 769..780 'self.buffer': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-797..808 'self.buffer': hir_ty=[<missing>] tir=[T | user.IvDone]
+797..808 'self.buffer': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
 811..820 'IvDone {}': user.IvDone
-837..852 'self.has_buffer': hir_ty=[<missing>] tir=[bool]
+837..852 'self.has_buffer': bool
 855..860 'false': false
 884..885 'v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
 912..926 'self.iter.next': hir_ty=[(self: user.IvIterator<T, E>) -> user.IvDone | T throws E] tir=[() -> T | user.IvDone throws E]

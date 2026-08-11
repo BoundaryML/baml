@@ -469,3 +469,29 @@ function ir_probe() -> int throws unknown {
         "reduce's own args must solve A = int, E = never"
     );
 }
+
+#[test]
+fn assign_target_chain_records() {
+    // A member/place assignment target types as an ordinary place
+    // expression (r-a's infer_assignee_expr): the chain's types and
+    // resolutions record - MIR's slot road resolves the store through
+    // them - and the field's type is the value's expectation.
+    let source = r#"
+class FaNode {
+    value int
+}
+function fa_probe(n: FaNode) -> int throws never {
+    n.value = 5;
+    n.value
+}
+"#;
+    let resolutions = member_resolutions(source);
+    assert_eq!(
+        resolutions
+            .iter()
+            .filter(|(snippet, kind)| snippet == "n.value" && kind == "Field")
+            .count(),
+        2,
+        "the assign TARGET and the read both record Field: {resolutions:?}"
+    );
+}
