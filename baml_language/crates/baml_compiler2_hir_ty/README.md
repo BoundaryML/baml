@@ -163,7 +163,7 @@ corpus (see Testing below). The reference architecture is rust-analyzer's
 ## Principles
 
 1. Layering mirrors rust-analyzer (`hir-def -> hir-ty -> hir`). This crate
-   depends on ast/hir/ppir/baml_type/baml_type_runtime and never on
+   depends on ast/hir/ppir/baml_type and never on
    tir/mir/emit.
 2. Leaf crate until cutover (S16). Until then its only consumer is the test
    harness in `baml_tests`, and every existing compiler snapshot stays
@@ -177,10 +177,13 @@ corpus (see Testing below). The reference architecture is rust-analyzer's
    tolerates exactly this).
 4. Build on the existing type algebra. `baml_type::normalize` (subset
    subtyping, union canonicalization, mu-binders, the fail-safe `TypeContext`
-   fact trait) and `baml_type_runtime::InferenceConstraints` (variance-aware
-   solving) are kept and consumed, not rebuilt. This crate's impl registry and
-   param env eventually become the `TypeContext` impl, which is how interface
-   facts flow into every subtype check.
+   fact trait) is kept and consumed, not rebuilt. (CORRECTION 2026-08-08:
+   an earlier revision claimed `baml_type_runtime::InferenceConstraints`
+   would be consumed too - it was not; the solver was built fresh in
+   `infer/unify.rs` + `sub()`, and this crate has no baml_type_runtime
+   dependency.) This crate's impl registry and param env became the
+   `TypeContext` impl, which is how interface facts flow into every
+   subtype check.
 
 ## What BAML needs that Rust does not (and vice versa)
 
@@ -223,7 +226,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | S8  | Calls: fresh vars per site, variance-aware solve, 2-pass args        | call fixtures; invariant-position rejection tests      |
 | S9  | Lambdas: expectation-driven params, child scope; function VALUES outside call position; consolidate callee/path resolution into one `resolve_value_path` entry (r-a's `infer/path.rs` shape) | lambda fixtures; TIR differential                      |
 | S10 | SHIPPED (S10a patterns + exhaustiveness, S10b flow narrowing): lifted `exhaustiveness.rs`, `infer/pat.rs` walk, `infer/flow.rs` CondFacts/merge/loop/assign machinery; B-919/B-633/B-688/B-774/B-735/B-618/B-1069 all fixed with tir: fails fixtures | patterns + narrowing fixtures; pattern_corpus verdict tables |
-| S11 | Member resolution (CORE SHIPPED, before S10/S2/S3): receiver->owning-class table incl. builtin classes (alias-transparent), receiver-pinned class generics + turbofish/fresh method generics, self via `class_self_ty`, bound vs UFCS/static calls, methods as values. Remaining: probe/confirm discipline, `?.` | method fixtures; B-1136 sub-issue fixtures (obligations stubbed) |
+| S11 | Member resolution (CORE SHIPPED, before S10/S2/S3): receiver->owning-class table incl. builtin classes (alias-transparent), receiver-pinned class generics + turbofish/fresh method generics, self via `class_self_ty`, bound vs UFCS/static calls, methods as values. Remaining: none (probe/confirm and `?.` shipped) | method fixtures; B-1136 sub-issue fixtures (obligations stubbed) |
 | I1  | SHIPPED: `impls.rs` registry (free-shape normalization, blanket matching + bound re-entry, fact-poor match equality, conjunctive bounds); facts wired (implements_interface, interface_requires); ops.rs = facade. Orphan check E0139 joins S17 diagnostics | existential/blanket/requires/user-operator fixtures, join-absorption observable |
 | I2  | SHIPPED: param env - frame-keyed bound conjunctions into LowerCtx/Facts, type_var_bound live, carried-bound operator dispatch, projection lowering. Concreteness gating (`is_bounded_arg_admissible`) + call-site bound verification join I4's obligations | bounded-var join absorption, spec's bounded-add verbatim |
 | I3  | SHIPPED: interface fields + methods on existential/rigid receivers (root-wins over requires closure, per-receiver Self, one-Self gate); in-body impl methods via class list. Out-of-body impl members + unions -> I4 symbolic resolvers | existential/bounded method + field fixtures; one-Self rejection pin |

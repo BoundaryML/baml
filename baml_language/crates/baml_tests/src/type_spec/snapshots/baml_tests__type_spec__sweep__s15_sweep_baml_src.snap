@@ -11,6 +11,24 @@ hir_ty error-channel entries: 0
 tir diagnostics: 0
 panics: 0
 
+== ruled divergence buckets ==
+10x alias-nominal
+559x canonical-order
+6x enum-complete-collapse
+479x literal-collapse-render
+702x ours-reduced
+27x ours-residual-never
+110x ours-union-join
+38x qualification-render
+1x rustc-strict-empty-literal
+934x self-showing-callee-render
+2624x throws-precision
+16x tir-error
+5x tir-known-bug-repro
+13x tir-never-render
+2263x tir-uninstantiated
+1x tir-unreduced-projection
+
 == conflicts by (hir_ty, tir) pair ==
 [2040x] hir_ty=[() -> void throws never / null] tir=[() -> void throws unknown / null]
     at ns_array_length_snapshot/array_length_snapshot.baml:385..431 `{\n    ass...ug(), 0)\n}`

@@ -3,11 +3,11 @@
 //! query. Facts are FAIL-SAFE per the trait's contract: an unanswerable
 //! question returns the conservative answer, never a guess.
 //!
-//! S7 scope: alias definitions (lazy, cycle-guarded by the normalizer's
-//! mu-binders) and enum variant sets (complete-set collapse). The interface
-//! facts (`implements_interface`, `interface_requires`, bounds, projections)
-//! come alive with the impl registry in I1/I2/I5; until then they answer
-//! "unknown" conservatively.
+//! Alias definitions (lazy, cycle-guarded by the normalizer's mu-binders),
+//! enum variant sets (complete-set collapse), and the interface facts
+//! (`implements_interface`, `interface_requires`, bounds, projections) -
+//! all LIVE since I1/I2/I5, backed by the impl registry and the scope's
+//! param env.
 
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{
