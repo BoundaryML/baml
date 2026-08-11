@@ -221,6 +221,49 @@ The `bex_query` (fold/BQL) crate is unchanged by Q1; renaming/merging remains a 
   fixed-snapshot-under-ingest and running/pending conformance runs move
   to Q2 where real providers bind real artifact universes.
 
+## Q2 — local providers and command surface
+
+### IN-Q2-1 — Provider shape and snapshot binding (**impl**, gate-anchored)
+
+`crates/baml_query_local` binds the `.baml` tree into a fixed universe:
+every relevant file is recorded WITH its length at bind, reads truncate
+to the bound length (a growing live segment is invisible to an executing
+query — the D10 contract), and the generation is a deterministic hash of
+the bound file set. Relations materialize as in-memory Arrow batches per
+bound session (benchmark-owned physical choice; there is no on-disk
+provider state, so rebuild determinism holds by construction and is
+pinned by the e2e test: same artifacts ⇒ same generation ⇒ same rows).
+Running runs serve population rows from the bound session's committed
+segment prefixes attributed via partition binds.
+
+### IN-Q2-2 — Local handle codec and evidence honesty (**impl**)
+
+Per-role value handles are `0x01+CID` (canonical CAS; admits the D7
+identity shortcut), `0x02+ref` (legacy inline/blob body; hydrates and
+compares semantically only), or `0x00+reason` (typed unavailability
+recorded at row build). Catalog amendments for honesty, ledger-noted
+under change control: `retained_calls_v1.status` is nullable (only the
+root call's terminal state is individually recorded locally — unknown is
+never "succeeded"), and `spawn_edges_v1.retained_instances`/
+`instances_dropped` are nullable (no instance ledger ⇒ NULL, never 0).
+
+### IN-Q2-3 — `baml query` surface (**freeze** of CLI contract)
+
+`baml query --schema [--view R]` emits the versioned machine-readable
+catalog; SQL executes with `--format table|json|jsonl` (rows to stdout,
+human outcome to stderr, JSONL ends with the mandatory
+`{"queryOutcome": …}` control frame). Exit codes: 0 complete, 1
+evidence-incomplete, 2 invalid SQL/authorization, 3 budget, 4 cancelled,
+5 internal/dependency.
+
+### IN-Q2-4 — Remaining Q2 items (open)
+
+The machine-readable `baml playground runs/values/source` subcommands and
+the published benchmark corpus with local qualification targets are not
+yet built; the no-pushdown reference comparison is currently trivial
+(the in-memory provider accepts no pushdown) and becomes a real gate
+when a pushdown-capable local provider (SQLite/Parquet) is measured in.
+
 ## Build environment
 
 - `RUSTC_WRAPPER=baml-sccache` requires `/root/tmp-build` to exist; a stale sccache server whose temp dir was deleted fails every compile with exit 254. Recreating the directory (or `sccache --stop-server`) fixes it.
