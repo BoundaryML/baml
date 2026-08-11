@@ -9127,7 +9127,33 @@ fn baml.reflect.class.Builder.field = builtin(vm)
 
 fn baml.reflect.class.Builder.type = builtin(vm)
 
-fn baml.reflect.class.Builder.build = builtin(vm)
+fn baml.reflect.class.Builder.build(self: baml.reflect.class.Builder, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
+    // Locals:
+    let _0: baml.reflect.class.Type // _0 // return
+    let _1: baml.reflect.class.Builder // self // param
+    let _2: baml.reflect.interface.Implementation[] // implementations // param
+    let _3: bool
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = []: baml.reflect.interface.Implementation[];
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn baml.reflect.class.Builder._build(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.reflect.class.Builder._build = builtin(vm)
 
 fn baml.reflect.class.PendingType.array = builtin(vm)
 
