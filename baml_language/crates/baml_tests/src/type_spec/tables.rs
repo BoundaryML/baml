@@ -151,3 +151,85 @@ function mr_concrete(d: Dog) -> string throws never {
         "concrete receiver resolves through the hoisted class method: {resolutions:?}"
     );
 }
+
+#[test]
+fn records_variant() {
+    let resolutions = member_resolutions(
+        r#"
+enum Status {
+    Active
+    Done
+}
+function mr_variant() -> Status throws never {
+    Status.Active
+}
+"#,
+    );
+    assert!(
+        resolutions.contains(&("Status.Active".into(), "Variant".into())),
+        "enum variant value records Variant: {resolutions:?}"
+    );
+}
+
+#[test]
+fn records_path_ladders() {
+    let source = r#"
+class City {
+    name string
+}
+class Address {
+    city City
+}
+class Person {
+    address Address
+    function home(self) -> City throws never {
+        self.address.city
+    }
+}
+function mr_chain(p: Person) -> string throws never {
+    let city_name = p.address.city.name;
+    p.address.city.name
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut ladders = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        for (&expr, path) in &result.path_resolutions {
+            let range = source_map.expr_span(expr);
+            let snippet = source[range].to_string();
+            let rendered: Vec<String> = path
+                .segments
+                .iter()
+                .map(|segment| {
+                    let ty = segment.ty.to_plain().render_canonical();
+                    match &segment.resolution {
+                        Some(resolution) => format!("{ty}/{}", kind(resolution)),
+                        None => ty,
+                    }
+                })
+                .collect();
+            ladders.push((snippet, rendered.join(" -> ")));
+        }
+    }
+    ladders.sort();
+    ladders.dedup();
+    assert_eq!(
+        ladders,
+        vec![
+            (
+                "p.address.city.name".to_string(),
+                "user.Person -> user.Address/Field -> user.City/Field -> string/Field".to_string()
+            ),
+            (
+                "self.address.city".to_string(),
+                "user.Person -> user.Address/Field -> user.City/Field".to_string()
+            ),
+        ],
+        "value-rooted chains record per-segment ladders"
+    );
+}

@@ -391,6 +391,28 @@ pub enum MemberResolution<'db> {
     },
 }
 
+/// A value-rooted path expression's resolved ladder (`a.b.c`: one
+/// `Expr::Path` node, unnumbered segments). rustc keys per-segment info
+/// by `HirId` because every segment has one; BAML's flat path AST does
+/// not, so the ladder lives in one entry per path expression - one
+/// structure, not TIR's three parallel maps. Package-rooted paths
+/// (statics, variants, free items) resolve as a whole and record only a
+/// `MemberResolution`; this table is for paths whose ROOT is a value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedPath<'db> {
+    /// One entry per written segment: entry 0 is the root (a local,
+    /// parameter, or template param - no member resolution), entry
+    /// `i > 0` the member access the `i`-th segment performs.
+    pub segments: Vec<ResolvedPathSegment<'db>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedPathSegment<'db> {
+    /// The value's type AFTER this segment.
+    pub ty: Ty,
+    pub resolution: Option<MemberResolution<'db>>,
+}
+
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
 /// rust-analyzer's `InferenceResult`. Types are the hash-consed
 /// `baml_type::interned` representation (this crate's native vocabulary);
@@ -418,6 +440,10 @@ pub struct InferenceResult<'db> {
     /// expr, TIR's keying). S16: MIR consumes this instead of re-running
     /// resolution.
     pub member_resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    /// Value-rooted multi-segment paths' per-segment ladders. S16: MIR's
+    /// field-chain-vs-method decisions read the ladder instead of
+    /// re-resolving.
+    pub path_resolutions: FxHashMap<ExprId, ResolvedPath<'db>>,
 }
 
 impl Default for InferenceResult<'_> {
@@ -429,6 +455,7 @@ impl Default for InferenceResult<'_> {
             type_mismatches: FxHashMap::default(),
             non_exhaustive_matches: rustc_hash::FxHashSet::default(),
             member_resolutions: FxHashMap::default(),
+            path_resolutions: FxHashMap::default(),
         }
     }
 }
@@ -2837,19 +2864,19 @@ impl<'db> InferenceContext<'db> {
                         .and_then(|root| self.template_param_ty(root))
                         .unwrap_or_else(Ty::error)
                 };
-                // Intermediate segments resolve without recording (their
-                // per-segment entries are the resolved-path table's
-                // business, a later S16 slice); the FINAL member is the
-                // callee's resolution.
-                let receiver = segments[1..segments.len() - 1].iter().fold(root, |ty, segment| {
-                    self.field_access_resolved(callee, &ty, segment).0
-                });
+                // Intermediate segments walk the ladder; the FINAL member
+                // resolves as the callee, and its step completes the
+                // recorded path.
+                let (receiver, mut steps) =
+                    self.walk_path_members(callee, root, &segments[1..segments.len() - 1]);
                 let member = segments.last().expect("checked len");
                 let (ty, bound, resolution) = self.member_callee(call, &receiver, member);
                 self.result.type_of_expr.insert(callee, ty.clone());
-                if let Some(resolution) = resolution {
-                    self.write_member_resolution(callee, resolution);
-                }
+                steps.push(ResolvedPathSegment {
+                    ty: ty.clone(),
+                    resolution,
+                });
+                self.write_resolved_path(callee, steps);
                 return (ty, bound);
             }
             _ => {}
@@ -3186,10 +3213,9 @@ impl<'db> InferenceContext<'db> {
             // segments are member accesses (the AST cannot split `b.v` into
             // base+member before name resolution).
             let root_ty = self.infer_path(expr);
-            return segments
-                .iter()
-                .skip(1)
-                .fold(root_ty, |ty, segment| self.field_access(expr, &ty, segment));
+            let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
+            self.write_resolved_path(expr, steps);
+            return ty;
         }
         // Tagged-template body params (`prompt`'s `role`/`ctx`): the
         // semantic index cannot register them (the tag is a cross-file
@@ -3199,10 +3225,9 @@ impl<'db> InferenceContext<'db> {
             .first()
             .and_then(|root| self.template_param_ty(root))
         {
-            return segments
-                .iter()
-                .skip(1)
-                .fold(root_ty, |ty, segment| self.field_access(expr, &ty, segment));
+            let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
+            self.write_resolved_path(expr, steps);
+            return ty;
         }
         if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
             self.lower.resolve_value(segments)
@@ -3250,7 +3275,7 @@ impl<'db> InferenceContext<'db> {
         // literal type - the same product the type-position path gives
         // (`lower_path` fallback 2; r-a resolves the value namespace to
         // the variant the same way).
-        if let Some(ty) = self.enum_variant_value(segments) {
+        if let Some(ty) = self.enum_variant_value(segments, Some(expr)) {
             return ty;
         }
         // `Type.from_json(j)` is language sugar for `baml.json.to<Type>(j)`
@@ -3350,12 +3375,33 @@ impl<'db> InferenceContext<'db> {
 
     /// TIER: an enum variant value (`Shape.Rectangle`) - the singleton
     /// literal type, the same product the type position gives.
-    fn enum_variant_value(&mut self, segments: &[baml_type::Name]) -> Option<Ty> {
+    /// `record_at` keys the recorded resolution (r-a's deep-recording
+    /// discipline, as in `class_static_value`).
+    fn enum_variant_value(
+        &mut self,
+        segments: &[baml_type::Name],
+        record_at: Option<ExprId>,
+    ) -> Option<Ty> {
         if segments.len() < 2 {
             return None;
         }
         let ty = self.lower.lower_type_path(segments);
-        matches!(ty.kind(), TyKind::EnumVariant(..)).then_some(ty)
+        let TyKind::EnumVariant(qtn, variant, _) = ty.kind() else {
+            return None;
+        };
+        if let Some(record_at) = record_at
+            && let Some(baml_compiler2_hir::contributions::Definition::Enum(enum_loc)) =
+                self.facts.definition_of(qtn)
+        {
+            self.write_member_resolution(
+                record_at,
+                MemberResolution::Variant {
+                    enum_loc,
+                    variant: variant.clone(),
+                },
+            );
+        }
+        Some(ty)
     }
 
     /// TIER: the `Type.from_json` decode desugar (`baml.json.to<Type>`).
@@ -3408,7 +3454,7 @@ impl<'db> InferenceContext<'db> {
             .or_else(|| {
                 let mut full = prefix.to_vec();
                 full.push(member.clone());
-                self.enum_variant_value(&full)
+                self.enum_variant_value(&full, Some(record_at))
             })
             .or_else(|| {
                 (member.as_str() == "from_json")
@@ -4363,6 +4409,49 @@ impl<'db> InferenceContext<'db> {
         self.result.member_resolutions.insert(expr, resolution);
     }
 
+    /// Walks the MEMBER segments of a value-rooted path (everything after
+    /// the root name), returning the final type and the recorded ladder.
+    /// Shared by the value road and the callee road; callers append their
+    /// final segment when they resolve it differently (a callee's last
+    /// member goes through `member_callee`) and then write the tables.
+    fn walk_path_members(
+        &mut self,
+        expr: ExprId,
+        root_ty: Ty,
+        members: &[baml_type::Name],
+    ) -> (Ty, Vec<ResolvedPathSegment<'db>>) {
+        let mut steps = vec![ResolvedPathSegment {
+            ty: root_ty.clone(),
+            resolution: None,
+        }];
+        let mut ty = root_ty;
+        for member in members {
+            let (next, resolution) = self.field_access_resolved(expr, &ty, member);
+            steps.push(ResolvedPathSegment {
+                ty: next.clone(),
+                resolution,
+            });
+            ty = next;
+        }
+        (ty, steps)
+    }
+
+    /// Writes a completed path ladder: the per-segment table entry (only
+    /// multi-segment paths - a bare local is just `type_of_expr`) and the
+    /// FINAL member's resolution at the path expression, where value
+    /// consumers key.
+    fn write_resolved_path(&mut self, expr: ExprId, steps: Vec<ResolvedPathSegment<'db>>) {
+        if steps.len() < 2 {
+            return;
+        }
+        if let Some(last) = steps.last().and_then(|step| step.resolution.clone()) {
+            self.write_member_resolution(expr, last);
+        }
+        self.result
+            .path_resolutions
+            .insert(expr, ResolvedPath { segments: steps });
+    }
+
     fn finish(mut self) -> InferenceResult<'db> {
         // The fulfillment fixpoint: resolve what ground bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
@@ -4420,11 +4509,21 @@ impl<'db> InferenceContext<'db> {
             *actual = self.finalize_ty(actual);
         }
         // The writeback pass covers every recorded table (rustc's
-        // `resolve_type_vars_in_body`): the virtual-field VIEW is the one
-        // resolution payload carrying a type.
+        // `resolve_type_vars_in_body`): the virtual-field VIEW and the
+        // path ladders' per-segment types carry types.
         for resolution in result.member_resolutions.values_mut() {
             if let MemberResolution::InterfaceVirtualField { view, .. } = resolution {
                 *view = self.finalize_ty(view);
+            }
+        }
+        for path in result.path_resolutions.values_mut() {
+            for segment in &mut path.segments {
+                segment.ty = self.finalize_ty(&segment.ty);
+                if let Some(MemberResolution::InterfaceVirtualField { view, .. }) =
+                    &mut segment.resolution
+                {
+                    *view = self.finalize_ty(view);
+                }
             }
         }
         result
