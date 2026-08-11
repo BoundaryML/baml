@@ -20,6 +20,11 @@ pub struct FoldedPartition {
     pub llm: Vec<blocks::LlmDeltaRow>,
     pub spawns: Vec<blocks::SpawnEdgeRow>,
     pub models: Vec<blocks::ModelBirthRow>,
+    /// Count fields that exceeded the u32 wire width and were clamped.
+    /// Nonzero folds carry a SATURATED marker in the encoded snapshot so
+    /// "population-true" readers see explicit lower bounds, not silently
+    /// wrong exact counts.
+    pub clamped_fields: u64,
 }
 
 /// Fold one partition out of the engine's live state. Pure read.
@@ -49,6 +54,23 @@ fn fold_where(engine: &CctEngine, keep: impl Fn(u32) -> bool) -> FoldedPartition
         }
     }
 
+    // Fold counts saturate to the u32 wire width deliberately — but every
+    // engaged clamp is counted so the snapshot can carry an explicit
+    // SATURATED marker instead of a silently short count.
+    let mut clamped_fields: u64 = 0;
+    let mut clamp = |v: u64| {
+        if v > u64::from(u32::MAX) {
+            clamped_fields += 1;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "explicitly clamped and counted just above"
+        )]
+        {
+            v.min(u64::from(u32::MAX)) as u32
+        }
+    };
+
     let mut births = Vec::with_capacity(order.len());
     let mut totals = Vec::with_capacity(order.len());
     let mut hists = Vec::new();
@@ -63,17 +85,13 @@ fn fold_where(engine: &CctEngine, keep: impl Fn(u32) -> bool) -> FoldedPartition
             logical_thread_id: 0,
             partition_id: nodes.partition[i],
         });
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "fold counts saturate u32 deliberately"
-        )]
         totals.push(blocks::CctDeltaRow {
             node_id: new_id,
-            enters: nodes.enters[i].min(u64::from(u32::MAX)) as u32,
-            ends_ok: nodes.ends_ok[i].min(u64::from(u32::MAX)) as u32,
-            ends_err: nodes.ends_err[i].min(u64::from(u32::MAX)) as u32,
-            ends_cancel: nodes.ends_cancel[i].min(u64::from(u32::MAX)) as u32,
-            ends_exit: nodes.ends_exit[i].min(u64::from(u32::MAX)) as u32,
+            enters: clamp(nodes.enters[i]),
+            ends_ok: clamp(nodes.ends_ok[i]),
+            ends_err: clamp(nodes.ends_err[i]),
+            ends_cancel: clamp(nodes.ends_cancel[i]),
+            ends_exit: clamp(nodes.ends_exit[i]),
             total_ns: nodes.total_ns[i],
             self_ns: nodes.self_ns[i],
             await_ns: nodes.await_ns[i],
@@ -91,17 +109,13 @@ fn fold_where(engine: &CctEngine, keep: impl Fn(u32) -> bool) -> FoldedPartition
     let mut model_ids: Vec<u32> = Vec::new();
     for (&(node, model_id), counters) in engine.llm_counters() {
         if let Some(&new_id) = remap.get(&node) {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "fold counts saturate u32 deliberately"
-            )]
             llm.push(blocks::LlmDeltaRow {
                 node_id: new_id,
-                llm_calls_delta: counters.llm_calls.min(u64::from(u32::MAX)) as u32,
+                llm_calls_delta: clamp(counters.llm_calls),
                 tokens_in_delta: counters.tokens_in,
                 tokens_out_delta: counters.tokens_out,
-                provider_errs_delta: counters.provider_errs.min(u64::from(u32::MAX)) as u32,
-                parse_errs_delta: counters.parse_errs.min(u64::from(u32::MAX)) as u32,
+                provider_errs_delta: clamp(counters.provider_errs),
+                parse_errs_delta: clamp(counters.parse_errs),
                 model_id,
             });
             if !model_ids.contains(&model_id) {
@@ -129,10 +143,6 @@ fn fold_where(engine: &CctEngine, keep: impl Fn(u32) -> bool) -> FoldedPartition
     for edge in 0..edges.len() {
         if let Some(&parent_new) = remap.get(&edges.parent_node[edge]) {
             let counters = edges.counters[edge];
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "fold counts saturate u32 deliberately"
-            )]
             spawns.push(blocks::SpawnEdgeRow {
                 edge_id: u32::try_from(spawns.len()).unwrap_or(u32::MAX),
                 parent_node: parent_new,
@@ -141,10 +151,10 @@ fn fold_where(engine: &CctEngine, keep: impl Fn(u32) -> bool) -> FoldedPartition
                     .get(&edges.child_root_node[edge])
                     .copied()
                     .unwrap_or(u32::MAX),
-                spawn_delta: counters.spawned.min(u64::from(u32::MAX)) as u32,
-                completed_delta: counters.completed.min(u64::from(u32::MAX)) as u32,
-                errored_delta: counters.errored.min(u64::from(u32::MAX)) as u32,
-                cancelled_delta: counters.cancelled.min(u64::from(u32::MAX)) as u32,
+                spawn_delta: clamp(counters.spawned),
+                completed_delta: clamp(counters.completed),
+                errored_delta: clamp(counters.errored),
+                cancelled_delta: clamp(counters.cancelled),
                 running_ns_delta: 0,
                 awaiting_ns_delta: 0,
             });
@@ -159,6 +169,7 @@ fn fold_where(engine: &CctEngine, keep: impl Fn(u32) -> bool) -> FoldedPartition
         llm,
         spawns,
         models,
+        clamped_fields,
     }
 }
 
@@ -284,6 +295,26 @@ fn encode_snapshot_inner(
         push(
             &mut bytes,
             BlockKind::PartitionBind,
+            1,
+            &payload,
+            &mut block_seq,
+            &mut total_rows,
+            &mut index,
+        );
+    }
+    if folded.clamped_fields > 0 {
+        // Explicit saturation evidence: every clamped count field makes
+        // the snapshot's totals lower bounds, and the snapshot says so.
+        let payload = blocks::encode_marker(&[blocks::MarkerRow {
+            marker_kind: blocks::marker_kind::SATURATED,
+            detail: format!(
+                "{} counter field(s) clamped at u32::MAX; totals are lower bounds",
+                folded.clamped_fields
+            ),
+        }]);
+        push(
+            &mut bytes,
+            BlockKind::Marker,
             1,
             &payload,
             &mut block_seq,
@@ -421,5 +452,80 @@ mod tests {
         let rows = blocks::decode_cct_delta(totals_block.payload, totals_block.row_count as usize)
             .expect("totals decode");
         assert_eq!(rows[1].total_ns, 30);
+    }
+
+    /// A fold that engaged a u32 clamp writes an explicit SATURATED marker
+    /// into the sealed snapshot: totals become declared lower bounds, not
+    /// silently wrong exact counts.
+    #[test]
+    fn clamped_fold_carries_saturated_marker() {
+        let header = SegmentHeader {
+            process_euid: [1; 16],
+            engine_id: 7,
+            session_seg_seq: 0,
+            started_epoch_ns: 0,
+            clock_kind: 3,
+            clock_quality: 1,
+            tick_ns_numer: 1,
+            tick_ns_denom: 1,
+            revision_id: [2; 32],
+        };
+        let folded = FoldedPartition {
+            remap: FxHashMap::default(),
+            births: vec![blocks::NodeBirthRow {
+                node_id: 0,
+                parent_node_id: u32::MAX,
+                function_id: 0,
+                logical_thread_id: 0,
+                partition_id: 0,
+            }],
+            totals: vec![blocks::CctDeltaRow {
+                node_id: 0,
+                enters: u32::MAX,
+                ends_ok: u32::MAX,
+                ends_err: 0,
+                ends_cancel: 0,
+                ends_exit: 0,
+                total_ns: 1,
+                self_ns: 1,
+                await_ns: 0,
+            }],
+            hists: Vec::new(),
+            llm: Vec::new(),
+            spawns: Vec::new(),
+            models: Vec::new(),
+            clamped_fields: 2,
+        };
+        let snapshot = encode_live_snapshot(&folded, &header);
+        let contents = segment::scan_segment(&snapshot).expect("snapshot parses");
+        let marker_block = contents
+            .blocks
+            .iter()
+            .find(|b| b.kind == BlockKind::Marker as u8)
+            .expect("clamped fold must carry a marker block");
+        let markers = blocks::decode_marker(marker_block.payload, marker_block.row_count as usize)
+            .expect("marker decodes");
+        assert_eq!(markers[0].marker_kind, blocks::marker_kind::SATURATED);
+        assert!(
+            markers[0].detail.contains("2 counter field(s)"),
+            "{}",
+            markers[0].detail
+        );
+        assert!(markers[0].detail.contains("lower bounds"));
+
+        // An unclamped fold carries no marker.
+        let clean = FoldedPartition {
+            clamped_fields: 0,
+            ..folded
+        };
+        let snapshot = encode_live_snapshot(&clean, &header);
+        let contents = segment::scan_segment(&snapshot).expect("snapshot parses");
+        assert!(
+            !contents
+                .blocks
+                .iter()
+                .any(|b| b.kind == BlockKind::Marker as u8),
+            "no marker without clamping"
+        );
     }
 }

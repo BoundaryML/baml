@@ -170,6 +170,14 @@ pub struct CctDiagnostics {
     /// Drained ranges whose decode failed mid-range (rest of the range
     /// discarded, live partitions degraded).
     pub corrupt_ranges: u64,
+    /// Histogram increments lost to bucket saturation (a bucket held at
+    /// u32::MAX): distribution buckets are lower bounds from the first
+    /// drop onward. Counts/times remain exact (u64 in memory).
+    pub hist_saturated_drops: u64,
+    /// Window-flush rows whose count delta exceeded the u32 wire width
+    /// and was clamped. Physically implausible at the 250 ms cadence —
+    /// counted so "implausible" is checked, not assumed.
+    pub wire_clamped: u64,
 }
 
 /// The per-producer-engine CCT state.
@@ -712,7 +720,15 @@ impl CctEngine {
             self.latency_triggers += 1;
         }
         self.nodes.total_ns[node] += duration;
-        self.nodes.hist[node][hist_bucket(duration)] += 1;
+        // Saturating, never wrapping: a bucket held at u32::MAX makes the
+        // distribution an explicit lower bound (counted, marked) instead
+        // of a silently wrong one.
+        let bucket = &mut self.nodes.hist[node][hist_bucket(duration)];
+        if *bucket == u32::MAX {
+            self.diagnostics.hist_saturated_drops += 1;
+        } else {
+            *bucket += 1;
+        }
         // No dirty write here: charge_slot above already marked this node
         // (it was the stack top) — except the zero-elapsed case, so mark
         // only then.
@@ -1361,17 +1377,26 @@ impl CctEngine {
             if enters | ends_ok | ends_err | ends_cancel | ends_exit | total_ns | self_ns | await_ns
                 != 0
             {
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "per-window count deltas fit u32 by cadence"
-                )]
+                let clamp = |v: u64, clamped: &mut u64| {
+                    if v > u64::from(u32::MAX) {
+                        *clamped += 1;
+                    }
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "explicitly clamped and counted just above"
+                    )]
+                    {
+                        v.min(u64::from(u32::MAX)) as u32
+                    }
+                };
+                let clamped = &mut self.diagnostics.wire_clamped;
                 delta_rows.push(CctDeltaRow {
                     node_id: u32::try_from(node).unwrap_or(u32::MAX),
-                    enters: enters.min(u64::from(u32::MAX)) as u32,
-                    ends_ok: ends_ok.min(u64::from(u32::MAX)) as u32,
-                    ends_err: ends_err.min(u64::from(u32::MAX)) as u32,
-                    ends_cancel: ends_cancel.min(u64::from(u32::MAX)) as u32,
-                    ends_exit: ends_exit.min(u64::from(u32::MAX)) as u32,
+                    enters: clamp(enters, clamped),
+                    ends_ok: clamp(ends_ok, clamped),
+                    ends_err: clamp(ends_err, clamped),
+                    ends_cancel: clamp(ends_cancel, clamped),
+                    ends_exit: clamp(ends_exit, clamped),
                     total_ns,
                     self_ns,
                     await_ns,
@@ -1390,7 +1415,9 @@ impl CctEngine {
             let mut buckets = [0u32; super::nodes::HIST_BUCKETS];
             let mut any = false;
             for (b, bucket) in buckets.iter_mut().enumerate() {
-                let delta = nodes.hist[node][b] - nodes.flushed_hist[node][b];
+                // Saturating: a bucket held at u32::MAX yields delta 0 in
+                // later windows instead of underflowing the shadow.
+                let delta = nodes.hist[node][b].saturating_sub(nodes.flushed_hist[node][b]);
                 *bucket = delta;
                 any |= delta != 0;
             }
@@ -1409,20 +1436,29 @@ impl CctEngine {
         for (&(node, model_id), counters) in &self.llm {
             let shadow = self.llm_flushed.entry((node, model_id)).or_default();
             if *counters != *shadow {
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "per-window count deltas fit u32 by cadence"
-                )]
+                let clamp = |v: u64, clamped: &mut u64| {
+                    if v > u64::from(u32::MAX) {
+                        *clamped += 1;
+                    }
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "explicitly clamped and counted just above"
+                    )]
+                    {
+                        v.min(u64::from(u32::MAX)) as u32
+                    }
+                };
+                let clamped = &mut self.diagnostics.wire_clamped;
                 llm_rows.push(LlmDeltaRow {
                     node_id: node,
-                    llm_calls_delta: (counters.llm_calls - shadow.llm_calls)
-                        .min(u64::from(u32::MAX)) as u32,
+                    llm_calls_delta: clamp(counters.llm_calls - shadow.llm_calls, clamped),
                     tokens_in_delta: counters.tokens_in - shadow.tokens_in,
                     tokens_out_delta: counters.tokens_out - shadow.tokens_out,
-                    provider_errs_delta: (counters.provider_errs - shadow.provider_errs)
-                        .min(u64::from(u32::MAX)) as u32,
-                    parse_errs_delta: (counters.parse_errs - shadow.parse_errs)
-                        .min(u64::from(u32::MAX)) as u32,
+                    provider_errs_delta: clamp(
+                        counters.provider_errs - shadow.provider_errs,
+                        clamped,
+                    ),
+                    parse_errs_delta: clamp(counters.parse_errs - shadow.parse_errs, clamped),
                     model_id,
                 });
                 *shadow = *counters;

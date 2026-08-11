@@ -54,6 +54,12 @@ pub struct CctFold {
     pub sealed: bool,
     pub last_ts_ns: u64,
     pub first_ts_ns: u64,
+    /// Declared loss/degradation evidence from kind-12 markers (SHED,
+    /// DEGRADED, LOSS, BUDGET_EXHAUSTED, SATURATED): `(marker_kind,
+    /// detail)`. Epoch-close markers are structural, not loss, and are
+    /// handled separately. Every consumer of this fold must surface
+    /// these — declared loss must never disappear in a reader.
+    pub loss_markers: Vec<(u8, String)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -334,6 +340,10 @@ fn apply_block(
                 for m in markers {
                     if m.marker_kind == blocks::marker_kind::EPOCH_CLOSE {
                         *epoch_closed = true;
+                    } else {
+                        // Declared loss/degradation travels with the fold
+                        // (§8.4): shed, degraded, saturated, budget.
+                        fold.loss_markers.push((m.marker_kind, m.detail));
                     }
                 }
             }

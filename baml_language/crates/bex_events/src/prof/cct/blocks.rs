@@ -102,6 +102,10 @@ pub mod marker_kind {
     pub const SHED: u8 = 3;
     pub const BUDGET_EXHAUSTED: u8 = 4;
     pub const EPOCH_CLOSE: u8 = 5;
+    /// A counter clamped at its wire width (u32::MAX): the written totals
+    /// are exact lower bounds, not exact counts. Additive kind — readers
+    /// that predate it pass it through as an opaque marker row.
+    pub const SATURATED: u8 = 6;
 }
 
 /// kind 13 `instance` (row-major, variable).

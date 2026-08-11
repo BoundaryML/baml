@@ -1062,12 +1062,25 @@ impl ConsumerState {
         let corrupt_ranges = diag
             .corrupt_ranges
             .saturating_sub(diag_at_bind.corrupt_ranges);
+        let hist_saturated = diag
+            .hist_saturated_drops
+            .saturating_sub(diag_at_bind.hist_saturated_drops);
+        let wire_clamped = diag.wire_clamped.saturating_sub(diag_at_bind.wire_clamped);
         let mut diagnostics = Vec::new();
         if shed > 0 {
             diagnostics.push(format!("shed_records={shed}"));
         }
         if corrupt_ranges > 0 {
             diagnostics.push(format!("corrupt_ranges={corrupt_ranges}"));
+        }
+        if hist_saturated > 0 {
+            diagnostics.push(format!("hist_saturated_drops={hist_saturated}"));
+        }
+        if wire_clamped > 0 {
+            diagnostics.push(format!("wire_clamped={wire_clamped}"));
+        }
+        if folded.clamped_fields > 0 {
+            diagnostics.push(format!("fold_clamped_fields={}", folded.clamped_fields));
         }
         if synthesized > 0 {
             diagnostics.push(format!("synthesized_parents={synthesized}"));

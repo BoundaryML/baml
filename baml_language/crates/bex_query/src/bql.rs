@@ -1402,6 +1402,10 @@ struct CtxState {
     torn: bool,
     first_ts_ns: u64,
     last_ts_ns: u64,
+    /// Declared loss/degradation markers from the fold (§8.4): rendered
+    /// into the mandatory footer so a shed/degraded/saturated run can
+    /// never present itself as complete.
+    loss_notes: Vec<String>,
 }
 
 enum State {
@@ -1548,13 +1552,43 @@ fn open_ctx(engine: &mut ObserveEngine, key: &str) -> Result<CtxState, BqlError>
             hist: fold.hist[i],
         });
     }
+    let loss_notes = fold
+        .loss_markers
+        .iter()
+        .map(|(kind, detail)| {
+            let label = match *kind {
+                k if k == bex_events::prof::cct::blocks::marker_kind::LOSS => "loss",
+                k if k == bex_events::prof::cct::blocks::marker_kind::DEGRADED => "degraded",
+                k if k == bex_events::prof::cct::blocks::marker_kind::SHED => "shed",
+                k if k == bex_events::prof::cct::blocks::marker_kind::BUDGET_EXHAUSTED => {
+                    "budget_exhausted"
+                }
+                k if k == bex_events::prof::cct::blocks::marker_kind::SATURATED => "saturated",
+                _ => "marker",
+            };
+            format!("{label}: {detail}")
+        })
+        .collect();
     Ok(CtxState {
         rows,
         sealed: fold.sealed,
         torn: fold.torn,
         first_ts_ns: fold.first_ts_ns,
         last_ts_ns: fold.last_ts_ns,
+        loss_notes,
     })
+}
+
+/// Surface a fold's declared loss markers into the execution notes (and
+/// therefore the mandatory §8.4 footer): a shed/degraded/saturated run
+/// must never present itself as complete.
+fn noted_ctx(ctx: CtxState, exec: &mut ExecNotes) -> CtxState {
+    for note in &ctx.loss_notes {
+        if !exec.notes.contains(note) {
+            exec.notes.push(note.clone());
+        }
+    }
+    ctx
 }
 
 /// Resolve a `RunSet` (or the source position) into one opened ctx —
@@ -1576,7 +1610,7 @@ fn ctx_from(
                     "pass a run key with the request, or pipe run(id=\"...\") | ctx() first",
                 ));
             };
-            open_ctx(engine, key)
+            open_ctx(engine, key).map(|ctx| noted_ctx(ctx, exec))
         }
         State::Runs(entries) => match entries.as_slice() {
             [] => {
@@ -1594,7 +1628,7 @@ fn ctx_from(
                         only.key
                     ));
                 }
-                open_ctx(engine, &only.key)
+                open_ctx(engine, &only.key).map(|ctx| noted_ctx(ctx, exec))
             }
             many => Err(BqlError::new(
                 "E_MULTI_RUN_CTX",
