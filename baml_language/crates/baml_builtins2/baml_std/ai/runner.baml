@@ -7,7 +7,7 @@ interface Runner<Out> {
     type Output
     type Error
 
-    function run(self, spec: FunctionSpec<Out>) -> Self.Output throws unknown
+    function run(self, spec: FunctionSpec<Out>) -> Self.Output throws Self.Error
 }
 
 class RunResult<Out> {
@@ -247,10 +247,15 @@ class Agent<Out> {
                             throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
                         },
                     };
+                    let value_json = baml.json.to_json(value) catch_all (e) {
+                        _ => {
+                            throw baml.errors.UnknownError { data: e, message: [e.to_string()] }
+                        },
+                    };
                     j.append_all(
                         [
                             root.events.FinalProduced {
-                                value_json: baml.json.stringify(baml.json.to_json(value)),
+                                value_json: baml.json.stringify(value_json),
                             },
                         ],
                     );

@@ -23,7 +23,9 @@ class GoogleClient {
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.invoke(self, input)
+            root.internal.invoke(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
         }
     }
 

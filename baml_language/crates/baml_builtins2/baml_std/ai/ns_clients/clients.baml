@@ -96,7 +96,9 @@ class Retry {
         }
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
-            self._attempt(input, self.max_attempts)
+            self._attempt(input, self.max_attempts) catch_all (e) {
+                _ => throw root.errors.normalize(e),
+            }
         }
     }
 }
@@ -126,13 +128,17 @@ class RoundRobin {
         }
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
-            let index = self.counter % self.members.length();
-            self.counter = self.counter + 1;
-            match (self.members.at(index)) {
-                let c: root.Client => c.invoke(input),
-                null => {
-                    throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
-                },
+            {
+                let index = self.counter % self.members.length();
+                self.counter = self.counter + 1;
+                match (self.members.at(index)) {
+                    let c: root.Client => c.invoke(input),
+                    null => {
+                        throw baml.errors.InvalidArgument { message: "RoundRobin needs at least one member" }
+                    },
+                }
+            } catch_all (e) {
+                _ => throw root.errors.normalize(e),
             }
         }
     }
@@ -176,7 +182,9 @@ class Fallback {
         }
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
-            self._try(input, 0)
+            self._try(input, 0) catch_all (e) {
+                _ => throw root.errors.normalize(e),
+            }
         }
     }
 }

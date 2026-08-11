@@ -42,5 +42,5 @@ class ModelTurn {
 
 interface Client {
     function id(self) -> string throws never
-    function invoke(self, input: ModelTurnInput) -> ModelTurn throws unknown
+    function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.Failure | baml.errors.UnknownError
 }

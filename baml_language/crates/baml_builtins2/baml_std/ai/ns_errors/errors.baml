@@ -11,6 +11,17 @@ interface Failure {
     function retry_safety(self) -> RetrySafety throws never
 }
 
+// Close an untyped error channel at an ai boundary. Classified failures and
+// already-normalized unknown errors retain their identity; everything else is
+// captured in the standard untyped wrapper.
+function normalize(error: unknown) -> Failure | baml.errors.UnknownError throws never {
+    match (error) {
+        let failure: Failure => failure,
+        let unknown_error: baml.errors.UnknownError => unknown_error,
+        _ => baml.errors.UnknownError { data: error, message: [error.to_string()] },
+    }
+}
+
 class RateLimited {
     provider: string,
     retry_after_ms: int?,
