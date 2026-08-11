@@ -1030,6 +1030,7 @@ class WorkflowGraphTests(unittest.TestCase):
         crates_io = job_block(workflow, "publish-crates-io")
         wrapper_release = job_block(workflow, "publish-wrapper-release")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
+        notify_slack = job_block(workflow, "notify-slack")
         complete = job_block(workflow, "release-complete")
         manifest = job_block(workflow, "publish-pkg-boundaryml-com")
         go_publisher = job_block(workflow, "publish-go-sdk")
@@ -1071,7 +1072,9 @@ class WorkflowGraphTests(unittest.TestCase):
         ):
             self.assertIn(f"- {publisher}", prerequisites)
         # AUR is temporarily excluded while upstream maintenance rejects SSH clones.
+        self.assertNotIn("\n  publish-aur:\n", workflow)
         self.assertNotRegex(prerequisites, r"(?m)^\s+- publish-aur\s*$")
+        self.assertNotRegex(notify_slack, r"(?m)^\s+- publish-aur\s*$")
         self.assertIn(
             "needs: [plan, release-prerequisites-complete]",
             manifest,
