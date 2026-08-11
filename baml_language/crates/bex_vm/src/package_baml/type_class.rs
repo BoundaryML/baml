@@ -1,5 +1,5 @@
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{DynTypeDefs, Object, TypeValue, Value};
+use bex_vm_types::types::{DynTypeDefs, DynWitnessDef, Object, TypeValue, Value};
 use indexmap::IndexMap;
 
 use super::{BamlClassTypeValue, BamlNamespaceType, PackageBamlImpl, copy, resolve};
@@ -924,6 +924,47 @@ fn render_ty_source(ty: &baml_type::RealizedTy) -> String {
     }
 }
 
+fn render_witness_interface(witness: &DynWitnessDef) -> String {
+    let mut source = witness.interface.render_user_facing();
+    if witness.interface_args.is_empty() {
+        return source;
+    }
+
+    source.push('<');
+    for (index, argument) in witness.interface_args.iter().enumerate() {
+        if index > 0 {
+            source.push_str(", ");
+        }
+        source.push_str(&render_ty_source(argument));
+    }
+    source.push('>');
+    source
+}
+
+fn render_witness_source(source: &mut String, witness: &DynWitnessDef) {
+    source.push_str("\n  implements ");
+    source.push_str(&render_witness_interface(witness));
+    if witness.associated_types.is_empty() && witness.field_links.is_empty() {
+        source.push_str(" {}");
+        return;
+    }
+
+    source.push_str(" {");
+    for (name, ty) in &witness.associated_types {
+        source.push_str("\n    type ");
+        source.push_str(name.as_str());
+        source.push_str(" = ");
+        source.push_str(&render_ty_source(ty));
+    }
+    for (interface_field, class_field) in &witness.field_links {
+        source.push_str("\n    ");
+        source.push_str(interface_field.as_str());
+        source.push_str(" as ");
+        source.push_str(class_field.as_str());
+    }
+    source.push_str("\n  }");
+}
+
 fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
     let mut enum_ptrs: Vec<_> = type_value.defs().enums.values().copied().collect();
     let mut class_ptrs: Vec<_> = type_value.defs().classes.values().copied().collect();
@@ -995,6 +1036,11 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
                 field.alias.as_deref(),
                 field.description.as_deref(),
             ));
+        }
+        if let Some(runtime_type) = &class.runtime_type {
+            for witness in &runtime_type.defs.witnesses {
+                render_witness_source(&mut source, witness);
+            }
         }
         if let Some(alias) = class.alias.as_deref() {
             source.push_str("\n  @@alias(");
