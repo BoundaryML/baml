@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 26877
 ---
 function $init_test(registry: unknown) -> null {
     load_var ?1

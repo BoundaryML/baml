@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38480
 ---
 === PPIR ===
 function user.bad_member_chain_interp() -> string  [expr] {

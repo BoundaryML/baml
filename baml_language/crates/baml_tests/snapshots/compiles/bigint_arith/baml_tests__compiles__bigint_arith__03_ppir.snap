@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 6457
 ---
 === PPIR ===
 function user.AddBigints() -> bigint  [expr] {

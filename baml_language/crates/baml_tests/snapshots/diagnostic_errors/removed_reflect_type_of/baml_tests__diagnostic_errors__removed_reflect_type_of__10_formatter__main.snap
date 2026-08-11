@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 44455
 ---
 // BEP-066 I-9: `reflect.type_of` was REMOVED (renamed to `type.of`), not
 // aliased. Both the bare shorthand spelling and the fully qualified one must

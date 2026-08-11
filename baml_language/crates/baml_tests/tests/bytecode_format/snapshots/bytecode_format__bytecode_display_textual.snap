@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
-assertion_line: 41
 ---
 function assert.approx_equal(actual: float, expected: float, eps: float) -> null {
     load_var eps

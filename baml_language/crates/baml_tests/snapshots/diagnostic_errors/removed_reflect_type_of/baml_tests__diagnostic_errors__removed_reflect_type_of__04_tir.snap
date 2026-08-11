@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 44319
 ---
 === TIR2 ===
 function user.old_bare_spelling() -> type throws never {

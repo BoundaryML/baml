@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 22859
 ---
 // BEP-066: `reflect` is a keyword shorthand for `baml.reflect` (and `type`,
 // as an expression path head, for `baml.type`). A user-defined name wins:

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 149
 ---
 function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) -> null {
     load_var registry

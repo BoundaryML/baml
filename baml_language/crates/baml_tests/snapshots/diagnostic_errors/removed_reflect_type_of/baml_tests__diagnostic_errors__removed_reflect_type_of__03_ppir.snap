@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 44295
 ---
 === PPIR ===
 function user.old_bare_spelling() -> type  [expr] {
