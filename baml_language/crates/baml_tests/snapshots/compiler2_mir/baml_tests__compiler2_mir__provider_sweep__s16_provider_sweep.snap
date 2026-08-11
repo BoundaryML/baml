@@ -6,13 +6,16 @@ functions compared: 2823
 agreements: 2486
 O2 agreements (informational; optimizer parity deferred): 2486
 ruled literal-widening: 39
+ruled literal-widening+thrown-literal: 2
 ruled literal-widening+tir-unknown: 3
 ruled receiver-seeding: 33
 ruled receiver-seeding+throws-precision: 2
+ruled receiver-seeding+void-union: 3
+ruled thrown-literal: 1
 ruled throws-precision: 31
 ruled throws-precision+tir-unknown: 1
 ruled tir-unknown: 92
-differing: 135
+differing: 129
 panics: 1
 top-level lets: not diffed (no body renderer yet)
 
@@ -56,14 +59,6 @@ ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
     ...     let _12: type
     tir:     let _13: 0
     hir:     let _13: void
-ns_defer/defer.baml :: defer_call_throws_main
-    ...     let _1: string[] // log
-    tir:     let _2: void
-    hir:     let _2: int | void
-ns_defer/defer.baml :: defer_explicit_throw_main
-    ...     let _1: string[] // log
-    tir:     let _2: void
-    hir:     let _2: int | void
 ns_defer/defer.baml :: defer_throwing_defer_main
     ...     let _1: string[] // log
     tir:     let _2: void
@@ -76,14 +71,6 @@ ns_exceptions/exceptions.baml :: $init_test_ns_exceptions_exceptions
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_exceptions/exceptions.baml :: named_binding_string_access_value_fn
-    ...         _2 = copy _1;
-    tir:         _2 = narrow_bind copy _2 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb2];
-    hir:         _2 = narrow_bind copy _2 as Literal(String("boom"), Regular, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb2];
-ns_exceptions/exceptions.baml :: named_binding_int_access_value_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, string);
-    hir:         _2 = is_type(copy _1, "boom");
 ns_floats/floats.baml :: $init_test_ns_floats_floats
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
@@ -200,10 +187,6 @@ ns_iter/iter.baml :: iter_array_first_adapter_defaults
     ...     let _6: type
     tir:     let _7: (int) -> bool throws E2
     hir:     let _7: (int) -> bool throws never
-ns_iter/iter.baml :: iter_array_peekable_fluent
-    ...     let _4: int[] // out
-    tir:     let _5: void
-    hir:     let _5: int | void
 ns_iter/iter.baml :: iter_peekable
     ...     let _5: int[] // out
     tir:     let _6: void
@@ -424,10 +407,6 @@ ns_lambdas/lambdas.baml :: lambda_contextual_main
     ...     let _1: unknown // e
     tir:     let _2: (int) -> int throws int | string
     hir:     let _2: (int) -> int throws "contextual"
-ns_lexical_scoping/lexical_scoping.baml :: capture_catch_arm_binding
-    ...         _2 = copy _1;
-    tir:         _2 = narrow_bind copy _2 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
-    hir:         _2 = narrow_bind copy _2 as Literal(String("caught"), Regular, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
 ns_match_basics/match_basics.baml :: $init_test_ns_match_basics_match_basics
     ...     let _2: void
     tir:     let _3: () -> void throws unknown

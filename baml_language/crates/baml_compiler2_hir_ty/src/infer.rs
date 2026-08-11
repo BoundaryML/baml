@@ -770,6 +770,17 @@ fn infer_body_impl<'db>(
     ctx.finish()
 }
 
+/// Which bounded-var classes a finish-fixpoint round may commit: the
+/// eager tier solves fully-ground classes only; the ground-subset tier
+/// is the quiescence-only fallback (see `finish`). Demand points
+/// (`structurally_resolve`) bypass the tiers - a structure demand
+/// commits from whatever has accumulated, rustc's semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SolveTier {
+    Ground,
+    GroundSubset,
+}
+
 /// Whether execution can proceed past the current point. `Maybe & Maybe`
 /// branch-combines to `Maybe`; a `return`/`throw` sets `Always`, and a block
 /// whose statements always diverge types as `never`.
@@ -4722,15 +4733,22 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn finish(mut self) -> InferenceResult<'db> {
-        // The fulfillment fixpoint: resolve what ground bounds determine,
+        // The fulfillment fixpoint: solve what FULL bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
         // while any side progresses (rustc re-runs stalled obligations
         // until quiescent - the deferred subs are our stalled goals).
+        // Only at QUIESCENCE does the ground-subset tier commit classes
+        // from partial bounds (rustc's fallback placement): it stays the
+        // operator-deadlock breaker without deciding a var whose
+        // deferred lowers mention a sibling that was still solvable.
         loop {
-            self.resolve_bounded_vars();
+            let solved = self.resolve_bounded_vars(SolveTier::Ground);
             let obligations = self.discharge_obligations_once();
             let subs = self.drain_deferred_subs();
-            if !obligations && !subs {
+            if solved || obligations || subs {
+                continue;
+            }
+            if !self.resolve_bounded_vars(SolveTier::GroundSubset) {
                 break;
             }
         }
@@ -4966,19 +4984,51 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Derives solutions from accumulated bounds, iterating because one
-    /// resolution can make another class's bounds ground.
-    fn resolve_bounded_vars(&mut self) {
+    /// resolution can make another class's bounds ground. Returns whether
+    /// anything solved.
+    fn resolve_bounded_vars(&mut self, tier: SolveTier) -> bool {
+        let mut any = false;
         loop {
             let mut progressed = false;
             for (var, bounds) in self.table.unsolved_bounded_vars() {
-                if self.try_solve_bounded_var(var, &bounds) {
+                if self.try_solve_bounded_var_tiered(var, &bounds, tier) {
                     progressed = true;
                 }
             }
             if !progressed {
                 break;
             }
+            any = true;
         }
+        any
+    }
+
+    /// The tier gate in front of [`InferenceContext::try_solve_bounded_var`]:
+    /// the eager tier solves only FULLY-ground classes; a class with
+    /// var-carrying bounds waits, because a sibling those bounds mention
+    /// may still be solvable and committing now would decide from partial
+    /// information (rustc runs type-variable fallback only once
+    /// fulfillment is quiescent; stalled obligations re-run instead of
+    /// forcing). The ground-subset tier is that fallback: it runs only
+    /// when a whole finish round made no other progress, where it remains
+    /// the operator-deadlock breaker.
+    fn try_solve_bounded_var_tiered(
+        &mut self,
+        var: baml_type::interned::InferVar,
+        bounds: &unify::VarBounds,
+        tier: SolveTier,
+    ) -> bool {
+        if tier == SolveTier::Ground {
+            let fully_ground = bounds
+                .lowers
+                .iter()
+                .chain(bounds.uppers.iter())
+                .all(|ty| !self.table.resolve_completely(ty).has_infer());
+            if !fully_ground {
+                return false;
+            }
+        }
+        self.try_solve_bounded_var(var, bounds)
     }
 
     /// One bounded class's resolution step - the shared core of the
@@ -5239,6 +5289,11 @@ impl<'db> InferenceContext<'db> {
                 continue;
             }
             if !actual.has_infer() && !expected.has_infer() {
+                // KNOWN GAP (S17): a failed post-hoc bound is dropped
+                // here - recording it needs provenance (an anchor expr)
+                // threaded through VarBounds, the diagnostics slice's
+                // business. The quiescence tiering above makes this
+                // reachable only for genuinely ill-typed programs.
                 let _ = is_subtype_interned(&actual, &expected, &self.facts);
                 continue;
             }

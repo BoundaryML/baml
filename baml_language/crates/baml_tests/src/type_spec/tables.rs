@@ -376,3 +376,53 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
         "defaults check against their parameter's declared type"
     );
 }
+
+#[test]
+fn call_plan_waits_for_sibling_vars() {
+    // The finish fixpoint must not commit a bounded var from its ground
+    // lowers while a sibling var occurring in a DEFERRED lower is still
+    // solvable (rustc solves fallback only at quiescence): deep_equals'
+    // T here has lowers {"caught", "caught" | ?T_gen[]} and must wait
+    // for ?T_gen = int, giving string | int[] - not commit to string
+    // from the ground subset and silently fail the deferred bound.
+    let source = r#"
+function de_gen<T>(x: T) -> T[] throws string {
+    [x]
+}
+function de_probe() -> bool throws never {
+    baml.deep_equals(de_gen(1) catch (e) {
+        string => "caught"
+    }, "caught")
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut plans = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        for (&call, plan) in &result.call_plans {
+            let snippet = &source[source_map.expr_span(call)];
+            let args: Vec<String> = plan
+                .type_args
+                .iter()
+                .map(|ty| ty.to_plain().render_canonical())
+                .collect();
+            plans.push(format!(
+                "{} -> {args:?}",
+                snippet.split('(').next().unwrap_or(snippet)
+            ));
+        }
+    }
+    plans.sort();
+    assert_eq!(
+        plans,
+        vec![
+            "baml.deep_equals -> [\"string | int[]\"]".to_string(),
+            "de_gen -> [\"int\"]".to_string(),
+        ],
+        "solver committed a var while a sibling in its deferred lowers was still solvable"
+    );
+}

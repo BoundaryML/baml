@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/type_spec/sweep.rs
+assertion_line: 462
 expression: report
 ---
 files: 116
@@ -39,9 +40,9 @@ panics: 0
 [240x] hir_ty=[(a: bool, b: bool) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:5314..5330 `baml.deep_equals`
     at ns_arrays/arrays.baml:7584..7600 `baml.deep_equals`
-[240x] hir_ty=[(a: string, b: string) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
-    at ns_arrays/arrays.baml:10142..10158 `baml.deep_equals`
+[238x] hir_ty=[(a: string, b: string) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:28366..28382 `baml.deep_equals`
+    at ns_bigints/bigints.baml:22401..22417 `baml.deep_equals`
 [133x] hir_ty=[(a: int[], b: int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:1146..1162 `baml.deep_equals`
     at ns_arrays/arrays.baml:1383..1399 `baml.deep_equals`
@@ -795,6 +796,9 @@ panics: 0
 [3x] hir_ty=[(a: int | null, b: int | null) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_strings/strings.baml:10122..10138 `baml.deep_equals`
     at ns_strings/strings.baml:10226..10242 `baml.deep_equals`
+[3x] hir_ty=[(a: string | int[], b: string | int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_arrays/arrays.baml:10142..10158 `baml.deep_equals`
+    at ns_arrays/arrays.baml:12197..12213 `baml.deep_equals`
 [3x] hir_ty=[(a: user.classes.PointXYZW, b: user.classes.PointXYZW) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_classes/classes.baml:4863..4879 `baml.deep_equals`
     at ns_classes/classes.baml:5153..5169 `baml.deep_equals`
@@ -2078,8 +2082,6 @@ panics: 0
     at ns_json_alias/json_alias.baml:1169..1185 `baml.deep_equals`
 [1x] hir_ty=[(a: string | (int | bool)[], b: string | (int | bool)[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_typed_outputs/typed_outputs.baml:7189..7205 `baml.deep_equals`
-[1x] hir_ty=[(a: string | int[], b: string | int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
-    at ns_arrays/arrays.baml:12197..12213 `baml.deep_equals`
 [1x] hir_ty=[(a: string, b: string) -> string throws never] tir=[(a: T, b: T) -> T throws never]
     at ns_operators/operators.baml:14543..14550 `drv_add`
 [1x] hir_ty=[(a: user.comparable_sort.Num, b: user.comparable_sort.Num) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]

@@ -83,7 +83,20 @@ fn lower_pretty_at(
 ///   codegen surfaces): TIR bakes fresh literals into inferred lambda
 ///   signatures and templates; hir_ty widens (`-> 42` vs `-> int`).
 ///   Both sides normalize literal tokens in TYPE position to their
-///   bases (`const 42_i64` operands are untouched).
+///   bases (`const 42_i64` operands are untouched). The normalization
+///   is direction-agnostic, so it also nets the RATIFIED (2026-08-11)
+///   S12 thrown-literal rule where the roles reverse: hir_ty keeps a
+///   thrown literal (`is_type(_, "boom")`) where TIR widened
+///   (`is_type(_, string)`) - thrown facts are union members, and the
+///   spec's one literal-policy sentence (TYPE_SYSTEM.md line 75) keeps
+///   literals as union members.
+/// - `thrown-literal` (ratified 2026-08-11): the narrow_bind spelling
+///   of the same S12 rule - hir_ty's catch narrows to
+///   `Literal(String("boom"), ..)` where TIR narrows to `String {..}`,
+///   so catch arms discharge exact error codes.
+/// - `void-union` (S15 arm-join ruling): TIR discards statement values
+///   (`void`) where hir_ty joins them (`int | void`); interim until
+///   void becomes the empty tuple.
 /// - `tir-unknown` (ruled 2026-08-11; the S15 tir-uninstantiated family
 ///   at codegen surfaces): TIR's `unknown` where hir_ty resolved the
 ///   type - TIR's token wildcard-matches hir's precise type, including
@@ -166,13 +179,48 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     if t_norm == h_norm {
         return Some(Some("literal-widening"));
     }
-    if t_norm.contains("unknown") && wildcard_match(&t_norm, "unknown", &h_norm) {
+    if t_norm.contains("unknown")
+        && wildcard_match(&t_norm, "unknown", &h_norm, &|filled| !filled.is_empty())
+    {
         return Some(Some("tir-unknown"));
+    }
+    if t_norm.contains("void")
+        && wildcard_match(&t_norm, "void", &h_norm, &|filled| {
+            filled == "void" || filled.ends_with(" | void")
+        })
+    {
+        return Some(Some("void-union"));
+    }
+    if thrown_literal_narrow_pair(&t_ids, &h_ids) {
+        return Some(Some("thrown-literal"));
     }
     if throws_rigid_var_pair(&t_norm, &h_norm) {
         return Some(Some("throws-precision"));
     }
     None
+}
+
+/// The narrow_bind spelling of the ratified thrown-literal rule: both
+/// sides narrow the same place, TIR to a base-type template, hir_ty to
+/// a literal of that base.
+fn thrown_literal_narrow_pair(tir: &str, hir: &str) -> bool {
+    if !tir.contains("narrow_bind") || !hir.contains("narrow_bind") {
+        return false;
+    }
+    let (Some(t_as), Some(h_as)) = (tir.find(" as "), hir.find(" as ")) else {
+        return false;
+    };
+    if tir[..t_as] != hir[..h_as] {
+        return false;
+    }
+    let t_ty = tir[t_as + " as ".len()..].trim_start();
+    let h_ty = hir[h_as + " as ".len()..].trim_start();
+    for base in ["String", "Int", "Bigint", "Float", "Bool"] {
+        if t_ty.starts_with(base) && h_ty.starts_with(&format!("Literal({base}(")) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Replaces every local id (`_12`) with `_` so renumbering compares
@@ -275,8 +323,8 @@ fn literal_base(token: &str) -> Option<&'static str> {
 }
 
 /// Whether `hir` matches `tir` with every occurrence of `hole` treated
-/// as a non-empty wildcard.
-fn wildcard_match(tir: &str, hole: &str, hir: &str) -> bool {
+/// as a wildcard whose filled-in text satisfies `accept`.
+fn wildcard_match(tir: &str, hole: &str, hir: &str, accept: &dyn Fn(&str) -> bool) -> bool {
     let segments: Vec<&str> = tir.split(hole).collect();
     let mut rest = hir;
     for (index, segment) in segments.iter().enumerate() {
@@ -288,11 +336,22 @@ fn wildcard_match(tir: &str, hole: &str, hir: &str) -> bool {
             continue;
         }
         if index == segments.len() - 1 {
-            return segment.len() < rest.len() && rest.ends_with(segment);
+            let Some(filled) = rest
+                .len()
+                .checked_sub(segment.len())
+                .map(|at| &rest[..at])
+                .filter(|_| rest.ends_with(segment))
+            else {
+                return false;
+            };
+            return accept(filled);
         }
-        let Some(found) = rest.find(segment).filter(|&at| at > 0) else {
+        let Some(found) = rest.find(segment) else {
             return false;
         };
+        if !accept(&rest[..found]) {
+            return false;
+        }
         rest = &rest[found + segment.len()..];
     }
     true
