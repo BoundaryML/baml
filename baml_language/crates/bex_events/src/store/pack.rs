@@ -184,6 +184,10 @@ pub struct PackWriter {
     index: Vec<ChunkMeta>,
     origin_euid: [u8; 16],
     pack_seq: u32,
+    /// The pack's directory entry has been fsynced. Data durability is
+    /// meaningless while the name itself can vanish, so the first group
+    /// commit also syncs `packs/` (once per pack lifetime).
+    dir_synced: bool,
 }
 
 impl PackWriter {
@@ -211,6 +215,7 @@ impl PackWriter {
             .open(&path)?;
         file.write_all(&encode_header(origin_euid, pack_seq, created_ms))?;
         std::fs::write(&lease_path, format!("{}\n", std::process::id()))?;
+        active_packs().insert(path.clone());
         Ok(PackWriter {
             file,
             path,
@@ -220,6 +225,7 @@ impl PackWriter {
             index: Vec::new(),
             origin_euid,
             pack_seq,
+            dir_synced: false,
         })
     }
 
@@ -241,9 +247,17 @@ impl PackWriter {
         Ok(offset)
     }
 
-    /// D1 group commit hook: fsync the pack.
+    /// D1 group commit hook: fsync the pack, plus (once) the `packs/`
+    /// directory so the pack's own name is as durable as its bytes.
     pub fn sync_data(&mut self) -> io::Result<()> {
-        self.file.sync_data()
+        self.file.sync_data()?;
+        if !self.dir_synced {
+            if let Some(dir) = self.path.parent() {
+                crate::fsutil::fsync_dir(dir)?;
+            }
+            self.dir_synced = true;
+        }
+        Ok(())
     }
 
     #[must_use]
@@ -276,17 +290,26 @@ impl PackWriter {
         self.origin_euid
     }
 
-    /// Seal: fsync, write `.bamlpack.idx` (tmp+rename), drop the lease.
-    /// Consumes the writer; the caller opens a fresh pack for new writes.
+    /// Seal: fsync pack + name, write `.bamlpack.idx` durably
+    /// (tmp fsync → rename → dir fsync), drop the lease. Consumes the
+    /// writer; the caller opens a fresh pack for new writes.
     pub fn seal(mut self) -> io::Result<()> {
-        self.file.sync_data()?;
+        self.sync_data()?;
         let idx_bytes = super::index::encode_index(&self.index);
         let idx_path = idx_path_for(&self.path);
         let tmp = self.path.with_extension("bamlpack.idx.tmp");
-        std::fs::write(&tmp, idx_bytes)?;
-        std::fs::rename(&tmp, &idx_path)?;
+        crate::fsutil::write_replace_durable(&tmp, &idx_path, &idx_bytes)?;
         let _ = std::fs::remove_file(&self.lease_path);
         Ok(())
+    }
+}
+
+impl Drop for PackWriter {
+    fn drop(&mut self) {
+        // In-memory ownership release only — the lease FILE stays unless
+        // seal removed it, which is what makes an unsealed drop look like
+        // (and recover like) a crash.
+        active_packs().remove(&self.path);
     }
 }
 
@@ -298,6 +321,71 @@ pub fn idx_path_for(pack_path: &Path) -> PathBuf {
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     name.push_str(".idx");
     pack_path.with_file_name(name)
+}
+
+/// `pack-...bamlpack` → its sibling `.lease` heartbeat file.
+#[must_use]
+pub fn lease_path_for(pack_path: &Path) -> PathBuf {
+    pack_path.with_extension("lease")
+}
+
+/// Parse a pack's sequence number from its 48-byte header without
+/// reading the (possibly 64 MiB) body.
+pub fn read_header_seq(pack_path: &Path) -> io::Result<u32> {
+    use std::io::Read as _;
+    let mut header = [0u8; PACK_HEADER_LEN];
+    let mut file = std::fs::File::open(pack_path)?;
+    file.read_exact(&mut header)?;
+    Ok(scan_pack(&header)?.pack_seq)
+}
+
+/// Pack paths owned by live [`PackWriter`]s in THIS process. A lease
+/// naming our own pid proves nothing by itself — the writer may have been
+/// dropped without seal (recoverable orphan) or may be live in another
+/// `Store` instance. This registry resolves that ambiguity exactly.
+static ACTIVE_PACKS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<PathBuf>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+
+fn active_packs() -> std::sync::MutexGuard<'static, std::collections::HashSet<PathBuf>> {
+    ACTIVE_PACKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Whether the pack's `.lease` names a live owner. Used by open-time
+/// recovery to distinguish a live writer (bytes readable but not provably
+/// durable) from a crashed one (recoverable). Same-process ownership is
+/// answered exactly via the active-writer registry; for foreign pids the
+/// probe errs on the side of "alive": an unreadable lease, an unparseable
+/// pid, or a platform without a liveness probe all report `true`, which
+/// only costs harmless duplicate writes — never a durability claim.
+#[must_use]
+pub fn lease_holder_alive(pack_path: &Path) -> bool {
+    let Ok(lease) = std::fs::read_to_string(lease_path_for(pack_path)) else {
+        // No lease at all: a sealed or already-recovered pack. The caller
+        // only asks for idx-less packs, where a missing lease means the
+        // owner is gone.
+        return false;
+    };
+    let Ok(pid) = lease.trim().parse::<i32>() else {
+        return true;
+    };
+    if pid == i32::try_from(std::process::id()).unwrap_or(-1) {
+        return active_packs().contains(pack_path);
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: kill(pid, 0) probes existence without side effects.
+        #[expect(unsafe_code, reason = "libc kill(pid, 0) liveness probe")]
+        let rc = unsafe { libc::kill(pid, 0) };
+        // ESRCH = definitely gone; anything else (0, EPERM) = assume live.
+        rc == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        true
+    }
 }
 
 fn flock_shared(file: &std::fs::File) -> io::Result<()> {

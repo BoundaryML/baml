@@ -206,6 +206,10 @@ fn recv_reply<T>(rx: &mpsc::Receiver<io::Result<T>>) -> io::Result<T> {
 }
 
 fn service_loop(mut store: Store, rx: &mpsc::Receiver<Op>, cpu_ns: &AtomicU64) {
+    // C10: sample this thread's cumulative CPU BEFORE each reply — the
+    // reply unblocks the caller, so sampling after it races callers that
+    // read `cpu_ns()` as soon as their op returns.
+    let sample = |cpu_ns: &AtomicU64| cpu_ns.store(thread_cpu_ns(), Ordering::Relaxed);
     while let Ok(op) = rx.recv() {
         match op {
             Op::Put {
@@ -220,6 +224,7 @@ fn service_loop(mut store: Store, rx: &mpsc::Receiver<Op>, cpu_ns: &AtomicU64) {
                 )]
                 let encoded = unsafe { &*encoded.0 };
                 let result = store.put_encoded(encoded, created_ms);
+                sample(cpu_ns);
                 let _ = reply.send(result);
             }
             Op::Commit {
@@ -232,23 +237,26 @@ fn service_loop(mut store: Store, rx: &mpsc::Receiver<Op>, cpu_ns: &AtomicU64) {
                 let result = store
                     .sync_data()
                     .and_then(|()| gc::append_manifest(&boundary_dir, &cids));
+                sample(cpu_ns);
                 let _ = reply.send(result);
             }
             Op::Sync { reply } => {
-                let _ = reply.send(store.sync_data());
+                let result = store.sync_data();
+                sample(cpu_ns);
+                let _ = reply.send(result);
             }
             Op::Seal { reply } => {
-                let _ = reply.send(store.seal_active());
+                let result = store.seal_active();
+                sample(cpu_ns);
+                let _ = reply.send(result);
             }
         }
-        // C10: this thread's cumulative CPU, one sample per op.
-        cpu_ns.store(thread_cpu_ns(), Ordering::Relaxed);
     }
     // Producer side dropped without seal_and_stop: seal best-effort so a
     // clean process exit still leaves an indexed pack (a true crash is
     // covered by the open-time pack rescan).
     let _ = store.seal_active();
-    cpu_ns.store(thread_cpu_ns(), Ordering::Relaxed);
+    sample(cpu_ns);
 }
 
 #[cfg(test)]

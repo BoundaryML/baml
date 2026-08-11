@@ -36,8 +36,14 @@ pub struct GcReport {
 }
 
 /// Append CIDs to a boundary's `manifest.bamlcids` (§6.7 root commit step
-/// 3 — call inside the same group-commit barrier as the pack sync). Wire
-/// form, one per line, O_APPEND.
+/// 3 — call inside the same group-commit barrier as the pack sync, AFTER
+/// the pack fsync). Wire form, one per line, O_APPEND.
+///
+/// The append is durable before this returns: the manifest bytes are
+/// fsynced and, because the file may have just been created, so is the
+/// boundary directory. This closes the §6.7 barrier — a root pin either
+/// survives a crash together with its pack bytes or is absent, in which
+/// case the (durable, unpinned) chunks age out through the grace window.
 pub fn append_manifest(boundary_dir: &Path, cids: &[[u8; 32]]) -> io::Result<()> {
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -48,7 +54,9 @@ pub fn append_manifest(boundary_dir: &Path, cids: &[[u8; 32]]) -> io::Result<()>
         buf.push_str(&canon::cid_wire(cid));
         buf.push('\n');
     }
-    file.write_all(buf.as_bytes())
+    file.write_all(buf.as_bytes())?;
+    file.sync_data()?;
+    crate::fsutil::fsync_dir(boundary_dir)
 }
 
 /// Parse one `bamlv_1_...` line back to raw CID bytes.
@@ -245,7 +253,7 @@ pub fn gc(baml_dir: &Path, now_ms: u64, grace_ms: u64) -> io::Result<GcReport> {
         // rebuild idx. (GC holds writers.lock exclusive; the pack files are
         // rewritten directly rather than via PackWriter, which would try to
         // re-take the shared lock.)
-        let mut fresh = encode_compacted(scan, &live, bytes);
+        let fresh = encode_compacted(scan, &live, bytes);
         let compacted_metas = match pack::scan_pack(&fresh) {
             Ok(s) => s.chunks,
             Err(_) => {
@@ -253,13 +261,14 @@ pub fn gc(baml_dir: &Path, now_ms: u64, grace_ms: u64) -> io::Result<GcReport> {
                 continue;
             }
         };
+        // The rename replaces a LIVE pack, so the temporary must be
+        // durable first — otherwise a crash can surface the pack's name
+        // with truncated content and lose the live records being kept.
         let tmp = path.with_extension("bamlpack.compact");
-        std::fs::write(&tmp, &mut fresh)?;
-        std::fs::rename(&tmp, path)?;
+        crate::fsutil::write_replace_durable(&tmp, path, &fresh)?;
         let idx_bytes = index::encode_index(&compacted_metas);
         let idx_tmp = path.with_extension("bamlpack.idx.tmp");
-        std::fs::write(&idx_tmp, idx_bytes)?;
-        std::fs::rename(&idx_tmp, pack::idx_path_for(path))?;
+        crate::fsutil::write_replace_durable(&idx_tmp, &pack::idx_path_for(path), &idx_bytes)?;
         let reclaimed = (bytes.len() as u64).saturating_sub(fresh.len() as u64);
         tombstone(&retention_log, path, "compacted", reclaimed, now_ms)?;
         report.packs_compacted += 1;
@@ -299,8 +308,8 @@ fn tombstone(log: &Path, pack_path: &Path, action: &str, bytes: u64, at_ms: u64)
 
 #[cfg(test)]
 mod tests {
-    use super::super::canon::{CanonValue, encode};
     use super::super::Store;
+    use super::super::canon::{CanonValue, encode};
     use super::*;
 
     fn setup(name: &str) -> std::path::PathBuf {

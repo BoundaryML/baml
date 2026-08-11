@@ -371,9 +371,15 @@ impl RunBoundary {
         if let Err(err) = writer.flush() {
             obs_debug(format_args!("value segment flush failed: {err}"));
         }
-        // Root-commit ordering (§6.7): pack D1 sync, then the manifest
-        // append inside the same barrier, then seal the active pack so
-        // this short-lived process leaves a sealed pack + idx behind.
+        // The capture evidence itself must be durable before any root that
+        // points into it is pinned.
+        if let Err(err) = writer.sync_data() {
+            obs_debug(format_args!("value segment sync failed: {err}"));
+        }
+        // Root-commit barrier (§6.7): pack D1 sync, then the durable
+        // manifest append (append_manifest fsyncs the manifest and the
+        // boundary dir), then seal the active pack so this short-lived
+        // process leaves a sealed pack + idx behind.
         if let Some(store) = store.as_mut() {
             if let Err(err) = store.sync_data() {
                 obs_debug(format_args!("value store sync failed: {err}"));

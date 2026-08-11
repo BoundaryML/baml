@@ -1,5 +1,6 @@
 pub mod collector;
 pub mod dict;
+pub(crate) mod fsutil;
 pub mod history;
 pub mod ids;
 pub mod metadata;

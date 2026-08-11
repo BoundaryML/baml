@@ -47,6 +47,27 @@ use rustc_hash::FxHashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use pack::{ChunkKind, PackWriter};
 
+/// Read exactly one record's bytes out of a pack and CRC-verify it.
+/// A record that no longer matches its index entry (torn tail after a
+/// crash, concurrent compaction) reads as absent, never as garbage.
+#[cfg(not(target_arch = "wasm32"))]
+fn read_record_range(path: &Path, meta: &pack::ChunkMeta) -> io::Result<Option<Vec<u8>>> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    let len = pack::REC_FIXED_LEN + meta.stored_len as usize + 4;
+    let mut record = vec![0u8; len];
+    if file.seek(SeekFrom::Start(meta.offset)).is_err() || file.read_exact(&mut record).is_err() {
+        return Ok(None);
+    }
+    let mut local = *meta;
+    local.offset = 0;
+    Ok(pack::read_chunk(&record, &local))
+}
+
 /// The write/read facade over one project store dir (`<baml>/store`).
 #[cfg(not(target_arch = "wasm32"))]
 pub struct Store {
@@ -77,30 +98,71 @@ impl Store {
         packs.sort();
         for pack_path in packs.iter().rev() {
             let idx_path = pack::idx_path_for(pack_path);
-            let idx = match std::fs::read(&idx_path)
+            // Dedupe-trust rule: a CID enters `known` (and can therefore
+            // absorb a future `put`) only when its bytes are provably
+            // durable. A sealed idx proves it — `PackWriter::seal` fsyncs
+            // the pack before publishing the idx. Anything else must be
+            // made durable here first or stay out of `known`.
+            let (idx, durable) = match std::fs::read(&idx_path)
                 .ok()
                 .and_then(|b| index::PackIndex::decode(&b).ok())
             {
-                Some(idx) => idx,
+                Some(idx) => {
+                    if let Ok(seq) = pack::read_header_seq(pack_path) {
+                        next_seq = next_seq.max(seq + 1);
+                    }
+                    // A crash between seal's idx publish and lease removal
+                    // leaves a dead lease that would pin this pack against
+                    // GC forever. The idx proves durability; clear it.
+                    if pack::lease_path_for(pack_path).exists()
+                        && !pack::lease_holder_alive(pack_path)
+                    {
+                        let _ = std::fs::remove_file(pack::lease_path_for(pack_path));
+                    }
+                    (idx, true)
+                }
                 None => {
-                    // Unsealed (crashed writer) or corrupt idx: rebuild
-                    // from the pack's committed records.
+                    // Unsealed (crashed or live foreign writer) or corrupt
+                    // idx: rebuild from the pack's committed records.
                     let bytes = std::fs::read(pack_path)?;
                     let scan = pack::scan_pack(&bytes)?;
                     next_seq = next_seq.max(scan.pack_seq + 1);
-                    index::PackIndex::decode(&index::encode_index(&scan.chunks))
-                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+                    let idx = index::PackIndex::decode(&index::encode_index(&scan.chunks))
+                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                    if pack::lease_holder_alive(pack_path) {
+                        // A live writer still owns this pack. Its bytes are
+                        // readable but not provably durable — excluded from
+                        // dedupe (we write our own durable copies; §6.7
+                        // duplicates are semantically harmless).
+                        (idx, false)
+                    } else {
+                        // Crashed-writer recovery: fsync the committed
+                        // prefix, then seal the rebuilt idx durably so the
+                        // recovery happens once. If durability cannot be
+                        // established, degrade to dedupe-off instead of
+                        // failing the open.
+                        let durable = std::fs::File::open(pack_path)
+                            .and_then(|f| f.sync_data())
+                            .and_then(|()| {
+                                pack_path.parent().map_or(Ok(()), crate::fsutil::fsync_dir)
+                            })
+                            .is_ok();
+                        if durable {
+                            let tmp = pack_path.with_extension("bamlpack.idx.tmp");
+                            let _ = crate::fsutil::write_replace_durable(
+                                &tmp,
+                                &idx_path,
+                                &index::encode_index(&scan.chunks),
+                            );
+                            let _ = std::fs::remove_file(pack::lease_path_for(pack_path));
+                        }
+                        (idx, durable)
+                    }
                 }
             };
-            for (cid, ..) in idx.iter() {
-                known.insert(*cid, ());
-            }
-            if let Ok(bytes) = std::fs::read(pack_path) {
-                if let Ok(scan) = pack::scan_pack(&bytes[..bytes.len().min(pack::PACK_HEADER_LEN)])
-                {
-                    next_seq = next_seq.max(scan.pack_seq + 1);
-                } else if let Ok(scan) = pack::scan_pack(&bytes) {
-                    next_seq = next_seq.max(scan.pack_seq + 1);
+            if durable {
+                for (cid, ..) in idx.iter() {
+                    known.insert(*cid, ());
                 }
             }
             sealed.push((pack_path.clone(), idx));
@@ -192,17 +254,17 @@ impl Store {
     }
 
     /// Read one chunk's payload by CID: active pack first, then sealed
-    /// packs newest-first. CRC-verified.
+    /// packs newest-first. CRC-verified. Reads only the record's byte
+    /// range — never the whole pack — so hydration cost tracks value
+    /// size, not pack size.
     pub fn get(&self, cid: &[u8; 32]) -> io::Result<Option<Vec<u8>>> {
         if let Some(writer) = &self.writer
             && let Some(meta) = writer.active_index().iter().find(|m| m.cid == *cid)
         {
-            let bytes = std::fs::read(writer.path())?;
-            return Ok(pack::read_chunk(&bytes, meta));
+            return read_record_range(writer.path(), meta);
         }
         for (path, idx) in &self.sealed {
             if let Some((offset, logical_len, stored_len)) = idx.lookup(cid) {
-                let bytes = std::fs::read(path)?;
                 let meta = pack::ChunkMeta {
                     kind: 0,
                     storage: 0,
@@ -211,7 +273,7 @@ impl Store {
                     stored_len,
                     offset,
                 };
-                return Ok(pack::read_chunk(&bytes, &meta));
+                return read_record_range(path, &meta);
             }
         }
         Ok(None)
@@ -222,6 +284,75 @@ impl Store {
 mod tests {
     use super::canon::{CanonValue, encode};
     use super::*;
+
+    #[test]
+    fn live_writer_pack_is_readable_but_not_dedupe_trusted() {
+        let dir = std::env::temp_dir().join(format!("baml-store-live-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let encoded = encode(&CanonValue::String("live writer bytes".repeat(200)));
+        let mut owner = Store::open(&dir, [1; 16]).unwrap();
+        owner.put_encoded(&encoded, 1).unwrap();
+        // No sync, no seal — the owner's bytes are not provably durable.
+
+        let mut other = Store::open(&dir, [2; 16]).unwrap();
+        assert!(
+            !other.contains(&encoded.root_cid),
+            "a live writer's unsealed bytes must not absorb another writer's put"
+        );
+        assert!(
+            other.get(&encoded.root_cid).unwrap().is_some(),
+            "the live pack's committed records stay readable"
+        );
+        // The second writer stores its own durable copy (harmless duplicate).
+        assert!(other.put_encoded(&encoded, 2).unwrap() > 0);
+        other.sync_data().unwrap();
+        other.seal_active().unwrap();
+        drop(owner);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn crashed_writer_recovery_is_durable_and_single_shot() {
+        let dir = std::env::temp_dir().join(format!("baml-store-recover-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let encoded = encode(&CanonValue::String("crash recovery".repeat(300)));
+        {
+            let mut store = Store::open(&dir, [3; 16]).unwrap();
+            store.put_encoded(&encoded, 1).unwrap();
+            // Dropped without seal: lease left behind, no idx — a crash.
+        }
+        let packs: Vec<PathBuf> = std::fs::read_dir(dir.join("packs"))
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "bamlpack"))
+            .collect();
+        assert_eq!(packs.len(), 1);
+        assert!(
+            pack::lease_path_for(&packs[0]).exists(),
+            "crash leaves lease"
+        );
+        assert!(
+            !pack::idx_path_for(&packs[0]).exists(),
+            "crash leaves no idx"
+        );
+
+        // Recovery: the committed prefix becomes durable, the idx seals,
+        // the dead lease clears, and the chunks re-enter dedupe.
+        let store = Store::open(&dir, [3; 16]).unwrap();
+        assert!(store.contains(&encoded.root_cid));
+        assert!(
+            pack::idx_path_for(&packs[0]).exists(),
+            "recovery seals the rebuilt idx"
+        );
+        assert!(
+            !pack::lease_path_for(&packs[0]).exists(),
+            "recovery clears the dead lease"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn store_dedupes_and_reads_back_across_reopen() {

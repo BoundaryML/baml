@@ -184,6 +184,11 @@ pub enum ValueArtifactRef {
 pub trait ValueArtifactSink {
     fn write_chunk(&mut self, bytes: &[u8]) -> io::Result<()>;
     fn flush(&mut self) -> io::Result<ValueArtifactRef>;
+    /// Make everything written so far durable (§6.6 D-milestone hook).
+    /// No-op for sinks without a durability boundary of their own.
+    fn sync_data(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -191,6 +196,7 @@ pub struct FileValueArtifactSink {
     file: File,
     path: PathBuf,
     bytes_written: u64,
+    dir_synced: bool,
 }
 
 impl FileValueArtifactSink {
@@ -203,6 +209,7 @@ impl FileValueArtifactSink {
             file: File::create(path)?,
             path: path.to_path_buf(),
             bytes_written: 0,
+            dir_synced: false,
         })
     }
 
@@ -226,6 +233,20 @@ impl ValueArtifactSink for FileValueArtifactSink {
         Ok(ValueArtifactRef::NativeFile {
             path: self.path.clone(),
         })
+    }
+
+    /// Fsync the segment and (once) its directory — `File::flush` alone is
+    /// a no-op for `std::fs::File`, so this is the only durability point a
+    /// `.bamlvalue` segment has.
+    fn sync_data(&mut self) -> io::Result<()> {
+        self.file.sync_data()?;
+        if !self.dir_synced {
+            if let Some(dir) = self.path.parent() {
+                crate::fsutil::fsync_dir(dir)?;
+            }
+            self.dir_synced = true;
+        }
+        Ok(())
     }
 }
 

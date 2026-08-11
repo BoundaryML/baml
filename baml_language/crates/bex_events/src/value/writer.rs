@@ -244,6 +244,13 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         self.sink.flush()
     }
 
+    /// Durability point for the segment (fsync where the sink has one).
+    /// Call at boundary completion, before the boundary's roots are
+    /// pinned — a pinned root must never outlive its capture evidence.
+    pub fn sync_data(&mut self) -> io::Result<()> {
+        self.sink.sync_data()
+    }
+
     pub fn sink(&self) -> &S {
         &self.sink
     }

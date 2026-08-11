@@ -292,8 +292,10 @@ pub fn ensure_dict_written(
         dict_file_name(revision_id),
         std::process::id()
     ));
-    std::fs::write(&tmp, &bytes)?;
-    match std::fs::rename(&tmp, &path) {
+    // §4.2 ordering: a segment header referencing this revision_id must
+    // never become durable before the dictionary's rename does — so the
+    // rename itself must be durable (tmp fsync → rename → dir fsync).
+    match crate::fsutil::write_replace_durable(&tmp, &path, &bytes) {
         Ok(()) => Ok(path),
         Err(err) => {
             // Rename-race loser: if the file exists now, someone else won

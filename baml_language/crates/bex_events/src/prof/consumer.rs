@@ -815,7 +815,13 @@ impl ConsumerState {
             .take(48)
             .collect();
         let path = flight_dir.join(format!("{ts_ms}-{slug}.bamlprof"));
-        std::fs::write(&path, &buf).ok()?;
+        // Durable tmp → rename: a torn dump must never appear under its
+        // final name. Dumps carry only structural events — no CID
+        // references — so no `.bamlcids` pin sidecar is owed; if the
+        // transcoder ever emits value references, it must write the pin
+        // (GC already honors `flight/*.bamlcids`) in this same barrier.
+        let tmp = flight_dir.join(format!(".{ts_ms}-{slug}.bamlprof.tmp"));
+        crate::fsutil::write_replace_durable(&tmp, &path, &buf).ok()?;
         entry.0 = now;
         entry.1 += 1;
         self.counters.flight_dumps += 1;
