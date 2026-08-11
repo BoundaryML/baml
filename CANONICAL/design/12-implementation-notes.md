@@ -89,6 +89,23 @@ cct_engine bench after C1: hotloop 48.6 ns/pair (baseline 47.9; gate
 never-exceed), migration unchanged. The +0.7 ns is the histogram
 saturation branch on the call-end path.
 
+### IN-C1-8 — Disk-full qualification (2026-08-11)
+
+Manual qualification on a 256 KiB tmpfs mounted as `.baml`:
+
+- **Filesystem full before begin:** boundary begin fails with an explicit
+  verbose diagnostic; the run proceeds unobserved and exits 0 with
+  correct program output. No panic, no partial garbage.
+- **Filesystem fills mid-boundary:** the dictionary write fails with a
+  declared fallback diagnostic; boundary meta, sealed `cct.bamlcct`,
+  values, manifest, and sealed pack+idx still land; the run exits 0.
+  Reads honor the degraded contract — missing dictionary yields honest
+  `fn#<id>` numeric labels, exact counts, `sealed=true`.
+
+A portable automated ENOSPC suite needs a fault-injection seam below the
+store (or CI privileges for loop/tmpfs mounts); tracked as follow-on
+hardening, with this qualification as the recorded evidence.
+
 ## Q1 — catalog and query-core freeze resolutions
 
 ### IN-Q1-1 — `args` root shape: named-argument object (**freeze**)
