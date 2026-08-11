@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use baml_base::{Name, SourceFile};
-use baml_compiler_diagnostics::diagnostic::DiagnosticId;
+use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::{TextRange, TextSize};
@@ -1802,7 +1802,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .fields
                         .iter()
                         .map(|f| (&f.name, f.name_span, f.attributes.as_slice())),
-                    "class",
+                    SerializedKeyContainer::Class,
                     is_builtin_file,
                 );
                 for method in &class.methods {
@@ -1819,7 +1819,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     enm.variants
                         .iter()
                         .map(|v| (&v.name, v.name_span, v.attributes.as_slice())),
-                    "enum",
+                    SerializedKeyContainer::Enum,
                     is_builtin_file,
                 );
             }
@@ -2120,12 +2120,11 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// cannot collide. A pure duplicate *member name* (no aliasing involved) is
     /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
     /// to avoid double-reporting; this rule only fires when at least two
-    /// *distinct* member names share a key. `container` is `"class"` or `"enum"`
-    /// and is used only for the diagnostic message.
+    /// *distinct* member names share a key.
     fn validate_alias_collisions<'a>(
         &mut self,
         members: impl Iterator<Item = (&'a Name, TextRange, &'a [ast::RawAttribute])>,
-        container: &'static str,
+        container: SerializedKeyContainer,
         is_builtin_file: bool,
     ) {
         // Builtin stdlib declarations carry no `@alias`, and type-level

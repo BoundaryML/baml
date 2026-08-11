@@ -1,9 +1,8 @@
 //! BEP-066 slice 4 executable oracles: incremental class builders, pending
-//! composites, recursive group freezing, and call-site diagnostics.
+//! composites, recursive group freezing, and structured diagnostics.
 
-use baml_tests::{baml_test, engine::run_test};
+use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
-use indexmap::IndexMap;
 
 #[tokio::test]
 async fn self_recursive_employee_renders_and_parses() {
@@ -162,55 +161,26 @@ async fn frozen_mutation_and_unresolved_call_name_the_builder() {
 }
 
 #[tokio::test]
-async fn duplicate_field_diagnostic_points_at_the_second_field_call() {
-    const SOURCE: &str = r#"
+async fn duplicate_field_structured_diagnostic_has_a_null_span() {
+    let output = baml_test!(
+        r#"
         function main() -> string {
             let builder = reflect.class.builder("Duplicate")
             builder.field("name", type.of<string>())
             let result = builder.field("name", type.of<int>()) catch (e) {
                 baml.reflect.errors.CompilationError => {
                     let span = e.diagnostics[0].span
-                    if span != null {
-                        return e.diagnostics[0].code
-                            + "|" + span.start.to_string()
-                            + "|" + span.end.to_string()
-                    }
-                    return e.diagnostics[0].code + "|null"
+                    return e.diagnostics[0].code
+                        + "|" + (span == null).to_string()
                 }
             }
             return "duplicate did not throw"
         }
-    "#;
-
-    let output = run_test(
-        SOURCE,
-        "main",
-        IndexMap::new(),
-        baml_compiler2_mir::OptLevel::One,
-    )
-    .await;
-    let BexExternalValue::String(result) = output
-        .result
-        .expect("duplicate field should be a catchable CompilationError")
-    else {
-        panic!("expected a string result")
-    };
-    let mut parts = result.split('|');
-    assert_eq!(parts.next(), Some("E0012"));
-    let start = parts
-        .next()
-        .expect("missing span start")
-        .parse::<usize>()
-        .expect("span start should be an integer");
-    let end = parts
-        .next()
-        .expect("missing span end")
-        .parse::<usize>()
-        .expect("span end should be an integer");
-    let offending = &SOURCE[start..end];
-    assert!(
-        offending.contains("builder.field(\"name\", type.of<int>())"),
-        "diagnostic selected {offending:?}, not the second field call"
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("E0012|true".into()))
     );
 }
 

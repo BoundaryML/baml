@@ -9,6 +9,7 @@ use crate::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
     errors::{ErrorContext, NameError, ParseError, TypeError},
     message::{DiagnosticIdentifierKind, DiagnosticText},
+    runtime_type,
 };
 
 // ============================================================================
@@ -81,7 +82,7 @@ impl<C: ErrorContext> TypeError<C> {
                     .type_expr(ty_fn(expected))
                     .text(", found ")
                     .type_expr(ty_fn(found));
-                let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+                let diag = runtime_type::mismatched_types()
                     .with_primary(loc_fn(location), message);
                 if let Some(info_location) = info_location {
                     diag.with_secondary(loc_fn(info_location), "expected due to this")

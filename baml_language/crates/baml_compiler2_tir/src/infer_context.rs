@@ -10,6 +10,7 @@
 use std::{cell::RefCell, fmt};
 
 use baml_base::{FileId, Name, SourceFile};
+use baml_compiler_diagnostics::runtime_type;
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -211,6 +212,9 @@ pub enum TirTypeError {
         /// "Did you mean" candidates, each a fully qualified `root.…` path.
         suggestions: Box<[Name]>,
     },
+    /// A value name was written bare in a call-site generic argument. Computed
+    /// type arguments must use the whole-slot `unreflect(value)` marker (M-1).
+    ComputedGenericArgumentRequiresUnreflect { name: Name },
     /// An associated-type projection's explicit `as X` qualifier resolved to a
     /// non-interface type (a class, alias, etc.). The qualifier must name an
     /// interface; without one the projection cannot be resolved, so it must not
@@ -1089,6 +1093,11 @@ impl fmt::Display for TirTypeError {
                         "unresolved type: {name}. Did you mean one of these: `{joined}`?"
                     )
                 }
+            }
+            TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+                let diagnostic =
+                    runtime_type::computed_generic_argument_requires_unreflect(name.as_str());
+                f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")
@@ -2166,6 +2175,7 @@ fn is_synthesized_code_diag(error: &TirTypeError) -> bool {
         error,
         TirTypeError::UnresolvedMember { .. }
             | TirTypeError::UnresolvedType { .. }
+            | TirTypeError::ComputedGenericArgumentRequiresUnreflect { .. }
             | TirTypeError::UnresolvedName { .. }
             | TirTypeError::NotCallable { .. }
     )

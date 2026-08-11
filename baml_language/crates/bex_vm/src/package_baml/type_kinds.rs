@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase};
+use baml_compiler_diagnostics::{
+    Diagnostic, DiagnosticId, DiagnosticPhase,
+    runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
+};
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
     Class, ClassField, DynTypeDefs, DynWitnessDef, Enum, EnumVariant, InterfaceDef, MethodImpl,
@@ -322,10 +325,13 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             };
             let serialized_key = row.alias.as_deref().unwrap_or(field_name.as_str());
             if !seen_serialized_keys.insert(serialized_key.to_string()) {
-                diagnostics.push(compiler_diagnostic(
-                    DiagnosticId::DuplicateFieldAlias,
-                    format!("duplicate serialized key `{serialized_key}` in class `{class_name}`"),
-                ));
+                diagnostics.push(
+                    runtime_type::duplicate_serialized_key(
+                        serialized_key,
+                        SerializedKeyContainer::Class,
+                    )
+                    .with_phase(DiagnosticPhase::Hir),
+                );
             }
             child_defs.merge_from(row.type_value.defs());
             class_fields.push(ClassField {
@@ -715,10 +721,14 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
         let mut seen_names = std::collections::HashSet::new();
         for variant in &variants {
             if !seen_names.insert(variant.name.as_str()) {
-                diagnostics.push(compiler_diagnostic(
-                    DiagnosticId::DuplicateField,
-                    format!("duplicate variant `{enum_name}.{}`", variant.name),
-                ));
+                diagnostics.push(
+                    runtime_type::duplicate_member(
+                        DuplicateMemberKind::Variant,
+                        enum_name,
+                        &variant.name,
+                    )
+                    .with_phase(DiagnosticPhase::Hir),
+                );
             }
         }
 
@@ -726,10 +736,10 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
         for variant in &variants {
             let key = variant.alias.as_deref().unwrap_or(&variant.name);
             if !seen_keys.insert(key) {
-                diagnostics.push(compiler_diagnostic(
-                    DiagnosticId::DuplicateFieldAlias,
-                    format!("duplicate serialized key `{key}` in enum `{enum_name}`"),
-                ));
+                diagnostics.push(
+                    runtime_type::duplicate_serialized_key(key, SerializedKeyContainer::Enum)
+                        .with_phase(DiagnosticPhase::Hir),
+                );
             }
         }
 
@@ -946,10 +956,7 @@ impl BamlNamespaceReflectPrimitive for PackageBamlImpl {}
 impl BamlNamespaceReflectUnion for PackageBamlImpl {
     fn new(vm: &mut BexVm, types: &[Value]) -> Result<Value, crate::errors::VmRustFnError> {
         if types.is_empty() {
-            let diagnostic = compiler_diagnostic(
-                DiagnosticId::RuntimeEmptyUnion,
-                "a runtime union must contain at least one member".to_string(),
-            );
+            let diagnostic = runtime_type::runtime_empty_union().with_phase(DiagnosticPhase::Hir);
             return Err(crate::errors::VmRustFnError::Thrown(
                 alloc_compilation_error(vm, &[diagnostic]),
             ));
@@ -1358,14 +1365,6 @@ pub(crate) fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnost
 
 pub(crate) fn alloc_compilation_error(vm: &mut BexVm, diagnostics: &[Diagnostic]) -> Value {
     alloc_compilation_error_with_span(vm, diagnostics, None)
-}
-
-pub(super) fn alloc_compilation_error_at_current_call(
-    vm: &mut BexVm,
-    diagnostics: &[Diagnostic],
-) -> Value {
-    let span = vm.current_source_span();
-    alloc_compilation_error_with_span(vm, diagnostics, span.as_ref())
 }
 
 fn alloc_compilation_error_with_span(

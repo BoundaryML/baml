@@ -13,7 +13,10 @@ use std::{
     },
 };
 
-use baml_compiler_diagnostics::DiagnosticId;
+use baml_compiler_diagnostics::{
+    Diagnostic, DiagnosticId,
+    runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
+};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr,
@@ -26,8 +29,8 @@ use indexmap::IndexMap;
 use super::{
     BamlClassReflectClassBuilder, BamlClassReflectClassPendingType, PackageBamlImpl,
     type_kinds::{
-        ReflectedTypeRow, alloc_compilation_error_at_current_call, compiler_diagnostic,
-        is_baml_identifier, reflected_type_row,
+        ReflectedTypeRow, alloc_compilation_error, compiler_diagnostic, is_baml_identifier,
+        reflected_type_row,
     },
 };
 use crate::{BexVm, errors::VmRustFnError};
@@ -100,7 +103,7 @@ struct PreparedField {
 }
 
 type PreparedGroup = IndexMap<u64, Vec<PreparedField>>;
-type BuilderDiagnostics = Vec<(DiagnosticId, String)>;
+type BuilderDiagnostics = Vec<Diagnostic>;
 
 fn lock_state(handle: &BuilderHandle) -> MutexGuard<'_, BuilderState> {
     handle
@@ -236,10 +239,14 @@ pub(crate) fn alloc_builder(vm: &mut BexVm, name: &str) -> Value {
 }
 
 fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRustFnError {
-    VmRustFnError::Thrown(alloc_compilation_error_at_current_call(
+    VmRustFnError::Thrown(alloc_compilation_error(
         vm,
         &[compiler_diagnostic(id, message)],
     ))
+}
+
+fn shared_compilation_error(vm: &mut BexVm, diagnostic: Diagnostic) -> VmRustFnError {
+    VmRustFnError::Thrown(alloc_compilation_error(vm, &[diagnostic]))
 }
 
 impl BamlClassReflectClassBuilder for PackageBamlImpl {
@@ -262,10 +269,13 @@ impl BamlClassReflectClassBuilder for PackageBamlImpl {
                 ));
             }
             if state.fields.iter().any(|field| field.name == name.as_str()) {
-                return Err(compilation_error(
+                return Err(shared_compilation_error(
                     vm,
-                    DiagnosticId::DuplicateField,
-                    format!("duplicate field `{builder_name}.{name}`"),
+                    runtime_type::duplicate_member(
+                        DuplicateMemberKind::Field,
+                        &builder_name,
+                        name.as_str(),
+                    ),
                 ));
             }
         }
@@ -424,13 +434,13 @@ fn prepare_group(
 
     for node in group.values() {
         if !is_baml_identifier(&node.name) {
-            diagnostics.push((
+            diagnostics.push(compiler_diagnostic(
                 DiagnosticId::InvalidSyntax,
                 format!("invalid class name `{}`", node.name),
             ));
         }
         if !names.insert(node.name.clone()) {
-            diagnostics.push((
+            diagnostics.push(compiler_diagnostic(
                 DiagnosticId::DuplicateName,
                 format!(
                     "duplicate class name `{}` in recursive builder group",
@@ -443,13 +453,13 @@ fn prepare_group(
         let mut serialized_keys = HashSet::new();
         for field in &node.fields {
             if !is_baml_identifier(&field.name) {
-                diagnostics.push((
+                diagnostics.push(compiler_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     format!("invalid field name `{}.{}`", node.name, field.name),
                 ));
             }
             let Some(&root) = node.roots.get(field.root_index) else {
-                diagnostics.push((
+                diagnostics.push(compiler_diagnostic(
                     DiagnosticId::TypeMismatch,
                     format!(
                         "class builder `{}` has invalid native field state",
@@ -470,7 +480,7 @@ fn prepare_group(
                         other: IndexMap::new(),
                     },
                     Err(message) => {
-                        diagnostics.push((DiagnosticId::TypeMismatch, message));
+                        diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
                         continue;
                     }
                 }
@@ -491,19 +501,16 @@ fn prepare_group(
                         other,
                     },
                     Err(message) => {
-                        diagnostics.push((DiagnosticId::TypeMismatch, message));
+                        diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
                         continue;
                     }
                 }
             };
             let serialized = row.alias.as_deref().unwrap_or(&row.name);
             if !serialized_keys.insert(serialized.to_string()) {
-                diagnostics.push((
-                    DiagnosticId::DuplicateFieldAlias,
-                    format!(
-                        "duplicate serialized key `{serialized}` in class `{}`",
-                        node.name
-                    ),
+                diagnostics.push(runtime_type::duplicate_serialized_key(
+                    serialized,
+                    SerializedKeyContainer::Class,
                 ));
             }
             fields.push(row);
@@ -638,13 +645,10 @@ fn build_group(vm: &mut BexVm, start: Value) -> Result<Value, VmRustFnError> {
     let prepared = match prepare_group(vm, &group) {
         Ok(prepared) => prepared,
         Err(diagnostics) => {
-            let diagnostics = diagnostics
-                .into_iter()
-                .map(|(id, message)| compiler_diagnostic(id, message))
-                .collect::<Vec<_>>();
-            return Err(VmRustFnError::Thrown(
-                alloc_compilation_error_at_current_call(vm, &diagnostics),
-            ));
+            return Err(VmRustFnError::Thrown(alloc_compilation_error(
+                vm,
+                &diagnostics,
+            )));
         }
     };
     let mut defs = collect_external_defs(vm, &prepared)
@@ -867,7 +871,7 @@ pub(crate) fn coerce_pending_type_arg(
     }
     match resolve_pending_if_ready(vm, value) {
         Ok(Some(value)) => Some(cloned_type_value(vm, value).ok_or_else(|| {
-            alloc_compilation_error_at_current_call(
+            alloc_compilation_error(
                 vm,
                 &[compiler_diagnostic(
                     DiagnosticId::TypeMismatch,
@@ -883,7 +887,7 @@ pub(crate) fn coerce_pending_type_arg(
                 .map(|name| format!("`{name}`"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            Some(Err(alloc_compilation_error_at_current_call(
+            Some(Err(alloc_compilation_error(
                 vm,
                 &[compiler_diagnostic(
                     DiagnosticId::TypeMismatch,
@@ -893,7 +897,7 @@ pub(crate) fn coerce_pending_type_arg(
                 )],
             )))
         }
-        Err(message) => Some(Err(alloc_compilation_error_at_current_call(
+        Err(message) => Some(Err(alloc_compilation_error(
             vm,
             &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
         ))),

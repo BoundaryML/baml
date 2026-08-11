@@ -16,7 +16,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use baml_compiler_diagnostics::DiagnosticId;
+use baml_compiler_diagnostics::runtime_type;
 use baml_type::Name;
 use smallvec::SmallVec;
 
@@ -4421,30 +4421,6 @@ impl BexVm {
         })
     }
 
-    /// Source range of the bytecode expression currently invoking a native.
-    /// Runtime reflection diagnostics use this to point at the offending
-    /// fluent call even though the validator itself runs in Rust.
-    pub(crate) fn current_source_span(&self) -> Option<(String, u32, u32)> {
-        let frame_idx = self
-            .frames
-            .iter()
-            .rposition(|frame| matches!(frame, Frame::Bytecode(_)))?;
-        let Frame::Bytecode(frame) = &self.frames[frame_idx] else {
-            return None;
-        };
-        let function = self.get_object(frame.function).as_callable().ok()?;
-        let entry = if let Some(compact) = &function.bytecode.compact {
-            compact.line_entry_for_pc(self.cur_pc)
-        } else {
-            function.bytecode.line_entry_for_pc(self.cur_pc)
-        }?;
-        Some((
-            function.source_file.clone(),
-            u32::from(entry.span.range.start()),
-            u32::from(entry.span.range.end()),
-        ))
-    }
-
     fn event_source_location_for_line_entry(
         entry: &bytecode::LineTableEntry,
     ) -> VmEventSourceLocation {
@@ -5418,16 +5394,7 @@ impl BexVm {
                     continue;
                 }
 
-                let expected = baml_type::RealizedTy::Interface(
-                    bound.interface.clone(),
-                    requested_args,
-                    requested_assoc,
-                    baml_type::TyAttr::default(),
-                );
-                let diagnostic = crate::package_baml::type_kinds::compiler_diagnostic(
-                    DiagnosticId::TypeMismatch,
-                    format!("type mismatch: expected {expected}, got {actual}"),
-                );
+                let diagnostic = runtime_type::mismatched_types();
                 let error =
                     crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
                 return Err(VmError::Thrown(error));
@@ -5458,18 +5425,12 @@ impl BexVm {
             if matches {
                 continue;
             }
-            let expected = param.substitute(type_args, self).map_err(|error| {
+            param.substitute(type_args, self).map_err(|error| {
                 VmInternalError::TypeSubstitution {
                     message: error.to_string(),
                 }
             })?;
-            let got = self
-                .value_concrete_ty(value)
-                .map_or_else(baml_type::RealizedTy::unknown, baml_type::RealizedTy::from);
-            let diagnostic = crate::package_baml::type_kinds::compiler_diagnostic(
-                DiagnosticId::TypeMismatch,
-                format!("type mismatch: expected {expected}, got {got}"),
-            );
+            let diagnostic = runtime_type::mismatched_types();
             let error =
                 crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
             return Err(VmError::Thrown(error));

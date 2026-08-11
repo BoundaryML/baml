@@ -28,9 +28,9 @@ class WithMeta<T> {
   other map<string, string>
 }
 
-/// A source range attached to a compiler diagnostic. Native validation that
-/// originates at a BAML call carries that call's range; host-side construction
-/// without a BAML source site reports `span = null`.
+/// A source range attached to a compiler diagnostic. Compile- and eval-door
+/// diagnostics carry their source range; structured construction diagnostics
+/// report `span = null`, including constructors invoked from BAML.
 class Span {
   file string?
   start int

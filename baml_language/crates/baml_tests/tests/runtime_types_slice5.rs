@@ -164,17 +164,10 @@ async fn bounded_unreflect_fails_before_rendering() {
     else {
         panic!("expected string result")
     };
-    assert!(
-        result.starts_with("E0001|"),
-        "render ran before bound check: {result}"
-    );
-    assert!(
-        result.contains("expected PersonAnchor"),
-        "wrong oracle: {result}"
-    );
-    assert!(
-        result.contains("got NoPerson"),
-        "wrong actual type: {result}"
+    assert_eq!(
+        result.as_str(),
+        "E0001|mismatched types",
+        "render ran before the static-equivalent bound diagnostic: {result}"
     );
 }
 
@@ -218,12 +211,7 @@ async fn unreflect_argument_is_revalidated_against_the_runtime_type() {
     else {
         panic!("expected string result")
     };
-    assert!(result.starts_with("E0001|"), "wrong diagnostic: {result}");
-    assert!(
-        result.contains("expected Person"),
-        "wrong expected type: {result}"
-    );
-    assert!(result.contains("got int"), "wrong actual type: {result}");
+    assert_eq!(result.as_str(), "E0001|mismatched types");
 }
 
 #[tokio::test]

@@ -2511,6 +2511,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &self.type_bindings,
                 )
             };
+            self.specialize_computed_generic_argument_diagnostics(type_arg_expr, &mut diags);
             for d in diags {
                 self.context.report_simple(d, expr_id);
             }
@@ -2588,6 +2589,64 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Return the value name behind a bare, value-shaped generic argument.
+    /// The grammar necessarily parses `foo<runtime_t>()` as a type path; once
+    /// resolution proves that path is a value rather than a type, M-1 requires
+    /// a diagnostic naming the `unreflect(runtime_t)` spelling.
+    fn computed_generic_argument_name(&self, type_expr: &ast::TypeExpr) -> Option<Name> {
+        let ast::TypeExprKind::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            attrs,
+        } = &type_expr.kind
+        else {
+            return None;
+        };
+        if segments.len() != 1
+            || !generic_args.is_empty()
+            || !associated_type_bindings.is_empty()
+            || !attrs.is_empty()
+        {
+            return None;
+        }
+        let name = &segments[0];
+        let is_value = self.locals.contains_key(name)
+            || self
+                .package_items
+                .lookup_value(&self.ns_context, name)
+                .is_some();
+        let is_type = self
+            .package_items
+            .lookup_type(&self.ns_context, name)
+            .is_some()
+            || self.generic_params.iter().any(|param| param.name() == name)
+            || self.type_bindings.keys().any(|param| param.name() == name);
+        (is_value && !is_type).then(|| name.clone())
+    }
+
+    fn specialize_computed_generic_argument_diagnostics(
+        &self,
+        type_expr: &ast::TypeExpr,
+        diagnostics: &mut [TirTypeError],
+    ) {
+        let Some(name) = self.computed_generic_argument_name(type_expr) else {
+            return;
+        };
+        for diagnostic in diagnostics {
+            if matches!(
+                diagnostic,
+                TirTypeError::UnresolvedType {
+                    name: unresolved,
+                    ..
+                } if unresolved == &name
+            ) {
+                *diagnostic =
+                    TirTypeError::ComputedGenericArgumentRequiresUnreflect { name: name.clone() };
+            }
+        }
+    }
+
     fn resolve_explicit_type_args(
         &mut self,
         callee_id: ExprId,
@@ -2635,7 +2694,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         bounds: &scope_bounds,
                         self_ty: self_ty.clone(),
                     };
-                    if extraction_contract {
+                    let ty = if extraction_contract {
                         crate::lower_type_expr::lower_extraction_contract_type_expr(
                             type_arg_expr,
                             &ctx,
@@ -2643,7 +2702,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                         )
                     } else {
                         crate::lower_type_expr::lower_type_expr(type_arg_expr, &ctx, &mut diags)
-                    }
+                    };
+                    self.specialize_computed_generic_argument_diagnostics(
+                        type_arg_expr,
+                        &mut diags,
+                    );
+                    ty
                 }
                 ast::TypeArg::Unreflect(operand) => {
                     self.runtime_checked_type_params

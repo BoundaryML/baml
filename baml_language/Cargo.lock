@@ -896,6 +896,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
+ "baml_compiler_diagnostics",
  "baml_type",
  "baml_type_runtime",
  "baml_workspace",

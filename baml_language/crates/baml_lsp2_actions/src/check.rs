@@ -24,7 +24,7 @@ use std::collections::HashSet;
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticPhase, DiagnosticText,
-    ParseError, ToDiagnostic,
+    ParseError, ToDiagnostic, runtime_type,
 };
 use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
@@ -1737,9 +1737,24 @@ fn new_tir_diagnostic(
     span: Span,
     warning: bool,
 ) -> Diagnostic {
+    if matches!(error, TirTypeError::TypeMismatch { .. }) {
+        let base = runtime_type::mismatched_types();
+        let diagnostic = if warning {
+            Diagnostic::warning(base.id, base.message)
+        } else {
+            base
+        };
+        return diagnostic
+            .with_primary(span, message)
+            .with_phase(DiagnosticPhase::Type);
+    }
+    if let TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } = error {
+        return runtime_type::computed_generic_argument_requires_unreflect(name.as_str())
+            .with_primary_span(span)
+            .with_phase(DiagnosticPhase::Type);
+    }
     let id = tir_type_error_to_diagnostic_id(error);
     let headline = match error {
-        TirTypeError::TypeMismatch { .. } => Some("mismatched types"),
         TirTypeError::MissingReturn { .. } => Some("missing return expression"),
         _ => None,
     };
@@ -1990,6 +2005,9 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::ComparisonAlwaysDisjoint { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+            runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
+        }
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,

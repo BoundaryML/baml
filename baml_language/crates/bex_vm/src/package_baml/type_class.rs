@@ -196,12 +196,8 @@ impl BamlClassTypeValue for PackageBamlImpl {
         else {
             return Ok(());
         };
-        let diagnostic = super::type_kinds::compiler_diagnostic(
-            baml_compiler_diagnostics::DiagnosticId::OpenInterfaceAtRender,
-            format!(
-                "field `{field}` has open interface type `{open_ty}`, which cannot be rendered as an LLM output schema"
-            ),
-        );
+        let diagnostic =
+            baml_compiler_diagnostics::runtime_type::open_interface_at_render(&field, &open_ty);
         Err(VmRustFnError::Thrown(
             super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
         ))
