@@ -4,8 +4,15 @@ source: crates/baml_tests/src/compiler2_mir/provider_sweep.rs
 == S16 provider sweep ==
 functions compared: 2823
 agreements: 2486
-ruled throws-precision: 123
-differing: 213
+O2 agreements (informational; optimizer parity deferred): 2486
+ruled literal-widening: 39
+ruled literal-widening+tir-unknown: 3
+ruled receiver-seeding: 33
+ruled receiver-seeding+throws-precision: 2
+ruled throws-precision: 31
+ruled throws-precision+tir-unknown: 1
+ruled tir-unknown: 92
+differing: 135
 panics: 1
 top-level lets: not diffed (no body renderer yet)
 
@@ -13,27 +20,7 @@ top-level lets: not diffed (no body renderer yet)
 ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable [hir_ty] internal error: entered unreachable code: `Error` is not a valid `RuntimeTy`: an error-recovery type reached runtime lowering
 
 == differing functions ==
-ns_array_length_snapshot/array_length_snapshot.baml :: length_snapshot_bug
-    ...     let _3: int
-    tir: 
-    hir:     let _4: type
-ns_array_rest_binding/array_rest_binding.baml :: arb_pushing_to_rest_does_not_mutate_source
-    ...     let _11: int
-    tir:     let _12: int
-    hir:     let _12: type
-ns_array_rest_binding/array_rest_binding.baml :: arb_pushing_to_source_does_not_mutate_rest
-    ...     let _11: int
-    tir: 
-    hir:     let _12: type
-ns_array_rest_binding/array_rest_binding.baml :: arb_rest_bind_chain_aliases_same_slice
-    ...     let _6: int
-    tir:     let _7: int
-    hir:     let _7: type
 ns_arrays/arrays.baml :: $init_test_ns_arrays_arrays
-    ...     let _2: void
-    tir:     let _3: () -> void throws unknown
-    hir:     let _3: () -> void throws never
-ns_assignments/assignments.baml :: $init_test_ns_assignments_assignments
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
@@ -44,7 +31,7 @@ ns_bigints/bigints.baml :: $init_test_ns_bigints_bigints
 ns_bigints/bigints.baml :: bigint_compound_assign_nonliteral_fn
     ...     let _1: bigint // x
     tir:     let _2: bigint
-    hir:     let _2: int
+    hir:     let _2: -7
 ns_bigints/bigints.baml :: bigint_compound_assign_lambda_fn
     ...     let _1: bigint // local_big
     tir:     let _2: bigint
@@ -53,66 +40,14 @@ ns_cancel_cascade/cancel_cascade.baml :: $init_test_ns_cancel_cascade_cancel_cas
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws baml.errors.Io
-ns_cancel_cascade/cancel_cascade.baml :: cancel_unblocks_await_on_non_descendant_fn
-    ... // lambda[0]
-    tir: fn .<lambda(cancel_unblocks_await_on_non_descendant_fn, 0)>() -> 42 {
-    hir: fn .<lambda(cancel_unblocks_await_on_non_descendant_fn, 0)>() -> int {
-ns_cancel_cascade/cancel_cascade.baml :: cancel_from_handle_then_await_catches_cancelled
-    ... // lambda[0]
-    tir: fn .<lambda(cancel_from_handle_then_await_catches_cancelled, 0)>() -> 42 {
-    hir: fn .<lambda(cancel_from_handle_then_await_catches_cancelled, 0)>() -> int {
-ns_cancel_cascade/cancel_cascade.baml :: cancel_after_gc_relocation_still_settles
-    ... // lambda[0]
-    tir: fn .<lambda(cancel_after_gc_relocation_still_settles, 0)>() -> 42 {
-    hir: fn .<lambda(cancel_after_gc_relocation_still_settles, 0)>() -> int {
-ns_cancel_cascade/cancel_cascade.baml :: cancelled_child_future_state_is_cancelled
-    ...     let _7: bool
-    tir:     let _8: unknown // observed
-    hir:     let _8: baml.future.FutureState // observed
-ns_cancel_token/cancel_token.baml :: await_token_cancelled_catches
-    ... // lambda[0]
-    tir: fn .<lambda(await_token_cancelled_catches, 0)>() -> 42 {
-    hir: fn .<lambda(await_token_cancelled_catches, 0)>() -> int {
-ns_cancel_token/cancel_token.baml :: uncancelled_token_completes
-    ... // lambda[0]
-    tir: fn .<lambda(uncancelled_token_completes, 0)>() -> 42 {
-    hir: fn .<lambda(uncancelled_token_completes, 0)>() -> int {
-ns_cancel_token/cancel_token.baml :: detached_spawn_completes
-    ... // lambda[0]
-    tir: fn .<lambda(detached_spawn_completes, 0)>() -> 42 {
-    hir: fn .<lambda(detached_spawn_completes, 0)>() -> int {
-ns_closures/closures.baml :: closures_strategy_swap
-    ...     let _6: (int, int) -> int throws never
-    tir:     let _7: int
-    hir:     let _7: type
 ns_control_flow/control_flow.baml :: $init_test_ns_control_flow_control_flow
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_csv/csv.baml :: grid
-    ...     let _10: string[]
-    tir:     let _11: string[]
-    hir:     let _11: type
-ns_csv/csv.baml :: csv_decode_all_cell_types
-    ...     let _11: string
-    tir:     let _12: int
-    hir:     let _12: type
-ns_csv/csv.baml :: csv_reader_resumes_after_throw
-    ...     let _17: string
-    tir:     let _18: string
-    hir:     let _18: type
-ns_csv/csv.baml :: csv_on_skip_observer
-    ...     let _4: baml.csv.CsvErrorKind
-    tir: 
-    hir:     let _5: type
 ns_csv/csv.baml :: csv_record_api
     ...     let _8: int
     tir:     let _9: int
     hir:     let _9: type
-ns_csv/csv.baml :: csv_record_snapshot_outlives_reader
-    ...     let _10: baml.csv.CsvRecord
-    tir:     let _11: string[] // parts
-    hir:     let _11: type
 ns_deep_copy/deep_copy.baml :: deep_copy_independence_helper
     ...     let _9: type
     tir:     let _10: 0
@@ -121,54 +56,18 @@ ns_deep_copy/deep_copy.baml :: deep_copy_complex_helper
     ...     let _12: type
     tir:     let _13: 0
     hir:     let _13: void
-ns_defer/defer.baml :: defer_call_throws_risky
-    ...     let _4: void
-    tir:     let _5: void
-    hir:     let _5: type
 ns_defer/defer.baml :: defer_call_throws_main
     ...     let _1: string[] // log
     tir:     let _2: void
     hir:     let _2: int | void
-ns_defer/defer.baml :: defer_unwind_lifo_risky
-    ...     let _4: void
-    tir:     let _5: void
-    hir:     let _5: type
-ns_defer/defer.baml :: defer_armed_only_risky
-    ...     let _4: void
-    tir:     let _5: void
-    hir:     let _5: type
-ns_defer/defer.baml :: defer_early_return_helper
-    ...     let _5: void
-    tir:     let _6: int
-    hir:     let _6: type
-ns_defer/defer.baml :: defer_on_break_main
-    ...     let _13: void
-    tir:     let _14: void
-    hir:     let _14: type
-ns_defer/defer.baml :: defer_on_continue_main
-    ...     let _13: void
-    tir:     let _14: void
-    hir:     let _14: type
-ns_defer/defer.baml :: defer_explicit_throw_risky
-    ...     let _4: void
-    tir: 
-    hir:     let _5: type
 ns_defer/defer.baml :: defer_explicit_throw_main
     ...     let _1: string[] // log
     tir:     let _2: void
     hir:     let _2: int | void
-ns_defer/defer.baml :: defer_throwing_defer_risky
-    ...     let _4: int
-    tir:     let _5: int
-    hir:     let _5: type
 ns_defer/defer.baml :: defer_throwing_defer_main
     ...     let _1: string[] // log
     tir:     let _2: void
     hir:     let _2: int | void
-ns_defer/defer.baml :: defer_await_inside_main
-    ...     let _4: unknown
-    tir:     let _5: void
-    hir:     let _5: type
 ns_enums/enums.baml :: $init_test_ns_enums_enums
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
@@ -177,26 +76,6 @@ ns_exceptions/exceptions.baml :: $init_test_ns_exceptions_exceptions
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_exceptions/exceptions.baml :: typed_binding_string_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, string);
-    hir:         _2 = is_type(copy _1, "boom");
-ns_exceptions/exceptions.baml :: typed_binding_int_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, int);
-    hir:         _2 = is_type(copy _1, 42);
-ns_exceptions/exceptions.baml :: typed_binding_dispatch_string_vs_int_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, string);
-    hir:         _2 = is_type(copy _1, "boom");
-ns_exceptions/exceptions.baml :: typed_binding_dispatch_int_vs_string_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, string);
-    hir:         _2 = is_type(copy _1, "boom");
-ns_exceptions/exceptions.baml :: typed_binding_plus_wildcard_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, string);
-    hir:         _2 = is_type(copy _1, "boom");
 ns_exceptions/exceptions.baml :: named_binding_string_access_value_fn
     ...         _2 = copy _1;
     tir:         _2 = narrow_bind copy _2 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb2];
@@ -205,22 +84,6 @@ ns_exceptions/exceptions.baml :: named_binding_int_access_value_fn
     ...     bb1: {
     tir:         _2 = is_type(copy _1, string);
     hir:         _2 = is_type(copy _1, "boom");
-ns_exceptions/exceptions.baml :: catch_three_type_arms_bool_throw_fn
-    ...     bb3: {
-    tir:         _4 = is_type(copy _1, bool);
-    hir:         _4 = is_type(copy _1, true);
-ns_exceptions/exceptions.baml :: catch_without_stack_trace_still_works_fn
-    ...     bb1: {
-    tir:         _2 = is_type(copy _1, string);
-    hir:         _2 = is_type(copy _1, "oops");
-ns_exceptions/exceptions.baml :: s17_forward_cb
-    ...     let _1: (int) -> string throws never // cb // param
-    tir: 
-    hir:     let _2: type
-ns_exceptions/exceptions.baml :: named_wrapper_value_catches_callback_throw_fn
-    ...     let _0: string // _0 // return
-    tir:     let _1: ((int) -> string throws unknown) -> string throws unknown // run
-    hir:     let _1: ((int) -> string throws string) -> string throws string // run
 ns_floats/floats.baml :: $init_test_ns_floats_floats
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
@@ -237,30 +100,10 @@ ns_from_json_interface/from_json_interface.baml :: static_from_json_threads_gene
     ...     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
     tir:     let _2: from_json_interface.Box<int> // b
     hir:     let _2: null
-ns_functions/functions.baml :: function_as_value_main
-    ...     let _2: (int, int) -> int throws never
-    tir: 
-    hir:     let _3: type
 ns_future_methods/future_methods.baml :: $init_test_ns_future_methods_future_methods
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_future_methods/future_methods.baml :: methods_after_successful_settle
-    ... // lambda[0]
-    tir: fn .<lambda(methods_after_successful_settle, 0)>() -> 42 {
-    hir: fn .<lambda(methods_after_successful_settle, 0)>() -> int {
-ns_future_methods/future_methods.baml :: methods_on_pending_future
-    ...     let _4: bool
-    tir:     let _5: unknown // observed
-    hir:     let _5: baml.future.FutureState // observed
-ns_future_methods/future_methods.baml :: methods_after_cancel
-    ... // lambda[0]
-    tir: fn .<lambda(methods_after_cancel, 0)>() -> 42 {
-    hir: fn .<lambda(methods_after_cancel, 0)>() -> int {
-ns_future_types/future_types.baml :: int_future_is_int_future_fn
-    ... // lambda[0]
-    tir: fn .<lambda(int_future_is_int_future_fn, 0)>() -> 1 {
-    hir: fn .<lambda(int_future_is_int_future_fn, 0)>() -> int {
 ns_future_types/future_types.baml :: int_future_is_string_future_fn
     ...         _1 = copy _3;
     tir:         _5 = is_type(copy _1, never);
@@ -269,26 +112,6 @@ ns_future_types/future_types.baml :: throwing_future_is_non_throwing_future_fn
     ...         _1 = copy _3;
     tir:         _5 = is_type(copy _1, never);
     hir:         _5 = is_type(copy _1, future<int, never>);
-ns_future_types/future_types.baml :: classify_int_future_fn
-    ... // lambda[0]
-    tir: fn .<lambda(classify_int_future_fn, 0)>() -> 1 {
-    hir: fn .<lambda(classify_int_future_fn, 0)>() -> int {
-ns_future_types/future_types.baml :: classify_string_future_fn
-    ... // lambda[0]
-    tir: fn .<lambda(classify_string_future_fn, 0)>() -> "a" {
-    hir: fn .<lambda(classify_string_future_fn, 0)>() -> string {
-ns_future_types/future_types.baml :: tagged_string_future_fn
-    ... // lambda[0]
-    tir: fn .<lambda(tagged_string_future_fn, 0)>() -> "a" {
-    hir: fn .<lambda(tagged_string_future_fn, 0)>() -> string {
-ns_future_types/future_types.baml :: tagged_int_future_fn
-    ... // lambda[0]
-    tir: fn .<lambda(tagged_int_future_fn, 0)>() -> 1 {
-    hir: fn .<lambda(tagged_int_future_fn, 0)>() -> int {
-ns_future_types/future_types.baml :: future_array_matches_fn
-    ... // lambda[0]
-    tir: fn .<lambda(future_array_matches_fn, 0)>() -> 1 {
-    hir: fn .<lambda(future_array_matches_fn, 0)>() -> int {
 ns_future_types/future_types.baml :: wrong_future_array_fn
     ...         _1 = [copy _2]: future<string, never>[];
     tir:         _6 = is_type(copy _1, never);
@@ -313,10 +136,6 @@ ns_generic_union_returns/generic_union_returns.baml :: sap_nullable_container_ty
     ...     let _10: int | null
     tir:     let _11: null | (((int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[]) -> int throws never)
     hir:     let _11: ((int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[]) -> int throws never
-ns_inferred_generic_type_args/inferred_generic_type_args.baml :: collect2
-    ...     let _7: T
-    tir: 
-    hir:     let _8: type
 ns_instantiation_expr/instantiation_expr.baml :: bound_method_value
     ...     let _2: (int) -> int throws never // f
     tir:     let _3: (T) -> T throws never
@@ -373,30 +192,6 @@ ns_iter/iter.baml :: iter_some_every_find
     ...     let _4: type
     tir:     let _5: (int) -> bool throws E2
     hir:     let _5: (int) -> bool throws never
-ns_iter/iter.baml :: iter_for_in_range
-    ...     let _9: int
-    tir: 
-    hir:     let _10: type
-ns_iter/iter.baml :: iter_for_in_array_iterator
-    ...     let _11: int
-    tir: 
-    hir:     let _12: type
-ns_iter/iter.baml :: iter_for_in_array_literal
-    ...     let _9: int
-    tir: 
-    hir:     let _10: type
-ns_iter/iter.baml :: iter_array_for_each
-    ...     let _3: int[]
-    tir:     let _4: (int) -> void throws E
-    hir:     let _4: (int) -> void throws never
-ns_iter/iter.baml :: iter_array_iter_lazy_over_source_details
-    ...     let _4: baml.iter.Iterator<Error = never, Item = int>
-    tir:     let _5: (int) -> bool throws E2
-    hir:     let _5: (int) -> bool throws never
-ns_iter/iter.baml :: iter_for_loop_sees_push_during_iteration
-    ...     let _10: int
-    tir:     let _11: bool
-    hir:     let _11: type
 ns_iter/iter.baml :: iter_for_loop_pop_during_iteration
     ...     let _10: int
     tir:     let _11: int | null
@@ -409,14 +204,6 @@ ns_iter/iter.baml :: iter_array_peekable_fluent
     ...     let _4: int[] // out
     tir:     let _5: void
     hir:     let _5: int | void
-ns_iter/iter.baml :: iter_shadowed_param_for_in
-    ...     let _11: string
-    tir: 
-    hir:     let _12: type
-ns_iter/iter.baml :: iter_for_in_repeat
-    ...     let _9: int
-    tir: 
-    hir:     let _10: type
 ns_iter/iter.baml :: iter_peekable
     ...     let _5: int[] // out
     tir:     let _6: void
@@ -429,10 +216,6 @@ ns_iter_impl_generics_only/iter.baml :: iter_peekable
     ...     let _5: int[] // out
     tir:     let _6: void
     hir:     let _6: int | void
-ns_iter_impl_generics_only/ns_core/core.baml :: collect
-    ...     let _7: T
-    tir: 
-    hir:     let _8: type
 ns_json_alias/json_alias.baml :: $init_test_ns_json_alias_json_alias
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
@@ -641,22 +424,10 @@ ns_lambdas/lambdas.baml :: lambda_contextual_main
     ...     let _1: unknown // e
     tir:     let _2: (int) -> int throws int | string
     hir:     let _2: (int) -> int throws "contextual"
-ns_lambdas/lambdas.baml :: lambdas_inferred_throwing_signature
-    ...     let _0: string // _0 // return
-    tir:     let _1: (int) -> int throws string // inferred
-    hir:     let _1: (int) -> int throws "negative" // inferred
-ns_lexical_scoping/lexical_scoping.baml :: capture_catch_clause_binding
-    ...         _2 = copy _1;
-    tir:         _3 = is_type(copy _1, string);
-    hir:         _3 = is_type(copy _1, "caught");
 ns_lexical_scoping/lexical_scoping.baml :: capture_catch_arm_binding
     ...         _2 = copy _1;
     tir:         _2 = narrow_bind copy _2 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
     hir:         _2 = narrow_bind copy _2 as Literal(String("caught"), Regular, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
-ns_lexical_scoping/lexical_scoping.baml :: multi_clause_catch_main
-    ...     bb2: {
-    tir:         _3 = is_type(copy _1, int);
-    hir:         _3 = is_type(copy _1, 7);
 ns_match_basics/match_basics.baml :: $init_test_ns_match_basics_match_basics
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
@@ -690,13 +461,9 @@ ns_ops_bitwise/ops_bitwise.baml :: $init_test_ns_ops_bitwise_ops_bitwise
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
 ns_ops_bitwise/ops_bitwise.baml :: bigint_ops
-    ...     bb0: {
-    tir:         _5 = load_type(bigint | 2n);
-    hir:         _5 = load_type(bigint);
-ns_optional_function_parameters/optional_function_parameters.baml :: push_default
-    ...     let _4: int
-    tir: 
-    hir:     let _5: type
+    ...         _5 = const 6n & const 3n;
+    tir:         _6 = load_type(bigint | 2n);
+    hir:         _6 = load_type(bigint);
 ns_patterns_new_runtime/patterns_new_runtime.baml :: dispatch_cb
     ...     let _4: string
     tir:     let _5: int
@@ -709,18 +476,6 @@ ns_patterns_new_runtime/patterns_new_runtime.baml :: test_fn_is_mismatched
     ...         _1 = make_closure lambda[0]();
     tir:         _2 = is_type(copy _1, never);
     hir:         _2 = is_type(copy _1, (string) -> string throws unknown);
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_let_chain_alias_capture
-    ...     let _10: () -> int throws never
-    tir:     let _11: int
-    hir:     let _11: type
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_rest_capture_fresh_cell
-    ...     let _13: () -> int throws never
-    tir:     let _14: int
-    hir:     let _14: type
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_deep_class_capture_fresh
-    ...     let _22: () -> int throws never
-    tir:     let _23: int
-    hir:     let _23: type
 ns_projection_patterns/projection_patterns.baml :: is_label
     ...     bb0: {
     tir:         _3 = is_type(copy _2, #1);
@@ -749,74 +504,14 @@ ns_reflect_type_of_generic/reflect_type_of_generic.baml :: type_of_depth4_path_p
     ...     let _3: reflect_type_of_generic.Leaf<int>
     tir:     let _4: () -> string throws never
     hir:     let _4: (reflect_type_of_generic.Leaf<int>) -> string throws never
-ns_spawn_basic/spawn_basic.baml :: spawn_returning_int_literal
-    ... // lambda[0]
-    tir: fn .<lambda(spawn_returning_int_literal, 0)>() -> 42 {
-    hir: fn .<lambda(spawn_returning_int_literal, 0)>() -> int {
 ns_spawn_basic/spawn_basic.baml :: spawn_returning_string
     ... // lambda[0]
     tir: fn .<lambda(spawn_returning_string, 0)>() -> "hello from spawn" {
     hir: fn .<lambda(spawn_returning_string, 0)>() -> string {
-ns_spawn_basic/spawn_basic.baml :: spawn_with_name_literal
-    ... // lambda[0]
-    tir: fn .<lambda(spawn_with_name_literal, 0)>() -> 42 {
-    hir: fn .<lambda(spawn_with_name_literal, 0)>() -> int {
-ns_spawn_semantics/spawn_semantics.baml :: spawn_child
-    ... // lambda[0]
-    tir: fn .<lambda(spawn_child, 0)>() -> 99 {
-    hir: fn .<lambda(spawn_child, 0)>() -> int {
-ns_spawn_throws/spawn_throws.baml :: racing_successful_spawn_returns_cleanly_fn
-    ... // lambda[0]
-    tir: fn .<lambda(racing_successful_spawn_returns_cleanly_fn, 0)>() -> 42 {
-    hir: fn .<lambda(racing_successful_spawn_returns_cleanly_fn, 0)>() -> int {
-ns_spawn_throws/spawn_throws.baml :: caught_not_preempted_by_unrelated_await_fn
-    ... // lambda[1]
-    tir: fn .<lambda(caught_not_preempted_by_unrelated_await_fn, 1)>() -> 7 {
-    hir: fn .<lambda(caught_not_preempted_by_unrelated_await_fn, 1)>() -> int {
 ns_strings/strings.baml :: $init_test_ns_strings_strings
     ...     let _2: void
     tir:     let _3: () -> void throws unknown
     hir:     let _3: () -> void throws never
-ns_tagged_template_runtime/tagged_template_runtime.baml :: tt_for_loop_flattens_main
-    ...     let _18: type
-    tir:     let _19: string
-    hir:     let _19: int
-ns_tagged_template_runtime/tagged_template_runtime.baml :: tt_for_loop_empty_collection_main
-    ...     let _18: type
-    tir:     let _19: string
-    hir:     let _19: int
-ns_tagged_template_runtime/tagged_template_runtime.baml :: tt_if_block_taken_main
-    ...     let _14: string
-    tir:     let _15: string
-    hir:     let _15: int
-ns_tagged_template_runtime/tagged_template_runtime.baml :: tt_if_block_skipped_main
-    ...     let _14: string
-    tir:     let _15: string
-    hir:     let _15: int
-ns_tagged_template_runtime/tagged_template_runtime.baml :: tt_mixed_static_and_for_main
-    ...     let _12: type
-    tir:     let _13: string
-    hir:     let _13: string[]
-ns_tagged_template_runtime/tagged_template_runtime.baml :: tt_cstyle_for_flattens_main
-    ...     let _17: type
-    tir:     let _18: string
-    hir:     let _18: int
-ns_tagged_template_runtime/tagged_template_runtime.baml :: tt_nested_for_in_if_main
-    ...     let _19: type
-    tir:     let _20: string
-    hir:     let _20: int
-ns_task_group/task_group.baml :: caps_active_and_queues_rest
-    ... // lambda[0]
-    tir: fn .<lambda(caps_active_and_queues_rest, 0)>() -> 1 {
-    hir: fn .<lambda(caps_active_and_queues_rest, 0)>() -> int {
-ns_task_group/task_group.baml :: queues_excess_and_all_complete
-    ... // lambda[0]
-    tir: fn .<lambda(queues_excess_and_all_complete, 0)>() -> 1 {
-    hir: fn .<lambda(queues_excess_and_all_complete, 0)>() -> int {
-ns_task_group/task_group.baml :: group_cancel_cancels_member
-    ... // lambda[0]
-    tir: fn .<lambda(group_cancel_cancels_member, 0)>() -> 42 {
-    hir: fn .<lambda(group_cancel_cancels_member, 0)>() -> int {
 ns_to_json_interface/to_json_interface.baml :: desugar_via_method_str
     ...     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     tir:     let _3: type
