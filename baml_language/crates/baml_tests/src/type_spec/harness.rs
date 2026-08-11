@@ -523,10 +523,10 @@ pub(crate) struct TypedNode {
 
 /// Per-body-owner hir_ty inference state paired with the maps needed to
 /// resolve arena ids to source ranges.
-struct OwnerInference {
+struct OwnerInference<'db> {
     body: OwnerBody,
     source_map: AstSourceMap,
-    result: InferenceResult,
+    result: InferenceResult<'db>,
 }
 
 /// Runs the hir_ty engine over every body owner in `file` and renders each
@@ -543,7 +543,7 @@ pub(crate) fn collect_hir_ty_nodes(
     // Inference results per body owner, keyed by the owner's scope so
     // binding lookups (which start from arbitrary child scopes) can find the
     // arena owner's result.
-    let mut owners: BTreeMap<u32, OwnerInference> = BTreeMap::new();
+    let mut owners: BTreeMap<u32, OwnerInference<'_>> = BTreeMap::new();
     for owner in baml_compiler2_ppir::file_body_owners(db, file) {
         let Some(scope_id) = baml_compiler2_ppir::body_scope(db, owner) else {
             continue;

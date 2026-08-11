@@ -16,7 +16,7 @@
 
 use baml_compiler2_hir::{
     contributions::Definition,
-    loc::{ClassLoc, FunctionLoc, InterfaceLoc},
+    loc::{ClassLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
     Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
@@ -31,6 +31,10 @@ use crate::facts::Facts;
 /// that `function_generic_frame` prepends for methods).
 pub struct MethodCandidate<'db> {
     pub method: FunctionLoc<'db>,
+    /// The declaring class - the resolution's identity for the recorded
+    /// tables (r-a's `write_method_resolution` records the target the
+    /// probe chose; the class was already computed here either way).
+    pub class: ClassLoc<'db>,
     pub class_args: Vec<Ty>,
 }
 
@@ -51,7 +55,7 @@ pub fn lookup_method<'db>(
         .find(|&method| {
             baml_compiler2_ppir::item_data::function_data(db, method).name == *name
         })?;
-    Some(MethodCandidate { method, class_args })
+    Some(MethodCandidate { method, class, class_args })
 }
 
 /// The class whose declaration owns `receiver`'s methods, with the generic
@@ -138,6 +142,43 @@ pub struct InterfaceMember<'db> {
     /// `fill_with_inference_vars` split, the same discipline the
     /// class-method path applies through `MethodCandidate`.
     pub pending_own: Option<PendingOwnGenerics<'db>>,
+    /// Where the member was found - the resolution's identity for the
+    /// recorded tables. The resolver knows the declarer at the match; it
+    /// returns what it computed (r-a's resolution fns hand back the
+    /// target for `write_method_resolution` the same way).
+    pub declarer: MemberDeclarer<'db>,
+}
+
+/// The declaration a resolved interface member came from, by dispatch
+/// mode: symbolic receivers (existential, bounded var, rigid projection)
+/// dispatch VIRTUALLY through the interface slot; concrete receivers
+/// resolve through a specific impl block.
+pub enum MemberDeclarer<'db> {
+    /// A virtual FIELD read: the realized declaring-interface view (the
+    /// runtime resolver's key) and the field's index in that interface's
+    /// own declared field list.
+    VirtualField {
+        interface: InterfaceLoc<'db>,
+        realized: InterfaceRef,
+        field_index: u32,
+    },
+    /// A virtual METHOD slot: only the interface and the member are
+    /// statically known (a required method has no body; the default is
+    /// one possible target).
+    VirtualMethod {
+        interface: InterfaceLoc<'db>,
+        method: FunctionLoc<'db>,
+    },
+    /// A concrete receiver's method through a matched impl: the impl's
+    /// override when it provides one, else the interface's default body.
+    ImplMethod {
+        block: ImplLoc<'db>,
+        func: FunctionLoc<'db>,
+    },
+    /// A concrete receiver's interface FIELD through a matched impl.
+    /// The backing class-field link is not resolved here yet, so
+    /// consumers record nothing for this case (S16 follow-up).
+    ImplField { block: ImplLoc<'db> },
 }
 
 /// The pieces the call site needs to finish a default method's
@@ -241,9 +282,35 @@ fn lookup_impl_member<'db>(
             continue;
         }
         let implemented = resolved.implemented();
-        if let Some(member) = member_on_interface(db, facts, &implemented, receiver, name, false)
+        if let Some(mut member) = member_on_interface(db, facts, &implemented, receiver, name, false)
             && !providers.iter().any(|(seen, _)| *seen == implemented)
         {
+            // Concrete dispatch: the impl block is the declarer. A
+            // method resolves to the impl's override when it provides
+            // one, else the interface's default body (the recorded
+            // callable IS the body the call runs).
+            member.declarer = match member.declarer {
+                MemberDeclarer::VirtualMethod { method, .. } => {
+                    let func = resolved
+                        .facts
+                        .methods
+                        .iter()
+                        .copied()
+                        .find(|&candidate| {
+                            baml_compiler2_ppir::item_data::function_data(db, candidate).name
+                                == *name
+                        })
+                        .unwrap_or(method);
+                    MemberDeclarer::ImplMethod {
+                        block: resolved.block,
+                        func,
+                    }
+                }
+                MemberDeclarer::VirtualField { .. } => MemberDeclarer::ImplField {
+                    block: resolved.block,
+                },
+                concrete => concrete,
+            };
             providers.push((implemented, member));
         }
     }
@@ -384,7 +451,8 @@ pub(crate) fn member_on_interface<'db>(
     let instantiation = interface_instantiation(receiver, target, data);
 
     // Fields first (mirroring the class path's field-before-method).
-    if let Some(field) = data.fields.iter().find(|field| field.name == *name) {
+    if let Some(index) = data.fields.iter().position(|field| field.name == *name) {
+        let field = &data.fields[index];
         let frame = interface_frame(interface, db);
         let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
             .with_frame(frame)
@@ -394,6 +462,15 @@ pub(crate) fn member_on_interface<'db>(
             ty: crate::lower::substitute_params(&field_ty, &instantiation),
             is_method: false,
             pending_own: None,
+            declarer: MemberDeclarer::VirtualField {
+                interface,
+                realized: target.clone(),
+                // The index space every implementation is baked against
+                // is the interface's OWN declared field list, not the
+                // requires-closure flattening (which dedups by name and
+                // numbers differently).
+                field_index: index as u32,
+            },
         });
     }
 
@@ -419,6 +496,7 @@ pub(crate) fn member_on_interface<'db>(
             ty: instantiate_signature(signature, &instantiation),
             is_method: true,
             pending_own,
+            declarer: MemberDeclarer::VirtualMethod { interface, method },
         });
     }
 

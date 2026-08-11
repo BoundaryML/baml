@@ -332,6 +332,65 @@ fn syntactic_union(members: &[Ty]) -> Ty {
 /// elsewhere.
 const PROJECTION_FINALIZE_FUEL: u32 = 32;
 
+/// One member access's resolution: which declaration the member refers
+/// to, through which dispatch mode - TIR's `MemberResolution` shape,
+/// proven by MIR's consumption. The rust-analyzer equivalent is the
+/// `method_resolutions`/`field_resolutions`/`variant_resolutions`/
+/// `assoc_resolutions` table family; BAML expresses it as one enum
+/// because virtual interface dispatch adds modes Rust encodes elsewhere,
+/// and splitting would lose the mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MemberResolution<'db> {
+    /// A class field access (`p.name`).
+    Field {
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        field: baml_type::Name,
+    },
+    /// An enum variant access (`Status.Active`).
+    Variant {
+        enum_loc: baml_compiler2_hir::loc::EnumLoc<'db>,
+        variant: baml_type::Name,
+    },
+    /// A free function named by a package/namespace path.
+    Free {
+        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    /// A method on a VALUE receiver (`p.get_name`): `self` is bound.
+    BoundMethod {
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    /// A method behind a TYPE qualifier (`Person.get_name`,
+    /// `Array.filled`): no receiver, `self` stays a parameter.
+    UnboundMethod {
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    /// A VIRTUAL interface-method call: only the slot (interface +
+    /// member) is statically known; dispatch resolves to the receiver's
+    /// runtime impl.
+    InterfaceVirtualMethod {
+        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        method: baml_type::Name,
+    },
+    /// A CONCRETE interface-method call through a statically-matched
+    /// impl: `func` is the impl's override, or the interface's default
+    /// body when inherited.
+    InterfaceConcreteMethod {
+        impl_block: baml_compiler2_hir::loc::ImplLoc<'db>,
+        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    /// A VIRTUAL interface-field access: read through the realized
+    /// declaring-interface view (`view`, the runtime resolver's key)
+    /// at `field_index` in that interface's own declared field list.
+    InterfaceVirtualField {
+        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        view: Ty,
+        field_index: u32,
+        field: baml_type::Name,
+    },
+}
+
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
 /// rust-analyzer's `InferenceResult`. Types are the hash-consed
 /// `baml_type::interned` representation (this crate's native vocabulary);
@@ -340,7 +399,7 @@ const PROJECTION_FINALIZE_FUEL: u32 = 32;
 /// Grows one map per slice; consumers must treat a missing entry as "not
 /// inferred", never as an error.
 #[derive(Debug, Clone, PartialEq)]
-pub struct InferenceResult {
+pub struct InferenceResult<'db> {
     pub type_of_expr: FxHashMap<ExprId, Ty>,
     pub type_of_pat: FxHashMap<PatId, Ty>,
     /// The owner's effect: the declared clause when written, else the
@@ -354,16 +413,22 @@ pub struct InferenceResult {
     /// Match expressions whose unguarded arms do not cover the scrutinee.
     /// The expression types as Error; S17 renders E0062 with witnesses.
     pub non_exhaustive_matches: rustc_hash::FxHashSet<ExprId>,
+    /// Member accesses and callees resolved to their declarations, keyed
+    /// by the accessing expression (a call's entry sits on the CALLEE
+    /// expr, TIR's keying). S16: MIR consumes this instead of re-running
+    /// resolution.
+    pub member_resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
 }
 
-impl Default for InferenceResult {
-    fn default() -> InferenceResult {
+impl Default for InferenceResult<'_> {
+    fn default() -> Self {
         InferenceResult {
             type_of_expr: FxHashMap::default(),
             type_of_pat: FxHashMap::default(),
             throws: Ty::never(),
             type_mismatches: FxHashMap::default(),
             non_exhaustive_matches: rustc_hash::FxHashSet::default(),
+            member_resolutions: FxHashMap::default(),
         }
     }
 }
@@ -373,7 +438,7 @@ impl Default for InferenceResult {
 // `infer_body` but reproduces the same result cuts off every downstream
 // consumer.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for InferenceResult {
+unsafe impl salsa::Update for InferenceResult<'_> {
     #[allow(unsafe_code)]
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
@@ -392,7 +457,7 @@ fn infer_function_body_cycle_initial<'db>(
     _db: &'db dyn baml_compiler2_ppir::Db,
     _id: salsa::Id,
     _function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> InferenceResult {
+) -> InferenceResult<'db> {
     // The fixpoint seed for the signature/throws cycle
     // (`infer_body -> function_signature -> callable_throws ->
     // infer_body`): an empty result whose effect is `never`, consistent
@@ -410,7 +475,7 @@ fn infer_function_body_cycle_initial<'db>(
 fn infer_function_body<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> InferenceResult {
+) -> InferenceResult<'db> {
     infer_body_impl(db, BodyOwnerId::Function(function))
 }
 
@@ -420,7 +485,7 @@ fn infer_function_body<'db>(
 fn infer_let_body<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
-) -> InferenceResult {
+) -> InferenceResult<'db> {
     infer_body_impl(db, BodyOwnerId::Let(let_binding))
 }
 
@@ -433,14 +498,17 @@ fn infer_let_body<'db>(
 pub fn infer_body<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     owner: BodyOwnerId<'db>,
-) -> &'db InferenceResult {
+) -> &'db InferenceResult<'db> {
     match owner {
         BodyOwnerId::Function(function) => infer_function_body(db, function),
         BodyOwnerId::Let(let_binding) => infer_let_body(db, let_binding),
     }
 }
 
-fn infer_body_impl(db: &dyn baml_compiler2_ppir::Db, owner: BodyOwnerId<'_>) -> InferenceResult {
+fn infer_body_impl<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    owner: BodyOwnerId<'db>,
+) -> InferenceResult<'db> {
     let body = baml_compiler2_ppir::body(db, owner);
     let index = baml_compiler2_ppir::file_semantic_index(db, owner.file(db));
     let owner_scope = baml_compiler2_ppir::body_scope(db, owner).map(|s| s.file_scope_id(db));
@@ -690,7 +758,7 @@ struct InferenceContext<'db> {
     /// see the non-null type.
     chain_nullable: Vec<bool>,
     diverges: Diverges,
-    result: InferenceResult,
+    result: InferenceResult<'db>,
 }
 
 impl<'db> InferenceContext<'db> {
@@ -2679,6 +2747,7 @@ impl<'db> InferenceContext<'db> {
                 self.register_call_bounds(function, &instantiation, call);
                 let fn_ty = function_value_ty(signature, &instantiation);
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
+                self.write_member_resolution(callee, MemberResolution::Free { func: function });
                 return (fn_ty, false);
             }
             // A type-qualified method path (`Array.filled(3, 0)`,
@@ -2690,9 +2759,13 @@ impl<'db> InferenceContext<'db> {
             // they instantiate fresh alongside the method's own.
             if segments.len() >= 2 {
                 let (prefix, member) = segments.split_at(segments.len() - 1);
-                if let Some(fn_ty) =
-                    self.class_static_value(prefix, &member[0], OwnArgs::Call(call), call)
-                {
+                if let Some(fn_ty) = self.class_static_value(
+                    prefix,
+                    &member[0],
+                    OwnArgs::Call(call),
+                    call,
+                    Some(callee),
+                ) {
                     self.result.type_of_expr.insert(callee, fn_ty.clone());
                     return (fn_ty, false);
                 }
@@ -2720,14 +2793,18 @@ impl<'db> InferenceContext<'db> {
                         base_expr,
                         &segments,
                         &member,
+                        callee,
                     ) {
                         self.result.type_of_expr.insert(callee, fn_ty.clone());
                         return (fn_ty, false);
                     }
                 }
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
-                let (ty, bound) = self.member_callee(call, &receiver, &member);
+                let (ty, bound, resolution) = self.member_callee(call, &receiver, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
+                if let Some(resolution) = resolution {
+                    self.write_member_resolution(callee, resolution);
+                }
                 return (ty, bound);
             }
             // `x?.method(..)`: the link peels the receiver's null (the
@@ -2736,8 +2813,11 @@ impl<'db> InferenceContext<'db> {
                 let member = member.clone();
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let nonnull = self.peel_chain_null(&receiver);
-                let (ty, bound) = self.member_callee(call, &nonnull, &member);
+                let (ty, bound, resolution) = self.member_callee(call, &nonnull, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
+                if let Some(resolution) = resolution {
+                    self.write_member_resolution(callee, resolution);
+                }
                 return (ty, bound);
             }
             Expr::Path(segments)
@@ -2757,12 +2837,19 @@ impl<'db> InferenceContext<'db> {
                         .and_then(|root| self.template_param_ty(root))
                         .unwrap_or_else(Ty::error)
                 };
-                let receiver = segments[1..segments.len() - 1]
-                    .iter()
-                    .fold(root, |ty, segment| self.field_access(callee, &ty, segment));
+                // Intermediate segments resolve without recording (their
+                // per-segment entries are the resolved-path table's
+                // business, a later S16 slice); the FINAL member is the
+                // callee's resolution.
+                let receiver = segments[1..segments.len() - 1].iter().fold(root, |ty, segment| {
+                    self.field_access_resolved(callee, &ty, segment).0
+                });
                 let member = segments.last().expect("checked len");
-                let (ty, bound) = self.member_callee(call, &receiver, member);
+                let (ty, bound, resolution) = self.member_callee(call, &receiver, member);
                 self.result.type_of_expr.insert(callee, ty.clone());
+                if let Some(resolution) = resolution {
+                    self.write_member_resolution(callee, resolution);
+                }
                 return (ty, bound);
             }
             _ => {}
@@ -2774,7 +2861,12 @@ impl<'db> InferenceContext<'db> {
     /// receiver pins the class generics, the call site's turbofish or
     /// fresh variables fill the method's own; bound iff it takes `self`),
     /// or a field holding a function value.
-    fn member_callee(&mut self, call: ExprId, receiver: &Ty, member: &baml_type::Name) -> (Ty, bool) {
+    fn member_callee(
+        &mut self,
+        call: ExprId,
+        receiver: &Ty,
+        member: &baml_type::Name,
+    ) -> (Ty, bool, Option<MemberResolution<'db>>) {
         let resolved = self.structurally_resolve(receiver);
         // Callee position on a UNION: every member must yield the
         // member as a callable with IDENTICAL parameters and boundness
@@ -2783,8 +2875,11 @@ impl<'db> InferenceContext<'db> {
         // expanded weak aliases.
         if let TyKind::Union(union_members, _) = resolved.kind() {
             let union_members = union_members.to_vec();
-            if let Some(joined) = self.union_member_callee(call, &union_members, member) {
-                return joined;
+            if let Some((ty, bound)) = self.union_member_callee(call, &union_members, member) {
+                // One expression, one recorded entry: the union access
+                // has no single declaration (its virtual view is an S16
+                // follow-up).
+                return (ty, bound, None);
             }
             // No per-member resolution: FALL THROUGH - the
             // operator-style sugars at the bottom of the ladder are
@@ -2804,17 +2899,24 @@ impl<'db> InferenceContext<'db> {
                 &self.facts,
                 &resolved,
                 member,
-            )
-            .or_else(|| {
-                resolved
-                    .has_infer()
-                    .then(|| self.probe_impl_member(&resolved, member, call))
-                    .flatten()
-            });
+            );
             if let Some(interface_member) = interface_member {
-                return self.interface_member_callee(interface_member, call);
+                let resolution = self.declarer_resolution(&interface_member.declarer, member);
+                let (ty, bound) = self.interface_member_callee(interface_member, call);
+                return (ty, bound, resolution);
             }
-            let field = self.field_access(call, &resolved, member);
+            // The var-carrying probe resolves through an impl candidate
+            // whose block loc `ImplFacts` does not carry yet, so its
+            // declarer would mislabel concrete dispatch as virtual -
+            // no recorded entry rather than a wrong one (S16 follow-up:
+            // thread the block loc through `ImplFacts`).
+            if resolved.has_infer()
+                && let Some(interface_member) = self.probe_impl_member(&resolved, member, call)
+            {
+                let (ty, bound) = self.interface_member_callee(interface_member, call);
+                return (ty, bound, None);
+            }
+            let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
             // `recv.to_json()` is language sugar for `baml.json.from(recv)`
             // (universal serialization; TIR's builder lowers the call the
             // same way). It is a FALLBACK tier: an `implements baml.ToJson`
@@ -2824,7 +2926,9 @@ impl<'db> InferenceContext<'db> {
                 && member.as_str() == "to_json"
                 && let Some(fn_ty) = self.json_desugar_callee("from", resolved.clone())
             {
-                return (fn_ty, true);
+                // Desugar tiers record nothing: MIR keys the sugar on the
+                // ABSENCE of a resolution (TIR's convention).
+                return (fn_ty, true, None);
             }
             // `recv.to_string()` with no real `implements baml.ToString`
             // member is likewise sugar for `string.from(recv)` (TIR's
@@ -2834,9 +2938,9 @@ impl<'db> InferenceContext<'db> {
                 && member.as_str() == "to_string"
                 && let Some(fn_ty) = self.string_from_callee(resolved.clone())
             {
-                return (fn_ty, true);
+                return (fn_ty, true, None);
             }
-            return (field, false);
+            return (field, false, field_resolution);
         };
         let signature = function_signature(self.db, candidate.method);
         let class_count = candidate.class_args.len();
@@ -2849,7 +2953,18 @@ impl<'db> InferenceContext<'db> {
             .params
             .first()
             .is_some_and(|param| param.name.as_str() == "self");
-        (fn_ty, bound)
+        let resolution = if bound {
+            MemberResolution::BoundMethod {
+                class: candidate.class,
+                func: candidate.method,
+            }
+        } else {
+            MemberResolution::UnboundMethod {
+                class: candidate.class,
+                func: candidate.method,
+            }
+        };
+        (fn_ty, bound, Some(resolution))
     }
 
     /// Callee position on a UNION receiver: every member must yield the
@@ -2865,7 +2980,7 @@ impl<'db> InferenceContext<'db> {
     ) -> Option<(Ty, bool)> {
         let mut resolved_fns = Vec::new();
         for member_ty in union_members {
-            let (ty, bound) = self.member_callee(call, member_ty, member);
+            let (ty, bound, _) = self.member_callee(call, member_ty, member);
             if ty.has_error() {
                 return None;
             }
@@ -3098,6 +3213,7 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
+            self.write_member_resolution(expr, MemberResolution::Free { func: function });
             return function_value_ty(signature, &instantiation);
         }
         // A type-qualified static as a VALUE (`let f = float.nan;`,
@@ -3106,7 +3222,7 @@ impl<'db> InferenceContext<'db> {
         if segments.len() >= 2 {
             let (prefix, member) = segments.split_at(segments.len() - 1);
             if let Some(fn_ty) =
-                self.class_static_value(prefix, &member[0], OwnArgs::Fresh, expr)
+                self.class_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
             {
                 return fn_ty;
             }
@@ -3188,12 +3304,17 @@ impl<'db> InferenceContext<'db> {
     /// alias and keyword qualifiers included). The class prefix takes
     /// the qualifier's pinned args when it carries them (an alias
     /// expansion), else fresh vars; the own suffix follows `own`.
+    /// `record_at` keys the recorded resolution (the callee expression
+    /// for calls; recording lives here because the tier is where the
+    /// method is known - r-a's path inference records its resolutions
+    /// the same way, deep in the resolving fn).
     fn class_static_value(
         &mut self,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
         own: OwnArgs,
         anchor: ExprId,
+        record_at: Option<ExprId>,
     ) -> Option<Ty> {
         let (class, pinned) = self.static_class_for(prefix)?;
         let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
@@ -3215,6 +3336,15 @@ impl<'db> InferenceContext<'db> {
         let own_params = signature.generic_params[frame.len()..].to_vec();
         instantiation.extend(self.own_instantiation(own, &own_params));
         self.register_call_bounds(method, &instantiation, anchor);
+        if let Some(record_at) = record_at {
+            self.write_member_resolution(
+                record_at,
+                MemberResolution::UnboundMethod {
+                    class,
+                    func: method,
+                },
+            );
+        }
         Some(function_value_ty(signature, &instantiation))
     }
 
@@ -3270,10 +3400,11 @@ impl<'db> InferenceContext<'db> {
         base_expr: ExprId,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
+        record_at: ExprId,
     ) -> Option<Ty> {
         let own = OwnArgs::Call(call);
         self.interface_static_value(prefix, member, own, call)
-            .or_else(|| self.class_static_value(prefix, member, own, call))
+            .or_else(|| self.class_static_value(prefix, member, own, call, Some(record_at)))
             .or_else(|| {
                 let mut full = prefix.to_vec();
                 full.push(member.clone());
@@ -3658,6 +3789,24 @@ impl<'db> InferenceContext<'db> {
     /// class generics and fresh variables for the method's own - value
     /// position has no turbofish.
     fn field_access(&mut self, at: ExprId, base_ty: &Ty, member: &baml_type::Name) -> Ty {
+        let (ty, resolution) = self.field_access_resolved(at, base_ty, member);
+        if let Some(resolution) = resolution {
+            self.write_member_resolution(at, resolution);
+        }
+        ty
+    }
+
+    /// The resolution core behind [`InferenceContext::field_access`]:
+    /// hands the resolution BACK instead of recording, so the union arm
+    /// can drop its per-member recursion's resolutions (one expression,
+    /// one recorded entry) and `member_callee` can key a call's entry on
+    /// the CALLEE expression rather than the anchor.
+    fn field_access_resolved(
+        &mut self,
+        at: ExprId,
+        base_ty: &Ty,
+        member: &baml_type::Name,
+    ) -> (Ty, Option<MemberResolution<'db>>) {
         // `structurally_resolve` expands weak aliases, so `json`
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
@@ -3665,18 +3814,20 @@ impl<'db> InferenceContext<'db> {
         // TS's union-member rule (TIR follows): a member on a UNION
         // resolves on EVERY member type and the results JOIN; a member
         // type lacking it - null included: handle null first - fails
-        // the whole access.
+        // the whole access. Per-member resolutions are dropped: the
+        // union access has no single declaration (its virtual view is
+        // an S16 follow-up).
         if let TyKind::Union(members, _) = resolved.kind() {
             let members = members.to_vec();
             let mut tys = Vec::new();
             for member_ty in &members {
-                let ty = self.field_access(at, member_ty, member);
+                let (ty, _) = self.field_access_resolved(at, member_ty, member);
                 if ty.has_error() {
-                    return Ty::error();
+                    return (Ty::error(), None);
                 }
                 tys.push(ty);
             }
-            return self.join(&tys);
+            return (self.join(&tys), None);
         }
         if let TyKind::Class(qtn, args, _) = resolved.kind()
             && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
@@ -3685,7 +3836,13 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .find(|(field, _)| field == member)
         {
-            return substitute_params(field_ty, args);
+            return (
+                substitute_params(field_ty, args),
+                Some(MemberResolution::Field {
+                    class,
+                    field: member.clone(),
+                }),
+            );
         }
         if let Some(candidate) =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member)
@@ -3702,14 +3859,57 @@ impl<'db> InferenceContext<'db> {
             // VALUE obligates its own generics' bounds exactly as a
             // call would (add_required_obligations_for_value_path).
             self.register_call_bounds(candidate.method, &instantiation, at);
-            return bind_receiver(function_value_ty(signature, &instantiation));
+            return (
+                bind_receiver(function_value_ty(signature, &instantiation)),
+                Some(MemberResolution::BoundMethod {
+                    class: candidate.class,
+                    func: candidate.method,
+                }),
+            );
         }
         if let Some(interface_member) =
             crate::method_resolution::lookup_interface_member(self.db, &self.facts, &resolved, member)
         {
-            return self.interface_member_value(interface_member);
+            let resolution = self.declarer_resolution(&interface_member.declarer, member);
+            return (self.interface_member_value(interface_member), resolution);
         }
-        Ty::error()
+        (Ty::error(), None)
+    }
+
+    /// The recorded resolution for an interface member's declarer, when
+    /// one applies (the concrete-field backing link is not resolved yet -
+    /// no entry rather than a wrong one).
+    fn declarer_resolution(
+        &self,
+        declarer: &crate::method_resolution::MemberDeclarer<'db>,
+        member: &baml_type::Name,
+    ) -> Option<MemberResolution<'db>> {
+        use crate::method_resolution::MemberDeclarer;
+        match declarer {
+            MemberDeclarer::VirtualField {
+                interface,
+                realized,
+                field_index,
+            } => Some(MemberResolution::InterfaceVirtualField {
+                interface: *interface,
+                view: realized.existential(),
+                field_index: *field_index,
+                field: member.clone(),
+            }),
+            MemberDeclarer::VirtualMethod { interface, .. } => {
+                Some(MemberResolution::InterfaceVirtualMethod {
+                    interface: *interface,
+                    method: member.clone(),
+                })
+            }
+            MemberDeclarer::ImplMethod { block, func } => {
+                Some(MemberResolution::InterfaceConcreteMethod {
+                    impl_block: *block,
+                    func: *func,
+                })
+            }
+            MemberDeclarer::ImplField { .. } => None,
+        }
     }
 
     /// An interface member in VALUE position: no turbofish, so a default
@@ -4156,7 +4356,14 @@ impl<'db> InferenceContext<'db> {
     /// with S17), and re-canonicalize the unions that `union_of` left
     /// syntactic while variables were live. The invariant afterward: no
     /// `Infer` reaches the result.
-    fn finish(mut self) -> InferenceResult {
+    /// Records one member access's resolution (r-a's
+    /// `write_method_resolution` family). A call's entry sits on the
+    /// CALLEE expression; value reads sit on the accessing expression.
+    fn write_member_resolution(&mut self, expr: ExprId, resolution: MemberResolution<'db>) {
+        self.result.member_resolutions.insert(expr, resolution);
+    }
+
+    fn finish(mut self) -> InferenceResult<'db> {
         // The fulfillment fixpoint: resolve what ground bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
         // while any side progresses (rustc re-runs stalled obligations
@@ -4211,6 +4418,14 @@ impl<'db> InferenceContext<'db> {
         for (expected, actual) in result.type_mismatches.values_mut() {
             *expected = self.finalize_ty(expected);
             *actual = self.finalize_ty(actual);
+        }
+        // The writeback pass covers every recorded table (rustc's
+        // `resolve_type_vars_in_body`): the virtual-field VIEW is the one
+        // resolution payload carrying a type.
+        for resolution in result.member_resolutions.values_mut() {
+            if let MemberResolution::InterfaceVirtualField { view, .. } = resolution {
+                *view = self.finalize_ty(view);
+            }
         }
         result
     }

@@ -21,3 +21,4 @@ mod coherence;
 mod fixtures;
 mod pattern_corpus;
 mod sweep;
+mod tables;
