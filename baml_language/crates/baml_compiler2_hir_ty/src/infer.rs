@@ -4498,14 +4498,28 @@ impl<'db> InferenceContext<'db> {
                     .or_else(|| candidates.iter().find(subsumes_all))
                     .cloned()
             };
-            // An ALL-widening candidate set widens unconditionally
+            // An ALL-widening candidate set widens by DEFAULT
             // (ruling 1's generation-site rule: `push(1)` infers
             // `int[]`, and a fresh `100 | 999` join widens the same
             // way); a non-widening candidate anchors the raw literals
             // instead (`pair(three(), 3)` keeps `3`) - TS's split
-            // exactly.
+            // exactly. A default never overrides an actual
+            // constraint: the call's expectation reaches the var as
+            // an upper bound (r-a's check_call_arguments unifies
+            // expected_output with formal_output BEFORE the args
+            // commit, expr.rs:1987; rustc applies literal fallback
+            // only to otherwise-unconstrained vars), so when the
+            // widened join violates an upper, the raw literals get
+            // their turn instead of manufacturing a conflict
+            // (`-> 42 { id(42) }` is `42`, not Error).
             let maximum = if widening.iter().all(|&flag| flag) {
                 maximum_of(&widened)
+                    .filter(|max| {
+                        uppers
+                            .iter()
+                            .all(|upper| is_subtype_interned(max, upper, facts))
+                    })
+                    .or_else(|| maximum_of(&lowers))
             } else {
                 maximum_of(&lowers).or_else(|| maximum_of(&widened))
             };
