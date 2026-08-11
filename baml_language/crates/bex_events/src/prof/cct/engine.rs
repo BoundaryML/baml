@@ -163,6 +163,13 @@ pub struct CctDiagnostics {
     pub late_suspends_dropped: u64,
     pub folded_frames: u64,
     pub degraded_partitions: u32,
+    /// Records dropped by this engine's producers under the structural-
+    /// exhaustion policy. Nonzero means population totals are lower
+    /// bounds from the first drop onward.
+    pub shed_records: u64,
+    /// Drained ranges whose decode failed mid-range (rest of the range
+    /// discarded, live partitions degraded).
+    pub corrupt_ranges: u64,
 }
 
 /// The per-producer-engine CCT state.
@@ -330,8 +337,10 @@ impl CctEngine {
                 }
                 Err(_) => {
                     // The consumer reports/aborts the range; aggregation
-                    // marks everything live degraded (§5.2 resync) and
-                    // keeps going.
+                    // marks everything live degraded (§5.2 resync), counts
+                    // the loss so it persists (markers, boundary
+                    // diagnostics), and keeps going.
+                    self.diagnostics.corrupt_ranges += 1;
                     self.note_corrupt_range();
                     break;
                 }
@@ -353,6 +362,16 @@ impl CctEngine {
         for partition in &mut self.partitions {
             partition.degraded = true;
         }
+    }
+
+    /// Structural-exhaustion shed: `count` records this engine's producers
+    /// dropped under the policy. Attribution after a drop is unknowable,
+    /// so every live partition coarsens visibly, exactly like a corrupt
+    /// range — and the count lands in [`CctDiagnostics::shed_records`] so
+    /// completion evidence can state the loss.
+    pub fn note_structural_shed(&mut self, count: u64) {
+        self.diagnostics.shed_records += count;
+        self.note_corrupt_range();
     }
 
     /// Direct dispatch: the hot variants (Call/End) run inline against the

@@ -48,6 +48,11 @@ pub const ENV_OBS_LAYOUT: &str = "BAML_OBS_LAYOUT";
 /// `.bamlprof` of every drained range under the session dir. The first
 /// casualty of retention/shedding; off by default.
 pub const ENV_PROFILE_RAW: &str = "BAML_PROFILE_RAW";
+/// Structural-exhaustion policy: what happens when live ring memory would
+/// exceed [`ENV_MAX_OVERFLOW_BYTES`]. `fail_run` (default) latches capture
+/// off and records the loss; `abort_process` is the strict opt-in hard
+/// abort; `continue_incomplete` sheds while over the cap and resumes.
+pub const ENV_PROFILE_EXHAUSTION: &str = "BAML_PROFILE_EXHAUSTION";
 
 /// Default profile anchor, relative to the working directory (`baml clean`
 /// integration is an open coordination point). Its parent (`.baml`) roots
@@ -140,6 +145,49 @@ impl ObsLayout {
     }
 }
 
+/// Structural-exhaustion policy ([`ENV_PROFILE_EXHAUSTION`]): the decided
+/// replacement for the historical unconditional abort. All three modes
+/// keep the loss visible — dropped-record counters, shed markers, and
+/// boundary loss records — never a silent gap.
+///
+/// The register's recommended default is `fail_run`; the exact per-
+/// environment defaults remain X1 policy work, so hosts may override.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExhaustionPolicy {
+    /// Latch capture off for the rest of the process on the first cap
+    /// breach. The application continues; the run's structural evidence is
+    /// explicitly failed/incomplete from the breach onward.
+    #[default]
+    FailRun,
+    /// Strict opt-in: abort the process with the documented diagnostic
+    /// (the pre-policy behavior).
+    AbortProcess,
+    /// Diagnostic admission: drop records while over the cap, resume when
+    /// the consumer catches up. Every shed window is marked degraded.
+    ContinueIncomplete,
+}
+
+impl ExhaustionPolicy {
+    fn parse(value: &str) -> Option<ExhaustionPolicy> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "fail_run" => Some(ExhaustionPolicy::FailRun),
+            "abort_process" => Some(ExhaustionPolicy::AbortProcess),
+            "continue_incomplete" => Some(ExhaustionPolicy::ContinueIncomplete),
+            _ => None,
+        }
+    }
+
+    /// Stable lowercase name (stats lines, markers).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ExhaustionPolicy::FailRun => "fail_run",
+            ExhaustionPolicy::AbortProcess => "abort_process",
+            ExhaustionPolicy::ContinueIncomplete => "continue_incomplete",
+        }
+    }
+}
+
 /// Parsed profiling knobs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfConfig {
@@ -165,6 +213,8 @@ pub struct ProfConfig {
     pub layout: ObsLayout,
     /// Raw firehose opt-in ([`ENV_PROFILE_RAW`]).
     pub profile_raw: bool,
+    /// Structural-exhaustion policy ([`ENV_PROFILE_EXHAUSTION`]).
+    pub exhaustion: ExhaustionPolicy,
 }
 
 impl Default for ProfConfig {
@@ -180,6 +230,7 @@ impl Default for ProfConfig {
             obs_stats_path: None,
             layout: ObsLayout::default(),
             profile_raw: false,
+            exhaustion: ExhaustionPolicy::default(),
         }
     }
 }
@@ -268,6 +319,10 @@ impl ProfConfig {
             })
             .unwrap_or(defaults.profile_raw);
 
+        let exhaustion = get(ENV_PROFILE_EXHAUSTION)
+            .and_then(|v| ExhaustionPolicy::parse(&v))
+            .unwrap_or(defaults.exhaustion);
+
         ProfConfig {
             enabled,
             seg_bytes,
@@ -279,6 +334,7 @@ impl ProfConfig {
             obs_stats_path,
             layout,
             profile_raw,
+            exhaustion,
         }
     }
 }
@@ -473,6 +529,32 @@ mod tests {
         assert!(!ProfConfig::from_lookup(lookup(&[])).profile_raw);
         assert!(ProfConfig::from_lookup(lookup(&[(ENV_PROFILE_RAW, "1")])).profile_raw);
         assert!(ObsLayout::V2.writes_v2());
+    }
+
+    #[test]
+    fn exhaustion_policy_parses_and_defaults() {
+        assert_eq!(
+            ProfConfig::from_lookup(lookup(&[])).exhaustion,
+            ExhaustionPolicy::FailRun,
+            "the register's recommended default is fail_run"
+        );
+        for (v, want) in [
+            ("fail_run", ExhaustionPolicy::FailRun),
+            ("abort_process", ExhaustionPolicy::AbortProcess),
+            ("continue_incomplete", ExhaustionPolicy::ContinueIncomplete),
+            (" ABORT_PROCESS ", ExhaustionPolicy::AbortProcess),
+        ] {
+            assert_eq!(
+                ProfConfig::from_lookup(lookup(&[(ENV_PROFILE_EXHAUSTION, v)])).exhaustion,
+                want,
+                "BAML_PROFILE_EXHAUSTION={v}"
+            );
+        }
+        // Garbage falls back to the default instead of failing the host.
+        assert_eq!(
+            ProfConfig::from_lookup(lookup(&[(ENV_PROFILE_EXHAUSTION, "shed-maybe")])).exhaustion,
+            ExhaustionPolicy::FailRun
+        );
     }
 
     #[test]

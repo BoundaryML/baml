@@ -178,11 +178,14 @@ mod global {
         &REGISTRY
     }
 
-    /// Process-wide ring context, sized from the environment knobs on first
-    /// use.
+    /// Process-wide ring context, sized and policied from the environment
+    /// knobs on first use.
     pub(crate) fn global_ctx() -> &'static RingCtx {
         static CTX: OnceLock<RingCtx> = OnceLock::new();
-        CTX.get_or_init(|| RingCtx::new(ProfConfig::global().max_overflow_bytes))
+        CTX.get_or_init(|| {
+            let cfg = ProfConfig::global();
+            RingCtx::with_policy(cfg.max_overflow_bytes, cfg.exhaustion)
+        })
     }
 
     /// One entry per engine this thread has produced for. The `Drop` is the

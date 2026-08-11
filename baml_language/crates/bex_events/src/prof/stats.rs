@@ -59,6 +59,8 @@ pub(crate) struct ConsumerCounters {
     pub cct_evicted_calls: u64,
     /// §5.9 flight-recorder dumps written.
     pub flight_dumps: u64,
+    /// Records producers dropped under the structural-exhaustion policy.
+    pub shed_records: u64,
 }
 
 /// Where and how to report. Owned by the consumer thread.
@@ -133,7 +135,8 @@ impl StatsReporter {
             "cct_deferred": c.cct_deferred,
             "cct_synthesized": c.cct_synthesized,
             "cct_evicted_calls": c.cct_evicted_calls,
-        "flight_dumps": c.flight_dumps,
+            "flight_dumps": c.flight_dumps,
+            "shed_records": c.shed_records,
             "live_ring_bytes": live_ring_bytes,
         })
         .to_string()

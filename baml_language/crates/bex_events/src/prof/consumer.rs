@@ -506,10 +506,26 @@ struct ConsumerState {
     flight: crate::prof::cct::flight::FlightRecorder,
     /// §3.1 rate limits: per engine (last dump, dumps so far, dropped).
     flight_dumps: HashMap<u64, (Instant, u32, u64)>,
-    /// §6.4 bound boundaries: boundary_id → (engine, partition, dir,
-    /// boundary-local id).
-    boundaries: HashMap<[u8; 16], (u64, u32, PathBuf, u32)>,
+    /// §6.4 bound boundaries.
+    boundaries: HashMap<[u8; 16], BoundBoundary>,
     next_boundary_local: u32,
+    /// Structural-shed counts harvested from rings but not yet written as
+    /// a session SHED marker (per engine; flushed at window ticks).
+    shed_pending: HashMap<u64, u64>,
+    /// Per engine: `diagnostics().corrupt_ranges` as of the last DEGRADED
+    /// marker written, so each new corruption gets exactly one marker.
+    degraded_marked: HashMap<u64, u64>,
+}
+
+/// One bound boundary's consumer-side state (§6.4).
+struct BoundBoundary {
+    engine_id: u64,
+    partition: u32,
+    dir: PathBuf,
+    boundary_local_id: u32,
+    /// Engine diagnostics snapshot at bind: completion reports the deltas
+    /// of the cumulative counters as THIS boundary's evidence.
+    diag_at_bind: crate::prof::cct::CctDiagnostics,
 }
 
 impl ConsumerState {
@@ -548,6 +564,8 @@ impl ConsumerState {
             flight_dumps: HashMap::new(),
             boundaries: HashMap::new(),
             next_boundary_local: 0,
+            shed_pending: HashMap::new(),
+            degraded_marked: HashMap::new(),
         }
     }
 
@@ -582,6 +600,7 @@ impl ConsumerState {
                 counters.cct_deferred += diag.deferred;
                 counters.cct_synthesized += diag.synthesized_parents;
                 counters.cct_evicted_calls += diag.evicted_calls;
+                counters.corrupt_ranges += diag.corrupt_ranges;
             }
             reporter.report(&counters, env.ctx.live_bytes());
         }
@@ -620,6 +639,18 @@ impl ConsumerState {
             }
         }
         self.transcode_cct(ring, bytes);
+        // Structural-exhaustion harvest: any records this ring's producer
+        // dropped since the last drain become declared loss — engine
+        // partitions coarsen, a SHED marker lands at the next window tick,
+        // and boundary completion reports the delta.
+        let shed = ring.take_shed_dropped();
+        if shed > 0 {
+            self.counters.shed_records += shed;
+            if let Some(engine) = self.cct.get_mut(&engine_id) {
+                engine.note_structural_shed(shed);
+            }
+            *self.shed_pending.entry(engine_id).or_default() += shed;
+        }
     }
 
     /// TickConverter identity quad recorded in session and raw headers.
@@ -831,12 +862,12 @@ impl ConsumerState {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        for (engine, _, boundary_dir, _) in self.boundaries.values() {
-            if *engine != engine_id {
+        for bound in self.boundaries.values() {
+            if bound.engine_id != engine_id {
                 continue;
             }
             if let Ok(mut meta) =
-                crate::prof::cct::meta::MetaWriter::create(&boundary_dir.join("boundary.bamlmeta"))
+                crate::prof::cct::meta::MetaWriter::create(&bound.dir.join("boundary.bamlmeta"))
             {
                 let _ = meta.append(&crate::prof::cct::meta::MetaRecord::BoundaryTrigger {
                     trigger: trigger.to_string(),
@@ -932,12 +963,13 @@ impl ConsumerState {
         }
         self.boundaries.insert(
             boundary_id,
-            (
+            BoundBoundary {
                 engine_id,
                 partition,
-                boundary_dir.to_path_buf(),
+                dir: boundary_dir.to_path_buf(),
                 boundary_local_id,
-            ),
+                diag_at_bind: engine.diagnostics(),
+            },
         );
         true
     }
@@ -946,12 +978,17 @@ impl ConsumerState {
     /// (tmp+rename, D2), append the meta `complete` record, free the
     /// partition (§5.7).
     fn complete_boundary(&mut self, boundary_id: [u8; 16], status: &str) -> bool {
-        let Some((engine_id, partition, dir, boundary_local_id)) =
-            self.boundaries.remove(&boundary_id)
-        else {
+        let Some(bound) = self.boundaries.remove(&boundary_id) else {
             report(format_args!("complete_boundary: unknown boundary"));
             return false;
         };
+        let BoundBoundary {
+            engine_id,
+            partition,
+            dir,
+            boundary_local_id,
+            diag_at_bind,
+        } = bound;
         let engine = if let Some(engine) = self.cct.get_mut(&engine_id) {
             engine
         } else if let Some((_, engine)) =
@@ -1011,8 +1048,49 @@ impl ConsumerState {
             return false;
         }
         let completed_ms = created_ms;
+        // Boundary-scoped evidence: deltas of the engine's cumulative
+        // diagnostics since bind. Nonzero deltas become part of the
+        // completion record — a degraded/lossy boundary states it.
+        let diag = engine.diagnostics();
+        let shed = diag.shed_records.saturating_sub(diag_at_bind.shed_records);
+        let synthesized = diag
+            .synthesized_parents
+            .saturating_sub(diag_at_bind.synthesized_parents);
+        let clock_anomalies = diag
+            .clock_anomalies
+            .saturating_sub(diag_at_bind.clock_anomalies);
+        let corrupt_ranges = diag
+            .corrupt_ranges
+            .saturating_sub(diag_at_bind.corrupt_ranges);
+        let mut diagnostics = Vec::new();
+        if shed > 0 {
+            diagnostics.push(format!("shed_records={shed}"));
+        }
+        if corrupt_ranges > 0 {
+            diagnostics.push(format!("corrupt_ranges={corrupt_ranges}"));
+        }
+        if synthesized > 0 {
+            diagnostics.push(format!("synthesized_parents={synthesized}"));
+        }
+        if clock_anomalies > 0 {
+            diagnostics.push(format!("clock_anomalies={clock_anomalies}"));
+        }
+        if diag.degraded_partitions > 0 {
+            diagnostics.push(format!("degraded_partitions={}", diag.degraded_partitions));
+        }
         let meta_ok = crate::prof::cct::meta::MetaWriter::create(&dir.join("boundary.bamlmeta"))
             .and_then(|mut writer| {
+                if shed > 0 {
+                    // Declared loss, not silent absence (§7.3): population
+                    // totals in this boundary are lower bounds.
+                    writer.append(&crate::prof::cct::meta::MetaRecord::BoundaryLoss {
+                        kind: "structural_shed".to_string(),
+                        detail: format!(
+                            "{shed} profiling records dropped (ring memory exhausted; \
+                             policy shed) — call totals are lower bounds"
+                        ),
+                    })?;
+                }
                 writer.append(&crate::prof::cct::meta::MetaRecord::BoundaryComplete {
                     status: status.to_string(),
                     completed_ms,
@@ -1021,7 +1099,7 @@ impl ConsumerState {
                         "nodes": folded.totals.len(),
                         "spawn_edges": folded.spawns.len(),
                     }),
-                    diagnostics: Vec::new(),
+                    diagnostics,
                     dump_refs: Vec::new(),
                 })?;
                 writer.sync_data()
@@ -1099,6 +1177,47 @@ impl ConsumerState {
                 report(format_args!(
                     "v2 session write failed for engine {engine_id}: {err}"
                 ));
+            }
+            // Declared structural loss: harvested shed counts become a
+            // durable SHED marker in the session stream.
+            if let Some(pending) = self.shed_pending.get_mut(&engine_id)
+                && *pending > 0
+            {
+                let detail = format!(
+                    "{pending} profiling records dropped (ring memory exhausted; policy shed)"
+                );
+                match writer.write_marker(
+                    crate::prof::cct::blocks::marker_kind::SHED,
+                    &detail,
+                    max_seen,
+                ) {
+                    Ok(()) => *pending = 0,
+                    Err(err) => report(format_args!(
+                        "SHED marker write failed for engine {engine_id}: {err}"
+                    )),
+                }
+            }
+            // Declared corruption: each newly corrupt range gets exactly
+            // one durable DEGRADED marker.
+            {
+                let corrupt = engine.diagnostics().corrupt_ranges;
+                let marked = self.degraded_marked.entry(engine_id).or_default();
+                if corrupt > *marked {
+                    let detail = format!(
+                        "{} drained range(s) failed to decode; attribution degraded",
+                        corrupt - *marked
+                    );
+                    match writer.write_marker(
+                        crate::prof::cct::blocks::marker_kind::DEGRADED,
+                        &detail,
+                        max_seen,
+                    ) {
+                        Ok(()) => *marked = corrupt,
+                        Err(err) => report(format_args!(
+                            "DEGRADED marker write failed for engine {engine_id}: {err}"
+                        )),
+                    }
+                }
             }
             if let Some(fsync) = &self.fsync
                 && let Err(err) = writer.tick(fsync, wall_epoch_ns, max_seen)
@@ -2009,16 +2128,20 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
-    /// PR5: hitting `BAML_RING_MAX_OVERFLOW_BYTES` must be a hard process
-    /// error with the documented message (D6) — asserted from a subprocess
-    /// because the path aborts.
+    /// Hitting `BAML_RING_MAX_OVERFLOW_BYTES` under the strict-opt-in
+    /// `abort_process` policy must be a hard process error with the
+    /// documented message (D6) — asserted from a subprocess because the
+    /// path aborts.
     #[test]
     #[cfg(not(miri))] // spawns a subprocess
     fn overflow_cap_aborts_with_message() {
         if std::env::var("BAML_PROF_OVERFLOW_CHILD").is_ok() {
             // Child mode: a cap smaller than one segment aborts on the
-            // first allocation.
-            let ctx: &'static RingCtx = leak(RingCtx::new(1024));
+            // first allocation under abort_process.
+            let ctx: &'static RingCtx = leak(RingCtx::with_policy(
+                1024,
+                crate::prof::config::ExhaustionPolicy::AbortProcess,
+            ));
             let registry: &'static Registry = leak(Registry::new());
             let _ = registry.acquire(ctx, 64 * 1024, 2, 1);
             unreachable!("the segment allocation above must abort");

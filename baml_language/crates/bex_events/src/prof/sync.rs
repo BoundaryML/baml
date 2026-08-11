@@ -5,10 +5,10 @@
 // cooperative-drain code still compile through these std shims.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
-// `AtomicBool` is re-exported only under loom: the std build's `Wake` uses
-// `std::sync::atomic` directly (its `OnceLock` half has no loom analogue).
 #[cfg(not(baml_loom))]
-pub(crate) use std::sync::atomic::{AtomicPtr, AtomicU8, AtomicU32, AtomicUsize, Ordering};
+pub(crate) use std::sync::atomic::{
+    AtomicBool, AtomicPtr, AtomicU8, AtomicU32, AtomicU64, AtomicUsize, Ordering,
+};
 #[cfg(all(not(baml_loom), test))]
 pub(crate) use std::thread;
 
@@ -16,7 +16,7 @@ pub(crate) use std::thread;
 pub(crate) use loom::cell::UnsafeCell;
 #[cfg(baml_loom)]
 pub(crate) use loom::sync::atomic::{
-    AtomicBool, AtomicPtr, AtomicU8, AtomicU32, AtomicUsize, Ordering,
+    AtomicBool, AtomicPtr, AtomicU8, AtomicU32, AtomicU64, AtomicUsize, Ordering,
 };
 #[cfg(baml_loom)]
 pub(crate) use loom::thread;

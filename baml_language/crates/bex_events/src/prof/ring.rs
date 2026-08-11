@@ -23,8 +23,11 @@
 //!   spin anywhere reachable from [`Ring::push`]. It runs holding an
 //!   `ActiveHeapPermit`; a blocked producer is an engine-wide GC stall.
 //! - The consumer never touches the GC heap or permits.
-//! - Hitting the live-memory cap is a hard process error with a clear
-//!   message (D6), never a silent drop.
+//! - Hitting the live-memory cap applies the structural-exhaustion policy
+//!   (D6 + decision register): `fail_run` latches capture off, `continue_
+//!   incomplete` sheds while over the cap, `abort_process` (strict opt-in)
+//!   aborts with a clear message. A shed is always a counted drop that the
+//!   consumer turns into declared loss evidence — never a silent gap.
 #![allow(unsafe_code)]
 // On wasm32 there is no background consumer thread. The consumer-side helpers
 // are compiled for the cooperative drain path, but not all native-only entry
@@ -36,7 +39,11 @@ use std::{marker::PhantomData, ptr::null_mut};
 use crossbeam_utils::CachePadded;
 
 use crate::prof::{
-    sync::{AtomicPtr, AtomicU8, AtomicU32, AtomicUsize, Buf, Ordering, UnsafeCell},
+    config::ExhaustionPolicy,
+    sync::{
+        AtomicBool, AtomicPtr, AtomicU8, AtomicU32, AtomicU64, AtomicUsize, Buf, Ordering,
+        UnsafeCell,
+    },
     wake::Wake,
 };
 
@@ -63,32 +70,56 @@ impl RingState {
     }
 }
 
-/// Process-wide context shared by all rings: the live-memory budget and the
-/// consumer wake state.
+/// Process-wide context shared by all rings: the live-memory budget, the
+/// structural-exhaustion policy, and the consumer wake state.
 pub(crate) struct RingCtx {
     budget: MemBudget,
     wake: Wake,
+    policy: ExhaustionPolicy,
+    /// `fail_run` latch: once the cap is breached, capture stays off for
+    /// the rest of the process. Never set by the other policies.
+    shed_latched: AtomicBool,
 }
 
 impl RingCtx {
     #[cfg(not(baml_loom))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "test-suite constructor"))]
     pub(crate) const fn new(max_overflow_bytes: usize) -> Self {
+        Self::with_policy(max_overflow_bytes, ExhaustionPolicy::FailRun)
+    }
+
+    #[cfg(not(baml_loom))]
+    pub(crate) const fn with_policy(max_overflow_bytes: usize, policy: ExhaustionPolicy) -> Self {
         Self {
             budget: MemBudget::new(max_overflow_bytes),
             wake: Wake::new(),
+            policy,
+            shed_latched: AtomicBool::new(false),
         }
     }
 
     #[cfg(baml_loom)]
     pub(crate) fn new(max_overflow_bytes: usize) -> Self {
+        Self::with_policy(max_overflow_bytes, ExhaustionPolicy::FailRun)
+    }
+
+    #[cfg(baml_loom)]
+    pub(crate) fn with_policy(max_overflow_bytes: usize, policy: ExhaustionPolicy) -> Self {
         Self {
             budget: MemBudget::new(max_overflow_bytes),
             wake: Wake::new(),
+            policy,
+            shed_latched: AtomicBool::new(false),
         }
     }
 
     pub(crate) fn wake(&self) -> &Wake {
         &self.wake
+    }
+
+    /// Has `fail_run` permanently latched capture off?
+    pub(crate) fn shed_latched(&self) -> bool {
+        self.shed_latched.load(Ordering::Relaxed)
     }
 
     /// Currently allocated ring-segment bytes (approximate bookkeeping unit:
@@ -123,11 +154,23 @@ impl MemBudget {
         }
     }
 
-    fn charge(&self, bytes: usize) {
+    /// Try to charge `bytes` against the cap. `false` = the cap would be
+    /// breached; nothing was charged and the caller applies the
+    /// structural-exhaustion policy.
+    fn try_charge(&self, bytes: usize) -> bool {
         let live = self.live.fetch_add(bytes, Ordering::Relaxed) + bytes;
         if live > self.cap {
-            overflow_abort(live, self.cap);
+            self.live.fetch_sub(bytes, Ordering::Relaxed);
+            return false;
         }
+        true
+    }
+
+    /// Charge unconditionally (ring creation: one segment per new producer
+    /// thread must exist for the claim protocol; growth stays bounded by
+    /// thread count even at the cap).
+    fn force_charge(&self, bytes: usize) {
+        self.live.fetch_add(bytes, Ordering::Relaxed);
     }
 
     fn credit(&self, bytes: usize) {
@@ -140,9 +183,9 @@ impl MemBudget {
     }
 }
 
-/// D6: exceeding the cap means the consumer cannot keep up with the
-/// sustained event rate — a hard process error, stated plainly, never a
-/// silent drop (and never an opaque OOM kill later).
+/// D6 `abort_process` policy: exceeding the cap means the consumer cannot
+/// keep up with the sustained event rate — a hard process error, stated
+/// plainly, never a silent drop (and never an opaque OOM kill later).
 #[cold]
 #[expect(clippy::print_stderr, reason = "process-fatal diagnostic")]
 fn overflow_abort(live: usize, cap: usize) -> ! {
@@ -150,9 +193,11 @@ fn overflow_abort(live: usize, cap: usize) -> ! {
         "FATAL: BAML profiling ring memory ({live} bytes) exceeded \
          BAML_RING_MAX_OVERFLOW_BYTES ({cap} bytes).\n\
          The profile consumer cannot keep up with the sustained event rate. \
-         Raise BAML_RING_MAX_OVERFLOW_BYTES, lower the event rate, or disable \
-         profiling (BAML_PROFILE=0). Aborting instead of growing without \
-         bound or silently dropping events."
+         Raise BAML_RING_MAX_OVERFLOW_BYTES, lower the event rate, disable \
+         profiling (BAML_PROFILE=0), or choose a shedding policy \
+         (BAML_PROFILE_EXHAUSTION=fail_run|continue_incomplete). Aborting \
+         instead of growing without bound or silently dropping events \
+         (BAML_PROFILE_EXHAUSTION=abort_process)."
     );
     std::process::abort();
 }
@@ -180,8 +225,7 @@ fn segment_footprint(seg_bytes: usize) -> usize {
     seg_bytes + size_of::<Segment>()
 }
 
-fn alloc_segment(seg_bytes: usize, ctx: &RingCtx) -> *mut Segment {
-    ctx.budget.charge(segment_footprint(seg_bytes));
+fn new_segment(seg_bytes: usize) -> *mut Segment {
     Box::into_raw(Box::new(Segment {
         sync: CachePadded::new(SegSync {
             commit_len: AtomicU32::new(0),
@@ -189,6 +233,40 @@ fn alloc_segment(seg_bytes: usize, ctx: &RingCtx) -> *mut Segment {
         }),
         buf: Buf::new(seg_bytes),
     }))
+}
+
+/// Allocate a growth segment under the memory cap. `None` = the cap is
+/// breached and the policy is a shedding one — the caller drops the record
+/// and counts it. `abort_process` never returns from the breach.
+fn alloc_segment(seg_bytes: usize, ctx: &RingCtx) -> Option<*mut Segment> {
+    if !ctx.budget.try_charge(segment_footprint(seg_bytes)) {
+        match ctx.policy {
+            ExhaustionPolicy::AbortProcess => {
+                overflow_abort(ctx.budget.live(), ctx.budget.cap);
+            }
+            ExhaustionPolicy::FailRun => {
+                ctx.shed_latched.store(true, Ordering::Relaxed);
+                return None;
+            }
+            ExhaustionPolicy::ContinueIncomplete => return None,
+        }
+    }
+    Some(new_segment(seg_bytes))
+}
+
+/// Allocate a ring's first segment. Ring creation force-charges: every
+/// producer thread needs one claimable segment for the lifecycle protocol,
+/// and that growth is bounded by thread count, not event rate. Only the
+/// strict `abort_process` policy still aborts here.
+fn alloc_segment_for_ring(seg_bytes: usize, ctx: &RingCtx) -> *mut Segment {
+    let footprint = segment_footprint(seg_bytes);
+    if !ctx.budget.try_charge(footprint) {
+        if matches!(ctx.policy, ExhaustionPolicy::AbortProcess) {
+            overflow_abort(ctx.budget.live(), ctx.budget.cap);
+        }
+        ctx.budget.force_charge(footprint);
+    }
+    new_segment(seg_bytes)
 }
 
 /// # Safety
@@ -227,6 +305,12 @@ struct RingShared {
     /// *before* its first push, read by the consumer only *after* observing
     /// a new commit — so the first push's Release/Acquire publishes it.
     engine_id: UnsafeCell<u64>,
+    /// Records this ring's producer dropped under the structural-
+    /// exhaustion policy (cap breach or oversized record). The consumer
+    /// harvests it with [`Ring::take_shed_dropped`] and turns it into
+    /// markers, degraded partitions, and boundary loss evidence — a drop
+    /// is never silent.
+    shed_dropped: AtomicU64,
 }
 
 /// The segmented SPSC ring. See the module docs.
@@ -260,7 +344,7 @@ impl Ring {
         freelist_cap: usize,
         engine_id: u64,
     ) -> *mut Ring {
-        let seg = alloc_segment(seg_bytes, ctx);
+        let seg = alloc_segment_for_ring(seg_bytes, ctx);
         Box::into_raw(Box::new(Ring {
             p: CachePadded::new(UnsafeCell::new(RingProducer {
                 head: seg,
@@ -275,11 +359,18 @@ impl Ring {
                 free_head: AtomicPtr::new(null_mut()),
                 free_len: AtomicUsize::new(0),
                 engine_id: UnsafeCell::new(engine_id),
+                shed_dropped: AtomicU64::new(0),
             }),
             seg_bytes,
             freelist_cap,
             ctx,
         }))
+    }
+
+    /// Harvest (and reset) the producer's dropped-record count. Any thread
+    /// may call this; the consumer does, once per drained range.
+    pub(crate) fn take_shed_dropped(&self) -> u64 {
+        self.s.shed_dropped.swap(0, Ordering::Relaxed)
     }
 
     /// The producer hot path (§3.2): bounds check + `memcpy` + one `Release`
@@ -318,18 +409,43 @@ impl Ring {
             if p.head_pos + len > self.seg_bytes {
                 // An oversized record necessarily lands here (head_pos ≥ 0),
                 // so this release-mode check costs one compare per segment
-                // fill — never per push — and is what keeps the write below
-                // in bounds for arbitrary input.
-                assert!(
+                // fill — never per push — and keeps the write below in
+                // bounds for arbitrary input. A record that cannot ever fit
+                // is a producer bug: loud in debug, a counted drop in
+                // release (never an out-of-bounds write, never a panic on
+                // an application thread holding the heap permit).
+                debug_assert!(
                     len <= self.seg_bytes,
                     "profiling record ({} bytes) exceeds the ring segment size ({} bytes)",
                     len,
                     self.seg_bytes
                 );
-                // Slow path: link a recycled or fresh segment.
+                if len > self.seg_bytes {
+                    self.s.shed_dropped.fetch_add(1, Ordering::Relaxed);
+                    return;
+                }
+                // `fail_run` latch: capture is over for this process; drop
+                // and count. Checked only on segment fill — zero cost on
+                // the per-record fast path.
+                if self.ctx.shed_latched() {
+                    self.s.shed_dropped.fetch_add(1, Ordering::Relaxed);
+                    self.ctx.wake.wake_if_parked();
+                    return;
+                }
+                // Slow path: link a recycled or fresh segment. A `None`
+                // from the allocator is the shedding policy speaking —
+                // drop the record, count it, and let the consumer turn the
+                // count into declared loss evidence.
                 let seg = match unsafe { self.free_pop() } {
                     Some(seg) => seg,
-                    None => alloc_segment(self.seg_bytes, self.ctx),
+                    None => match alloc_segment(self.seg_bytes, self.ctx) {
+                        Some(seg) => seg,
+                        None => {
+                            self.s.shed_dropped.fetch_add(1, Ordering::Relaxed);
+                            self.ctx.wake.wake_if_parked();
+                            return;
+                        }
+                    },
                 };
                 unsafe {
                     // D2: the producer owns the reset, for recycled and fresh
@@ -639,4 +755,101 @@ unsafe fn consume_range(
     unsafe { seg.buf.with_slice(*tail_pos, len, |bytes| sink(bytes)) };
     *tail_pos = committed;
     true
+}
+
+#[cfg(all(test, not(baml_loom)))]
+mod shed_tests {
+    use super::*;
+
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+
+    /// Fill the ring past the cap; the producer must drop-and-count, never
+    /// abort or grow unboundedly.
+    fn fill_until_shed(ring: &Ring, seg_bytes: usize) -> u64 {
+        // Enough pushes to require several segments beyond the cap.
+        for _ in 0..(seg_bytes / 64) * 8 {
+            // SAFETY: this thread created the ring (creator is claimant).
+            unsafe { ring.push(&[7u8; 64]) };
+        }
+        ring.s.shed_dropped.load(Ordering::Relaxed)
+    }
+
+    #[test]
+    fn continue_incomplete_sheds_under_pressure_and_resumes_after_drain() {
+        let seg = 4096;
+        // Room for the initial segment plus one growth segment only.
+        let cap = segment_footprint(seg) * 2 + 64;
+        let ctx = leak(RingCtx::with_policy(
+            cap,
+            ExhaustionPolicy::ContinueIncomplete,
+        ));
+        let ring = unsafe { &*Ring::alloc(ctx, seg, 0, 1) };
+
+        let dropped = fill_until_shed(ring, seg);
+        assert!(dropped > 0, "over-cap pushes must shed, not grow");
+        assert!(!ctx.shed_latched(), "continue_incomplete never latches");
+
+        // Drain everything; with freelist_cap = 0 passed segments free and
+        // credit the budget.
+        let mut bytes = 0usize;
+        // SAFETY: single consumer (this test thread).
+        while unsafe { ring.drain(&mut |b| bytes += b.len()) } {}
+        assert!(bytes > 0, "committed records drain");
+
+        // Pressure cleared: capture resumes.
+        let before = ring.s.shed_dropped.load(Ordering::Relaxed);
+        unsafe { ring.push(&[9u8; 64]) };
+        let mut resumed = 0usize;
+        while unsafe { ring.drain(&mut |b| resumed += b.len()) } {}
+        assert_eq!(
+            ring.s.shed_dropped.load(Ordering::Relaxed),
+            before,
+            "post-drain pushes must not shed"
+        );
+        assert!(resumed >= 64, "the resumed record drains");
+    }
+
+    #[test]
+    fn fail_run_latches_capture_off_for_the_process_lifetime() {
+        let seg = 4096;
+        let cap = segment_footprint(seg) * 2 + 64;
+        let ctx = leak(RingCtx::with_policy(cap, ExhaustionPolicy::FailRun));
+        let ring = unsafe { &*Ring::alloc(ctx, seg, 0, 1) };
+
+        let dropped = fill_until_shed(ring, seg);
+        assert!(dropped > 0, "over-cap pushes must shed");
+        assert!(ctx.shed_latched(), "fail_run latches on the first breach");
+
+        // Even after the consumer fully catches up, the latch holds.
+        while unsafe { ring.drain(&mut |_| {}) } {}
+        let before = ring.take_shed_dropped();
+        assert!(before > 0, "consumer harvests the dropped count");
+        unsafe { ring.push(&[9u8; 200]) };
+        unsafe { ring.push(&[9u8; 4000]) };
+        // The first push may still fit the current segment; the segment
+        // fill is where the latch speaks.
+        let mut post = 0u64;
+        for _ in 0..(seg / 64) * 4 {
+            unsafe { ring.push(&[3u8; 64]) };
+        }
+        post += ring.s.shed_dropped.load(Ordering::Relaxed);
+        assert!(post > 0, "capture stays off after the latch");
+    }
+
+    #[test]
+    fn oversized_record_is_a_counted_drop_not_an_abort() {
+        let seg = 4096;
+        let ctx = leak(RingCtx::with_policy(1 << 20, ExhaustionPolicy::FailRun));
+        let ring = unsafe { &*Ring::alloc(ctx, seg, 0, 1) };
+        // A record that cannot ever fit a segment: counted, dropped, no
+        // out-of-bounds write, no panic on the producer thread.
+        // (debug_assert fires in debug builds; this test documents the
+        // release contract, so only run it with debug_assertions off.)
+        if !cfg!(debug_assertions) {
+            unsafe { ring.push(&vec![1u8; seg + 1]) };
+            assert_eq!(ring.take_shed_dropped(), 1);
+        }
+    }
 }

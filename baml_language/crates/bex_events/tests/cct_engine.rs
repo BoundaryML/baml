@@ -208,8 +208,40 @@ fn corrupt_range_degrades_partitions_but_keeps_aggregating() {
     bytes.push(0xEE); // unknown tag: rest of range is unrecoverable
     consume(&mut engine, &bytes);
     assert_eq!(engine.diagnostics().degraded_partitions, 1);
+    assert_eq!(
+        engine.diagnostics().corrupt_ranges,
+        1,
+        "corruption is counted so it can persist as evidence"
+    );
 
     // Later ranges still aggregate.
+    consume(
+        &mut engine,
+        &encode(&[end(1, 1, FunctionEndStatus::Ok, 30)]),
+    );
+    let totals = totals_by_function(&engine);
+    assert_eq!(totals.get(&100).map(|t| t.1), Some(1));
+}
+
+/// Structural-exhaustion shed: dropped-record counts degrade every live
+/// partition and accumulate in diagnostics, exactly like corruption — a
+/// drop is declared loss, never a silent gap.
+#[test]
+fn structural_shed_degrades_and_counts() {
+    let mut engine = CctEngine::new(16);
+    consume(
+        &mut engine,
+        &encode(&[start_thread(1, 0, 0, 0), call(1, 1, 0, 100, 10)]),
+    );
+    assert_eq!(engine.diagnostics().degraded_partitions, 0);
+
+    engine.note_structural_shed(42);
+    engine.note_structural_shed(8);
+    let diag = engine.diagnostics();
+    assert_eq!(diag.shed_records, 50);
+    assert_eq!(diag.degraded_partitions, 1, "shed coarsens live partitions");
+
+    // Aggregation continues after the shed (lower bounds, not a wedge).
     consume(
         &mut engine,
         &encode(&[end(1, 1, FunctionEndStatus::Ok, 30)]),
