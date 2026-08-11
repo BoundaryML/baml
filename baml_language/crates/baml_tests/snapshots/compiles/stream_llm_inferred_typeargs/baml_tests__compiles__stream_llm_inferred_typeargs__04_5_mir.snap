@@ -226,3 +226,25 @@ fn user.TestFunc$stream(input: string, client: null | ai.stream.StreamingClient)
         return;
     }
 }
+
+fn user.call_stream_inferred() -> ai.stream.Stream<string | null, string> {
+    // Locals:
+    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _1: ai.FunctionSpec<string>
+    let _2: type
+    let _3: type
+
+    bb0: {
+        _1 = call const fn user.TestFunc$spec(const "world") -> [bb1];
+    }
+
+    bb1: {
+        _2 = load_type(string | null);
+        _3 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _2, copy _3>(copy _1, const <omitted>) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}

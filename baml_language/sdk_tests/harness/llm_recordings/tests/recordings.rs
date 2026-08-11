@@ -1,19 +1,14 @@
 //! Streaming replay-harness recorder
 //! (thoughts/sam-projects/bridge-generics/streaming/02).
 //!
-//! TODO(stream-migration): the recorder drives the removed legacy
-//! `$build_request_stream` companion and the parked `stream_e2e_*` fixture
-//! functions (see fixtures/llm_functions/baml_src/ns_lorem/functions.baml).
-//! The snapshot tests are `#[ignore]`d until the ai-world `$stream`
-//! machinery lands.
-//!
 //! For each recording this owns an insta **binary** snapshot under
 //! `sdk_tests/fixtures/llm_functions/recordings/`:
 //!
 //!   * `<name>.snap` / `<name>.snap.sse` — the raw SSE response body, captured
 //!     once with `curl` against the real provider (the request is built via the
-//!     compiler-synthesized `$build_request_stream` companion) and served
-//!     verbatim by the BAML replay server.
+//!     the fixture's recorder-only request helper, which delegates to the
+//!     same native-BAML provider lowering as `$stream`) and served verbatim
+//!     by the BAML replay server.
 //!
 //! Whether the network is hit is decided **only by insta state**: a capture
 //! runs when a `.snap.sse` payload is missing or `INSTA_UPDATE=always|force`;
@@ -122,8 +117,9 @@ struct RequestParts {
     body: String,
 }
 
-/// Build the streaming request via `<function>$build_request_stream` (the exact
-/// `{method,url,headers,body}` the runtime would send, `stream: true` injected).
+/// Build the streaming request via a fixture helper backed by the provider's
+/// native-BAML request lowering (the exact `{method,url,headers,body}` the
+/// runtime would send, with `stream: true`).
 /// Sets the replay client's env-resolved options first; `api_key` is the real
 /// key, since the only caller is the curl capture.
 async fn build_request(function: &str, api_key: &str) -> RequestParts {
@@ -141,7 +137,7 @@ async fn build_request(function: &str, api_key: &str) -> RequestParts {
     env::set_var("BAML_REPLAY_BASE_URL", OPENAI_BASE_URL);
     env::set_var("BAML_REPLAY_API_KEY", api_key);
 
-    let entry = format!("{function}$build_request_stream");
+    let entry = function.to_string();
     let mut args: IndexMap<&str, BexExternalValue> = IndexMap::new();
     args.insert("text", BexExternalValue::String(RECORDING_INPUT.into()));
     let out = run_compiled(program, &entry, args, false).await;
@@ -287,18 +283,45 @@ fn openai_api_key_available_when_recording() {
     }
 }
 
+#[tokio::test]
+async fn recording_request_uses_stream_provider_lowering() {
+    let request = build_request(
+        "lorem.stream_e2e_extract_recording_request",
+        "test-recording-key",
+    )
+    .await;
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.url, "https://api.openai.com/v1/responses");
+    assert!(
+        request.body.contains("\"stream\":true"),
+        "recording request enables streaming: {}",
+        request.body
+    );
+    assert!(
+        request.body.contains("\"input\":"),
+        "recording request contains Responses input: {}",
+        request.body
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "awaiting ai $stream"]
 async fn sse_snapshot_string() {
-    let bytes = obtain_sse("replay_extract_string", "lorem.stream_e2e_extract").await;
+    let bytes = obtain_sse(
+        "replay_extract_string",
+        "lorem.stream_e2e_extract_recording_request",
+    )
+    .await;
     validate_sse(&bytes);
     settings().bind(|| insta::assert_binary_snapshot!("replay_extract_string.sse", bytes.clone()));
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "awaiting ai $stream"]
 async fn sse_snapshot_doc() {
-    let bytes = obtain_sse("replay_extract_doc", "lorem.stream_e2e_extract_doc").await;
+    let bytes = obtain_sse(
+        "replay_extract_doc",
+        "lorem.stream_e2e_extract_doc_recording_request",
+    )
+    .await;
     validate_sse(&bytes);
     settings().bind(|| insta::assert_binary_snapshot!("replay_extract_doc.sse", bytes.clone()));
 }

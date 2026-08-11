@@ -24,12 +24,13 @@ function _proxy(
 
 // One JSON-RPC message as one line. Pure; tested with literal values.
 function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> string {
-    let m: map<string, unknown> = {};
-    let _ = m.set("jsonrpc", "2.0");
+    let m: map<string, unknown> = {
+        "jsonrpc": "2.0",
+        "method": method,
+    };
     if let i: int = id {
         let _ = m.set("id", i);
     }
-    let _ = m.set("method", method);
     if let p: map<string, unknown> = params {
         let _ = m.set("params", p);
     }
@@ -69,14 +70,14 @@ class McpConnection {
             },
         };
         let conn = McpConnection { server_name: name, p: p, next_id: 1 };
-        let init: map<string, unknown> = {};
-        let _ = init.set("protocolVersion", "2025-06-18");
-        let caps: map<string, unknown> = {};
-        let _ = init.set("capabilities", caps);
-        let info: map<string, unknown> = {};
-        let _ = info.set("name", "baml-mcp");
-        let _ = info.set("version", "0.1");
-        let _ = init.set("clientInfo", info);
+        let init: map<string, unknown> = {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "baml-mcp",
+                "version": "0.1",
+            },
+        };
         let _ = conn._request("initialize", init);
         conn._send(rpc_line(null, "notifications/initialized", null));
         conn
@@ -185,9 +186,10 @@ class McpConnection {
     // One tools/call. Text content items join as the tool's result; an
     // isError result throws, which the runner journals as ToolFailed.
     function call_tool(self, name: string, args: map<string, unknown>) -> string {
-        let params: map<string, unknown> = {};
-        let _ = params.set("name", name);
-        let _ = params.set("arguments", args);
+        let params: map<string, unknown> = {
+            "name": name,
+            "arguments": args,
+        };
         let result = self._request("tools/call", params);
         let texts: string[] = [];
         for (let item in baml.json.path_or<json[]>(result, ".content", [])) {

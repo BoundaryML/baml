@@ -444,12 +444,7 @@ function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = u
         let _ = props.set(a.name, baml.json.schema(a.type)) : unknown | null
         required.push(a.name) : int
       }
-    let schema: map<string, unknown> = map {  } : map<string, unknown>
-    let _ = schema.set("type", "object") : unknown | null
-    let _ = schema.set("properties", props) : unknown | null
-    let _ = schema.set("required", required) : unknown | null
-    let _ = schema.set("additionalProperties", false) : unknown | null
-    schema : map<string, unknown>
+    map { "type": "object", "properties": props, "required": required, "additionalProperties": false } : map<string, unknown>
   }
 }
 class ai.internal.SpecCtx {
@@ -472,10 +467,8 @@ lambda ai.mcp._proxy {
 }
 function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unknown> | null) -> string throws never {
   { : string
-    let m: map<string, unknown> = map {  } : map<string, unknown>
-    let _ = m.set("jsonrpc", "2.0") : unknown | null
+    let m: map<string, unknown> = map { "jsonrpc": "2.0", "method": method } : map<string, unknown>
     if let <pat> = id { 1 stmts } : void
-    let _ = m.set("method", method) : unknown | null
     if let <pat> = params { 1 stmts } : void
     baml.json.stringify(baml.json.to_json(m)) : string
   }
@@ -495,14 +488,7 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
               throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } : ai.errors.NetworkFailure
             }
     let conn = McpConnection { server_name: name, p: p, next_id: 1 } : ai.mcp.McpConnection
-    let init: map<string, unknown> = map {  } : map<string, unknown>
-    let _ = init.set("protocolVersion", "2025-06-18") : unknown | null
-    let caps: map<string, unknown> = map {  } : map<string, unknown>
-    let _ = init.set("capabilities", caps) : unknown | null
-    let info: map<string, unknown> = map {  } : map<string, unknown>
-    let _ = info.set("name", "baml-mcp") : unknown | null
-    let _ = info.set("version", "0.1") : unknown | null
-    let _ = init.set("clientInfo", info) : unknown | null
+    let init: map<string, unknown> = map { "protocolVersion": "2025-06-18", "capabilities": map {  }, "clientInfo": map { "name": "baml-mcp", "version": "0.1" } } : map<string, unknown>
     let _ = conn._request("initialize", init) : baml.json.json
     conn._send(rpc_line(null, "notifications/ini...", null)) : null
     conn : ai.mcp.McpConnection
@@ -587,9 +573,7 @@ function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool
 }
 function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args: map<string, unknown>) -> string throws never {
   { : string
-    let params: map<string, unknown> = map {  } : map<string, unknown>
-    let _ = params.set("name", name) : unknown | null
-    let _ = params.set("arguments", args) : unknown | null
+    let params: map<string, unknown> = map { "name": name, "arguments": args } : map<string, unknown>
     let result = self._request("tools/call", params) : baml.json.json
     let texts: string[] = [] : string[]
     for item in baml.json.path_or<baml.json.json[]>(result, ".content", [])

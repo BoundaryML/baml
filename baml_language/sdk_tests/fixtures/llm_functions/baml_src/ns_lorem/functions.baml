@@ -113,6 +113,31 @@ function stream_e2e_extract_resume(text: string) -> Resume {
   `
 }
 
+// Recorder-only request builders. They use the same native-BAML provider
+// lowering as `$stream`, but stop before opening the SSE connection so the
+// Rust recording harness can send the exact request with curl and retain the
+// raw response bytes.
+function _stream_recording_request<T>(spec: ai.FunctionSpec<T>) -> baml.http.Request {
+  openai.internal._openai_request(
+    StreamStub,
+    ai.ModelTurnInput {
+      prompt: spec.prompt_template,
+      journal: ai.Journal.new(spec),
+      toolbox: spec.tools(),
+      output_type: spec.output_type(),
+    },
+    true,
+  )
+}
+
+function stream_e2e_extract_recording_request(text: string) -> baml.http.Request {
+  _stream_recording_request(stream_e2e_extract$spec(text))
+}
+
+function stream_e2e_extract_doc_recording_request(text: string) -> baml.http.Request {
+  _stream_recording_request(stream_e2e_extract_doc$spec(text))
+}
+
 // BAML-driven collectors: they drive `$stream` from inside BAML so the
 // partial values never cross the FFI boundary as `T | ai.stream.Done`. The
 // two values that do cross are typed concretely. Useful for isolating a host

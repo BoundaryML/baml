@@ -308,7 +308,7 @@ class ai.internal.SpecCtx$stream {
   output_format: string | null
 }
 function ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown>  [expr] {
-  { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.json.schema(a.type)); required.push(a.name) }; let schema: map<string, unknown> = map {  }; let _ = schema.set("type", "object"); let _ = schema.set("properties", props); let _ = schema.set("required", required); let _ = schema.set("additionalProperties", false) } schema
+  { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.json.schema(a.type)); required.push(a.name) } } map { "type": "object", "properties": props, "required": required, "additionalProperties": false }
 }
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> root.Prompt  [builtin]
 
@@ -333,16 +333,16 @@ function ai.mcp._send(self: ?, line: string) -> null  [expr] {
   { let framed = [line, "\n"].join(""); let _ = self.p.write_stdin(framed) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } } } null
 }
 function ai.mcp.call_tool(self: ?, name: string, args: map<string, unknown>) -> string  [expr] {
-  { let params: map<string, unknown> = map {  }; let _ = params.set("name", name); let _ = params.set("arguments", args); let result = self._request("tools/call", params); let texts: string[] = []; for item in baml.json.path_or(result, ".content", []) {  } if (baml.json.path_or(item, ".type", "") Eq "text") { texts.push(baml.json.path_or(item, ".text", "")) }; let joined = texts.join("\n"); if (baml.json.path_or(result, ".isError", false)) { throw baml.errors.InvalidArgument { message: `...` } } } joined
+  { let params: map<string, unknown> = map { "name": name, "arguments": args }; let result = self._request("tools/call", params); let texts: string[] = []; for item in baml.json.path_or(result, ".content", []) {  } if (baml.json.path_or(item, ".type", "") Eq "text") { texts.push(baml.json.path_or(item, ".text", "")) }; let joined = texts.join("\n"); if (baml.json.path_or(result, ".isError", false)) { throw baml.errors.InvalidArgument { message: `...` } } } joined
 }
 function ai.mcp.close(self: ?) -> null  [expr] {
   {  } self.p.close()
 }
 function ai.mcp.connect(name: string, command: string, args: string[], timeout_ms: int = 30000) -> ai.mcp.McpConnection  [expr] {
-  { let p = baml.sys.start_process(command, args, baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: timeout_ms, stdin: null, keep_stdin_open: true }) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } }; let conn = ai.mcp.McpConnection { server_name: name, p: p, next_id: 1 }; let init: map<string, unknown> = map {  }; let _ = init.set("protocolVersion", "2025-06-18"); let caps: map<string, unknown> = map {  }; let _ = init.set("capabilities", caps); let info: map<string, unknown> = map {  }; let _ = info.set("name", "baml-mcp"); let _ = info.set("version", "0.1"); let _ = init.set("clientInfo", info); let _ = conn._request("initialize", init); conn._send(rpc_line(null, "notifications/ini...", null)) } conn
+  { let p = baml.sys.start_process(command, args, baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: timeout_ms, stdin: null, keep_stdin_open: true }) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: `...`, detail: `...`, raw_body: null } } }; let conn = ai.mcp.McpConnection { server_name: name, p: p, next_id: 1 }; let init: map<string, unknown> = map { "protocolVersion": "2025-06-18", "capabilities": map {  }, "clientInfo": map { "name": "baml-mcp", "version": "0.1" } }; let _ = conn._request("initialize", init); conn._send(rpc_line(null, "notifications/ini...", null)) } conn
 }
 function ai.mcp.rpc_line(id: int?, method: string, params: map<string, unknown>?) -> string  [expr] {
-  { let m: map<string, unknown> = map {  }; let _ = m.set("jsonrpc", "2.0"); if let i: int = id { let _ = m.set("id", i) }; let _ = m.set("method", method); if let p: map<string, unknown> = params { let _ = m.set("params", p) } } baml.json.stringify(baml.json.to_json(m))
+  { let m: map<string, unknown> = map { "jsonrpc": "2.0", "method": method }; if let i: int = id { let _ = m.set("id", i) }; if let p: map<string, unknown> = params { let _ = m.set("params", p) } } baml.json.stringify(baml.json.to_json(m))
 }
 function ai.mcp.tools(self: ?) -> root.tools.Tool[]  [expr] {
   { let result = self._request("tools/list", map {  }); let out: root.tools.Tool[] = []; for t in baml.json.path_or(result, ".tools", []) { let tool_name = baml.json.path_or(t, ".name", ""); let schema = baml.json.from_json(baml.json.path_or(t, ".inputSchema", map {  })) catch_all (e) { _ => { let empty: map<string, unknown> = map {  } } empty }; out.push(root.tools.raw_tool(tool_name, baml.json.path_or(t, ".description", ""), schema, _proxy(self, tool_name))) } } out

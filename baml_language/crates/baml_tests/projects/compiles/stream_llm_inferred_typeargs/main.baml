@@ -1,10 +1,5 @@
-// TODO(stream-migration): this project pinned the call shape of the removed
-// `baml.prompt.stream_llm_function<TStream, TFinal>` machinery (inference-reliant
-// call sites without explicit type args). The `$stream`/`$parse_stream`
-// companions and `stream_llm_function` were removed with the legacy LLM path.
-// When streaming returns, restore the inferred-typeargs call-shape pin from
-// git history. Until then this project keeps a minimal non-streaming LLM
-// function so it still compiles cleanly.
+// Call-shape pin for the generic ai.stream constructor. The expected return
+// type must infer both TStream and TFinal without explicit type arguments.
 
 client TestClient = openai.OpenAiClient.new(
     model = "gpt-4o-mini",
@@ -15,4 +10,8 @@ client TestClient = openai.OpenAiClient.new(
 function TestFunc(input: string) -> string {
     client TestClient
     prompt `hi ${input}`
+}
+
+function call_stream_inferred() -> ai.stream.Stream<string | null, string> {
+    ai.stream.from_spec(TestFunc$spec("world"))
 }

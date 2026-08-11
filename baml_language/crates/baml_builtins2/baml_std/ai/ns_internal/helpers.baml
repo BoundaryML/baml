@@ -10,12 +10,12 @@ function _schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown
         let _ = props.set(a.name, baml.json.schema(a.type));
         required.push(a.name);
     }
-    let schema: map<string, unknown> = {};
-    let _ = schema.set("type", "object");
-    let _ = schema.set("properties", props);
-    let _ = schema.set("required", required);
-    let _ = schema.set("additionalProperties", false);
-    schema
+    {
+        "type": "object",
+        "properties": props,
+        "required": required,
+        "additionalProperties": false,
+    }
 }
 
 // Bound as `ctx` inside a compiler-desugared `@spec` prompt template.

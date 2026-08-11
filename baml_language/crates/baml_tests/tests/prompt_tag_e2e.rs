@@ -9,11 +9,8 @@
 //!     `#"..."#` prompts are a compile error now, so there is no legacy twin
 //!     to compare against.
 //!
-//! TODO(stream-migration): the two remaining tests exercise the removed
-//! `$stream` companion and are `#[ignore]`d until the ai-world `$stream`
-//! machinery lands. Their inline BAML still uses the removed
-//! `client<llm>`/Jinja forms and must be migrated when restored (the Jinja
-//! half of the parity test must be dropped entirely).
+//! The remaining tests exercise the ai-world `$stream` companion against a
+//! local OpenAI Responses API endpoint.
 
 #![allow(dead_code)]
 
@@ -37,16 +34,16 @@ fn client_decl(base_url: &str) -> String {
     )
 }
 
-/// Pull the concatenated `messages[].content` out of a captured chat request.
+/// Pull the concatenated `input[].content` out of a captured Responses request.
 fn request_messages(server_requests: &[wiremock::Request]) -> String {
     let req = server_requests
         .iter()
-        .find(|r| r.url.path() == "/chat/completions")
-        .expect("a /chat/completions request was recorded");
+        .find(|r| r.url.path() == "/responses")
+        .expect("a /responses request was recorded");
     let body: serde_json::Value = serde_json::from_slice(&req.body).expect("request body is JSON");
-    body["messages"]
+    body["input"]
         .as_array()
-        .expect("messages array present")
+        .expect("input array present")
         .iter()
         .map(|m| message_text(&m["content"]))
         .collect::<Vec<_>>()
@@ -70,27 +67,27 @@ fn message_text(content: &serde_json::Value) -> String {
         .unwrap_or_default()
 }
 
-/// An OpenAI-format SSE body streaming `chunks` then a `stop` finish.
+/// An OpenAI Responses SSE body streaming `chunks` then completing.
 fn openai_sse_body(chunks: &[&str]) -> String {
     let mut body = String::new();
     for chunk in chunks {
         body.push_str(&format!(
-            "data: {{\"choices\":[{{\"delta\":{{\"content\":\"{chunk}\"}}}}]}}\n\n"
+            "data: {{\"type\":\"response.output_text.delta\",\"delta\":\"{chunk}\"}}\n\n"
         ));
     }
-    body.push_str("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n");
-    body.push_str("data: [DONE]\n\n");
+    body.push_str(
+        "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n",
+    );
     body
 }
 
 #[tokio::test]
-#[ignore = "awaiting ai $stream"]
 async fn backtick_prompt_streams_through_orchestrator() {
     // BEP-049 M5e: the streaming path must thread the same prompt closure as
     // the oneshot path, so the rendered backtick prompt reaches the wire.
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/chat/completions"))
+        .and(path("/responses"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -140,11 +137,10 @@ async fn backtick_prompt_streams_through_orchestrator() {
 /// Streaming render of `ctx.output_format` over a CLASS return: the class
 /// schema must reach the wire on the streaming path.
 #[tokio::test]
-#[ignore = "awaiting ai $stream"]
 async fn backtick_streaming_renders_output_format() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/chat/completions"))
+        .and(path("/responses"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
