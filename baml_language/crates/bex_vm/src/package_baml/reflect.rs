@@ -17,7 +17,10 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
-use baml_compiler_diagnostics::DiagnosticId;
+use baml_compiler_diagnostics::{
+    DiagnosticId, DiagnosticPhase,
+    runtime_type::{self, InvalidIdentifierKind},
+};
 use baml_type::{RealizedTy, Ty, TyAttr, normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
@@ -979,10 +982,11 @@ impl BamlClassReflectPackage for PackageBamlImpl {
         for (export, value) in types {
             let export = export.to_string();
             if !super::type_kinds::is_baml_identifier(&export) {
-                return Err(compilation_error(
-                    vm,
-                    DiagnosticId::InvalidSyntax,
-                    format!("invalid exported type name `{export}`"),
+                let diagnostic =
+                    runtime_type::invalid_identifier(InvalidIdentifierKind::ExportedType, &export)
+                        .with_phase(DiagnosticPhase::Hir);
+                return Err(VmRustFnError::Thrown(
+                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
                 ));
             }
             let local = LocalName {

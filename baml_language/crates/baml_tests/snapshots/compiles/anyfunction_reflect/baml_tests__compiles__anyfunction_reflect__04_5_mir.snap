@@ -573,14 +573,14 @@ fn user.RuntimeClassify$stream(input: string, client: baml.llm.Client) -> baml.l
 fn user.runtime_enum_llm_companions_compile() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: type // category
+    let _1: baml.reflect.enum.Type // category
     let _2: (string | baml.reflect.enum.Value)[]
     let _3: baml.reflect.enum.Value
     let _4: string // prompt
     let _5: baml.llm.PromptAst
-    let _6: type
+    let _6: baml.reflect.enum.Type
     let _7: unknown // parsed
-    let _8: type
+    let _8: baml.reflect.enum.Type
     let _9: string
     let _10: string
     let _11: unknown

@@ -2570,17 +2570,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             if name.package().as_str() == "baml"
                 && name.namespace().iter().map(Name::as_str).eq(["reflect", "class"])
                 && name.name().as_str() == "PendingType");
+        let type_carrier = Ty::Type {
+            attr: TyAttr::default(),
+        };
         if !pending_type
             && !matches!(
-                operand_ty,
-                Ty::Type { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
+                &operand_ty,
+                Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
             )
+            && !self.is_subtype(&operand_ty, &type_carrier)
         {
             self.context.report(
                 TirTypeError::TypeMismatch {
-                    expected: Ty::Type {
-                        attr: TyAttr::default(),
-                    },
+                    expected: type_carrier,
                     got: operand_ty,
                 },
                 operand,
@@ -10904,21 +10906,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         match self.resolve_package_item(pkg_items, &item_path, expr_id) {
             Some(ty) => ty,
             None => {
-                // I-9 (BEP-066): `reflect.type_of` was *removed*, not aliased —
-                // name the replacement instead of a bare "unresolved name".
-                // Both spellings funnel here: the bare `reflect.type_of` (via
-                // the keyword-shorthand alias) and the explicit
-                // `baml.reflect.type_of`.
+                // I-9 (BEP-066): the `reflect.type_of*` readers were *removed*,
+                // not aliased — name each replacement instead of reporting a
+                // bare "unresolved name". Bare `reflect.*` and explicit
+                // `baml.reflect.*` spellings both funnel through this branch.
                 if pkg_name.as_str() == "baml"
                     && item_path.len() == 2
                     && item_path[0].as_str() == "reflect"
-                    && item_path[1].as_str() == "type_of"
                 {
-                    self.context
-                        .report_simple(TirTypeError::RemovedReflectTypeOf, expr_id);
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
+                    let removed_reader = match item_path[1].as_str() {
+                        "type_of" => Some(TirTypeError::RemovedReflectTypeOf),
+                        "type_of_value" => Some(TirTypeError::RemovedReflectTypeOfValue),
+                        _ => None,
                     };
+                    if let Some(error) = removed_reader {
+                        self.context.report_simple(error, expr_id);
+                        return Ty::Unknown {
+                            attr: TyAttr::default(),
+                        };
+                    }
                 }
                 // Find the first invalid segment in the path.
                 // The path is [ns_0, ns_1, ..., ns_n, item].

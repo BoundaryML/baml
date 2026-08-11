@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticPhase,
-    runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
+    runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
@@ -300,10 +300,10 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
         let class_name = name.as_str();
         let mut diagnostics = Vec::new();
         if !is_baml_identifier(class_name) {
-            diagnostics.push(compiler_diagnostic(
-                DiagnosticId::InvalidSyntax,
-                format!("invalid class name `{class_name}`"),
-            ));
+            diagnostics.push(
+                runtime_type::invalid_identifier(InvalidIdentifierKind::Class, class_name)
+                    .with_phase(DiagnosticPhase::Hir),
+            );
         }
 
         let mut class_fields = Vec::with_capacity(fields.len());
@@ -311,10 +311,13 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
         let mut seen_serialized_keys = std::collections::HashSet::new();
         for (field_name, value) in fields {
             if !is_baml_identifier(field_name.as_str()) {
-                diagnostics.push(compiler_diagnostic(
-                    DiagnosticId::InvalidSyntax,
-                    format!("invalid field name `{class_name}.{field_name}`"),
-                ));
+                diagnostics.push(
+                    runtime_type::invalid_identifier(
+                        InvalidIdentifierKind::Field,
+                        &format!("{class_name}.{field_name}"),
+                    )
+                    .with_phase(DiagnosticPhase::Hir),
+                );
             }
             let row = match reflected_type_row(vm, *value) {
                 Ok(row) => row,
@@ -693,10 +696,10 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
         let enum_name = name.as_str();
         let mut diagnostics = Vec::new();
         if !is_baml_identifier(enum_name) {
-            diagnostics.push(compiler_diagnostic(
-                DiagnosticId::InvalidSyntax,
-                format!("invalid enum name `{enum_name}`"),
-            ));
+            diagnostics.push(
+                runtime_type::invalid_identifier(InvalidIdentifierKind::Enum, enum_name)
+                    .with_phase(DiagnosticPhase::Hir),
+            );
         }
 
         let mut variants = Vec::with_capacity(values.len());
@@ -711,10 +714,13 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
 
         for variant in &variants {
             if !is_baml_identifier(&variant.name) {
-                diagnostics.push(compiler_diagnostic(
-                    DiagnosticId::InvalidSyntax,
-                    format!("invalid enum variant name `{}.{}`", enum_name, variant.name),
-                ));
+                diagnostics.push(
+                    runtime_type::invalid_identifier(
+                        InvalidIdentifierKind::EnumVariant,
+                        &format!("{}.{}", enum_name, variant.name),
+                    )
+                    .with_phase(DiagnosticPhase::Hir),
+                );
             }
         }
 
@@ -1345,18 +1351,7 @@ fn string_map(
 }
 
 pub(super) fn is_baml_identifier(value: &str) -> bool {
-    fn segment(value: &str, allow_hyphen: bool) -> bool {
-        let mut chars = value.chars();
-        matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
-            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || (allow_hyphen && c == '-'))
-    }
-
-    if let Some(rest) = value.strip_prefix('$') {
-        return segment(rest, false);
-    }
-    let mut segments = value.split('$');
-    segments.next().is_some_and(|head| segment(head, true))
-        && segments.all(|part| segment(part, true))
+    runtime_type::is_baml_identifier(value)
 }
 
 pub(crate) fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {

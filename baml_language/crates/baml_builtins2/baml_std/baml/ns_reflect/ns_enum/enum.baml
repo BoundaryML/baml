@@ -17,7 +17,7 @@ function value(
 /// identity even when its name and rows are byte-identical.
 //baml:mut_vm
 //baml:fallible
-function new(name: string, values: (string | Value)[]) -> type throws baml.reflect.errors.CompilationError {
+function new(name: string, values: (string | Value)[]) -> Type throws baml.reflect.errors.CompilationError {
   $rust_function
 }
 

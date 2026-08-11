@@ -2006,7 +2006,7 @@ class baml.reflect.enum.Value$stream {
 function baml.reflect.enum.as_type(self: ?) -> type  [builtin]
 function baml.reflect.enum.get_value(value: unknown) -> string  [builtin]
 function baml.reflect.enum.meta(self: ?) -> baml.reflect.Meta  [builtin]
-function baml.reflect.enum.new(name: string, values: string | baml.reflect.enum.Value[]) -> type  [builtin]
+function baml.reflect.enum.new(name: string, values: string | baml.reflect.enum.Value[]) -> baml.reflect.enum.Type  [builtin]
 function baml.reflect.enum.value(name: string, alias: string? = null, description: string? = null, docstring: string? = null, other: map<string, string>? = null) -> baml.reflect.enum.Value  [builtin]
 function baml.reflect.enum.values(self: ?) -> baml.reflect.enum.Value[]  [builtin]
 
