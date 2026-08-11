@@ -113,6 +113,82 @@ pub(crate) struct RunBoundary {
     baml_dir: PathBuf,
     created_ms: u64,
     producer: TraceCaptureProducer,
+    /// §7.3 continuous off-thread drain (primary path). `None` when the
+    /// worker thread could not spawn; finish() then drains inline.
+    drain_worker: Option<ValueDrainWorker>,
+}
+
+/// Mutable state of one boundary's value drain: lazily created segment
+/// writer + store, plus the roots owed to the §6.7 manifest commit.
+#[derive(Default)]
+struct DrainState {
+    writer: Option<ValueWriter<FileValueArtifactSink>>,
+    store: Option<Store>,
+    /// Store open failed once — don't retry every drain.
+    store_failed: bool,
+    roots: Vec<[u8; 32]>,
+}
+
+/// The continuous drain worker: drains captured drafts off the
+/// application threads at a steady cadence, so a long run's values reach
+/// the segment + CAS incrementally instead of accumulating in the trace
+/// heap until boundary finish. At stop it runs the same §6.7 root-commit
+/// barrier the inline path uses.
+struct ValueDrainWorker {
+    stop: std::sync::mpsc::Sender<()>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl ValueDrainWorker {
+    const DRAIN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+    fn spawn(
+        boundary_id: BoundaryId,
+        boundary_dir: PathBuf,
+        baml_dir: PathBuf,
+        created_ms: u64,
+        producer: TraceCaptureProducer,
+    ) -> Option<ValueDrainWorker> {
+        let (stop, rx) = std::sync::mpsc::channel::<()>();
+        let thread = std::thread::Builder::new()
+            .name("baml-value-drain".to_string())
+            .spawn(move || {
+                let mut state = DrainState::default();
+                loop {
+                    // A send OR a dropped sender both mean "finish now";
+                    // only the timeout tick keeps looping.
+                    let stopping = !matches!(
+                        rx.recv_timeout(Self::DRAIN_INTERVAL),
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                    );
+                    drain_step(
+                        &producer,
+                        &mut state,
+                        boundary_id,
+                        &boundary_dir,
+                        &baml_dir,
+                        created_ms,
+                    );
+                    if stopping {
+                        break;
+                    }
+                }
+                drain_finish(&producer, state, boundary_id, &boundary_dir);
+            })
+            .ok()?;
+        Some(ValueDrainWorker {
+            stop,
+            thread: Some(thread),
+        })
+    }
+
+    /// Stop the worker and wait for its final drain + commit barrier.
+    fn finish(mut self) {
+        let _ = self.stop.send(());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
 }
 
 impl RunBoundary {
@@ -169,13 +245,30 @@ impl RunBoundary {
             ));
             return None;
         }
+        // Same enabled(16) draft budgets the playground run path uses.
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
+        // §7.3 continuous off-thread drain: values leave the trace heap at
+        // a steady cadence instead of accumulating until finish. A failed
+        // spawn degrades to the inline finish-time drain.
+        let drain_worker = ValueDrainWorker::spawn(
+            boundary_id,
+            boundary_dir.clone(),
+            baml_dir.clone(),
+            created_ms,
+            producer.clone(),
+        );
+        if drain_worker.is_none() {
+            obs_debug(format_args!(
+                "value drain worker did not spawn; draining inline at finish"
+            ));
+        }
         Some(Self {
             boundary_id,
             boundary_dir,
             baml_dir,
             created_ms,
-            // Same enabled(16) draft budgets the playground run path uses.
-            producer: TraceCaptureProducer::new(TraceCaptureConfig::enabled(16)),
+            producer,
+            drain_worker,
         })
     }
 
@@ -196,7 +289,12 @@ impl RunBoundary {
     /// flush → exit). `status` is `succeeded` / `failed` / `cancelled`;
     /// `entry_call_ref` carries the run's root logical thread when the
     /// call actually started. Never fails the run.
-    pub(crate) fn finish(self, engine: &BexEngine, entry_call_ref: Option<CallRef>, status: &str) {
+    pub(crate) fn finish(
+        mut self,
+        engine: &BexEngine,
+        entry_call_ref: Option<CallRef>,
+        status: &str,
+    ) {
         // 1. Flush the profile rings so the consumer has seen the run's
         //    StartThread before we ask it to bind (playground does the
         //    same before trace attachment).
@@ -208,8 +306,24 @@ impl RunBoundary {
         // CallRef (the engine allocates thread 1 to the root call first).
         let root_thread = entry_call_ref.map_or(1, |call_ref| call_ref.thread_id.0);
 
-        // 2. Drain captured values into the boundary dir + project store.
-        self.drain_values(root_thread);
+        // 2. Values: stop the continuous drain worker (final drain + §6.7
+        //    commit barrier run on the worker), or drain inline when the
+        //    worker never spawned.
+        match self.drain_worker.take() {
+            Some(worker) => worker.finish(),
+            None => {
+                let mut state = DrainState::default();
+                drain_step(
+                    &self.producer,
+                    &mut state,
+                    self.boundary_id,
+                    &self.boundary_dir,
+                    &self.baml_dir,
+                    self.created_ms,
+                );
+                drain_finish(&self.producer, state, self.boundary_id, &self.boundary_dir);
+            }
+        }
 
         // 3./4. Bind the run's partition, then complete the boundary (the
         //    consumer folds the sealed `cct.bamlcct` snapshot). Recently
@@ -260,102 +374,122 @@ impl RunBoundary {
             obs_debug(format_args!("final profile flush timed out"));
         }
     }
+}
 
-    /// §7.4 value drain: every captured draft goes to
-    /// `<boundary>/thread-<root>/value-0.bamlvalue` (the segment shape
-    /// the history readers scan) and, canonically encoded, into the
-    /// project store `<baml>/store` (dedup by CID). Root-commit ordering
-    /// (§6.7): pack sync BEFORE the manifest append; the manifest lists
-    /// every DagRef root actually persisted.
-    fn drain_values(&self, root_thread: u64) {
-        let value_path = self
-            .boundary_dir
-            .join(format!("thread-{root_thread}"))
-            .join("value-0.bamlvalue");
-        let sink = match FileValueArtifactSink::create(&value_path) {
-            Ok(sink) => sink,
-            Err(err) => {
-                obs_debug(format_args!(
-                    "cannot create value segment {}: {err}",
-                    value_path.display()
-                ));
-                return;
-            }
-        };
-        let mut writer = match ValueWriter::new(sink, self.boundary_id) {
-            Ok(writer) => writer,
-            Err(err) => {
-                obs_debug(format_args!("cannot start value writer: {err}"));
-                return;
-            }
-        };
-        // The store euid is the process euid — the same identity the
-        // profile consumer stamps into session dirs and pack headers.
-        let mut store = match Store::open(&self.baml_dir.join("store"), ProcessEuid::current().0) {
-            Ok(store) => Some(store),
-            Err(err) => {
-                obs_debug(format_args!("cannot open value store: {err}"));
-                None
-            }
-        };
-
-        let mut roots: Vec<[u8; 32]> = Vec::new();
-        let created_ms = self.created_ms;
-        // Mirrors `TraceCaptureProducer::drain_to_value_writer_with_store`,
-        // kept open-coded so the DagRef root CIDs are collectible for the
-        // manifest (the encoded report does not carry them).
-        let report = self
-            .producer
-            .drain_to_value_recorder_report(|draft, body, canonical| {
-                if let Some(log) = &draft.log {
-                    writer.append_log_body(
-                        ValueCodec::BamlOutboundValue,
-                        body,
-                        LogEventRecord {
-                            call: draft.call,
-                            level: log.level.clone(),
-                            source: log.source.clone(),
-                            timestamp_ms: log.timestamp_ms,
-                            message_preview: log.message_preview.clone(),
-                        },
-                    )
-                } else {
-                    // A failed store write degrades to the legacy record
-                    // shape (no DagRef); the inline body stays authoritative.
-                    let dag_ref = store.as_mut().and_then(|store| {
-                        store
-                            .put_encoded(canonical, created_ms)
-                            .ok()
-                            .map(|_| DagRef {
-                                root_cid: canonical.root_cid,
-                                node_codec_version: canon::NODE_CODEC_VERSION,
-                                logical_len: canonical.logical_len,
-                            })
-                    });
-                    if let Some(dag_ref) = &dag_ref {
-                        roots.push(dag_ref.root_cid);
-                    }
-                    writer.append_body_with_capture_and_dag(
-                        ValueCodec::BamlOutboundValue,
-                        body,
-                        Some(ValueCapture {
-                            kind: value_capture_kind(draft.kind),
-                            call: draft.call,
-                            function_id: draft.function_id,
-                        }),
-                        dag_ref,
-                    )
-                }
-            });
-        for failure in &report.failures {
-            obs_debug(format_args!(
-                "value capture drain failed ({:?}): {}",
-                failure.kind, failure.diagnostic
-            ));
+/// One drain pass (§7.4): every pending draft goes to the boundary's
+/// `.bamlvalue` segment (created lazily under the first draft's thread
+/// dir — the history readers scan every thread dir) and, canonically
+/// encoded, into the project store `<baml>/store` (dedup by CID). DagRef
+/// roots accumulate for the §6.7 manifest commit at finish.
+fn drain_step(
+    producer: &TraceCaptureProducer,
+    state: &mut DrainState,
+    boundary_id: BoundaryId,
+    boundary_dir: &Path,
+    baml_dir: &Path,
+    created_ms: u64,
+) {
+    let DrainState {
+        writer,
+        store,
+        store_failed,
+        roots,
+    } = state;
+    let report = producer.drain_to_value_recorder_report(|draft, body, canonical| {
+        // Lazy writer: no captures → no segment file at all.
+        if writer.is_none() {
+            let thread = draft.call.thread_id.0;
+            let value_path = boundary_dir
+                .join(format!("thread-{thread}"))
+                .join("value-0.bamlvalue");
+            let sink = FileValueArtifactSink::create(&value_path)?;
+            *writer = Some(ValueWriter::new(sink, boundary_id)?);
         }
-        // Declared loss instead of silent absence (§7.3).
-        let stats = self.producer.stats();
-        if stats.skipped_queue_full > 0 {
+        let writer = writer.as_mut().expect("created above");
+        if let Some(log) = &draft.log {
+            writer.append_log_body(
+                ValueCodec::BamlOutboundValue,
+                body,
+                LogEventRecord {
+                    call: draft.call,
+                    level: log.level.clone(),
+                    source: log.source.clone(),
+                    timestamp_ms: log.timestamp_ms,
+                    message_preview: log.message_preview.clone(),
+                },
+            )
+        } else {
+            if store.is_none() && !*store_failed {
+                // The store euid is the process euid — the same identity
+                // the profile consumer stamps into session dirs and pack
+                // headers.
+                match Store::open(&baml_dir.join("store"), ProcessEuid::current().0) {
+                    Ok(opened) => *store = Some(opened),
+                    Err(err) => {
+                        obs_debug(format_args!("cannot open value store: {err}"));
+                        *store_failed = true;
+                    }
+                }
+            }
+            // A failed store write degrades to the legacy record shape
+            // (no DagRef); the inline body stays authoritative.
+            let dag_ref = store.as_mut().and_then(|store| {
+                store
+                    .put_encoded(canonical, created_ms)
+                    .ok()
+                    .map(|_| DagRef {
+                        root_cid: canonical.root_cid,
+                        node_codec_version: canon::NODE_CODEC_VERSION,
+                        logical_len: canonical.logical_len,
+                    })
+            });
+            if let Some(dag_ref) = &dag_ref {
+                roots.push(dag_ref.root_cid);
+            }
+            writer.append_body_with_capture_and_dag(
+                ValueCodec::BamlOutboundValue,
+                body,
+                Some(ValueCapture {
+                    kind: value_capture_kind(draft.kind),
+                    call: draft.call,
+                    function_id: draft.function_id,
+                }),
+                dag_ref,
+            )
+        }
+    });
+    for failure in &report.failures {
+        obs_debug(format_args!(
+            "value capture drain failed ({:?}): {}",
+            failure.kind, failure.diagnostic
+        ));
+    }
+}
+
+/// Final drain + declared loss + the §6.7 root-commit barrier: segment
+/// sync BEFORE store sync BEFORE the durable manifest append (a pinned
+/// root must never outlive its capture evidence or its pack bytes), then
+/// seal the active pack so this short-lived process leaves an idx behind.
+fn drain_finish(
+    producer: &TraceCaptureProducer,
+    mut state: DrainState,
+    boundary_id: BoundaryId,
+    boundary_dir: &Path,
+) {
+    // Declared loss instead of silent absence (§7.3). Skips force the
+    // segment into existence even when nothing else was captured.
+    let stats = producer.stats();
+    if stats.skipped_queue_full > 0 {
+        if state.writer.is_none() {
+            let value_path = boundary_dir.join("thread-1").join("value-0.bamlvalue");
+            state.writer = FileValueArtifactSink::create(&value_path)
+                .and_then(|sink| ValueWriter::new(sink, boundary_id))
+                .map_err(|err| {
+                    obs_debug(format_args!("cannot create value segment: {err}"));
+                })
+                .ok();
+        }
+        if let Some(writer) = state.writer.as_mut() {
             let loss = bex_events::value::CaptureLossRecord {
                 kind: bex_events::value::CaptureLossKind::Value,
                 reason: bex_events::value::CaptureLossReason::QueueFull,
@@ -368,29 +502,27 @@ impl RunBoundary {
                 obs_debug(format_args!("cannot append capture-loss record: {err}"));
             }
         }
+    }
+    if let Some(writer) = state.writer.as_mut() {
         if let Err(err) = writer.flush() {
             obs_debug(format_args!("value segment flush failed: {err}"));
         }
-        // The capture evidence itself must be durable before any root that
-        // points into it is pinned.
+        // The capture evidence itself must be durable before any root
+        // that points into it is pinned.
         if let Err(err) = writer.sync_data() {
             obs_debug(format_args!("value segment sync failed: {err}"));
         }
-        // Root-commit barrier (§6.7): pack D1 sync, then the durable
-        // manifest append (append_manifest fsyncs the manifest and the
-        // boundary dir), then seal the active pack so this short-lived
-        // process leaves a sealed pack + idx behind.
-        if let Some(store) = store.as_mut() {
-            if let Err(err) = store.sync_data() {
-                obs_debug(format_args!("value store sync failed: {err}"));
-            } else if !roots.is_empty()
-                && let Err(err) = gc::append_manifest(&self.boundary_dir, &roots)
-            {
-                obs_debug(format_args!("manifest append failed: {err}"));
-            }
-            if let Err(err) = store.seal_active() {
-                obs_debug(format_args!("value store seal failed: {err}"));
-            }
+    }
+    if let Some(store) = state.store.as_mut() {
+        if let Err(err) = store.sync_data() {
+            obs_debug(format_args!("value store sync failed: {err}"));
+        } else if !state.roots.is_empty()
+            && let Err(err) = gc::append_manifest(boundary_dir, &state.roots)
+        {
+            obs_debug(format_args!("manifest append failed: {err}"));
+        }
+        if let Err(err) = store.seal_active() {
+            obs_debug(format_args!("value store seal failed: {err}"));
         }
     }
 }
