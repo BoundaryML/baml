@@ -22,7 +22,7 @@ symbol comes out unjudged. Nothing pairs the two sides deterministically, by
 design — name agreement was tried and removed, and `build_symbol_matrix` says
 why.
 
-`--llm` needs `ANTHROPIC_API_KEY`; locally, `infisical run -- tools/stdlib-matrix/run --llm`.
+`--llm` needs `OPENAI_API_KEY`; locally, `infisical run -- tools/stdlib-matrix/run --llm`.
 
 To check a key before spending a run on it — or before putting it in a CI
 environment — `check_client` makes one trial call and nothing else:
@@ -31,11 +31,13 @@ environment — `check_client` makes one trial call and nothing else:
 cd tools/stdlib-matrix && baml run check_client
 ```
 
-It uses `AlignerProbe`, which is `Aligner` without the retry policy, because the
-orchestrator discards each attempt's error and reports only that all of them
-failed. Unretried, the provider's own message comes through: `invalid x-api-key`
-reads very differently from a model this account may not use, and a `--llm` run
-calls this first so it fails in seconds rather than at the end of a session.
+It goes through `Aligner`, the same client the sessions use, and still answers
+immediately: a rejected key arrives as `ai.errors.InvalidRequest`, which the
+retry wrapper's default judgment declines to retry, so the provider's own
+message comes through on the first attempt. That message is the point — a bad
+key and a model this account may not use need different fixes and are otherwise
+indistinguishable. A `--llm` run makes this call first, so it fails in seconds
+rather than after a session's worth of work.
 
 ## How it judges
 
@@ -135,7 +137,7 @@ Three things it needs, none of which live in this repo:
 
 1. **GitHub Pages enabled** for the repository, with the source set to *GitHub
    Actions*. Until then the deploy step fails.
-2. **`ANTHROPIC_API_KEY`** in the `boundary-tools-prod` environment.
+2. **`OPENAI_API_KEY`** in the `boundary-tools-prod` environment.
 3. Optionally **`STDLIB_MATRIX_URL`** as a repository variable, if the site is
    served anywhere other than `https://boundaryml.github.io/baml`. It is what the
    workflow fetches the previous report from; get it wrong and every run is a

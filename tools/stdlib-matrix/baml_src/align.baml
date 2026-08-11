@@ -22,10 +22,13 @@
 // Reliability composes at the client boundary: the base client is wrapped
 // rather than configured with a `retry_policy` block, which is gone.
 //
-// No `temperature`: claude-sonnet-5 rejects it ("`temperature` is deprecated
-// for this model"). Run-to-run stability comes from `--previous` instead — an
-// unchanged symbol is never asked about twice.
-client AlignerBase = anthropic.AnthropicClient.new(model = "claude-sonnet-5");
+// No `temperature`, deliberately: the current reasoning models reject it
+// outright rather than ignoring it. Run-to-run stability comes from
+// `--previous` instead — an unchanged symbol is never asked about twice.
+//
+// No `api_key_env` either: `OPENAI_API_KEY` is what `OpenAiClient` falls back
+// to, so naming it would restate the default and invite the two to drift.
+client AlignerBase = openai.OpenAiClient.new(model = "gpt-5.5");
 
 // `max_attempts` counts attempts, where the old `max_retries: 3` counted
 // retries after the first, so four keeps the previous budget. The backoff
@@ -348,7 +351,7 @@ function check_client() -> null {
     let _ = preflight("Reply with one word: ready") catch_all (error) {
         _ => {
             throw baml.errors.InvalidArgument {
-                message: `the model client rejected a trial call, so every session would fail the same way.\n${error}\nCheck ANTHROPIC_API_KEY, and that this account may use the model named by the Aligner client.`,
+                message: `the model client rejected a trial call, so every session would fail the same way.\n${error}\nCheck OPENAI_API_KEY, and that this account may use the model the Aligner client names.`,
             };
         },
     };

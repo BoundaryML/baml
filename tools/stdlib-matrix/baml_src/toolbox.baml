@@ -144,18 +144,11 @@ function strip_warnings(text: string) -> string {
 /// would turn the single most useful failure — a near miss with alternatives —
 /// into a bare error.
 function run_baml(box: Toolbox, args: string[]) -> string {
-    let result = baml
-        .sys
-        .exec(
-            box.baml_bin,
-            args,
-            baml.sys.ProcessOptions {
-                cwd: box.repo_root,
-                env: null,
-                timeout_ms: 30000,
-                stdin: null,
-            },
-        ) catch_all (error) {
+    let result = baml.sys.exec(
+        box.baml_bin,
+        args,
+        baml.sys.ProcessOptions { cwd: box.repo_root, env: null, timeout_ms: 30000, stdin: null },
+    ) catch_all (error) {
         _ => {
             return `could not run the compiler: ${error}`;
         },
@@ -203,18 +196,11 @@ function tool_examples(box: Toolbox, query: string) -> string {
     for (let path in examples_paths()) {
         args.push(path);
     }
-    let result = baml
-        .sys
-        .exec(
-            "git",
-            args,
-            baml.sys.ProcessOptions {
-                cwd: box.repo_root,
-                env: null,
-                timeout_ms: 20000,
-                stdin: null,
-            },
-        ) catch_all (error) {
+    let result = baml.sys.exec(
+        "git",
+        args,
+        baml.sys.ProcessOptions { cwd: box.repo_root, env: null, timeout_ms: 20000, stdin: null },
+    ) catch_all (error) {
         _ => {
             return `could not search for examples: ${error}`;
         },
@@ -357,7 +343,10 @@ function looks_like_skill(text: string) -> bool {
     let body = text.trim();
     // The real document is 22KB of markdown that opens with front matter and
     // names the language repeatedly. An interstitial satisfies none of that.
-    body.length() > 2000 && !body.to_lower_case().starts_with("<!doctype") && !body.to_lower_case().starts_with("<html") && body.to_lower_case().includes("baml")
+    body.length() > 2000
+        && !body.to_lower_case().starts_with("<!doctype")
+        && !body.to_lower_case().starts_with("<html")
+        && body.to_lower_case().includes("baml")
 }
 
 function load_skill(cache_file: string) -> string {
@@ -455,17 +444,15 @@ function check_snippet_in(
     baml.fs.mkdir(`${directory}/baml_src`, baml.fs.MkdirOptions { recursive: true });
     baml.fs.write(`${directory}/baml.toml`, "[package]\nname = \"snippet\"\n");
     baml.fs.write(`${directory}/baml_src/snippet.baml`, code);
-    let result = baml
-        .sys
-        .exec(
-            box.baml_bin,
-            ["check", "--color", "never", "--directory", directory],
-            // No `cwd`: `--directory` already says what to compile, and setting
-            // one would re-root the compiler's own path. `baml.sys.exec`
-            // resolves the program against the child's working directory, so a
-            // relative `baml_bin` plus a `cwd` is a spawn failure.
-            baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 60000, stdin: null },
-        );
+    let result = baml.sys.exec(
+        box.baml_bin,
+        ["check", "--color", "never", "--directory", directory],
+        // No `cwd`: `--directory` already says what to compile, and setting
+        // one would re-root the compiler's own path. `baml.sys.exec`
+        // resolves the program against the child's working directory, so a
+        // relative `baml_bin` plus a `cwd` is a spawn failure.
+        baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 60000, stdin: null },
+    );
     if (result.ok()) {
         return "";
     }

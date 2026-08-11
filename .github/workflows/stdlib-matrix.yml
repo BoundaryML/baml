@@ -55,7 +55,7 @@ jobs:
     # subprocess lookups between them, eight sessions at a time. An incremental
     # run is minutes; this bound is for the cold one.
     timeout-minutes: 120
-    # Holds ANTHROPIC_API_KEY. Pages needs its own environment, which is why
+    # Holds OPENAI_API_KEY. Pages needs its own environment, which is why
     # deploying is a separate job — a job may name only one.
     #
     # -prod rather than -dev: the key in -dev was rejected on every one of 199
@@ -171,7 +171,7 @@ jobs:
       - name: "Build the matrix"
         if: steps.ratchet.outputs.changed == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           # Two independent questions, which were one flag until a forced
