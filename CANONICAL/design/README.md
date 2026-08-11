@@ -28,6 +28,7 @@ This folder is organized by the question a reader is trying to answer. It is not
 - [Delivery plan](09-delivery-plan.md) — what exists, what is next, implementation gates.
 - [Deferred](10-deferred.md) — explicitly out of v1 or policy values intentionally not frozen.
 - [Source map](11-source-map.md) — disposition of every document in the [source archive](../archive/README.md).
+- [Implementation notes](12-implementation-notes.md) — decision ledger for freeze-gate resolutions and implementation-only choices made while executing the delivery plan.
 - [Glossary](glossary.md) — shared vocabulary.
 
 ## Status vocabulary
