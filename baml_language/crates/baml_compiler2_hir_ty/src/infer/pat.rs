@@ -46,6 +46,12 @@ use crate::exhaustiveness::{
 pub(super) struct PatternOutcome {
     pub dpat: DPat,
     pub matched_ty: Ty,
+    /// The WRITTEN form to record when it differs from `matched_ty` -
+    /// ruling 3 (bindings record what the user wrote; rustc's
+    /// user_provided_types discipline): a type ascription's recorded
+    /// type is the declared spelling, while `matched_ty` stays the
+    /// refined working form that drives narrowing and destructuring.
+    pub recorded_ty: Option<Ty>,
     pub covers_type: bool,
     pub consumes_matched: bool,
 }
@@ -225,12 +231,14 @@ impl<'db> InferenceContext<'db> {
         scrut: &Ty,
     ) -> PatternOutcome {
         let outcome = self.lower_pattern_inner(body, pat, scrut);
-        // Every pattern node records its matched type (TIR's
-        // pattern_types single-write-point discipline) - binds overwrite
-        // with the identical value.
-        self.result
-            .type_of_pat
-            .insert(pat, outcome.matched_ty.clone());
+        // Every pattern node records its type (TIR's pattern_types
+        // single-write-point discipline); ascriptions record the WRITTEN
+        // form (ruling 3) while narrowing keeps the refined one.
+        let recorded = outcome
+            .recorded_ty
+            .clone()
+            .unwrap_or_else(|| outcome.matched_ty.clone());
+        self.result.type_of_pat.insert(pat, recorded);
         outcome
     }
 
@@ -244,6 +252,7 @@ impl<'db> InferenceContext<'db> {
             Pattern::Wildcard => PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),
                 matched_ty: scrut.clone(),
+                recorded_ty: None,
                 covers_type: true,
                 consumes_matched: true,
             },
@@ -253,15 +262,19 @@ impl<'db> InferenceContext<'db> {
                     None => PatternOutcome {
                         dpat: DPat::wildcard(scrut.to_plain()),
                         matched_ty: scrut.clone(),
+                        recorded_ty: None,
                         covers_type: true,
                         consumes_matched: true,
                     },
                 };
                 // Chain semantics: every bind in a chain takes the
-                // rightmost (most refined) type.
-                self.result
-                    .type_of_pat
-                    .insert(pat, inner.matched_ty.clone());
+                // rightmost type - the WRITTEN form when an ascription
+                // supplied one (ruling 3), else the refined one.
+                let recorded = inner
+                    .recorded_ty
+                    .clone()
+                    .unwrap_or_else(|| inner.matched_ty.clone());
+                self.result.type_of_pat.insert(pat, recorded);
                 inner
             }
             Pattern::Type(_) => {
@@ -313,6 +326,7 @@ impl<'db> InferenceContext<'db> {
                         scrut.to_plain(),
                     ),
                     matched_ty: matched,
+                    recorded_ty: None,
                 }
             }
         }
@@ -464,6 +478,7 @@ impl<'db> InferenceContext<'db> {
         PatternOutcome {
             dpat,
             matched_ty: if head_covers { scrut.clone() } else { head },
+                recorded_ty: None,
             covers_type: head_covers && field_covers,
             consumes_matched: field_covers,
         }
@@ -475,6 +490,17 @@ impl<'db> InferenceContext<'db> {
     /// (the B-633 rule - undecidable rigid-vs-concrete pairs stay
     /// unclaimed and therefore uncovered).
     fn type_pattern_outcome(&mut self, scrut: &Ty, pat_ty: &Ty) -> PatternOutcome {
+        let mut outcome = self.type_pattern_outcome_inner(scrut, pat_ty);
+        // The recorded form is the WRITTEN annotation whenever it is not
+        // error-carrying (error ascriptions already record the written
+        // shape through matched_ty).
+        if !pat_ty.has_error() {
+            outcome.recorded_ty = Some(pat_ty.clone());
+        }
+        outcome
+    }
+
+    fn type_pattern_outcome_inner(&mut self, scrut: &Ty, pat_ty: &Ty) -> PatternOutcome {
         if pat_ty.has_error() {
             // Fail-safe for coverage, but the error stays LOCAL: the
             // written type is the matched type (`map<!error, int>`
@@ -483,6 +509,7 @@ impl<'db> InferenceContext<'db> {
             return PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),
                 matched_ty: pat_ty.clone(),
+                recorded_ty: None,
                 covers_type: false,
                 consumes_matched: false,
             };
@@ -522,6 +549,7 @@ impl<'db> InferenceContext<'db> {
                 return PatternOutcome {
                     dpat,
                     matched_ty: self.narrow_to(&matched, pat_ty),
+                    recorded_ty: None,
                     covers_type: false,
                     consumes_matched: true,
                 };
@@ -530,6 +558,7 @@ impl<'db> InferenceContext<'db> {
             return PatternOutcome {
                 dpat: DPat::single(pat_ty.to_plain(), scrut.to_plain()),
                 matched_ty: pat_ty.clone(),
+                recorded_ty: None,
                 covers_type: false,
                 consumes_matched: true,
             };
@@ -541,6 +570,7 @@ impl<'db> InferenceContext<'db> {
             } else {
                 self.narrow_to(scrut, pat_ty)
             },
+            recorded_ty: None,
             covers_type: covers,
             consumes_matched: true,
         }
@@ -679,6 +709,7 @@ impl<'db> InferenceContext<'db> {
             return PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),
                 matched_ty: Ty::error(),
+                recorded_ty: None,
                 covers_type: false,
                 consumes_matched: false,
             };
@@ -802,6 +833,7 @@ impl<'db> InferenceContext<'db> {
         PatternOutcome {
             dpat,
             matched_ty: if head_covers { scrut.clone() } else { head },
+            recorded_ty: None,
             covers_type: head_covers && field_covers,
             // The head is fully consumed only when every field sub-pattern
             // is irrefutable for its field type.
@@ -920,6 +952,7 @@ impl<'db> InferenceContext<'db> {
         PatternOutcome {
             dpat,
             matched_ty: effective,
+                recorded_ty: None,
             // A member-claiming pattern narrows; it never covers the
             // whole union.
             covers_type: covers && ascribed.is_none() && claimed_union.is_none(),

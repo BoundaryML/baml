@@ -264,12 +264,59 @@ fn classify_divergence(hir: &str, tir: &str) -> Option<&'static str> {
         if nominal_only(hir) && nominal_only(tir) {
             return Some("alias-nominal");
         }
+        // The written-ascription direction (ruling 3, recorded 2026-08-11:
+        // pattern ascriptions record the WRITTEN form): hir renders the
+        // written alias NAME where TIR expanded it into its union. Scoped
+        // to a single bare name against a union render.
+        let bare_name = |s: &str| {
+            !s.is_empty()
+                && !s.contains(' ')
+                && !s.contains(['(', '<', '['])
+                && s.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '_')
+        };
+        if bare_name(hir) && tir.contains(" | ") {
+            return Some("written-ascription");
+        }
     }
     // 8g. TIR's own type-error repro corpus (ns_type_error_repro): TIR
     //     renders its known-broken duplicated alias keys; ours resolves.
     if tir.contains("TypeErrReproStrKey") {
         return Some("tir-known-bug-repro");
     }
+    // 8b. A written FUNCTION ascription: hir records the written type
+    //     (ruling 3) - parameter labels absent, `throws unknown` as
+    //     written - where TIR records the narrowed working form with
+    //     labels and the inferred effect.
+    {
+        let strip_labels = |s: &str| -> String {
+            let mut out = String::new();
+            let mut chars = s.split_inclusive(|c: char| c == '(' || c == ',');
+            for piece in chars.by_ref() {
+                out.push_str(piece);
+            }
+            let _ = &mut out;
+            let mut cleaned = String::new();
+            for segment in out.split(&['(', ','][..]) {
+                cleaned.push_str(segment.split_once(": ").map_or(segment, |(_, ty)| ty));
+            }
+            cleaned
+        };
+        if hir.contains("->")
+            && tir.contains("->")
+            && hir.contains("throws unknown")
+            && strip_labels(&hir.replace("throws unknown", "throws _"))
+                == strip_labels(
+                    &tir[..]
+                        .split(" throws ")
+                        .next()
+                        .map(|prefix| format!("{prefix} throws _"))
+                        .unwrap_or_default(),
+                )
+        {
+            return Some("written-ascription");
+        }
+    }
+
     // 9. Name-qualification and alias-nominal renders.
     if sorted_tokens(&unqualified(hir)) == sorted_tokens(&unqualified(tir)) {
         return Some("qualification-render");

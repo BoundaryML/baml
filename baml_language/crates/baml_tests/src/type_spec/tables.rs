@@ -525,3 +525,46 @@ function uv_probe(animal: UvCat | UvDog) -> string throws never {
         "union field access records the shared virtual view: {resolutions:?}"
     );
 }
+
+#[test]
+fn pattern_ascription_records_written_nominal() {
+    // Ruling 3 (S15): bindings record the WRITTEN pattern type; aliases
+    // are nominal by design. The scrutinee's structural analysis may
+    // expand the alias transiently, but the recorded type is the
+    // declared form (rustc's user_provided_types discipline - the
+    // written annotation is the artifact, normalization never
+    // overwrites it).
+    let source = r#"
+function pa_probe() -> int {
+    let j: baml.json.json = baml.json.parse("[1, 2, 3]");
+    match (j) {
+        let arr: baml.json.json[] => arr.length(),
+        _ => -1
+    }
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let mut renders = Vec::new();
+    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        let body = baml_compiler2_ppir::body(&db, owner);
+        let Some(arena) = body.expr_body() else { continue };
+        for (pat_id, _) in arena.patterns.iter() {
+            let snippet = &source[source_map.pattern_span(pat_id)];
+            if snippet.starts_with("let arr") {
+                if let Some(ty) = result.type_of_pat.get(&pat_id) {
+                    renders.push(ty.to_plain().render_canonical());
+                }
+            }
+        }
+    }
+    assert_eq!(
+        renders,
+        vec!["baml.json.json[]".to_string()],
+        "the ascribed binding records the written nominal type"
+    );
+}
