@@ -89,7 +89,7 @@ function user.RuntimeClassify$build_request_stream<T>(input: string, client: bam
 }
 function user.runtime_enum_llm_companions_compile() -> string throws never {
   { : never
-    let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]) : type
+    let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]) : baml.reflect.enum.Type
     let prompt = RuntimeClassify$render_prompt<unreflect(category)>("sample").text() : string
     let parsed = RuntimeClassify$parse<T>(`...`) : unknown
     return prompt + reflect.enum.get_value(parsed) : string

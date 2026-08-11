@@ -6563,7 +6563,7 @@ function baml.reflect.enum.Type.values(self: baml.reflect.enum.Type) -> baml.ref
 function baml.reflect.enum.get_value(value: unknown) -> string {
 }
 
-function baml.reflect.enum.new(name: string, values: (string | baml.reflect.enum.Value)[]) -> type {
+function baml.reflect.enum.new(name: string, values: (string | baml.reflect.enum.Value)[]) -> baml.reflect.enum.Type {
 }
 
 function baml.reflect.enum.value(name: string, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.enum.Value {

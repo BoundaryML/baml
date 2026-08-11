@@ -61,6 +61,15 @@ fn enum_constructor_has_its_precise_declared_kind() {
 function make_enum() -> reflect.enum.Type {
   reflect.enum.new("PreciseEnum", [])
 }
+
+function accept_runtime_type<T>() -> string {
+  "ok"
+}
+
+function use_precise_enum_as_runtime_type() -> string {
+  let enum_t = reflect.enum.new("RuntimeEnum", [])
+  accept_runtime_type<unreflect(enum_t)>()
+}
 "#,
     );
 

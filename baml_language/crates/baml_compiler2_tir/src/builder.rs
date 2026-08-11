@@ -2570,17 +2570,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             if name.package().as_str() == "baml"
                 && name.namespace().iter().map(Name::as_str).eq(["reflect", "class"])
                 && name.name().as_str() == "PendingType");
+        let type_carrier = Ty::Type {
+            attr: TyAttr::default(),
+        };
         if !pending_type
             && !matches!(
-                operand_ty,
-                Ty::Type { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
+                &operand_ty,
+                Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
             )
+            && !self.is_subtype(&operand_ty, &type_carrier)
         {
             self.context.report(
                 TirTypeError::TypeMismatch {
-                    expected: Ty::Type {
-                        attr: TyAttr::default(),
-                    },
+                    expected: type_carrier,
                     got: operand_ty,
                 },
                 operand,
