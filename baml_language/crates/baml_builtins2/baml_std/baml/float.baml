@@ -455,7 +455,7 @@ class Float {
 /// to the `int` range and mapping NaN to `0` — it never throws.
 ///
 /// Private helper (leading `_`; formerly the public `baml.math.trunc`) backing
-/// internal retry-delay math in `baml.llm`. User code should prefer the
+/// internal retry-delay math. User code should prefer the
 /// range-checked, throwing `float.itrunc()` (or the float-returning
 /// `float.trunc()`); this saturating form is intentionally not public surface.
 function _trunc_to_int(value: float) -> int throws never {

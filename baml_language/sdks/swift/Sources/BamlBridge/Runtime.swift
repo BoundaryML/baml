@@ -183,7 +183,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     /// Undecoded ok-value variants — for callers that interpret the
     /// wire value themselves (BamlStream's next(), which must
-    /// distinguish the StreamFinished sentinel from a partial).
+    /// distinguish the `ai.stream.Done` sentinel from a partial).
     public func callRawSync(
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]

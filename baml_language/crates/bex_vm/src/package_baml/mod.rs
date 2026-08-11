@@ -30,11 +30,11 @@ mod future;
 pub(crate) mod id;
 mod int;
 pub mod json;
-mod llm;
 mod map;
 mod media;
 mod ops;
 mod ops_math;
+mod prompt;
 mod random;
 mod resolve;
 pub(crate) use resolve::ImplResolver;
@@ -392,6 +392,10 @@ type NativeResolver = fn(&str) -> Option<NativeFunction>;
 
 const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     ("baml.", PackageBamlImpl::get_native_fn),
+    (
+        "ai.",
+        <crate::package_ai::PackageAiImpl as crate::package_ai::BamlPackageAi>::get_native_fn,
+    ),
     (
         "reflect.",
         <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,

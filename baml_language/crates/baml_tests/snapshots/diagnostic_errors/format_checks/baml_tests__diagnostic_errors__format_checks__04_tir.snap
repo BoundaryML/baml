@@ -576,109 +576,6 @@ class user.SemicolonTrivia$stream {
   name: string | null
   age: int | null
 }
-function user.BasicClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "BasicClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.FullClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "FullClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 } } } : baml.llm.PrimitiveClient
-}
-function user.StringProviderClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.NestedConfigClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "NestedConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.ArrayConfigClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["END", "STOP", "DONE"] } } } : baml.llm.PrimitiveClient
-}
-function user.LongOptionClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "LongOptionClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.TypedValuesClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TypedValuesClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "temperature": 0.5, "max_tokens": 2048, "stream": true } } } : baml.llm.PrimitiveClient
-}
-function user.EnvClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "EnvClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.ArrayOfObjectsClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, map { "server_label": "calculator", "server_url": "https://calc.exam..." }] } } } : baml.llm.PrimitiveClient
-}
-function user.RawStringConfigClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "RawStringConfigCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "system_prompt": "#Youareahelpfulas..." } } } : baml.llm.PrimitiveClient
-}
-function user.MixedValuesClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "MixedValuesClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7, "stream": true, "stop": ["END"], "inline_string": "#inlineraw#" } } } : baml.llm.PrimitiveClient
-}
-function user.TriviaClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.TriviaClientBlock$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaClientBlock", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "ThisIsAnExtremely...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.DeeplyNestedClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map { "custom_config": map { "retry_on_failure": true, "timeout_ms": 30000, "metadata": map { "team": "platform", "environment": "production" } } }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-  !! 5255..5694: type mismatch: expected string, got map<string, bool | int | map<string, string>>
-}
-function user.LongNestedValuesClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.ManyOptionsClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "ManyOptionsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"] } } } : baml.llm.PrimitiveClient
-}
-function user.LongArrayClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "LongArrayClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_M...", "COMPLETION_FINISH...", "TERMINATE_OUTPUT_...", "FINAL_ANSWER_DELI..."] } } } : baml.llm.PrimitiveClient
-}
-function user.LongArrayOfObjectsClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "this_is_a_very_lo...", "server_url": "https://some-extr...", "type": "mcp", "description": "Averylongdescript..." }, map { "server_label": "another_long_serv...", "server_url": "https://another-l..." }] } } } : baml.llm.PrimitiveClient
-}
-function user.TriviaDeeplyNestedClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.TriviaDeeplyNestedClientBlock$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.TriviaLongValueClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.TriviaLongValueClientBlock$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.TestTarget(client: baml.llm.Client = BasicClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "TestTarget", map {  }) : string
-}
-function user.TestTarget$render_prompt(client: baml.llm.Client = BasicClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "TestTarget", map {  }) : baml.llm.PromptAst
-}
-function user.TestTarget$build_request(client: baml.llm.Client = BasicClient) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "TestTarget", map {  }) : baml.http.Request
-}
-function user.TestTarget$build_request_stream(client: baml.llm.Client = BasicClient) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "TestTarget", map {  }) : baml.http.Request
-}
-function user.C$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "C", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.ExtraWhitespaceClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "ExtraWhitespaceCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.CommaClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "CommaClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100 } } } : baml.llm.PrimitiveClient
-}
-function user.SameLineClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "SameLineClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
-function user.TestTarget$stream(client: baml.llm.Client = BasicClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "TestTarget", map {  }) : baml.llm.Stream<string | null, string>
-}
-function user.TestTarget$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = BasicClient) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-}
-function user.TestTarget$parse(json: string, client: baml.llm.Client = BasicClient) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-}
 enum user.Minimal
 enum user.TwoVariants
 enum user.MultiVariant
@@ -961,81 +858,79 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
       }
   }
 }
-function user.LlmBasic(name: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmBasic", map { "name": name }) : string
-  !! 11235..11291: unresolved name: GPT4
+function user.LlmBasic(name: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(LlmBasic$spec(name)).value : string
 }
-function user.LlmBasic$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "LlmBasic", map { "name": name }) : baml.llm.PromptAst
-  !! 11235..11291: unresolved name: GPT4
+function user.LlmBasic$spec(name: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "LlmBasic", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
+  !! 11248..11252: unresolved name: GPT4
 }
-function user.LlmBasic$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "LlmBasic", map { "name": name }) : baml.http.Request
-  !! 11235..11291: unresolved name: GPT4
+lambda user.LlmBasic$spec {
 }
-function user.LlmBasic$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "LlmBasic", map { "name": name }) : baml.http.Request
-  !! 11235..11291: unresolved name: GPT4
+function user.LlmBasic$render_prompt(name: string) -> ai.Prompt throws never {
+  LlmBasic$spec(name).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
-function user.LlmMultiLine(text: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmMultiLine", map { "text": text }) : string
-  !! 11395..11516: unresolved name: GPT4
+function user.LlmBasic$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
-function user.LlmMultiLine$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
-  !! 11395..11516: unresolved name: GPT4
+function user.LlmMultiLine(text: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(LlmMultiLine$spec(text)).value : string
 }
-function user.LlmMultiLine$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "LlmMultiLine", map { "text": text }) : baml.http.Request
-  !! 11395..11516: unresolved name: GPT4
+function user.LlmMultiLine$spec(text: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "LlmMultiLine", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
+  !! 11405..11409: unresolved name: GPT4
 }
-function user.LlmMultiLine$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "LlmMultiLine", map { "text": text }) : baml.http.Request
-  !! 11395..11516: unresolved name: GPT4
+lambda user.LlmMultiLine$spec {
 }
-function user.LlmStringClient(text: string, client: baml.llm.Client = ...) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmStringClient", map { "text": text }) : string
+function user.LlmMultiLine$render_prompt(text: string) -> ai.Prompt throws never {
+  LlmMultiLine$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
-function user.LlmStringClient$render_prompt(text: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "LlmStringClient", map { "text": text }) : baml.llm.PromptAst
+function user.LlmMultiLine$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
-function user.LlmStringClient$build_request(text: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "LlmStringClient", map { "text": text }) : baml.http.Request
+function user.LlmStringClient(text: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(LlmStringClient$spec(text)).value : string
 }
-function user.LlmStringClient$build_request_stream(text: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "LlmStringClient", map { "text": text }) : baml.http.Request
+function user.LlmStringClient$spec(text: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "LlmStringClient", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o") } : ai.FunctionSpec<string>
 }
-function user.LlmReversedOrder(text: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmReversedOrder", map { "text": text }) : string
-  !! 11795..11851: unresolved name: GPT4
+lambda user.LlmStringClient$spec {
 }
-function user.LlmReversedOrder$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
-  !! 11795..11851: unresolved name: GPT4
+function user.LlmStringClient$render_prompt(text: string) -> ai.Prompt throws never {
+  LlmStringClient$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
-function user.LlmReversedOrder$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "LlmReversedOrder", map { "text": text }) : baml.http.Request
-  !! 11795..11851: unresolved name: GPT4
+function user.LlmStringClient$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
-function user.LlmReversedOrder$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "LlmReversedOrder", map { "text": text }) : baml.http.Request
-  !! 11795..11851: unresolved name: GPT4
+function user.LlmReversedOrder(text: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(LlmReversedOrder$spec(text)).value : string
 }
-function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
-  !! 12037..12187: unresolved name: GPT4
+function user.LlmReversedOrder$spec(text: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "LlmReversedOrder", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
+  !! 11827..11831: unresolved name: GPT4
 }
-function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
-  !! 12037..12187: unresolved name: GPT4
+lambda user.LlmReversedOrder$spec {
 }
-function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 12037..12187: unresolved name: GPT4
+function user.LlmReversedOrder$render_prompt(text: string) -> ai.Prompt throws never {
+  LlmReversedOrder$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
-function user.LlmWithLongSignature$build_request_stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 12037..12187: unresolved name: GPT4
+function user.LlmReversedOrder$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
+}
+function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query)).value : string
+}
+function user.LlmWithLongSignature$spec(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "LlmWithLongSignature", args: map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
+  !! 12032..12036: unresolved name: GPT4
+}
+lambda user.LlmWithLongSignature$spec {
+}
+function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.Prompt throws never {
+  LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
+}
+function user.LlmWithLongSignature$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
 function user.ExtraWhitespace(a: int, b: int) -> int throws never {
   { : int
@@ -1067,62 +962,20 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
     "done" : "done"
   }
 }
-function user.LlmBasic$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name }) : baml.llm.Stream<string | null, string>
-  !! 11235..11291: unresolved name: GPT4
+function user.LlmBasic$stream(name: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmBasic$spec(name), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmBasic$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11235..11291: unresolved name: GPT4
+function user.LlmMultiLine$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmMultiLine$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmBasic$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-  !! 11235..11291: unresolved name: GPT4
+function user.LlmStringClient$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmStringClient$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmMultiLine$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text }) : baml.llm.Stream<string | null, string>
-  !! 11395..11516: unresolved name: GPT4
+function user.LlmReversedOrder$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmReversedOrder$spec(text), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11395..11516: unresolved name: GPT4
-}
-function user.LlmMultiLine$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-  !! 11395..11516: unresolved name: GPT4
-}
-function user.LlmStringClient$stream(text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text }) : baml.llm.Stream<string | null, string>
-}
-function user.LlmStringClient$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-}
-function user.LlmStringClient$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-}
-function user.LlmReversedOrder$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text }) : baml.llm.Stream<string | null, string>
-  !! 11795..11851: unresolved name: GPT4
-}
-function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11795..11851: unresolved name: GPT4
-}
-function user.LlmReversedOrder$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-  !! 11795..11851: unresolved name: GPT4
-}
-function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.Stream<string | null, string>
-  !! 12037..12187: unresolved name: GPT4
-}
-function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 12037..12187: unresolved name: GPT4
-}
-function user.LlmWithLongSignature$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-  !! 12037..12187: unresolved name: GPT4
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client) : ai.stream.Stream<string | null, string>
 }
 function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1

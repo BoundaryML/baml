@@ -23,13 +23,8 @@ function foo() -> string {
   x
 }
 
-// client blocks are desugared into functions; no hints should appear
-client<llm> GPT4 {
-    provider openai
-    options {
-        model "gpt-4"
-    }
-}
+// client declarations are desugared; no hints should appear
+client GPT4 = openai.OpenAiClient.new(model = "gpt-4");
 
 //----
 //- diagnostics

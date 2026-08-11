@@ -89,10 +89,102 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
             if let Some(ref stdin) = opts.stdin {
                 let _ = Reflect::set(&obj, &"stdin".into(), &stdin.into());
             }
+            if let Some(keep_stdin_open) = opts.keep_stdin_open {
+                let _ = Reflect::set(
+                    &obj,
+                    &"keep_stdin_open".into(),
+                    &JsValue::from_bool(keep_stdin_open),
+                );
+            }
             js_sys::JSON::stringify(&obj)
                 .map(JsValue::from)
                 .unwrap_or(JsValue::NULL)
         }
+    }
+}
+
+impl io::IoClassSysProcess for WasmSys {
+    fn write_stdin(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close_stdin(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn wait(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn kill(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
+    }
+}
+
+impl io::IoClassSysProcessLineStream for WasmSys {
+    fn _next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _processlinestream: io::owned::sys::ProcessLineStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _processlinestream: io::owned::sys::ProcessLineStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
     }
 }
 
@@ -149,6 +241,20 @@ impl IoNamespaceSys for WasmSys {
 
             unpack_shell_result(&obj).map_err(VmRustFnError::from)
         }))
+    }
+
+    fn start_process(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::ProcessOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::Process> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
     }
 
     fn shell(

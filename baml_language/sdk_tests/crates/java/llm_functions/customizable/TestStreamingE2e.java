@@ -16,18 +16,17 @@
 //                  (BamlStream<StreamingDoc$stream, StreamingDoc>)
 //
 // The recordings stream many SSE chunks, so each next() yields >= 10 partials
-// before StreamFinished (asserted below).
+// before Done (asserted below).
 //
 // ===========================================================================
 // java-port notes on the streaming surface:
 //   * `BamlStream<TPartial, TFinal>` is the runtime wrapper (baml_bridge). Its
 //     `next()` is declared `TPartial` but callers bind the result to `Object`:
-//     it is either a `TPartial` partial (nullable) or a `StreamFinished`
-//     sentinel — Java generics can't express the `TPartial | StreamFinished`
-//     union, and the `if (v instanceof StreamFinished)` control flow must
-//     compile. This is the faithful port of Python's `isinstance(v,
-//     StreamFinished)` duck-typing (a sealed `StreamItem<T>` is a possible
-//     future shape).
+//     it is either a `TPartial` partial (nullable) or an `ai.stream.Done`
+//     sentinel — Java generics can't express the `TPartial | Done`
+//     union, and the `if (v instanceof Done)` control flow must compile. This
+//     is the faithful port of Python's sentinel duck-typing (a sealed
+//     `StreamItem<T>` is a possible future shape).
 //   * Method names follow the codegen-conventions doc: next()/next_async() and
 //     get_final()/get_final_async() (get_final escapes Python's `final`, a Java
 //     reserved word — OWNER decision 2026-07-18).
@@ -47,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_bridge.BamlStream;
-import baml_sdk.baml.stream.StreamFinished;
+import baml_sdk.ai.stream.Done;
 import baml_sdk.lorem.Fns;
 import baml_sdk.lorem.StreamE2ECollectResult;
 import baml_sdk.lorem.StreamingDoc;
@@ -80,14 +79,14 @@ class TestStreamingE2e {
 
     @Test
     void test_streaming_e2e_stream() throws Exception {
-        // Sync `next()` yields a stream of partials and drains to `StreamFinished`.
+        // Sync `next()` yields a stream of partials and drains to `Done`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
             BamlStream<String, String> stream =
                     Fns.stream_e2e_extract$stream("ignored-by-replay-server");
             int results = 0;
             while (true) {
                 Object v = stream.next();
-                if (v instanceof StreamFinished) {
+                if (v instanceof Done) {
                     break;
                 }
                 results += 1;
@@ -108,7 +107,7 @@ class TestStreamingE2e {
             int results = 0;
             while (true) {
                 Object v = stream.next_async().join();
-                if (v instanceof StreamFinished) {
+                if (v instanceof Done) {
                     break;
                 }
                 results += 1;
@@ -122,7 +121,7 @@ class TestStreamingE2e {
 
     @Test
     void test_streaming_e2e_stream_collect_in_baml() throws Exception {
-        // BAML-driven counterpart: the `S | StreamFinished` union stays engine-side.
+        // BAML-driven counterpart: the `S | Done` union stays engine-side.
         // java-port note: `result`/`item` are statically typed, so the
         // `assertInstanceOf` / `instanceof String` checks are the compile-time
         // guaranteed analogs of Python's runtime `isinstance` assertions.
@@ -151,7 +150,7 @@ class TestStreamingE2e {
             int results = 0;
             while (true) {
                 Object v = stream.next();
-                if (v instanceof StreamFinished) {
+                if (v instanceof Done) {
                     break;
                 }
                 results += 1;
@@ -174,7 +173,7 @@ class TestStreamingE2e {
             int results = 0;
             while (true) {
                 Object v = stream.next_async().join();
-                if (v instanceof StreamFinished) {
+                if (v instanceof Done) {
                     break;
                 }
                 results += 1;
@@ -190,7 +189,7 @@ class TestStreamingE2e {
 
     @Test
     void test_streaming_e2e_stream_doc_collect_in_baml() throws Exception {
-        // BAML-driven counterpart: the `S | StreamFinished` union stays
+        // BAML-driven counterpart: the `S | Done` union stays
         // engine-side; only the concrete `StreamingDoc` crosses the FFI boundary.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
             Object result = Fns.stream_e2e_collect_doc("ignored-by-replay-server");

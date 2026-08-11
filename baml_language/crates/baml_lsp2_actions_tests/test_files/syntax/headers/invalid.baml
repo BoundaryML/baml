@@ -2,10 +2,10 @@
 
 function HeaderInPrompt() -> string {
     client GPT4
-    prompt #"
+    prompt `
         //# This is inside a prompt
         It should be treated as literal text, not a header
-    "#
+    `
 }
 
 function MixedOnSameLine() -> string {
@@ -49,20 +49,16 @@ function LLMFunction(input: string) -> string {
     client GPT4
     //# Section Header
     // Should fail - only allowed in expression functions
-    prompt #"Process: {{ input }}"#
+    prompt `Process: ${input}`
 }
 
-client<llm> GPT4 {
-    provider openai
-    options {
-        model gpt-4
-        api_key env.OPENAI_API_KEY
-    }
-}
+client GPT4 = openai.OpenAiClient.new(
+    model = "gpt-4",
+    api_key = env.OPENAI_API_KEY,
+);
 
 //----
 //- diagnostics
-// (expect errors for invalid header patterns)
 // E0010
 //
 //   × unexpected token

@@ -1052,7 +1052,20 @@ pub(crate) use emit::compile_mir_function;
 fn is_builtin_function_name(name: &str) -> bool {
     matches!(
         name.split('.').next(),
-        Some("baml" | "boundary" | "reflect" | "assert" | "testing" | "log" | "env")
+        Some(
+            "baml"
+                | "boundary"
+                | "reflect"
+                | "assert"
+                | "testing"
+                | "log"
+                | "env"
+                | "ai"
+                | "openai"
+                | "anthropic"
+                | "google"
+                | "claude_code"
+        )
     )
 }
 

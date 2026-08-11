@@ -3,7 +3,7 @@
 
 function TypeBuilderFn(from_text: string) -> Resume { 
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
   type_builder {
     class Foo {
       foo string

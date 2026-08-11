@@ -27,7 +27,7 @@ class ParsedNullableContainers {
 
 function parse_model_step<T>(raw string) -> ModelStep<T> throws unknown {
   ModelStep<T> {
-    outcome: baml.llm.parse<T | PendingCalls, T | PendingCalls>(raw),
+    outcome: baml.sap.parse<T | PendingCalls>(raw),
   }
 }
 
@@ -41,7 +41,7 @@ function model_step_flattens_union_type_arg() -> bool throws unknown {
 }
 
 function sap_parses_optional_json_null() -> bool throws unknown {
-  let parsed = baml.llm.parse<json?, json?>(`null`);
+  let parsed = baml.sap.parse<json?>(`null`);
   match (parsed) {
     null => true,
     let value: json => baml.json.stringify(value) == "never",
@@ -49,12 +49,12 @@ function sap_parses_optional_json_null() -> bool throws unknown {
 }
 
 function sap_parses_optional_json_value() -> bool throws unknown {
-  let parsed = baml.llm.parse<json?, json?>(`true`);
+  let parsed = baml.sap.parse<json?>(`true`);
   baml.json.stringify(parsed) == "true"
 }
 
 function sap_nullable_container_types_are_preserved() -> bool throws unknown {
-  let parsed = baml.llm.parse<ParsedNullableContainers, ParsedNullableContainers>(
+  let parsed = baml.sap.parse<ParsedNullableContainers>(
     `{
       "empty_json": [],
       "metadata": {"attempt": 1},

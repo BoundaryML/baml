@@ -154,6 +154,9 @@ ast_node!(ConfigItem, CONFIG_ITEM);
 ast_node!(ConfigValue, CONFIG_VALUE);
 ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
+ast_node!(ToolsField, TOOLS_FIELD);
+ast_node!(SpecExpr, SPEC_EXPR);
+ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
@@ -989,6 +992,88 @@ impl LlmFunctionBody {
     pub fn prompt_field(&self) -> Option<PromptField> {
         self.syntax.children().find_map(PromptField::cast)
     }
+
+    /// Get the tools field if present.
+    ///
+    /// For `function Foo() -> T { ... tools: [a, b] ... }`, returns the
+    /// `tools: [a, b]` field.
+    pub fn tools_field(&self) -> Option<ToolsField> {
+        self.syntax.children().find_map(ToolsField::cast)
+    }
+}
+
+impl ClientValueDef {
+    /// The declared client name (`Fast` in `client Fast = <expr>;`).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+    }
+
+    /// The initializer — the first element after the `=` (a node, or a bare
+    /// identifier/literal token).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_equals = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) if seen_equals => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind() == SyntaxKind::EQUALS {
+                        seen_equals = true;
+                        continue;
+                    }
+                    if seen_equals && !t.kind().is_trivia() && t.kind() != SyntaxKind::SEMICOLON {
+                        return Some(el);
+                    }
+                }
+                rowan::NodeOrToken::Node(_) => {}
+            }
+        }
+        None
+    }
+}
+
+impl ToolsField {
+    /// The tools value expression — the first child node after the `tools`
+    /// keyword and optional colon (usually an `ARRAY_LITERAL`).
+    pub fn expr(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+
+    /// The tools value as a node-or-token element. A bare dot-free
+    /// identifier (`tools my_tools`) is emitted by the parser as a WORD
+    /// token with no wrapping node, so [`Self::expr`] alone would miss it
+    /// and the field would silently lower to an empty toolbox.
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        let mut seen_keyword = false;
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia() || t.kind() == SyntaxKind::COLON {
+                        continue;
+                    }
+                    // The leading `tools` keyword lexes as a WORD; everything
+                    // after it (and the optional colon) is the value.
+                    if !seen_keyword && t.kind() == SyntaxKind::WORD && t.text() == "tools" {
+                        seen_keyword = true;
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
+        None
+    }
+}
+
+impl SpecExpr {
+    /// The base expression the postfix `@spec` was applied to (a `PATH_EXPR`
+    /// naming an LLM function).
+    pub fn base(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
 }
 
 impl ClientField {
@@ -1003,14 +1088,38 @@ impl ClientField {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the client value as a string, whether it's an identifier or a string literal.
+    /// Get the client value as a string, whether it's an identifier, an
+    /// unquoted shorthand, or a string literal.
     ///
     /// For `client GPT4`, returns "GPT4".
     /// For `client "openai/gpt-4o"`, returns "openai/gpt-4o".
+    /// For `client openai/gpt-4o` (unquoted shorthand), returns
+    /// "openai/gpt-4o" — the parser consumes the whole shorthand as value
+    /// tokens, and truncating to the first WORD would silently resolve the
+    /// provider prefix alone.
     pub fn value(&self) -> Option<String> {
-        // First try to get it as a simple identifier (WORD token)
-        if let Some(token) = self.name() {
-            return Some(token.text().to_string());
+        // Try token form first: concatenate every non-trivia value token after
+        // the `client` keyword and one optional leading colon. Only the FIRST
+        // colon is field syntax — later ones belong to the value (model ids
+        // like `ollama/llama3:8b`). A single WORD yields the plain identifier;
+        // a multi-token run reproduces the unquoted shorthand (its source has
+        // no interior whitespace).
+        let mut value = String::new();
+        let mut leading_colon_eaten = false;
+        for token in self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| !t.kind().is_trivia() && t.kind() != SyntaxKind::KW_CLIENT)
+        {
+            if token.kind() == SyntaxKind::COLON && value.is_empty() && !leading_colon_eaten {
+                leading_colon_eaten = true;
+                continue;
+            }
+            value.push_str(token.text());
+        }
+        if !value.is_empty() {
+            return Some(value);
         }
 
         // Otherwise, try to get it as a string literal
@@ -1018,6 +1127,26 @@ impl ClientField {
             return Some(string_node.value());
         }
 
+        None
+    }
+
+    /// The client value as a node-or-token element: a `STRING_LITERAL` node
+    /// for the `"provider/model"` form, any other node for an expression
+    /// (`client my_client()`), or a bare identifier token (`client Fast`).
+    pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
+        for el in self.syntax.children_with_tokens() {
+            match &el {
+                rowan::NodeOrToken::Node(_) => return Some(el),
+                rowan::NodeOrToken::Token(t) => {
+                    if t.kind().is_trivia()
+                        || matches!(t.kind(), SyntaxKind::KW_CLIENT | SyntaxKind::COLON)
+                    {
+                        continue;
+                    }
+                    return Some(el);
+                }
+            }
+        }
         None
     }
 }
@@ -2542,6 +2671,7 @@ impl BlockExpr {
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
                         | SyntaxKind::UPCAST_EXPR
+                        | SyntaxKind::SPEC_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR

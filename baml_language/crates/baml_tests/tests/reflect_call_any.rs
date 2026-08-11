@@ -92,6 +92,77 @@ async fn call_any_rejects_missing_key_and_type_mismatches() {
 }
 
 #[tokio::test]
+async fn call_any_widens_int_for_float_param() {
+    let output = baml_test!(
+        r#"
+        function scale(budget: float, factor: float? = null) -> float throws never {
+            let f = 1.0
+            if factor != null {
+                f = factor
+            }
+            return budget * f
+        }
+
+        function takes_int(n: int) -> int throws never {
+            return n
+        }
+
+        function main() -> int throws never {
+            let g: baml.AnyFunction<Returns = float, Throws = never> = scale
+            // The one boundary conversion: an integral value widens for a
+            // `float` parameter (JSON Schema's `number` admits integers)...
+            let widened = reflect.call_any(g, { "budget": 150 }) catch (e) {
+                reflect.InvalidArgumentError => -1.0
+            }
+            // ...and for a `float?` parameter.
+            let opt = reflect.call_any(g, { "budget": 2, "factor": 3 }) catch (e) {
+                reflect.InvalidArgumentError => -1.0
+            }
+            // Nothing else converts: a float does not narrow to `int`, and a
+            // numeric string does not parse to `float`.
+            let h: baml.AnyFunction<Returns = int, Throws = never> = takes_int
+            let narrowed = reflect.call_any(h, { "n": 1.5 }) catch (e) {
+                reflect.InvalidArgumentError => -1
+            }
+            let stringy = reflect.call_any(g, { "budget": "150" }) catch (e) {
+                reflect.InvalidArgumentError => -2.0
+            }
+            // Widening is lossless-only: 2^53 is the last exactly
+            // representable integer and widens; 2^53 + 1 would silently
+            // round, so it stays an InvalidArgumentError.
+            let exact = reflect.call_any(g, { "budget": 9007199254740992 }) catch (e) {
+                reflect.InvalidArgumentError => -1.0
+            }
+            let lossy = reflect.call_any(g, { "budget": 9007199254740993 }) catch (e) {
+                reflect.InvalidArgumentError => -3.0
+            }
+            let ok = 0
+            if widened == 150.0 {
+                ok = ok + 1
+            }
+            if opt == 6.0 {
+                ok = ok + 1
+            }
+            if narrowed == -1 {
+                ok = ok + 1
+            }
+            if stringy == -2.0 {
+                ok = ok + 1
+            }
+            if exact == 9007199254740992.0 {
+                ok = ok + 1
+            }
+            if lossy == -3.0 {
+                ok = ok + 1
+            }
+            return ok
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+}
+
+#[tokio::test]
 async fn call_any_invalid_argument_error_carries_types() {
     let output = baml_test!(
         r#"

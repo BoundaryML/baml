@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19715
 ---
 === PPIR ===
 class user.Invoice {
@@ -12,30 +11,24 @@ class user.Invoice$stream {
   amount: float | null
 }
 enum user.Currency {USD, EUR}
-function user.ExtractInvoice(text: string, client: baml.llm.Client = GPT4o) -> user.Invoice  [llm] {
-  baml.llm.call_llm_function(client, "ExtractInvoice", map { "text": text })
+function user.ExtractInvoice(text: string, client: ai.Client? = null) -> user.Invoice  [llm] {
+  ai.Agent.new(client = client).run(ExtractInvoice$spec(text)).value
 }
-function user.ExtractInvoice$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "ExtractInvoice", map { "text": text })
+function user.ExtractInvoice$parse(json: string) -> user.Invoice  [expr] {
+  baml.sap.parse(json)
 }
-function user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "ExtractInvoice", map { "text": text })
+function user.ExtractInvoice$render_prompt(text: string) -> ai.Prompt  [expr] {
+  ExtractInvoice$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.ExtractInvoice$parse(json: string, client: baml.llm.Client = GPT4o) -> user.Invoice  [expr] {
-  baml.llm.parse(json)
+function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<user.Invoice>  [expr] {
+  ai.FunctionSpec { spec_name: "ExtractInvoice", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "extract an invoic...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o }
 }
-function user.ExtractInvoice$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice>  [expr] {
-  client.__make_stream(sse)
-}
-function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "ExtractInvoice", map { "text": text })
-}
-function user.ExtractInvoice$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice>  [expr] {
-  baml.llm.stream_llm_function(client, "ExtractInvoice", map { "text": text })
-}
-function user.GPT4o$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "GPT4o", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<user.Invoice$stream | null, user.Invoice>  [expr] {
+  ai.stream.from_spec(ExtractInvoice$spec(text), client = client)
 }
 function user.TryExtract(json: string) -> user.Invoice?  [expr] {
   {  } ExtractInvoice$parse(json) catch (_) { baml.errors.ParseError { message: message } => null }
 }
+
+--- captures ---
+lambda ( __spec_output_format) in ExtractInvoice$spec: captures [text]

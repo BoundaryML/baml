@@ -116,12 +116,15 @@ fn bytecode() {
     // Group user (non-stdlib, non-auto-derived) functions by their namespace.
     let mut by_namespace: BTreeMap<String, Vec<(String, &Function)>> = BTreeMap::new();
     for (name, idx) in &program.function_indices {
-        if name.starts_with("baml.")
-            || name.starts_with("testing.")
-            || name.starts_with("assert.")
-            || name.starts_with("log.")
-            || name.starts_with("env.")
-        {
+        // Stdlib functions are not this suite's subject — it snapshots the
+        // BAML written in `baml_src/`. The package list comes from
+        // `baml_builtins2::ALL`, so adding a builtin package (ai, openai,
+        // anthropic, google, claude_code, ...) never floods these snapshots.
+        let is_stdlib = baml_builtins2::stdlib_package_names().iter().any(|pkg| {
+            let pkg: &str = pkg;
+            name.len() > pkg.len() && name.as_bytes()[pkg.len()] == b'.' && name.starts_with(pkg)
+        });
+        if is_stdlib || name.starts_with("env.") {
             continue;
         }
         let Some(Object::Function(func)) = program.objects.get(*idx) else {
