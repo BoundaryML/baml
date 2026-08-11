@@ -1,0 +1,95 @@
+{
+  "schema_version": 2,
+  "files": [
+    {
+      "relative_path": ".gitignore",
+      "sha256": "66b47ca221280cb5ace576604a74cbc2f89d60e319cc1b85b4122ae43d003a9a"
+    },
+    {
+      "relative_path": "baml/functions.go",
+      "sha256": "2ce76578c2f0c76367aeb6d3494f446728e3e874801bcf1d431c15bc452581ce"
+    },
+    {
+      "relative_path": "baml/types.go",
+      "sha256": "b979ff6d6f6fa90f09b565b73dd92dd7df448a5a11ed47cc28eea86ceaee2805"
+    },
+    {
+      "relative_path": "functions.go",
+      "sha256": "28bedb2901a40e51091e64caf52d13812a1d49f9c1ad9955070a6f735940850d"
+    },
+    {
+      "relative_path": "internal/bootstrap/bootstrap.go",
+      "sha256": "31bb90d4340cc9381a41f3fa0edaaced1a891268b2b006d5ccccb6d7b2c15e37"
+    },
+    {
+      "relative_path": "packages/ai/functions.go",
+      "sha256": "2770e9e99296850aa655085e413c04b7229372930ea085c8a23bbd44c16c24ca"
+    },
+    {
+      "relative_path": "packages/ai/types.go",
+      "sha256": "6908b5ff3deb9082ec008fc1d0c6064479a3c3cb2ba7e3a2f91c104ed74b56e3"
+    },
+    {
+      "relative_path": "packages/anthropic/functions.go",
+      "sha256": "6cd071a11228c8599eec494c12423ecf926cde6b610df9dba6a35dc622b6094c"
+    },
+    {
+      "relative_path": "packages/anthropic/types.go",
+      "sha256": "902316f2d42f0691d68ecaae6eb79047f0276414c21b4d81f356b891de370812"
+    },
+    {
+      "relative_path": "packages/assert/functions.go",
+      "sha256": "e66eb6f6e2f2d1f2dbfc56fe0a8208eccc8efe59e4b910f36452a35c3ace07e6"
+    },
+    {
+      "relative_path": "packages/boundary/functions.go",
+      "sha256": "dc0c9e1ba589f5359a30e7c491ad595f9beec1676e1e699ffceb9251f7e53353"
+    },
+    {
+      "relative_path": "packages/boundary/types.go",
+      "sha256": "6aa5ab15713885734542bb7278a9426a3c9203a672d97a89d4d07ab120a5bab2"
+    },
+    {
+      "relative_path": "packages/claude_code/functions.go",
+      "sha256": "1c59b39c89f93cca624b2d093d857e73e03416c40274c7fa83ff6de03966ef25"
+    },
+    {
+      "relative_path": "packages/claude_code/types.go",
+      "sha256": "4362fc8516a6ef332dbbab90058b456e00da7b323784f87085b8af5872312ddf"
+    },
+    {
+      "relative_path": "packages/google/functions.go",
+      "sha256": "6349234e4dcff083dfd5eaf9395b4430a5e6f9d0c839fe3d682a84d913ff3d83"
+    },
+    {
+      "relative_path": "packages/google/types.go",
+      "sha256": "16eb1d05b6d5d88a2e0e99a65091cb523766935107447ed3b8238f18afe86398"
+    },
+    {
+      "relative_path": "packages/openai/functions.go",
+      "sha256": "d0f082e81372366feff2fe62056ca74ff98f3bae7f576921648d0cc470cceef8"
+    },
+    {
+      "relative_path": "packages/openai/types.go",
+      "sha256": "b90f959b7a7a43e8eb30e3b1f3c1ab652eaae4717e726f8ba939895599c0c8bc"
+    },
+    {
+      "relative_path": "packages/reflect/types.go",
+      "sha256": "95327dce046c7fe816ab1945b5028918169db6e2bcdeea4a910a6ef08c94f151"
+    },
+    {
+      "relative_path": "packages/testing/functions.go",
+      "sha256": "7dca77776e4bce6221debaf538aa61934e4ca141084d6850ef5a9b93d09cfe7f"
+    },
+    {
+      "relative_path": "packages/testing/types.go",
+      "sha256": "8c789b428d0f844d3c0a0d17939d2628454e1871bafa2fb883a833043e778046"
+    },
+    {
+      "relative_path": "types.go",
+      "sha256": "474ce9734905375b812e7e317cce865b46f4a19085555c3ac4f7aceda2fdec86"
+    }
+  ],
+  "committed_files": [],
+  "recovery_files": []
+}
