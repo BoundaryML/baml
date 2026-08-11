@@ -88,9 +88,10 @@ function old_value_reader(value: unknown) -> type {
         ("reflect.type_of", "type.of"),
         ("reflect.type_of_value", "type.of_value"),
     ] {
+        let quoted_old = format!("`{old}`");
         let matching = errors
             .iter()
-            .filter(|(_, message)| message.contains(old))
+            .filter(|(_, message)| message.contains(&quoted_old))
             .collect::<Vec<_>>();
         assert_eq!(
             matching.len(),

@@ -23,6 +23,16 @@ pub enum DuplicateMemberKind {
     Variant,
 }
 
+/// The declaration position containing an invalid runtime-supplied name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvalidIdentifierKind {
+    Class,
+    Enum,
+    Field,
+    EnumVariant,
+    ExportedType,
+}
+
 impl fmt::Display for DuplicateMemberKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -39,6 +49,31 @@ impl fmt::Display for SerializedKeyContainer {
             Self::Enum => f.write_str("enum"),
         }
     }
+}
+
+impl fmt::Display for InvalidIdentifierKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Class => f.write_str("class"),
+            Self::Enum => f.write_str("enum"),
+            Self::Field => f.write_str("field"),
+            Self::EnumVariant => f.write_str("enum variant"),
+            Self::ExportedType => f.write_str("exported type"),
+        }
+    }
+}
+
+/// Check a runtime-supplied name with the compiler lexer's identifier rules.
+pub fn is_baml_identifier(value: &str) -> bool {
+    baml_compiler_lexer::is_baml_identifier(value)
+}
+
+/// E0010 — a runtime-supplied declaration name is not a BAML identifier.
+pub fn invalid_identifier(kind: InvalidIdentifierKind, name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::InvalidSyntax,
+        format!("invalid {kind} name `{name}`"),
+    )
 }
 
 /// E0001 — the compiler's type-mismatch headline.
@@ -110,6 +145,16 @@ mod tests {
                 duplicate_serialized_key("wire", SerializedKeyContainer::Class),
                 "E0149",
                 "duplicate serialized key `wire` in class",
+            ),
+            (
+                invalid_identifier(InvalidIdentifierKind::Class, "type"),
+                "E0010",
+                "invalid class name `type`",
+            ),
+            (
+                invalid_identifier(InvalidIdentifierKind::EnumVariant, "Choice.function"),
+                "E0010",
+                "invalid enum variant name `Choice.function`",
             ),
         ];
 

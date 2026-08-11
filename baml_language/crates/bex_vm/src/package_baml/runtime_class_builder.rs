@@ -14,8 +14,8 @@ use std::{
 };
 
 use baml_compiler_diagnostics::{
-    Diagnostic, DiagnosticId,
-    runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
+    Diagnostic, DiagnosticId, DiagnosticPhase,
+    runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::{
@@ -434,10 +434,10 @@ fn prepare_group(
 
     for node in group.values() {
         if !is_baml_identifier(&node.name) {
-            diagnostics.push(compiler_diagnostic(
-                DiagnosticId::InvalidSyntax,
-                format!("invalid class name `{}`", node.name),
-            ));
+            diagnostics.push(
+                runtime_type::invalid_identifier(InvalidIdentifierKind::Class, &node.name)
+                    .with_phase(DiagnosticPhase::Hir),
+            );
         }
         if !names.insert(node.name.clone()) {
             diagnostics.push(compiler_diagnostic(
@@ -453,10 +453,13 @@ fn prepare_group(
         let mut serialized_keys = HashSet::new();
         for field in &node.fields {
             if !is_baml_identifier(&field.name) {
-                diagnostics.push(compiler_diagnostic(
-                    DiagnosticId::InvalidSyntax,
-                    format!("invalid field name `{}.{}`", node.name, field.name),
-                ));
+                diagnostics.push(
+                    runtime_type::invalid_identifier(
+                        InvalidIdentifierKind::Field,
+                        &format!("{}.{}", node.name, field.name),
+                    )
+                    .with_phase(DiagnosticPhase::Hir),
+                );
             }
             let Some(&root) = node.roots.get(field.root_index) else {
                 diagnostics.push(compiler_diagnostic(
