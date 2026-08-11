@@ -607,7 +607,7 @@ pub(crate) fn collect_hir_ty_nodes(
             if owner.source_map.synthetic_patterns.contains(&pat_id) {
                 continue;
             }
-            if let Some(ty) = owner.result.type_of_binding.get(&pat_id) {
+            if let Some(ty) = owner.result.type_of_pat.get(&pat_id) {
                 nodes.push(TypedNode {
                     range: owner.source_map.pattern_span(pat_id),
                     kind: NodeKind::Pattern,
@@ -631,7 +631,7 @@ pub(crate) fn collect_hir_ty_nodes(
             continue;
         };
         for binding in &bindings.bindings {
-            if let Some(ty) = owner.result.type_of_binding.get(&binding.bind_pattern) {
+            if let Some(ty) = owner.result.type_of_pat.get(&binding.bind_pattern) {
                 nodes.push(TypedNode {
                     range: binding_name_range(fixture, binding),
                     kind: NodeKind::BindingName,

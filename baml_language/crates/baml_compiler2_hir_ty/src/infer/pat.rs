@@ -233,7 +233,7 @@ impl<'db> InferenceContext<'db> {
         // pattern_types single-write-point discipline) - binds overwrite
         // with the identical value.
         self.result
-            .type_of_binding
+            .type_of_pat
             .insert(pat, outcome.matched_ty.clone());
         outcome
     }
@@ -264,7 +264,7 @@ impl<'db> InferenceContext<'db> {
                 // Chain semantics: every bind in a chain takes the
                 // rightmost (most refined) type.
                 self.result
-                    .type_of_binding
+                    .type_of_pat
                     .insert(pat, inner.matched_ty.clone());
                 inner
             }

@@ -342,7 +342,7 @@ const PROJECTION_FINALIZE_FUEL: u32 = 32;
 #[derive(Debug, Clone, PartialEq)]
 pub struct InferenceResult {
     pub type_of_expr: FxHashMap<ExprId, Ty>,
-    pub type_of_binding: FxHashMap<PatId, Ty>,
+    pub type_of_pat: FxHashMap<PatId, Ty>,
     /// The owner's effect: the declared clause when written, else the
     /// canonical union of the body's throw sites and callee throws
     /// (`never` when nothing throws) - S12.
@@ -360,7 +360,7 @@ impl Default for InferenceResult {
     fn default() -> InferenceResult {
         InferenceResult {
             type_of_expr: FxHashMap::default(),
-            type_of_binding: FxHashMap::default(),
+            type_of_pat: FxHashMap::default(),
             throws: Ty::never(),
             type_mismatches: FxHashMap::default(),
             non_exhaustive_matches: rustc_hash::FxHashSet::default(),
@@ -632,7 +632,7 @@ struct InferenceContext<'db> {
     /// `infer_lambda`; the lambda-scope analog of `param_tys`.
     lambda_params: FxHashMap<FileScopeId, Vec<Ty>>,
     /// The flow-narrowing overlay: refined types for bindings, consulted
-    /// before `type_of_binding`. S10a populates it per match arm only;
+    /// before `type_of_pat`. S10a populates it per match arm only;
     /// the S10b condition/branch machinery grows it into the full
     /// environment (design: eager-forward on the structured walk).
     flow: FxHashMap<BindingId, Ty>,
@@ -758,13 +758,13 @@ impl<'db> InferenceContext<'db> {
             .patterns
             .iter()
             .map(|(pat_id, _)| pat_id)
-            .filter(|pat_id| !self.result.type_of_binding.contains_key(pat_id))
+            .filter(|pat_id| !self.result.type_of_pat.contains_key(pat_id))
             .collect();
         for pat_id in unfilled {
             let ty = self
                 .pattern_ascription_ty(body, pat_id)
                 .unwrap_or_else(Ty::error);
-            self.result.type_of_binding.insert(pat_id, ty);
+            self.result.type_of_pat.insert(pat_id, ty);
         }
     }
 
@@ -3877,7 +3877,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     self.index
                         .local_binding(binding_id)
-                        .and_then(|binding| self.result.type_of_binding.get(&binding.bind_pattern))
+                        .and_then(|binding| self.result.type_of_pat.get(&binding.bind_pattern))
                         .cloned()
                         .unwrap_or_else(Ty::error)
                 }
@@ -3980,7 +3980,7 @@ impl<'db> InferenceContext<'db> {
                 self.union_of(&facts)
             };
             self.result
-                .type_of_binding
+                .type_of_pat
                 .insert(clause.binding, clause_binding_ty);
             if let Some(context) = clause.stack_trace_binding {
                 // The second binding (`catch (e, ctx)`) is the full error
@@ -4005,7 +4005,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     _ => Ty::error(),
                 };
-                self.result.type_of_binding.insert(context, context_ty);
+                self.result.type_of_pat.insert(context, context_ty);
             }
             for &arm_id in &clause.arms {
                 let arm = &body.catch_arms[arm_id];
@@ -4204,7 +4204,7 @@ impl<'db> InferenceContext<'db> {
         for ty in result
             .type_of_expr
             .values_mut()
-            .chain(result.type_of_binding.values_mut())
+            .chain(result.type_of_pat.values_mut())
         {
             *ty = self.finalize_ty(ty);
         }

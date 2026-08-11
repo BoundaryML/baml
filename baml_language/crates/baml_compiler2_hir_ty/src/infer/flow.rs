@@ -191,7 +191,7 @@ impl InferenceContext<'_> {
             BindingKind::Local(_) => self
                 .index
                 .local_binding(binding)
-                .and_then(|local| self.result.type_of_binding.get(&local.bind_pattern))
+                .and_then(|local| self.result.type_of_pat.get(&local.bind_pattern))
                 .cloned()
                 .unwrap_or_else(Ty::error),
             BindingKind::Parameter(param_index) => {
