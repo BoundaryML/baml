@@ -307,8 +307,8 @@ pub struct UserFunctionInfo {
     /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
     /// is the path to the file containing `main`.
     pub source_file: String,
-    /// `true` when the function carries `FunctionMeta::Llm` — i.e. it
-    /// was declared with `client X { ... } prompt `...`` and the
+    /// `true` when the function carries `FunctionMeta::Llm` and was declared
+    /// with an LLM client and backtick prompt.
     /// compiler synthesized the LLM dispatch body. Surfaced here so
     /// `baml run --list` can annotate LLM functions inline without
     /// reaching back into the heap to inspect `body_meta`.
