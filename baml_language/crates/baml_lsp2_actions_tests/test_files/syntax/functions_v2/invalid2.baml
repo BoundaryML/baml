@@ -156,6 +156,46 @@ function Foo6(arg: int) -> float {
 //  2 │ │     client Foo
 //  3 │ ╰─▶ }
 //    ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//    ╭─[functions_v2_invalid2.baml:1:34]
+//  1 │ ╭─▶ function Foo1(arg: int) -> float {
+//  2 │ │     client Foo
+//  3 │ ╰─▶ }
+//    ╰────
+// E0003
+//
+//   × unresolved name: `Foo`
+//    ╭─[functions_v2_invalid2.baml:1:34]
+//  1 │ ╭─▶ function Foo1(arg: int) -> float {
+//  2 │ │     client Foo
+//  3 │ ╰─▶ }
+//    ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//    ╭─[functions_v2_invalid2.baml:1:1]
+//  1 │ ╭─▶ function Foo1(arg: int) -> float {
+//  2 │ │     client Foo
+//  3 │ ╰─▶ }
+//    ╰────
+// E0003
+//
+//   × unresolved name: `Foo`
+//    ╭─[functions_v2_invalid2.baml:1:34]
+//  1 │ ╭─▶ function Foo1(arg: int) -> float {
+//  2 │ │     client Foo
+//  3 │ ╰─▶ }
+//    ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//    ╭─[functions_v2_invalid2.baml:1:1]
+//  1 │ ╭─▶ function Foo1(arg: int) -> float {
+//  2 │ │     client Foo
+//  3 │ ╰─▶ }
+//    ╰────
 // E0001
 //
 //   × mismatched types
@@ -174,10 +214,118 @@ function Foo6(arg: int) -> float {
 //  11 │ │     prompt "..."
 //  12 │ ╰─▶ }
 //     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:9:34]
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:9:34]
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:9:1]
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:9:34]
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:9:1]
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:9:34]
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:9:1]
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
 // E0003
 //
 //   × unresolved name: `bar`
 //     ╭─[functions_v2_invalid2.baml:15:34]
+//  15 │ ╭─▶ function Foo4(arg: int) -> float {
+//  16 │ │     client bar
+//  17 │ │     prompt
+//  18 │ ╰─▶ }
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:15:34]
+//  15 │ ╭─▶ function Foo4(arg: int) -> float {
+//  16 │ │     client bar
+//  17 │ │     prompt
+//  18 │ ╰─▶ }
+//     ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:15:34]
+//  15 │ ╭─▶ function Foo4(arg: int) -> float {
+//  16 │ │     client bar
+//  17 │ │     prompt
+//  18 │ ╰─▶ }
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:15:1]
+//  15 │ ╭─▶ function Foo4(arg: int) -> float {
+//  16 │ │     client bar
+//  17 │ │     prompt
+//  18 │ ╰─▶ }
+//     ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:15:34]
+//  15 │ ╭─▶ function Foo4(arg: int) -> float {
+//  16 │ │     client bar
+//  17 │ │     prompt
+//  18 │ ╰─▶ }
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:15:1]
 //  15 │ ╭─▶ function Foo4(arg: int) -> float {
 //  16 │ │     client bar
 //  17 │ │     prompt
@@ -193,6 +341,15 @@ function Foo6(arg: int) -> float {
 //  24 │ ├─▶ }
 //     · ╰──── expected `baml.llm.Client`, found `null`
 //     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:27:34]
+//  27 │ ╭─▶ function Foo6(arg: int) -> float {
+//  28 │ │     client
+//  29 │ │     prompt
+//  30 │ ╰─▶ }
+//     ╰────
 // E0001
 //
 //   × mismatched types
@@ -202,6 +359,34 @@ function Foo6(arg: int) -> float {
 //  29 │ │     prompt
 //  30 │ ├─▶ }
 //     · ╰──── expected `baml.llm.Client`, found `null`
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:27:1]
+//  27 │ ╭─▶ function Foo6(arg: int) -> float {
+//  28 │ │     client
+//  29 │ │     prompt
+//  30 │ ╰─▶ }
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[functions_v2_invalid2.baml:27:1]
+//  27 │ ╭─▶ function Foo6(arg: int) -> float {
+//  28 │ │     client
+//  29 │ │     prompt
+//  30 │ ├─▶ }
+//     · ╰──── expected `baml.llm.Client`, found `null`
+//     ╰────
+// E0005
+//
+//   × expected 4 argument(s), got 3
+//     ╭─[functions_v2_invalid2.baml:27:1]
+//  27 │ ╭─▶ function Foo6(arg: int) -> float {
+//  28 │ │     client
+//  29 │ │     prompt
+//  30 │ ╰─▶ }
 //     ╰────
 // E0001
 //
