@@ -43,38 +43,69 @@ let array_access_4 = [1,2, 3][foo.name];
 
 //----
 //- diagnostics
-// E0007
+// E0010
 //
-//   × type `Foo` has no member `names`
-//     ╭─[expr_access.baml:11:19]
+//   × top-level `let` bindings are not supported
+//    ╭─[expr_access.baml:6:1]
+//  6 │ ╭─▶ let foo = Foo {
+//  7 │ │       name: "John",
+//  8 │ │       age: 2,
+//  9 │ ├─▶ };
+//    · ╰──── move this binding into a function body
+//    ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_access.baml:10:1]
+//  10 │ let name = foo.name;
+//     · ──────────┬─────────
+//     ·           ╰── move this binding into a function body
+//     ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_access.baml:11:1]
 //  11 │ let misspelling = foo.names;
-//     ·                   ─────────
+//     · ──────────────┬─────────────
+//     ·               ╰── move this binding into a function body
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[expr_access.baml:1:7]
-//        1 │ class Foo {
-//          ·       ───
-//          ╰────
-// E0007
+// E0010
 //
-//   × type `string` has no member `field`
-//     ╭─[expr_access.baml:12:16]
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_access.baml:12:1]
 //  12 │ let nonsense = foo.name.field;
-//     ·                ──────────────
+//     · ───────────────┬──────────────
+//     ·                ╰── move this binding into a function body
 //     ╰────
-// E0001
+// E0010
 //
-//   × mismatched types
-//     ╭─[expr_access.baml:15:31]
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_access.baml:14:1]
+//  14 │ let array_access_1 = [1, 2, 3][0];
+//     · ─────────────────┬────────────────
+//     ·                  ╰── move this binding into a function body
+//     ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_access.baml:15:1]
 //  15 │ let array_access_2 = [1,2, 3]["hi"];
-//     ·                               ──┬─
-//     ·                                 ╰── expected `int`, found `string`
+//     · ──────────────────┬─────────────────
+//     ·                   ╰── move this binding into a function body
 //     ╰────
-// E0001
+// E0010
 //
-//   × mismatched types
-//     ╭─[expr_access.baml:17:31]
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_access.baml:16:1]
+//  16 │ let array_access_3 = [1,2, 3][foo.age];
+//     · ───────────────────┬───────────────────
+//     ·                    ╰── move this binding into a function body
+//     ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[expr_access.baml:17:1]
 //  17 │ let array_access_4 = [1,2, 3][foo.name];
-//     ·                               ────┬───
-//     ·                                   ╰── expected `int`, found `string`
+//     · ────────────────────┬───────────────────
+//     ·                     ╰── move this binding into a function body
 //     ╰────

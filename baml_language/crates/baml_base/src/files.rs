@@ -26,4 +26,9 @@ pub struct SourceFile {
     /// This allows spans to identify their source file without carrying
     /// the full SourceFile reference (which is a Salsa-tracked entity).
     pub file_id: FileId,
+
+    /// Whether this is compiler-generated source for a `Session.eval`
+    /// submission. Session lowering represents persistent bindings as root
+    /// lets internally; ordinary BAML source files must reject them.
+    pub is_session_submission: bool,
 }

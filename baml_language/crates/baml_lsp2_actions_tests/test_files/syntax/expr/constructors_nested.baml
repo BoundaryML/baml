@@ -17,11 +17,11 @@ let x = Foo { bar: Bar { name: 10 }};
 
 //----
 //- diagnostics
-// E0001
+// E0010
 //
-//   × mismatched types
-//    ╭─[expr_constructors_nested.baml:9:32]
+//   × top-level `let` bindings are not supported
+//    ╭─[expr_constructors_nested.baml:9:1]
 //  9 │ let x = Foo { bar: Bar { name: 10 }};
-//    ·                                ─┬
-//    ·                                 ╰── expected `string`, found `10`
+//    · ──────────────────┬──────────────────
+//    ·                   ╰── move this binding into a function body
 //    ╰────

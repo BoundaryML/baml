@@ -434,7 +434,7 @@ impl ProjectDatabase {
         content: &str,
     ) -> SourceFile {
         let path = path.as_ref().to_path_buf();
-        let file = self.add_file_internal(&path, content);
+        let file = self.add_file_internal(&path, content, false);
         let file_id = file.file_id(self);
         Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
         self.compiler2_file_map.insert(path, file);
@@ -484,6 +484,7 @@ impl ProjectDatabase {
         &mut self,
         path: impl Into<std::path::PathBuf>,
         text: impl Into<String>,
+        is_session_submission: bool,
     ) -> SourceFile {
         let file_id = FileId::new(
             self.next_file_id
@@ -491,7 +492,13 @@ impl ProjectDatabase {
         );
 
         // Create a new SourceFile input
-        SourceFile::new(self, text.into(), path.into(), file_id)
+        SourceFile::new(
+            self,
+            text.into(),
+            path.into(),
+            file_id,
+            is_session_submission,
+        )
     }
 
     /// Add or update a file in the database.
@@ -501,20 +508,34 @@ impl ProjectDatabase {
     ///
     /// Returns the `SourceFile` handle.
     pub fn add_or_update_file(&mut self, path: &std::path::Path, content: &str) -> SourceFile {
+        self.add_or_update_file_with_kind(path, content, false)
+    }
+
+    fn add_or_update_file_with_kind(
+        &mut self,
+        path: &std::path::Path,
+        content: &str,
+        is_session_submission: bool,
+    ) -> SourceFile {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if let Some(&existing_file) = self.file_map.get(&canonical_path) {
             // Update existing file using Salsa's setter
             existing_file.set_text(self).to(content.to_string());
             existing_file
+                .set_is_session_submission(self)
+                .to(is_session_submission);
+            existing_file
         } else {
             // Revive the tombstoned input if this path existed before —
             // creating a fresh input would leak the old one forever.
             let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
                 file.set_text(self).to(content.to_string());
+                file.set_is_session_submission(self)
+                    .to(is_session_submission);
                 file
             } else {
-                self.add_file_internal(&canonical_path, content)
+                self.add_file_internal(&canonical_path, content, is_session_submission)
             };
             let file_id = file.file_id(self);
 
@@ -548,13 +569,15 @@ impl ProjectDatabase {
 
             if let Some(&existing_file) = self.file_map.get(&canonical_path) {
                 existing_file.set_text(self).to(content.to_string());
+                existing_file.set_is_session_submission(self).to(false);
                 continue;
             }
             let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
                 file.set_text(self).to(content.to_string());
+                file.set_is_session_submission(self).to(false);
                 file
             } else {
-                self.add_file_internal(&canonical_path, content)
+                self.add_file_internal(&canonical_path, content, false)
             };
             let file_id = file.file_id(self);
             Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
@@ -644,7 +667,7 @@ impl ProjectDatabase {
         for builtin in baml_builtins2::ALL {
             let virtual_path = builtin.virtual_path();
             let path = PathBuf::from(&virtual_path);
-            let file = self.add_file_internal(&path, builtin.contents);
+            let file = self.add_file_internal(&path, builtin.contents, false);
             let file_id = file.file_id(self);
 
             Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
@@ -661,6 +684,19 @@ impl ProjectDatabase {
     /// This is an alias for `add_or_update_file` for API compatibility.
     pub fn add_file(&mut self, path: impl AsRef<std::path::Path>, content: &str) -> SourceFile {
         self.add_or_update_file(path.as_ref(), content)
+    }
+
+    /// Add compiler-generated source for a `Session.eval` submission.
+    ///
+    /// These transient files may contain root lets used to materialize
+    /// persistent session bindings. Ordinary project and runtime-package files
+    /// always go through [`Self::add_file`] and reject root lets.
+    pub fn add_session_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+        content: &str,
+    ) -> SourceFile {
+        self.add_or_update_file_with_kind(path.as_ref(), content, true)
     }
 
     /// Get all file paths currently tracked by the database.

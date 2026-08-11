@@ -286,7 +286,7 @@ mod tests {
     impl TestDb {
         fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
-            SourceFile::new(self, content.to_string(), path.into(), file_id)
+            SourceFile::new(self, content.to_string(), path.into(), file_id, false)
         }
 
         fn with_builtins() -> Self {

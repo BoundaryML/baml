@@ -82,24 +82,33 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
 function main() -> bool throws unknown {
   let pkg = reflect.Package.compile({ "schema.baml": #"
-let initialized = init_marker();
-function init_marker() -> int {
-  log.info("runtime init ran")
-  1
+client<llm> InitClient {
+  provider openai
+  options {
+    model "unused-network-free-init-check"
+    api_key "unused"
+  }
+}
+function init_ready() -> bool {
+  InitClient.name == "InitClient"
 }
 class Ready { value string }
 "# })
-  pkg.get_class("root.Ready") != null
+  let init_ready = pkg.get_function<() -> bool>("root.init_ready")
+    ?? throw "missing init_ready"
+  pkg.get_class("root.Ready") != null && init_ready()
 }
 "####;
 
 const REJECTED_INIT_SOURCE: &str = r####"
 function main() -> null throws unknown {
   reflect.Package.compile({ "schema.baml": #"
-let initialized = init_marker();
-function init_marker() -> int {
-  log.info("rejected init must not run")
-  1
+client<llm> InitClient {
+  provider openai
+  options {
+    model "unused-network-free-init-check"
+    api_key "unused"
+  }
 }
 class Broken { value MissingType }
 "# })
@@ -286,8 +295,7 @@ async fn successful_compile_runs_init_before_returning_package() {
     let (result, report) = run_main_with_logs(SUCCESSFUL_INIT_SOURCE).await;
     assert_eq!(result, Ok(BexExternalValue::Bool(true)));
     assert!(report.failures.is_empty(), "{:?}", report.failures);
-    assert_eq!(report.logs.len(), 1);
-    assert_eq!(report.logs[0].body, "runtime init ran");
+    assert!(report.logs.is_empty());
 }
 
 #[tokio::test]

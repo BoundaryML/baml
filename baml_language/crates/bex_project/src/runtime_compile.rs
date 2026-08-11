@@ -1166,8 +1166,8 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             packages,
             mode,
         } = request;
-        let (files, mut session_artifact, result_contract, session_lease) = match mode {
-            RuntimeCompileMode::Package => (files, None, None, None),
+        let (files, mut session_artifact, result_contract, session_lease, is_session) = match mode {
+            RuntimeCompileMode::Package => (files, None, None, None, false),
             RuntimeCompileMode::Session(session) => {
                 let session = *session;
                 let lowered = lower_session_submission(&session)?;
@@ -1178,6 +1178,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                     Some(lowered.artifact),
                     Some((lowered.result_global, session.expected.clone())),
                     Some(session.lease),
+                    true,
                 )
             }
         };
@@ -1196,7 +1197,12 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             // the synthetic root makes `ns_foo/` namespace derivation behave
             // exactly like an ordinary project without exposing the synthetic
             // prefix in diagnostics.
-            db.add_file(Path::new("<runtime>").join(path), &source);
+            let path = Path::new("<runtime>").join(path);
+            if is_session {
+                db.add_session_file(path, &source);
+            } else {
+                db.add_file(path, &source);
+            }
         }
 
         let diagnostics: Vec<_> = collect_diagnostics(&db)

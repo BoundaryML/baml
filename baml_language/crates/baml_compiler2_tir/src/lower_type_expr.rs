@@ -1564,6 +1564,7 @@ mod tests {
             source.to_string(),
             PathBuf::from("test.baml"),
             baml_base::FileId::new(0),
+            false,
         );
         db.project = Some(Project::new(&db, PathBuf::from("."), vec![file]));
         db
@@ -5134,12 +5135,14 @@ function needs<T extends Marker>(x: T) -> int throws never {
             core.to_string(),
             PathBuf::from("ns_core/core.baml"),
             baml_base::FileId::new(0),
+            false,
         );
         let f1 = baml_base::SourceFile::new(
             &db,
             main.to_string(),
             PathBuf::from("test.baml"),
             baml_base::FileId::new(1),
+            false,
         );
         db.project = Some(Project::new(&db, PathBuf::from("."), vec![f0, f1]));
         let mut errors: Vec<TirTypeError> = Vec::new();

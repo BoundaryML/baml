@@ -24,13 +24,13 @@ function Ok() -> int {
 
 //----
 //- diagnostics
-// E0001
+// E0010
 //
-//   × invalid pattern type ascription: top-level lets do not support patterns or `else`
+//   × top-level `let` bindings are not supported
 //    ╭─[expr_let_annotations.baml:1:1]
 //  1 │ let G: int | float = 10.0;
 //    · ─────────────┬────────────
-//    ·              ╰── type ascription not allowed here
+//    ·              ╰── move this binding into a function body
 //    ╰────
 // E0001
 //

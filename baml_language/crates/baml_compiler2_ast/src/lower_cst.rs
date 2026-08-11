@@ -85,6 +85,28 @@ pub fn lower_file_with_path_and_test_owner(
     file_path: Option<&std::path::Path>,
     test_owner: Option<&str>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, false)
+}
+
+/// Lower compiler-generated source for a `Session.eval` submission.
+///
+/// Session lowering rewrites persistent bindings into root lets before the
+/// transient source reaches HIR. This entry point is intentionally separate
+/// from ordinary file lowering so user-authored file-scope lets stay rejected.
+pub fn lower_session_file_with_path_and_test_owner(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner_impl(root, file_path, test_owner, true)
+}
+
+fn lower_file_with_path_and_test_owner_impl(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+    is_session_submission: bool,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
@@ -160,10 +182,16 @@ pub fn lower_file_with_path_and_test_owner(
                 }
             }
             baml_compiler_syntax::SyntaxKind::LET_STMT => {
-                if let Some(let_item) =
-                    lower_expr_body::lower_top_level_let(&child, &mut diags, &mut env_var_refs)
-                {
-                    items.push(Item::Let(let_item));
+                if is_session_submission {
+                    if let Some(let_item) =
+                        lower_expr_body::lower_session_let(&child, &mut diags, &mut env_var_refs)
+                    {
+                        items.push(Item::Let(let_item));
+                    }
+                } else {
+                    diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
+                        span: child.span_range(),
+                    });
                 }
             }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {

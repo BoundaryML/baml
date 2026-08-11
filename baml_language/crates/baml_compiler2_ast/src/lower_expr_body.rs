@@ -122,11 +122,12 @@ pub(crate) fn lower(
     (body, source_map)
 }
 
-/// Lower a source-level root `let name = expression` into the same `LetDef`
-/// representation used by synthesized clients and retry policies. The parser
-/// deliberately reuses `LET_STMT` at file and block scope; file lowering must
-/// therefore extract the binding rather than silently dropping the CST node.
-pub(crate) fn lower_top_level_let(
+/// Lower one compiler-generated persistent binding for `Session.eval`.
+///
+/// Ordinary source files never call this path: their root lets are rejected by
+/// file lowering. Sessions use the global representation internally so each
+/// committed binding can be re-imported by later submissions.
+pub(crate) fn lower_session_let(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<EnvVarRef>,
@@ -144,14 +145,14 @@ pub(crate) fn lower_top_level_let(
     };
     let Pattern::Bind { name, subpat } = ctx.patterns[pattern].clone() else {
         diags.push(LoweringDiagnostic::InvalidPatternAscription {
-            reason: "top-level lets require a single named binding",
+            reason: "session bindings require a single named binding",
             span: node.span_range(),
         });
         return None;
     };
     if subpat.is_some() || else_branch.is_some() {
         diags.push(LoweringDiagnostic::InvalidPatternAscription {
-            reason: "top-level lets do not support patterns or `else`",
+            reason: "session bindings do not support patterns or `else`",
             span: node.span_range(),
         });
         return None;

@@ -52,10 +52,8 @@ function main() -> int { bounded<string>() }
     let output = baml_test!(
         r#"
 interface Named { name string }
-let entered = 0
 function bounded<T extends Named>() -> int {
-  entered += 1
-  entered
+  baml.sys.panic("callee body entered")
 }
 function main() -> string {
   let result = bounded<unreflect(type.of<string>())>() catch (e) {
@@ -64,21 +62,14 @@ function main() -> string {
     }
   }
   let diagnostic = if result is string { result } else { "bound accepted" }
-  diagnostic + "|" + (entered == 0).to_string()
+  diagnostic
 }
 "#
     );
     let Ok(BexExternalValue::String(runtime)) = output.result else {
         panic!("expected runtime diagnostic, got {:?}", output.result)
     };
-    let (runtime_diagnostic, body_not_entered) = runtime
-        .rsplit_once('|')
-        .expect("runtime result should include the entry sentinel");
-    assert_eq!(
-        body_not_entered, "true",
-        "callee body ran before bound check"
-    );
-    let (runtime_code, runtime_message) = runtime_diagnostic
+    let (runtime_code, runtime_message) = runtime
         .split_once('|')
         .expect("runtime result should contain code and message");
     assert_eq!(runtime_code, static_diagnostic.0);

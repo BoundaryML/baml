@@ -43,40 +43,71 @@ let array_access_4 = [1,2, 3][foo.name];
 
 //----
 //- diagnostics
-// E0007
+// E0010
 //
-//   × type `Foo` has no member `names`
-//     ╭─[index_access.baml:11:19]
+//   × top-level `let` bindings are not supported
+//    ╭─[index_access.baml:6:1]
+//  6 │ ╭─▶ let foo = Foo {
+//  7 │ │       name: "John",
+//  8 │ │       age: 2,
+//  9 │ ├─▶ };
+//    · ╰──── move this binding into a function body
+//    ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[index_access.baml:10:1]
+//  10 │ let name = foo.name;
+//     · ──────────┬─────────
+//     ·           ╰── move this binding into a function body
+//     ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[index_access.baml:11:1]
 //  11 │ let misspelling = foo.names;
-//     ·                   ─────────
+//     · ──────────────┬─────────────
+//     ·               ╰── move this binding into a function body
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[index_access.baml:1:7]
-//        1 │ class Foo {
-//          ·       ───
-//          ╰────
-// E0007
+// E0010
 //
-//   × type `string` has no member `field`
-//     ╭─[index_access.baml:12:16]
+//   × top-level `let` bindings are not supported
+//     ╭─[index_access.baml:12:1]
 //  12 │ let nonsense = foo.name.field;
-//     ·                ──────────────
+//     · ───────────────┬──────────────
+//     ·                ╰── move this binding into a function body
 //     ╰────
-// E0001
+// E0010
 //
-//   × mismatched types
-//     ╭─[index_access.baml:15:31]
+//   × top-level `let` bindings are not supported
+//     ╭─[index_access.baml:14:1]
+//  14 │ let array_access_1 = [1, 2, 3][0];
+//     · ─────────────────┬────────────────
+//     ·                  ╰── move this binding into a function body
+//     ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[index_access.baml:15:1]
 //  15 │ let array_access_2 = [1,2, 3]["hi"];
-//     ·                               ──┬─
-//     ·                                 ╰── expected `int`, found `string`
+//     · ──────────────────┬─────────────────
+//     ·                   ╰── move this binding into a function body
 //     ╰────
-// E0001
+// E0010
 //
-//   × mismatched types
-//     ╭─[index_access.baml:17:31]
+//   × top-level `let` bindings are not supported
+//     ╭─[index_access.baml:16:1]
+//  16 │ let array_access_3 = [1,2, 3][foo.age];
+//     · ───────────────────┬───────────────────
+//     ·                    ╰── move this binding into a function body
+//     ╰────
+// E0010
+//
+//   × top-level `let` bindings are not supported
+//     ╭─[index_access.baml:17:1]
 //  17 │ let array_access_4 = [1,2, 3][foo.name];
-//     ·                               ────┬───
-//     ·                                   ╰── expected `int`, found `string`
+//     · ────────────────────┬───────────────────
+//     ·                     ╰── move this binding into a function body
 //     ╰────
 //
 //- semantic_tokens
@@ -97,17 +128,12 @@ let array_access_4 = [1,2, 3][foo.name];
 // index_access.baml:10:1 (keyword) len=3 "let"
 // index_access.baml:10:5 (variable) [declaration] len=4 "name"
 // index_access.baml:10:10 (operator) len=1 "="
-// index_access.baml:10:12 (variable) len=3 "foo"
-// index_access.baml:10:16 (property) len=4 "name"
 // index_access.baml:11:1 (keyword) len=3 "let"
 // index_access.baml:11:5 (variable) [declaration] len=11 "misspelling"
 // index_access.baml:11:17 (operator) len=1 "="
-// index_access.baml:11:19 (variable) len=3 "foo"
 // index_access.baml:12:1 (keyword) len=3 "let"
 // index_access.baml:12:5 (variable) [declaration] len=8 "nonsense"
 // index_access.baml:12:14 (operator) len=1 "="
-// index_access.baml:12:16 (variable) len=3 "foo"
-// index_access.baml:12:20 (property) len=4 "name"
 // index_access.baml:14:1 (keyword) len=3 "let"
 // index_access.baml:14:5 (variable) [declaration] len=14 "array_access_1"
 // index_access.baml:14:20 (operator) len=1 "="
@@ -128,16 +154,12 @@ let array_access_4 = [1,2, 3][foo.name];
 // index_access.baml:16:23 (number) len=1 "1"
 // index_access.baml:16:25 (number) len=1 "2"
 // index_access.baml:16:28 (number) len=1 "3"
-// index_access.baml:16:31 (variable) len=3 "foo"
-// index_access.baml:16:35 (property) len=3 "age"
 // index_access.baml:17:1 (keyword) len=3 "let"
 // index_access.baml:17:5 (variable) [declaration] len=14 "array_access_4"
 // index_access.baml:17:20 (operator) len=1 "="
 // index_access.baml:17:23 (number) len=1 "1"
 // index_access.baml:17:25 (number) len=1 "2"
 // index_access.baml:17:28 (number) len=1 "3"
-// index_access.baml:17:31 (variable) len=3 "foo"
-// index_access.baml:17:35 (property) len=4 "name"
 // index_access.baml:19:1 (comment) len=56 "// error: Error validating: Class Foo has no field names"
 // index_access.baml:20:1 (comment) len=29 "//   -->  expr/access.baml:11"
 // index_access.baml:21:1 (comment) len=7 "//    |"
