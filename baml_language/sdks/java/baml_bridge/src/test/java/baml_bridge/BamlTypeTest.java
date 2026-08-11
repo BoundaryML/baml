@@ -212,9 +212,9 @@ class BamlTypeTest {
     void class_by_fqn_needs_no_registration_and_has_value_semantics() {
         // classByFqn names a type by BAML FQN without a TypeRegistry lookup (so it
         // spells runtime-owned / not-yet-loaded types too).
-        BamlType a = BamlType.classByFqn("baml.llm.Stream");
-        assertEquals(BamlType.classByFqn("baml.llm.Stream"), a);
-        assertEquals("baml.llm.Stream", a.fqn());
+        BamlType a = BamlType.classByFqn("ai.stream.Stream");
+        assertEquals(BamlType.classByFqn("ai.stream.Stream"), a);
+        assertEquals("ai.stream.Stream", a.fqn());
         // A generic-args form is distinct from the bare form (distinct registry keys).
         BamlType g = BamlType.classByFqn("user.g.Wrapper", BamlType.INT);
         assertNotEquals(BamlType.classByFqn("user.g.Wrapper"), g);

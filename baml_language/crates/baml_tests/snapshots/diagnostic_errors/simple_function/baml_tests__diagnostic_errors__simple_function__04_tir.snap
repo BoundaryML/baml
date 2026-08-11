@@ -2,37 +2,27 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.HelloWorld(name: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "HelloWorld", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : string
-  !! 44..101: unresolved name: GPT4
+function user.HelloWorld(name: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(HelloWorld$spec(name)).value : string
 }
-function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "HelloWorld", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
-  !! 44..101: unresolved name: GPT4
+function user.HelloWorld$spec(name: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "HelloWorld", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4 } : ai.FunctionSpec<string>
+  !! 55..59: unresolved name: GPT4
 }
-function user.HelloWorld$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "HelloWorld", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
-  !! 44..101: unresolved name: GPT4
+lambda user.HelloWorld$spec {
 }
-function user.HelloWorld$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "HelloWorld", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
-  !! 44..101: unresolved name: GPT4
+function user.HelloWorld$render_prompt(name: string) -> ai.Prompt throws never {
+  HelloWorld$spec(name).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
+}
+function user.HelloWorld$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
 class user.User {
   name: string
   age: int
 }
-function user.HelloWorld$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "HelloWorld", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
-  !! 44..101: unresolved name: GPT4
-}
-function user.HelloWorld$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 44..101: unresolved name: GPT4
-}
-function user.HelloWorld$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-  !! 44..101: unresolved name: GPT4
+function user.HelloWorld$stream(name: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(HelloWorld$spec(name), client = client) : ai.stream.Stream<string | null, string>
 }
 class user.User$stream {
   name: string | null

@@ -1,19 +1,18 @@
-//! BEP-049 M5e/M5f end-to-end: a new-mode (backtick) `prompt` is compiled into
-//! a closure that the orchestrator invokes per attempt, producing a `PromptAst`
-//! that flows into the real provider request — byte-for-byte the same path a
-//! legacy Jinja `#"..."#` prompt takes, just rendered by the closure instead of
-//! the Jinja engine.
+//! BEP-049 M5e/M5f end-to-end prompt and streaming coverage.
 //!
-//! These tests drive the **companion** function (`Greet("World")`), not the raw
-//! `baml.llm.call_llm_function` builtin, so the closure synthesized in
-//! `lower_cst` is threaded all the way through `execute_once_oneshot`. A
-//! WireMock server captures the outgoing request so we can assert the rendered
-//! prompt actually reaches the wire.
+//! Removed with the legacy LLM path (see git history):
+//!   - `backtick_prompt_renders_into_provider_request` — asserted on the wire
+//!     request built by the legacy `call_llm_function` orchestrator; prompt
+//!     rendering is now covered by the `$render_prompt` companion tests in
+//!     `baml_src/ns_prompt_tag_runtime/`.
+//!   - `backtick_and_jinja_prompts_produce_identical_messages` — Jinja
+//!     `#"..."#` prompts are a compile error now, so there is no legacy twin
+//!     to compare against.
 //!
-//! These tests require Rust-side mocking (WireMock) with dynamic URI injection
-//! into client declarations and wire-level request capture. BAML client options
-//! are static and `baml.env` is read-only, so in-BAML HTTP servers bound to
-//! OS-assigned ports cannot be reached from client declarations.
+//! The remaining tests exercise the ai-world `$stream` companion against a
+//! local OpenAI Responses API endpoint.
+
+#![allow(dead_code)]
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -22,43 +21,29 @@ use wiremock::{
     matchers::{method, path},
 };
 
-/// A single-choice OpenAI chat-completion response carrying `content`.
-fn openai_chat_response(content: &str) -> String {
-    format!(
-        "{{\"id\":\"chatcmpl-test\",\"object\":\"chat.completion\",\"created\":0,\
-         \"model\":\"gpt-4o\",\
-         \"choices\":[{{\"index\":0,\"message\":{{\"role\":\"assistant\",\"content\":\"{content}\"}},\
-         \"finish_reason\":\"stop\"}}],\
-         \"usage\":{{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}}}"
-    )
-}
-
 /// An OpenAI client pointed at the mock server.
 fn client_decl(base_url: &str) -> String {
     format!(
-        r##"
-        client<llm> TestClient {{
-            provider openai
-            options {{
-                model "gpt-4o"
-                api_key "test-key"
-                base_url "{base_url}"
-            }}
-        }}
-    "##
+        r#"
+        client TestClient = openai.OpenAiClient.new(
+            model = "gpt-4o",
+            api_key = "test-key",
+            base_url = "{base_url}",
+        );
+    "#
     )
 }
 
-/// Pull the concatenated `messages[].content` out of a captured chat request.
+/// Pull the concatenated `input[].content` out of a captured Responses request.
 fn request_messages(server_requests: &[wiremock::Request]) -> String {
     let req = server_requests
         .iter()
-        .find(|r| r.url.path() == "/chat/completions")
-        .expect("a /chat/completions request was recorded");
+        .find(|r| r.url.path() == "/responses")
+        .expect("a /responses request was recorded");
     let body: serde_json::Value = serde_json::from_slice(&req.body).expect("request body is JSON");
-    body["messages"]
+    body["input"]
         .as_array()
-        .expect("messages array present")
+        .expect("input array present")
         .iter()
         .map(|m| message_text(&m["content"]))
         .collect::<Vec<_>>()
@@ -82,77 +67,28 @@ fn message_text(content: &serde_json::Value) -> String {
         .unwrap_or_default()
 }
 
-#[tokio::test]
-async fn backtick_prompt_renders_into_provider_request() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/chat/completions"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "application/json")
-                .set_body_string(openai_chat_response("Hi there")),
-        )
-        .mount(&server)
-        .await;
-    let uri = server.uri();
-
-    let source = format!(
-        r#"
-        {client}
-
-        function Greet(name: string) -> string {{
-            client TestClient
-            prompt `Hello ${{name}}!`
-        }}
-
-        function main() -> string {{
-            Greet("World")
-        }}
-    "#,
-        client = client_decl(&uri)
-    );
-
-    let output = baml_test!(&source);
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("Hi there".to_string().into())),
-        "the parsed LLM response should flow back out: {:?}",
-        output.result
-    );
-
-    let requests = server
-        .received_requests()
-        .await
-        .expect("WireMock recorded the request");
-    let messages = request_messages(&requests);
-    assert!(
-        messages.contains("Hello World!"),
-        "the closure-rendered prompt must reach the provider request: {messages:?}"
-    );
-}
-
-/// An OpenAI-format SSE body streaming `chunks` then a `stop` finish.
+/// An OpenAI Responses SSE body streaming `chunks` then completing.
 fn openai_sse_body(chunks: &[&str]) -> String {
     let mut body = String::new();
     for chunk in chunks {
+        let delta = serde_json::to_string(chunk).expect("stream delta is JSON-serializable");
         body.push_str(&format!(
-            "data: {{\"choices\":[{{\"delta\":{{\"content\":\"{chunk}\"}}}}]}}\n\n"
+            "data: {{\"type\":\"response.output_text.delta\",\"delta\":{delta}}}\n\n"
         ));
     }
-    body.push_str("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n");
-    body.push_str("data: [DONE]\n\n");
+    body.push_str(
+        "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n",
+    );
     body
 }
 
 #[tokio::test]
 async fn backtick_prompt_streams_through_orchestrator() {
-    // BEP-049 M5e: the streaming path (`stream_llm_function` → `execute_once_stream`)
-    // must thread the same closure as the oneshot path. The `$stream` companion
-    // is generated in PPIR from the body `lower_cst` pre-built off the backtick,
-    // so the closure renders the prompt instead of looking up a Jinja template.
+    // BEP-049 M5e: the streaming path must thread the same prompt closure as
+    // the oneshot path, so the rendered backtick prompt reaches the wire.
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/chat/completions"))
+        .and(path("/responses"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "text/event-stream")
@@ -172,7 +108,7 @@ async fn backtick_prompt_streams_through_orchestrator() {
         }}
 
         function main() -> string {{
-            let stream: baml.llm.Stream<null | string, string> = Greet$stream("World");
+            let stream = Greet$stream("World");
             stream.final()
         }}
     "#,
@@ -196,5 +132,57 @@ async fn backtick_prompt_streams_through_orchestrator() {
     assert!(
         messages.contains("Hello World!"),
         "the closure-rendered prompt must reach the streaming request: {messages:?}"
+    );
+}
+
+/// Streaming render of `ctx.output_format` over a CLASS return: the class
+/// schema must reach the wire on the streaming path.
+#[tokio::test]
+async fn backtick_streaming_renders_output_format() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(openai_sse_body(&["{\"name\": \"Ada\"}"])),
+        )
+        .mount(&server)
+        .await;
+
+    let src = format!(
+        r#"
+        {client}
+
+        class Person {{ name string }}
+
+        function GetPerson() -> Person {{
+            client TestClient
+            prompt `Make a person.${{ctx.output_format}}`
+        }}
+
+        function main() -> Person {{
+            let s = GetPerson$stream();
+            s.final()
+        }}
+    "#,
+        client = client_decl(&server.uri()),
+    );
+    let output = baml_test!(&src);
+    assert!(
+        output.result.is_ok(),
+        "streamed class response should parse: {:?}",
+        output.result
+    );
+    let backtick = request_messages(
+        &server
+            .received_requests()
+            .await
+            .expect("stream request recorded"),
+    );
+
+    assert!(
+        backtick.contains("name"),
+        "backtick streaming should render the Person schema (its `name` field): {backtick:?}"
     );
 }

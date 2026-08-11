@@ -71,15 +71,17 @@ implements<T extends HasErr> Wrap for T[] {
 }
 
 class Safe {
-    value: int
+    value: int,
     implements HasErr {
         type E = never
-        function f(self) -> int throws never { return self.value }
+        function f(self) -> int throws never {
+            return self.value;
+        }
     }
 }
 
 class Kaboom {
-    message: string
+    message: string,
 }
 
 class Risky {
@@ -94,8 +96,8 @@ class Risky {
 // `Safe.E = never`, so `(Safe as HasErr).E = never` and `xs.g()` requires
 // no error handling: the helper declares no `throws` and uses no `catch`.
 function spike_1a_never_main() -> int throws never {
-    let xs: Safe[] = [Safe { value: 7 }]
-    return xs.g()
+    let xs: Safe[] = [Safe { value: 7 }];
+    return xs.g();
 }
 
 test "spike_1a_projection_normalizes_to_never_at_concrete_callsite" {
@@ -103,13 +105,13 @@ test "spike_1a_projection_normalizes_to_never_at_concrete_callsite" {
 }
 
 function spike_1a_catch_main() -> string {
-    let xs: Risky[] = [Risky {}]
+    let xs: Risky[] = [Risky {  }];
     return {
         let v = xs.g();
         "no throw"
     } catch (e) {
         Kaboom => "caught:" + e.message
-    }
+    };
 }
 
 test "spike_1a_concrete_error_is_catchable_at_callsite" {
@@ -120,17 +122,17 @@ test "spike_1a_concrete_error_is_catchable_at_callsite" {
 // the wrapper declares `throws U.E` and re-throws. At the concrete call
 // site the projection resolves to `Kaboom` and is caught.
 function call_g<U extends HasErr>(us: U[]) -> int throws U.E {
-    return us.g()
+    return us.g();
 }
 
 function spike_1a_symbolic_main() -> string {
-    let xs: Risky[] = [Risky {}]
+    let xs: Risky[] = [Risky {  }];
     return {
         let v = call_g(xs);
         "no throw"
     } catch (e) {
         Kaboom => "caught:" + e.message
-    }
+    };
 }
 
 test "spike_1a_symbolic_projection_propagates_through_generic_code" {
@@ -155,15 +157,15 @@ implements<T extends Named> FirstNamed for T[] {
 }
 
 class Person {
-    name: string
+    name: string,
     implements Named {}
 }
 
 // Direct call syntax on the array receiver — not via an interface-typed
 // variable. Runtime result proves dispatch found the blanket impl.
 function spike_1b_first_name_main() -> string {
-    let xs: Person[] = [Person { name: "Ada" }, Person { name: "Bob" }]
-    return xs.first_name()
+    let xs: Person[] = [Person { name: "Ada" }, Person { name: "Bob" }];
+    return xs.first_name();
 }
 
 test "spike_1b_blanket_method_resolves_on_array_receiver" {
@@ -183,8 +185,8 @@ implements<T> Countable for T[] {
 }
 
 function spike_1b_count_main() -> int {
-    let xs: int[] = [1, 2, 3]
-    return xs.count()
+    let xs: int[] = [1, 2, 3];
+    return xs.count();
 }
 
 test "spike_1b_blanket_interface_method_wins_over_array_class_method" {
@@ -200,20 +202,20 @@ interface Cmp {
 }
 
 class Num {
-    value: int
+    value: int,
     implements Cmp {
         function compare(self, other: Self) -> int {
-            return self.value - other.value
+            return self.value - other.value;
         }
     }
 }
 
 function lt<T extends Cmp>(a: T, b: T) -> bool {
-    return a.compare(b) < 0
+    return a.compare(b) < 0;
 }
 
 function spike_1c_main() -> bool {
-    return lt(Num { value: 1 }, Num { value: 2 })
+    return lt(Num { value: 1 }, Num { value: 2 });
 }
 
 test "spike_1c_two_self_method_through_bounded_typevar_runs" {
@@ -223,28 +225,32 @@ test "spike_1c_two_self_method_through_bounded_typevar_runs" {
 // ── Phase 2 repro: user-class Comparable dispatch ────────────────────────────
 
 class Score {
-    points: int
+    points: int,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
-            if (self.points < other.points) { -1 }
-            else if (self.points > other.points) { 1 }
-            else { 0 }
+            if (self.points < other.points) {
+                -1
+            } else if (self.points > other.points) {
+                1
+            } else {
+                0
+            }
         }
     }
 }
 
 function phase2_compare_main() -> int throws never {
-    let high = Score { points: 9 }
-    let low = Score { points: 1 }
-    return high.compare(low)
+    let high = Score { points: 9 };
+    let low = Score { points: 1 };
+    return high.compare(low);
 }
 
 function phase2_compare_explicit_binding_main() -> int throws never {
-    let high = Score { points: 9 }
-    let low = Score { points: 1 }
-    let result = high.compare(low)
-    return result
+    let high = Score { points: 9 };
+    let low = Score { points: 1 };
+    let result = high.compare(low);
+    return result;
 }
 
 test "phase2_user_class_compare_direct_call_in_main" {
@@ -258,9 +264,9 @@ test "phase2_user_class_compare_with_explicit_binding_in_main" {
 // ── Phase 3 runtime: actually execute the blanket `sort` ───────────────────
 
 function phase3_sort_ints_main() -> int throws never {
-    let xs = [3, 1, 2]
-    let s = xs.sort()
-    return s[0] * 100 + s[1] * 10 + s[2]
+    let xs = [3, 1, 2];
+    let s = xs.sort();
+    return s[0] * 100 + s[1] * 10 + s[2];
 }
 
 test "phase3_runtime_sort_ints" {
@@ -270,13 +276,13 @@ test "phase3_runtime_sort_ints" {
 // ── Phase 3 runtime gap-mapping: generic dispatch to primitive vs class ─────
 
 function cmp<T extends baml.Comparable>(a: T, b: T) -> int throws T.CompareError {
-    return a.compare(b)
+    return a.compare(b);
 }
 
 function phase3_generic_compare_primitive_main() -> int throws never {
-    let a: int = 3
-    let b: int = 1
-    return cmp(a, b)
+    let a: int = 3;
+    let b: int = 1;
+    return cmp(a, b);
 }
 
 test "phase3_runtime_generic_compare_on_primitive" {
@@ -286,17 +292,17 @@ test "phase3_runtime_generic_compare_on_primitive" {
 // Named `ScorePts` (not `Score`) to avoid collision with phase2's `Score` above.
 // Shared definition for the three phase3 user-class tests.
 class ScorePts {
-    points: int
+    points: int,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
-            return self.points.compare(other.points)
+            return self.points.compare(other.points);
         }
     }
 }
 
 function phase3_generic_compare_user_class_main() -> int throws never {
-    return cmp(ScorePts { points: 9 }, ScorePts { points: 1 })
+    return cmp(ScorePts { points: 9 }, ScorePts { points: 1 });
 }
 
 test "phase3_runtime_generic_compare_on_user_class" {
@@ -304,9 +310,9 @@ test "phase3_runtime_generic_compare_on_user_class" {
 }
 
 function phase3_sort_user_class_main() -> int throws never {
-    let xs = [ScorePts { points: 3 }, ScorePts { points: 1 }, ScorePts { points: 2 }]
-    let sorted = xs.sort()
-    return sorted[0].points
+    let xs = [ScorePts { points: 3 }, ScorePts { points: 1 }, ScorePts { points: 2 }];
+    let sorted = xs.sort();
+    return sorted[0].points;
 }
 
 test "phase3_runtime_sort_user_class" {
@@ -316,13 +322,15 @@ test "phase3_runtime_sort_user_class" {
 // Same body as the blanket `sort`, but as a plain generic function — isolates
 // whether a failure is the blanket-impl context or generic lambda dispatch.
 function gsort<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
-    return xs.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) })
+    return xs.sort_by((a: T, b: T) -> int throws T.CompareError {
+        a.compare(b)
+    });
 }
 
 function phase3_gsort_ints_main() -> int throws never {
-    let xs = [3, 1, 2]
-    let s = gsort(xs)
-    return s[0] * 100 + s[1] * 10 + s[2]
+    let xs = [3, 1, 2];
+    let s = gsort(xs);
+    return s[0] * 100 + s[1] * 10 + s[2];
 }
 
 test "phase3_runtime_generic_fn_sort_by_compare_ints" {
@@ -334,9 +342,9 @@ test "phase3_runtime_generic_fn_sort_by_compare_ints" {
 // cannot see downstream impls), a user generic body sees its own `Comparable`
 // impl and dispatches `compare` statically.
 function phase3_gsort_user_class_main() -> int throws never {
-    let xs = [ScorePts { points: 3 }, ScorePts { points: 1 }, ScorePts { points: 2 }]
-    let s = gsort(xs)
-    return s[0].points * 100 + s[1].points * 10 + s[2].points
+    let xs = [ScorePts { points: 3 }, ScorePts { points: 1 }, ScorePts { points: 2 }];
+    let s = gsort(xs);
+    return s[0].points * 100 + s[1].points * 10 + s[2].points;
 }
 
 test "phase3_runtime_user_generic_sort_by_compare_user_class" {
@@ -345,13 +353,13 @@ test "phase3_runtime_user_generic_sort_by_compare_user_class" {
 
 // Param-receiver dispatch in a real function (not a test block).
 function do_sort(xs: int[]) -> int[] throws never {
-    return xs.sort()
+    return xs.sort();
 }
 
 function phase3_param_receiver_main() -> int throws never {
-    let xs = [3, 1, 2]
-    let s = do_sort(xs)
-    return s[0] * 100 + s[1] * 10 + s[2]
+    let xs = [3, 1, 2];
+    let s = do_sort(xs);
+    return s[0] * 100 + s[1] * 10 + s[2];
 }
 
 test "phase3_runtime_sort_param_receiver_in_function" {
@@ -361,19 +369,19 @@ test "phase3_runtime_sort_param_receiver_in_function" {
 // ── Phase 5: a class that DOES implement Comparable sorts fine ──────────────
 
 class Resume {
-    rank: int
+    rank: int,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
-            return self.rank.compare(other.rank)
+            return self.rank.compare(other.rank);
         }
     }
 }
 
 function phase5_resume_sort_main() -> int throws never {
-    let xs = [Resume { rank: 3 }, Resume { rank: 1 }, Resume { rank: 2 }]
-    let sorted = xs.sort()
-    return sorted[0].rank
+    let xs = [Resume { rank: 3 }, Resume { rank: 1 }, Resume { rank: 2 }];
+    let sorted = xs.sort();
+    return sorted[0].rank;
 }
 
 test "phase5_class_with_comparable_sort_compiles_and_runs" {
@@ -389,12 +397,16 @@ test "phase5_class_with_comparable_sort_compiles_and_runs" {
 // test went native; with this working, that dispatch could move back to pure
 // BAML.
 function probe<T>(x: T) -> int {
-    if (x is int) { 1 } else { 0 }
+    if (x is int) {
+        1
+    } else {
+        0
+    }
 }
 
 function is_primitive_probe_main() -> int {
-    let a: int = 42
-    return probe(a) * 10 + probe("s")
+    let a: int = 42;
+    return probe(a) * 10 + probe("s");
 }
 
 test "is_primitive_on_generic_value_tests_realized_type" {
@@ -407,15 +419,15 @@ test "is_primitive_on_generic_value_tests_realized_type" {
 // native `_is_primitive_array`; `fast_g` for `_rust_sort`; `slow_g` for the
 // `sort_by` path.
 function is_fast<T extends baml.Comparable>(xs: T[]) -> bool throws never {
-    return xs.length() == 0
+    return xs.length() == 0;
 }
 
 function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
-    return xs
+    return xs;
 }
 
 function slow_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
-    return xs
+    return xs;
 }
 
 function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
@@ -427,7 +439,7 @@ function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareE
 }
 
 class RouteItem {
-    rank int
+    rank: int,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
@@ -441,12 +453,16 @@ class RouteItem {
 // in the stand-in, non-empty → the slow branch). Real routing through the
 // native `_is_primitive_array` is pinned by the Phase 4/5 sort tests.
 function element_dispatch_main() -> int throws never {
-    let empty: int[] = []
-    let ints = [3, 1]
-    let items = [RouteItem { rank: 7 }]
-    if (dispatch_f(empty).length() != 0) { return -1 }
-    if (dispatch_f(ints).length() != 2) { return -2 }
-    return dispatch_f(items)[0].rank
+    let empty: int[] = [];
+    let ints = [3, 1];
+    let items = [RouteItem { rank: 7 }];
+    if (dispatch_f(empty).length() != 0) {
+        return -1;
+    }
+    if (dispatch_f(ints).length() != 2) {
+        return -2;
+    }
+    return dispatch_f(items)[0].rank;
 }
 
 test "element_is_dispatch_runtime_both_branches" {
@@ -461,7 +477,7 @@ test "element_is_dispatch_runtime_both_branches" {
 // domain rides along as a sanity check (both sides take the comparator
 // path there).
 class ParityItem {
-    rank int
+    rank: int,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
@@ -470,24 +486,52 @@ class ParityItem {
     }
 }
 
+// Element-wise `compare(...) == 0` rather than `xs == ys`. The float domain
+// below includes NaN, and `==` is IEEE — `NaN != NaN`, so an array holding one
+// is not even equal to itself. `Comparable for float` is `total_cmp`, which is
+// both total and the very ordering these two sort paths are being compared on.
 function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.CompareError {
     xs.sort();
-    ys.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) });
-    return baml.deep_equals(xs, ys)
+    ys.sort_by((a: T, b: T) -> int throws T.CompareError {
+        a.compare(b)
+    });
+    if (xs.length() != ys.length()) {
+        return false;
+    }
+    let i = 0;
+    while (i < xs.length()) {
+        if (xs[i].compare(ys[i]) != 0) {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
 }
 
 function parity_main() -> int throws never {
-    if (!check([3, 1, 2, 1, 3], [3, 1, 2, 1, 3])) { return 1 }
-    let f = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, -0.0, float.nan(), 1.5]
-    let g = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, -0.0, float.nan(), 1.5]
-    if (!check(f, g)) { return 2 }
-    if (!check(["b", "a", "aa", "b"], ["b", "a", "aa", "b"])) { return 3 }
-    if (!check([3n, 1n, 2n, 1n], [3n, 1n, 2n, 1n])) { return 4 }
-    if (!check(
-        [ParityItem { rank: 3 }, ParityItem { rank: 1 }, ParityItem { rank: 2 }],
-        [ParityItem { rank: 3 }, ParityItem { rank: 1 }, ParityItem { rank: 2 }]
-    )) { return 5 }
-    return 0
+    if (!check([3, 1, 2, 1, 3], [3, 1, 2, 1, 3])) {
+        return 1;
+    }
+    let f = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, -0.0, float.nan(), 1.5];
+    let g = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, -0.0, float.nan(), 1.5];
+    if (!check(f, g)) {
+        return 2;
+    }
+    if (!check(["b", "a", "aa", "b"], ["b", "a", "aa", "b"])) {
+        return 3;
+    }
+    if (!check([3n, 1n, 2n, 1n], [3n, 1n, 2n, 1n])) {
+        return 4;
+    }
+    if (
+        !check(
+            [ParityItem { rank: 3 }, ParityItem { rank: 1 }, ParityItem { rank: 2 }],
+            [ParityItem { rank: 3 }, ParityItem { rank: 1 }, ParityItem { rank: 2 }],
+        )
+    ) {
+        return 5;
+    }
+    return 0;
 }
 
 test "parity_fast_path_matches_comparator_path" {
@@ -496,12 +540,14 @@ test "parity_fast_path_matches_comparator_path" {
 
 // Tests float NaN sorting through the native fast path (infallible, NaN after +inf).
 function float_nan_sort_main() -> bool throws never {
-    let xs = [1.0, float.nan(), 0.5, float.inf()]
-    xs.sort()
-    if (xs.at(0) != 0.5 || xs.at(1) != 1.0 || xs.at(2) != float.inf()) { return false }
+    let xs = [1.0, float.nan(), 0.5, float.inf()];
+    xs.sort();
+    if (xs.at(0) != 0.5 || xs.at(1) != 1.0 || xs.at(2) != float.inf()) {
+        return false;
+    }
     match (xs.at(3)) {
-        null => false
-        let f: float => f.is_nan()
+        null => false,
+        let f: float => f.is_nan(),
     }
 }
 
@@ -515,7 +561,7 @@ test "float_nan_sorts_via_total_order_no_throw" {
 // there — the in-body-only lookup made the sort type-check but fail at
 // runtime with "compare dispatch: function … not found".
 class OobScore {
-    points: int
+    points: int,
 }
 
 implements baml.Comparable for OobScore {
@@ -526,9 +572,9 @@ implements baml.Comparable for OobScore {
 }
 
 function oob_score_sort_main() -> int throws never {
-    let xs = [OobScore { points: 3 }, OobScore { points: 1 }, OobScore { points: 2 }]
-    let s = xs.sort()
-    return s[0].points * 100 + s[1].points * 10 + s[2].points
+    let xs = [OobScore { points: 3 }, OobScore { points: 1 }, OobScore { points: 2 }];
+    let s = xs.sort();
+    return s[0].points * 100 + s[1].points * 10 + s[2].points;
 }
 
 test "sort_user_class_with_out_of_body_comparable_impl" {
@@ -539,8 +585,8 @@ test "sort_user_class_with_out_of_body_comparable_impl" {
 // native `sort_by` + the `_compare_shim` lambda (the dispatch's fallback
 // branch) and still sorts stably, in place, returning self.
 class Ranked {
-    rank int
-    tag string
+    rank: int,
+    tag: string,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
@@ -554,11 +600,17 @@ function ranked_sort_main() -> string throws never {
         Ranked { rank: 2, tag: "a" },
         Ranked { rank: 1, tag: "b" },
         Ranked { rank: 2, tag: "c" },
-        Ranked { rank: 1, tag: "d" }
-    ]
-    let result = xs.sort()
-    if (result != xs) { return "not self" }
-    return xs.map((x: Ranked) -> string { x.tag }).join("")
+        Ranked { rank: 1, tag: "d" },
+    ];
+    let result = xs.sort();
+    if (result != xs) {
+        return "not self";
+    }
+    return xs
+        .map((x: Ranked) -> string {
+            x.tag
+        })
+        .join("");
 }
 
 test "user_class_still_sorts_through_comparator_path" {

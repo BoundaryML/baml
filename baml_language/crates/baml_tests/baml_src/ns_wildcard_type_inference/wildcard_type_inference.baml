@@ -13,8 +13,10 @@ function wildcard_json_dump(x: int) -> baml.json.json throws baml.json.JsonSeria
     baml.json.to_json(x)
 }
 
-function wildcard_json_main() -> int { 0 }
+function wildcard_json_main() -> int {
+    0
+}
 
 test "json_to_json_is_serialize_only" {
-    assert.is_true(baml.deep_equals(wildcard_json_main(), 0))
+    assert.equal(wildcard_json_main(), 0)
 }

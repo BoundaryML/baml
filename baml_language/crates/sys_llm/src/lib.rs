@@ -24,7 +24,7 @@ pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
 // Used by sys_types (From<LlmOpError> for VmBamlError)
 pub use provider::LlmProvider;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
-pub use types::SapStreamCache;
+pub use types::SapParseCache;
 pub use types::{LlmOpError, OutputFormatContent};
 
 // Selects the rustls crypto provider for the crate. No longer called directly
@@ -581,7 +581,7 @@ pub fn execute_parse_response_from_owned(
         baml_type::RuntimeTy::null(), // no streaming
     )
     .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
-    let sap = SapStreamCache::new(compiled);
+    let sap = SapParseCache::new(compiled);
     execute_sap_parse_final(&response.content, &sap, ctx)
 }
 
@@ -928,7 +928,7 @@ fn nullable_list_inner(target: &baml_type::RuntimeTy) -> Option<&baml_type::Runt
 
 pub fn execute_sap_parse_final(
     json: &str,
-    sap: &SapStreamCache,
+    sap: &SapParseCache,
     _ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
     // === Jsonish ===
@@ -956,7 +956,7 @@ pub fn execute_sap_parse_final(
 
 pub fn execute_sap_parse_partial(
     json: &str,
-    sap: &SapStreamCache,
+    sap: &SapParseCache,
     _ctx: &::sys_types::SysOpContext,
 ) -> Result<Option<bex_external_types::BexExternalValue>, LlmOpError> {
     // === Jsonish ===

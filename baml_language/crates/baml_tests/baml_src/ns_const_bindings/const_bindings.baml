@@ -21,6 +21,6 @@ function const_bindings_with_const() -> int {
 }
 
 test "let_and_const_bindings_execute_the_same" {
-    assert.is_true(baml.deep_equals(const_bindings_with_let(), 6));
-    assert.is_true(baml.deep_equals(const_bindings_with_const(), 6))
+    assert.equal(const_bindings_with_let(), 6);
+    assert.equal(const_bindings_with_const(), 6)
 }

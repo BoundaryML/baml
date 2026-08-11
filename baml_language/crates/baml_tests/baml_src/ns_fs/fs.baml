@@ -70,7 +70,7 @@ function fs_open_and_read_bytes_fn() -> bool {
     let data = file.bytes();
     baml.fs.remove(path);
     // "Hello from BAML!" is 16 bytes
-    baml.deep_equals(data.length(), 16)
+    data.length() == 16
 }
 
 test "fs_open_and_read_bytes" {
@@ -86,7 +86,7 @@ function fs_write_string_fn() -> bool {
     let n = baml.fs.write(path, "Hello, world!");
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
-    baml.deep_equals(n, 13) && baml.deep_equals(readback, "Hello, world!")
+    n == 13 && readback == "Hello, world!"
 }
 
 test "fs_write_string" {
@@ -107,7 +107,7 @@ function fs_write_bytes_fn() -> bool {
     baml.fs.remove(src);
     baml.fs.remove(dst);
     // "binary data" is 11 bytes; readback should have the same length
-    baml.deep_equals(n, 11) && baml.deep_equals(readback.length(), 11)
+    n == 11 && readback.length() == 11
 }
 
 test "fs_write_bytes" {
@@ -125,7 +125,7 @@ function fs_write_creates_parent_dirs_fn() -> bool {
     // Can only remove the file; directories cannot be removed via baml.fs.remove.
     // The path is unique so re-runs are idempotent (write overwrites).
     baml.fs.remove(path);
-    baml.deep_equals(n, 14) && baml.deep_equals(readback, "nested content")
+    n == 14 && readback == "nested content"
 }
 
 test "fs_write_creates_parent_dirs" {
@@ -142,7 +142,7 @@ function fs_write_overwrites_existing_fn() -> bool {
     let n = baml.fs.write(path, "new content");
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
-    baml.deep_equals(n, 11) && baml.deep_equals(readback, "new content")
+    n == 11 && readback == "new content"
 }
 
 test "fs_write_overwrites_existing" {
@@ -222,7 +222,7 @@ function fs_file_rw_write_bytes_fn() -> bool {
     baml.fs.remove(src);
     baml.fs.remove(dst);
     // "AB" is 2 bytes
-    baml.deep_equals(n, 2)
+    n == 2
 }
 
 test "fs_file_rw_write_bytes" {
@@ -255,7 +255,7 @@ function fs_exists_returns_false_fn() -> bool {
 }
 
 test "fs_exists_returns_false" {
-    assert.is_true(baml.deep_equals(fs_exists_returns_false_fn(), false))
+    assert.is_true(!fs_exists_returns_false_fn())
 }
 
 // ============================================================================
@@ -267,7 +267,7 @@ function fs_remove_deletes_file_fn() -> bool {
     baml.fs.write(path, "bye");
     baml.fs.remove(path);
     // after remove, exists should return false
-    baml.deep_equals(baml.fs.exists(path), false)
+    !baml.fs.exists(path)
 }
 
 test "fs_remove_deletes_file" {
@@ -335,7 +335,7 @@ function fs_file_read_bytes_n_fn() -> bool {
     let data = f.read_bytes(3);
     baml.fs.remove(path);
     // should have read exactly 3 bytes
-    baml.deep_equals(data.length(), 3)
+    data.length() == 3
 }
 
 test "fs_file_read_bytes_n" {
@@ -371,7 +371,7 @@ function fs_open_append_creates_and_appends_fn() -> bool {
     let n = f.write("more!");
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
-    baml.deep_equals(n, 5) && baml.deep_equals(readback, "start!more!")
+    n == 5 && readback == "start!more!"
 }
 
 test "fs_open_append_creates_and_appends" {
@@ -393,7 +393,7 @@ function fs_open_append_creates_missing_file_fn() -> bool {
     let n = f2.write("hi");
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
-    baml.deep_equals(n, 2) && baml.deep_equals(readback, "hi")
+    n == 2 && readback == "hi"
 }
 
 test "fs_open_append_creates_missing_file" {
@@ -464,7 +464,7 @@ function fs_open_w_truncates_existing_fn() -> bool {
     let n = f.write("new");
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
-    baml.deep_equals(n, 3) && baml.deep_equals(readback, "new")
+    n == 3 && readback == "new"
 }
 
 test "fs_open_w_truncates_existing" {
@@ -481,7 +481,7 @@ function fs_open_w_creates_missing_file_fn() -> bool {
     let n = f.write("hi");
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
-    baml.deep_equals(n, 2) && baml.deep_equals(readback, "hi")
+    n == 2 && readback == "hi"
 }
 
 test "fs_open_w_creates_missing_file" {
@@ -519,7 +519,7 @@ function fs_open_w_creates_parent_dirs_fn() -> bool {
     // Can only remove the file; intermediate dirs cannot be removed via baml.fs.remove.
     // The path is unique per test so re-runs are idempotent (write overwrites).
     baml.fs.remove(path);
-    baml.deep_equals(n, 6) && baml.deep_equals(readback, "nested")
+    n == 6 && readback == "nested"
 }
 
 test "fs_open_w_creates_parent_dirs" {
@@ -543,10 +543,16 @@ function fs_read_dir_returns_entries_fn() -> bool {
     baml.fs.remove(dir + "/a.txt");
     baml.fs.remove(dir + "/b.txt");
     // 3 entries: a.txt, b.txt, subdir
-    let count_ok = baml.deep_equals(entries.length(), 3);
-    let has_a = entries.some((e: baml.fs.DirEntry) -> bool { baml.deep_equals(e.name, "a.txt") });
-    let has_b = entries.some((e: baml.fs.DirEntry) -> bool { baml.deep_equals(e.name, "b.txt") });
-    let has_sub = entries.some((e: baml.fs.DirEntry) -> bool { baml.deep_equals(e.name, "subdir") });
+    let count_ok = entries.length() == 3;
+    let has_a = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "a.txt"
+    });
+    let has_b = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "b.txt"
+    });
+    let has_sub = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "subdir"
+    });
     count_ok && has_a && has_b && has_sub
 }
 
@@ -568,11 +574,11 @@ function fs_read_dir_type_flags_fn() -> bool {
     baml.fs.remove(dir + "/file.txt");
     // Verify file.txt has is_file=true, is_dir=false, is_symlink=false
     let file_ok = entries.some((e: baml.fs.DirEntry) -> bool {
-        baml.deep_equals(e.name, "file.txt") && e.is_file && !e.is_dir && !e.is_symlink
+        e.name == "file.txt" && e.is_file && !e.is_dir && !e.is_symlink
     });
     // Verify subdir has is_dir=true, is_file=false, is_symlink=false
     let dir_ok = entries.some((e: baml.fs.DirEntry) -> bool {
-        baml.deep_equals(e.name, "subdir") && e.is_dir && !e.is_file && !e.is_symlink
+        e.name == "subdir" && e.is_dir && !e.is_file && !e.is_symlink
     });
     file_ok && dir_ok
 }
@@ -590,7 +596,7 @@ function fs_read_dir_empty_dir_fn() -> bool {
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     let entries = baml.fs.read_dir(dir);
     // Can't remove the dir, but it stays empty so re-runs are idempotent
-    baml.deep_equals(entries.length(), 0)
+    entries.length() == 0
 }
 
 test "fs_read_dir_empty_dir" {
@@ -650,7 +656,7 @@ function fs_remove_dir_removes_empty_fn() -> bool {
     let dir = fs_tmp("remove_dir_empty");
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     baml.fs.remove_dir(dir);
-    baml.deep_equals(baml.fs.exists(dir), false)
+    !baml.fs.exists(dir)
 }
 
 test "fs_remove_dir_removes_empty" {
@@ -667,7 +673,7 @@ function fs_remove_dir_all_removes_tree_fn() -> bool {
     baml.fs.write(dir + "/a.txt", "a");
     baml.fs.write(dir + "/sub/b.txt", "b");
     baml.fs.remove_dir_all(dir);
-    baml.deep_equals(baml.fs.exists(dir), false)
+    !baml.fs.exists(dir)
 }
 
 test "fs_remove_dir_all_removes_tree" {
@@ -682,7 +688,7 @@ function fs_remove_dir_all_idempotent_fn() -> bool {
     let dir = fs_tmp("remove_dir_all_missing");
     // dir was never created; removing it must not throw
     baml.fs.remove_dir_all(dir);
-    baml.deep_equals(baml.fs.exists(dir), false)
+    !baml.fs.exists(dir)
 }
 
 test "fs_remove_dir_all_idempotent" {

@@ -4,8 +4,8 @@
 //
 // Tests that mutate locals or use multi-step indexed writes go through a
 // top-level `function` helper so they aren't affected by the test-block
-// local-boxing VM behavior (a `let` local compared against a literal with
-// `deep_equals` in a test block can mismatch; code inside a function is fine).
+// local-boxing VM behavior (a `let` local compared against a literal in a test
+// block can mismatch; code inside a function is fine).
 //
 // Bytecode-snapshot-only tests are structured with test-running functions so
 // the test passes if the body compiles and runs without error.
@@ -37,7 +37,7 @@ test "bytecode_1d_array_write_local" {
 
 // Bytecode-only: 1D array write through a field on self.
 class BytecodeContainer {
-    items string[]
+    items: string[],
 
     function set(self, idx: int, val: string) -> null {
         self.items[idx] = val;
@@ -58,7 +58,7 @@ test "bytecode_1d_array_write_through_field" {
 
 // Bytecode-only: 1D array READ through a field on self.
 class BytecodeContainerRead {
-    items string[]
+    items: string[],
 
     function get(self, idx: int) -> string {
         self.items[idx]
@@ -89,7 +89,7 @@ test "bytecode_2d_array_write_local" {
 
 // Bytecode-only: 2D array write through a field on self.
 class BytecodeGrid {
-    cells string[][]
+    cells: string[][],
 
     function set(self, row: int, col: int, val: string) -> null {
         self.cells[row][col] = val;
@@ -110,7 +110,7 @@ test "bytecode_2d_array_write_through_field" {
 
 // Bytecode-only: map write through a field on self.
 class BytecodeScores {
-    data map<string, int>
+    data: map<string, int>,
 
     function set(self, key: string, val: int) -> null {
         self.data[key] = val;
@@ -143,7 +143,7 @@ test "bytecode_map_write_local" {
 
 // Bytecode-only: non-self param array write.
 class BytecodeContainerNonSelf {
-    items string[]
+    items: string[],
 }
 
 function bytecode_set_item(c: BytecodeContainerNonSelf, idx: int, val: string) -> null {
@@ -219,11 +219,7 @@ function get_cell_for_nested_test(cells: string[][], row: int, col: int) -> stri
 }
 
 function nested_array_index_with_int_works_body() -> string {
-    let cells = [
-        ["a", "b", "c"],
-        ["d", "e", "f"],
-        ["g", "h", "i"]
-    ];
+    let cells = [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]];
     get_cell_for_nested_test(cells, 1, 2)
 }
 
@@ -237,11 +233,7 @@ test "nested_array_index_with_int_works" {
 
 // 2D array write with literal indices.
 function array_element_assignment_2d_type_error_body() -> string {
-    let cells = [
-        ["", "", ""],
-        ["", "", ""],
-        ["", "", ""]
-    ];
+    let cells = [["", "", ""], ["", "", ""], ["", "", ""]];
     cells[1][2] = "x";
     cells[1][2]
 }
@@ -263,16 +255,10 @@ test "array_element_assignment_1d" {
 
 // Class method with array READ — this should work.
 class BoardRead {
-    cells string[][]
+    cells: string[][],
 
     function new() -> BoardRead {
-        BoardRead {
-            cells: [
-                ["", "", ""],
-                ["", "", ""],
-                ["", "", ""]
-            ]
-        }
+        BoardRead { cells: [["", "", ""], ["", "", ""], ["", "", ""]] }
     }
 
     function get(self, row: int, col: int) -> string {
@@ -291,16 +277,10 @@ test "class_method_array_read_works" {
 
 // Class method with array WRITE — the tic-tac-toe bug.
 class BoardWrite {
-    cells string[][]
+    cells: string[][],
 
     function new() -> BoardWrite {
-        BoardWrite {
-            cells: [
-                ["", "", ""],
-                ["", "", ""],
-                ["", "", ""]
-            ]
-        }
+        BoardWrite { cells: [["", "", ""], ["", "", ""], ["", "", ""]] }
     }
 
     function play(self, player: string, row: int, col: int) -> null {
@@ -329,11 +309,7 @@ test "class_method_array_write_type_error" {
 
 // 2D array read with variables (not literals).
 function nested_array_read_with_variables_body() -> string {
-    let cells = [
-        ["a", "b", "c"],
-        ["d", "e", "f"],
-        ["g", "h", "i"]
-    ];
+    let cells = [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]];
     let row = 1;
     let col = 2;
     cells[row][col]
@@ -345,11 +321,7 @@ test "nested_array_read_with_variables" {
 
 // 2D array write with variables — isolates the assignment path.
 function nested_array_write_with_variables_body() -> string {
-    let cells = [
-        ["a", "b", "c"],
-        ["d", "e", "f"],
-        ["g", "h", "i"]
-    ];
+    let cells = [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]];
     let row = 1;
     let col = 2;
     cells[row][col] = "x";
@@ -378,7 +350,7 @@ test "array_write_with_variable_index" {
 
 // 1D array assignment through self — is `self` the issue?
 class ContainerSelf {
-    items string[]
+    items: string[],
 
     function new() -> ContainerSelf {
         ContainerSelf { items: ["a", "b", "c"] }
@@ -406,16 +378,10 @@ test "class_method_1d_array_write_through_self" {
 
 // 2D array assignment through self with literal indices — is it self + 2D?
 class GridSelf {
-    cells string[][]
+    cells: string[][],
 
     function new() -> GridSelf {
-        GridSelf {
-            cells: [
-                ["", "", ""],
-                ["", "", ""],
-                ["", "", ""]
-            ]
-        }
+        GridSelf { cells: [["", "", ""], ["", "", ""], ["", "", ""]] }
     }
 
     function set(self, row: int, col: int, val: string) -> null {
@@ -440,16 +406,10 @@ test "class_method_2d_array_write_through_self_literals" {
 
 // Same as Board.play but without if/else guards — minimal class method.
 class BoardMinimal {
-    cells string[][]
+    cells: string[][],
 
     function new() -> BoardMinimal {
-        BoardMinimal {
-            cells: [
-                ["", "", ""],
-                ["", "", ""],
-                ["", "", ""]
-            ]
-        }
+        BoardMinimal { cells: [["", "", ""], ["", "", ""], ["", "", ""]] }
     }
 
     function play(self, player: string, row: int, col: int) -> null {
@@ -474,7 +434,7 @@ test "class_method_2d_array_write_minimal" {
 
 // Does self.map[key] = val hit the same bug?
 class ScoresSelf {
-    data map<string, int>
+    data: map<string, int>,
 
     function new() -> ScoresSelf {
         ScoresSelf { data: {} }
@@ -517,11 +477,11 @@ test "map_write_local_variable" {
 
 // Does self.inner.items[idx] = val break? (nested object field)
 class InnerItems {
-    items string[]
+    items: string[],
 }
 
 class OuterItems {
-    inner InnerItems
+    inner: InnerItems,
 
     function new() -> OuterItems {
         OuterItems { inner: InnerItems { items: ["a", "b", "c"] } }
@@ -553,7 +513,7 @@ test "class_method_nested_field_array_write" {
 
 // self.data[key] where data is map<string, int[]> — map read then array write.
 class Registry {
-    data map<string, int[]>
+    data: map<string, int[]>,
 
     function new() -> Registry {
         Registry { data: { "nums": [1, 2, 3] } }
@@ -585,7 +545,7 @@ test "class_method_map_then_array_write_through_self" {
 
 // 3D array write through self — does more nesting make it worse?
 class Cube {
-    data int[][][]
+    data: int[][][],
 
     function new() -> Cube {
         Cube { data: [[[0, 0], [0, 0]], [[0, 0], [0, 0]]] }
@@ -618,7 +578,7 @@ test "class_method_3d_array_write_through_self" {
 // Array push through self — uses a method call, not index assignment.
 // If this works, it confirms the bug is specific to index-based assignment.
 class Stack {
-    items int[]
+    items: int[],
 
     function new() -> Stack {
         Stack { items: [] }
@@ -650,7 +610,7 @@ test "class_method_array_push_through_self" {
 
 // Pass a class instance as a regular param (not self) and write to its array.
 class ContainerNonSelf {
-    items string[]
+    items: string[],
 }
 
 function set_item_non_self(c: ContainerNonSelf, idx: int, val: string) -> null {
@@ -715,7 +675,7 @@ test "negated_int_min_literal_is_valid" {
 // §15 — String-denoting alias map keys are accepted (B-533)
 // ============================================================================
 
-type TypeErrReproStrKey = string
+type TypeErrReproStrKey = string;
 
 // A `map` keyed by an alias that denotes `string` type-checks and runs.
 function map_with_string_alias_key_body() -> int {

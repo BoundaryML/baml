@@ -4099,7 +4099,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // callee (free/method/static) reaches here with `generic_params`
                 // cleared by receiver/class substitution yet its own params still
                 // inferable — restricting there would wrongly freeze `arr.map`'s
-                // `U` or `StreamCache.new`'s class params.
+                // `U` or `ParseCache.new`'s class params.
                 if is_value_call {
                     bindings.retain(|name, _| {
                         crate::generics::is_value_call_inferable(name, &generic_params)
@@ -10102,7 +10102,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_local_rooted_path(segments, expr_id, true)
             } else {
                 // Root is not a known local. Try full package/namespace resolution:
-                // 1. Package path (e.g. baml.llm.ClientType.Primitive, baml.env.get)
+                // 1. Package path (e.g. ai.Prompt, baml.env.get)
                 let pkg_ty = self.infer_multi_segment_path(segments, expr_id);
                 if !matches!(pkg_ty, Ty::Unknown { .. }) {
                     return pkg_ty;
@@ -10298,7 +10298,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         current_ty
     }
 
-    /// Resolve a multi-segment path like `baml.llm.render_prompt` or `root.sys.panic`.
+    /// Resolve a multi-segment path like `baml.http.fetch` or `root.sys.panic`.
     ///
     /// The first segment is either a literal package name or `root` (maps to the
     /// current file's package).
@@ -15664,8 +15664,8 @@ impl TypeInferenceBuilder<'_> {
                 // (with a per-member type). After all branches lower, we
                 // collapse same-named bindings into one entry typed at
                 // the join of the per-branch types — so e.g. `parsed`
-                // bound across `S` and `StreamNoYield` ends up typed at
-                // `S | StreamNoYield` rather than last-write-wins.
+                // bound across `S` and `NoYield` ends up typed at
+                // `S | NoYield` rather than last-write-wins.
                 let mut bindings_by_name: indexmap::IndexMap<Name, (PatId, Vec<Ty>)> =
                     indexmap::IndexMap::new();
                 // `pattern_types` is single-valued per PatId, but lowering the

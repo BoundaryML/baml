@@ -17,21 +17,21 @@
 // ============================================================================
 
 test "match_catch_all_underscore" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         match (42) {
-            _ => 100
+            _ => 100,
         },
-        100
-    ))
+        100,
+    )
 }
 
 test "match_catch_all_named_binding" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         match (42) {
-            let x => x + 1
+            let x => x + 1,
         },
-        43
-    ))
+        43,
+    )
 }
 
 // match_catch_all_with_variable: scrutinee is a local, match arms bind it —
@@ -39,12 +39,12 @@ test "match_catch_all_named_binding" {
 function catch_all_with_variable() -> int {
     let x = 42;
     match (x) {
-        let y => y + 1
+        let y => y + 1,
     }
 }
 
 test "match_catch_all_with_variable" {
-    assert.is_true(baml.deep_equals(catch_all_with_variable(), 43))
+    assert.equal(catch_all_with_variable(), 43)
 }
 
 // ============================================================================
@@ -57,12 +57,12 @@ function literal_int_first_arm() -> int {
     match (x) {
         1 => 100,
         2 => 200,
-        _ => 0
+        _ => 0,
     }
 }
 
 test "match_literal_int_first_arm" {
-    assert.is_true(baml.deep_equals(literal_int_first_arm(), 100))
+    assert.equal(literal_int_first_arm(), 100)
 }
 
 function literal_int_second_arm() -> int {
@@ -70,12 +70,12 @@ function literal_int_second_arm() -> int {
     match (x) {
         1 => 100,
         2 => 200,
-        _ => 0
+        _ => 0,
     }
 }
 
 test "match_literal_int_second_arm" {
-    assert.is_true(baml.deep_equals(literal_int_second_arm(), 200))
+    assert.equal(literal_int_second_arm(), 200)
 }
 
 function literal_int_fallback() -> int {
@@ -83,21 +83,21 @@ function literal_int_fallback() -> int {
     match (x) {
         1 => 100,
         2 => 200,
-        _ => 0
+        _ => 0,
     }
 }
 
 test "match_literal_int_fallback" {
-    assert.is_true(baml.deep_equals(literal_int_fallback(), 0))
+    assert.equal(literal_int_fallback(), 0)
 }
 
 test "match_literal_int_single_arm" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         match (1) {
             1 => 100,
         },
-        100
-    ))
+        100,
+    )
 }
 
 // Scrutinee `null` stored in local — use a helper.
@@ -109,7 +109,7 @@ function literal_null() -> string {
 }
 
 test "match_literal_null" {
-    assert.is_true(baml.deep_equals(literal_null(), "was null"))
+    assert.equal(literal_null(), "was null")
 }
 
 // bool scrutinee stored in local — use a helper.
@@ -117,33 +117,33 @@ function literal_bool_true() -> string {
     let b = true;
     match (b) {
         true => "yes",
-        false => "no"
+        false => "no",
     }
 }
 
 test "match_literal_bool_true" {
-    assert.is_true(baml.deep_equals(literal_bool_true(), "yes"))
+    assert.equal(literal_bool_true(), "yes")
 }
 
 function literal_bool_false() -> string {
     let b = false;
     match (b) {
         true => "yes",
-        false => "no"
+        false => "no",
     }
 }
 
 test "match_literal_bool_false" {
-    assert.is_true(baml.deep_equals(literal_bool_false(), "no"))
+    assert.equal(literal_bool_false(), "no")
 }
 
 test "match_literal_bool_exhaustive_constant" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         match (true) {
             true => "yes",
         },
-        "yes"
-    ))
+        "yes",
+    )
 }
 
 // ============================================================================
@@ -156,12 +156,12 @@ function union_literal_first() -> string {
     match (code) {
         200 | 201 => "success",
         400 | 404 => "client error",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_union_literal_first" {
-    assert.is_true(baml.deep_equals(union_literal_first(), "success"))
+    assert.equal(union_literal_first(), "success")
 }
 
 function union_literal_second() -> string {
@@ -169,12 +169,12 @@ function union_literal_second() -> string {
     match (code) {
         200 | 201 => "success",
         400 | 404 => "client error",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_union_literal_second" {
-    assert.is_true(baml.deep_equals(union_literal_second(), "success"))
+    assert.equal(union_literal_second(), "success")
 }
 
 function union_large() -> string {
@@ -183,12 +183,12 @@ function union_large() -> string {
         200 | 201 | 202 | 204 => "success",
         400 | 401 | 403 | 404 => "client error",
         500 | 501 | 502 | 503 => "server error",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_union_large" {
-    assert.is_true(baml.deep_equals(union_large(), "success"))
+    assert.equal(union_large(), "success")
 }
 
 function union_client_error() -> string {
@@ -197,12 +197,12 @@ function union_client_error() -> string {
         200 | 201 | 202 | 204 => "success",
         400 | 401 | 403 | 404 => "client error",
         500 | 501 | 502 | 503 => "server error",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_union_client_error" {
-    assert.is_true(baml.deep_equals(union_client_error(), "client error"))
+    assert.equal(union_client_error(), "client error")
 }
 
 function union_with_duplicates() -> string {
@@ -210,12 +210,12 @@ function union_with_duplicates() -> string {
     match (x) {
         1 | 1 | 2 => "one or two",
         3 | 3 => "three",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_union_with_duplicates" {
-    assert.is_true(baml.deep_equals(union_with_duplicates(), "one or two"))
+    assert.equal(union_with_duplicates(), "one or two")
 }
 
 // ============================================================================
@@ -228,12 +228,13 @@ function as_expression_in_arithmetic() -> int {
     match (x) {
         1 => 10,
         2 => 20,
-        _ => 0
-    } + 1
+        _ => 0,
+    }
+        + 1
 }
 
 test "match_as_expression_in_arithmetic" {
-    assert.is_true(baml.deep_equals(as_expression_in_arithmetic(), 21))
+    assert.equal(as_expression_in_arithmetic(), 21)
 }
 
 function nested_match() -> int {
@@ -243,15 +244,15 @@ function nested_match() -> int {
         1 => match (inner) {
             1 => 11,
             2 => 12,
-            _ => 10
+            _ => 10,
         },
         2 => 20,
-        _ => 0
+        _ => 0,
     }
 }
 
 test "match_nested" {
-    assert.is_true(baml.deep_equals(nested_match(), 12))
+    assert.equal(nested_match(), 12)
 }
 
 // ============================================================================
@@ -262,20 +263,20 @@ function classify_string(s: string) -> int {
     match (s) {
         "hello" => 100,
         "world" => 200,
-        _ => 0
+        _ => 0,
     }
 }
 
 test "match_string_literal_first_arm" {
-    assert.is_true(baml.deep_equals(classify_string("hello"), 100))
+    assert.equal(classify_string("hello"), 100)
 }
 
 test "match_string_literal_second_arm" {
-    assert.is_true(baml.deep_equals(classify_string("world"), 200))
+    assert.equal(classify_string("world"), 200)
 }
 
 test "match_string_literal_fallback" {
-    assert.is_true(baml.deep_equals(classify_string("other"), 0))
+    assert.equal(classify_string("other"), 0)
 }
 
 function classify_string_four_arms(s: string) -> int {
@@ -284,24 +285,24 @@ function classify_string_four_arms(s: string) -> int {
         "b" => 2,
         "c" => 3,
         "d" => 4,
-        _ => 0
+        _ => 0,
     }
 }
 
 test "match_string_four_arms" {
-    assert.is_true(baml.deep_equals(classify_string_four_arms("c"), 3))
+    assert.equal(classify_string_four_arms("c"), 3)
 }
 
 function classify_string_typed_fallback(s: string) -> int {
     match (s) {
         "ok" => 200,
         "error" => 500,
-        string => 0
+        string => 0,
     }
 }
 
 test "match_string_literal_with_typed_fallback" {
-    assert.is_true(baml.deep_equals(classify_string_typed_fallback("unknown"), 0))
+    assert.equal(classify_string_typed_fallback("unknown"), 0)
 }
 
 // ============================================================================
@@ -315,12 +316,12 @@ function catch_all_binding_with_int_patterns() -> int {
         1 => 1,
         2 => 2,
         3 => 3,
-        let other => other * 10
+        let other => other * 10,
     }
 }
 
 test "match_catch_all_binding_with_int_patterns" {
-    assert.is_true(baml.deep_equals(catch_all_binding_with_int_patterns(), 990))
+    assert.equal(catch_all_binding_with_int_patterns(), 990)
 }
 
 // ============================================================================
@@ -333,12 +334,12 @@ function negative_int_with_variable() -> string {
     match (x) {
         -1 => "negative one",
         0 => "zero",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_negative_int_with_variable" {
-    assert.is_true(baml.deep_equals(negative_int_with_variable(), "negative one"))
+    assert.equal(negative_int_with_variable(), "negative one")
 }
 
 // match_negative_int_first_arm: scrutinee is `let x: int = -1` (variable) → helper.
@@ -349,12 +350,12 @@ function negative_int_first_arm() -> string {
         -1 => "negative one",
         0 => "zero",
         1 => "one",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_negative_int_first_arm" {
-    assert.is_true(baml.deep_equals(negative_int_first_arm(), "negative one"))
+    assert.equal(negative_int_first_arm(), "negative one")
 }
 
 // BUG: compile error — "type mismatch: expected 5, got -1" and "unreachable arm"
@@ -372,7 +373,7 @@ test "match_negative_int_first_arm" {
 // }
 //
 // test "match_negative_int_fallback" {
-//     assert.is_true(baml.deep_equals(match_negative_int_fallback_literal(), "other"))
+//     assert.equal(match_negative_int_fallback_literal(), "other")
 // }
 
 // BUG: compile error — "Float literal values are not supported"
@@ -391,7 +392,7 @@ test "match_negative_int_first_arm" {
 // }
 //
 // test "match_float_literal" {
-//     assert.is_true(baml.deep_equals(match_float_literal_fn(), "one point five"))
+//     assert.equal(match_float_literal_fn(), "one point five")
 // }
 
 // BUG: compile error — "Float literal values are not supported" (E0010)
@@ -408,7 +409,7 @@ test "match_negative_int_first_arm" {
 // }
 //
 // test "match_negative_float_pattern" {
-//     assert.is_true(baml.deep_equals(match_negative_float_pattern_fn(), "negative one point five"))
+//     assert.equal(match_negative_float_pattern_fn(), "negative one point five")
 // }
 
 // BUG: compile error — "type mismatch: expected -2, got -3" and "unreachable arm"
@@ -425,7 +426,7 @@ test "match_negative_int_first_arm" {
 // }
 //
 // test "match_multiple_negative_patterns" {
-//     assert.is_true(baml.deep_equals(match_multiple_negative_patterns_fn(), "negative two"))
+//     assert.equal(match_multiple_negative_patterns_fn(), "negative two")
 // }
 
 // BUG: compile error — "unreachable arm" on the wildcard
@@ -441,7 +442,7 @@ test "match_negative_int_first_arm" {
 // }
 //
 // test "match_negative_in_union_pattern" {
-//     assert.is_true(baml.deep_equals(match_negative_in_union_pattern_fn(), "small"))
+//     assert.equal(match_negative_in_union_pattern_fn(), "small")
 // }
 
 // ============================================================================
@@ -453,20 +454,20 @@ function classify_three(x: int, y: int, z: int) -> string {
         0 => match (y) {
             0 => match (z) {
                 0 => "all zero",
-                _ => "z nonzero"
+                _ => "z nonzero",
             },
-            _ => "y nonzero"
+            _ => "y nonzero",
         },
-        _ => "x nonzero"
+        _ => "x nonzero",
     }
 }
 
 test "match_three_levels_nested" {
-    assert.is_true(baml.deep_equals(classify_three(0, 0, 0), "all zero"))
+    assert.equal(classify_three(0, 0, 0), "all zero")
 }
 
 test "match_three_levels_nested_middle" {
-    assert.is_true(baml.deep_equals(classify_three(0, 1, 0), "y nonzero"))
+    assert.equal(classify_three(0, 1, 0), "y nonzero")
 }
 
 // ============================================================================
@@ -476,28 +477,28 @@ test "match_three_levels_nested_middle" {
 function process_optional(x: int?) -> string {
     match (x) {
         null => "none",
-        let n: int => "some"
+        let n: int => "some",
     }
 }
 
 test "match_optional_null_pattern" {
-    assert.is_true(baml.deep_equals(process_optional(null), "none"))
+    assert.equal(process_optional(null), "none")
 }
 
 test "match_optional_value_pattern" {
-    assert.is_true(baml.deep_equals(process_optional(42), "some"))
+    assert.equal(process_optional(42), "some")
 }
 
 function process_optional_with_zero(x: int?) -> string {
     match (x) {
         null => "none",
         0 => "zero",
-        let n: int => "other"
+        let n: int => "other",
     }
 }
 
 test "match_optional_with_literal_and_typed" {
-    assert.is_true(baml.deep_equals(process_optional_with_zero(0), "zero"))
+    assert.equal(process_optional_with_zero(0), "zero")
 }
 
 // ============================================================================
@@ -508,12 +509,12 @@ function classify_sum(a: int, b: int) -> string {
     match (a + b) {
         0 => "zero",
         1 => "one",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_arithmetic_scrutinee" {
-    assert.is_true(baml.deep_equals(classify_sum(2, -1), "one"))
+    assert.equal(classify_sum(2, -1), "one")
 }
 
 function helper_42() -> int {
@@ -523,12 +524,12 @@ function helper_42() -> int {
 function classify_by_call() -> string {
     match (helper_42()) {
         42 => "answer",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_function_call_scrutinee" {
-    assert.is_true(baml.deep_equals(classify_by_call(), "answer"))
+    assert.equal(classify_by_call(), "answer")
 }
 
 function get_value() -> int {
@@ -536,16 +537,16 @@ function get_value() -> int {
 }
 
 test "match_computed_discriminant" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         match (get_value()) {
             0 => 100,
             1 => 101,
             2 => 102,
             3 => 103,
-            _ => 999
+            _ => 999,
         },
-        102
-    ))
+        102,
+    )
 }
 
 // ============================================================================
@@ -557,13 +558,15 @@ function match_in_loop_helper() -> int {
     let sum = 0;
     let i = 0;
     while (i < 5) {
-        sum = sum + match (i) {
-            0 => 10,
-            1 => 20,
-            2 => 30,
-            3 => 40,
-            _ => 50
-        };
+        sum
+            = sum
+                + match (i) {
+                    0 => 10,
+                    1 => 20,
+                    2 => 30,
+                    3 => 40,
+                    _ => 50,
+                };
         i = i + 1;
     }
     sum
@@ -571,7 +574,7 @@ function match_in_loop_helper() -> int {
 
 test "match_in_loop" {
     // 10 + 20 + 30 + 40 + 50 = 150
-    assert.is_true(baml.deep_equals(match_in_loop_helper(), 150))
+    assert.equal(match_in_loop_helper(), 150)
 }
 
 function classify_dense(n: int) -> int {
@@ -580,16 +583,16 @@ function classify_dense(n: int) -> int {
         1 => 1,
         2 => 2,
         3 => 3,
-        _ => -1
+        _ => -1,
     }
 }
 
 test "match_dense_with_catch_all_via_call" {
-    assert.is_true(baml.deep_equals(classify_dense(2), 2))
+    assert.equal(classify_dense(2), 2)
 }
 
 class MatchResult {
-    code int
+    code: int,
 }
 
 // match_mixed_instanceof_and_literal: match on a local instance → helper.
@@ -601,7 +604,7 @@ function mixed_instanceof_and_literal() -> int {
 }
 
 test "match_mixed_instanceof_and_literal" {
-    assert.is_true(baml.deep_equals(mixed_instanceof_and_literal(), 200))
+    assert.equal(mixed_instanceof_and_literal(), 200)
 }
 
 // ============================================================================
@@ -611,22 +614,22 @@ test "match_mixed_instanceof_and_literal" {
 function check_bool(flag: bool) -> string {
     match (flag) {
         true => "yes",
-        false => "no"
+        false => "no",
     }
 }
 
 test "match_bool_variable_exhaustive" {
-    assert.is_true(baml.deep_equals(check_bool(true), "yes"))
+    assert.equal(check_bool(true), "yes")
 }
 
 function check_or_wildcard(flag: bool) -> int {
     match (flag) {
-        _ | true => 1
+        _ | true => 1,
     }
 }
 
 test "match_or_wildcard_bool_is_exhaustive" {
-    assert.is_true(baml.deep_equals(check_or_wildcard(false), 1))
+    assert.equal(check_or_wildcard(false), 1)
 }
 
 // ============================================================================
@@ -639,10 +642,10 @@ function classify_string_many(s: string) -> int {
         "beta" => 2,
         "gamma" => 3,
         "delta" => 4,
-        _ => 0
+        _ => 0,
     }
 }
 
 test "match_string_many_arms" {
-    assert.is_true(baml.deep_equals(classify_string_many("gamma"), 3))
+    assert.equal(classify_string_many("gamma"), 3)
 }

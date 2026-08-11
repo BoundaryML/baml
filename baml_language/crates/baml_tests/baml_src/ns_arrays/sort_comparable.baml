@@ -78,7 +78,7 @@ test "comparable_float_nan_total_order" {
 // matching `throws never` (an omitted `throws` is inferred, not `never`, and
 // fails conformance E0120).
 class ComparableScore {
-    points int
+    points: int,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
@@ -95,18 +95,18 @@ test "comparable_user_class_default_cmperror_is_never" {
 
 // Fallible comparator: binds `type CompareError = ComparableCompareError` and throws.
 class ComparableCompareError {
-    message string
+    message: string,
 }
 
 class ComparableFlaky {
-    value int?
+    value: int?,
     implements baml.Comparable {
         type CompareError = ComparableCompareError
 
         function compare(self, other: Self) -> int throws ComparableCompareError {
             if let a: int = self.value {
                 if let b: int = other.value {
-                    return a.compare(b)
+                    return a.compare(b);
                 }
             }
             throw ComparableCompareError { message: "cannot compare null" }
@@ -118,9 +118,14 @@ class ComparableFlaky {
 // the builtin `int.compare` from inside the impl body. The catch value is
 // compared inline (a catch result stored in a test-block `let` stays boxed).
 test "comparable_user_class_fallible_happy_path" {
-    assert.is_true((ComparableFlaky { value: 1 }.compare(ComparableFlaky { value: 2 }) catch (e) {
-        ComparableCompareError => 99
-    }) < 0)
+    assert.is_true(
+        (
+            ComparableFlaky { value: 1 }.compare(ComparableFlaky { value: 2 }) catch (e) {
+                ComparableCompareError => 99
+            }
+        )
+            < 0,
+    )
 }
 
 test "comparable_user_class_custom_cmperror_propagates" {
@@ -146,16 +151,24 @@ test "comparable_user_class_custom_cmperror_propagates" {
 // functions below are still *declared* (and compile) to pin the `throws never`
 // normalization for parameter receivers at compile time.
 
-function sort_ints(xs: int[]) -> int[] throws never { xs.sort() }
-function sort_strings(xs: string[]) -> string[] throws never { xs.sort() }
-function sort_bigints(xs: bigint[]) -> bigint[] throws never { xs.sort() }
+function sort_ints(xs: int[]) -> int[] throws never {
+    xs.sort()
+}
+
+function sort_strings(xs: string[]) -> string[] throws never {
+    xs.sort()
+}
+
+function sort_bigints(xs: bigint[]) -> bigint[] throws never {
+    xs.sort()
+}
 
 test "sort_ints_in_place_returns_self" {
     let xs = [3, 1, 2];
     let result = xs.sort();
     let expected = [1, 2, 3];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_empty_is_noop" {
@@ -163,28 +176,28 @@ test "sort_empty_is_noop" {
     let result = xs.sort();
     let expected: int[] = [];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_duplicates" {
     let xs = [3, 1, 2, 1, 3];
     xs.sort();
     let expected = [1, 1, 2, 3, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_strings_match_sort" {
     let xs = ["b", "a", "aa"];
     xs.sort();
     let expected = ["a", "aa", "b"];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "sort_bigints_match_sort" {
     let xs = [3n, 1n, 2n];
     xs.sort();
     let expected = [1n, 2n, 3n];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // float's SortError is `never` (total_cmp decision) — infallible like int.
@@ -196,7 +209,7 @@ test "sort_floats_match_sort" {
     let xs = [2.5, 0.5, 1.5];
     xs.sort();
     let expected = [0.5, 1.5, 2.5];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // DECISION TEST (02-plan Phase 3): NaN no longer throws — `total_cmp` is a
@@ -204,22 +217,22 @@ test "sort_floats_match_sort" {
 test "sort_floats_nan_sorts_last" {
     let xs = [1.0, float.nan(), 0.5];
     xs.sort();
-    assert.is_true(baml.deep_equals(xs.length(), 3));
+    assert.equal(xs.length(), 3);
     assert.equal(xs.at(0), 0.5);
     assert.equal(xs.at(1), 1.0);
     // NaN != NaN under `==`; assert positionally via is_nan.
     let last = xs.at(2);
     match (last) {
-        null => assert.is_true(false)
-        let f: float => assert.is_true(f.is_nan())
+        null => assert.is_true(false),
+        let f: float => assert.is_true(f.is_nan()),
     }
 }
 
 // User class with an infallible (`never`) CompareError sorts by its compare —
 // stably, in place, returning self.
 class SortableItem {
-    rank int
-    label string
+    rank: int,
+    label: string,
     implements baml.Comparable {
         type CompareError = never
         function compare(self, other: Self) -> int throws never {
@@ -240,13 +253,15 @@ test "sort_user_class_sorts_by_compare" {
     let xs = [
         SortableItem { rank: 3, label: "c" },
         SortableItem { rank: 1, label: "a" },
-        SortableItem { rank: 2, label: "b" }
+        SortableItem { rank: 2, label: "b" },
     ];
     let result = xs.sort();
     assert.is_true(result == xs);
-    let labels = xs.map((x: SortableItem) -> string { x.label });
+    let labels = xs.map((x: SortableItem) -> string {
+        x.label
+    });
     let expected = ["a", "b", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 test "sort_user_class_is_stable" {
@@ -254,12 +269,14 @@ test "sort_user_class_is_stable" {
         SortableItem { rank: 2, label: "a" },
         SortableItem { rank: 1, label: "b" },
         SortableItem { rank: 2, label: "c" },
-        SortableItem { rank: 1, label: "d" }
+        SortableItem { rank: 1, label: "d" },
     ];
     xs.sort();
-    let labels = xs.map((x: SortableItem) -> string { x.label });
+    let labels = xs.map((x: SortableItem) -> string {
+        x.label
+    });
     let expected = ["b", "d", "a", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 // Fallible comparator (CompareError = ComparableCompareError): the call site must
@@ -269,11 +286,7 @@ function sort_flaky(xs: ComparableFlaky[]) -> ComparableFlaky[] throws Comparabl
 }
 
 test "sort_fallible_comparator_throw_rolls_back" {
-    let xs = [
-        ComparableFlaky { value: 3 },
-        ComparableFlaky { value: null },
-        ComparableFlaky { value: 1 }
-    ];
+    let xs = [ComparableFlaky { value: 3 }, ComparableFlaky { value: null }, ComparableFlaky { value: 1 }];
     let msg = {
         sort_flaky(xs);
         "no throw"
@@ -283,32 +296,41 @@ test "sort_fallible_comparator_throw_rolls_back" {
     assert.is_true(msg.matches("cannot compare null"));
     // rollback: original order intact
     let vals = xs.map((x: ComparableFlaky) -> int {
-        if let v: int = x.value { v } else { -1 }
+        if let v: int = x.value {
+            v
+        } else {
+            -1
+        }
     });
     let expected = [3, -1, 1];
-    assert.is_true(baml.deep_equals(vals, expected))
+    assert.equal(vals, expected)
 }
 
 test "sort_fallible_comparator_happy_path" {
-    let xs = [
-        ComparableFlaky { value: 3 },
-        ComparableFlaky { value: 1 },
-        ComparableFlaky { value: 2 }
-    ];
+    let xs = [ComparableFlaky { value: 3 }, ComparableFlaky { value: 1 }, ComparableFlaky { value: 2 }];
     // No-throw contract: all values present, so the comparator never fails.
     // Asserted inline — a catch result stored in a test-block `let` stays
     // boxed (same VM quirk as above) and `== false` would reject the box.
-    assert.is_true(({
-        sort_flaky(xs);
-        false
-    } catch (e) {
-        ComparableCompareError => true
-    }) == false);
+    assert.is_true(
+        (
+            {
+                sort_flaky(xs);
+                false
+            } catch (e) {
+                ComparableCompareError => true
+            }
+        )
+            == false,
+    );
     let vals = xs.map((x: ComparableFlaky) -> int {
-        if let v: int = x.value { v } else { -1 }
+        if let v: int = x.value {
+            v
+        } else {
+            -1
+        }
     });
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(vals, expected))
+    assert.equal(vals, expected)
 }
 
 // Generic propagation: a function over `U extends Comparable` may call
@@ -328,7 +350,7 @@ function run_sort_generic_ints() -> int[] throws never {
 test "sort_generic_propagation" {
     let result = run_sort_generic_ints();
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // ─── out-of-body `implements baml.Comparable for <class>` ───────────────────
@@ -339,7 +361,7 @@ test "sort_generic_propagation" {
 // namespaced complement to the flat-package Rust test
 // (`sort_user_class_with_out_of_body_comparable_impl`).
 class OutOfBodyScore {
-    points int
+    points: int,
 }
 
 implements baml.Comparable for OutOfBodyScore {
@@ -350,13 +372,11 @@ implements baml.Comparable for OutOfBodyScore {
 }
 
 test "sort_user_class_out_of_body_impl" {
-    let xs = [
-        OutOfBodyScore { points: 3 },
-        OutOfBodyScore { points: 1 },
-        OutOfBodyScore { points: 2 }
-    ];
+    let xs = [OutOfBodyScore { points: 3 }, OutOfBodyScore { points: 1 }, OutOfBodyScore { points: 2 }];
     xs.sort();
-    let pts = xs.map((x: OutOfBodyScore) -> int { x.points });
+    let pts = xs.map((x: OutOfBodyScore) -> int {
+        x.points
+    });
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(pts, expected))
+    assert.equal(pts, expected)
 }

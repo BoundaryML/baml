@@ -1053,7 +1053,7 @@ pub fn display_program(functions: &[(String, &Function)], format: BytecodeFormat
 ///        1    load_var 0            (name)
 ///        2    load_const 1          ("name")
 ///        3    alloc_map 1
-///        4    call 5                (baml.llm.call_llm_function)
+///        4    call 5                (ai.Agent.run)
 ///        5    return
 /// ```
 ///

@@ -52,17 +52,13 @@ function LLMFunction(input: string) -> string {
     prompt `Process: ${input}`
 }
 
-client<llm> GPT4 {
-    provider openai
-    options {
-        model gpt-4
-        api_key env.OPENAI_API_KEY
-    }
-}
+client GPT4 = openai.OpenAiClient.new(
+    model = "gpt-4",
+    api_key = env.OPENAI_API_KEY,
+);
 
 //----
 //- diagnostics
-// (expect errors for invalid header patterns)
 // E0010
 //
 //   × unexpected token

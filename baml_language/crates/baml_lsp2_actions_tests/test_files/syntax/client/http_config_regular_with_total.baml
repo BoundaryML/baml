@@ -1,11 +1,11 @@
 client<llm> RegularWithTotal {
-  provider openai
-  options {
-    model "gpt-4"
-    http {
-      total_timeout_ms 60000  // Only for composite clients
-    }
-  }
+    provider: openai,
+    options: {
+        model: "gpt-4",
+        http: {
+            total_timeout_ms: 60000, // Only for composite clients
+        },
+    },
 }
 
 // error: Unrecognized field 'total_timeout_ms' in http configuration block. 'total_timeout_ms' is only available for composite clients (fallback/round-robin). For regular clients, use: connect_timeout_ms, request_timeout_ms, time_to_first_token_timeout_ms, idle_timeout_ms
@@ -19,4 +19,19 @@ client<llm> RegularWithTotal {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client RegularWithTotal = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[client_http_config_regular_with_total.baml:1:1]
+//  1 │ ╭─▶ client<llm> RegularWithTotal {
+//  2 │ │       provider: openai,
+//  3 │ │       options: {
+//  4 │ │           model: "gpt-4",
+//  5 │ │           http: {
+//  6 │ │               total_timeout_ms: 60000, // Only for composite clients
+//  7 │ │           },
+//  8 │ │       },
+//  9 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

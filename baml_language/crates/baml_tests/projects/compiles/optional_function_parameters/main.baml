@@ -1,65 +1,67 @@
-type Searcher = (query: string, max_results?: int) -> int throws never
-type NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
+type Searcher = (query: string, max_results?: int) -> int throws never;
 
-client<llm> TestClient {
-  provider openai
-}
+type NarrowSearcher = (query: string, filter?: string?) -> string[] throws never;
+
+client TestClient = openai.OpenAiClient.new();
 
 function DefaultFilter() -> string {
-  "none"
+    "none"
 }
 
 function Search(query: string, max_results: int = 10, filter: string = "none") -> int {
-  max_results
+    max_results
 }
 
 function SearchDocs(
-  query: string,
-  max_results: int = 10,
-  filter: string? = null,
-  chunk_size: int = query.length(),
+    query: string,
+    max_results: int = 10,
+    filter: string? = null,
+    chunk_size: int = query.length(),
 ) -> string[] {
-  [query]
+    [query]
 }
 
 function UseNamedDefaults() -> int {
-  Search(query = "cats", max_results = 5, filter = "recent")
+    Search(query = "cats", max_results = 5, filter = "recent")
 }
 
 function UseMixedArgs() -> int {
-  Search("dogs", max_results = 3, filter = "all")
+    Search("dogs", max_results = 3, filter = "all")
 }
 
 function UseRequiredByName() -> string[] {
-  SearchDocs(query = "birds")
+    SearchDocs(query = "birds")
 }
 
 function UseOptionalDropping() -> string[] {
-  let narrowed: NarrowSearcher = SearchDocs
-  narrowed("cats", filter = "recent")
+    let narrowed: NarrowSearcher = SearchDocs;
+    narrowed("cats", filter = "recent")
 }
 
 function HostEntry(query: string, max_results: int = 10, filter: string? = null) -> int {
-  if (filter == null) {
-    max_results
-  } else {
-    max_results + 100
-  }
+    if (filter == null) {
+        max_results
+    } else {
+        max_results + 100
+    }
 }
 
-function AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter()) -> string {
-  client TestClient
-  prompt `${query} ${max_results} ${filter}`
+// LLM functions cannot use defaulted parameters: the spec desugar forwards
+// args positionally, and defaulted parameters must be passed by name (E0005).
+// This LLM function keeps only required parameters.
+function AskDocs(query: string, max_results: int, filter: string) -> string {
+    client: TestClient
+    prompt: `${query} ${max_results} ${filter}`
 }
 
 class SearchService {
-  base string
+    base: string,
 
-  function Run(self, query: string, limit: int = 20) -> int {
-    Search(query = query, max_results = limit, filter = self.base)
-  }
+    function Run(self, query: string, limit: int = 20) -> int {
+        Search(query = query, max_results = limit, filter = self.base)
+    }
 
-  function Docs(self, query: string, filter: string? = null) -> string[] {
-    SearchDocs(query, filter = filter)
-  }
+    function Docs(self, query: string, filter: string? = null) -> string[] {
+        SearchDocs(query, filter = filter)
+    }
 }

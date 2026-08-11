@@ -69,15 +69,15 @@ function MatchExpression(x: int) -> string {
         1 => {
             //# One
             "one"
-        }
+        },
         2 => {
             //# Two
             "two"
-        }
+        },
         _ => {
             //# Default
             "other"
-        }
+        },
     }
 }
 
@@ -100,16 +100,11 @@ function NestedControlFlow(x: int) -> string {
 }
 
 // LLM function
-client<llm> TestClient {
-    provider openai
-    options {
-        model gpt-4
-    }
-}
+client TestClient = openai.OpenAiClient.new(model = "gpt-4");
 
 function LlmFunction(input: string) -> string {
-    client TestClient
-    prompt `
+    client: TestClient
+    prompt: `
         Echo: ${input}
     `
 }

@@ -18,57 +18,57 @@
 function parse_array_len() -> int {
     let j: json = baml.json.parse("[1, 2, 3]");
     match (j) {
-        let arr: json[] => arr.length()
-        _ => -1
+        let arr: json[] => arr.length(),
+        _ => -1,
     }
 }
 
 test "parse_array_of_ints" {
-    assert.is_true(baml.deep_equals(parse_array_len(), 3))
+    assert.equal(parse_array_len(), 3)
 }
 
 // ─── 2.2 Parse then match: array arm ─────────────────────────────────────────
 
 function parse_then_match_array_len() -> int {
-    let j: json = baml.json.parse("[1, 2, 3]")
+    let j: json = baml.json.parse("[1, 2, 3]");
     match (j) {
-        let arr: json[] => arr.length()
-        _ => -1
+        let arr: json[] => arr.length(),
+        _ => -1,
     }
 }
 
 test "parse_then_match_array" {
-    assert.is_true(baml.deep_equals(parse_then_match_array_len(), 3))
+    assert.equal(parse_then_match_array_len(), 3)
 }
 
 // ─── 2.3 Roundtrip: stringify(parse(s)) ──────────────────────────────────────
 
 test "roundtrip_stringify_parse" {
-    assert.is_true(baml.deep_equals(baml.json.stringify(baml.json.parse("[1,2,3]")), "[1,2,3]"))
+    assert.equal(baml.json.stringify(baml.json.parse("[1,2,3]")), "[1,2,3]")
 }
 
 // ─── 2.4 Int/float disambiguation ────────────────────────────────────────────
 
 function parse_is_int() -> bool {
     match (baml.json.parse("1")) {
-        let n: int => true
-        _ => false
+        let n: int => true,
+        _ => false,
     }
 }
 
 test "parse_int_disambiguation" {
-    assert.is_true(baml.deep_equals(parse_is_int(), true))
+    assert.is_true(parse_is_int())
 }
 
 function parse_is_float() -> bool {
     match (baml.json.parse("1.0")) {
-        let f: float => true
-        _ => false
+        let f: float => true,
+        _ => false,
     }
 }
 
 test "parse_float_disambiguation" {
-    assert.is_true(baml.deep_equals(parse_is_float(), true))
+    assert.is_true(parse_is_float())
 }
 
 // ─── 2.5 Parse throws on garbage input ───────────────────────────────────────
@@ -94,10 +94,10 @@ test "stringify_pretty_multiline" {
 
 // The string `s` is in a local inside main; moved to helper to avoid boxing.
 function roundtrip_nested() -> string {
-    let s: string = "{\"x\":1,\"y\":[2,3]}"
+    let s: string = "{\"x\":1,\"y\":[2,3]}";
     baml.json.stringify(baml.json.parse(s))
 }
 
 test "roundtrip_nested_object" {
-    assert.is_true(baml.deep_equals(roundtrip_nested(), "{\"x\":1,\"y\":[2,3]}"))
+    assert.equal(roundtrip_nested(), "{\"x\":1,\"y\":[2,3]}")
 }

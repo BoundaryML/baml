@@ -9,24 +9,18 @@ class user.TopLevelClass$stream {
   a: string | null
 }
 enum user.TopLevelEnum {A, B}
-function user.Fn(client: baml.llm.Client = ...) -> string  [llm] {
-  baml.llm.call_llm_function(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
+function user.Fn(client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(Fn$spec()).value
 }
-function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
+function user.Fn$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
+function user.Fn$render_prompt() -> ai.Prompt  [expr] {
+  Fn$spec().prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string  [expr] {
-  baml.llm.parse(json)
+function user.Fn$spec() -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "Fn", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Hi";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o") }
 }
-function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string>  [expr] {
-  client.__make_stream(sse)
-}
-function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
-}
-function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "Fn", map {  }, prompt_closure = baml.llm.prompt`...`)
+function user.Fn$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(Fn$spec(), client = client)
 }

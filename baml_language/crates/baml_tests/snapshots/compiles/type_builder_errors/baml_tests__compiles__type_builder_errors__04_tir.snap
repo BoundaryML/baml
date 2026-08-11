@@ -2,29 +2,25 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.TypeBuilderFn(from_text: string, client: baml.llm.Client = ...) -> user.Resume throws never {
-  baml.llm.call_llm_function<T>(client, "TypeBuilderFn", map { "from_text": from_text }, prompt_closure = baml.llm.prompt`...`) : user.Resume
+function user.TypeBuilderFn(from_text: string, client: ai.Client | null = null) -> user.Resume throws never {
+  ai.Agent.new<Resume>(client = client).run(TypeBuilderFn$spec(from_text)).value : user.Resume
 }
-function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "TypeBuilderFn", map { "from_text": from_text }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
+function user.TypeBuilderFn$spec(from_text: string) -> ai.FunctionSpec<user.Resume> throws never {
+  ai.FunctionSpec { spec_name: "TypeBuilderFn", args: map { "from_text": from_text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.OpenAiClient.new(model = "gpt-4o-mini") } : ai.FunctionSpec<user.Resume>
 }
-function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "TypeBuilderFn", map { "from_text": from_text }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
+lambda user.TypeBuilderFn$spec {
 }
-function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "TypeBuilderFn", map { "from_text": from_text }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
+function user.TypeBuilderFn$render_prompt(from_text: string) -> ai.Prompt throws never {
+  TypeBuilderFn$spec(from_text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<Resume>())) : ai.Prompt
+}
+function user.TypeBuilderFn$parse(json: string) -> user.Resume throws never {
+  baml.sap.parse<T>(json) : user.Resume
 }
 class user.Resume {
   name: string
 }
-function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
-  baml.llm.stream_llm_function(client, "TypeBuilderFn", map { "from_text": from_text }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
-}
-function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
-}
-function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client = ...) -> user.Resume throws never {
-  baml.llm.parse<TFinal>(json) : user.Resume
+function user.TypeBuilderFn$stream(from_text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<user.Resume$stream | null, user.Resume> throws never {
+  ai.stream.from_spec(TypeBuilderFn$spec(from_text), client = client) : ai.stream.Stream<user.Resume$stream | null, user.Resume>
 }
 class user.Resume$stream {
   name: string | null

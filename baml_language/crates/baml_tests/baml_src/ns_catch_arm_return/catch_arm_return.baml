@@ -20,33 +20,37 @@ function car_throws(x: int) -> int throws string {
 // early; otherwise the catch yields the base value and execution continues.
 function catch_arm_returns(x: int) -> int {
     let v = car_throws(x) catch (e) {
-        _ => return -1,
+        _ => {
+            return -1;
+        },
     };
     v + 100
 }
 
 test "catch_arm_braceless_return_fires_on_throw" {
     // x == 0 throws -> arm runs -> `return -1` exits the function with -1.
-    assert.is_true(baml.deep_equals(catch_arm_returns(0), -1))
+    assert.equal(catch_arm_returns(0), -1)
 }
 
 test "catch_arm_braceless_return_skipped_when_no_throw" {
     // x == 5 does not throw -> catch yields 5 -> 5 + 100 = 105.
-    assert.is_true(baml.deep_equals(catch_arm_returns(5), 105))
+    assert.equal(catch_arm_returns(5), 105)
 }
 
 // A typed catch arm value mixed with an early `return`: the `never`-typed
 // `return` arm unifies with the `int` arm, so the catch result stays `int`.
 function catch_arm_return_mixed(x: int) -> int {
     let v = car_throws(x) catch (e) {
-        let s: string => return s.length(),
+        let s: string => {
+            return s.length();
+        },
     };
     v + 100
 }
 
 test "catch_arm_braceless_return_mixed_arm_types" {
     // x == 0 throws "boom" (len 4) -> `return 4`.
-    assert.is_true(baml.deep_equals(catch_arm_return_mixed(0), 4))
+    assert.equal(catch_arm_return_mixed(0), 4)
 }
 
 // ── match arm ────────────────────────────────────────────────────────────────
@@ -56,16 +60,18 @@ test "catch_arm_braceless_return_mixed_arm_types" {
 
 function match_arm_returns(x: int) -> int {
     let v = match (x) {
-        0 => return -1,
+        0 => {
+            return -1;
+        },
         _ => x,
     };
     v + 100
 }
 
 test "match_arm_braceless_return_fires" {
-    assert.is_true(baml.deep_equals(match_arm_returns(0), -1))
+    assert.equal(match_arm_returns(0), -1)
 }
 
 test "match_arm_braceless_return_other_arm" {
-    assert.is_true(baml.deep_equals(match_arm_returns(7), 107))
+    assert.equal(match_arm_returns(7), 107)
 }

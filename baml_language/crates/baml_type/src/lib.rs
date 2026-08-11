@@ -27,6 +27,7 @@ use std::fmt;
 
 // Re-export core baml_base types so downstream crates can depend on baml_type
 // instead of baml_base directly.
+pub use baml_base::qualified_name;
 pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -505,7 +506,7 @@ impl Ty {
     // --- Opaque leaf-type constructors (default TyAttr) ---
 
     /// Opaque resource handle type (file, socket, HTTP response body).
-    /// Renders as `baml.llm.Resource`.
+    /// Renders as `baml.prompt.Resource`.
     pub fn resource() -> Self {
         Ty::Resource {
             attr: TyAttr::default(),
@@ -513,7 +514,7 @@ impl Ty {
     }
 
     /// Opaque structured prompt tree type for LLM calls.
-    /// Renders as `baml.llm.PromptAst`.
+    /// Renders as `ai.Prompt`.
     pub fn prompt_ast() -> Self {
         Ty::PromptAst {
             attr: TyAttr::default(),
@@ -831,8 +832,8 @@ impl Ty {
             Ty::Type { .. } => "type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
             // strings feed canonical dumps and must stay byte-identical.
-            Ty::Resource { .. } => "baml.llm.Resource".to_string(),
-            Ty::PromptAst { .. } => "baml.llm.PromptAst".to_string(),
+            Ty::Resource { .. } => "baml.prompt.Resource".to_string(),
+            Ty::PromptAst { .. } => "ai.Prompt".to_string(),
             Ty::Error { .. } => "!error".to_string(),
             Ty::Future(value, error, _) => {
                 format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
@@ -1034,8 +1035,8 @@ impl fmt::Display for Ty {
             // resource/prompt handles render as their fixed qualified names.)
             Ty::RustType { .. } => write!(f, "$rust_type"),
             Ty::Type { .. } => write!(f, "type"),
-            Ty::Resource { .. } => write!(f, "baml.llm.Resource"),
-            Ty::PromptAst { .. } => write!(f, "baml.llm.PromptAst"),
+            Ty::Resource { .. } => write!(f, "baml.prompt.Resource"),
+            Ty::PromptAst { .. } => write!(f, "ai.Prompt"),
         }
     }
 }
@@ -1278,8 +1279,8 @@ mod tests {
 
     #[test]
     fn test_display_opaque_types() {
-        assert_eq!(Ty::resource().to_string(), "baml.llm.Resource");
-        assert_eq!(Ty::prompt_ast().to_string(), "baml.llm.PromptAst");
+        assert_eq!(Ty::resource().to_string(), "baml.prompt.Resource");
+        assert_eq!(Ty::prompt_ast().to_string(), "ai.Prompt");
         assert_eq!(Ty::type_type().to_string(), "type");
     }
 

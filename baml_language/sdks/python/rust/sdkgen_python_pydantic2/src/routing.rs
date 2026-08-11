@@ -96,6 +96,7 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
     match name.package().as_str() {
         "user" => {}
         "baml" => segs.push("baml".to_string()),
+        "ai" => segs.push("ai".to_string()),
         other => {
             segs.push("vendor".to_string());
             segs.push(sanitize_python_module_segment(other));
@@ -212,6 +213,14 @@ mod tests {
         let lp = route(&n, &class_sym(&n));
         assert_eq!(lp.segments, vec!["baml".to_string(), "http".to_string()]);
         assert_eq!(lp.init_py(), PathBuf::from("baml/http/__init__.py"));
+    }
+
+    #[test]
+    fn ai_routes_under_ai() {
+        let n = name("ai", &["stream"], "Stream");
+        let lp = route(&n, &class_sym(&n));
+        assert_eq!(lp.segments, vec!["ai".to_string(), "stream".to_string()]);
+        assert_eq!(lp.init_py(), PathBuf::from("ai/stream/__init__.py"));
     }
 
     #[test]

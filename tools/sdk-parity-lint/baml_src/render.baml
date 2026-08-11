@@ -11,17 +11,14 @@ function render_inventory_test(test_case: InventoryTest) -> string {
         `    source_column: ${test_case.source_column}`,
         `    rule_id: ${yaml_string(test_case.rule_id)}`,
     ]
-    .join("\n")
+        .join("\n")
 }
 
 function render_inventory(inventory: SdkInventory, ast_grep_version: string) -> string {
-    let rendered_tests = inventory
-        .tests
-        .map(
-            (test_case) -> {
-                render_inventory_test(test_case)
-            },
-        )
+    let rendered_tests = inventory.tests
+        .map((test_case) -> {
+            render_inventory_test(test_case)
+        })
         .join("\n");
     [
         `ast_grep_version: ${yaml_string(ast_grep_version)}`,
@@ -34,19 +31,18 @@ function render_inventory(inventory: SdkInventory, ast_grep_version: string) -> 
         },
         "",
     ]
-    .join("\n")
+        .join("\n")
 }
 
 function escape_markdown_cell(value: string) -> string {
-    value
-        .replace_all("\\", "\\\\")
-        .replace_all("|", "\\|")
-        .replace_all("\r", "")
-        .replace_all("\n", "<br>")
+    value.replace_all("\\", "\\\\").replace_all("|", "\\|").replace_all("\r", "").replace_all(
+        "\n",
+        "<br>",
+    )
 }
 
 function required_label(row: ParityRow, sdk_envs: string[]) -> string {
-    if (baml.deep_equals(row.required_envs, sdk_envs)) {
+    if (row.required_envs == sdk_envs) {
         "all"
     } else {
         row.required_envs.join(", ")
@@ -54,17 +50,14 @@ function required_label(row: ParityRow, sdk_envs: string[]) -> string {
 }
 
 function render_parity_row(row: ParityRow, sdk_envs: string[]) -> string {
-    let markers = row
-        .cells
-        .map(
-            (cell) -> {
-                if (cell.present) {
-                    "y"
-                } else {
-                    "-"
-                }
-            },
-        )
+    let markers = row.cells
+        .map((cell) -> {
+            if (cell.present) {
+                "y"
+            } else {
+                "-"
+            }
+        })
         .join(" | ");
     `| ${escape_markdown_cell(row.sdk_test_id)} | ${markers} | ${escape_markdown_cell(required_label(row, sdk_envs))} | ${escape_markdown_cell(row.reason)} |`
 }

@@ -1,77 +1,64 @@
-client<llm> Bar {
-  provider openai
-}
+client Bar = openai.OpenAiClient.new(model = "gpt-4o");
 
 function InputNone() -> int {
-  client Bar
-  prompt `fa`
+    client: Bar
+    prompt: `fa`
 }
 
 function InputSimple(a: string, b: int | bool) -> int {
-  client Bar
-  prompt `fa`
+    client: Bar
+    prompt: `fa`
 }
 
 class Email {
-    subject string
-    body string
+    subject: string,
+    body: string,
 }
 
 function InputObject(email: Email) -> string {
-  client Bar
-  prompt ` subject line ${email.subject} `
+    client: Bar
+    prompt: ` subject line ${email.subject} `
 }
 
 enum Color {
-  RED
-  BLUE
-  GREEN
+    RED,
+    BLUE,
+    GREEN,
 }
 
 function InputEnum(color: Color) -> string {
-  client Bar
-  prompt ` color ${color} `
+    client: Bar
+    prompt: ` color ${color} `
 }
 
 // Try it with wierd spacing and comments
 
 function InputEnum2(
-  color: Color,
-  bar: string, // ok
-
-  // This param is great!
-  foo: string[],
-
-  // But we should do something...
-  baz: (string | int?)[]
-)
-// Err
-->
-// Do something
-string
-
-// Or else
-{
-  client Bar
-  prompt ` color ${color} `
+    color: Color,
+    bar: string, // ok
+    // This param is great!
+    foo: string[],
+    // But we should do something...
+    baz: (string | int?)[],
+) -> // Do something
+    string {
+    client: Bar
+    prompt: ` color ${color} `
 }
-
 
 function InputImage(img: image) -> string {
-  client Bar
-  prompt ` image ${img} `
+    client: Bar
+    prompt: ` image ${img} `
 }
 
 test Foo {
-  functions [InputImage]
-  args {
-  }
+    functions: [InputImage],
+    args: {},
 }
 
 test Foo {
-  functions [InputEnum]
-  args {
-  }
+    functions: [InputEnum],
+    args: {},
 }
 
 //----

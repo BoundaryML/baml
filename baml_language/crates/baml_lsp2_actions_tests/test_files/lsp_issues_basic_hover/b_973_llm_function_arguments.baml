@@ -2,12 +2,7 @@ class Email {
   subject string
 }
 
-client<llm> TestClient {
-  provider openai
-  options {
-    model "gpt-4o-mini"
-  }
-}
+client TestClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
 
 function ClassifyEmail(em<[CURSOR]ail: Email) -> string {
   client TestClient
@@ -21,11 +16,11 @@ function ClassifyEmail(em<[CURSOR]ail: Email) -> string {
 // <no-diagnostics-expected>
 //
 //- on_hover expressions
-// hover at b_973_llm_function_arguments.baml:12:26
+// hover at b_973_llm_function_arguments.baml:7:26
 // ```baml
 // email: Email
 // ```
-// hover at b_973_llm_function_arguments.baml:15:18
+// hover at b_973_llm_function_arguments.baml:10:18
 // ```baml
 // email: Email
 // ```

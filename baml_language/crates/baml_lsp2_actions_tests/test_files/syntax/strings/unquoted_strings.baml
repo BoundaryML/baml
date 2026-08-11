@@ -50,3 +50,19 @@ client<llm> Hello {
 //    ·                        ┬
 //    ·                        ╰── expected `identifier`, found `')'`
 //    ╰────
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client Hello = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[strings_unquoted_strings.baml:1:1]
+//  1 │ ╭─▶ client<llm> Hello {
+//  2 │ │     provider openai
+//  3 │ │     options {
+//  4 │ │       thing hello'world
+//  5 │ │       banned @helloworld
+//  6 │ │       banned2 #helloworld
+//  7 │ │       banned3 hello(world)
+//  8 │ │     }
+//  9 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

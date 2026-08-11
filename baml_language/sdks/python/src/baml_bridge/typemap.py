@@ -28,7 +28,7 @@ _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {
     ("baml_bridge.baml_py", "BamlPdf"):   "baml.media.Pdf",
     # `BamlStream` is re-exported from `baml_bridge` but defined in
     # `baml_bridge._stream`; `__module__` reflects the defining module.
-    ("baml_bridge._stream", "BamlStream"): "baml.llm.Stream",
+    ("baml_bridge._stream", "BamlStream"): "ai.stream.Stream",
 }
 
 

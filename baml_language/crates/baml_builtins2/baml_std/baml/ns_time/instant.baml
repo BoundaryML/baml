@@ -1,7 +1,7 @@
 /// Represents an absolute point in time.
 class Instant {
     /// Internal representation: the number of nanoseconds since the UNIX epoch.
-    _nanoseconds: bigint;
+    _nanoseconds: bigint,
 
     /// Creates a new `Instant` representing the current point in time.
     ///
@@ -32,9 +32,7 @@ class Instant {
     /// let duration = start.elapsed();
     /// ```
     function elapsed(self) -> Duration throws never {
-        Duration {
-            _nanoseconds: Instant.now()._nanoseconds - self._nanoseconds
-        }
+        Duration { _nanoseconds: Instant.now()._nanoseconds - self._nanoseconds }
     }
 
     /// Parses a timestamp string into an `Instant`.
@@ -75,7 +73,9 @@ class Instant {
         /// ```
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => root.sys.panic("Instant.to_string: " + message),
+                root.errors.InvalidArgument { message } => {
+                    root.sys.panic("Instant.to_string: " + message)
+                },
             }
         }
     }
@@ -89,17 +89,25 @@ class Instant {
     implements baml.FromJson {
         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
             match (j) {
-                string => Instant.parse(j) catch (_) {
-                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                string => {
+                    Instant.parse(j) catch (_) {
+                        root.errors.ParseError { message } => {
+                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                        },
+                    }
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected timestamp string", path: "" }
+                _ => {
+                    throw baml.json.JsonDecodeError { message: "Expected timestamp string", path: "" }
+                },
             }
         }
     }
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+                root.errors.InvalidArgument { message } => {
+                    throw baml.json.JsonSerializationError { message: message, path: "" }
+                },
             }
         }
     }
@@ -123,9 +131,7 @@ class Instant {
     /// Returns the absolute value of the difference between `self` and `other`.
     /// This operation is commutative: swapping `self` and `other` does not change the result.
     function abs_diff(self, other: Instant) -> Duration throws never {
-        Duration {
-            _nanoseconds: (self._nanoseconds - other._nanoseconds).abs()
-        }
+        Duration { _nanoseconds: (self._nanoseconds - other._nanoseconds).abs() }
     }
 
     /// Creates a new `Instant` from a number of nanoseconds since the UNIX epoch.

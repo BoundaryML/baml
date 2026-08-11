@@ -245,8 +245,8 @@ impl BexEngine {
                     panic!("Instance.class should point to a Class object")
                 };
 
-                // Lift `baml.llm.Stream` to an opaque ADT handle.  The four
-                // child fields (_client/_acc/_sse/_cache) stay on the heap
+                // Lift the canonical AI stream to an opaque ADT handle. Its
+                // BAML-owned state stays on the heap
                 // behind the GC-rooted handle so the BAML interpreter can
                 // walk them when running `Stream.next` / `Stream.final`
                 // bodies on subsequent calls.  See plan 21b §"Phase 1a".
@@ -255,7 +255,8 @@ impl BexEngine {
                 // once at lift time and carried inline on the variant so
                 // the wire encoder doesn't need a heap permit. See plan
                 // 23a §"Engine-side ripple effects".
-                if class.name.display_name().as_str() == "baml.llm.Stream" {
+                if class.name.display_name().as_str() == baml_type::qualified_name::AI_STREAM_STREAM
+                {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(
                         class.name.clone(),
@@ -508,7 +509,7 @@ impl BexEngine {
                 SynthTy::Known(RuntimeTy::Media(media.kind, attr()))
             }
             // A collector inhabits the concrete `Resource` leaf type, and a
-            // rendered prompt inhabits `PromptAst` — bind T to those rather than
+            // rendered prompt inhabits `ai.Prompt` — bind T to those rather than
             // falling into the host-only catch-all below.
             BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
                 SynthTy::Known(RuntimeTy::resource())
@@ -999,7 +1000,7 @@ impl BexEngine {
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 return Err(EngineError::CannotConvert {
-                    type_name: "PromptAst".to_string(),
+                    type_name: "ai.Prompt".to_string(),
                 });
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
@@ -1451,7 +1452,7 @@ pub(crate) fn collect_type_var_bindings(
 ///
 /// This is the fix for the host-driven streaming `TStream`-typevar bug: a
 /// generic method's declared return type (e.g. `Stream.next`'s
-/// `TStream | StreamFinished`) reaches the FFI return conversion with `TStream`
+/// `TStream | Done`) reaches the FFI return conversion with `TStream`
 /// unsubstituted, so a concrete partial value matched no union member and the
 /// conversion panicked. Substituting from the receiver's bound type args (see
 /// [`collect_type_var_bindings`]) makes the concrete arm present.
@@ -2024,7 +2025,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
 /// `BuiltinUnknown` arms match any value (see `value_matches_type`) and are
 /// considered last so a more-specific arm wins. This keeps the union
 /// metadata's `selected_option` faithful when concrete arms (e.g.
-/// `StreamFinished` in `BuiltinUnknown | StreamFinished`) actually fit.
+/// `Done` in `BuiltinUnknown | Done`) actually fit.
 fn find_matching_member(
     value: &BexExternalValue,
     members: &[RuntimeTy],
@@ -2329,7 +2330,7 @@ fn value_matches_type_with_definitions(
         // `BuiltinUnknown` is the engine's "any value matches" sentinel
         // (TypeScript `unknown` semantics — see `baml_type::RuntimeTy::BuiltinUnknown`).
         // Used by the stdlib generics hardcode in `baml_compiler2_mir::lower`
-        // so e.g. `Stream<TStream, TFinal>.next() -> TStream | StreamFinished`
+        // so e.g. `Stream<TStream, TFinal>.next() -> TStream | Done`
         // accepts any partial-stream payload as the `TStream` arm.
         (_, RuntimeTy::BuiltinUnknown { .. }) => true,
         (BexExternalValue::Null, RuntimeTy::Null { .. }) => true,
@@ -5116,7 +5117,7 @@ mod peel_to_rust_type_tests {
 
     #[test]
     fn unrelated_opaque_does_not_match() {
-        // A different opaque leaf type — e.g. `baml.llm.PromptAst` — must
+        // A different opaque leaf type — e.g. `ai.Prompt` — must
         // not be confused with `$rust_type`.
         let ty = RuntimeTy::PromptAst {
             attr: TyAttr::default(),

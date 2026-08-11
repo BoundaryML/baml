@@ -40,7 +40,7 @@ function catch_literal_string_match_fn() -> int {
 }
 
 test "catch_literal_string_match" {
-    assert.is_true(baml.deep_equals(catch_literal_string_match_fn(), 1))
+    assert.equal(catch_literal_string_match_fn(), 1)
 }
 
 function s1_fails_2() -> int {
@@ -55,7 +55,7 @@ function catch_literal_string_no_match_falls_to_wildcard_fn() -> int {
 }
 
 test "catch_literal_string_no_match_falls_to_wildcard" {
-    assert.is_true(baml.deep_equals(catch_literal_string_no_match_falls_to_wildcard_fn(), 2))
+    assert.equal(catch_literal_string_no_match_falls_to_wildcard_fn(), 2)
 }
 
 function s1_fails_3() -> int {
@@ -70,12 +70,16 @@ function catch_literal_int_match_fn() -> int {
 }
 
 test "catch_literal_int_match" {
-    assert.is_true(baml.deep_equals(catch_literal_int_match_fn(), 1))
+    assert.equal(catch_literal_int_match_fn(), 1)
 }
 
 function s1_fails_4(mode: int) -> int {
-    if (mode == 0) { throw "alpha" }
-    if (mode == 1) { throw "beta" }
+    if (mode == 0) {
+        throw "alpha"
+    }
+    if (mode == 1) {
+        throw "beta"
+    }
     throw "gamma"
 }
 
@@ -88,7 +92,7 @@ function catch_multiple_literals_dispatch_fn() -> int {
 }
 
 test "catch_multiple_literals_dispatch" {
-    assert.is_true(baml.deep_equals(catch_multiple_literals_dispatch_fn(), 2))
+    assert.equal(catch_multiple_literals_dispatch_fn(), 2)
 }
 
 // ============================================================================
@@ -106,7 +110,7 @@ function typed_binding_string_fn() -> int {
 }
 
 test "typed_binding_string" {
-    assert.is_true(baml.deep_equals(typed_binding_string_fn(), 1))
+    assert.equal(typed_binding_string_fn(), 1)
 }
 
 function s2_fails_6() -> int {
@@ -120,11 +124,13 @@ function typed_binding_int_fn() -> int {
 }
 
 test "typed_binding_int" {
-    assert.is_true(baml.deep_equals(typed_binding_int_fn(), 1))
+    assert.equal(typed_binding_int_fn(), 1)
 }
 
 function s2_fails_7(mode: int) -> int {
-    if (mode == 0) { throw "boom" }
+    if (mode == 0) {
+        throw "boom"
+    }
     throw 42
 }
 
@@ -136,7 +142,7 @@ function typed_binding_dispatch_string_vs_int_fn() -> int {
 }
 
 test "typed_binding_dispatch_string_vs_int" {
-    assert.is_true(baml.deep_equals(typed_binding_dispatch_string_vs_int_fn(), 1))
+    assert.equal(typed_binding_dispatch_string_vs_int_fn(), 1)
 }
 
 function typed_binding_dispatch_int_vs_string_fn() -> int {
@@ -147,11 +153,13 @@ function typed_binding_dispatch_int_vs_string_fn() -> int {
 }
 
 test "typed_binding_dispatch_int_vs_string" {
-    assert.is_true(baml.deep_equals(typed_binding_dispatch_int_vs_string_fn(), 2))
+    assert.equal(typed_binding_dispatch_int_vs_string_fn(), 2)
 }
 
 function s2_fails_9(mode: int) -> int {
-    if (mode == 0) { throw "boom" }
+    if (mode == 0) {
+        throw "boom"
+    }
     throw 42
 }
 
@@ -163,7 +171,7 @@ function typed_binding_plus_wildcard_fn() -> int {
 }
 
 test "typed_binding_plus_wildcard" {
-    assert.is_true(baml.deep_equals(typed_binding_plus_wildcard_fn(), 2))
+    assert.equal(typed_binding_plus_wildcard_fn(), 2)
 }
 
 // ============================================================================
@@ -171,7 +179,9 @@ test "typed_binding_plus_wildcard" {
 // ============================================================================
 
 function s2b_fails_10(mode: int) -> string {
-    if (mode == 0) { throw "boom" }
+    if (mode == 0) {
+        throw "boom"
+    }
     throw 42
 }
 
@@ -183,11 +193,13 @@ function named_binding_string_access_value_fn() -> string {
 }
 
 test "named_binding_string_access_value" {
-    assert.is_true(baml.deep_equals(named_binding_string_access_value_fn(), "boom"))
+    assert.equal(named_binding_string_access_value_fn(), "boom")
 }
 
 function s2b_fails_11(mode: int) -> int {
-    if (mode == 0) { throw "boom" }
+    if (mode == 0) {
+        throw "boom"
+    }
     throw 42
 }
 
@@ -199,15 +211,20 @@ function named_binding_int_access_value_fn() -> int {
 }
 
 test "named_binding_int_access_value" {
-    assert.is_true(baml.deep_equals(named_binding_int_access_value_fn(), 42))
+    assert.equal(named_binding_int_access_value_fn(), 42)
 }
 
 // ============================================================================
 // §3 — Catch by user-defined class type
 // ============================================================================
 
-class NetworkError { url string }
-class ParseError { message string }
+class NetworkError {
+    url: string,
+}
+
+class ParseError {
+    message: string,
+}
 
 function s3_fails_12() -> int {
     throw NetworkError { url: "http://example.com" }
@@ -220,11 +237,13 @@ function catch_user_class_single_arm_fn() -> int {
 }
 
 test "catch_user_class_single_arm" {
-    assert.is_true(baml.deep_equals(catch_user_class_single_arm_fn(), 1))
+    assert.equal(catch_user_class_single_arm_fn(), 1)
 }
 
 function s3_fails_13(mode: int) -> int {
-    if (mode == 0) { throw NetworkError { url: "http://x" } }
+    if (mode == 0) {
+        throw NetworkError { url: "http://x" }
+    }
     throw ParseError { message: "bad json" }
 }
 
@@ -236,7 +255,7 @@ function catch_two_user_classes_dispatch_first_fn() -> int {
 }
 
 test "catch_two_user_classes_dispatch_first" {
-    assert.is_true(baml.deep_equals(catch_two_user_classes_dispatch_first_fn(), 1))
+    assert.equal(catch_two_user_classes_dispatch_first_fn(), 1)
 }
 
 function catch_two_user_classes_dispatch_second_fn() -> int {
@@ -247,11 +266,13 @@ function catch_two_user_classes_dispatch_second_fn() -> int {
 }
 
 test "catch_two_user_classes_dispatch_second" {
-    assert.is_true(baml.deep_equals(catch_two_user_classes_dispatch_second_fn(), 2))
+    assert.equal(catch_two_user_classes_dispatch_second_fn(), 2)
 }
 
 function s3_fails_15(mode: int) -> int {
-    if (mode == 0) { throw NetworkError { url: "http://x" } }
+    if (mode == 0) {
+        throw NetworkError { url: "http://x" }
+    }
     throw "plain string error"
 }
 
@@ -263,17 +284,31 @@ function catch_user_class_plus_wildcard_fn() -> int {
 }
 
 test "catch_user_class_plus_wildcard" {
-    assert.is_true(baml.deep_equals(catch_user_class_plus_wildcard_fn(), 2))
+    assert.equal(catch_user_class_plus_wildcard_fn(), 2)
 }
 
-class AuthError { reason string }
-class NotFound { path string }
-class RateLimit { retryAfter int }
+class AuthError {
+    reason: string,
+}
+
+class NotFound {
+    path: string,
+}
+
+class RateLimit {
+    retryAfter: int,
+}
 
 function s3_api_1(mode: int) -> int {
-    if (mode == 0) { throw AuthError { reason: "expired" } }
-    if (mode == 1) { throw NotFound { path: "/users" } }
-    if (mode == 2) { throw RateLimit { retryAfter: 30 } }
+    if (mode == 0) {
+        throw AuthError { reason: "expired" }
+    }
+    if (mode == 1) {
+        throw NotFound { path: "/users" }
+    }
+    if (mode == 2) {
+        throw RateLimit { retryAfter: 30 }
+    }
     throw "unknown"
 }
 
@@ -287,7 +322,7 @@ function catch_three_user_classes_plus_wildcard_fn() -> int {
 }
 
 test "catch_three_user_classes_plus_wildcard" {
-    assert.is_true(baml.deep_equals(catch_three_user_classes_plus_wildcard_fn(), 3))
+    assert.equal(catch_three_user_classes_plus_wildcard_fn(), 3)
 }
 
 // ============================================================================
@@ -305,11 +340,13 @@ function named_class_binding_access_field_fn() -> string {
 }
 
 test "named_class_binding_access_field" {
-    assert.is_true(baml.deep_equals(named_class_binding_access_field_fn(), "http://example.com"))
+    assert.equal(named_class_binding_access_field_fn(), "http://example.com")
 }
 
 function s3a_fails_17(mode: int) -> string {
-    if (mode == 0) { throw NetworkError { url: "http://x" } }
+    if (mode == 0) {
+        throw NetworkError { url: "http://x" }
+    }
     throw ParseError { message: "bad json" }
 }
 
@@ -321,7 +358,7 @@ function named_class_binding_dispatch_access_fields_fn() -> string {
 }
 
 test "named_class_binding_dispatch_access_fields" {
-    assert.is_true(baml.deep_equals(named_class_binding_dispatch_access_fields_fn(), "bad json"))
+    assert.equal(named_class_binding_dispatch_access_fields_fn(), "bad json")
 }
 
 // ============================================================================
@@ -339,11 +376,13 @@ function bare_class_single_arm_fn() -> int {
 }
 
 test "bare_class_single_arm" {
-    assert.is_true(baml.deep_equals(bare_class_single_arm_fn(), 1))
+    assert.equal(bare_class_single_arm_fn(), 1)
 }
 
 function s3b_fails_19(mode: int) -> int {
-    if (mode == 0) { throw NetworkError { url: "http://x" } }
+    if (mode == 0) {
+        throw NetworkError { url: "http://x" }
+    }
     throw ParseError { message: "bad" }
 }
 
@@ -355,7 +394,7 @@ function bare_class_dispatch_first_fn() -> int {
 }
 
 test "bare_class_dispatch_first" {
-    assert.is_true(baml.deep_equals(bare_class_dispatch_first_fn(), 1))
+    assert.equal(bare_class_dispatch_first_fn(), 1)
 }
 
 function bare_class_dispatch_second_fn() -> int {
@@ -366,11 +405,13 @@ function bare_class_dispatch_second_fn() -> int {
 }
 
 test "bare_class_dispatch_second" {
-    assert.is_true(baml.deep_equals(bare_class_dispatch_second_fn(), 2))
+    assert.equal(bare_class_dispatch_second_fn(), 2)
 }
 
 function s3b_fails_21(mode: int) -> int {
-    if (mode == 0) { throw NetworkError { url: "http://x" } }
+    if (mode == 0) {
+        throw NetworkError { url: "http://x" }
+    }
     throw "plain string"
 }
 
@@ -382,7 +423,7 @@ function bare_class_plus_wildcard_fn() -> int {
 }
 
 test "bare_class_plus_wildcard" {
-    assert.is_true(baml.deep_equals(bare_class_plus_wildcard_fn(), 1))
+    assert.equal(bare_class_plus_wildcard_fn(), 1)
 }
 
 function bare_class_plus_wildcard_wildcard_fires_fn() -> int {
@@ -393,7 +434,7 @@ function bare_class_plus_wildcard_wildcard_fires_fn() -> int {
 }
 
 test "bare_class_plus_wildcard_wildcard_fires" {
-    assert.is_true(baml.deep_equals(bare_class_plus_wildcard_wildcard_fires_fn(), 2))
+    assert.equal(bare_class_plus_wildcard_wildcard_fires_fn(), 2)
 }
 
 // ============================================================================
@@ -422,124 +463,172 @@ test "unhandled_throw_int" {
 // §5 — Panic patterns: single arm per panic type
 // ============================================================================
 
-function s5_divides_1() -> int { 1 / 0 }
+function s5_divides_1() -> int {
+    1 / 0
+}
 
 function catch_division_by_zero_fn() -> int {
-    s5_divides_1() catch (e) { baml.panics.DivisionByZero => -1 }
+    s5_divides_1() catch (e) {
+        baml.panics.DivisionByZero => -1
+    }
 }
 
 test "catch_division_by_zero" {
-    assert.is_true(baml.deep_equals(catch_division_by_zero_fn(), -1))
+    assert.equal(catch_division_by_zero_fn(), -1)
 }
 
 // Integer overflow is a catchable panic, parallel to division-by-zero. The
 // helpers take runtime args so the arithmetic isn't constant-folded away — it
 // runs through the VM's checked AddInt/SubInt/MulInt opcodes.
-function s5_add_overflow(x: int) -> int { x + 1 }
-function s5_sub_overflow(x: int) -> int { x - 1 }
-function s5_mul_overflow(x: int) -> int { x * 2 }
-function s5_neg_overflow(x: int) -> int { 0 - x }
+function s5_add_overflow(x: int) -> int {
+    x + 1
+}
+
+function s5_sub_overflow(x: int) -> int {
+    x - 1
+}
+
+function s5_mul_overflow(x: int) -> int {
+    x * 2
+}
+
+function s5_neg_overflow(x: int) -> int {
+    0 - x
+}
 
 function catch_integer_overflow_add_fn() -> int {
-    s5_add_overflow(baml.Int.max_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
+    s5_add_overflow(baml.Int.max_value()) catch (e) {
+        baml.panics.IntegerOverflow => -1
+    }
 }
 
 test "catch_integer_overflow_add" {
-    assert.is_true(baml.deep_equals(catch_integer_overflow_add_fn(), -1))
+    assert.equal(catch_integer_overflow_add_fn(), -1)
 }
 
 function catch_integer_overflow_sub_fn() -> int {
-    s5_sub_overflow(baml.Int.min_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
+    s5_sub_overflow(baml.Int.min_value()) catch (e) {
+        baml.panics.IntegerOverflow => -1
+    }
 }
 
 test "catch_integer_overflow_sub" {
-    assert.is_true(baml.deep_equals(catch_integer_overflow_sub_fn(), -1))
+    assert.equal(catch_integer_overflow_sub_fn(), -1)
 }
 
 function catch_integer_overflow_mul_fn() -> int {
-    s5_mul_overflow(baml.Int.max_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
+    s5_mul_overflow(baml.Int.max_value()) catch (e) {
+        baml.panics.IntegerOverflow => -1
+    }
 }
 
 test "catch_integer_overflow_mul" {
-    assert.is_true(baml.deep_equals(catch_integer_overflow_mul_fn(), -1))
+    assert.equal(catch_integer_overflow_mul_fn(), -1)
 }
 
 // `-int.min_value()` overflows (its magnitude is INT_MAX + 1).
 function catch_integer_overflow_neg_fn() -> int {
-    s5_neg_overflow(baml.Int.min_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
+    s5_neg_overflow(baml.Int.min_value()) catch (e) {
+        baml.panics.IntegerOverflow => -1
+    }
 }
 
 test "catch_integer_overflow_neg" {
-    assert.is_true(baml.deep_equals(catch_integer_overflow_neg_fn(), -1))
+    assert.equal(catch_integer_overflow_neg_fn(), -1)
 }
 
 // An overflowing panic is a member of the `baml.panics.Panic` union.
 function catch_integer_overflow_via_panic_union_fn() -> int {
-    s5_add_overflow(baml.Int.max_value()) catch (e) { baml.panics.Panic => -2 }
+    s5_add_overflow(baml.Int.max_value()) catch (e) {
+        baml.panics.Panic => -2
+    }
 }
 
 test "catch_integer_overflow_via_panic_union" {
-    assert.is_true(baml.deep_equals(catch_integer_overflow_via_panic_union_fn(), -2))
+    assert.equal(catch_integer_overflow_via_panic_union_fn(), -2)
 }
 
 // `<<` can overflow i63 (`1 << 62` = 2^62 > INT_MAX) → catchable IntegerOverflow;
 // a negative shift count → catchable NegativeBitShift. (Runtime args avoid
 // constant folding so the VM's shift opcode is exercised.)
-function s5_shl(x: int, n: int) -> int { x << n }
+function s5_shl(x: int, n: int) -> int {
+    x << n
+}
 
 function catch_shift_overflow_fn() -> int {
-    s5_shl(1, 62) catch (e) { baml.panics.IntegerOverflow => -1 }
+    s5_shl(1, 62) catch (e) {
+        baml.panics.IntegerOverflow => -1
+    }
 }
 
 test "catch_shift_overflow" {
-    assert.is_true(baml.deep_equals(catch_shift_overflow_fn(), -1))
+    assert.equal(catch_shift_overflow_fn(), -1)
 }
 
 function catch_negative_shift_fn() -> int {
-    s5_shl(1, 0 - 1) catch (e) { baml.panics.NegativeBitShift => -1 }
+    s5_shl(1, 0 - 1) catch (e) {
+        baml.panics.NegativeBitShift => -1
+    }
 }
 
 test "catch_negative_shift" {
-    assert.is_true(baml.deep_equals(catch_negative_shift_fn(), -1))
+    assert.equal(catch_negative_shift_fn(), -1)
 }
 
-function s5_oob_1() -> int { let a = [1, 2]; a[5] }
+function s5_oob_1() -> int {
+    let a = [1, 2];
+    a[5]
+}
 
 function catch_index_out_of_bounds_fn() -> int {
-    s5_oob_1() catch (e) { baml.panics.IndexOutOfBounds => -1 }
+    s5_oob_1() catch (e) {
+        baml.panics.IndexOutOfBounds => -1
+    }
 }
 
 test "catch_index_out_of_bounds" {
-    assert.is_true(baml.deep_equals(catch_index_out_of_bounds_fn(), -1))
+    assert.equal(catch_index_out_of_bounds_fn(), -1)
 }
 
-function s5_bad_1() -> int { let m = {"a": 1}; m["x"] }
+function s5_bad_1() -> int {
+    let m = { "a": 1 };
+    m["x"]
+}
 
 function catch_map_key_not_found_fn() -> int {
-    s5_bad_1() catch (e) { baml.panics.MapKeyNotFound => -1 }
+    s5_bad_1() catch (e) {
+        baml.panics.MapKeyNotFound => -1
+    }
 }
 
 test "catch_map_key_not_found" {
-    assert.is_true(baml.deep_equals(catch_map_key_not_found_fn(), -1))
+    assert.equal(catch_map_key_not_found_fn(), -1)
 }
 
 // `-3` counts from the end past the start of a length-2 array (it normalizes
 // to `-1`), so it is out of bounds. (`a[-1]` would resolve to the last element.)
-function s5_bad_2() -> int { let a = [1, 2]; a[-3] }
+function s5_bad_2() -> int {
+    let a = [1, 2];
+    a[-3]
+}
 
 function catch_negative_index_as_index_out_of_bounds_fn() -> int {
-    s5_bad_2() catch (e) { baml.panics.IndexOutOfBounds => -1 }
+    s5_bad_2() catch (e) {
+        baml.panics.IndexOutOfBounds => -1
+    }
 }
 
 test "catch_negative_index_as_index_out_of_bounds" {
-    assert.is_true(baml.deep_equals(catch_negative_index_as_index_out_of_bounds_fn(), -1))
+    assert.equal(catch_negative_index_as_index_out_of_bounds_fn(), -1)
 }
 
 // ============================================================================
 // §5b — Named panic binding (var: PanicType => var.field)
 // ============================================================================
 
-function s5b_divides_2() -> int { 10 / 0 }
+function s5b_divides_2() -> int {
+    10 / 0
+}
 
 function named_panic_binding_division_by_zero_field_fn() -> int {
     s5b_divides_2() catch (e) {
@@ -548,7 +637,7 @@ function named_panic_binding_division_by_zero_field_fn() -> int {
 }
 
 test "named_panic_binding_division_by_zero_field" {
-    assert.is_true(baml.deep_equals(named_panic_binding_division_by_zero_field_fn(), 10))
+    assert.equal(named_panic_binding_division_by_zero_field_fn(), 10)
 }
 
 // String-typed so the protected value and the `err.message` handler unify to
@@ -556,7 +645,11 @@ test "named_panic_binding_division_by_zero_field" {
 // used so the throwing add isn't dead-code-eliminated.
 function s5b_overflow_to_string(x: int) -> string {
     let y = x + 1;
-    if (y > 0) { "positive" } else { "non-positive" }
+    if (y > 0) {
+        "positive"
+    } else {
+        "non-positive"
+    }
 }
 
 function named_panic_binding_integer_overflow_message_fn() -> string {
@@ -566,13 +659,16 @@ function named_panic_binding_integer_overflow_message_fn() -> string {
 }
 
 test "named_panic_binding_integer_overflow_message" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         named_panic_binding_integer_overflow_message_fn(),
-        "4611686018427387903 + 1 overflows int"
-    ))
+        "4611686018427387903 + 1 overflows int",
+    )
 }
 
-function s5b_oob_2() -> int { let a = [10, 20, 30]; a[7] }
+function s5b_oob_2() -> int {
+    let a = [10, 20, 30];
+    a[7]
+}
 
 function named_panic_binding_index_out_of_bounds_fields_fn() -> int {
     s5b_oob_2() catch (e) {
@@ -581,7 +677,7 @@ function named_panic_binding_index_out_of_bounds_fields_fn() -> int {
 }
 
 test "named_panic_binding_index_out_of_bounds_fields" {
-    assert.is_true(baml.deep_equals(named_panic_binding_index_out_of_bounds_fields_fn(), 7))
+    assert.equal(named_panic_binding_index_out_of_bounds_fields_fn(), 7)
 }
 
 function named_panic_binding_index_out_of_bounds_length_fn() -> int {
@@ -591,10 +687,13 @@ function named_panic_binding_index_out_of_bounds_length_fn() -> int {
 }
 
 test "named_panic_binding_index_out_of_bounds_length" {
-    assert.is_true(baml.deep_equals(named_panic_binding_index_out_of_bounds_length_fn(), 3))
+    assert.equal(named_panic_binding_index_out_of_bounds_length_fn(), 3)
 }
 
-function s5b_bad_3() -> string { let m = {"a": "one"}; m["x"] }
+function s5b_bad_3() -> string {
+    let m = { "a": "one" };
+    m["x"]
+}
 
 function named_panic_binding_map_key_not_found_field_fn() -> string {
     s5b_bad_3() catch (e) {
@@ -607,7 +706,7 @@ function named_panic_binding_map_key_not_found_field_fn() -> string {
 test "named_panic_binding_map_key_not_found_field" {
     let result = named_panic_binding_map_key_not_found_field_fn();
     let expected = named_panic_binding_map_key_not_found_field_fn();
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // ============================================================================
@@ -615,13 +714,17 @@ test "named_panic_binding_map_key_not_found_field" {
 // ============================================================================
 
 function s6_risky_1(x: int) -> int {
-    if (x > 100) { throw "too big" }
+    if (x > 100) {
+        throw "too big"
+    }
     1 / x
 }
 
 test "wildcard_skips_division_by_zero" {
     {
-        s6_risky_1(0) catch (e) { _ => -1 };
+        s6_risky_1(0) catch (e) {
+            _ => -1
+        };
         baml.sys.panic("expected uncaught DivisionByZero")
     } catch (e) {
         baml.panics.DivisionByZero => null
@@ -629,14 +732,18 @@ test "wildcard_skips_division_by_zero" {
 }
 
 function s6_risky_2(x: int) -> int {
-    if (x > 100) { throw "too big" }
+    if (x > 100) {
+        throw "too big"
+    }
     let a = [1, 2, 3];
     a[x]
 }
 
 test "wildcard_skips_index_out_of_bounds" {
     {
-        s6_risky_2(99) catch (e) { _ => -1 };
+        s6_risky_2(99) catch (e) {
+            _ => -1
+        };
         baml.sys.panic("expected uncaught IndexOutOfBounds")
     } catch (e) {
         baml.panics.IndexOutOfBounds => null
@@ -647,10 +754,14 @@ test "wildcard_skips_index_out_of_bounds" {
 // §7 — Multi-arm: panics + user errors in same catch
 // ============================================================================
 
-class AppError { code int }
+class AppError {
+    code: int,
+}
 
 function s7_risky_3(x: int) -> int {
-    if (x > 100) { throw "too big" }
+    if (x > 100) {
+        throw "too big"
+    }
     1 / x
 }
 
@@ -662,7 +773,7 @@ function panic_arm_plus_wildcard_panic_fires_fn() -> int {
 }
 
 test "panic_arm_plus_wildcard_panic_fires" {
-    assert.is_true(baml.deep_equals(panic_arm_plus_wildcard_panic_fires_fn(), 1))
+    assert.equal(panic_arm_plus_wildcard_panic_fires_fn(), 1)
 }
 
 function panic_arm_plus_wildcard_user_error_fires_fn() -> int {
@@ -673,11 +784,13 @@ function panic_arm_plus_wildcard_user_error_fires_fn() -> int {
 }
 
 test "panic_arm_plus_wildcard_user_error_fires" {
-    assert.is_true(baml.deep_equals(panic_arm_plus_wildcard_user_error_fires_fn(), 2))
+    assert.equal(panic_arm_plus_wildcard_user_error_fires_fn(), 2)
 }
 
 function s7_risky_5(x: int) -> int {
-    if (x > 100) { throw "too big" }
+    if (x > 100) {
+        throw "too big"
+    }
     1000 / x
 }
 
@@ -689,18 +802,24 @@ function panic_arm_plus_wildcard_no_error_fn() -> int {
 }
 
 test "panic_arm_plus_wildcard_no_error" {
-    assert.is_true(baml.deep_equals(panic_arm_plus_wildcard_no_error_fn(), 200))
+    assert.equal(panic_arm_plus_wildcard_no_error_fn(), 200)
 }
 
 // ============================================================================
 // §8 — Multi-arm: user class + panic + wildcard
 // ============================================================================
 
-function s8_do_div_1() -> int { 1 / 0 }
+function s8_do_div_1() -> int {
+    1 / 0
+}
 
 function s8_risky_6(mode: int) -> int {
-    if (mode == 0) { throw AppError { code: 500 } }
-    if (mode == 1) { 1 / 0 }
+    if (mode == 0) {
+        throw AppError { code: 500 }
+    }
+    if (mode == 1) {
+        1 / 0
+    }
     throw "fallback"
 }
 
@@ -713,12 +832,16 @@ function user_class_plus_panic_plus_wildcard_class_fires_fn() -> int {
 }
 
 test "user_class_plus_panic_plus_wildcard_class_fires" {
-    assert.is_true(baml.deep_equals(user_class_plus_panic_plus_wildcard_class_fires_fn(), 1))
+    assert.equal(user_class_plus_panic_plus_wildcard_class_fires_fn(), 1)
 }
 
 function s8_risky_7(mode: int) -> int {
-    if (mode == 0) { throw AppError { code: 500 } }
-    if (mode == 1) { return s8_do_div_1() }
+    if (mode == 0) {
+        throw AppError { code: 500 }
+    }
+    if (mode == 1) {
+        return s8_do_div_1();
+    }
     throw "fallback"
 }
 
@@ -731,7 +854,7 @@ function user_class_plus_panic_plus_wildcard_panic_fires_fn() -> int {
 }
 
 test "user_class_plus_panic_plus_wildcard_panic_fires" {
-    assert.is_true(baml.deep_equals(user_class_plus_panic_plus_wildcard_panic_fires_fn(), 2))
+    assert.equal(user_class_plus_panic_plus_wildcard_panic_fires_fn(), 2)
 }
 
 function user_class_plus_panic_plus_wildcard_string_fires_fn() -> int {
@@ -743,7 +866,7 @@ function user_class_plus_panic_plus_wildcard_string_fires_fn() -> int {
 }
 
 test "user_class_plus_panic_plus_wildcard_string_fires" {
-    assert.is_true(baml.deep_equals(user_class_plus_panic_plus_wildcard_string_fires_fn(), 3))
+    assert.equal(user_class_plus_panic_plus_wildcard_string_fires_fn(), 3)
 }
 
 // ============================================================================
@@ -752,12 +875,20 @@ test "user_class_plus_panic_plus_wildcard_string_fires" {
 
 // §9a — Mixed union WITH wildcard
 
-function s9_do_div_2() -> int { 1 / 0 }
+function s9_do_div_2() -> int {
+    1 / 0
+}
 
 function s9_risky_9(mode: int) -> int {
-    if (mode == 0) { throw AppError { code: 7 } }
-    if (mode == 1) { return s9_do_div_2() }
-    if (mode == 2) { throw "fallback" }
+    if (mode == 0) {
+        throw AppError { code: 7 }
+    }
+    if (mode == 1) {
+        return s9_do_div_2();
+    }
+    if (mode == 2) {
+        throw "fallback"
+    }
     let a = [1];
     a[5]
 }
@@ -770,12 +901,16 @@ function mixed_union_arm_plus_wildcard_panic_fires_fn() -> int {
 }
 
 test "mixed_union_arm_plus_wildcard_panic_fires" {
-    assert.is_true(baml.deep_equals(mixed_union_arm_plus_wildcard_panic_fires_fn(), 1))
+    assert.equal(mixed_union_arm_plus_wildcard_panic_fires_fn(), 1)
 }
 
 function s9_risky_10(mode: int) -> int {
-    if (mode == 0) { throw AppError { code: 7 } }
-    if (mode == 1) { 1 / 0 }
+    if (mode == 0) {
+        throw AppError { code: 7 }
+    }
+    if (mode == 1) {
+        1 / 0
+    }
     throw "fallback"
 }
 
@@ -787,7 +922,7 @@ function mixed_union_arm_plus_wildcard_user_error_fires_fn() -> int {
 }
 
 test "mixed_union_arm_plus_wildcard_user_error_fires" {
-    assert.is_true(baml.deep_equals(mixed_union_arm_plus_wildcard_user_error_fires_fn(), 1))
+    assert.equal(mixed_union_arm_plus_wildcard_user_error_fires_fn(), 1)
 }
 
 function mixed_union_arm_plus_wildcard_fallback_error_fires_fn() -> int {
@@ -798,11 +933,13 @@ function mixed_union_arm_plus_wildcard_fallback_error_fires_fn() -> int {
 }
 
 test "mixed_union_arm_plus_wildcard_fallback_error_fires" {
-    assert.is_true(baml.deep_equals(mixed_union_arm_plus_wildcard_fallback_error_fires_fn(), 99))
+    assert.equal(mixed_union_arm_plus_wildcard_fallback_error_fires_fn(), 99)
 }
 
 function s9_risky_12(mode: int) -> int {
-    if (mode == 0) { throw "fallback" }
+    if (mode == 0) {
+        throw "fallback"
+    }
     let a = [1];
     a[5]
 }
@@ -819,11 +956,15 @@ test "mixed_union_arm_plus_wildcard_other_panic_propagates" {
     }
 }
 
-type Mixed = AppError | baml.panics.DivisionByZero
+type Mixed = AppError | baml.panics.DivisionByZero;
 
 function s9_risky_13(mode: int) -> int {
-    if (mode == 0) { throw AppError { code: 7 } }
-    if (mode == 1) { return s9_do_div_2() }
+    if (mode == 0) {
+        throw AppError { code: 7 }
+    }
+    if (mode == 1) {
+        return s9_do_div_2();
+    }
     throw "fallback"
 }
 
@@ -835,11 +976,13 @@ function mixed_union_alias_plus_wildcard_handles_both_domains_fn() -> int {
 }
 
 test "mixed_union_alias_plus_wildcard_handles_both_domains" {
-    assert.is_true(baml.deep_equals(mixed_union_alias_plus_wildcard_handles_both_domains_fn(), 1))
+    assert.equal(mixed_union_alias_plus_wildcard_handles_both_domains_fn(), 1)
 }
 
 function s9_risky_14(mode: int) -> int {
-    if (mode == 0) { throw AppError { code: 7 } }
+    if (mode == 0) {
+        throw AppError { code: 7 }
+    }
     1 / 0
 }
 
@@ -851,14 +994,16 @@ function mixed_union_alias_plus_wildcard_error_fires_fn() -> int {
 }
 
 test "mixed_union_alias_plus_wildcard_error_fires" {
-    assert.is_true(baml.deep_equals(mixed_union_alias_plus_wildcard_error_fires_fn(), 1))
+    assert.equal(mixed_union_alias_plus_wildcard_error_fires_fn(), 1)
 }
 
 // §9b — Mixed union WITHOUT wildcard
 
 function s9b_risky_15(mode: int) -> int {
-    if (mode == 0) { throw AppError { code: 7 } }
-    return s9_do_div_2()
+    if (mode == 0) {
+        throw AppError { code: 7 }
+    }
+    return s9_do_div_2();
 }
 
 function mixed_union_no_wildcard_panic_fires_fn() -> int {
@@ -868,7 +1013,7 @@ function mixed_union_no_wildcard_panic_fires_fn() -> int {
 }
 
 test "mixed_union_no_wildcard_panic_fires" {
-    assert.is_true(baml.deep_equals(mixed_union_no_wildcard_panic_fires_fn(), 1))
+    assert.equal(mixed_union_no_wildcard_panic_fires_fn(), 1)
 }
 
 function mixed_union_no_wildcard_error_fires_fn() -> int {
@@ -878,7 +1023,7 @@ function mixed_union_no_wildcard_error_fires_fn() -> int {
 }
 
 test "mixed_union_no_wildcard_error_fires" {
-    assert.is_true(baml.deep_equals(mixed_union_no_wildcard_error_fires_fn(), 1))
+    assert.equal(mixed_union_no_wildcard_error_fires_fn(), 1)
 }
 
 function s9b_risky_17() -> int {
@@ -914,11 +1059,18 @@ test "mixed_union_no_wildcard_unmatched_panic_rethrows" {
 
 // §9c — Pure-panic union with wildcard
 
-function s9c_do_div_3() -> int { 1 / 0 }
+function s9c_do_div_3() -> int {
+    1 / 0
+}
 
 function s9c_risky_19(mode: int) -> int {
-    if (mode == 0) { return s9c_do_div_3() }
-    if (mode == 1) { let a = [1]; return a[5] }
+    if (mode == 0) {
+        return s9c_do_div_3();
+    }
+    if (mode == 1) {
+        let a = [1];
+        return a[5];
+    }
     throw "fallback"
 }
 
@@ -930,7 +1082,7 @@ function panic_union_plus_wildcard_division_fires_fn() -> int {
 }
 
 test "panic_union_plus_wildcard_division_fires" {
-    assert.is_true(baml.deep_equals(panic_union_plus_wildcard_division_fires_fn(), 1))
+    assert.equal(panic_union_plus_wildcard_division_fires_fn(), 1)
 }
 
 function panic_union_plus_wildcard_index_fires_fn() -> int {
@@ -941,11 +1093,13 @@ function panic_union_plus_wildcard_index_fires_fn() -> int {
 }
 
 test "panic_union_plus_wildcard_index_fires" {
-    assert.is_true(baml.deep_equals(panic_union_plus_wildcard_index_fires_fn(), 1))
+    assert.equal(panic_union_plus_wildcard_index_fires_fn(), 1)
 }
 
 function s9c_risky_21(mode: int) -> int {
-    if (mode == 0) { 1 / 0 }
+    if (mode == 0) {
+        1 / 0
+    }
     throw "fallback"
 }
 
@@ -957,20 +1111,32 @@ function panic_union_plus_wildcard_error_falls_to_wildcard_fn() -> int {
 }
 
 test "panic_union_plus_wildcard_error_falls_to_wildcard" {
-    assert.is_true(baml.deep_equals(panic_union_plus_wildcard_error_falls_to_wildcard_fn(), 99))
+    assert.equal(panic_union_plus_wildcard_error_falls_to_wildcard_fn(), 99)
 }
 
 // ============================================================================
 // §10 — Four-arm: two separate panics + user class + wildcard
 // ============================================================================
 
-function s10_do_div_4() -> int { 1 / 0 }
-function s10_do_oob_1() -> int { let a = [1]; a[5] }
+function s10_do_div_4() -> int {
+    1 / 0
+}
+
+function s10_do_oob_1() -> int {
+    let a = [1];
+    a[5]
+}
 
 function s10_four_arms_risky(mode: int) -> int {
-    if (mode == 0) { return s10_do_div_4() }
-    if (mode == 1) { return s10_do_oob_1() }
-    if (mode == 2) { throw AppError { code: 404 } }
+    if (mode == 0) {
+        return s10_do_div_4();
+    }
+    if (mode == 1) {
+        return s10_do_oob_1();
+    }
+    if (mode == 2) {
+        throw AppError { code: 404 }
+    }
     throw "unknown"
 }
 
@@ -984,7 +1150,7 @@ function four_arms_division_by_zero_fires_fn() -> int {
 }
 
 test "four_arms_division_by_zero_fires" {
-    assert.is_true(baml.deep_equals(four_arms_division_by_zero_fires_fn(), 1))
+    assert.equal(four_arms_division_by_zero_fires_fn(), 1)
 }
 
 function four_arms_index_out_of_bounds_fires_fn() -> int {
@@ -997,7 +1163,7 @@ function four_arms_index_out_of_bounds_fires_fn() -> int {
 }
 
 test "four_arms_index_out_of_bounds_fires" {
-    assert.is_true(baml.deep_equals(four_arms_index_out_of_bounds_fires_fn(), 2))
+    assert.equal(four_arms_index_out_of_bounds_fires_fn(), 2)
 }
 
 function four_arms_user_class_fires_fn() -> int {
@@ -1010,7 +1176,7 @@ function four_arms_user_class_fires_fn() -> int {
 }
 
 test "four_arms_user_class_fires" {
-    assert.is_true(baml.deep_equals(four_arms_user_class_fires_fn(), 3))
+    assert.equal(four_arms_user_class_fires_fn(), 3)
 }
 
 function four_arms_wildcard_fires_fn() -> int {
@@ -1023,14 +1189,22 @@ function four_arms_wildcard_fires_fn() -> int {
 }
 
 test "four_arms_wildcard_fires" {
-    assert.is_true(baml.deep_equals(four_arms_wildcard_fires_fn(), 4))
+    assert.equal(four_arms_wildcard_fires_fn(), 4)
 }
 
 function s10_four_arms_no_error_risky(mode: int) -> int {
-    if (mode == 0) { return s10_do_div_4() }
-    if (mode == 1) { return s10_do_oob_1() }
-    if (mode == 2) { throw AppError { code: 404 } }
-    if (mode == 3) { throw "unknown" }
+    if (mode == 0) {
+        return s10_do_div_4();
+    }
+    if (mode == 1) {
+        return s10_do_oob_1();
+    }
+    if (mode == 2) {
+        throw AppError { code: 404 }
+    }
+    if (mode == 3) {
+        throw "unknown"
+    }
     99
 }
 
@@ -1044,7 +1218,7 @@ function four_arms_no_error_fn() -> int {
 }
 
 test "four_arms_no_error" {
-    assert.is_true(baml.deep_equals(four_arms_no_error_fn(), 99))
+    assert.equal(four_arms_no_error_fn(), 99)
 }
 
 // ============================================================================
@@ -1054,7 +1228,9 @@ test "four_arms_no_error" {
 // uncaught_division_by_zero: bare `1 / 0;` as a statement discards the panic
 // (semicolon makes it a void statement). Call through a function so the panic
 // propagates into the catch handler.
-function s11_div_zero() -> int { 1 / 0 }
+function s11_div_zero() -> int {
+    1 / 0
+}
 
 test "uncaught_division_by_zero" {
     {
@@ -1066,7 +1242,10 @@ test "uncaught_division_by_zero" {
 }
 
 // uncaught_index_out_of_bounds: same — call through a function.
-function s11_oob() -> int { let a = [1]; a[5] }
+function s11_oob() -> int {
+    let a = [1];
+    a[5]
+}
 
 test "uncaught_index_out_of_bounds" {
     {
@@ -1077,11 +1256,15 @@ test "uncaught_index_out_of_bounds" {
     }
 }
 
-function s11_divides_wrong() -> int { 1 / 0 }
+function s11_divides_wrong() -> int {
+    1 / 0
+}
 
 test "wrong_panic_pattern_propagates" {
     {
-        s11_divides_wrong() catch (e) { baml.panics.IndexOutOfBounds => -1 };
+        s11_divides_wrong() catch (e) {
+            baml.panics.IndexOutOfBounds => -1
+        };
         baml.sys.panic("expected uncaught DivisionByZero")
     } catch (e) {
         baml.panics.DivisionByZero => null
@@ -1093,42 +1276,48 @@ test "wrong_panic_pattern_propagates" {
 // ============================================================================
 
 test "same_frame_division_caught" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         (1 / 0) catch (e) {
             baml.panics.DivisionByZero => -1
         },
-        -1
-    ))
+        -1,
+    )
 }
 
 test "same_frame_index_out_of_bounds_caught" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         {
             let a = [1, 2, 3];
             a[10]
         } catch (e) {
             baml.panics.IndexOutOfBounds => -1
         },
-        -1
-    ))
+        -1,
+    )
 }
 
 // ============================================================================
 // §12 — Panic type alias (union of all panics)
 // ============================================================================
 
-function s12_divides_panic() -> int { 1 / 0 }
+function s12_divides_panic() -> int {
+    1 / 0
+}
 
 function panic_alias_catches_any_panic_fn() -> int {
-    s12_divides_panic() catch (e) { baml.panics.Panic => -1 }
+    s12_divides_panic() catch (e) {
+        baml.panics.Panic => -1
+    }
 }
 
 test "panic_alias_catches_any_panic" {
-    assert.is_true(baml.deep_equals(panic_alias_catches_any_panic_fn(), -1))
+    assert.equal(panic_alias_catches_any_panic_fn(), -1)
 }
 
 function s12_risky_22(x: int) -> int {
-    if (x > 100) { throw "too big" }
+    if (x > 100) {
+        throw "too big"
+    }
     1 / x
 }
 
@@ -1140,64 +1329,91 @@ function panic_alias_plus_wildcard_dispatch_fn() -> int {
 }
 
 test "panic_alias_plus_wildcard_dispatch" {
-    assert.is_true(baml.deep_equals(panic_alias_plus_wildcard_dispatch_fn(), 1))
+    assert.equal(panic_alias_plus_wildcard_dispatch_fn(), 1)
 }
 
 // ============================================================================
 // §13 — Nested catch, rethrow, sequential
 // ============================================================================
 
-function s13_inner_1() -> int { throw "inner" }
+function s13_inner_1() -> int {
+    throw "inner"
+}
 
 function s13_middle_1() -> int {
-    s13_inner_1() catch (e) { _ => 42 }
+    s13_inner_1() catch (e) {
+        _ => 42
+    }
 }
 
 test "nested_inner_catches_outer_does_not_fire" {
-    assert.is_true(baml.deep_equals(
-        s13_middle_1() catch (e) { _ => -1 },
-        42
-    ))
+    assert.equal(
+        s13_middle_1() catch (e) {
+            _ => -1
+        },
+        42,
+    )
 }
 
-function s13_divides_3() -> int { 1 / 0 }
+function s13_divides_3() -> int {
+    1 / 0
+}
 
 function s13_middle_2() -> int {
-    let x = s13_divides_3() catch (e) { baml.panics.DivisionByZero => -1 };
+    let x = s13_divides_3() catch (e) {
+        baml.panics.DivisionByZero => -1
+    };
     throw "recovered but failing"
 }
 
 test "nested_inner_catches_panic_outer_catches_rethrow" {
-    assert.is_true(baml.deep_equals(
-        s13_middle_2() catch (e) { _ => 99 },
-        99
-    ))
+    assert.equal(
+        s13_middle_2() catch (e) {
+            _ => 99
+        },
+        99,
+    )
 }
 
-function s13_inner_2() -> int { throw "original" }
+function s13_inner_2() -> int {
+    throw "original"
+}
 
 function s13_middle_3() -> int {
-    s13_inner_2() catch (e) { _ => throw "rethrown" }
+    s13_inner_2() catch (e) {
+        _ => throw "rethrown"
+    }
 }
 
 test "rethrow_propagates_to_outer" {
-    assert.is_true(baml.deep_equals(
-        s13_middle_3() catch (e) { _ => 99 },
-        99
-    ))
+    assert.equal(
+        s13_middle_3() catch (e) {
+            _ => 99
+        },
+        99,
+    )
 }
 
-function s13_f1_seq() -> int { throw "one" }
-function s13_f2_seq() -> int { throw "two" }
+function s13_f1_seq() -> int {
+    throw "one"
+}
+
+function s13_f2_seq() -> int {
+    throw "two"
+}
 
 function sequential_catches_both_recover_fn() -> int {
-    let a = s13_f1_seq() catch (e) { _ => 10 };
-    let b = s13_f2_seq() catch (e) { _ => 20 };
+    let a = s13_f1_seq() catch (e) {
+        _ => 10
+    };
+    let b = s13_f2_seq() catch (e) {
+        _ => 20
+    };
     a + b
 }
 
 test "sequential_catches_both_recover" {
-    assert.is_true(baml.deep_equals(sequential_catches_both_recover_fn(), 30))
+    assert.equal(sequential_catches_both_recover_fn(), 30)
 }
 
 // ============================================================================
@@ -1205,10 +1421,12 @@ test "sequential_catches_both_recover" {
 // ============================================================================
 
 test "inline_throw_catch" {
-    assert.is_true(baml.deep_equals(
-        throw 1 catch (e) { _ => 2 },
-        2
-    ))
+    assert.equal(
+        throw 1 catch (e) {
+            _ => 2
+        },
+        2,
+    )
 }
 
 // throw_in_match_arm_propagates: no semicolon after match so the throw from the
@@ -1220,20 +1438,27 @@ test "throw_in_match_arm_propagates" {
         let x = 2;
         match (x) {
             1 => "one",
-            _ => { throw "boom" },
+            _ => {
+                throw "boom"
+            },
         }
     } catch (e) {
         string => null
     }
 }
 
-function s14_oob_fields() -> int { let a = [10, 20, 30]; a[7] }
+function s14_oob_fields() -> int {
+    let a = [10, 20, 30];
+    a[7]
+}
 
 test "caught_panic_has_accessible_fields" {
-    assert.is_true(baml.deep_equals(
-        s14_oob_fields() catch (e) { baml.panics.IndexOutOfBounds => e.index },
-        7
-    ))
+    assert.equal(
+        s14_oob_fields() catch (e) {
+            baml.panics.IndexOutOfBounds => e.index
+        },
+        7,
+    )
 }
 
 // ============================================================================
@@ -1256,16 +1481,29 @@ function catch_four_primitive_type_arms_fn() -> int {
 }
 
 test "catch_four_primitive_type_arms" {
-    assert.is_true(baml.deep_equals(catch_four_primitive_type_arms_fn(), 1))
+    assert.equal(catch_four_primitive_type_arms_fn(), 1)
 }
 
 // 4+ typed arms with final bind binding — panics must still propagate.
-class ErrA { x int }
-class ErrB { x int }
-class ErrC { x int }
-class ErrD { x int }
+class ErrA {
+    x: int,
+}
 
-function s15_risky_opt_1() -> int { 1 / 0 }
+class ErrB {
+    x: int,
+}
+
+class ErrC {
+    x: int,
+}
+
+class ErrD {
+    x: int,
+}
+
+function s15_risky_opt_1() -> int {
+    1 / 0
+}
 
 test "catch_four_typed_arms_plus_bind_jump_table_rethrows_panic" {
     {
@@ -1298,7 +1536,7 @@ function catch_four_primitive_wildcard_on_float_fn() -> int {
 }
 
 test "catch_four_primitive_wildcard_on_float" {
-    assert.is_true(baml.deep_equals(catch_four_primitive_wildcard_on_float_fn(), 0))
+    assert.equal(catch_four_primitive_wildcard_on_float_fn(), 0)
 }
 
 // 3 type arms + wildcard, throw bool.
@@ -1316,17 +1554,27 @@ function catch_three_type_arms_bool_throw_fn() -> int {
 }
 
 test "catch_three_type_arms_bool_throw" {
-    assert.is_true(baml.deep_equals(catch_three_type_arms_bool_throw_fn(), 3))
+    assert.equal(catch_three_type_arms_bool_throw_fn(), 3)
 }
 
 // 4+ user class arms — exercises TypeTag dispatch path.
-class Timeout { ms int }
+class Timeout {
+    ms: int,
+}
 
 function s15_api_opt(mode: int) -> int {
-    if (mode == 0) { throw AuthError { reason: "expired" } }
-    if (mode == 1) { throw NotFound { path: "/users" } }
-    if (mode == 2) { throw RateLimit { retryAfter: 30 } }
-    if (mode == 3) { throw Timeout { ms: 5000 } }
+    if (mode == 0) {
+        throw AuthError { reason: "expired" }
+    }
+    if (mode == 1) {
+        throw NotFound { path: "/users" }
+    }
+    if (mode == 2) {
+        throw RateLimit { retryAfter: 30 }
+    }
+    if (mode == 3) {
+        throw Timeout { ms: 5000 }
+    }
     throw "unknown"
 }
 
@@ -1341,14 +1589,20 @@ function catch_four_user_classes_instanceof_chain_fn() -> int {
 }
 
 test "catch_four_user_classes_instanceof_chain" {
-    assert.is_true(baml.deep_equals(catch_four_user_classes_instanceof_chain_fn(), 3))
+    assert.equal(catch_four_user_classes_instanceof_chain_fn(), 3)
 }
 
 // Literal patterns use sequential dispatch even with 4+ arms.
 function s15_fails_lits(x: int) -> int {
-    if (x == 0) { throw "boom" }
-    if (x == 1) { throw "bang" }
-    if (x == 2) { throw "crash" }
+    if (x == 0) {
+        throw "boom"
+    }
+    if (x == 1) {
+        throw "bang"
+    }
+    if (x == 2) {
+        throw "crash"
+    }
     throw "other"
 }
 
@@ -1363,15 +1617,26 @@ function catch_four_literal_arms_fn() -> int {
 }
 
 test "catch_four_literal_arms" {
-    assert.is_true(baml.deep_equals(catch_four_literal_arms_fn(), 20))
+    assert.equal(catch_four_literal_arms_fn(), 20)
 }
 
 // Mixed named and anonymous bindings with field access — separate class names to
 // avoid reusing the module-level NetworkError/AuthError/NotFound/RateLimit above.
-class NetErr { url string }
-class AuthErr { reason string }
-class NotFoundErr { path string }
-class RateLimitErr { retryAfter int }
+class NetErr {
+    url: string,
+}
+
+class AuthErr {
+    reason: string,
+}
+
+class NotFoundErr {
+    path: string,
+}
+
+class RateLimitErr {
+    retryAfter: int,
+}
 
 function s15_fails_mixed() -> string {
     throw NetErr { url: "http://example.com" }
@@ -1388,7 +1653,7 @@ function catch_mixed_named_and_anonymous_bindings_fn() -> string {
 }
 
 test "catch_mixed_named_and_anonymous_bindings" {
-    assert.is_true(baml.deep_equals(catch_mixed_named_and_anonymous_bindings_fn(), "http://example.com"))
+    assert.equal(catch_mixed_named_and_anonymous_bindings_fn(), "http://example.com")
 }
 
 // ============================================================================
@@ -1397,9 +1662,15 @@ test "catch_mixed_named_and_anonymous_bindings" {
 
 // catch_four_typed_arms_jump_table: 4 typed arms no wildcard — ErrC fires.
 function s16_risky_jump(mode: int) -> int {
-    if (mode == 0) { throw ErrA { x: 1 } }
-    if (mode == 1) { throw ErrB { x: 2 } }
-    if (mode == 2) { throw ErrC { x: 3 } }
+    if (mode == 0) {
+        throw ErrA { x: 1 }
+    }
+    if (mode == 1) {
+        throw ErrB { x: 2 }
+    }
+    if (mode == 2) {
+        throw ErrC { x: 3 }
+    }
     throw ErrD { x: 4 }
 }
 
@@ -1413,15 +1684,23 @@ function catch_four_typed_arms_jump_table_fn() -> int {
 }
 
 test "catch_four_typed_arms_jump_table" {
-    assert.is_true(baml.deep_equals(catch_four_typed_arms_jump_table_fn(), 30))
+    assert.equal(catch_four_typed_arms_jump_table_fn(), 30)
 }
 
 // catch_four_typed_arms_plus_wildcard_jump_table: no match → wildcard (mode 4).
 function s16_risky_jump2(mode: int) -> int {
-    if (mode == 0) { throw ErrA { x: 1 } }
-    if (mode == 1) { throw ErrB { x: 2 } }
-    if (mode == 2) { throw ErrC { x: 3 } }
-    if (mode == 3) { throw ErrD { x: 4 } }
+    if (mode == 0) {
+        throw ErrA { x: 1 }
+    }
+    if (mode == 1) {
+        throw ErrB { x: 2 }
+    }
+    if (mode == 2) {
+        throw ErrC { x: 3 }
+    }
+    if (mode == 3) {
+        throw ErrD { x: 4 }
+    }
     throw "unknown"
 }
 
@@ -1436,15 +1715,22 @@ function catch_four_typed_arms_plus_wildcard_jump_table_fn() -> int {
 }
 
 test "catch_four_typed_arms_plus_wildcard_jump_table" {
-    assert.is_true(baml.deep_equals(catch_four_typed_arms_plus_wildcard_jump_table_fn(), 99))
+    assert.equal(catch_four_typed_arms_plus_wildcard_jump_table_fn(), 99)
 }
 
 // catch_two_typed_arms_sequential_chain: 2 arms — below 4-arm switch threshold.
-class NetworkError3 { url string }
-class ParseError3 { msg string }
+class NetworkError3 {
+    url: string,
+}
+
+class ParseError3 {
+    msg: string,
+}
 
 function s16_fails_chain(mode: int) -> int {
-    if (mode == 0) { throw NetworkError3 { url: "http://x" } }
+    if (mode == 0) {
+        throw NetworkError3 { url: "http://x" }
+    }
     throw ParseError3 { msg: "bad" }
 }
 
@@ -1456,14 +1742,18 @@ function catch_two_typed_arms_sequential_chain_fn() -> int {
 }
 
 test "catch_two_typed_arms_sequential_chain" {
-    assert.is_true(baml.deep_equals(catch_two_typed_arms_sequential_chain_fn(), 2))
+    assert.equal(catch_two_typed_arms_sequential_chain_fn(), 2)
 }
 
 // catch_mixed_literal_and_typed_no_switch: literal + typed — no switch optimization.
-class AppError2 { code int }
+class AppError2 {
+    code: int,
+}
 
 function s16_fails_lit_typed(mode: int) -> int {
-    if (mode == 0) { throw "boom" }
+    if (mode == 0) {
+        throw "boom"
+    }
     throw AppError2 { code: 404 }
 }
 
@@ -1476,7 +1766,7 @@ function catch_mixed_literal_and_typed_no_switch_fn() -> int {
 }
 
 test "catch_mixed_literal_and_typed_no_switch" {
-    assert.is_true(baml.deep_equals(catch_mixed_literal_and_typed_no_switch_fn(), 1))
+    assert.equal(catch_mixed_literal_and_typed_no_switch_fn(), 1)
 }
 
 // ============================================================================
@@ -1484,16 +1774,20 @@ test "catch_mixed_literal_and_typed_no_switch" {
 // ============================================================================
 
 // catch_without_stack_trace_still_works: only checks the value, not the trace.
-function s17_inner_st() -> string { throw "oops" }
+function s17_inner_st() -> string {
+    throw "oops"
+}
 
 function catch_without_stack_trace_still_works_fn() -> string {
     s17_inner_st() catch (e) {
-        string => { e }
+        string => {
+            e
+        }
     }
 }
 
 test "catch_without_stack_trace_still_works" {
-    assert.is_true(baml.deep_equals(catch_without_stack_trace_still_works_fn(), "oops"))
+    assert.equal(catch_without_stack_trace_still_works_fn(), "oops")
 }
 
 // named_wrapper_value_catches_callback_throw: catch a throw from a callback
@@ -1519,7 +1813,7 @@ function named_wrapper_value_catches_callback_throw_fn() -> string {
 }
 
 test "named_wrapper_value_catches_callback_throw" {
-    assert.is_true(baml.deep_equals(named_wrapper_value_catches_callback_throw_fn(), "caught"))
+    assert.equal(named_wrapper_value_catches_callback_throw_fn(), "caught")
 }
 
 // ============================================================================
@@ -1555,12 +1849,23 @@ test "catch_four_typed_arms_plus_bind_chain_rethrows_panic" {
 // reaches the caller's exception table, and the VM must select the innermost
 // covering entry (largest `start_pc`), not the first. Here `s19_boom()` throws
 // inside the callee; the inner `catch (e) { _ => 1 }` handles it.
-function s19_boom() -> void { throw "x" }
+function s19_boom() -> void {
+    throw "x"
+}
 
 function nested_catch_inner_catches_callee_throw_fn() -> int {
-    ({ s19_boom(); 0 } catch (e) { _ => 1 }) catch (e2) { _ => 2 }
+    (
+        {
+            s19_boom();
+            0
+        } catch (e) {
+            _ => 1
+        }
+    ) catch (e2) {
+        _ => 2
+    }
 }
 
 test "nested_catch_inner_catches_callee_throw" {
-    assert.is_true(baml.deep_equals(nested_catch_inner_catches_callee_throw_fn(), 1))
+    assert.equal(nested_catch_inner_catches_callee_throw_fn(), 1)
 }

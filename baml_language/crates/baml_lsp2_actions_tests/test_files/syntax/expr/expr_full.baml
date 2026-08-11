@@ -1,17 +1,18 @@
 function MakePoem(length: int) -> string {
-    client GPT4o
-    prompt `Write a poem ${length} lines long.`
+    client: GPT4o
+    prompt: `Write a poem ${length} lines long.`
 }
 
 function CombinePoems(poem1: string, poem2: string) -> string {
-    client GPT4o
-    prompt `Combine the following two poems into one poem.
+    client: GPT4o
+    prompt: `
+        Combine the following two poems into one poem.
 
-    Poem 1:
-    ${poem1}
+            Poem 1:
+            ${poem1}
 
-    Poem 2:
-    ${poem2}
+            Poem 2:
+            ${poem2}
     `
 }
 
@@ -28,45 +29,46 @@ function Pipeline() -> string {
     let y = MakePoem(6);
     let a = MakePoem(6);
     let b = MakePoem(6);
-    let xy = CombinePoems(x,y);
-    let ab = CombinePoems(a,b);
+    let xy = CombinePoems(x, y);
+    let ab = CombinePoems(a, b);
     CombinePoems(xy, ab)
 }
 
 function Pyramid() -> string {
-  CombinePoems( CombinePoems( MakePoem(10), MakePoem(10)), MakePoem(10))
+    CombinePoems(CombinePoems(MakePoem(10), MakePoem(10)), MakePoem(10))
 }
 
 function OuterPyramid() -> string {
-  CombinePoems(poem, another)
+    CombinePoems(poem, another)
 }
 
 test TestPipeline() {
-  functions [Pipeline]
-  args { }
+    functions[Pipeline];
+    args {  }
 }
 
 test TestPyramid() {
-  functions [Pyramid]
-  args { }
+    functions[Pyramid];
+    args {  }
 }
 
 test OuterPyramid() {
-  functions [OuterPyramid]
-  args { }
+    functions[OuterPyramid];
+    args {  }
 }
 
-client<llm> GPT4o {
-  provider openai
-  options {
-    model gpt-4o
-    api_key env.OPENAI_API_KEY
-  }
-}
+client GPT4o = openai.OpenAiClient.new(
+    model = "gpt-4o",
+    api_key = env.OPENAI_API_KEY,
+);
 
 test TestMakePoem() {
-    functions [MakePoem]
-    args { length 4 }
+    functions[MakePoem];
+    args;
+    {
+        length;
+        4
+    }
 }
 
 //----
@@ -74,161 +76,161 @@ test TestMakePoem() {
 // E0003
 //
 //   × unresolved name: `poem`
-//     ╭─[expr_expr_full.baml:41:16]
-//  41 │   CombinePoems(poem, another)
-//     ·                ────
+//     ╭─[expr_expr_full.baml:42:18]
+//  42 │     CombinePoems(poem, another)
+//     ·                  ────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `another`
-//     ╭─[expr_expr_full.baml:41:22]
-//  41 │   CombinePoems(poem, another)
-//     ·                      ───────
+//     ╭─[expr_expr_full.baml:42:24]
+//  42 │     CombinePoems(poem, another)
+//     ·                        ───────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `TestPipeline`
-//     ╭─[expr_expr_full.baml:44:6]
-//  44 │ test TestPipeline() {
+//     ╭─[expr_expr_full.baml:45:6]
+//  45 │ test TestPipeline() {
 //     ·      ────────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:45:3]
-//  45 │   functions [Pipeline]
-//     ·   ─────────
+//     ╭─[expr_expr_full.baml:46:5]
+//  46 │     functions[Pipeline];
+//     ·     ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:46:3]
-//  46 │   args { }
-//     ·   ────────
+//     ╭─[expr_expr_full.baml:47:5]
+//  47 │     args {  }
+//     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `TestPyramid`
-//     ╭─[expr_expr_full.baml:49:6]
-//  49 │ test TestPyramid() {
+//     ╭─[expr_expr_full.baml:50:6]
+//  50 │ test TestPyramid() {
 //     ·      ───────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:50:3]
-//  50 │   functions [Pyramid]
-//     ·   ─────────
+//     ╭─[expr_expr_full.baml:51:5]
+//  51 │     functions[Pyramid];
+//     ·     ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:51:3]
-//  51 │   args { }
-//     ·   ────────
+//     ╭─[expr_expr_full.baml:52:5]
+//  52 │     args {  }
+//     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:55:3]
-//  55 │   functions [OuterPyramid]
-//     ·   ─────────
+//     ╭─[expr_expr_full.baml:56:5]
+//  56 │     functions[OuterPyramid];
+//     ·     ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:56:3]
-//  56 │   args { }
-//     ·   ────────
+//     ╭─[expr_expr_full.baml:57:5]
+//  57 │     args {  }
+//     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `TestMakePoem`
-//     ╭─[expr_expr_full.baml:67:6]
-//  67 │ test TestMakePoem() {
+//     ╭─[expr_expr_full.baml:65:6]
+//  65 │ test TestMakePoem() {
 //     ·      ────────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:68:5]
-//  68 │     functions [MakePoem]
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     functions[MakePoem];
 //     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:69:5]
-//  69 │     args { length 4 }
+//     ╭─[expr_expr_full.baml:67:5]
+//  67 │     args;
 //     ·     ────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:69:12]
-//  69 │     args { length 4 }
-//     ·            ──────
+//     ╭─[expr_expr_full.baml:69:9]
+//  69 │         length;
+//     ·         ──────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:45:3]
-//  45 │   functions [Pipeline]
-//     ·   ─────────
+//     ╭─[expr_expr_full.baml:46:5]
+//  46 │     functions[Pipeline];
+//     ·     ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:46:3]
-//  46 │   args { }
-//     ·   ────────
+//     ╭─[expr_expr_full.baml:47:5]
+//  47 │     args {  }
+//     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:50:3]
-//  50 │   functions [Pyramid]
-//     ·   ─────────
+//     ╭─[expr_expr_full.baml:51:5]
+//  51 │     functions[Pyramid];
+//     ·     ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:51:3]
-//  51 │   args { }
-//     ·   ────────
+//     ╭─[expr_expr_full.baml:52:5]
+//  52 │     args {  }
+//     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:55:3]
-//  55 │   functions [OuterPyramid]
-//     ·   ─────────
+//     ╭─[expr_expr_full.baml:56:5]
+//  56 │     functions[OuterPyramid];
+//     ·     ─────────
 //     ╰────
 // E0002
 //
 //   × unresolved type: args
-//     ╭─[expr_expr_full.baml:56:3]
-//  56 │   args { }
-//     ·   ────────
+//     ╭─[expr_expr_full.baml:57:5]
+//  57 │     args {  }
+//     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `functions`
-//     ╭─[expr_expr_full.baml:68:5]
-//  68 │     functions [MakePoem]
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     functions[MakePoem];
 //     ·     ─────────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `args`
-//     ╭─[expr_expr_full.baml:69:5]
-//  69 │     args { length 4 }
+//     ╭─[expr_expr_full.baml:67:5]
+//  67 │     args;
 //     ·     ────
 //     ╰────
 // E0003
 //
 //   × unresolved name: `length`
-//     ╭─[expr_expr_full.baml:69:12]
-//  69 │     args { length 4 }
-//     ·            ──────
+//     ╭─[expr_expr_full.baml:69:9]
+//  69 │         length;
+//     ·         ──────
 //     ╰────

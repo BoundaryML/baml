@@ -3,7 +3,7 @@
 // types.baml stays method-free.
 //
 // Minimum repro of the generic-method FFI plumbing bug surfaced by
-// `Stream<T, S>.next() -> S | baml.stream.StreamFinished`: an instance
+// `ai.stream.Stream<T, S>.next() -> S | ai.stream.Done`: an instance
 // method on a generic class whose return type mentions a class-level
 // TypeVar. When Python calls `w.get_value()`, the host-side
 // `tir2_to_template` path can't substitute the class's `T` into the
@@ -25,31 +25,31 @@
 // Exercised by `customizable/test_generic.py` and
 // `customizable/test_generic.test.ts`.
 class WrapperMethods<T> {
-  value T
+    value: T,
 
-  // Plain TypeVar return. With the host-side lifting we have today,
-  // this round-trips fine — `test_generic_wrapper_get_value` passes.
-  function get_value(self) -> T {
-    self.value
-  }
+    // Plain TypeVar return. With the host-side lifting we have today,
+    // this round-trips fine — `test_generic_wrapper_get_value` passes.
+    function get_value(self) -> T {
+        self.value
+    }
 
-  // Union-with-TypeVar return. Mirrors the shape of
-  // `baml.llm.Stream<T, S>.next(self) -> S | baml.stream.StreamFinished`:
-  // a class-level TypeVar appears as one arm of a union with a concrete
-  // class. This is the shape the streaming smoke fails on; whether the
-  // user-defined analogue fails the same way isolates whether the bug
-  // is in the union-of-TypeVar lifting path or in the engine-side
-  // handle/Stream lifting specifically.
-  function get_value_or_marker(self) -> T | WrapperMarker {
-    self.value
-  }
+    // Union-with-TypeVar return. Mirrors the shape of
+    // `ai.stream.Stream<T, S>.next(self) -> S | ai.stream.Done`:
+    // a class-level TypeVar appears as one arm of a union with a concrete
+    // class. This is the shape the streaming smoke fails on; whether the
+    // user-defined analogue fails the same way isolates whether the bug
+    // is in the union-of-TypeVar lifting path or in the engine-side
+    // handle/Stream lifting specifically.
+    function get_value_or_marker(self) -> T | WrapperMarker {
+        self.value
+    }
 }
 
 // Concrete sibling for the union arm above. Kept trivial — the marker
 // path is not exercised; the test only proves that a `T`-shaped value
 // decodes when the declared return is `T | WrapperMarker`.
 class WrapperMarker {
-  reason string
+    reason: string,
 }
 
 // Host-side construction of a `WrapperMethods<string>` so Python can
@@ -58,5 +58,5 @@ class WrapperMarker {
 // builds the generic instance on one side, calls the generic instance
 // method from the other.
 function make_wrapper_methods(text: string) -> WrapperMethods<string> {
-  WrapperMethods<string> { value: text }
+    WrapperMethods<string> { value: text }
 }

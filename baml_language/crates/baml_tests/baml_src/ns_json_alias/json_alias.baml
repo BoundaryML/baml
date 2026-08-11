@@ -7,7 +7,9 @@
 // VM bug (reading an Instance field from a local throws `expected Instance, got Any`).
 // The helper returns the `data` field (null); we compare via assert.equal since it's optional.
 
-class Foo { data json }
+class Foo {
+    data: json,
+}
 
 // Helper: returns the `data` field from a freshly-constructed Foo.
 function foo_data() -> json {
@@ -24,19 +26,19 @@ test "field_of_type_json_lowers_cleanly" {
 // ─── 1.2 Union arm: null ─────────────────────────────────────────────────────
 
 test "let_json_null" {
-    assert.is_true(baml.deep_equals(null, null))
+    assert.equal(null, null)
 }
 
 // ─── 1.3 Union arm: int ──────────────────────────────────────────────────────
 
 test "let_json_int" {
-    assert.is_true(baml.deep_equals(42, 42))
+    assert.equal(42, 42)
 }
 
 // ─── 1.4 Union arm: string ───────────────────────────────────────────────────
 
 test "let_json_string" {
-    assert.is_true(baml.deep_equals("hello", "hello"))
+    assert.equal("hello", "hello")
 }
 
 // ─── 1.5 Union arm: array ────────────────────────────────────────────────────
@@ -46,13 +48,13 @@ test "let_json_string" {
 function json_array_len() -> int {
     let arr: json = [1, 2, 3];
     match (arr) {
-        let a: json[] => a.length()
-        _ => -1
+        let a: json[] => a.length(),
+        _ => -1,
     }
 }
 
 test "let_json_array" {
-    assert.is_true(baml.deep_equals(json_array_len(), 3))
+    assert.equal(json_array_len(), 3)
 }
 
 // ─── 1.6 Union arm: map literal ──────────────────────────────────────────────
@@ -60,10 +62,10 @@ test "let_json_array" {
 // Check that a json map with key "key" round-trips through a match.
 // We verify the map has exactly 1 entry (and that it typed as map<string,json>).
 function json_map_has_key() -> bool {
-    let m: json = {"key": "value"};
+    let m: json = { "key": "value" };
     match (m) {
-        let obj: map<string, json> => obj.length() == 1
-        _ => false
+        let obj: map<string, json> => obj.length() == 1,
+        _ => false,
     }
 }
 
@@ -83,12 +85,12 @@ function match_json(j: json) -> string {
         let f: float => "float",
         let s: string => "string",
         let arr: json[] => "array",
-        let obj: map<string, json> => "map"
+        let obj: map<string, json> => "map",
     }
 }
 
 test "match_json_arms_exhaustive" {
-    assert.is_true(baml.deep_equals(match_json(null), "null"))
+    assert.equal(match_json(null), "null")
 }
 
 // ─── 1.8 Impl dispatch with `json` as a generic argument (B-1078) ────────────
@@ -105,7 +107,7 @@ interface JsonTagged {
 }
 
 class JsonWrap<T> {
-    data T
+    data: T,
 }
 
 implements JsonTagged for JsonWrap<json> {
@@ -113,9 +115,9 @@ implements JsonTagged for JsonWrap<json> {
 }
 
 function json_wrap_tag() -> string {
-    let w = JsonWrap<json> { data: null }
-    let t: JsonTagged = w
-    return t.tag()
+    let w = JsonWrap<json> { data: null };
+    let t: JsonTagged = w;
+    return t.tag();
 }
 
 test "impl_on_recursive_alias_generic_arg_dispatches" {

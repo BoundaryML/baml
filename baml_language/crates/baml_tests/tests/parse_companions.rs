@@ -6,14 +6,11 @@ use indexmap::indexmap;
 async fn parse_companion_allows_missing_optional_class_field() {
     let output = baml_test!(
         r##"
-            client<llm> TestClient {
-                provider openai
-                options {
-                    model "gpt-4o-mini"
-                    api_key "test-key"
-                    base_url "http://localhost:1234"
-                }
-            }
+            client TestClient = openai.OpenAiClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = "http://localhost:1234",
+            );
 
             class Payload {
                 text string?
@@ -46,14 +43,11 @@ async fn parse_companion_allows_missing_optional_class_field() {
 async fn parse_companion_allows_missing_nullable_alias_field() {
     let output = baml_test!(
         r##"
-            client<llm> TestClient {
-                provider openai
-                options {
-                    model "gpt-4o-mini"
-                    api_key "test-key"
-                    base_url "http://localhost:1234"
-                }
-            }
+            client TestClient = openai.OpenAiClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = "http://localhost:1234",
+            );
 
             type MaybeText = string | null
 
@@ -91,14 +85,11 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
 async fn sap_parse_decodes_a_complete_top_level_json_string() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
 
         function ParseString() -> string {
             client TestClient
@@ -118,14 +109,11 @@ async fn sap_parse_decodes_a_complete_top_level_json_string() {
 async fn sap_parse_preserves_plain_llm_text() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
 
         function ParseString() -> string {
             client TestClient

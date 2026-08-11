@@ -9,8 +9,6 @@ namespace []
   interface                Renderer     span:Renderer     doc: Renderer docs.
   class                    Widget       span:Widget       doc: Widget docs.
   class                    Widget$stream span:             doc: Widget docs. [synthetic]
-  let (written: retry_policy) Careful      span:Careful      doc: -
-  let (written: client)    Fast         span:Fast         doc: -
-  function                 Fast$new     span:Fast         doc: - [synthetic]
+  template_string          Prompt       span:Prompt       doc: -
   function                 greet        span:greet        doc: -
   test                     greet_works  span:greet_works  doc: -

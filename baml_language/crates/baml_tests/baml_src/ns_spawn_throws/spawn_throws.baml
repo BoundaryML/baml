@@ -26,12 +26,12 @@ function await_uncaught_spawns_io_fn() -> int throws baml.errors.Io {
 }
 
 test "await_uncaught_bubbles_to_host" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         await_uncaught_spawns_io_fn() catch (e) {
             baml.errors.Io => e.message
         },
-        "boom"
-    ))
+        "boom",
+    )
 }
 
 function boom_io_x() -> int throws baml.errors.Io {
@@ -40,11 +40,13 @@ function boom_io_x() -> int throws baml.errors.Io {
 
 function await_rethrows_caught_by_user_catch_fn() -> int {
     let f = spawn { boom_io_x() };
-    (await f) catch (e) { baml.errors.Io => 99 }
+    (await f) catch (e) {
+        baml.errors.Io => 99
+    }
 }
 
 test "await_rethrows_caught_by_user_catch" {
-    assert.is_true(baml.deep_equals(await_rethrows_caught_by_user_catch_fn(), 99))
+    assert.equal(await_rethrows_caught_by_user_catch_fn(), 99)
 }
 
 // B-612 regression lock: an erroring child whose error IS observed (awaited and
@@ -56,11 +58,13 @@ test "await_rethrows_caught_by_user_catch" {
 function caught_after_sleep_not_double_surfaced_fn() -> int {
     let f = spawn { boom_io_x() };
     baml.sys.sleep(baml.time.Duration.from_milliseconds(30n));
-    (await f) catch (e) { baml.errors.Io => 99 }
+    (await f) catch (e) {
+        baml.errors.Io => 99
+    }
 }
 
 test "caught_after_sleep_not_double_surfaced" {
-    assert.is_true(baml.deep_equals(caught_after_sleep_not_double_surfaced_fn(), 99))
+    assert.equal(caught_after_sleep_not_double_surfaced_fn(), 99)
 }
 
 // B-650: a *racing* erroring child that IS observed (awaited + caught) with NO
@@ -72,11 +76,13 @@ test "caught_after_sleep_not_double_surfaced" {
 // cleanly rather than re-surfacing an already-handled error.
 function racing_caught_not_double_surfaced_fn() -> int {
     let f = spawn { boom_io_x() };
-    (await f) catch (e) { baml.errors.Io => 99 }
+    (await f) catch (e) {
+        baml.errors.Io => 99
+    }
 }
 
 test "racing_caught_not_double_surfaced" {
-    assert.is_true(baml.deep_equals(racing_caught_not_double_surfaced_fn(), 99))
+    assert.equal(racing_caught_not_double_surfaced_fn(), 99)
 }
 
 // B-650 negative guard: a *racing* never-awaited spawn (NO sleep) whose body
@@ -92,7 +98,7 @@ function racing_successful_spawn_returns_cleanly_fn() -> int {
 }
 
 test "racing_successful_spawn_returns_cleanly" {
-    assert.is_true(baml.deep_equals(racing_successful_spawn_returns_cleanly_fn(), 7))
+    assert.equal(racing_successful_spawn_returns_cleanly_fn(), 7)
 }
 
 function caught_not_preempted_by_unrelated_await_fn() -> int {
@@ -108,5 +114,5 @@ function caught_not_preempted_by_unrelated_await_fn() -> int {
 }
 
 test "caught_not_preempted_by_unrelated_await" {
-    assert.is_true(baml.deep_equals(caught_not_preempted_by_unrelated_await_fn(), 99))
+    assert.equal(caught_not_preempted_by_unrelated_await_fn(), 99)
 }

@@ -5,6 +5,7 @@ fn main() {
     // required trait method, so forgetting the Rust side is a compile error.
     for (package, file) in [
         ("baml", "nativefunctions_generated.rs"),
+        ("ai", "aifunctions_generated.rs"),
         ("reflect", "reflectfunctions_generated.rs"),
         ("boundary", "boundaryfunctions_generated.rs"),
     ] {

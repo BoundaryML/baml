@@ -1,20 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-client<llm> OpenAIImageResponses {
-    provider: openai-responses,
-    options: {
-        model: "gpt-4.1",
-        api_key: env.OPENAI_API_KEY,
-        tools: [
-            {
-                type: "image_generation",
-                size: "1024x1024",
-                quality: "low",
-            },
-        ],
-    },
-}
+// LLM functions whose return types contain `image` compile end-to-end:
+// plain image, image[], and (image | string)[] outputs.
+
+client OpenAIImageResponses = openai.OpenAiClient.new(
+    model = "gpt-4.1",
+    api_key = "test-key",
+);
 
 function GenerateImage(prompt: string) -> image {
     client: OpenAIImageResponses

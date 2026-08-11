@@ -1,9 +1,11 @@
 // Negative cases for the `reflect.type_of` compiler intrinsic itself.
 // These complement `strict_normalization.baml` (which exercises Ty::Type
-// strictness via `baml.llm.get_return_type`) by hitting the intrinsic path
+// strictness via `baml.prompt.get_return_type`) by hitting the intrinsic path
 // directly.
 
-class User { name string }
+class User {
+    name: string,
+}
 
 // Direct strictness via the intrinsic: a `type` value cannot be assigned
 // to a non-`type` slot. Validates Phase 2's strictness all the way through

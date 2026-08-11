@@ -62,18 +62,6 @@ fn throw_of_non_literal_expression_compiles() {
     }
 }
 
-/// A generic LLM function whose stream-expanded return type embeds a typevar
-/// (`-> Box<T>`). The stream-return lowering must thread the function's generic
-/// params so `T` lowers to a faithful `TypeVar`, not `Ty::Unknown`.
-#[test]
-fn generic_llm_function_with_generic_return_compiles() {
-    let db = db_with(
-        "class Box<T> { value T }\n\
-         function Extract<T>(text: string) -> Box<T> { client GPT4\nprompt `x` }\n",
-    );
-    assert!(bytecode_ok(&db).is_ok());
-}
-
 /// An error-bearing program (here, an unresolved parameter type) produces
 /// inference-only `Unknown` types. The in-process / runtime-eval entry point
 /// (`ProjectDatabase::get_bytecode`) must gate on a clean diagnostic pass and

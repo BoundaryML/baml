@@ -15,15 +15,21 @@ function server_roundtrip() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(200, { "x-echo-method": req.method }, (greeting + req.body).to_utf8())
+            baml.http.Response.new(
+                200,
+                { "x-echo-method": req.method },
+                (greeting + req.body).to_utf8(),
+            )
         })
     };
-    let resp = baml.http.send(baml.http.Request {
-        method: "POST",
-        url: "http://" + server.addr + "/echo",
-        headers: { },
-        body: "ping",
-    });
+    let resp = baml.http.send(
+        baml.http.Request {
+            method: "POST",
+            url: "http://" + server.addr + "/echo",
+            headers: {},
+            body: "ping",
+        },
+    );
     let body = resp.text();
     task.cancel();
     body
@@ -38,7 +44,7 @@ function server_status_code() -> int {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(503, { }, "down".to_utf8())
+            baml.http.Response.new(503, {}, "down".to_utf8())
         })
     };
     let resp = baml.http.fetch("http://" + server.addr + "/");
@@ -65,7 +71,7 @@ function server_response_headers() -> string? {
 }
 
 test "server_response_headers" {
-    assert.is_true(baml.deep_equals(server_response_headers(), "from-handler"))
+    assert.equal(server_response_headers(), "from-handler")
 }
 
 // Framing / hop-by-hop headers a handler sets (here a bogus `Content-Length` far
@@ -100,17 +106,19 @@ function server_rejects_oversized_body() -> int {
     let task = spawn {
         server.serve(
             (req: baml.http.Request) -> baml.http.Response {
-                baml.http.Response.new(200, { }, "ok".to_utf8())
+                baml.http.Response.new(200, {}, "ok".to_utf8())
             },
             max_body_size = 8,
         )
     };
-    let resp = baml.http.send(baml.http.Request {
-        method: "POST",
-        url: "http://" + server.addr + "/",
-        headers: { },
-        body: "this body is much longer than eight bytes",
-    });
+    let resp = baml.http.send(
+        baml.http.Request {
+            method: "POST",
+            url: "http://" + server.addr + "/",
+            headers: {},
+            body: "this body is much longer than eight bytes",
+        },
+    );
     task.cancel();
     resp.status_code
 }
@@ -128,7 +136,7 @@ function server_isolates_handler_panic() -> bool {
             if (req.url == "/boom") {
                 baml.sys.panic("handler exploded")
             } else {
-                baml.http.Response.new(200, { }, "ok".to_utf8())
+                baml.http.Response.new(200, {}, "ok".to_utf8())
             }
         })
     };
@@ -162,17 +170,17 @@ function server_reserve_after_cancel() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let firstTask = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(200, { }, "first".to_utf8())
+            baml.http.Response.new(200, {}, "first".to_utf8())
         })
     };
     let served = baml.http.fetch("http://" + server.addr + "/").text();
 
     firstTask.cancel();
-    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));  // let the cancelled serve release the "serving" flag
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n)); // let the cancelled serve release the "serving" flag
 
     let secondTask = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(200, { }, "second".to_utf8())
+            baml.http.Response.new(200, {}, "second".to_utf8())
         })
     };
     let served_again = baml.http.fetch("http://" + server.addr + "/").text();
@@ -188,9 +196,9 @@ test "server_reserve_after_cancel" {
 // A bound method used as the handler: `server.serve(greeter.handle)`. Proves the
 // callable path injects the receiver as `self` (so `self.prefix` is visible).
 class Greeter {
-    prefix: string
+    prefix: string,
     function handle(self, req: baml.http.Request) -> baml.http.Response {
-        baml.http.Response.new(200, { }, (self.prefix + req.body).to_utf8())
+        baml.http.Response.new(200, {}, (self.prefix + req.body).to_utf8())
     }
 }
 
@@ -198,12 +206,14 @@ function server_bound_method_handler() -> string {
     let greeter = Greeter { prefix: "hi " };
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn { server.serve(greeter.handle) };
-    let resp = baml.http.send(baml.http.Request {
-        method: "POST",
-        url: "http://" + server.addr + "/",
-        headers: { },
-        body: "there",
-    });
+    let resp = baml.http.send(
+        baml.http.Request {
+            method: "POST",
+            url: "http://" + server.addr + "/",
+            headers: {},
+            body: "there",
+        },
+    );
     task.cancel();
     resp.text()
 }
@@ -238,18 +248,20 @@ function server_custom_config() -> int {
     let task = spawn {
         server.serve(
             (req: baml.http.Request) -> baml.http.Response {
-                baml.http.Response.new(200, { }, "ok".to_utf8())
+                baml.http.Response.new(200, {}, "ok".to_utf8())
             },
             max_connections = 4,
             header_read_timeout = baml.time.Duration.from_seconds(5n),
         )
     };
-    let resp = baml.http.send(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/",
-        headers: { },
-        body: "",
-    });
+    let resp = baml.http.send(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/",
+            headers: {},
+            body: "",
+        },
+    );
     task.cancel();
     resp.status_code
 }

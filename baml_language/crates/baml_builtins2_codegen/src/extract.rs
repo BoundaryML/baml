@@ -301,7 +301,7 @@ fn extract_from_class(
 
         // Always set receiver for class methods — even static methods (no `self`)
         // need it for dispatch routing. The runtime path is
-        // "baml.llm.StreamCache.new" which dispatches via class name.
+        // "baml.sap.ParseCache.new" which dispatches via class name.
         let receiver_type = if !has_self {
             ReceiverType::Static
         } else if is_mut {
@@ -1148,24 +1148,15 @@ mod tests {
         assert_eq!(request.namespace_prefix, "baml.http");
         assert_eq!(request.fields.len(), 4);
 
-        // LLM classes
-        let pc = class_defs
+        // The structural prompt lives in the ai package.
+        let (_ai_vm, _ai_io, ai_class_defs) = extract_native_builtins_for("ai").unwrap();
+        let prompt = ai_class_defs
             .iter()
-            .find(|c| c.name == "PrimitiveClient")
-            .expect("missing PrimitiveClient");
-        assert_eq!(pc.namespace_prefix, "baml.llm");
-
-        let client = class_defs
-            .iter()
-            .find(|c| c.name == "Client")
-            .expect("missing Client");
-        assert_eq!(client.namespace_prefix, "baml.llm");
-
-        let retry = class_defs
-            .iter()
-            .find(|c| c.name == "RetryPolicy")
-            .expect("missing RetryPolicy");
-        assert_eq!(retry.namespace_prefix, "baml.llm");
+            .find(|c| c.name == "Prompt")
+            .expect("missing ai.Prompt");
+        assert_eq!(prompt.namespace_prefix, "ai");
+        assert_eq!(prompt.fields.len(), 1);
+        assert!(matches!(prompt.fields[0].field_type, BamlType::RustType));
     }
 
     #[test]
@@ -1204,6 +1195,11 @@ mod tests {
             "BamlHttpFetch"
         );
         assert_eq!(make("baml.sys.panic").sys_op_variant_name(), "BamlSysPanic");
+        assert_eq!(make("ai.Prompt.text").sys_op_variant_name(), "AiPromptText");
+        assert_eq!(
+            make("baml.prompt.render_output_format").sys_op_variant_name(),
+            "BamlPromptRenderOutputFormat"
+        );
     }
 
     #[test]
@@ -1288,11 +1284,10 @@ mod tests {
 
         assert_eq!(deep_copy.vm_usage, VmUsage::MutRef);
 
-        let deep_equals = vm_builtins
-            .iter()
-            .find(|b| b.path == "baml.deep_equals")
-            .expect("missing deep_equals");
-        assert_eq!(deep_equals.vm_usage, VmUsage::Ref);
+        // `//baml:vm` on a non-container receiver: `Array`/`Map` methods default to
+        // `Ref` without the directive, so a media method is what actually pins the
+        // directive being read.
+        assert_eq!(pdf_url.vm_usage, VmUsage::Ref);
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);
@@ -1329,10 +1324,10 @@ mod tests {
             .unwrap();
         assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
 
-        let specialize = io_builtins
+        let sap_final = io_builtins
             .iter()
-            .find(|b| b.path == "baml.llm.PrimitiveClient.specialize_prompt")
+            .find(|b| b.path == "baml.sap.__parse_final")
             .unwrap();
-        assert_eq!(specialize.throws, throws(&["RenderPrompt", "LlmClient"]));
+        assert_eq!(sap_final.throws, throws(&["LlmClient"]));
     }
 }

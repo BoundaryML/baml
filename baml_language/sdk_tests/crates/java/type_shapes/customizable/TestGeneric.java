@@ -1,6 +1,6 @@
 // Minimum repro of the generic-method FFI plumbing bug.
 //
-// `Stream<T, S>.next() -> S | baml.stream.StreamFinished` is a generic
+// `ai.stream.Stream<T, S>.next() -> S | ai.stream.Done` is a generic
 // instance method whose return type mentions a class-level TypeVar. The
 // host-side lowering for that call doesn't substitute the instantiation's
 // `S` into the lifted return type, so the union still contains
@@ -9,7 +9,7 @@
 // accepts it.
 //
 // This file isolates the same pattern in a single-shot call, no LLM, no
-// streams, no `StreamFinished` union — just `WrapperMethods<T>.get_value(self)
+// streams, no `Done` union — just `WrapperMethods<T>.get_value(self)
 // -> T` invoked on a `WrapperMethods<String>` instance. See the Python
 // original's module/function docstrings for the full bug narrative.
 //

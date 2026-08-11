@@ -17,14 +17,14 @@
 // ============================================================================
 
 class Success {
-    data string
+    data: string,
 }
 
 class Failure {
-    reason string
+    reason: string,
 }
 
-type Res = Success | Failure
+type Res = Success | Failure;
 
 // match_typed_pattern_second_arm: scrutinee is a local instance → helper.
 function typed_pattern_second_arm() -> string {
@@ -36,7 +36,7 @@ function typed_pattern_second_arm() -> string {
 }
 
 test "match_typed_pattern_second_arm" {
-    assert.is_true(baml.deep_equals(typed_pattern_second_arm(), "failure: error"))
+    assert.equal(typed_pattern_second_arm(), "failure: error")
 }
 
 // match_typed_pattern_first_arm: scrutinee has inline type ascription in match.
@@ -65,21 +65,21 @@ test "match_typed_pattern_second_arm" {
 // }
 //
 // test "match_typed_pattern_first_arm" {
-//     assert.is_true(baml.deep_equals(match_typed_pattern_first_arm(), "success: hello"))
+//     assert.equal(match_typed_pattern_first_arm(), "success: hello")
 // }
 
 // match_typed_pattern_with_field_access: previously ignored; passes now when
 // using a type alias for the scrutinee (same conversion pattern as second_arm).
 class MtpPoint {
-    x int
-    y int
+    x: int,
+    y: int,
 }
 
 class MtpCircle {
-    radius int
+    radius: int,
 }
 
-type MtpShape = MtpPoint | MtpCircle
+type MtpShape = MtpPoint | MtpCircle;
 
 function match_typed_pattern_with_field_access() -> int {
     let shape: MtpShape = MtpPoint { x: 10, y: 20 };
@@ -90,7 +90,7 @@ function match_typed_pattern_with_field_access() -> int {
 }
 
 test "match_typed_pattern_with_field_access" {
-    assert.is_true(baml.deep_equals(match_typed_pattern_with_field_access(), 30))
+    assert.equal(match_typed_pattern_with_field_access(), 30)
 }
 
 // ============================================================================
@@ -107,7 +107,7 @@ function classify_primitives(x: int | string | bool | float) -> int {
 }
 
 test "match_typed_discard_patterns_typetag_switch_path" {
-    assert.is_true(baml.deep_equals(classify_primitives(true), 3))
+    assert.equal(classify_primitives(true), 3)
 }
 
 // ============================================================================
@@ -115,7 +115,7 @@ test "match_typed_discard_patterns_typetag_switch_path" {
 // ============================================================================
 
 class Score {
-    value int
+    value: int,
 }
 
 // match_guard_true: scrutinee is a local instance → helper.
@@ -129,7 +129,7 @@ function guard_true() -> string {
 }
 
 test "match_guard_true" {
-    assert.is_true(baml.deep_equals(guard_true(), "excellent"))
+    assert.equal(guard_true(), "excellent")
 }
 
 function guard_fallthrough() -> string {
@@ -142,7 +142,7 @@ function guard_fallthrough() -> string {
 }
 
 test "match_guard_fallthrough" {
-    assert.is_true(baml.deep_equals(guard_fallthrough(), "good"))
+    assert.equal(guard_fallthrough(), "good")
 }
 
 function guard_all_fail() -> string {
@@ -155,7 +155,7 @@ function guard_all_fail() -> string {
 }
 
 test "match_guard_all_fail" {
-    assert.is_true(baml.deep_equals(guard_all_fail(), "needs work"))
+    assert.equal(guard_all_fail(), "needs work")
 }
 
 // ============================================================================
@@ -167,7 +167,7 @@ function classify_guarded_int(x: int, flag: bool) -> string {
         1 if flag => "one with flag",
         1 => "one without flag",
         2 => "two",
-        _ => "other"
+        _ => "other",
     }
 }
 
@@ -180,11 +180,11 @@ function guarded_main_without_flag() -> string {
 }
 
 test "match_guarded_int_literal_guard_true" {
-    assert.is_true(baml.deep_equals(guarded_main_with_flag(), "one with flag"))
+    assert.equal(guarded_main_with_flag(), "one with flag")
 }
 
 test "match_guarded_int_literal_guard_false" {
-    assert.is_true(baml.deep_equals(guarded_main_without_flag(), "one without flag"))
+    assert.equal(guarded_main_without_flag(), "one without flag")
 }
 
 function classify_all_guarded(x: int, flag: bool) -> string {
@@ -192,7 +192,7 @@ function classify_all_guarded(x: int, flag: bool) -> string {
         0 if flag => "zero",
         1 if flag => "one",
         2 if flag => "two",
-        _ => "fallback"
+        _ => "fallback",
     }
 }
 
@@ -201,7 +201,7 @@ function all_guarded_main() -> string {
 }
 
 test "match_all_arms_guarded_all_fail" {
-    assert.is_true(baml.deep_equals(all_guarded_main(), "fallback"))
+    assert.equal(all_guarded_main(), "fallback")
 }
 
 // ============================================================================
@@ -212,38 +212,32 @@ function classify_mixed_lit_typed_guard(x: int, flag: bool) -> string {
     match (x) {
         0 => "zero",
         1 if flag => "one with flag",
-        let n: int => "other int"
+        let n: int => "other int",
     }
 }
 
 test "match_mixed_literal_typed_guard" {
-    assert.is_true(baml.deep_equals(classify_mixed_lit_typed_guard(1, true), "one with flag"))
+    assert.equal(classify_mixed_lit_typed_guard(1, true), "one with flag")
 }
 
 test "match_mixed_literal_typed_guard_fallthrough" {
-    assert.is_true(baml.deep_equals(classify_mixed_lit_typed_guard(1, false), "other int"))
+    assert.equal(classify_mixed_lit_typed_guard(1, false), "other int")
 }
 
 function classify_guard_on_typed_field(result: Success | Failure) -> string {
     match (result) {
         let s: Success if s.data != "" => "success with data",
         let s: Success => "empty success",
-        let f: Failure => "failure"
+        let f: Failure => "failure",
     }
 }
 
 test "match_guard_on_typed_pattern_field_access" {
-    assert.is_true(baml.deep_equals(
-        classify_guard_on_typed_field(Success { data: "hello" }),
-        "success with data"
-    ))
+    assert.equal(classify_guard_on_typed_field(Success { data: "hello" }), "success with data")
 }
 
 test "match_guard_on_typed_pattern_field_access_fails" {
-    assert.is_true(baml.deep_equals(
-        classify_guard_on_typed_field(Success { data: "" }),
-        "empty success"
-    ))
+    assert.equal(classify_guard_on_typed_field(Success { data: "" }), "empty success")
 }
 
 // ============================================================================
@@ -251,41 +245,41 @@ test "match_guard_on_typed_pattern_field_access_fails" {
 // ============================================================================
 
 enum Status {
-    Active
-    Inactive
-    Pending
+    Active,
+    Inactive,
+    Pending,
 }
 
 function classify_status(s: Status) -> string {
     match (s) {
         Status.Active => "active",
         Status.Inactive => "inactive",
-        Status.Pending => "pending"
+        Status.Pending => "pending",
     }
 }
 
 test "match_enum_variant_first" {
-    assert.is_true(baml.deep_equals(classify_status(Status.Active), "active"))
+    assert.equal(classify_status(Status.Active), "active")
 }
 
 test "match_enum_variant_last" {
-    assert.is_true(baml.deep_equals(classify_status(Status.Pending), "pending"))
+    assert.equal(classify_status(Status.Pending), "pending")
 }
 
 function classify_status_wildcard(s: Status) -> string {
     match (s) {
         Status.Active => "active",
         Status.Inactive => "inactive",
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_enum_variant_with_wildcard" {
-    assert.is_true(baml.deep_equals(classify_status_wildcard(Status.Pending), "other"))
+    assert.equal(classify_status_wildcard(Status.Pending), "other")
 }
 
 test "match_enum_variant_with_wildcard_matched" {
-    assert.is_true(baml.deep_equals(classify_status_wildcard(Status.Active), "active"))
+    assert.equal(classify_status_wildcard(Status.Active), "active")
 }
 
 // ============================================================================
@@ -293,10 +287,10 @@ test "match_enum_variant_with_wildcard_matched" {
 // ============================================================================
 
 enum Direction {
-    North
-    East
-    South
-    West
+    North,
+    East,
+    South,
+    West,
 }
 
 function compass(d: Direction) -> string {
@@ -304,52 +298,60 @@ function compass(d: Direction) -> string {
         Direction.North => "N",
         Direction.East => "E",
         Direction.South => "S",
-        Direction.West => "W"
+        Direction.West => "W",
     }
 }
 
 test "match_enum_four_variants_jump_table" {
-    assert.is_true(baml.deep_equals(compass(Direction.South), "S"))
+    assert.equal(compass(Direction.South), "S")
 }
 
 // ============================================================================
 // Exhaustive and Non-Exhaustive Class Type Tests
 // ============================================================================
 
-class Cat { name string }
-class Dog { name string }
-class Bird { name string }
+class Cat {
+    name: string,
+}
+
+class Dog {
+    name: string,
+}
+
+class Bird {
+    name: string,
+}
 
 function classify_animal(animal: Cat | Dog | Bird) -> string {
     match (animal) {
         let c: Cat => "cat: " + c.name,
         let d: Dog => "dog: " + d.name,
-        let b: Bird => "bird: " + b.name
+        let b: Bird => "bird: " + b.name,
     }
 }
 
 test "match_class_types_exhaustive_first" {
-    assert.is_true(baml.deep_equals(classify_animal(Cat { name: "Whiskers" }), "cat: Whiskers"))
+    assert.equal(classify_animal(Cat { name: "Whiskers" }), "cat: Whiskers")
 }
 
 test "match_class_types_exhaustive_last" {
-    assert.is_true(baml.deep_equals(classify_animal(Bird { name: "Tweety" }), "bird: Tweety"))
+    assert.equal(classify_animal(Bird { name: "Tweety" }), "bird: Tweety")
 }
 
 function classify_animal_wildcard(animal: Cat | Dog | Bird) -> string {
     match (animal) {
         let c: Cat => "cat: " + c.name,
         let d: Dog => "dog: " + d.name,
-        _ => "other"
+        _ => "other",
     }
 }
 
 test "match_class_types_non_exhaustive_wildcard" {
-    assert.is_true(baml.deep_equals(classify_animal_wildcard(Bird { name: "Tweety" }), "other"))
+    assert.equal(classify_animal_wildcard(Bird { name: "Tweety" }), "other")
 }
 
 test "match_class_types_non_exhaustive_matched" {
-    assert.is_true(baml.deep_equals(classify_animal_wildcard(Dog { name: "Rex" }), "dog: Rex"))
+    assert.equal(classify_animal_wildcard(Dog { name: "Rex" }), "dog: Rex")
 }
 
 // ============================================================================
@@ -361,110 +363,151 @@ function identify(x: int | string | bool | float) -> string {
         let n: int => "integer",
         let s: string => "text",
         let b: bool => "boolean",
-        let f: float => "decimal"
+        let f: float => "decimal",
     }
 }
 
 test "match_union_type_four_patterns_type_tag" {
-    assert.is_true(baml.deep_equals(identify("hello"), "text"))
+    assert.equal(identify("hello"), "text")
 }
 
 // ============================================================================
 // Multiple Typed Patterns with Guards
 // ============================================================================
 
-class SuccessCode { code int }
-class FailureCode { code int }
+class SuccessCode {
+    code: int,
+}
+
+class FailureCode {
+    code: int,
+}
 
 function classify_result_guarded(result: SuccessCode | FailureCode, strict: bool) -> string {
     match (result) {
         let s: SuccessCode if s.code > 200 => "redirect",
         let s: SuccessCode if strict => "strict success",
         let s: SuccessCode => "success",
-        let f: FailureCode => "failure"
+        let f: FailureCode => "failure",
     }
 }
 
 test "match_multiple_typed_patterns_with_guards" {
-    assert.is_true(baml.deep_equals(
-        classify_result_guarded(SuccessCode { code: 301 }, false),
-        "redirect"
-    ))
+    assert.equal(classify_result_guarded(SuccessCode { code: 301 }, false), "redirect")
 }
 
 // ============================================================================
 // Step 1.6 — Explicit TypeTag dispatch shape verification
 // ============================================================================
 
-class Fish { name string }
+class Fish {
+    name: string,
+}
 
 function describe_animal(animal: Cat | Dog | Bird | Fish) -> string {
     match (animal) {
-        let c: Cat  => "cat",
-        let d: Dog  => "dog",
+        let c: Cat => "cat",
+        let d: Dog => "dog",
         let b: Bird => "bird",
-        let f: Fish => "fish"
+        let f: Fish => "fish",
     }
 }
 
 test "match_class_type_tag_jump_table" {
-    assert.is_true(baml.deep_equals(describe_animal(Dog { name: "Rex" }), "dog"))
+    assert.equal(describe_animal(Dog { name: "Rex" }), "dog")
 }
 
 function describe_two(animal: Cat | Dog) -> string {
     match (animal) {
         let c: Cat => "cat",
-        let d: Dog => "dog"
+        let d: Dog => "dog",
     }
 }
 
 test "match_class_type_is_type_chain" {
-    assert.is_true(baml.deep_equals(describe_two(Cat { name: "Whiskers" }), "cat"))
+    assert.equal(describe_two(Cat { name: "Whiskers" }), "cat")
 }
 
-class MyClass { value int }
+class MyClass {
+    value: int,
+}
 
 function classify_mixed_class_primitive(x: MyClass | int | string | bool) -> string {
     match (x) {
         let c: MyClass => "class",
-        let n: int     => "int",
-        let s: string  => "string",
-        let b: bool    => "bool"
+        let n: int => "int",
+        let s: string => "string",
+        let b: bool => "bool",
     }
 }
 
 test "match_mixed_class_primitive_type_tag_switch" {
-    assert.is_true(baml.deep_equals(classify_mixed_class_primitive(MyClass { value: 42 }), "class"))
+    assert.equal(classify_mixed_class_primitive(MyClass { value: 42 }), "class")
 }
 
 // ============================================================================
 // Sparse Class Tags (Perfect Hash)
 // ============================================================================
 
-class Filler1 { x int }
-class Filler2 { x int }
-class Filler3 { x int }
-class Filler4 { x int }
-class Filler5 { x int }
-class Filler6 { x int }
-class Filler7 { x int }
-class Filler8 { x int }
-class Filler9 { x int }
-class Filler10 { x int }
-class Filler11 { x int }
-class Filler12 { x int }
+class Filler1 {
+    x: int,
+}
+
+class Filler2 {
+    x: int,
+}
+
+class Filler3 {
+    x: int,
+}
+
+class Filler4 {
+    x: int,
+}
+
+class Filler5 {
+    x: int,
+}
+
+class Filler6 {
+    x: int,
+}
+
+class Filler7 {
+    x: int,
+}
+
+class Filler8 {
+    x: int,
+}
+
+class Filler9 {
+    x: int,
+}
+
+class Filler10 {
+    x: int,
+}
+
+class Filler11 {
+    x: int,
+}
+
+class Filler12 {
+    x: int,
+}
 
 function describe_sparse(animal: Cat | Dog | Bird | Fish) -> string {
     match (animal) {
-        let c: Cat  => "cat",
-        let d: Dog  => "dog",
+        let c: Cat => "cat",
+        let d: Dog => "dog",
         let b: Bird => "bird",
-        let f: Fish => "fish"
+        let f: Fish => "fish",
     }
 }
 
 test "match_sparse_class_type_tag_perfect_hash" {
-    assert.is_true(baml.deep_equals(describe_sparse(Dog { name: "Rex" }), "dog"))
+    assert.equal(describe_sparse(Dog { name: "Rex" }), "dog")
 }
 
 // ============================================================================
@@ -473,30 +516,30 @@ test "match_sparse_class_type_tag_perfect_hash" {
 
 function classify_with_null(x: int | string | bool | null) -> string {
     match (x) {
-        int    => "int",
+        int => "int",
         string => "string",
-        bool   => "bool",
-        null   => "null"
+        bool => "bool",
+        null => "null",
     }
 }
 
 test "match_null_in_type_tag_jump_table" {
-    assert.is_true(baml.deep_equals(classify_with_null(null), "null"))
+    assert.equal(classify_with_null(null), "null")
 }
 
 function classify_null_with_class(x: Cat | Dog | null) -> string {
     match (x) {
-        let c: Cat  => "cat",
-        let d: Dog  => "dog",
-        null => "nothing"
+        let c: Cat => "cat",
+        let d: Dog => "dog",
+        null => "nothing",
     }
 }
 
 test "match_null_with_class_types_type_tag" {
-    assert.is_true(baml.deep_equals(classify_null_with_class(null), "nothing"))
+    assert.equal(classify_null_with_class(null), "nothing")
 }
 
 // Dense class tags still use direct JumpTable (same as match_class_type_tag_jump_table)
 test "match_dense_class_still_uses_direct_jump_table" {
-    assert.is_true(baml.deep_equals(describe_animal(Dog { name: "Rex" }), "dog"))
+    assert.equal(describe_animal(Dog { name: "Rex" }), "dog")
 }

@@ -7,16 +7,16 @@
 // body is moved into a helper function where locals are not boxed.
 
 class BuiltinsPoint {
-    x int
-    y int
+    x: int,
+    y: int,
 }
 
 class BuiltinsPerson {
-    name string
-    age int
-    location BuiltinsPoint
-    hobbies string[]
-    scores map<string, int>
+    name: string,
+    age: int,
+    location: BuiltinsPoint,
+    hobbies: string[],
+    scores: map<string, int>,
 }
 
 // Helper: binds the method-call result to a local before returning — safe inside
@@ -39,11 +39,11 @@ function builtins_float_to_string_concat() -> string {
 }
 
 test "builtin_method_call" {
-    assert.is_true(baml.deep_equals([1, 2, 3].length(), 3))
+    assert.equal([1, 2, 3].length(), 3)
 }
 
 test "bind_method_call" {
-    assert.is_true(baml.deep_equals(builtins_bind_method_call(), 3))
+    assert.equal(builtins_bind_method_call(), 3)
 }
 
 // Helper: constructs and stringifies a person — moved out of the test block
@@ -56,7 +56,7 @@ function builtins_any_value_to_string() -> string {
         age: 25,
         location: p,
         hobbies: ["reading", "coding"],
-        scores: {"math": 95, "english": 88}
+        scores: { "math": 95, "english": 88 },
     };
     string.from(person)
 }
@@ -66,7 +66,7 @@ test "any_value_to_string" {
     // unqualified class names; nested strings and map keys are quoted.
     assert.equal(
         builtins_any_value_to_string(),
-        "BuiltinsPerson { name: \"Alice\", age: 25, location: BuiltinsPoint { x: 10, y: 20 }, hobbies: [\"reading\", \"coding\"], scores: {\"math\": 95, \"english\": 88} }"
+        "BuiltinsPerson { name: \"Alice\", age: 25, location: BuiltinsPoint { x: 10, y: 20 }, hobbies: [\"reading\", \"coding\"], scores: {\"math\": 95, \"english\": 88} }",
     )
 }
 

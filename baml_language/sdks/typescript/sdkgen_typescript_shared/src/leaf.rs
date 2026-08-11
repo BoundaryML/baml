@@ -20,6 +20,7 @@ use std::{
     fmt::Write as _,
 };
 
+use baml_base::qualified_name::AI_STREAM_STREAM;
 use baml_codegen_types::FunctionArgumentDefault;
 
 use crate::{
@@ -102,7 +103,7 @@ const RUNTIME_OWNED_CLASS_REEXPORTS: &[(&str, &str)] = &[
     ("baml.media.Audio", "BamlAudio"),
     ("baml.media.Video", "BamlVideo"),
     ("baml.media.Pdf", "BamlPdf"),
-    ("baml.llm.Stream", "BamlStream"),
+    (AI_STREAM_STREAM, "BamlStream"),
 ];
 
 fn runtime_owned_reexport_name(c: &TypeScriptClass) -> Option<&'static str> {

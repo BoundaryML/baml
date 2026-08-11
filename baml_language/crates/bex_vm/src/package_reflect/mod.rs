@@ -224,6 +224,80 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     normalize::is_subtype(&actual, &expected, vm)
 }
 
+/// The boundary decode at the reflection call boundary (B-1174): when a
+/// provided value does not fit a parameter's type as-is, a value-level,
+/// lossless conversion may construct a FRESH value that does.
+///
+/// Dynamic argument maps arrive from sources that follow JSON Schema — an
+/// LLM emits `{"budget": 150}` for a `float` parameter, and a decoded JSON
+/// array carries the element tag `json` (`baml.json.json[]`) regardless of
+/// what a `string[]` parameter expects. The language itself keeps no
+/// implicit coercion and arrays stay invariant; this is not a subtyping
+/// rule. It applies only where `call_any` validates `unknown` values
+/// against the callee's signature, and every conversion allocates a new
+/// value, so nothing is aliased and nothing existing is retyped.
+///
+/// Two conversions exist, applied recursively through arrays:
+/// - an exactly representable integer widens to `float`
+///   ([`widen_int_for_float`]);
+/// - an array whose every element fits (or decodes into) the parameter's
+///   element type rebuilds as a fresh array of that element type, which
+///   admits `json[]` into `string[]`, `[150, 200]` into `float[]`, and
+///   nested compositions.
+///
+/// Returns `None` when no conversion applies; the caller reports the
+/// ordinary `InvalidArgumentError`.
+fn decode_for_param(vm: &mut BexVm, value: Value, expected: &RealizedTy) -> Option<Value> {
+    if let Some(widened) = widen_int_for_float(vm, value, expected) {
+        return Some(widened);
+    }
+    if let RealizedTy::List(elem_ty, _) = expected.strip_null() {
+        // Copy the elements out first: the read guard borrows the VM, and
+        // the per-element decode needs it mutably.
+        let elems: Vec<Value> = vm.as_array(&value).ok()?.to_vec();
+        let mut out = Vec::with_capacity(elems.len());
+        for e in elems {
+            let decoded = if value_fits(vm, e, &elem_ty) {
+                e
+            } else {
+                decode_for_param(vm, e, &elem_ty)?
+            };
+            out.push(decoded);
+        }
+        return Some(Value::object(vm.tlab.alloc_array(*elem_ty, out)));
+    }
+    None
+}
+
+/// An integer value supplied for a `float` (or `float?`) parameter widens
+/// to float — JSON Schema's `number` admits integral literals. Returns
+/// `None` when the widening does not apply — non-int values, non-float
+/// parameters — and nothing else converts (no float→int truncation, no
+/// string parsing).
+fn widen_int_for_float(vm: &mut BexVm, value: Value, expected: &RealizedTy) -> Option<Value> {
+    let i = value.as_int()?;
+    // `strip_null` reduces `float?` (the nullable union) to its non-null
+    // member, so plain `float` and `float?` both widen; a wider union such
+    // as `float | string` stays an error, as does everything else.
+    match expected.strip_null() {
+        RealizedTy::Float { .. } => {
+            // Widen only when the conversion is exact. An f64 represents
+            // every integer up to 2^53; beyond that, silent precision loss
+            // would corrupt the argument, so the value stays an
+            // InvalidArgumentError like any other mismatch.
+            #[allow(clippy::cast_precision_loss)]
+            let f = i as f64;
+            #[allow(clippy::cast_possible_truncation)]
+            if f as i64 == i {
+                Some(Value::object(vm.alloc_float(f)))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
 ///
 /// Every argument is keyed by parameter name; a nameless positional is
@@ -272,11 +346,15 @@ fn call_any_impl(
         }
         match (param.mode, value) {
             (_, Some(value)) => {
-                if !value_fits(vm, value, &param.ty) {
+                let value = if value_fits(vm, value, &param.ty) {
+                    value
+                } else if let Some(decoded) = decode_for_param(vm, value, &param.ty) {
+                    decoded
+                } else {
                     let expected = param.ty.clone();
                     let got = value_realized_ty(vm, value);
                     return raise_invalid_argument(vm, key.as_deref().unwrap_or(""), expected, got);
-                }
+                };
                 matched += 1;
                 final_args.push(value);
             }

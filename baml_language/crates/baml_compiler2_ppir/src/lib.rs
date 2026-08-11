@@ -367,16 +367,30 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
             }
+            // LLM `$stream` companions, single-path StreamingClient design:
+            // `Fn$stream(args, client)` = one-turn streaming over the
+            // function's own spec, returning the typed partial stream
+            // `ai.stream.Stream<Out$stream, Out>`. Synthesized here (not with the
+            // AST-level companions) because the body's explicit type args
+            // need the stream-expanded return type, which only PPIR can
+            // compute. Tools-bearing functions get no `$stream`: streaming
+            // does not run the tool loop yet (`LlmBodyDef::has_tools` is the
+            // conservative compile-time signal; `ai.from_spec` re-checks
+            // the toolbox at runtime for the dynamic cases).
             ast::Item::Function(func) => {
-                // Only LLM functions get $parse_stream companions.
-                if !matches!(&func.declarative_meta, Some(ast::DeclarativeMeta::Llm(_))) {
+                let Some(ast::DeclarativeMeta::Llm(llm)) = &func.declarative_meta else {
+                    continue;
+                };
+                if !llm.companion_bodies.iter().any(|(t, _)| t == "spec") {
+                    continue;
+                }
+                if llm.has_tools {
                     continue;
                 }
                 // Skip companions (contain $) to avoid recursive generation.
                 if func.name.contains('$') {
                     continue;
                 }
-                // Skip functions without return types.
                 let Some(ref return_type_spanned) = func.return_type else {
                     continue;
                 };
@@ -394,169 +408,89 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, &ctx);
                 let stream_type_expr = stream_type.to_type_expr();
 
-                // Extract client name from parent's LLM metadata.
-                let client_name = match &func.declarative_meta {
-                    Some(ast::DeclarativeMeta::Llm(llm)) => {
-                        llm.client.as_ref().map(|n| n.as_str().to_string())
-                    }
-                    _ => None,
-                };
-
                 // Share the parent function's span — same as AST-level companions.
                 let span = func.span;
                 let name_span = func.name_span;
 
-                // Return type: baml.llm.Stream<STREAM_EXPANDED_TYPE, ORIGINAL_RETURN_TYPE>
-                // (matches the stdlib `class Stream<TStream, TFinal>` ordering:
-                // stream type first, final type second.)
-                //
-                // The same `<STREAM_EXPANDED, ORIGINAL>` pair is also passed as
-                // explicit call-site type args in every companion body below, so
-                // the stdlib reifies the types from its frame
-                // (`reflect.type_of<TStream/TFinal>()`) instead of a name-keyed
-                // registry lookup. Explicit args lower through
-                // `lower_type_expr_in_ns` with the companion's own namespace
-                // context — bare in-namespace names resolve correctly, with
-                // diagnostics surfaced as ordinary compile errors.
-                let original_return_type_expr = return_type_spanned.clone();
-                let companion_type_args =
-                    || vec![stream_type_expr.clone(), original_return_type_expr.clone()];
-                let companion_stream_return_type = ast::TypeExprKind::Path {
-                    segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
-                    generic_args: companion_type_args(),
+                // The `<STREAM_EXPANDED, ORIGINAL>` pair: the return type
+                // `ai.stream.Stream<TS, TF>` and the body's explicit call-site
+                // type args on `ai.stream.from_spec`, so the stdlib reifies both types
+                // from its own frame (`reflect.type_of<TStream/TFinal>()`).
+                let companion_type_args = vec![stream_type_expr, return_type_spanned.clone()];
+                let return_type = ast::TypeExprKind::Path {
+                    // The canonical host-facing stream lives with the rest of
+                    // the AI streaming contract.
+                    segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
+                    generic_args: companion_type_args.clone(),
                     associated_type_bindings: vec![],
                     attrs: vec![],
                 }
                 .at(span);
 
-                // --- $stream companion ---
-                // Calls baml.llm.stream_llm_function(CLIENT, "FuncName", map { args })
-                {
-                    let param_names: Vec<Name> = func
-                        .params
-                        .iter()
-                        .filter(|p| p.name.as_str() != "client")
-                        .map(|p| p.name.clone())
-                        .collect();
-                    let client_arg_name = if func.params.iter().any(|p| p.name.as_str() == "client")
-                    {
-                        Some("client")
-                    } else {
-                        client_name.as_deref()
-                    };
-                    // BEP-049 M5e: a new-mode (backtick) function threads the
-                    // same `prompt`…`` closure into `stream_llm_function` that
-                    // the oneshot path threads into `call_llm_function`, so the
-                    // orchestrator renders via the closure instead of looking up
-                    // a (nonexistent) Jinja template. `lower_cst` pre-built this
-                    // body while the CST was still in hand (the closure captures
-                    // this function's params, hence a dedicated arena); reuse it.
-                    // Legacy Jinja prompts keep the 3-arg path.
-                    let stream_body = match &func.declarative_meta {
-                        Some(ast::DeclarativeMeta::Llm(llm)) => llm.stream_body.clone(),
-                        _ => None,
-                    };
-                    let (body, source_map) = stream_body.unwrap_or_else(|| {
-                        ast::synthesize_llm_builtin_call(
-                            "stream_llm_function",
-                            func.name.as_str(),
-                            &param_names,
-                            client_arg_name,
-                            companion_type_args(),
-                            span,
-                        )
-                    });
-                    let companion = ast::FunctionDef {
-                        name: SmolStr::new(format!("{}$stream", func.name)),
-                        generic_params: func.generic_params.clone(),
-                        params: func.params.clone(),
-                        defaults: func.defaults.clone(),
-                        return_type: Some(companion_stream_return_type.clone()),
-                        throws: None,
-                        body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
-                        declarative_meta: None,
-                        metadata: ast::FunctionMetadata::user_facing(
-                            ast::FunctionOrigin::Companion,
-                        ),
-                        is_tagged_template_tag: func.is_tagged_template_tag,
-                        attributes: vec![],
-                        docstring: func.docstring.clone(),
-                        span,
-                        name_span,
-                    };
-                    synthetic_items.push(ast::Item::Function(companion));
-                }
-
-                // --- $parse_stream companion ---
-                // Requires a client (calls CLIENT.__make_stream).
-                if let Some(client_arg_name) = func
+                // Params: the parent's own params plus its injected trailing
+                // `client` override, retyped to the streaming capability
+                // (`ai.StreamingClient? = null`) so passing a non-streaming
+                // client fails at the call site. The parent's `null` default
+                // is reused (the defaults arena is cloned as-is).
+                let params: Vec<ast::Param> = func
                     .params
                     .iter()
-                    .find(|p| p.name.as_str() == "client")
-                    .map(|_| "client")
-                    .or(client_name.as_deref())
-                {
-                    let sse_param = ast::Param {
-                        name: Name::new("sse"),
-                        type_expr: Some(
-                            ast::TypeExprKind::Path {
+                    .cloned()
+                    .map(|mut p| {
+                        if p.name.as_str() == "client" {
+                            let capability = ast::TypeExprKind::Path {
                                 segments: vec![
-                                    Name::new("baml"),
-                                    Name::new("http"),
-                                    Name::new("SseStream"),
+                                    Name::new("ai"),
+                                    Name::new("stream"),
+                                    Name::new("StreamingClient"),
                                 ],
                                 generic_args: vec![],
                                 associated_type_bindings: vec![],
                                 attrs: vec![],
                             }
-                            .at(span),
-                        ),
-                        default: None,
-                        span,
-                        name_span,
-                    };
+                            .at(span);
+                            p.type_expr = Some(
+                                ast::TypeExprKind::Optional {
+                                    inner: Box::new(capability),
+                                    attrs: vec![],
+                                }
+                                .at(span),
+                            );
+                        }
+                        p
+                    })
+                    .collect();
 
-                    let (body, source_map) = ast::synthesize_llm_make_stream_call(
-                        companion_type_args(),
-                        client_arg_name,
-                        span,
-                    );
-                    let mut params = vec![sse_param];
-                    if let Some(client_param) =
-                        func.params.iter().find(|p| p.name.as_str() == "client")
-                    {
-                        params.push(client_param.clone());
-                    }
+                let param_names: Vec<Name> = func
+                    .params
+                    .iter()
+                    .filter(|p| p.name.as_str() != "client")
+                    .map(|p| p.name.clone())
+                    .collect();
+                let (body, source_map) = ast::synthesize_spec_stream_body(
+                    func.name.as_str(),
+                    &param_names,
+                    companion_type_args,
+                    span,
+                );
 
-                    let companion = ast::FunctionDef {
-                        name: SmolStr::new(format!("{}$parse_stream", func.name)),
-                        generic_params: func.generic_params.clone(),
-                        params,
-                        defaults: func.defaults.clone(),
-                        return_type: Some(companion_stream_return_type),
-                        throws: None,
-                        body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
-                        declarative_meta: None,
-                        metadata: ast::FunctionMetadata::user_facing(
-                            ast::FunctionOrigin::Companion,
-                        ),
-                        is_tagged_template_tag: func.is_tagged_template_tag,
-                        attributes: vec![],
-                        docstring: func.docstring.clone(),
-                        span,
-                        name_span,
-                    };
-                    synthetic_items.push(ast::Item::Function(companion));
-                }
-
-                // --- $parse companion ---
-                // Built by `companions::llm_parse` (kept with its sibling
-                // expanders in baml_compiler2_ast), but invoked from here:
-                // its body needs the stream-expanded return type as an
-                // explicit type arg, which only PPIR can compute.
-                if let Some(companion) = ast::llm_parse_companion(func, companion_type_args()) {
-                    synthetic_items.push(ast::Item::Function(companion));
-                }
+                let companion = ast::FunctionDef {
+                    name: SmolStr::new(format!("{}$stream", func.name)),
+                    generic_params: func.generic_params.clone(),
+                    params,
+                    defaults: func.defaults.clone(),
+                    return_type: Some(return_type),
+                    throws: None,
+                    body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
+                    declarative_meta: None,
+                    metadata: ast::FunctionMetadata::user_facing(ast::FunctionOrigin::Companion),
+                    is_tagged_template_tag: func.is_tagged_template_tag,
+                    attributes: vec![],
+                    docstring: func.docstring.clone(),
+                    span,
+                    name_span,
+                };
+                synthetic_items.push(ast::Item::Function(companion));
             }
             _ => {}
         }

@@ -6,7 +6,9 @@
 // json natives) resolve T at runtime — i.e. it behaves exactly like the
 // equivalent direct call `foo<int>(...)`.
 
-function identity<T>(x: T) -> T { x }
+function identity<T>(x: T) -> T {
+    x
+}
 
 // The value runs end-to-end: calling it invokes the underlying function.
 function identity_int_value_fn() -> int {
@@ -15,10 +17,10 @@ function identity_int_value_fn() -> int {
 }
 
 test "identity_int_value_runs" {
-    assert.is_true(baml.deep_equals(identity_int_value_fn(), 5))
+    assert.equal(identity_int_value_fn(), 5)
 }
 
-// Two evaluations of `identity<int>` compare equal. NOTE: `deep_equals` is
+// Two evaluations of `identity<int>` compare equal. NOTE: `==` is
 // structural, so this only guards against the value regressing to *inequality*
 // — it does not prove the pooled, pointer-stable identity (`foo<int> ===
 // foo<int>`). BAML has no in-language identity operator, so that guarantee is
@@ -27,7 +29,7 @@ test "identity_int_value_runs" {
 function identity_same_specialization() -> bool {
     let a = identity<int>;
     let b = identity<int>;
-    baml.deep_equals(a, b)
+    a == b
 }
 
 test "same_specialization_is_identical" {
@@ -35,11 +37,11 @@ test "same_specialization_is_identical" {
 }
 
 // A deep-copied generic-function value compares equal to the original: the
-// pooled/interned case short-circuits on pointer identity, and `deep_equals`
-// also compares non-pooled copies structurally (function + type args).
+// pooled/interned case is the same object, and `==` also compares non-pooled
+// copies structurally (function + type args).
 function identity_deep_copy_equal() -> bool {
     let f = identity<int>;
-    baml.deep_equals(f, baml.deep_copy(f))
+    f == baml.deep_copy(f)
 }
 
 test "deep_copy_compares_equal" {
@@ -48,7 +50,9 @@ test "deep_copy_compares_equal" {
 
 // Multiple bound type args: `pair<int, string>` specializes both params and
 // runs end-to-end, returning the second (string) argument.
-function pair<A, B>(a: A, b: B) -> B { b }
+function pair<A, B>(a: A, b: B) -> B {
+    b
+}
 
 function pair_value_fn() -> string {
     let f = pair<int, string>;
@@ -56,10 +60,12 @@ function pair_value_fn() -> string {
 }
 
 test "pair_two_type_args_value_runs" {
-    assert.is_true(baml.deep_equals(pair_value_fn(), "hello"))
+    assert.equal(pair_value_fn(), "hello")
 }
 
-class User { name string }
+class User {
+    name: string,
+}
 
 function describe<T>() -> string {
     reflect.type_of<T>().to_string()
@@ -73,7 +79,7 @@ function describe_user_value_fn() -> string {
 }
 
 test "reflect_type_of_through_value" {
-    assert.is_true(baml.deep_equals(describe_user_value_fn(), "instantiation_expr.User"))
+    assert.equal(describe_user_value_fn(), "instantiation_expr.User")
 }
 
 // Type-reifying native through a value: `baml.json.from_string<User>` decodes
@@ -84,7 +90,7 @@ function from_string_value_fn() -> User {
 }
 
 test "json_native_through_value" {
-    assert.is_true(baml.deep_equals(from_string_value_fn(), User { name: "Ada" }))
+    assert.equal(from_string_value_fn(), User { name: "Ada" })
 }
 
 // Param-dependent instantiation (`identity<T>` where T is the enclosing
@@ -96,7 +102,7 @@ function forward<T>(x: T) -> T {
 }
 
 test "param_dependent_instantiation_runs" {
-    assert.is_true(baml.deep_equals(forward<int>(7), 7))
+    assert.equal(forward<int>(7), 7)
 }
 
 // Param-dependent value whose body REFLECTS on T: the runtime path seeds T from
@@ -108,7 +114,7 @@ function forward_reflect<T>() -> string {
 }
 
 test "param_dependent_reflect_resolves_T" {
-    assert.is_true(baml.deep_equals(forward_reflect<int>(), "int"))
+    assert.equal(forward_reflect<int>(), "int")
 }
 
 // Multi-segment qualified instantiation value: a generic function in a nested
@@ -117,16 +123,18 @@ function qualified_value_fn() -> string {
     let f = user.instantiation_expr.qualified.q_describe<string>;
     f()
 }
+
 function qualified_value_id_fn() -> int {
     let g = user.instantiation_expr.qualified.q_id<int>;
     g(7)
 }
 
 test "qualified_namespaced_value_reflects" {
-    assert.is_true(baml.deep_equals(qualified_value_fn(), "string"))
+    assert.equal(qualified_value_fn(), "string")
 }
+
 test "qualified_namespaced_value_runs" {
-    assert.is_true(baml.deep_equals(qualified_value_id_fn(), 7))
+    assert.equal(qualified_value_id_fn(), 7)
 }
 
 // A generic instance METHOD referenced as a bound value with explicit type args.
@@ -135,8 +143,10 @@ test "qualified_namespaced_value_runs" {
 // passed through with the receiver intact (type args erased — correct for a body
 // that does not reify T). (Previously: a runtime crash.)
 class GenBox {
-    v int
-    function pick<T>(self, x: T) -> T { x }
+    v: int,
+    function pick<T>(self, x: T) -> T {
+        x
+    }
 }
 
 function bound_method_value() -> int {
@@ -146,16 +156,18 @@ function bound_method_value() -> int {
 }
 
 test "bound_method_value_runs" {
-    assert.is_true(baml.deep_equals(bound_method_value(), 7))
+    assert.equal(bound_method_value(), 7)
 }
 
 // Companion: a (non-generic) lambda inside a generic function still reifies the
 // enclosing function's `U` (no regression from threading lambda params).
 function lambda_reflects_enclosing_U<U>() -> string {
-    let g = () -> string { reflect.type_of<U>().to_string() };
+    let g = () -> string {
+        reflect.type_of<U>().to_string()
+    };
     g()
 }
 
 test "lambda_reflects_enclosing_U_resolves" {
-    assert.is_true(baml.deep_equals(lambda_reflects_enclosing_U<int>(), "int"))
+    assert.equal(lambda_reflects_enclosing_U<int>(), "int")
 }

@@ -614,7 +614,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
          function Sub(x: int, y: int) -> int {\n  x - y\n}\n\n\
          class Holder {\n  n int\n\n  function get(self) -> int {\n    self.n\n  }\n}\n\n\
          function Greet(name: string) -> string {\n  \
-         client GPT4\n  prompt `Hello ${name}`\n}\n",
+         client \"openai/gpt-4o-mini\"\n  prompt `Hello ${name}`\n}\n",
     );
 
     let db = test_db.db();

@@ -134,6 +134,63 @@ mod format_options_tests {
 }
 
 #[cfg(test)]
+mod llm_tools_field_tests {
+    use super::*;
+
+    /// The BEP `tools` field must survive formatting — the print path used to
+    /// omit it entirely, silently deleting the field (and with it the
+    /// function's spec mode) from the user's source.
+    #[test]
+    fn test_tools_field_is_preserved_and_idempotent() {
+        let source = concat!(
+            "function Plan(q: string) -> string {\n",
+            "    client \"openai/gpt-4o-mini\"\n",
+            "    // the toolbox\n",
+            "    tools [search_flights, search_hotels]\n",
+            "    prompt `\n",
+            "        ${q}\n",
+            "        ${ctx.output_format}\n",
+            "    `\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("tools field should format");
+        assert!(
+            formatted.contains("tools: [search_flights, search_hotels]"),
+            "tools field preserved (canonical colon form): {formatted}"
+        );
+        assert!(
+            formatted.contains("// the toolbox"),
+            "comment on the tools line preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A duplicate field the parser tolerates (`type_builder` has no
+    /// duplicate diagnostic) must fail formatting rather than silently
+    /// printing only the survivor — deleting a block from the user's source.
+    #[test]
+    fn test_duplicate_llm_field_errors_instead_of_dropping_one() {
+        let source = concat!(
+            "function Plan(q: string) -> string {\n",
+            "    client \"openai/gpt-4o-mini\"\n",
+            "    type_builder {\n",
+            "    }\n",
+            "    type_builder {\n",
+            "    }\n",
+            "    prompt `${q}`\n",
+            "}\n",
+        );
+        let result = format(source, &FormatOptions::default());
+        assert!(
+            result.is_err(),
+            "duplicate type_builder must be a formatter error, got: {result:?}"
+        );
+    }
+}
+
+#[cfg(test)]
 mod contextual_keyword_identifier_tests {
     use super::*;
 

@@ -19,65 +19,65 @@
 // number of markers observed after the fact is exactly the number of times the
 // body ran.
 class CleanupResource {
-  log string[]
-  function cleanup(self) -> void {
-    self.log.push("cleaned")
-  }
+    log: string[],
+    function cleanup(self) -> void {
+        self.log.push("cleaned")
+    }
 }
 
 // Two explicit `cleanup()` calls run the body exactly once: the latch is set
 // on the first call, so the second is a no-op.
 function cleanup_explicit_double_call_main() -> string[] {
-  let r = CleanupResource { log: [] }
-  r.cleanup()
-  r.cleanup()
-  r.log
+    let r = CleanupResource { log: [] };
+    r.cleanup();
+    r.cleanup();
+    r.log
 }
 
 test "cleanup_runs_once_on_explicit_double_call" {
-    assert.is_true(baml.deep_equals(cleanup_explicit_double_call_main(), ["cleaned"]))
+    assert.equal(cleanup_explicit_double_call_main(), ["cleaned"])
 }
 
 // `defer { r.cleanup() }` invokes the finalizer at scope exit — after the
 // block body — so the markers are ["body", "cleaned"].
 function cleanup_via_defer_main() -> string[] {
-  let r = CleanupResource { log: [] }
-  {
-    defer { r.cleanup() }
-    r.log.push("body")
-  }
-  r.log
+    let r = CleanupResource { log: [] };
+    {
+        defer { r.cleanup() }
+        r.log.push("body")
+    };
+    r.log
 }
 
 test "cleanup_runs_via_defer" {
-    assert.is_true(baml.deep_equals(cleanup_via_defer_main(), ["body", "cleaned"]))
+    assert.equal(cleanup_via_defer_main(), ["body", "cleaned"])
 }
 
 // An explicit `cleanup()` runs the body and sets the latch; a later
 // `defer { r.cleanup() }` sees the latch set and is a no-op. The body runs
 // exactly once across both paths.
 function cleanup_explicit_then_defer_main() -> string[] {
-  let r = CleanupResource { log: [] }
-  r.cleanup()
-  {
-    defer { r.cleanup() }
-  }
-  r.log
+    let r = CleanupResource { log: [] };
+    r.cleanup();
+    {
+        defer { r.cleanup() }
+    };
+    r.log
 }
 
 test "cleanup_explicit_then_defer_shares_one_latch" {
-    assert.is_true(baml.deep_equals(cleanup_explicit_then_defer_main(), ["cleaned"]))
+    assert.equal(cleanup_explicit_then_defer_main(), ["cleaned"])
 }
 
 // The latch is per-instance: cleaning `a` (twice) does not flip `b`'s latch,
 // so each instance still runs its body exactly once → 1 + 1 markers total.
 function cleanup_per_instance_main() -> int {
-  let a = CleanupResource { log: [] }
-  let b = CleanupResource { log: [] }
-  a.cleanup()
-  a.cleanup()
-  b.cleanup()
-  a.log.length() + b.log.length()
+    let a = CleanupResource { log: [] };
+    let b = CleanupResource { log: [] };
+    a.cleanup();
+    a.cleanup();
+    b.cleanup();
+    a.log.length() + b.log.length()
 }
 
 test "cleanup_runs_once_per_distinct_instance" {
@@ -89,19 +89,19 @@ test "cleanup_runs_once_per_distinct_instance" {
 // (latch injected), not rejected. If it were treated as malformed, no guard
 // would be injected and the body would run twice → ["cleaned", "cleaned"].
 class CleanupThrowsNeverR {
-  log string[]
-  function cleanup(self) -> void throws never {
-    self.log.push("cleaned")
-  }
+    log: string[],
+    function cleanup(self) -> void throws never {
+        self.log.push("cleaned")
+    }
 }
 
 function cleanup_throws_never_main() -> string[] {
-  let r = CleanupThrowsNeverR { log: [] }
-  r.cleanup()
-  r.cleanup()
-  r.log
+    let r = CleanupThrowsNeverR { log: [] };
+    r.cleanup();
+    r.cleanup();
+    r.log
 }
 
 test "cleanup_with_explicit_throws_never_is_accepted" {
-    assert.is_true(baml.deep_equals(cleanup_throws_never_main(), ["cleaned"]))
+    assert.equal(cleanup_throws_never_main(), ["cleaned"])
 }

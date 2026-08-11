@@ -2,35 +2,34 @@
 //
 // Converted from crates/baml_tests/tests/arrays.rs. Each Rust test becomes a
 // `test` block with the `main()` body inlined. Results are compared with
-// `baml.deep_equals` (structural — `==` on arrays is reference equality), except
-// optional (`int?`) results, which use `assert.equal`: `deep_equals`'s generic
-// `T` won't unify an `int?` value against a bare int literal.
+// `assert.equal`, which is structural: `==` on arrays recurses element-wise
+// through `baml.ops.equals_equals`.
 //
 // A `catch` expression's value is passed directly into the assertion call rather
 // than bound to a `let`: a stored result stays boxed and won't compare equal, but
 // the call boundary coerces it back to its concrete type.
 //
 // Inside a `test` block, a value read from a `let` local compares unequal to a
-// literal (both `==` and `deep_equals`) — a VM bug that does not affect the same
-// code inside a `function`. Tests that must hold a value in a local (mutation
-// results, `count` accumulators) therefore bind the expected value to a local
-// too, since two locals compare correctly.
+// literal — a VM bug that does not affect the same code inside a `function`.
+// Tests that must hold a value in a local (mutation results, `count`
+// accumulators) therefore bind the expected value to a local too, since two
+// locals compare correctly.
 
 class ArraySortItem {
-    key int
-    label string
-    nullable int?
+    key: int,
+    label: string,
+    nullable: int?,
 }
 
 test "array_literal" {
-    assert.is_true(baml.deep_equals([1, 2, 3], [1, 2, 3]))
+    assert.equal([1, 2, 3], [1, 2, 3])
 }
 
 test "array_assign_to_variable" {
     let a = [1, 2, 3];
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(a, expected))
+    assert.equal(a, expected)
 }
 
 test "array_push" {
@@ -38,7 +37,7 @@ test "array_push" {
     a.push(4);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [1, 2, 3, 4];
-    assert.is_true(baml.deep_equals(a, expected))
+    assert.equal(a, expected)
 }
 
 // ─── sort ────────────────────────────────────────────────────────────────────
@@ -48,7 +47,7 @@ test "array_sort_ints_in_place" {
     let result = xs.sort();
     let expected = [1, 2, 3];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_returns_self" {
@@ -57,7 +56,7 @@ test "array_sort_returns_self" {
     assert.is_true(result == xs);
     result.push(4);
     let expected = [1, 2, 3, 4];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_empty_is_noop" {
@@ -65,28 +64,28 @@ test "array_sort_empty_is_noop" {
     let result = xs.sort();
     let expected: int[] = [];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_duplicates_stable" {
     let xs = [3, 1, 2, 1, 3];
     xs.sort();
     let expected = [1, 1, 2, 3, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_strings" {
     let xs = ["b", "a", "aa"];
     xs.sort();
     let expected = ["a", "aa", "b"];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_bigints" {
     let xs = [3n, 1n, 2n];
     xs.sort();
     let expected = [1n, 2n, 3n];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_floats" {
@@ -94,7 +93,7 @@ test "array_sort_floats" {
     let result = xs.sort();
     let expected = [0.5, 1.5, 2.5];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // PHASE-5 cutover: `sort()` is now the `Sortable` blanket method requiring
@@ -115,8 +114,8 @@ test "array_sort_nan_sorts_last" {
     xs.sort();
     assert.equal(xs.at(0), 1.0);
     match (xs.at(1)) {
-        null => assert.is_true(false)
-        let f: float => assert.is_true(f.is_nan())
+        null => assert.is_true(false),
+        let f: float => assert.is_true(f.is_nan()),
     }
 }
 
@@ -124,25 +123,31 @@ test "array_sort_nan_sorts_last" {
 
 test "array_sort_by_descending" {
     let xs = [1, 3, 2];
-    xs.sort_by((a: int, b: int) -> int { b - a });
+    xs.sort_by((a: int, b: int) -> int {
+        b - a
+    });
     let expected = [3, 2, 1];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_by_returns_self" {
     let xs = [1, 3, 2];
-    let result = xs.sort_by((a: int, b: int) -> int { a - b });
+    let result = xs.sort_by((a: int, b: int) -> int {
+        a - b
+    });
     assert.is_true(result == xs);
     result.push(4);
     let expected = [1, 2, 3, 4];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_by_callback_throws" {
     let xs = [1, 3, 2];
     let caught = {
         xs.sort_by((a: int, b: int) -> int throws string {
-            if (a == 2 || b == 2) { throw "bad compare" }
+            if (a == 2 || b == 2) {
+                throw "bad compare"
+            }
             a - b
         });
         false
@@ -150,9 +155,9 @@ test "array_sort_by_callback_throws" {
         string => true
     };
     let expected_caught = true;
-    assert.is_true(baml.deep_equals(caught, expected_caught));
+    assert.equal(caught, expected_caught);
     let expected = [1, 3, 2];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // ─── sort_by_key ─────────────────────────────────────────────────────────────
@@ -161,12 +166,16 @@ test "array_sort_by_key_class_field" {
     let xs = [
         ArraySortItem { key: 3, label: "c", nullable: 3 },
         ArraySortItem { key: 1, label: "a", nullable: 1 },
-        ArraySortItem { key: 2, label: "b", nullable: 2 }
+        ArraySortItem { key: 2, label: "b", nullable: 2 },
     ];
-    xs.sort_by_key((x: ArraySortItem) -> int { x.key });
-    let labels = xs.map((x: ArraySortItem) -> string { x.label });
+    xs.sort_by_key((x: ArraySortItem) -> int {
+        x.key
+    });
+    let labels = xs.map((x: ArraySortItem) -> string {
+        x.label
+    });
     let expected = ["a", "b", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 test "array_sort_by_key_stable" {
@@ -174,12 +183,16 @@ test "array_sort_by_key_stable" {
         ArraySortItem { key: 2, label: "a", nullable: 2 },
         ArraySortItem { key: 1, label: "b", nullable: 1 },
         ArraySortItem { key: 2, label: "c", nullable: 2 },
-        ArraySortItem { key: 1, label: "d", nullable: 1 }
+        ArraySortItem { key: 1, label: "d", nullable: 1 },
     ];
-    xs.sort_by_key((x: ArraySortItem) -> int { x.key });
-    let labels = xs.map((x: ArraySortItem) -> string { x.label });
+    xs.sort_by_key((x: ArraySortItem) -> int {
+        x.key
+    });
+    let labels = xs.map((x: ArraySortItem) -> string {
+        x.label
+    });
     let expected = ["b", "d", "a", "c"];
-    assert.is_true(baml.deep_equals(labels, expected))
+    assert.equal(labels, expected)
 }
 
 test "array_sort_by_key_called_once_per_element" {
@@ -190,24 +203,28 @@ test "array_sort_by_key_called_once_per_element" {
         x
     });
     let expected_count = 3;
-    assert.is_true(baml.deep_equals(count, expected_count));
+    assert.equal(count, expected_count);
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_by_key_empty_does_not_call_callback" {
     let xs: int[] = [];
-    let result = xs.sort_by_key((x: int) -> int throws string { throw "should not call" });
+    let result = xs.sort_by_key((x: int) -> int throws string {
+        throw "should not call"
+    });
     let expected: int[] = [];
     assert.is_true(result == xs);
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_sort_by_key_callback_throws" {
     let xs = [3, 1, 2];
     let caught = {
         xs.sort_by_key((x: int) -> int throws string {
-            if (x == 1) { throw "bad key" }
+            if (x == 1) {
+                throw "bad key"
+            }
             x
         });
         false
@@ -215,14 +232,16 @@ test "array_sort_by_key_callback_throws" {
         string => true
     };
     let expected_caught = true;
-    assert.is_true(baml.deep_equals(caught, expected_caught))
+    assert.equal(caught, expected_caught)
 }
 
 test "array_sort_by_key_throw_does_not_write_back" {
     let xs = [3, 1, 2];
     let caught = {
         xs.sort_by_key((x: int) -> int throws string {
-            if (x == 1) { throw "bad key" }
+            if (x == 1) {
+                throw "bad key"
+            }
             x
         });
         false
@@ -230,9 +249,9 @@ test "array_sort_by_key_throw_does_not_write_back" {
         string => true
     };
     let expected_caught = true;
-    assert.is_true(baml.deep_equals(caught, expected_caught));
+    assert.equal(caught, expected_caught);
     let expected = [3, 1, 2];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // `sort_by_key` now requires the key type to be `Comparable` (it sorts by the
@@ -243,11 +262,13 @@ test "array_sort_by_key_throw_does_not_write_back" {
 
 test "array_sort_by_key_returns_self" {
     let xs = [3, 1, 2];
-    let result = xs.sort_by_key((x: int) -> int { x });
+    let result = xs.sort_by_key((x: int) -> int {
+        x
+    });
     assert.is_true(result == xs);
     result.push(4);
     let expected = [1, 2, 3, 4];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // ============================================================================
@@ -258,20 +279,35 @@ test "array_sort_by_key_returns_self" {
 // [1, 2, 3].map(x -> x * 2) returns [2, 4, 6].
 test "array_map_simple_double" {
     let items: int[] = [1, 2, 3];
-    assert.is_true(baml.deep_equals(items.map((x: int) -> int { x * 2 }), [2, 4, 6]))
+    assert.equal(
+        items.map((x: int) -> int {
+            x * 2
+        }),
+        [2, 4, 6],
+    )
 }
 
 // array.map on an empty array returns [].
 test "array_map_empty_array" {
     let items: int[] = [];
-    assert.is_true(baml.deep_equals(items.map((x: int) -> int { x * 2 }), []))
+    assert.equal(
+        items.map((x: int) -> int {
+            x * 2
+        }),
+        [],
+    )
 }
 
 // array.map with a single-element array.
 // [42].map(x -> x + 1) returns [43].
 test "array_map_single_element" {
     let items: int[] = [42];
-    assert.is_true(baml.deep_equals(items.map((x: int) -> int { x + 1 }), [43]))
+    assert.equal(
+        items.map((x: int) -> int {
+            x + 1
+        }),
+        [43],
+    )
 }
 
 // array.map with a closure capturing multiple variables.
@@ -280,43 +316,59 @@ test "array_map_closure_captures_multiple_variables" {
     let scale = 10;
     let bias = 5;
     let items: int[] = [1, 2, 3];
-    assert.is_true(baml.deep_equals(items.map((x: int) -> int { x * scale + bias }), [15, 25, 35]))
+    assert.equal(
+        items.map((x: int) -> int {
+            x * scale + bias
+        }),
+        [15, 25, 35],
+    )
 }
 
 // array.map where the callback throws — verify exception propagates through
 // the CPS trampoline and can be caught.
 test "array_map_callback_throws" {
     let items: int[] = [1, 2, 3];
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         items.map((x: int) -> int {
-            if (x == 2) { throw "bad value" }
+            if (x == 2) {
+                throw "bad value"
+            }
             x
         }) catch (e) {
             _ => "caught"
         },
-        "caught"
-    ))
+        "caught",
+    )
 }
 
 // array.map callback inside a catch base still resolves its own parameter,
 // even though the catch handler introduces a later lexical scope.
 test "array_map_callback_in_catch_base_keeps_parameter_scope" {
     let items: int[] = [1, 2, 3];
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         items.map((x: int) -> int {
-            if (x == 2) { x + 10 } else { x }
+            if (x == 2) {
+                x + 10
+            } else {
+                x
+            }
         }) catch (e) {
             _ => [0]
         },
-        [1, 12, 3]
-    ))
+        [1, 12, 3],
+    )
 }
 
 // array.map over string[] — exercises heap-object paths in MapContinuation
 // (gc_roots, apply_forwarding) that int[] tests don't cover.
 test "array_map_string_elements" {
     let items: string[] = ["a", "b", "c"];
-    assert.is_true(baml.deep_equals(items.map((s: string) -> string { s + "!" }), ["a!", "b!", "c!"]))
+    assert.equal(
+        items.map((s: string) -> string {
+            s + "!"
+        }),
+        ["a!", "b!", "c!"],
+    )
 }
 
 // ============================================================================
@@ -325,45 +377,55 @@ test "array_map_string_elements" {
 
 test "array_filter_even_numbers" {
     let items = [1, 2, 3, 4, 5, 6];
-    let result = items.filter((x: int) -> bool { x % 2 == 0 });
+    let result = items.filter((x: int) -> bool {
+        x % 2 == 0
+    });
     let expected = [2, 4, 6];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 test "array_filter_empty_array_does_not_call_callback" {
     let items: int[] = [];
-    let result = items.filter((x: int) -> bool throws string { throw "should not call" });
+    let result = items.filter((x: int) -> bool throws string {
+        throw "should not call"
+    });
     let expected: int[] = [];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 test "array_filter_does_not_mutate_source" {
     let items = [1, 2, 3, 4];
-    let result = items.filter((x: int) -> bool { x > 2 });
+    let result = items.filter((x: int) -> bool {
+        x > 2
+    });
     let expected_result = [3, 4];
     let expected_items = [1, 2, 3, 4];
-    assert.is_true(baml.deep_equals(result, expected_result));
-    assert.is_true(baml.deep_equals(items, expected_items))
+    assert.equal(result, expected_result);
+    assert.equal(items, expected_items)
 }
 
 test "array_filter_callback_throws" {
     let items = [1, 2, 3];
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         items.filter((x: int) -> bool throws string {
-            if (x == 2) { throw "bad value" }
+            if (x == 2) {
+                throw "bad value"
+            }
             true
         }) catch (e) {
             string => "caught"
         },
-        "caught"
-    ))
+        "caught",
+    )
 }
 
 test "array_filter_string_elements" {
     let items = ["ant", "bear", "cat"];
-    let result = items.filter((s: string) -> bool { s.length() == 3 });
+    let result = items.filter((s: string) -> bool {
+        s.length() == 3
+    });
     let expected = ["ant", "cat"];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // ─── clear ────────────────────────────────────────────────────────────────────
@@ -371,13 +433,13 @@ test "array_filter_string_elements" {
 test "array_clear_non_empty" {
     let xs = [1, 2, 3];
     xs.clear();
-    assert.is_true(baml.deep_equals(xs.length(), 0))
+    assert.equal(xs.length(), 0)
 }
 
 test "array_clear_already_empty_is_noop" {
     let xs: int[] = [];
     xs.clear();
-    assert.is_true(baml.deep_equals(xs.length(), 0))
+    assert.equal(xs.length(), 0)
 }
 
 test "array_clear_returns_array_after" {
@@ -385,7 +447,7 @@ test "array_clear_returns_array_after" {
     xs.clear();
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected: int[] = [];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // ─── remove_at ────────────────────────────────────────────────────────────────
@@ -399,42 +461,42 @@ test "array_remove_at_modifies_array_in_place" {
     let xs = [10, 20, 30];
     let _ = xs.remove_at(1);
     let expected = [10, 30];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_remove_at_zero_removes_first_element" {
     let xs = [10, 20, 30];
     assert.equal(xs.remove_at(0), 10);
     let expected = [20, 30];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_remove_at_last_index_removes_last_element" {
     let xs = [10, 20, 30];
     assert.equal(xs.remove_at(2), 30);
     let expected = [10, 20];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_remove_at_out_of_bounds_returns_null_and_keeps_array" {
     let xs = [10, 20, 30];
     assert.equal(xs.remove_at(99), null);
     let expected = [10, 20, 30];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_remove_at_negative_counts_from_end" {
     let xs = [10, 20, 30];
     assert.equal(xs.remove_at(-1), 30);
     let expected = [10, 20];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_remove_at_past_start_returns_null_and_keeps_array" {
     let xs = [10, 20, 30];
     assert.equal(xs.remove_at(-4), null);
     let expected = [10, 20, 30];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_remove_at_empty_returns_null" {
@@ -454,7 +516,7 @@ test "array_shift_modifies_array_in_place" {
     let _ = xs.shift();
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [20, 30];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_shift_empty_returns_null" {
@@ -467,14 +529,14 @@ test "array_shift_repeated_drains_array" {
     let _ = xs.shift();
     let _ = xs.shift();
     let _ = xs.shift();
-    assert.is_true(baml.deep_equals(xs.length(), 0))
+    assert.equal(xs.length(), 0)
 }
 
 // ─── unshift ──────────────────────────────────────────────────────────────────
 
 test "array_unshift_returns_new_length" {
     let xs = [2, 3];
-    assert.is_true(baml.deep_equals(xs.unshift(1), 3))
+    assert.equal(xs.unshift(1), 3)
 }
 
 test "array_unshift_inserts_at_front" {
@@ -482,7 +544,7 @@ test "array_unshift_inserts_at_front" {
     let _ = xs.unshift(1);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_unshift_empty_array" {
@@ -490,7 +552,7 @@ test "array_unshift_empty_array" {
     let _ = xs.unshift(42);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [42];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // ─── insert ───────────────────────────────────────────────────────────────────
@@ -500,7 +562,7 @@ test "array_insert_in_middle" {
     let _ = xs.insert(3, 2);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [1, 2, 3, 4];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_insert_at_zero" {
@@ -508,7 +570,7 @@ test "array_insert_at_zero" {
     let _ = xs.insert(1, 0);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_insert_at_length_appends" {
@@ -516,12 +578,12 @@ test "array_insert_at_length_appends" {
     let _ = xs.insert(3, xs.length());
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [1, 2, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_insert_returns_new_length" {
     let xs = [1, 2, 4];
-    assert.is_true(baml.deep_equals(xs.insert(3, 2), 4))
+    assert.equal(xs.insert(3, 2), 4)
 }
 
 test "array_insert_empty_array_at_zero" {
@@ -529,7 +591,7 @@ test "array_insert_empty_array_at_zero" {
     let _ = xs.insert(99, 0);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [99];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // idx -1 counts from the end → inserts before the last element.
@@ -537,7 +599,7 @@ test "array_insert_negative_counts_from_end" {
     let xs = [1, 2, 3];
     assert.equal(xs.insert(9, -1), 4);
     let expected = [1, 2, 9, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_insert_past_start_throws" {
@@ -567,7 +629,7 @@ test "array_splice_replaces_range" {
     xs.splice(1, 2, [9, 9, 9]);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [0, 9, 9, 9, 3, 4];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_splice_pure_insertion" {
@@ -575,7 +637,7 @@ test "array_splice_pure_insertion" {
     xs.splice(0, 0, [-1]);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [-1, 1, 2, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_splice_pure_removal" {
@@ -583,7 +645,7 @@ test "array_splice_pure_removal" {
     xs.splice(1, 2, []);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [0, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_splice_count_clamped_to_length" {
@@ -591,7 +653,7 @@ test "array_splice_count_clamped_to_length" {
     xs.splice(1, 99, [9]);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [0, 9];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_splice_at_length_appends" {
@@ -599,7 +661,7 @@ test "array_splice_at_length_appends" {
     xs.splice(2, 0, [2, 3]);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [0, 1, 2, 3];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_splice_replace_with_longer" {
@@ -607,7 +669,7 @@ test "array_splice_replace_with_longer" {
     xs.splice(1, 1, [10, 11, 12]);
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [0, 10, 11, 12, 2];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 // start -2 counts from the end → replaces starting at index length - 2.
@@ -615,7 +677,7 @@ test "array_splice_negative_start_counts_from_end" {
     let xs = [0, 1, 2, 3, 4];
     xs.splice(-2, 1, [9, 9]);
     let expected = [0, 1, 2, 9, 9, 4];
-    assert.is_true(baml.deep_equals(xs, expected))
+    assert.equal(xs, expected)
 }
 
 test "array_splice_past_start_throws" {
@@ -651,16 +713,28 @@ test "array_splice_negative_count_throws" {
 // ─── some ─────────────────────────────────────────────────────────────────────
 
 test "array_some_finds_match" {
-    assert.is_true(baml.deep_equals([1, 2, 3].some((x: int) -> bool { x > 2 }), true))
+    assert.is_true(
+        [1, 2, 3].some((x: int) -> bool {
+            x > 2
+        }),
+    )
 }
 
 test "array_some_no_match" {
-    assert.is_true(baml.deep_equals([1, 2, 3].some((x: int) -> bool { x > 9 }), false))
+    assert.is_true(
+        ![1, 2, 3].some((x: int) -> bool {
+            x > 9
+        }),
+    )
 }
 
 test "array_some_empty_is_false" {
     let xs: int[] = [];
-    assert.is_true(baml.deep_equals(xs.some((x: int) -> bool { true }), false))
+    assert.is_true(
+        !xs.some((x: int) -> bool {
+            true
+        }),
+    )
 }
 
 // Counts predicate invocations via a closure-captured counter. If `some`
@@ -673,33 +747,48 @@ test "array_some_short_circuits" {
     });
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = 2;
-    assert.is_true(baml.deep_equals(count, expected))
+    assert.equal(count, expected)
 }
 
 test "array_some_propagates_error" {
-    assert.is_true(baml.deep_equals(
+    assert.is_true(
         [1, 2, 3].some((x: int) -> bool throws string {
-            if (x == 2) { throw "boom" } else { false }
+            if (x == 2) {
+                throw "boom"
+            } else {
+                false
+            }
         }) catch (e) {
             string => true
         },
-        true
-    ))
+    )
 }
 
 // ─── every ────────────────────────────────────────────────────────────────────
 
 test "array_every_all_match" {
-    assert.is_true(baml.deep_equals([2, 4, 6].every((x: int) -> bool { x % 2 == 0 }), true))
+    assert.is_true(
+        [2, 4, 6].every((x: int) -> bool {
+            x % 2 == 0
+        }),
+    )
 }
 
 test "array_every_one_fails" {
-    assert.is_true(baml.deep_equals([2, 4, 5].every((x: int) -> bool { x % 2 == 0 }), false))
+    assert.is_true(
+        ![2, 4, 5].every((x: int) -> bool {
+            x % 2 == 0
+        }),
+    )
 }
 
 test "array_every_empty_is_true" {
     let xs: int[] = [];
-    assert.is_true(baml.deep_equals(xs.every((x: int) -> bool { false }), true))
+    assert.is_true(
+        xs.every((x: int) -> bool {
+            false
+        }),
+    )
 }
 
 // visited 1, 2, 3; 3 < 3 = false → stop
@@ -711,30 +800,55 @@ test "array_every_short_circuits_on_false" {
     });
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = 3;
-    assert.is_true(baml.deep_equals(count, expected))
+    assert.equal(count, expected)
 }
 
 // ─── find / find_index ────────────────────────────────────────────────────────
 
 test "array_find_returns_first_match" {
-    assert.equal([1, 2, 3, 4].find((x: int) -> bool { x > 2 }), 3)
+    assert.equal(
+        [1, 2, 3, 4].find((x: int) -> bool {
+            x > 2
+        }),
+        3,
+    )
 }
 
 test "array_find_returns_null_when_no_match" {
-    assert.equal([1, 2, 3].find((x: int) -> bool { x > 9 }), null)
+    assert.equal(
+        [1, 2, 3].find((x: int) -> bool {
+            x > 9
+        }),
+        null,
+    )
 }
 
 test "array_find_empty_is_null" {
     let xs: int[] = [];
-    assert.equal(xs.find((x: int) -> bool { true }), null)
+    assert.equal(
+        xs.find((x: int) -> bool {
+            true
+        }),
+        null,
+    )
 }
 
 test "array_find_index_returns_first_index" {
-    assert.equal([1, 2, 3, 4].find_index((x: int) -> bool { x > 2 }), 2)
+    assert.equal(
+        [1, 2, 3, 4].find_index((x: int) -> bool {
+            x > 2
+        }),
+        2,
+    )
 }
 
 test "array_find_index_returns_null_when_no_match" {
-    assert.equal([1, 2].find_index((x: int) -> bool { x > 9 }), null)
+    assert.equal(
+        [1, 2].find_index((x: int) -> bool {
+            x > 9
+        }),
+        null,
+    )
 }
 
 test "array_find_short_circuits" {
@@ -745,22 +859,37 @@ test "array_find_short_circuits" {
     });
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = 2;
-    assert.is_true(baml.deep_equals(count, expected))
+    assert.equal(count, expected)
 }
 
 // ─── find_last / find_last_index ──────────────────────────────────────────────
 
 test "array_find_last_returns_last_match" {
-    assert.equal([1, 2, 3, 4].find_last((x: int) -> bool { x > 1 }), 4)
+    assert.equal(
+        [1, 2, 3, 4].find_last((x: int) -> bool {
+            x > 1
+        }),
+        4,
+    )
 }
 
 test "array_find_last_returns_null_when_no_match" {
-    assert.equal([1, 2, 3].find_last((x: int) -> bool { x > 9 }), null)
+    assert.equal(
+        [1, 2, 3].find_last((x: int) -> bool {
+            x > 9
+        }),
+        null,
+    )
 }
 
 // [1, 2, 1, 2] → last index where x == 1 is 2.
 test "array_find_last_index_returns_last_index" {
-    assert.equal([1, 2, 1, 2].find_last_index((x: int) -> bool { x == 1 }), 2)
+    assert.equal(
+        [1, 2, 1, 2].find_last_index((x: int) -> bool {
+            x == 1
+        }),
+        2,
+    )
 }
 
 // Verify iteration direction by counting visits: 40, 30, 20 — short-circuits on 20.
@@ -772,31 +901,36 @@ test "array_find_last_iterates_back_to_front" {
     });
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = 3;
-    assert.is_true(baml.deep_equals(count, expected))
+    assert.equal(count, expected)
 }
 
 test "array_find_last_empty_is_null" {
     let xs: int[] = [];
-    assert.equal(xs.find_last((x: int) -> bool { true }), null)
+    assert.equal(
+        xs.find_last((x: int) -> bool {
+            true
+        }),
+        null,
+    )
 }
 
 // ─── includes / index_of / last_index_of ──────────────────────────────────────
 
 test "array_includes_present" {
-    assert.is_true(baml.deep_equals([1, 2, 3].includes(2), true))
+    assert.is_true([1, 2, 3].includes(2))
 }
 
 test "array_includes_absent" {
-    assert.is_true(baml.deep_equals([1, 2, 3].includes(99), false))
+    assert.is_true(![1, 2, 3].includes(99))
 }
 
 test "array_includes_empty" {
     let xs: int[] = [];
-    assert.is_true(baml.deep_equals(xs.includes(1), false))
+    assert.is_true(!xs.includes(1))
 }
 
 test "array_includes_strings" {
-    assert.is_true(baml.deep_equals(["a", "b", "c"].includes("b"), true))
+    assert.is_true(["a", "b", "c"].includes("b"))
 }
 
 test "array_index_of_present" {
@@ -821,51 +955,119 @@ test "array_last_index_of_absent" {
 }
 
 // ─── reduce ───────────────────────────────────────────────────────────────────
+//
+// These compare with `==` rather than `assert.equal`. `assert.equal` takes
+// `unknown`, and that expected type propagates into the call as `reduce`'s
+// return type, binding the accumulator `A` to `unknown | <initial>` before the
+// annotated reducer is checked against `(A, T) -> A` — which then fails.
+// `==` synthesizes both operands, so `A` is inferred from the reducer.
+//
+// BUG: an explicitly annotated reducer should pin `A` regardless of the
+// expected type at the call site; the return context should not win over it.
 
 test "array_reduce_sum" {
-    assert.is_true(baml.deep_equals([1, 2, 3, 4].reduce((acc: int, x: int) -> int { acc + x }, 0), 10))
+    assert.is_true(
+        [1, 2, 3, 4].reduce(
+            (acc: int, x: int) -> int {
+                acc + x
+            },
+            0,
+        )
+            == 10,
+    )
 }
 
 test "array_reduce_with_nonzero_initial" {
-    assert.is_true(baml.deep_equals([1, 2, 3].reduce((acc: int, x: int) -> int { acc + x }, 100), 106))
+    assert.is_true(
+        [1, 2, 3].reduce(
+            (acc: int, x: int) -> int {
+                acc + x
+            },
+            100,
+        )
+            == 106,
+    )
 }
 
 test "array_reduce_empty_returns_initial" {
     let xs: int[] = [];
-    assert.is_true(baml.deep_equals(xs.reduce((acc: int, x: int) -> int { acc + x }, 42), 42))
+    assert.is_true(
+        xs.reduce(
+            (acc: int, x: int) -> int {
+                acc + x
+            },
+            42,
+        )
+            == 42,
+    )
 }
 
 // 1 * 2 * 3 * 4 = 24
 test "array_reduce_visits_every_element" {
-    assert.is_true(baml.deep_equals([1, 2, 3, 4].reduce((acc: int, x: int) -> int { acc * x }, 1), 24))
+    assert.is_true(
+        [1, 2, 3, 4].reduce(
+            (acc: int, x: int) -> int {
+                acc * x
+            },
+            1,
+        )
+            == 24,
+    )
 }
 
 test "array_reduce_concat_strings" {
-    assert.is_true(baml.deep_equals(["a", "b", "c"].reduce((acc: string, x: string) -> string { acc + x }, ""), "abc"))
+    assert.is_true(
+        ["a", "b", "c"].reduce(
+            (acc: string, x: string) -> string {
+                acc + x
+            },
+            "",
+        )
+            == "abc",
+    )
 }
 
 // ─── flat_map ─────────────────────────────────────────────────────────────────
 
 test "array_flat_map_doubles_each_element" {
-    assert.is_true(baml.deep_equals([1, 2, 3].flat_map((x: int) -> int[] { [x, x * 10] }), [1, 10, 2, 20, 3, 30]))
+    assert.equal(
+        [1, 2, 3].flat_map((x: int) -> int[] {
+            [x, x * 10]
+        }),
+        [1, 10, 2, 20, 3, 30],
+    )
 }
 
 test "array_flat_map_with_empty_inner_arrays" {
-    assert.is_true(baml.deep_equals([1, 2, 3].flat_map((x: int) -> int[] { [] }), []))
+    assert.equal(
+        [1, 2, 3].flat_map((x: int) -> int[] {
+            []
+        }),
+        [],
+    )
 }
 
 test "array_flat_map_empty_input" {
     let xs: int[] = [];
-    assert.is_true(baml.deep_equals(xs.flat_map((x: int) -> int[] { [x] }), []))
+    assert.equal(
+        xs.flat_map((x: int) -> int[] {
+            [x]
+        }),
+        [],
+    )
 }
 
 test "array_flat_map_uneven_inner_lengths" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         [1, 2, 3].flat_map((x: int) -> int[] {
-            if (x == 2) { [20, 21, 22] } else { [x] }
+            if (x == 2) {
+                [20, 21, 22]
+            } else {
+                [x]
+            }
         }),
-        [1, 20, 21, 22, 3]
-    ))
+        [1, 20, 21, 22, 3],
+    )
 }
 
 // ─── at ────────────────────────────────────────────────────────────────────────
@@ -945,7 +1147,7 @@ function array_index_write(idx: int) -> int[] {
 
 // Writing through a negative index targets the element counted from the end.
 test "array_index_write_negative_counts_from_end" {
-    assert.is_true(baml.deep_equals(array_index_write(-1), [10, 20, 99]))
+    assert.equal(array_index_write(-1), [10, 20, 99])
 }
 
 test "array_index_write_past_end_panics" {
@@ -969,35 +1171,35 @@ test "array_index_write_past_start_panics" {
 // ─── slice ─────────────────────────────────────────────────────────────────────
 
 test "array_slice_basic" {
-    assert.is_true(baml.deep_equals([1, 2, 3, 4].slice(1, 3), [2, 3]))
+    assert.equal([1, 2, 3, 4].slice(1, 3), [2, 3])
 }
 
 test "array_slice_negative_start" {
-    assert.is_true(baml.deep_equals([1, 2, 3].slice(-2, 3), [2, 3]))
+    assert.equal([1, 2, 3].slice(-2, 3), [2, 3])
 }
 
 test "array_slice_negative_end" {
-    assert.is_true(baml.deep_equals([1, 2, 3, 4].slice(0, -1), [1, 2, 3]))
+    assert.equal([1, 2, 3, 4].slice(0, -1), [1, 2, 3])
 }
 
 test "array_slice_negative_both" {
-    assert.is_true(baml.deep_equals([1, 2, 3, 4, 5].slice(-3, -1), [3, 4]))
+    assert.equal([1, 2, 3, 4, 5].slice(-3, -1), [3, 4])
 }
 
 // An `end` that resolves at or before `start` yields an empty array.
 test "array_slice_end_before_start_is_empty" {
-    assert.is_true(baml.deep_equals([1, 2, 3].slice(2, 1), []));
-    assert.is_true(baml.deep_equals([1, 2, 3].slice(-1, -2), []))
+    assert.equal([1, 2, 3].slice(2, 1), []);
+    assert.equal([1, 2, 3].slice(-1, -2), [])
 }
 
 // Out-of-range bounds clamp to `[0, length]`.
 test "array_slice_clamps_out_of_range" {
-    assert.is_true(baml.deep_equals([1, 2, 3].slice(-100, 100), [1, 2, 3]))
+    assert.equal([1, 2, 3].slice(-100, 100), [1, 2, 3])
 }
 
 test "array_slice_empty_array" {
     let xs: int[] = [];
-    assert.is_true(baml.deep_equals(xs.slice(-1, 5), []))
+    assert.equal(xs.slice(-1, 5), [])
 }
 
 // ============================================================================
@@ -1011,16 +1213,20 @@ test "array_slice_empty_array" {
 
 // (a) `f` is called once per index, receiving 0, 1, ..., length-1 in order.
 test "array_generate_passes_index_0_to_n_minus_1" {
-    let result = baml.Array.generate(4, (i: int) -> int { i });
+    let result = baml.Array.generate(4, (i: int) -> int {
+        i
+    });
     let expected = [0, 1, 2, 3];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // The factory result can transform the index (here: squares).
 test "array_generate_maps_index_through_f" {
-    let result = baml.Array.generate(3, (i: int) -> int { i * i });
+    let result = baml.Array.generate(3, (i: int) -> int {
+        i * i
+    });
     let expected = [0, 1, 4];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // `f` runs exactly `length` times — once per slot, no more.
@@ -1032,7 +1238,7 @@ test "array_generate_calls_f_once_per_index" {
     });
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = 3;
-    assert.is_true(baml.deep_equals(count, expected))
+    assert.equal(count, expected)
 }
 
 // (b) Each slot is INDEPENDENT: mutating one generated inner array must not
@@ -1040,16 +1246,15 @@ test "array_generate_calls_f_once_per_index" {
 // Done in a function so the subscript writes/reads avoid test-block value-boxing
 // quirks (see file header).
 function generate_independence_grid() -> int[][] {
-    let grid = baml.Array.generate(3, (r: int) -> int[] { baml.Array.filled(2, 0) });
+    let grid = baml.Array.generate(3, (r: int) -> int[] {
+        baml.Array.filled(2, 0)
+    });
     grid[0].push(99);
     grid
 }
 
 test "array_generate_slots_are_independent" {
-    assert.is_true(baml.deep_equals(
-        generate_independence_grid(),
-        [[0, 0, 99], [0, 0], [0, 0]]
-    ))
+    assert.equal(generate_independence_grid(), [[0, 0, 99], [0, 0], [0, 0]])
 }
 
 // Contrast: `Array.filled` with the same mutable inner value aliases every slot,
@@ -1063,35 +1268,38 @@ function filled_aliases_grid() -> int[][] {
 }
 
 test "array_filled_shares_mutable_slots_unlike_generate" {
-    assert.is_true(baml.deep_equals(
-        filled_aliases_grid(),
-        [[0, 0, 99], [0, 0, 99], [0, 0, 99]]
-    ))
+    assert.equal(filled_aliases_grid(), [[0, 0, 99], [0, 0, 99], [0, 0, 99]])
 }
 
 // (c) n == 0 yields an empty array and never calls `f`.
 test "array_generate_zero_length_is_empty" {
-    let result = baml.Array.generate(0, (i: int) -> int throws string { throw "should not call" });
+    let result = baml.Array.generate(0, (i: int) -> int throws string {
+        throw "should not call"
+    });
     let expected: int[] = [];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // A negative length is clamped to empty, like `Array.filled`.
 test "array_generate_negative_length_is_empty" {
-    let result = baml.Array.generate(-3, (i: int) -> int throws string { throw "should not call" });
+    let result = baml.Array.generate(-3, (i: int) -> int throws string {
+        throw "should not call"
+    });
     let expected: int[] = [];
-    assert.is_true(baml.deep_equals(result, expected))
+    assert.equal(result, expected)
 }
 
 // An error thrown by `f` propagates to the caller and halts generation.
 test "array_generate_propagates_error" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         baml.Array.generate(3, (i: int) -> int throws string {
-            if (i == 1) { throw "boom" }
+            if (i == 1) {
+                throw "boom"
+            }
             i
         }) catch (e) {
             string => "caught"
         },
-        "caught"
-    ))
+        "caught",
+    )
 }

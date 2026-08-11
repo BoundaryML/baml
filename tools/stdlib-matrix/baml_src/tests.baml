@@ -210,14 +210,14 @@ test "TypeScript symbols separate callables from properties" {
         assert.equal(container.display, "Foo");
         assert.equal(container.origin, "container");
         assert.equal(container.kind, "class");
-        assert.is_true(baml.deep_equals(container.symbol, ["(globals)", "Foo"]));
+        assert.equal(container.symbol, ["(globals)", "Foo"]);
     } else {
         baml.sys.panic("no TS symbols");
     }
     if let index_of: TsSymbol = symbols.at(1) {
         assert.equal(index_of.display, "Foo.prototype.indexOf");
         assert.equal(index_of.origin, "method");
-        assert.is_true(baml.deep_equals(index_of.symbol, ["(globals)", "Foo", "indexOf"]));
+        assert.equal(index_of.symbol, ["(globals)", "Foo", "indexOf"]);
     } else {
         baml.sys.panic("no member symbol");
     }
@@ -363,20 +363,16 @@ test "the markdown view renders both sides" {
 }
 
 test "a rendered type is split into the names it mentions" {
-    assert.is_true(baml.deep_equals(type_names("baml.fs.DirEntry[]"), ["baml.fs.DirEntry"]));
-    assert.is_true(
-        baml.deep_equals(type_names("map<string, unknown>"), ["map", "string", "unknown"]),
-    );
+    assert.equal(type_names("baml.fs.DirEntry[]"), ["baml.fs.DirEntry"]);
+    assert.equal(type_names("map<string, unknown>"), ["map", "string", "unknown"]);
     // A dotted path is one name, and the punctuation around a projection does
     // not glue onto either side of it.
-    assert.is_true(
-        baml.deep_equals(
-            type_names("(Self as baml.Comparable).CompareError"),
-            ["Self", "as", "baml.Comparable", "CompareError"],
-        ),
+    assert.equal(
+        type_names("(Self as baml.Comparable).CompareError"),
+        ["Self", "as", "baml.Comparable", "CompareError"],
     );
     // String-literal contents survive as names that resolve to nothing.
-    assert.is_true(baml.deep_equals(type_names("\"r\" | \"w+\""), ["r", "w"]));
+    assert.equal(type_names("\"r\" | \"w+\""), ["r", "w"]);
 }
 
 test "a generic parameter splits from its bound" {
@@ -397,7 +393,7 @@ test "references resolve to declarations, never to members or to nothing" {
     // companion; `int` is not in this fixture, so only Foo resolves. The symbol
     // is not its own reference.
     if let index_of: BamlSymbol = by_display.get("Foo.index_of") {
-        assert.is_true(baml.deep_equals(index_of.references, ["T:baml.Foo"]));
+        assert.equal(index_of.references, ["T:baml.Foo"]);
     } else {
         baml.sys.panic("Foo.index_of missing");
     }
@@ -405,7 +401,7 @@ test "references resolve to declarations, never to members or to nothing" {
     // A type declaration names nothing by existing.
     if let foo: BamlSymbol = by_display.get("Foo") {
         let none: string[] = [];
-        assert.is_true(baml.deep_equals(foo.references, none));
+        assert.equal(foo.references, none);
     } else {
         baml.sys.panic("Foo missing");
     }
@@ -416,7 +412,7 @@ test "references resolve to declarations, never to members or to nothing" {
         symbol.origin == "impl_method" && symbol.display.includes("compare")
     });
     if let compare: BamlSymbol = compares.at(0) {
-        assert.is_true(baml.deep_equals(compare.references, ["T:baml.Foo"]));
+        assert.equal(compare.references, ["T:baml.Foo"]);
     } else {
         baml.sys.panic("the impl's compare is missing");
     }
@@ -459,14 +455,9 @@ test "impl entries address themselves and name what they re-list" {
     for (let method in impl_methods) {
         ids.push(method.id);
     }
-    assert.is_true(
-        baml.deep_equals(
-            ids,
-            [
-                "X:baml.impl[baml.Comparable for baml.Foo]::compare",
-                "X:baml.impl[baml.Comparable for baml.Foo]::index_of",
-            ],
-        ),
+    assert.equal(
+        ids,
+        [ "X:baml.impl[baml.Comparable for baml.Foo]::compare", "X:baml.impl[baml.Comparable for baml.Foo]::index_of"],
     );
     // The re-listed one carries the declaration it came from; the override
     // declared only in the block has no other address.
@@ -1050,7 +1041,7 @@ test "a finding that names a real symbol by path is applied" {
         judgement.ts == "Foo.prototype.only"
     });
     if let judgement: Judgement = applied.at(0) {
-        assert.is_true(baml.deep_equals(judgement.baml, ["M:baml.Foo.sort_helper"]));
+        assert.equal(judgement.baml, ["M:baml.Foo.sort_helper"]);
     } else {
         baml.sys.panic("the finding was not applied");
     }
@@ -1104,7 +1095,7 @@ test "an answer keeps its finding when only the example is bad" {
     let stripped = without_example(finding);
     assert.is_true(stripped.example == null);
     assert.equal(stripped.verdict, finding.verdict);
-    assert.is_true(baml.deep_equals(stripped.baml, finding.baml));
+    assert.equal(stripped.baml, finding.baml);
     assert.equal(stripped.reason, finding.reason);
 }
 

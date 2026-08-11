@@ -50,7 +50,7 @@ use std::collections::BTreeSet;
 use baml_codegen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
 
 use crate::{
-    routing::java_identifier,
+    routing::{java_identifier, java_method_identifier},
     translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
 };
 
@@ -447,10 +447,15 @@ pub(crate) fn render_class(
     out.push_str("    }\n");
 
     // PreserveCase accessors — the nullable ones carry `@Nullable` on their
-    // return type (the primary Kotlin-visible nullness signal).
+    // return type (the primary Kotlin-visible nullness signal). The ACCESSOR
+    // name goes through `java_method_identifier`: a field named `wait` is a
+    // legal field but `wait()` cannot override `java.lang.Object`'s final
+    // `wait()`, so the accessor becomes `wait$()` while the field it reads
+    // keeps its own name.
     for (f_ident, f_ty) in &display_fields {
+        let accessor = java_method_identifier(f_ident);
         out.push_str(&format!(
-            "\n    public {f_ty} {f_ident}() {{\n        return this.{f_ident};\n    }}\n"
+            "\n    public {f_ty} {accessor}() {{\n        return this.{f_ident};\n    }}\n"
         ));
     }
 
@@ -478,7 +483,7 @@ pub(crate) fn render_class(
         .static_methods
         .iter()
         .chain(&class.instance_methods)
-        .map(|m| java_identifier(m.name.as_str()))
+        .map(|m| java_method_identifier(m.name.as_str()))
         .collect();
 
     // Static and instance method bindings. Static methods (like free
@@ -783,7 +788,7 @@ fn render_callable_pair(
     } else {
         None
     };
-    let ident = java_identifier(function.name.as_str());
+    let ident = java_method_identifier(function.name.as_str());
     // The `_async` sibling name, escaped past a user callable that already
     // claims `{ident}_async` (see [`async_sibling_ident`]).
     let async_ident = async_sibling_ident(&ident, sibling_idents);

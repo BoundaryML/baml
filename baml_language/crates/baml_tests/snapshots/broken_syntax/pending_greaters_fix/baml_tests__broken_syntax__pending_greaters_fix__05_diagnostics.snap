@@ -20,14 +20,15 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                      ╰── unmatched `>` in type expression (found 1 extra)
     ╰────
 
-  [type] E0003
+  [hir] E0010
 
-  × unresolved name: `GPT4`
+  × LLM function `BadParam` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
     ╭─[extra_greater.baml:23:51]
  23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
  24 │ │     client GPT4
- 25 │ │     prompt `test`
- 26 │ ╰─▶ }
+ 25 │ │     prompt #"test"#
+ 26 │ ├─▶ }
+    · ╰──── migrate to a backtick prompt
     ╰────
 
   [parse] E0010
@@ -39,14 +40,15 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                             ╰── unmatched `>` in type expression (found 1 extra)
     ╰────
 
-  [type] E0003
+  [hir] E0010
 
-  × unresolved name: `GPT4`
+  × LLM function `BadReturnType` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
     ╭─[extra_greater.baml:29:47]
  29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
  30 │ │     client GPT4
- 31 │ │     prompt `test`
- 32 │ ╰─▶ }
+ 31 │ │     prompt #"test"#
+ 32 │ ├─▶ }
+    · ╰──── migrate to a backtick prompt
     ╰────
 
   [parse] E0010

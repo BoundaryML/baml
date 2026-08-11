@@ -118,27 +118,20 @@ function user.NestedControlFlow(x: int) -> string throws never {
       }
   }
 }
-function user.TestClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+function user.LlmFunction(input: string, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(LlmFunction$spec(input)).value : string
 }
-function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`) : string
+function user.LlmFunction$spec(input: string) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "LlmFunction", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
 }
-function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
+lambda user.LlmFunction$spec {
 }
-function user.LlmFunction$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
+function user.LlmFunction$render_prompt(input: string) -> ai.Prompt throws never {
+  LlmFunction$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.type_of<string>())) : ai.Prompt
 }
-function user.LlmFunction$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
+function user.LlmFunction$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
-function user.LlmFunction$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmFunction", map { "input": input }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
-}
-function user.LlmFunction$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-}
-function user.LlmFunction$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
+function user.LlmFunction$stream(input: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(LlmFunction$spec(input), client = client) : ai.stream.Stream<string | null, string>
 }

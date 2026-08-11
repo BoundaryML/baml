@@ -4,27 +4,25 @@
 //
 // All test bodies use helper functions with parameters (the Rust tests do the
 // same, to prevent the compiler from narrowing nullable types at compile time).
-// Results are declared as optional types, so `assert.equal` is used instead of
-// `assert.is_true(baml.deep_equals(...))` — deep_equals's generic T won't unify
-// a `T?` value against a bare literal.
+// Results are declared as optional types.
 
 class NhProfile {
-    name string
-    address string?
-    scores int[]?
-    settings map<string, string>?
+    name: string,
+    address: string?,
+    scores: int[]?,
+    settings: map<string, string>?,
 }
 
 class NhUser {
-    id int
-    profile NhProfile?
+    id: int,
+    profile: NhProfile?,
 }
 
 class NhNode {
-    value int
-    next NhNode?
-    children NhNode[]?
-    labels map<string, NhNode>?
+    value: int,
+    next: NhNode?,
+    children: NhNode[]?,
+    labels: map<string, NhNode>?,
 }
 
 // ============================================================================
@@ -50,10 +48,12 @@ function nh_safe_assign_non_null(user: NhUser?) -> string? {
 }
 
 function nh_run_safe_assign_non_null() -> string? {
-    nh_safe_assign_non_null(NhUser {
-        id: 1,
-        profile: NhProfile { name: "old", address: null, scores: null, settings: null },
-    })
+    nh_safe_assign_non_null(
+        NhUser {
+            id: 1,
+            profile: NhProfile { name: "old", address: null, scores: null, settings: null },
+        },
+    )
 }
 
 test "safe_assign_non_null_writes" {
@@ -118,7 +118,10 @@ test "safe_assign_index_non_null_writes" {
 
 function nh_null_coalesce_lazy_non_null(value: int?) -> int {
     let counter = 0;
-    let bump = () -> int { counter += 1; counter };
+    let bump = () -> int {
+        counter += 1;
+        counter
+    };
     let result = value ?? bump();
     // result should be 42 (LHS), counter should still be 0 (RHS never called)
     result * 10 + counter
@@ -129,12 +132,15 @@ function nh_run_null_coalesce_lazy_non_null() -> int {
 }
 
 test "null_coalesce_lazy_rhs_skips_side_effects" {
-    assert.is_true(baml.deep_equals(nh_run_null_coalesce_lazy_non_null(), 420))
+    assert.equal(nh_run_null_coalesce_lazy_non_null(), 420)
 }
 
 function nh_null_coalesce_null_lhs(value: int?) -> int {
     let counter = 0;
-    let bump = () -> int { counter += 1; counter };
+    let bump = () -> int {
+        counter += 1;
+        counter
+    };
     let result = value ?? bump();
     // result should be 1 (from bump), counter should be 1
     result * 10 + counter
@@ -145,7 +151,7 @@ function nh_run_null_coalesce_null_lhs() -> int {
 }
 
 test "null_coalesce_null_lhs_evaluates_rhs" {
-    assert.is_true(baml.deep_equals(nh_run_null_coalesce_null_lhs(), 11))
+    assert.equal(nh_run_null_coalesce_null_lhs(), 11)
 }
 
 // ============================================================================
@@ -158,10 +164,7 @@ function nh_combined_rhs_null(node: NhNode?, items: int[]?) -> int? {
 }
 
 function nh_run_combined_rhs_null() -> int? {
-    nh_combined_rhs_null(
-        NhNode { value: 10, next: null, children: null, labels: null },
-        null,
-    )
+    nh_combined_rhs_null(NhNode { value: 10, next: null, children: null, labels: null }, null)
 }
 
 test "combined_compound_assign_rhs_null_uses_fallback" {
@@ -189,12 +192,12 @@ test "combined_compound_assign_lhs_null_skips" {
 interface NhHasSound { sound string }
 
 class NhCat {
-    sound string
+    sound: string,
     implements NhHasSound {}
 }
 
 class NhDog {
-    sound string
+    sound: string,
     implements NhHasSound {}
 }
 

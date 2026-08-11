@@ -15,9 +15,9 @@
 
 // Shape of one serialized SSE event as emitted by `sse.next()`.
 class SseJsonEvent {
-    event string
-    data string
-    id string?
+    event: string,
+    data: string,
+    id: string?,
 }
 
 // ─── fetch + next + close basics ─────────────────────────────────────────────
@@ -30,16 +30,20 @@ function sse_fetch_and_next_returns_events_fn() -> bool {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let events = sse.next();
     sse.close();
     task.cancel();
-    if (events == null) { return false; }
+    if (events == null) {
+        return false;
+    }
     assert.contains(events, "\"data\":\"hello\"");
     assert.contains(events, "\"data\":\"world\"");
     true
@@ -57,17 +61,21 @@ function sse_next_returns_null_when_done_fn() -> bool {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let first = sse.next();
     let second = sse.next();
     sse.close();
     task.cancel();
-    if (first == null) { return false; }
+    if (first == null) {
+        return false;
+    }
     // Once the stream is exhausted, next() returns null.
     assert.is_true(second == null);
     // The first batch contains the only event.
@@ -87,12 +95,14 @@ function sse_close_does_not_hang_fn() -> bool {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let events = sse.next();
     sse.close();
     task.cancel();
@@ -109,16 +119,18 @@ function sse_fetch_error_on_bad_status_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(500, { }, "Internal Server Error".to_utf8())
+            baml.http.Response.new(500, {}, "Internal Server Error".to_utf8())
         })
     };
     let ok = {
-        let sse = baml.http.fetch_sse(baml.http.Request {
-            method: "GET",
-            url: "http://" + server.addr + "/sse",
-            headers: { },
-            body: "",
-        });
+        let sse = baml.http.fetch_sse(
+            baml.http.Request {
+                method: "GET",
+                url: "http://" + server.addr + "/sse",
+                headers: {},
+                body: "",
+            },
+        );
         baml.sys.panic("expected fetch_sse on a 500 response to throw")
     } catch (e) {
         let err: baml.errors.Io => {
@@ -144,22 +156,30 @@ function sse_post_with_body_fn() -> bool {
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
             if (req.method == "POST" && req.body == "my-request-body") {
-                baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: ok\n\n".to_utf8())
+                baml.http.Response.new(
+                    200,
+                    { "content-type": "text/event-stream" },
+                    "data: ok\n\n".to_utf8(),
+                )
             } else {
-                baml.http.Response.new(404, { }, "".to_utf8())
+                baml.http.Response.new(404, {}, "".to_utf8())
             }
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "POST",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "my-request-body",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "POST",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "my-request-body",
+        },
+    );
     let events = sse.next();
     sse.close();
     task.cancel();
-    if (events == null) { return false; }
+    if (events == null) {
+        return false;
+    }
     assert.contains(events, "\"data\":\"ok\"");
     true
 }
@@ -175,24 +195,32 @@ function sse_custom_headers_fn() -> bool {
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
             if (req.headers.get("authorization") == "Bearer test-token-123") {
-                baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: authed\n\n".to_utf8())
+                baml.http.Response.new(
+                    200,
+                    { "content-type": "text/event-stream" },
+                    "data: authed\n\n".to_utf8(),
+                )
             } else {
-                baml.http.Response.new(404, { }, "".to_utf8())
+                baml.http.Response.new(404, {}, "".to_utf8())
             }
         })
     };
-    let headers: map<string, string> = { };
+    let headers: map<string, string> = {};
     headers["authorization"] = "Bearer test-token-123";
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: headers,
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: headers,
+            body: "",
+        },
+    );
     let events = sse.next();
     sse.close();
     task.cancel();
-    if (events == null) { return false; }
+    if (events == null) {
+        return false;
+    }
     assert.contains(events, "\"data\":\"authed\"");
     true
 }
@@ -209,16 +237,20 @@ function sse_empty_stream_returns_null_fn() -> string {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, "".to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let first = sse.next();
     sse.close();
     task.cancel();
-    if (first == null) { return "got-null"; }
+    if (first == null) {
+        return "got-null";
+    }
     "unexpected-data"
 }
 
@@ -231,20 +263,28 @@ function sse_next_after_close_returns_null_fn() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: hello\n\n".to_utf8())
+            baml.http.Response.new(
+                200,
+                { "content-type": "text/event-stream" },
+                "data: hello\n\n".to_utf8(),
+            )
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let first = sse.next();
     sse.close();
     let after_close = sse.next();
     task.cancel();
-    if (after_close == null) { return "null-after-close"; }
+    if (after_close == null) {
+        return "null-after-close";
+    }
     "unexpected-data"
 }
 
@@ -259,24 +299,32 @@ function sse_event_fields_in_json_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(200, { "content-type": "text/event-stream" }, "id: 42\nevent: custom\ndata: payload\n\n".to_utf8())
+            baml.http.Response.new(
+                200,
+                { "content-type": "text/event-stream" },
+                "id: 42\nevent: custom\ndata: payload\n\n".to_utf8(),
+            )
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let events = sse.next();
     sse.close();
     task.cancel();
-    if (events == null) { return false; }
+    if (events == null) {
+        return false;
+    }
     let parsed: SseJsonEvent[] = baml.json.from_string<SseJsonEvent[]>(events);
     assert.equal(parsed.length(), 1);
     assert.equal(parsed[0].event, "custom");
     assert.equal(parsed[0].data, "payload");
-    assert.is_true(baml.deep_equals(parsed[0].id, "42"));
+    assert.equal(parsed[0].id, "42");
     true
 }
 
@@ -288,19 +336,27 @@ function sse_event_id_null_when_not_set_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: no-id\n\n".to_utf8())
+            baml.http.Response.new(
+                200,
+                { "content-type": "text/event-stream" },
+                "data: no-id\n\n".to_utf8(),
+            )
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let events = sse.next();
     sse.close();
     task.cancel();
-    if (events == null) { return false; }
+    if (events == null) {
+        return false;
+    }
     let parsed: SseJsonEvent[] = baml.json.from_string<SseJsonEvent[]>(events);
     assert.equal(parsed.length(), 1);
     // id should be null when not set.
@@ -318,16 +374,18 @@ function sse_http_4xx_error_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {
-            baml.http.Response.new(403, { }, "Forbidden".to_utf8())
+            baml.http.Response.new(403, {}, "Forbidden".to_utf8())
         })
     };
     let ok = {
-        let sse = baml.http.fetch_sse(baml.http.Request {
-            method: "GET",
-            url: "http://" + server.addr + "/sse",
-            headers: { },
-            body: "",
-        });
+        let sse = baml.http.fetch_sse(
+            baml.http.Request {
+                method: "GET",
+                url: "http://" + server.addr + "/sse",
+                headers: {},
+                body: "",
+            },
+        );
         baml.sys.panic("expected fetch_sse on a 403 response to throw")
     } catch (e) {
         let err: baml.errors.Io => {
@@ -356,16 +414,20 @@ function sse_large_event_payload_fn() -> bool {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
-        method: "GET",
-        url: "http://" + server.addr + "/sse",
-        headers: { },
-        body: "",
-    });
+    let sse = baml.http.fetch_sse(
+        baml.http.Request {
+            method: "GET",
+            url: "http://" + server.addr + "/sse",
+            headers: {},
+            body: "",
+        },
+    );
     let events = sse.next();
     sse.close();
     task.cancel();
-    if (events == null) { return false; }
+    if (events == null) {
+        return false;
+    }
     // The full 50KB payload is present.
     assert.contains(events, large_data);
     true

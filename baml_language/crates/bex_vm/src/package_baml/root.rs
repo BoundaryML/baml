@@ -5,7 +5,7 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    FutureRead, HeapPtr, ObjectType, ValueKind,
+    HeapPtr, ObjectType, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
@@ -27,11 +27,6 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
         let mut copied_objects = HashMap::new();
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
-    }
-
-    fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool {
-        let mut visited = HashMap::new();
-        deep_equals_recursive(vm, *a, *b, &mut visited)
     }
 
     /// `baml._float_total_cmp(a, b)` — bit-exact `f64::total_cmp` three-way
@@ -425,7 +420,7 @@ impl Continuation for ToStringWalkContinuation {
 
 /// Owned snapshot of a heap object, captured so the recursive walker never
 /// holds a heap borrow or a container lock across a recursive call (mirrors the
-/// snapshot-before-recurse discipline in `deep_equals_recursive`).
+/// snapshot-before-recurse discipline in `deep_copy_value_recursive`).
 enum DisplaySnap {
     /// A finished leaf rendering (`5.0`, `null`, an enum variant name, ...).
     Leaf(String),
@@ -924,145 +919,6 @@ fn deep_copy_value_recursive(
 
             Value::object(new_ptr)
         }
-    }
-}
-
-#[allow(clippy::float_cmp)]
-fn deep_equals_recursive(
-    vm: &BexVm,
-    a: Value,
-    b: Value,
-    visited: &mut HashMap<(HeapPtr, HeapPtr), bool>,
-) -> bool {
-    match (a.kind(), b.kind()) {
-        (ValueKind::OmittedArg, ValueKind::OmittedArg) => true,
-        (ValueKind::Null, ValueKind::Null) => true,
-        (ValueKind::Int(a), ValueKind::Int(b)) => a == b,
-        (ValueKind::Bool(a), ValueKind::Bool(b)) => a == b,
-
-        (ValueKind::Object(a_ptr), ValueKind::Object(b_ptr)) => {
-            if a_ptr == b_ptr {
-                return true;
-            }
-
-            let key = if a_ptr < b_ptr {
-                (a_ptr, b_ptr)
-            } else {
-                (b_ptr, a_ptr)
-            };
-
-            if let Some(&result) = visited.get(&key) {
-                return result;
-            }
-
-            visited.insert(key, true);
-
-            let result = match (vm.get_object(a_ptr), vm.get_object(b_ptr)) {
-                (Object::Float(a), Object::Float(b)) => (a.is_nan() && b.is_nan()) || a == b,
-                (Object::String(a), Object::String(b)) => a == b,
-                (Object::Uint8Array(a), Object::Uint8Array(b)) => {
-                    let a_snap = a.to_vec();
-                    let b_snap = b.to_vec();
-                    a_snap == b_snap
-                }
-
-                // Different `Arc`s with the same numeric value must compare equal.
-                (Object::Bigint(a), Object::Bigint(b)) => a == b,
-
-                (Object::Array(a_values), Object::Array(b_values)) => {
-                    // Snapshot under each lock before recursing; deep_equals
-                    // is mutator code so we cannot hold the lock across
-                    // recursive lookups that may also lock containers.
-                    let a_snap = a_values.to_vec();
-                    let b_snap = b_values.to_vec();
-                    a_snap.len() == b_snap.len()
-                        && a_snap
-                            .iter()
-                            .zip(b_snap.iter())
-                            .all(|(a, b)| deep_equals_recursive(vm, *a, *b, visited))
-                }
-
-                (Object::Map(a_map), Object::Map(b_map)) => {
-                    let a_snap = a_map.to_index_map();
-                    let b_snap = b_map.to_index_map();
-                    a_snap.len() == b_snap.len()
-                        && a_snap.iter().all(|(key, a_val)| {
-                            b_snap.get(key).is_some_and(|b_val| {
-                                deep_equals_recursive(vm, *a_val, *b_val, visited)
-                            })
-                        })
-                }
-
-                (Object::Instance(a_inst), Object::Instance(b_inst)) => {
-                    a_inst.class == b_inst.class
-                        && a_inst.fields.len() == b_inst.fields.len()
-                        && a_inst
-                            .fields
-                            .iter()
-                            .zip(b_inst.fields.iter())
-                            .all(|(a, b)| deep_equals_recursive(vm, a.load(), b.load(), visited))
-                }
-
-                (Object::Variant(a_var), Object::Variant(b_var)) => {
-                    a_var.enm == b_var.enm && a_var.index == b_var.index
-                }
-
-                (Object::Type(a_ty), Object::Type(b_ty)) => a_ty == b_ty,
-
-                (Object::Enum(a_enum), Object::Enum(b_enum)) => {
-                    a_enum.name == b_enum.name
-                        && a_enum.variants.len() == b_enum.variants.len()
-                        && a_enum
-                            .variants
-                            .iter()
-                            .zip(b_enum.variants.iter())
-                            .all(|(a, b)| a.name == b.name)
-                }
-
-                (Object::Class(a_class), Object::Class(b_class)) => {
-                    a_class.name == b_class.name
-                        && a_class.fields.len() == b_class.fields.len()
-                        && a_class
-                            .fields
-                            .iter()
-                            .zip(b_class.fields.iter())
-                            .all(|(a, b)| a.name == b.name)
-                }
-
-                (Object::Function(_), Object::Function(_)) => a_ptr == b_ptr,
-
-                // GenericFunction values compare structurally (same base
-                // function + same type args). The interned/pooled case already
-                // short-circuits via the `a_ptr == b_ptr` fast path above; this
-                // arm covers non-pooled copies (e.g. from `baml.deep_copy`).
-                (Object::GenericFunction(a_gf), Object::GenericFunction(b_gf)) => {
-                    a_gf.function == b_gf.function && a_gf.type_args == b_gf.type_args
-                }
-
-                (Object::Future(a_fut), Object::Future(b_fut)) => {
-                    match (a_fut.read(), b_fut.read()) {
-                        (FutureRead::Ready(a_val), FutureRead::Ready(b_val)) => {
-                            deep_equals_recursive(vm, a_val, b_val, visited)
-                        }
-                        (FutureRead::Pending(a_id), FutureRead::Pending(b_id)) => a_id == b_id,
-                        _ => false,
-                    }
-                }
-
-                (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
-                    a_fut.closure == b_fut.closure
-                        && a_fut.name == b_fut.name
-                        && a_fut.config == b_fut.config
-                }
-
-                _ => false,
-            };
-
-            visited.insert(key, result);
-            result
-        }
-
-        _ => false,
     }
 }
 

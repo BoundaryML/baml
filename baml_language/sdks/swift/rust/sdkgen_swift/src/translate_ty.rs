@@ -9,6 +9,7 @@
 
 use std::collections::BTreeSet;
 
+use baml_base::qualified_name::AI_STREAM_STREAM;
 use baml_codegen_types::{Name, Ty};
 
 /// Which named types the emitter decided it can emit this run (the
@@ -124,10 +125,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         }
         Ty::Union(members, _) => translate_union(members, ctx),
         Ty::Class(name, args, _) => {
-            // `baml.llm.Stream<Partial, Final>` is runtime-owned: it
+            // `ai.stream.Stream<Partial, Final>` is runtime-owned: it
             // translates to the BamlBridge `BamlStream` wrapper, never
             // a generated struct (its state is an engine handle).
-            if name.to_string() == "baml.llm.Stream" {
+            if name.to_string() == AI_STREAM_STREAM {
                 if args.len() != 2 {
                     return None;
                 }

@@ -861,13 +861,7 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
             prompt `classify ${text}`
         }
 
-        client<llm> GPT4o {
-            provider openai
-            options {
-                model "gpt-4o"
-                api_key env.OPENAI_API_KEY
-            }
-        }
+        client GPT4o = openai.OpenAiClient.new(model = "gpt-4o");
 
         testset "vibes" {
             let topics: string[] = ["happy", "sad"];
@@ -900,13 +894,7 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
     // NOTE: "vibes" is INSIDE "test" — the closing brace of "test" comes
     // AFTER "vibes". This is the exact structure from the user's file.
     let source = r##"
-        client<llm> GPT4o {
-            provider openai
-            options {
-                model "gpt-4o"
-                api_key env.OPENAI_API_KEY
-            }
-        }
+        client GPT4o = openai.OpenAiClient.new(model = "gpt-4o");
 
         class Sentiment {
             feeling string @description("The detected sentiment")
@@ -917,10 +905,8 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         function ClassifySentiment(text: string) -> Sentiment {
             client GPT4o
             prompt `
-                ${role("system")}
                 Classify the sentiment of the following text.
                 ${ctx.output_format}
-                ${role("assistant")}
                 Text: ${text}
             `
         }

@@ -8,7 +8,7 @@
 // ─── associated_type_projection_in_throws_position_runs ──────────────────────
 
 class Boom {
-    message: string
+    message: string,
 }
 
 interface Fallible {
@@ -32,20 +32,20 @@ class AlwaysFails {
 }
 
 function call_value<F extends Fallible>(value: F) -> int throws F.Error {
-    return value.value()
+    return value.value();
 }
 
 function atp_throws_main() -> string {
-    let default_result = AlwaysFails {}.value_plus_one() catch (e) {
+    let default_result = AlwaysFails {  }.value_plus_one() catch (e) {
         Boom => "default:" + e.message
-    }
-    let generic_result = call_value(AlwaysFails {}) catch (e) {
+    };
+    let generic_result = call_value(AlwaysFails {  }) catch (e) {
         Boom => "generic:" + e.message
-    }
+    };
     // The catch arms make these `int | string` (the int is the
     // non-throwing value); render explicitly — a mixed union is not
     // a valid concat operand.
-    return default_result.to_string() + "|" + generic_result.to_string()
+    return default_result.to_string() + "|" + generic_result.to_string();
 }
 
 test "associated_type_projection_in_throws_position_runs" {
@@ -53,7 +53,7 @@ test "associated_type_projection_in_throws_position_runs" {
 }
 
 class CaeKaboom {
-    data: int
+    data: int,
 }
 
 interface CaeDriver<Input> {
@@ -64,7 +64,7 @@ interface CaeDriver<Input> {
 }
 
 class CaeTask<T> {
-    value: T
+    value: T,
 
     function drive<Output, Error, D extends CaeDriver<CaeTask<T>, Output = Output, Error = Error>>(
         self,
@@ -74,7 +74,8 @@ class CaeTask<T> {
     }
 }
 
-class CaeIntDriver {}
+class CaeIntDriver {
+}
 
 implements CaeDriver<CaeTask<int>> for CaeIntDriver {
     type Output = int
@@ -86,7 +87,7 @@ implements CaeDriver<CaeTask<int>> for CaeIntDriver {
 }
 
 function cae_main() -> int {
-    CaeTask<int> { value: 42 }.drive(CaeIntDriver {}) catch (e) {
+    CaeTask<int> { value: 42 }.drive(CaeIntDriver {  }) catch (e) {
         let error: CaeKaboom => error.data
     }
 }
@@ -108,20 +109,20 @@ interface Describable {
 }
 
 class Ticket {
-    id: string
+    id: string,
 
     implements Describable {
         type Output = string
 
         function value(self) -> Self.Output {
-            return self.id
+            return self.id;
         }
     }
 }
 
 function dms_main() -> string {
-    let ticket = Ticket { id: "A-100" }
-    return ticket.describe()
+    let ticket = Ticket { id: "A-100" };
+    return ticket.describe();
 }
 
 test "default_method_self_call_yielding_associated_type_runs" {
@@ -137,14 +138,14 @@ interface BspSource {
 }
 
 class BspTextSource {
-    name: string
-    text: string
+    name: string,
+    text: string,
 
     implements BspSource {
         type Item = string
 
         function get(self) -> Self.Item {
-            return self.text
+            return self.text;
         }
     }
 }
@@ -155,7 +156,7 @@ interface BspRenderable {
 }
 
 class BspWrapped<T extends BspSource<Item = string>> {
-    inner: T
+    inner: T,
 }
 
 implements<T extends BspSource<Item = string>> BspRenderable for BspWrapped<T> {
@@ -167,14 +168,14 @@ implements<T extends BspSource<Item = string>> BspRenderable for BspWrapped<T> {
 }
 
 function bsp_take_source<T extends BspSource<Item = string>>(source: T) -> T.Item {
-    return source.get()
+    return source.get();
 }
 
 function bsp_main() -> string {
-    let source = BspTextSource { name: "sample", text: "ok" }
-    let wrapped = BspWrapped<BspTextSource> { inner: source }
+    let source = BspTextSource { name: "sample", text: "ok" };
+    let wrapped = BspWrapped<BspTextSource> { inner: source };
 
-    return bsp_take_source(source) + ":" + wrapped.as<BspRenderable<Output = string>>.render()
+    return bsp_take_source(source) + ":" + wrapped.as<BspRenderable<Output = string>>.render();
 }
 
 test "blanket_impl_self_associated_projection_uses_bounded_typevar" {
@@ -189,13 +190,13 @@ interface BcpSource {
 }
 
 class BcpTextSource {
-    text: string
+    text: string,
 
     implements BcpSource {
         type Item = string
 
         function get(self) -> Self.Item {
-            return self.text
+            return self.text;
         }
     }
 }
@@ -206,7 +207,7 @@ interface BcpWrapperView {
 }
 
 class BcpWrapped<S extends BcpSource<Item = string>> {
-    inner: S
+    inner: S,
 }
 
 implements<S extends BcpSource<Item = string>> BcpWrapperView for BcpWrapped<S> {
@@ -218,8 +219,8 @@ implements<S extends BcpSource<Item = string>> BcpWrapperView for BcpWrapped<S> 
 }
 
 function bcp_main() -> string {
-    let wrapped = BcpWrapped<BcpTextSource> { inner: BcpTextSource { text: "hello" } }
-    return wrapped.output()
+    let wrapped = BcpWrapped<BcpTextSource> { inner: BcpTextSource { text: "hello" } };
+    return wrapped.output();
 }
 
 test "blanket_impl_concrete_projection_return_resolves_at_callsite" {
@@ -241,23 +242,21 @@ interface UpcEntity requires UpcHasKey<Key = string>, UpcNamed {
 }
 
 class UpcUser {
-    id: string
-    name: string
+    id: string,
+    name: string,
 
     implements UpcHasKey {
         type Key = string
         key as id
     }
 
-    implements UpcNamed {
-    }
+    implements UpcNamed {}
 
-    implements UpcEntity {
-    }
+    implements UpcEntity {}
 }
 
 class UpcEntityBox<T extends UpcEntity> {
-    value: T
+    value: T,
 }
 
 interface UpcSummarizes {
@@ -279,13 +278,13 @@ implements<T extends UpcEntity> UpcSummarizes for UpcEntityBox<T> {
 }
 
 function upc_entity_key<T extends UpcEntity>(value: T) -> (T as UpcHasKey).Key {
-    return value.as<UpcHasKey<Key = string>>.key
+    return value.as<UpcHasKey<Key = string>>.key;
 }
 
 function upc_main() -> string {
-    let user = UpcUser { id: "u1", name: "Ada" }
-    let boxed = UpcEntityBox<UpcUser> { value: user }
-    return boxed.summary() + "|" + upc_entity_key(user)
+    let user = UpcUser { id: "u1", name: "Ada" };
+    let boxed = UpcEntityBox<UpcUser> { value: user };
+    return boxed.summary() + "|" + upc_entity_key(user);
 }
 
 test "upcast_of_bounded_typevar_preserves_associated_bindings" {
@@ -305,31 +304,31 @@ interface AdbHolder<T extends AdbSummarizable> {
 }
 
 class AdbUser {
-    name: string
+    name: string,
 
     implements AdbSummarizable {
         function summary(self) -> string {
-            return self.name
+            return self.name;
         }
     }
 }
 
 class AdbUserHolder {
-    user: AdbUser
+    user: AdbUser,
 
     implements AdbHolder<AdbUser> {
         function get(self) -> Self.Item {
-            return self.user
+            return self.user;
         }
     }
 }
 
 function adb_summarize<H extends AdbHolder<AdbUser>>(holder: H) -> string {
-    return holder.get().summary()
+    return holder.get().summary();
 }
 
 function adb_main() -> string {
-    return adb_summarize(AdbUserHolder { user: AdbUser { name: "Ada" } })
+    return adb_summarize(AdbUserHolder { user: AdbUser { name: "Ada" } });
 }
 
 test "associated_type_default_typevar_satisfies_declared_bound" {
@@ -353,41 +352,45 @@ interface ApdHolder {
 }
 
 class ApdWidget {
-    name: string
+    name: string,
 
     implements ApdSomeInterface {
         function label(self) -> string {
-            return self.name
+            return self.name;
         }
     }
 }
 
 class ApdWidgetHolder {
-    item: ApdWidget
+    item: ApdWidget,
 
     implements ApdHolder {
         type Item = ApdWidget
 
         function get(self) -> ApdWidget {
-            return self.item
+            return self.item;
         }
     }
 }
 
 function apd_label_from_holder<H extends ApdHolder>(holder: H) -> string {
-    let item = holder.get()
-    return item.label()
+    let item = holder.get();
+    return item.label();
 }
 
 function apd_holder_matches_itself<H extends ApdHolder>(holder: H) -> bool {
-    let item = holder.get()
-    return item.same_label(item)
+    let item = holder.get();
+    return item.same_label(item);
 }
 
 function apd_main() -> string {
-    let holder = ApdWidgetHolder { item: ApdWidget { name: "alpha" } }
-    let same = if apd_holder_matches_itself(holder) { "true" } else { "false" }
-    return apd_label_from_holder(holder) + ":" + same
+    let holder = ApdWidgetHolder { item: ApdWidget { name: "alpha" } };
+    let same = if (apd_holder_matches_itself(holder)) {
+        "true"
+    } else {
+        "false"
+    };
+    return apd_label_from_holder(holder) + ":" + same;
 }
 
 test "abstract_associated_projection_bound_method_dispatch_runs" {
@@ -403,23 +406,23 @@ interface IngIterator {
 }
 
 class IngIntIterator {
-    value: int
+    value: int,
 
     implements IngIterator {
         type Item = int?
 
         function next(self) -> Self.Item {
-            return self.value
+            return self.value;
         }
     }
 }
 
 function ing_stringify_next(iter: IngIterator<Item = int?>) -> string {
-    return baml.json.to_string(iter.next())
+    return baml.json.to_string(iter.next());
 }
 
 function ing_main() -> string {
-    return ing_stringify_next(IngIntIterator { value: 7 })
+    return ing_stringify_next(IngIntIterator { value: 7 });
 }
 
 test "inferred_native_generic_type_arg_from_interface_associated_return_runs" {
@@ -435,23 +438,23 @@ interface RdsContainer {
 }
 
 class RdsBox<T> {
-    value: T
+    value: T,
 
     implements RdsContainer {
         type Item = T
 
         function get(self) -> T {
-            return self.value
+            return self.value;
         }
     }
 }
 
 function rds_unwrap(c: RdsContainer<Item = int>) -> int {
-    return c.get()
+    return c.get();
 }
 
 function rds_main() -> int {
-    return rds_unwrap(RdsBox<int> { value: 42 })
+    return rds_unwrap(RdsBox<int> { value: 42 });
 }
 
 test "runtime_dispatch_substitutes_class_typevar_in_associated_type_binding" {
@@ -473,35 +476,35 @@ interface RdnOuter {
 }
 
 class RdnBox<T> {
-    value: T
+    value: T,
 
     implements RdnSource {
         type Item = T
 
         function get(self) -> T {
-            return self.value
+            return self.value;
         }
     }
 }
 
 class RdnOuterBox<T> {
-    source: RdnSource<Item = T>
+    source: RdnSource<Item = T>,
 
     implements RdnOuter {
         type Inner = RdnSource<Item = T>
 
         function inner(self) -> RdnSource<Item = T> {
-            return self.source
+            return self.source;
         }
     }
 }
 
 function rdn_unwrap(outer: RdnOuter<Inner = RdnSource<Item = int>>) -> int {
-    return outer.inner().get()
+    return outer.inner().get();
 }
 
 function rdn_main() -> int {
-    return rdn_unwrap(RdnOuterBox<int> { source: RdnBox<int> { value: 42 } })
+    return rdn_unwrap(RdnOuterBox<int> { source: RdnBox<int> { value: 42 } });
 }
 
 test "runtime_dispatch_substitutes_class_typevar_inside_nested_associated_binding" {
@@ -517,25 +520,25 @@ interface RmfSource {
 }
 
 class RmfIntSource {
-    value: int
+    value: int,
 
     implements RmfSource {
         type Item = int
 
         function get(self) -> int {
-            return self.value
+            return self.value;
         }
     }
 }
 
 class RmfStringSource {
-    value: string
+    value: string,
 
     implements RmfSource {
         type Item = string
 
         function get(self) -> string {
-            return self.value
+            return self.value;
         }
     }
 }
@@ -544,11 +547,11 @@ function rmf_score(source: RmfSource<Item = int> | RmfSource<Item = string>) -> 
     return match (source) {
         let ints: RmfSource<Item = int> => ints.get(),
         _ => 0,
-    }
+    };
 }
 
 function rmf_main() -> int {
-    return rmf_score(RmfStringSource { value: "no" }) + rmf_score(RmfIntSource { value: 7 })
+    return rmf_score(RmfStringSource { value: "no" }) + rmf_score(RmfIntSource { value: 7 });
 }
 
 test "runtime_match_filters_by_associated_type_binding" {
@@ -564,7 +567,7 @@ interface RdfSource {
 }
 
 class RdfIntSource {
-    value: int
+    value: int,
 
     implements RdfSource {
         type Item = int
@@ -572,7 +575,7 @@ class RdfIntSource {
 }
 
 class RdfStringSource {
-    value: string
+    value: string,
 
     implements RdfSource {
         type Item = string
@@ -583,11 +586,11 @@ function rdf_score(source: RdfSource<Item = int> | RdfSource<Item = string>) -> 
     return match (source) {
         RdfSource<Item = int> { value } => value,
         _ => 0,
-    }
+    };
 }
 
 function rdf_main() -> int {
-    return rdf_score(RdfStringSource { value: "no" }) + rdf_score(RdfIntSource { value: 9 })
+    return rdf_score(RdfStringSource { value: "no" }) + rdf_score(RdfIntSource { value: 9 });
 }
 
 test "runtime_destructure_filters_by_associated_type_binding" {
@@ -613,61 +616,24 @@ class RfiStringSource {
 }
 
 function rfi_main() -> int {
-    let score = 0
-    if reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = int>>()) {
+    let score = 0;
+    if (reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = int>>())) {
         score = score + 1
     }
-    if reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = string>>()) {
+    if (reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = string>>())) {
         score = score + 10
     }
-    if reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = string>>()) {
+    if (reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = string>>())) {
         score = score + 100
     }
-    if reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = int>>()) {
+    if (reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = int>>())) {
         score = score + 1000
     }
-    return score
+    return score;
 }
 
 test "reflection_implements_respects_associated_type_bindings" {
     assert.equal(rfi_main(), 101)
-}
-
-// ─── reflection_implementors_respects_associated_type_bindings ───────────────
-
-interface RfmSource {
-    type Item
-}
-
-class RfmIntSource {
-    implements RfmSource {
-        type Item = int
-    }
-}
-
-class RfmStringSource {
-    implements RfmSource {
-        type Item = string
-    }
-}
-
-function rfm_main() -> int {
-    let int_impls = reflect.type_of<RfmSource<Item = int>>().implementors()
-    let string_impls = reflect.type_of<RfmSource<Item = string>>().implementors()
-    let score = 0
-    score = score + int_impls.length()
-    if int_impls.length() > 0 && int_impls[0] == reflect.type_of<RfmIntSource>() {
-        score = score + 10
-    }
-    score = score + (string_impls.length() * 100)
-    if string_impls.length() > 0 && string_impls[0] == reflect.type_of<RfmStringSource>() {
-        score = score + 1000
-    }
-    return score
-}
-
-test "reflection_implementors_respects_associated_type_bindings" {
-    assert.equal(rfm_main(), 1111)
 }
 
 // ─── reflection_resolves_generic_class_associated_type_binding ───────────────
@@ -675,17 +641,14 @@ test "reflection_implementors_respects_associated_type_bindings" {
 // A generic class's `type Item = T` binding resolves precisely at the
 // instantiation: `RfgBox<int>` *is* `RfgSource<Item = int>` (consistent with
 // runtime dispatch and with how Rust resolves the projection), but it is
-// *not* `RfgSource<Item = string>`. `implementors()`, however, cannot
-// enumerate generic instantiations, so it lists the generic base `RfgBox`
-// for *any* specific `RfgSource<Item = …>` request (it can't pin the
-// instantiation).
+// *not* `RfgSource<Item = string>`.
 
 interface RfgSource {
     type Item
 }
 
 class RfgBox<T> {
-    value: T
+    value: T,
 
     implements RfgSource {
         type Item = T
@@ -693,32 +656,27 @@ class RfgBox<T> {
 }
 
 function rfg_main() -> int {
-    let box_int = reflect.type_of<RfgBox<int>>()
-    let int_source = reflect.type_of<RfgSource<Item = int>>()
-    let string_source = reflect.type_of<RfgSource<Item = string>>()
+    let box_int = reflect.type_of<RfgBox<int>>();
+    let int_source = reflect.type_of<RfgSource<Item = int>>();
+    let string_source = reflect.type_of<RfgSource<Item = string>>();
 
-    let score = 0
-    if box_int.implements(int_source) {
+    let score = 0;
+    if (box_int.implements(int_source)) {
         score = score + 1
     }
-    if box_int.implements(string_source) {
+    if (box_int.implements(string_source)) {
         score = score + 10
     }
-    if string_source.implemented_by(box_int) {
+    if (string_source.implemented_by(box_int)) {
         score = score + 100
     }
-    if string_source.implementors().length() > 0 {
-        score = score + 1000
-    }
-    return score
+    return score;
 }
 
 // `RfgBox<int>.implements(RfgSource<Item = int>)` holds (+1); the two
-// `Item = string` membership checks are correctly false; and `implementors()`
-// lists the generic base `RfgBox` for the `RfgSource<Item = string>` request
-// (+1000) since it can't pin the instantiation.
+// `Item = string` membership checks are correctly false.
 test "reflection_resolves_generic_class_associated_type_binding" {
-    assert.equal(rfg_main(), 1001)
+    assert.equal(rfg_main(), 1)
 }
 
 // ─── reflection_respects_generic_interface_impl_bound ────────────────────────
@@ -746,17 +704,18 @@ class RgbStrSource {
 }
 
 interface RgbIntSourced {}
+
 implement<T extends RgbSource<Item = int>> RgbIntSourced for T {}
 
 function rgb_main() -> int {
-    let score = 0
-    if reflect.type_of<RgbIntSource>().implements(reflect.type_of<RgbIntSourced>()) {
+    let score = 0;
+    if (reflect.type_of<RgbIntSource>().implements(reflect.type_of<RgbIntSourced>())) {
         score = score + 1
     }
-    if reflect.type_of<RgbStrSource>().implements(reflect.type_of<RgbIntSourced>()) {
+    if (reflect.type_of<RgbStrSource>().implements(reflect.type_of<RgbIntSourced>())) {
         score = score + 10
     }
-    return score
+    return score;
 }
 
 test "reflection_respects_generic_interface_impl_bound" {
@@ -771,25 +730,28 @@ test "reflection_respects_generic_interface_impl_bound" {
 // type-arg to implement the interface at exactly that instantiation.
 
 interface RpaContainer<T> {}
+
 class RpaIntBox {
     implements RpaContainer<int> {}
 }
+
 class RpaStrBox {
     implements RpaContainer<string> {}
 }
 
 interface RpaNeedsIntContainer {}
+
 implement<T extends RpaContainer<int>> RpaNeedsIntContainer for T {}
 
 function rpa_main() -> int {
-    let score = 0
-    if reflect.type_of<RpaIntBox>().implements(reflect.type_of<RpaNeedsIntContainer>()) {
+    let score = 0;
+    if (reflect.type_of<RpaIntBox>().implements(reflect.type_of<RpaNeedsIntContainer>())) {
         score = score + 1
     }
-    if reflect.type_of<RpaStrBox>().implements(reflect.type_of<RpaNeedsIntContainer>()) {
+    if (reflect.type_of<RpaStrBox>().implements(reflect.type_of<RpaNeedsIntContainer>())) {
         score = score + 10
     }
-    return score
+    return score;
 }
 
 test "reflection_respects_generic_interface_impl_bound_plain_args" {
@@ -805,19 +767,20 @@ test "reflection_respects_generic_interface_impl_bound_plain_args" {
 interface RltDebuggable {
     function debug(self) -> string throws never
 }
+
 implements RltDebuggable for int {
     function debug(self) -> string { return "int" }
 }
 
 function rlt_main() -> int {
-    let score = 0
-    if reflect.type_of<1>().implements(reflect.type_of<RltDebuggable>()) {
+    let score = 0;
+    if (reflect.type_of<1>().implements(reflect.type_of<RltDebuggable>())) {
         score = score + 1
     }
-    if reflect.type_of<int>().implements(reflect.type_of<RltDebuggable>()) {
+    if (reflect.type_of<int>().implements(reflect.type_of<RltDebuggable>())) {
         score = score + 10
     }
-    return score
+    return score;
 }
 
 test "reflection_literal_type_uses_concrete_base_impls" {
@@ -832,20 +795,25 @@ test "reflection_literal_type_uses_concrete_base_impls" {
 interface RevNamed {
     function name(self) -> string throws never
 }
-enum RevColor { Red  Green }
+
+enum RevColor {
+    Red,
+    Green,
+}
+
 implements RevNamed for RevColor {
     function name(self) -> string { return "color" }
 }
 
 function rev_main() -> int {
-    let score = 0
-    if reflect.type_of<RevColor.Red>().implements(reflect.type_of<RevNamed>()) {
+    let score = 0;
+    if (reflect.type_of<RevColor.Red>().implements(reflect.type_of<RevNamed>())) {
         score = score + 1
     }
-    if reflect.type_of<RevColor>().implements(reflect.type_of<RevNamed>()) {
+    if (reflect.type_of<RevColor>().implements(reflect.type_of<RevNamed>())) {
         score = score + 10
     }
-    return score
+    return score;
 }
 
 test "reflection_enum_variant_type_uses_concrete_base_impls" {

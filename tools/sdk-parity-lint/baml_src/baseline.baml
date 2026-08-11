@@ -93,7 +93,7 @@ function parse_baseline(contents: string, source: string, sdk_envs: string[]) ->
     expected_header.push("Required in");
     expected_header.push("Reason");
     let header = split_markdown_row(lines[header_index], source);
-    if (!baml.deep_equals(header, expected_header)) {
+    if (header != expected_header) {
         throw baml.errors.ParseError {
             message: `baseline environment columns do not match the configured matrix: ${source}`,
         };
@@ -128,8 +128,7 @@ function parse_baseline(contents: string, source: string, sdk_envs: string[]) ->
             };
         }
         let sdk_test_id = cells[0];
-        if let _separator: int = sdk_test_id.index_of("/") {
-        } else {
+        if let _separator: int = sdk_test_id.index_of("/") {} else {
             throw baml.errors.ParseError {
                 message: `invalid test ID in baseline ${source}: ${sdk_test_id}`,
             };
@@ -157,14 +156,9 @@ function parse_baseline(contents: string, source: string, sdk_envs: string[]) ->
                 has_required_gap = true;
                 required_gap_count += 1;
             }
-            parity_cells
-                .push(
-                    ParityCell {
-                        sdk_env: sdk_envs[env_index],
-                        present: present,
-                        required: required,
-                    },
-                );
+            parity_cells.push(
+                ParityCell { sdk_env: sdk_envs[env_index], present: present, required: required },
+            );
             env_index += 1;
         }
         rows.push(
@@ -216,12 +210,9 @@ function present_declaration_count(report: ParityReport) -> int {
 }
 
 function sorted_pairs(pairs: ParityPair[]) -> ParityPair[] {
-    pairs
-        .sort_by_key(
-            (pair) -> {
-                parity_pair_key(pair.sdk_test_id, pair.sdk_env)
-            },
-        );
+    pairs.sort_by_key((pair) -> {
+        parity_pair_key(pair.sdk_test_id, pair.sdk_env)
+    });
     pairs
 }
 
@@ -254,13 +245,9 @@ function compare_to_baseline(baseline: ParityReport, current: ParityReport) -> P
             if let current_row: ParityRow = current_by_id.get(baseline_row.sdk_test_id) {
                 for (let sdk_env in baseline_row.required_envs) {
                     if (!array_contains(current_row.required_envs, sdk_env)) {
-                        weakened
-                            .push(
-                                ParityPair {
-                                    sdk_test_id: baseline_row.sdk_test_id,
-                                    sdk_env: sdk_env,
-                                },
-                            );
+                        weakened.push(
+                            ParityPair { sdk_test_id: baseline_row.sdk_test_id, sdk_env: sdk_env },
+                        );
                     }
                 }
             }

@@ -24,7 +24,7 @@ function shell_failing_command_fn() -> int {
 }
 
 test "shell_failing_command" {
-    assert.is_true(baml.deep_equals(shell_failing_command_fn(), 1))
+    assert.equal(shell_failing_command_fn(), 1)
 }
 
 // Dynamic command string: the variable assignment happens inside BAML, then
@@ -53,7 +53,7 @@ function shell_ok_failure_fn() -> bool {
 }
 
 test "shell_ok_method_failure" {
-    assert.is_true(baml.deep_equals(shell_ok_failure_fn(), false))
+    assert.is_true(!shell_ok_failure_fn())
 }
 
 // stdout field is a uint8array; to_string() decodes it.
@@ -170,7 +170,9 @@ test "b251_println_discarded_then_shell" {
 // exec() with no platform guard in the original Rust test — `echo` resolves as
 // a PATH binary on Unix and is available cross-platform enough for CI.
 function exec_echo_fn() -> bool {
-    baml.sys.exec("echo", ["Hello From Exec!"], null).stdout.to_string().includes("Hello From Exec!")
+    baml.sys.exec("echo", ["Hello From Exec!"], null).stdout.to_string().includes(
+        "Hello From Exec!",
+    )
 }
 
 test "exec_echo" {
