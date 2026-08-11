@@ -1209,9 +1209,12 @@ impl BacktickStringLiteral {
     /// For `` `Hello, ${user.name}!` `` returns:
     /// `[Text("Hello, "), Interp(<${user.name}>), Text("!")]`.
     ///
-    /// Text segments are escape-decoded; multi-line content is dedented per
-    /// BEP §12 (interpolations do not affect the min-indent calculation per
-    /// §12 rule 8 — "Whitespace inside `${...}` is preserved verbatim").
+    /// Multi-line content is dedented per BEP §12 (see
+    /// [`baml_base::dedent::dedent_backtick`]) with interpolations excluded from
+    /// the min-indent calculation (§12 rule 8 — "Whitespace inside `${...}` is
+    /// preserved verbatim"), §13 block-tag whitespace control is applied, and
+    /// then text segments are escape-decoded. Only *layout* is stripped: an
+    /// authored `\n` at the end of a literal survives.
     pub fn segments(&self) -> Vec<BacktickSegment> {
         build_segment_tree(&mut self.flat_parts().into_iter().peekable())
     }
@@ -1228,9 +1231,10 @@ impl BacktickStringLiteral {
     }
 
     /// Pass (1) of the two-pass build: walk the CST into a flat `FlatPart`
-    /// stream (text + interp + block-tag opens/closes) with whole-literal
-    /// dedent and §13 whitespace control. Pass (2) — lifting matched
-    /// open/close pairs into nested For / If segments — is `build_segment_tree`.
+    /// stream (text + interp + block-tag opens/closes) with whole-literal §12
+    /// dedent, §13 whitespace control, and escape decoding — in that order.
+    /// Pass (2) — lifting matched open/close pairs into nested For / If
+    /// segments — is `build_segment_tree`.
     fn flat_parts(&self) -> Vec<FlatPart> {
         let n = self.delimiter_count();
         if n == 0 {
@@ -1310,20 +1314,22 @@ impl BacktickStringLiteral {
             parts.push(FlatPart::Text(current_text));
         }
 
-        // Decode escapes per text chunk.
-        for p in &mut parts {
-            if let FlatPart::Text(s) = p {
-                *s = unescape_backtick_string_literal(s);
-            }
-        }
+        // Everything from here through §13 whitespace control runs on the *raw*
+        // chunk text, with escapes still encoded. Both are source-layout rules,
+        // and an authored `\n` is content, not layout. Decoding first would turn
+        // it into a real newline that the dedent's edge handling and §13's
+        // line scan could then read as a line break of the layout — which is
+        // exactly how `` `${host}\n` `` used to lose its trailing newline.
 
-        // Dedent across the whole literal if any text chunk contains a
-        // newline. Replace each non-text part with a single-char placeholder
-        // so they don't influence min-indent, then split the dedented
-        // result back into text segments and reattach the parts in order.
+        // §12 dedent across the whole literal. Replace each non-text part with
+        // a single-char placeholder so an interpolation neither contributes to
+        // the min-indent nor has its own lines re-indented (§12 rule 8:
+        // "Whitespace inside `${...}` is preserved verbatim"), then split the
+        // dedented result back into text segments and reattach the parts in
+        // order.
         let needs_dedent = parts
             .iter()
-            .any(|p| matches!(p, FlatPart::Text(s) if s.contains('\n')));
+            .any(|p| matches!(p, FlatPart::Text(s) if s.contains(['\n', '\r'])));
         if needs_dedent {
             // Pick a placeholder that doesn't appear in user content
             // (ultrareview bug_006). Walk the PUA range U+E000..U+F8FF and
@@ -1352,7 +1358,7 @@ impl BacktickStringLiteral {
                     }
                 }
             }
-            let dedented = baml_base::dedent::preprocess_template(&joined);
+            let dedented = baml_base::dedent::dedent_backtick(&joined);
             let pieces: Vec<&str> = dedented.split(placeholder).collect();
 
             // Rebuild `parts` in dedented order: one text piece per gap,
@@ -1385,6 +1391,14 @@ impl BacktickStringLiteral {
         // block tags consume nothing. Applied to the flat sequence before
         // hierarchical lifting so it works uniformly across nested blocks.
         apply_block_tag_whitespace_rule(&mut parts);
+
+        // Escapes decode last, once every layout rule has run. `\n`/`\t`
+        // sequences produced here are user content and are never trimmed.
+        for p in &mut parts {
+            if let FlatPart::Text(s) = p {
+                *s = unescape_backtick_string_literal(s);
+            }
+        }
         parts
     }
 }

@@ -13,10 +13,10 @@
 //!    line as-is (its content is whitespace-only).
 //! 3. Trim leading/trailing whitespace from the overall result.
 //!
-//! Used by BEP-049 backtick string literals (multi-line auto-dedent, §12). The
-//! legacy Jinja prompt pipeline (`sys_llm::preprocess_template`) keeps the older
-//! byte-count-min variant until that path is removed (M6) — they intentionally
-//! diverge on mixed tab/space indentation, which only the new backtick form specs.
+//! `preprocess_template` is the legacy Jinja form, kept in lockstep with
+//! `sys_llm::preprocess_template` until that path is removed (M6). BEP-049
+//! backtick literals use [`dedent_backtick`] instead, which strips layout
+//! without the blanket trim.
 // Walk leading whitespace by *char* so we never split a multi-byte
 // Unicode whitespace codepoint (NBSP U+00A0 = 2 bytes, LINE SEPARATOR
 // U+2028 = 3 bytes, etc.). A naive `line.len() - line.trim_start().len()`
@@ -64,6 +64,98 @@ fn common_prefix<'a>(a: &'a str, b: &str) -> &'a str {
         .last()
         .unwrap_or(0);
     &a[..end]
+}
+
+/// Strip the layout of a multi-line backtick string literal (BEP-049 §12),
+/// leaving everything the author actually wrote.
+///
+/// Three steps, in order:
+///
+/// 1. Normalize `\r\n` and lone `\r` to `\n` (§AA, TypeScript parity).
+/// 2. Drop the line break that follows the opening delimiter and the line break
+///    plus indentation that precedes the closing one. These belong to the
+///    delimiters, not the content.
+/// 3. Strip the longest common leading-whitespace prefix from the remaining
+///    lines (§12 Rule 2: compared char-by-char, so tabs and spaces don't mix).
+///
+/// What it deliberately does *not* do is trim. Blank lines the author left at
+/// either end, trailing spaces, and a `\n` written as an escape all survive.
+/// That last one is why a blanket trim was wrong: it silently ate the newline
+/// in `` `${host}\n` ``, so a generated `/etc/hostname` came out without one.
+///
+/// Runs on the *raw* literal text, before escapes are decoded, so an authored
+/// `\n` is still two opaque characters here and can never be mistaken for a
+/// line break of the layout. A single-line literal is returned unchanged: with
+/// no layout to strip, its leading and trailing spaces are content.
+pub fn dedent_backtick(text: &str) -> String {
+    if !text.contains(['\n', '\r']) {
+        return text.to_string();
+    }
+    let normalized = normalize_newlines(text);
+    let mut body = normalized.as_ref();
+
+    // The line break after the opening delimiter (any spaces/tabs in front of
+    // it are part of that same break).
+    if let Some(rest) = body.trim_start_matches([' ', '\t']).strip_prefix('\n') {
+        body = rest;
+    }
+    // The line break before the closing delimiter, plus the indent that lines
+    // the delimiter up with the code around it.
+    if let Some(rest) = body.trim_end_matches([' ', '\t']).strip_suffix('\n') {
+        body = rest;
+    }
+
+    // Split on '\n' rather than `str::lines`, which would silently swallow a
+    // trailing newline the author asked for (a blank line before the closer).
+    let lines: Vec<&str> = body.split('\n').collect();
+    let strip = common_indent(&lines);
+    lines
+        .iter()
+        .map(|line| {
+            if leading_whitespace_bytes(line) >= strip {
+                strip_leading_indent(line, strip)
+            } else {
+                // Whitespace-only line shorter than the common indent.
+                ""
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `\r\n` and lone `\r` become `\n` (§AA, mirroring typescript-go's scanner).
+/// Borrows when there is nothing to change.
+fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.contains('\r') {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\r' {
+            if chars.peek() == Some(&'\n') {
+                chars.next();
+            }
+            out.push('\n');
+        } else {
+            out.push(c);
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
+/// Byte length of the longest common leading-whitespace prefix across the
+/// non-blank lines.
+fn common_indent(lines: &[&str]) -> usize {
+    let mut common: Option<&str> = None;
+    for line in lines.iter().filter(|line| !line.trim().is_empty()) {
+        let ws = &line[..leading_whitespace_bytes(line)];
+        common = Some(match common {
+            None => ws,
+            Some(prev) => common_prefix(prev, ws),
+        });
+    }
+    common.map_or(0, str::len)
 }
 
 pub fn preprocess_template(template: &str) -> String {
@@ -158,6 +250,62 @@ mod tests {
         // Option+Space.
         let input = " hello\n\u{00A0}world";
         let _ = preprocess_template(input);
+    }
+
+    #[test]
+    fn backtick_single_line_is_untouched() {
+        // No layout to strip, so the spaces are content.
+        assert_eq!(dedent_backtick("  hello  "), "  hello  ");
+    }
+
+    #[test]
+    fn backtick_strips_indent_and_delimiter_line_breaks() {
+        let input = "\n        line one\n        line two\n    ";
+        assert_eq!(dedent_backtick(input), "line one\nline two");
+    }
+
+    #[test]
+    fn backtick_keeps_relative_indent() {
+        let input = "\n    header\n        bullet\n    footer\n";
+        assert_eq!(dedent_backtick(input), "header\n    bullet\nfooter");
+    }
+
+    #[test]
+    fn backtick_keeps_trailing_escaped_newline() {
+        // B-1474. The escape is two raw characters at this point, so nothing
+        // here can read it as layout, and no trim runs to eat it either.
+        assert_eq!(dedent_backtick(r"a\n"), r"a\n");
+        assert_eq!(dedent_backtick("\n    a\\n\n"), "a\\n");
+    }
+
+    #[test]
+    fn backtick_blank_line_before_closer_yields_trailing_newline() {
+        // Only *one* line break belongs to the closing delimiter; the blank
+        // line the author left in front of it is content.
+        assert_eq!(dedent_backtick("\n    a\n    b\n\n    "), "a\nb\n");
+    }
+
+    #[test]
+    fn backtick_keeps_leading_and_trailing_blank_content_lines() {
+        assert_eq!(dedent_backtick("\n\n    a\n\n"), "\na\n");
+    }
+
+    #[test]
+    fn backtick_keeps_trailing_spaces_inside_content() {
+        // Trailing spaces on an interior line are content, not layout.
+        assert_eq!(dedent_backtick("\n    a  \n    b\n"), "a  \nb");
+    }
+
+    #[test]
+    fn backtick_escape_does_not_count_as_indentation() {
+        // `\t` is a backslash and a `t`, not whitespace: it must not join the
+        // common prefix, and must not be stripped off the front of a line.
+        assert_eq!(dedent_backtick("\n  a\n  \\tb\n"), "a\n\\tb");
+    }
+
+    #[test]
+    fn backtick_normalizes_crlf() {
+        assert_eq!(dedent_backtick("\r\n    a\r\n    b\r\n"), "a\nb");
     }
 
     #[test]

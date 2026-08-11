@@ -819,7 +819,7 @@ impl Printable for RawString {
 /// BEP-049 backtick-interpolated string literal.
 ///
 /// A backtick string is auto-dedented at lower time (BEP-049 §12,
-/// `baml_base::dedent::preprocess_template`) with its `${...}` interpolations
+/// `baml_base::dedent::dedent_backtick`) with its `${...}` interpolations
 /// replaced by placeholders and §13 whitespace control applied, so its runtime
 /// *value* depends on the interior's indentation. The formatter re-indents a
 /// multi-line interior to sit one level past the surrounding block (like a raw
@@ -891,10 +891,11 @@ fn reindent_backtick(text: &str, indent: usize, indent_width: usize) -> Option<S
     }
     let inner = &text[ticks..text.len() - ticks];
 
-    // Source-level dedent: strip the common leading-whitespace prefix and trim,
-    // matching the runtime §12 dedent but on the raw source so escapes and
+    // Source-level dedent: strip the common leading-whitespace prefix and the
+    // delimiters' own line breaks, exactly as the compiler's §12 dedent does,
+    // and on the raw source for the same reason it does — so escapes and
     // `${...}` stay intact and the printed form remains valid source.
-    let dedented = baml_db::dedent::preprocess_template(inner);
+    let dedented = baml_db::dedent::dedent_backtick(inner);
     if dedented.is_empty() {
         return None;
     }
@@ -913,10 +914,11 @@ fn reindent_backtick(text: &str, indent: usize, indent_width: usize) -> Option<S
     candidate_inner.push('\n');
     candidate_inner.extend(std::iter::repeat_n(' ', indent));
 
-    // Bail to verbatim unless the runtime value (escapes decoded, then §12
-    // dedented) is byte-identical for the original and re-indented interiors.
+    // Bail to verbatim unless the runtime value (§12 dedented, then escapes
+    // decoded — the compiler's order) is byte-identical for the original and
+    // re-indented interiors.
     let value = |s: &str| {
-        baml_db::dedent::preprocess_template(&baml_db::escape::unescape_backtick_string_literal(s))
+        baml_db::escape::unescape_backtick_string_literal(&baml_db::dedent::dedent_backtick(s))
     };
     if value(inner) != value(&candidate_inner) {
         return None;
