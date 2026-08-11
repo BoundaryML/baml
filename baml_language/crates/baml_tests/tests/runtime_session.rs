@@ -61,6 +61,11 @@ function Wait() -> int throws unknown {
   1
 }
 
+function LongWait() -> int throws unknown {
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(5000))
+  1
+}
+
 function scenario_7() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
 
@@ -184,6 +189,25 @@ function concurrent_eval_is_busy() -> bool throws unknown {
   busy && waited == 1 && s.eval<int>(#"2"#) == 2
 }
 
+function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unknown {
+  let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  s.eval(#"let baseline = 40"#)
+  let pending = spawn {
+    s.eval<int>(#"
+      let committed = baseline + 1
+      app.LongWait()
+    "#)
+  }
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(500))
+  pending.cancel()
+  let cancelled = (await pending) catch (e) {
+    baml.panics.Cancelled => true,
+    _ => false,
+  }
+
+  cancelled && s.eval<int>(#"baseline + committed"#) == 81
+}
+
 function declaration_redefinition_keeps_earlier_resolution() -> bool throws unknown {
   let s = reflect.Session.new()
   s.eval(#"function Current() -> int { 1 }"#)
@@ -285,6 +309,15 @@ async fn runtime_contracts_check_before_execution() {
 #[tokio::test]
 async fn concurrent_session_eval_throws_busy_and_recovers() {
     let output = baml_test!(baml: SCENARIO_7, entry: "concurrent_eval_is_busy");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn cancelled_session_eval_releases_lease_and_preserves_committed_prefix() {
+    let output = baml_test!(
+        baml: SCENARIO_7,
+        entry: "cancelled_eval_releases_lease_and_preserves_prefix"
+    );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
