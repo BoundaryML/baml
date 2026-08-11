@@ -3745,7 +3745,9 @@ impl Printable for ArrayInitializer {
 pub struct ObjectInitializer {
     pub name: PathExpr,
     pub open_brace: t::LBrace,
-    pub fields: Vec<(ObjectField, Option<t::Comma>)>,
+    /// Fields and `...spread` members, in source order. Order is significant:
+    /// later members win at runtime, so it must be preserved verbatim.
+    pub fields: Vec<(ObjectMember, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
 }
 
@@ -3771,8 +3773,8 @@ impl FromCST for ObjectInitializer {
                 SyntaxKind::R_BRACE => {
                     break t::RBrace::from_cst(elem)?;
                 }
-                SyntaxKind::OBJECT_FIELD => {
-                    let field = ObjectField::from_cst(elem)?;
+                SyntaxKind::OBJECT_FIELD | SyntaxKind::SPREAD_ELEMENT => {
+                    let field = ObjectMember::from_cst(elem)?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
@@ -3781,7 +3783,7 @@ impl FromCST for ObjectInitializer {
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "OBJECT_FIELD or R_BRACE".into(),
+                        expected_desc: "OBJECT_FIELD, SPREAD_ELEMENT, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -4300,6 +4302,132 @@ impl Printable for ObjectField {
             .as_ref()
             .map(Printable::rightmost_token)
             .unwrap_or_else(|| self.name.rightmost_token())
+    }
+}
+
+/// A member of an [`ObjectInitializer`]: either a `name: value` field or a
+/// `...expr` spread element.
+///
+/// Only [`SyntaxKind::OBJECT_LITERAL`] admits spreads; map literals and array
+/// literals keep using [`ObjectField`] directly.
+#[derive(Debug)]
+pub enum ObjectMember {
+    Field(ObjectField),
+    Spread(SpreadElement),
+}
+
+impl FromCST for ObjectMember {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::OBJECT_FIELD => Ok(ObjectMember::Field(ObjectField::from_cst(elem)?)),
+            SyntaxKind::SPREAD_ELEMENT => Ok(ObjectMember::Spread(SpreadElement::from_cst(elem)?)),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "OBJECT_FIELD or SPREAD_ELEMENT".into(),
+                found: elem.kind(),
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl ObjectMember {
+    /// Returns the width of the member if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            ObjectMember::Field(field) => field.single_line_width(input),
+            ObjectMember::Spread(spread) => spread.single_line_width(input),
+        }
+    }
+}
+
+impl Printable for ObjectMember {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ObjectMember::Field(field) => field.print(shape, printer),
+            ObjectMember::Spread(spread) => spread.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ObjectMember::Field(field) => field.leftmost_token(),
+            ObjectMember::Spread(spread) => spread.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ObjectMember::Field(field) => field.rightmost_token(),
+            ObjectMember::Spread(spread) => spread.rightmost_token(),
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::SPREAD_ELEMENT`] node.
+///
+/// Struct-update spread inside an object literal: `Type { ...base, field: v }`.
+#[derive(Debug)]
+pub struct SpreadElement {
+    pub dot_dot_dot: t::DotDotDot,
+    pub value: Expression,
+}
+
+impl FromCST for SpreadElement {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::SPREAD_ELEMENT)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let dot_dot_dot = it.expect_parse()?;
+        let value = it.expect_next("spread value")?;
+        let value = Expression::from_cst(value)?;
+
+        it.expect_end()?;
+
+        Ok(SpreadElement { dot_dot_dot, value })
+    }
+}
+
+impl KnownKind for SpreadElement {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::SPREAD_ELEMENT
+    }
+}
+
+impl SpreadElement {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        // Must match the trivia handled by `print`: dots_trailing + value_leading.
+        let mut trivia_len = 0usize;
+        let (_, dots_trailing) = input.trivia.get_for_range_split(self.dot_dot_dot.span());
+        for t in dots_trailing {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_leading = input.trivia.get_leading_for_element(&self.value);
+        for t in value_leading {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_width = self.value.single_line_width(input)?;
+        Some(const { "...".len() } + value_width + trivia_len)
+    }
+}
+
+impl Printable for SpreadElement {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // No space after `...` — it binds tightly to its operand.
+        printer.print_raw_token(&self.dot_dot_dot);
+        let (_, dots_trailing) = printer.trivia.get_for_range_split(self.dot_dot_dot.span());
+        printer.print_trivia_squished(dots_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        printer.print_trivia_squished(value_leading);
+        printer.print(&self.value, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.dot_dot_dot.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.value.rightmost_token()
     }
 }
 
