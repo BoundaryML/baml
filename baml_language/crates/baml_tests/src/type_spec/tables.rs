@@ -495,3 +495,33 @@ function fa_probe(n: FaNode) -> int throws never {
         "the assign TARGET and the read both record Field: {resolutions:?}"
     );
 }
+
+#[test]
+fn union_field_access_records_virtual_view() {
+    // Proper dyn (ruled 2026-08-11): a field access on a UNION receiver
+    // whose members all share one realized declaring-interface view
+    // records InterfaceVirtualField through that view - TIR's
+    // "authoritative for union receivers" rule - so MIR emits the
+    // virtual read instead of falling back to a tag switch.
+    let source = r#"
+interface UvHasSound {
+    sound string
+}
+class UvCat {
+    sound string
+    implements UvHasSound {}
+}
+class UvDog {
+    sound string
+    implements UvHasSound {}
+}
+function uv_probe(animal: UvCat | UvDog) -> string throws never {
+    animal.sound
+}
+"#;
+    let resolutions = member_resolutions(source);
+    assert!(
+        resolutions.contains(&("animal.sound".into(), "InterfaceVirtualField".into())),
+        "union field access records the shared virtual view: {resolutions:?}"
+    );
+}

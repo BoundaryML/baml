@@ -3,8 +3,8 @@ source: crates/baml_tests/src/compiler2_mir/provider_sweep.rs
 ---
 == S16 provider sweep ==
 functions compared: 2823
-agreements: 2515
-O2 agreements (informational; optimizer parity deferred): 2515
+agreements: 2516
+O2 agreements (informational; optimizer parity deferred): 2516
 ruled bigint-context: 1
 ruled literal-widening: 77
 ruled literal-widening+receiver-seeding+void-union: 1
@@ -19,26 +19,14 @@ ruled throws-precision: 33
 ruled throws-precision+tir-unknown: 1
 ruled tir-never-test: 4
 ruled tir-unknown: 93
-differing: 37
+differing: 36
 panics: 0
 top-level lets: not diffed (no body renderer yet)
 
 == residual pair census (all shapes, by count) ==
-[3x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: 
-[3x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: goto -> bb6;
-[3x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: }
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: 
     hir: <absent>
-[2x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: _ = copy _.0;
 [2x] e.g. ns_control_flow/control_flow.baml :: $init_test_ns_control_flow_control_flow
     tir: _ = [copy _, copy _, copy _]: control_flow.Ok | control_flow.Err[];
     hir: _ = [copy _, copy _, copy _]: control_flow.Err | control_flow.Ok[];
@@ -69,27 +57,6 @@ top-level lets: not diffed (no body renderer yet)
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: }
     hir: <absent>
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: _ = const null;
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: bb4: {
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: bb5: {
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: bb6: {
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: let _: int
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: let _: null | null_handling.NhCat | null_handling.NhDog
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: <absent>
-    hir: switch copy _ [NhCat: bb4, NhDog: bb3, otherwise: bb2] (exhaustive);
 [1x] e.g. ns_iter_closure_elements/iter_closure_elements.baml :: closure_loop_sum
     tir: _ = []: never[];
     hir: _ = []: () -> void throws never[];
@@ -126,15 +93,9 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_interfaces/interfaces.baml :: idmr_main
     tir: _ = const fn user.interfaces.IdmrDescribable.describe;
     hir: _ = const null;
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: _ = const null;
-    hir: unreachable;
 [1x] e.g. ns_interfaces/interfaces_3.baml :: describe
     tir: _ = copy _.name#0 as interfaces.W304Named;
     hir: _ = copy _.0;
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: _ = copy _.sound#0 as null_handling.NhHasSound;
-    hir: _ = copy _;
 [1x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_falls_through_on_non_fn
     tir: _ = copy _;
     hir: _ = virtual_call area as generic_match_subtype.Shape(copy _) -> [bb2];
@@ -243,18 +204,9 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: bb4: {
     hir: <absent>
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: branch copy _ -> [bb2, bb1];
-    hir: branch copy _ -> [bb5, bb1];
 [1x] e.g. ns_spawn_basic/spawn_basic.baml :: spawn_returning_string
     tir: fn .<lambda(spawn_returning_string, 0)>() -> "hello from spawn" {
     hir: fn .<lambda(spawn_returning_string, 0)>() -> string {
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: goto -> bb3;
-    hir: <absent>
-[1x] e.g. ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    tir: goto -> bb3;
-    hir: _ = type_tag(_);
 [1x] e.g. ns_spawn_basic/spawn_basic.baml :: spawn_returning_string
     tir: let _: "hello from spawn" // _ // return
     hir: let _: string // _ // return
@@ -415,10 +367,6 @@ ns_lambdas/lambdas.baml :: lambda_contextual_main
     ...     let _1: unknown // e
     tir:     let _2: (int) -> int throws int | string
     hir:     let _2: (int) -> int throws "contextual"
-ns_null_handling/null_handling.baml :: nh_multi_union_optional_access
-    ...     let _2: bool
-    tir: 
-    hir:     let _3: null | null_handling.NhCat | null_handling.NhDog
 ns_ops_bitwise/ops_bitwise.baml :: $init_test_ns_ops_bitwise_ops_bitwise
     ...     let _2: void
     tir:     let _3: () -> void throws unknown

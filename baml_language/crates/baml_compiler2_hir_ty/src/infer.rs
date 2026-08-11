@@ -4183,9 +4183,11 @@ impl<'db> InferenceContext<'db> {
         // TS's union-member rule (TIR follows): a member on a UNION
         // resolves on EVERY member type and the results JOIN; a member
         // type lacking it - null included: handle null first - fails
-        // the whole access. Per-member resolutions are dropped: the
-        // union access has no single declaration (its virtual view is
-        // an S16 follow-up).
+        // the whole access. When every member reaches the field through
+        // ONE shared realized declaring-interface view, the access
+        // records that view (proper dyn, ruled 2026-08-11): the virtual
+        // read is the union's single declaration - TIR's rule, and the
+        // only resolution that answers a union receiver.
         if let TyKind::Union(members, _) = resolved.kind() {
             let members = members.to_vec();
             let mut tys = Vec::new();
@@ -4196,7 +4198,8 @@ impl<'db> InferenceContext<'db> {
                 }
                 tys.push(ty);
             }
-            return (self.join(&tys), None);
+            let view = self.union_virtual_field_view(&members, member);
+            return (self.join(&tys), view);
         }
         if let TyKind::Class(qtn, args, _) = resolved.kind()
             && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
@@ -4243,6 +4246,81 @@ impl<'db> InferenceContext<'db> {
             return (self.interface_member_value(interface_member), resolution);
         }
         (Ty::error(), None)
+    }
+
+    /// The one realized declaring-interface view a UNION receiver's
+    /// field access dispatches through, when every member matches an
+    /// impl of the SAME realized interface declaring `field` - proper
+    /// dyn dispatch (rust's `dyn Trait` field-object shape; TIR's
+    /// union-receiver rule). Any member without a unique matching view,
+    /// or two members with different realized views, resolves nothing:
+    /// absent, so MIR falls back, never a wrong view.
+    fn union_virtual_field_view(
+        &mut self,
+        members: &[Ty],
+        field: &baml_type::Name,
+    ) -> Option<MemberResolution<'db>> {
+        let mut shared: Option<(
+            baml_compiler2_hir::loc::InterfaceLoc<'db>,
+            baml_type::interned::InterfaceRef,
+            u32,
+        )> = None;
+        for member_ty in members {
+            let view = self.member_field_view(member_ty, field)?;
+            match &shared {
+                None => shared = Some(view),
+                Some(existing) if existing.1 == view.1 => {}
+                Some(_) => return None,
+            }
+        }
+        shared.map(
+            |(interface, realized, field_index)| MemberResolution::InterfaceVirtualField {
+                interface,
+                view: realized.existential(),
+                field_index,
+                field: field.clone(),
+            },
+        )
+    }
+
+    /// The unique impl-provided interface view declaring `field` for one
+    /// concrete receiver: the declaring interface, its realization at
+    /// this receiver, and the field's index in the interface's own
+    /// declared field list.
+    fn member_field_view(
+        &mut self,
+        receiver: &Ty,
+        field: &baml_type::Name,
+    ) -> Option<(
+        baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        baml_type::interned::InterfaceRef,
+        u32,
+    )> {
+        use baml_compiler2_hir::contributions::Definition;
+        let mut found: Option<(
+            baml_compiler2_hir::loc::InterfaceLoc<'db>,
+            baml_type::interned::InterfaceRef,
+            u32,
+        )> = None;
+        for resolved in crate::impls::impls_for_type(self.db, receiver) {
+            let implemented = resolved.implemented();
+            let Some(Definition::Interface(interface)) = self.facts.definition_of(&implemented.name)
+            else {
+                continue;
+            };
+            let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+            let Some(index) = data.fields.iter().position(|f| f.name == *field) else {
+                continue;
+            };
+            let view = (interface, implemented, index as u32);
+            match &found {
+                None => found = Some(view),
+                Some(existing) if existing.1 == view.1 => {}
+                // Two distinct declaring views: ambiguous, fail-safe.
+                Some(_) => return None,
+            }
+        }
+        found
     }
 
     /// The recorded resolution for an interface member's declarer, when
