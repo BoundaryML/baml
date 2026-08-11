@@ -1776,12 +1776,10 @@ impl BamlClassReflectSession for PackageBamlImpl {
         vm: &mut BexVm,
         packages: &IndexMap<bex_str::BexStr, Value>,
     ) -> Result<Value, VmRustFnError> {
-        const RESERVED: &[&str] = &[
-            "baml", "boundary", "testing", "assert", "log", "user", "root", "env",
-        ];
         let mut dependencies = IndexMap::new();
         for (alias, value) in packages {
-            if RESERVED.contains(&alias.as_str()) {
+            // Keep runtime rejection single-sourced with compiler mount filtering.
+            if baml_builtins2::reserved_package_names().contains(&alias.as_str()) {
                 let diagnostic = super::type_kinds::compiler_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),

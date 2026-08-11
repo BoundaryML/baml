@@ -192,6 +192,21 @@ pub fn stdlib_package_names() -> &'static [&'static str] {
     })
 }
 
+/// Every package name that user-provided mounts may not claim, in stable
+/// first-appearance order: all builtin packages, followed by the implicit user
+/// package and the two compiler-reserved package names.
+///
+/// This is the single source of truth shared by mount filtering and runtime
+/// reflection, so both paths reject exactly the same aliases.
+pub fn reserved_package_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = stdlib_package_names().to_vec();
+        names.extend([baml_type::RESERVED_USER_PACKAGE, "root", "env"]);
+        names
+    })
+}
+
 mod adt;
 mod media;
 pub use adt::*;

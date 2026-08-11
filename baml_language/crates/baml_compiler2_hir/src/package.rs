@@ -368,21 +368,11 @@ mod tests {
     }
 }
 
-/// Package names a mounted blob may NOT claim (BEP-066 slice 6a): the
-/// hardcoded stdlib arms of [`package_dependencies`] plus the names
-/// `file_package` can assign to real files (`user`, `env`) and the `root`
-/// self-reference keyword. A mounted entry under any of these is ignored
-/// entirely — it never becomes a dependency and `package_interface` never
-/// serves its blob — so a mount can never shadow the stdlib or the user's own
-/// package. Kept in lockstep with the hardcoded arms below (same maintenance
-/// story as those arms themselves).
-const RESERVED_PACKAGE_NAMES: &[&str] = &[
-    "baml", "boundary", "testing", "assert", "log", "user", "root", "env",
-];
-
-/// Whether `name` is reserved against mounting — see `RESERVED_PACKAGE_NAMES`.
+/// Whether `name` is reserved against mounting (BEP-066 slice 6a): builtin
+/// packages, `user`, `root`, and `env`. The complete list is single-sourced in
+/// [`baml_builtins2::reserved_package_names`], shared with runtime reflection.
 pub fn is_reserved_package_name(name: &str) -> bool {
-    RESERVED_PACKAGE_NAMES.contains(&name)
+    baml_builtins2::reserved_package_names().contains(&name)
 }
 
 /// The names of every mounted source-less dependency package (BEP-066 slice
