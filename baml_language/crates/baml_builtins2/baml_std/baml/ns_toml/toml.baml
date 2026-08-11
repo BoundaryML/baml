@@ -4,6 +4,8 @@
 /// `PlainTime`.
 type Item = Table | Item[] | bool | int | float | string | baml.time.ZonedDateTime | baml.time.PlainDateTime | baml.time.PlainDate | baml.time.PlainTime
 
+/// A TOML [table](https://toml.io/en/latest#table).
+/// Represents a collection of key/value pairs.
 class Table {
     items: map<string, Item>
 

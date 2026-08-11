@@ -141,7 +141,7 @@ fn build_class_namespace_tree<'a>(
 /// - `baml.Array.length` → class `Array` at root, method `length`
 /// - `baml.media.Pdf.url` → namespace `media`, class `Pdf`, method `url`
 /// - `baml.deep_copy` → root free function
-/// - `baml.sys.now_ms` → namespace `sys`, free function `now_ms`
+/// - `baml.sys.argv` → namespace `sys`, free function `argv`
 fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> NamespaceNode<'a> {
     let mut root = NamespaceNode::new();
     let prefix = format!("{package}.");

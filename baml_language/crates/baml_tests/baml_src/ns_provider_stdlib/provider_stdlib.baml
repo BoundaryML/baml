@@ -5,7 +5,7 @@ class ProviderSchemaExample {
 }
 
 function provider_schema() -> json {
-  baml.schema.json_schema(type.of<ProviderSchemaExample>())
+  baml.json.schema(type.of<ProviderSchemaExample>())
 }
 
 function provider_schema_values() -> string {

@@ -142,6 +142,29 @@ class Bigint {
     $rust_function
   }
 
+  // ─── Conversions ──────────────────────────────────────────────────────────
+
+  /// Narrows `self` to a fixed-width `int`.
+  ///
+  /// Throws `InvalidArgument` if `self` is outside `int`'s range. BAML integers
+  /// are 63-bit signed, so that range (`int.min_value()` ..= `int.max_value()`)
+  /// is narrower than a machine 64-bit integer's.
+  ///
+  /// The opposite direction needs no conversion: an `int` widens to `bigint`
+  /// wherever a `bigint` is expected, and `0n + value` forces it explicitly.
+  ///
+  /// # Examples
+  /// ```
+  /// (42n).to_int()                          // 42
+  /// (-7n).to_int()                          // -7
+  /// (4611686018427387903n).to_int()         // int.max_value()
+  /// (4611686018427387904n).to_int()         // throws — one past int.max_value()
+  /// (10n).pow(30n).to_int()                 // throws
+  /// ```
+  function to_int(self) -> int throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
   // ─── Parsing ──────────────────────────────────────────────────────────────
 
   /// Parses `text` as a base-ten signed integer.

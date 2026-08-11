@@ -9,6 +9,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // Intrinsic-only modules are not emitted at all, so a missing file is fine;
 // callers only need to confirm the symbol is absent when the file exists.
@@ -24,11 +25,14 @@ static std::string GeneratedSdkFile(const std::string& rel_path) {
   return buf.str();
 }
 
-// `baml.sys.now_ms() -> int` is a `$rust_function` -> `FunctionKind::Native`.
-// Calling it as an entry point should run the native and return a positive
-// millisecond timestamp, not reject with `NotInvokableAsEntry`.
-BAML_TEST(stdlib_entrypoints_native_now_ms_callable_as_entry_point) {
-  BAML_ASSERT(baml_sdk::baml::sys::now_ms() > 0);
+// `baml.sys.argv() -> string[]` is a `$rust_function` ->
+// `FunctionKind::Native`. Calling it as an entry point should run the native
+// and return the argument array, not reject with `NotInvokableAsEntry`. The
+// fixture host passes no program arguments, so the contents are not worth
+// asserting on — that the call lands and is stable across invocations is.
+BAML_TEST(stdlib_entrypoints_native_argv_callable_as_entry_point) {
+  const std::vector<std::string> args = baml_sdk::baml::sys::argv();
+  BAML_ASSERT(args == baml_sdk::baml::sys::argv());
 }
 
 // `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` ->

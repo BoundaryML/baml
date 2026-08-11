@@ -14,17 +14,22 @@ class Request {
 
 /// An HTTP response returned by `baml.http.fetch` or `baml.http.send`.
 class Response {
+  /// The [HTTP response status code](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status)
   status_code int
+  /// The [HTTP response headers](https://developer.mozilla.org/en-US/docs/Glossary/Response_header)
   headers map<string, string>
+  /// The URL the response came from.
   url string
   _body $rust_type
 
   /// Returns the response body as a UTF-8 string.
+  /// Throws an error if the body was not available or was not valid UTF-8.
   function text(self) -> string throws root.errors.Io {
     $rust_io_function
   }
 
   /// Returns the response body as raw bytes.
+  /// Throws an error if the body was not available.
   function bytes(self) -> uint8array throws root.errors.Io {
     $rust_io_function
   }
@@ -34,7 +39,7 @@ class Response {
     self.status_code >= 200 && self.status_code < 300
   }
 
-  /// Builds a response to return from an `http.Server` handler.
+  /// Builds a response, typically to return from a `baml.http.Server` handler.
   ///
   /// `body` is sent verbatim as the response body. `headers` should include a
   /// `Content-Type` if the client needs one; `Content-Length` is set for you.

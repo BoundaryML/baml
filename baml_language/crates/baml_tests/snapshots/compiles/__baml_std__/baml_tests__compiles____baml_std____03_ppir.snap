@@ -19,6 +19,7 @@ function baml.min(self: ?, other: bigint) -> bigint  [builtin]
 function baml.parse(text: string) -> bigint  [builtin]
 function baml.pow(self: ?, exp: bigint) -> bigint  [builtin]
 function baml.random(lower: bigint, upper: bigint) -> bigint  [builtin]
+function baml.to_int(self: ?) -> int  [builtin]
 
 --- <builtin>/baml/bool.baml ---
 class baml.Bool {
@@ -1183,6 +1184,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> T  [expr] {
 function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T  [expr] {
   {  } path(j, selector) catch (_) { baml.json.JsonPathError => default }
 }
+function baml.json.schema(t: type) -> baml.json.json  [builtin]
 function baml.json.serialize(v: T) -> string  [expr] {
   {  } stringify(to_json(v))
 }
@@ -2233,9 +2235,6 @@ function baml.sap.parse_type(t: type, text: string) -> unknown  [expr] {
   { let cache: root.llm.StreamCache<unknown, unknown> = root.llm.StreamCache.new(t, t) } root.llm.__sap_parse_final(text, cache)
 }
 
---- <builtin>/baml/ns_schema/schema.baml ---
-function baml.schema.json_schema(t: type) -> root.json.json  [builtin]
-
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.CancelToken {
   _handle: $rust_type
@@ -2318,7 +2317,6 @@ function baml.sys.argv() -> string[]  [builtin]
 function baml.sys.collect_garbage() -> null  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.exit(code: int) -> never  [builtin]
-function baml.sys.now_ms() -> int  [builtin]
 function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }

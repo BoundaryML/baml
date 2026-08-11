@@ -391,6 +391,9 @@ function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
 function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
 }
 
+function baml.Bigint.to_int(self: baml.Bigint) -> int {
+}
+
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
     load_var2 1 2
     cmp_op <
@@ -4209,6 +4212,9 @@ function baml.json.path_or(j: baml.json.json, selector: string, default: #0) -> 
     return
 }
 
+function baml.json.schema(t: type) -> baml.json.json {
+}
+
 function baml.json.serialize(v: #0) -> string {
     load_type #0
     load_var v
@@ -6649,9 +6655,6 @@ function baml.sap.parse_type(t: type, text: string) -> unknown {
     return
 }
 
-function baml.schema.json_schema(t: type) -> baml.json.json {
-}
-
 function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
 }
 
@@ -6745,9 +6748,6 @@ function baml.sys.exec(program: string, args: string[] | null, options: baml.sys
 }
 
 function baml.sys.exit(code: int) -> never {
-}
-
-function baml.sys.now_ms() -> int {
 }
 
 function baml.sys.panic(message: string) -> never {

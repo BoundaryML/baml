@@ -43,7 +43,7 @@
 // ============================================================================
 
 function fs_tmp(name: string) -> string {
-    "/tmp/baml_fs_" + name + "_" + baml.json.stringify(baml.sys.now_ms()) + "_" + baml.json.stringify(int.random(0, 1000000000))
+    `/tmp/baml_fs_${name}_${baml.time.Instant.now().to_timestamp_milliseconds()}_${int.random(0, 1000000000)}`
 }
 
 function fs_open_and_read_fn() -> string {

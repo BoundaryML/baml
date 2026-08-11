@@ -312,6 +312,20 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
   }
 }
 
+/// Lower a BAML `type` to ordinary, provider-neutral JSON Schema. Optional
+/// fields are omitted from `required`, maps use schema-valued
+/// `additionalProperties`, unions use `anyOf`, and recursive class graphs use
+/// `$defs` and `$ref`.
+///
+/// This is the type-level counterpart to the value-level conversions above:
+/// everything else here moves a *value* between BAML and `json`, while this
+/// describes the *shape* a value of `t` would take.
+///
+/// Throws `root.errors.Unsupported` for constructs without a JSON Schema form.
+function schema(t: type) -> json throws root.errors.Unsupported {
+  $rust_io_function
+}
+
 /// Serialize `v` to JSON text, honoring user-defined `to_json` overrides on
 /// classes (via [`to_json<T>`]). Equivalent to `stringify(to_json<T>(v))`.
 ///

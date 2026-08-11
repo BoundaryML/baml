@@ -9,21 +9,27 @@ class Duration {
         Duration { _nanoseconds: self._nanoseconds.abs() }
     }
 
+    /// Creates a new duration of `ns` nanoseconds.
     function from_nanoseconds(ns: int | bigint) -> Duration throws never {
         Duration { _nanoseconds: match (ns) { let value: bigint => value, let value: int => 0n + value } }
     }
+    /// Creates a new duration of `us` microseconds.
     function from_microseconds(us: int | bigint) -> Duration throws never {
         Duration { _nanoseconds: match (us) { let value: bigint => value, let value: int => 0n + value } * 1000n }
     }
+    /// Creates a new duration of `ms` milliseconds.
     function from_milliseconds(ms: int | bigint) -> Duration throws never {
         Duration { _nanoseconds: match (ms) { let value: bigint => value, let value: int => 0n + value } * 1000000n }
     }
+    /// Creates a new duration of `s` seconds.
     function from_seconds(s: int | bigint) -> Duration throws never {
         Duration { _nanoseconds: match (s) { let value: bigint => value, let value: int => 0n + value } * 1000000000n }
     }
+    /// Creates a new duration of `m` minutes.
     function from_minutes(m: int | bigint) -> Duration throws never {
         Duration { _nanoseconds: match (m) { let value: bigint => value, let value: int => 0n + value } * 60000000000n }
     }
+    /// Creates a new duration of `h` hours.
     function from_hours(h: int | bigint) -> Duration throws never {
         Duration { _nanoseconds: match (h) { let value: bigint => value, let value: int => 0n + value } * 3600000000000n }
     }

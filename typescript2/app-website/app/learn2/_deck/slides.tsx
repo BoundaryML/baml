@@ -2,9 +2,8 @@
 
 import Image from 'next/image';
 import { BamlCode } from '../_components/BamlCode';
-import BamlEditor from '../_components/BamlEditorLazy';
+import BamlEditor from '../_components/baml-editor-lazy';
 import LivePlayground from '../_components/LivePlaygroundLazy';
-import { SpawnRace } from '../_components/SpawnRace';
 import {
   Bullets,
   Callout,
@@ -15,6 +14,7 @@ import {
   Split,
   Terminal,
 } from '../_components/primitives';
+import { SpawnRace } from '../_components/SpawnRace';
 import type { Slide } from '../_lib/types';
 
 /* ------------------------------------------------------------------ *
@@ -368,18 +368,16 @@ export function getSlides(): Slide[] {
   return [
     {
       id: 'cover',
-      section: 'Intro',
-      title: 'BAML',
       node: (
         <div className="l2-cover">
           <div className="l2-cover-mark">
             <Image
-              src="/baml-sheep.png"
               alt=""
-              width={128}
-              height={128}
               className="l2-cover-sheep"
+              height={128}
               priority
+              src="/baml-sheep.png"
+              width={128}
             />
             <h1 className="l2-cover-title">BAML</h1>
           </div>
@@ -393,12 +391,12 @@ export function getSlides(): Slide[] {
           </p>
         </div>
       ),
+      section: 'Intro',
+      title: 'BAML',
     },
 
     {
       id: 'agenda',
-      section: 'Intro',
-      title: 'Agenda',
       node: (
         <SlideShell kicker="Agenda" title="Where we are headed">
           <Bullets
@@ -412,12 +410,12 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Intro',
+      title: 'Agenda',
     },
 
     {
       id: 'why-language',
-      section: 'Why',
-      title: 'Why a new language?',
       node: (
         <SlideShell kicker="Why" title="Why make a new language?">
           <Bullets
@@ -430,17 +428,17 @@ export function getSlides(): Slide[] {
           <Quote>{'Existing languages weren’t built with LLMs in mind.'}</Quote>
         </SlideShell>
       ),
+      section: 'Why',
+      title: 'Why a new language?',
     },
 
     {
       id: 'fake-types',
-      section: 'Why',
-      title: 'Why not just improve Python / TS?',
       node: (
         <SlideShell
-          wide
           kicker="Why · types"
           title="Types are the basis for observability"
+          wide
         >
           <Lead>
             {
@@ -453,16 +451,16 @@ export function getSlides(): Slide[] {
                 Python — the hint is ignored at runtime
               </p>
               <BamlCode
-                lang="python"
-                filename="add.py"
                 code={PY_FAKE_TYPES}
                 diagnostics={[
                   {
                     line: 4,
-                    severity: 'warning',
                     message: 'no error — runs fine',
+                    severity: 'warning',
                   },
                 ]}
+                filename="add.py"
+                lang="python"
               />
             </div>
             <div className="l2-example">
@@ -470,32 +468,32 @@ export function getSlides(): Slide[] {
                 TypeScript — every type is erased after compile
               </p>
               <BamlCode
-                lang="typescript"
-                filename="fetch.ts"
                 code={TS_FAKE_TYPES}
                 diagnostics={[
                   {
                     line: 2,
-                    severity: 'warning',
                     message: 'any swallows everything downstream',
+                    severity: 'warning',
                   },
                   {
                     line: 4,
-                    severity: 'error',
                     message: 'ships to prod, crashes at runtime',
+                    severity: 'error',
                   },
                 ]}
+                filename="fetch.ts"
+                lang="typescript"
               />
             </div>
           </div>
         </SlideShell>
       ),
+      section: 'Why',
+      title: 'Why not just improve Python / TS?',
     },
 
     {
       id: 'great-for',
-      section: 'What it is',
-      title: 'What is BAML great for?',
       node: (
         <SlideShell kicker="What it is" title="What is BAML great for?">
           <Lead>{'Systems that need to be highly observable.'}</Lead>
@@ -507,12 +505,12 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'What it is',
+      title: 'What is BAML great for?',
     },
 
     {
       id: 'three-things',
-      section: 'What it is',
-      title: 'Three things we need',
       node: (
         <SlideShell kicker="What it is" title="To get there, three things">
           <Bullets
@@ -524,12 +522,12 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'What it is',
+      title: 'Three things we need',
     },
 
     {
       id: 'roadmap',
-      section: 'Roadmap',
-      title: 'What this talk covers',
       node: (
         <SlideShell kicker="Roadmap" title="What we’ll cover">
           <Bullets
@@ -542,30 +540,30 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Roadmap',
+      title: 'What this talk covers',
     },
 
     {
       id: 'section-viz',
-      section: 'Visualization',
-      title: 'Playground Visualization',
       node: (
         <SectionDivider
+          blurb="See the pipeline, not just the prompt."
           index="Section 1"
           title="Playground Visualization"
-          blurb="See the pipeline, not just the prompt."
         />
       ),
+      section: 'Visualization',
+      title: 'Playground Visualization',
     },
 
     {
       id: 'just-typescript',
-      section: 'Visualization',
-      title: 'It reads like TypeScript',
       node: (
         <SlideShell
-          wide
           kicker="Visualization"
           title="It reads like a language you know"
+          wide
         >
           <Split
             left={
@@ -590,14 +588,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Visualization',
+      title: 'It reads like TypeScript',
     },
 
     {
       id: 'image-pipeline',
-      section: 'Visualization',
-      title: 'A simple pipeline',
       node: (
-        <SlideShell wide kicker="Visualization" title="A simple pipeline">
+        <SlideShell kicker="Visualization" title="A simple pipeline" wide>
           <Lead>
             {
               'Generate an image, then have an LLM describe it — one typed pipeline. Edit it, then run it live.'
@@ -606,14 +604,14 @@ export function getSlides(): Slide[] {
           <LivePlayground initialCode={BAML_IMAGE} />
         </SlideShell>
       ),
+      section: 'Visualization',
+      title: 'A simple pipeline',
     },
 
     {
       id: 'claude-code',
-      section: 'Visualization',
-      title: 'A more complex pipeline',
       node: (
-        <SlideShell wide kicker="Visualization" title="A more complex pipeline">
+        <SlideShell kicker="Visualization" title="A more complex pipeline" wide>
           <Split
             left={
               <>
@@ -634,25 +632,25 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Visualization',
+      title: 'A more complex pipeline',
     },
 
     {
       id: 'section-agents',
-      section: 'Agents & BAML',
-      title: 'How agents read & write BAML',
       node: (
         <SectionDivider
+          blurb="A language built for a model’s context window."
           index="Section 2"
           title="How agents read & write BAML"
-          blurb="A language built for a model’s context window."
         />
       ),
+      section: 'Agents & BAML',
+      title: 'How agents read & write BAML',
     },
 
     {
       id: 'minified-skill',
-      section: 'Agents & BAML',
-      title: 'The whole skill fits here',
       node: (
         <SlideShell kicker="Agents & BAML" title="The skill fits in this text">
           <Lead>
@@ -669,14 +667,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Agents & BAML',
+      title: 'The whole skill fits here',
     },
 
     {
       id: 'baml-describe',
-      section: 'Agents & BAML',
-      title: 'baml describe',
       node: (
-        <SlideShell wide kicker="Agents & BAML" title="baml describe">
+        <SlideShell kicker="Agents & BAML" title="baml describe" wide>
           <Split
             left={
               <>
@@ -692,19 +690,19 @@ export function getSlides(): Slide[] {
               </>
             }
             right={
-              <BamlCode lang="bash" filename="terminal" code={SH_DESCRIBE} />
+              <BamlCode code={SH_DESCRIBE} filename="terminal" lang="bash" />
             }
           />
         </SlideShell>
       ),
+      section: 'Agents & BAML',
+      title: 'baml describe',
     },
 
     {
       id: 'baml-run',
-      section: 'Agents & BAML',
-      title: 'run · fmt · generate',
       node: (
-        <SlideShell wide kicker="Agents & BAML" title="run · fmt · generate">
+        <SlideShell kicker="Agents & BAML" title="run · fmt · generate" wide>
           <Split
             left={
               <Callout tone="warn">
@@ -713,34 +711,34 @@ export function getSlides(): Slide[] {
                 }
               </Callout>
             }
-            right={<BamlCode lang="bash" filename="terminal" code={SH_RUN} />}
+            right={<BamlCode code={SH_RUN} filename="terminal" lang="bash" />}
           />
         </SlideShell>
       ),
+      section: 'Agents & BAML',
+      title: 'run · fmt · generate',
     },
 
     {
       id: 'section-parallel',
-      section: 'Parallelism',
-      title: 'Parallelism',
       node: (
         <SectionDivider
+          blurb="Concurrency without the colored functions."
           index="Section 3"
           title="Parallelism"
-          blurb="Concurrency without the colored functions."
         />
       ),
+      section: 'Parallelism',
+      title: 'Parallelism',
     },
 
     {
       id: 'spawn',
-      section: 'Parallelism',
-      title: 'spawn — no function coloring',
       node: (
         <SlideShell
-          wide
           kicker="Parallelism"
           title="spawn, and no function coloring"
+          wide
         >
           <Split
             left={
@@ -748,9 +746,9 @@ export function getSlides(): Slide[] {
             }
             right={
               <BamlCode
-                lang="typescript"
-                filename="server.ts"
                 code={TS_COLOR}
+                filename="server.ts"
+                lang="typescript"
                 notes={[
                   { line: 1, text: 'async spreads up the whole call stack' },
                 ]}
@@ -759,42 +757,42 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Parallelism',
+      title: 'spawn — no function coloring',
     },
 
     {
       id: 'throughput',
-      section: 'Parallelism',
-      title: 'Throughput',
       node: (
         <SlideShell
-          wide
           kicker="Parallelism"
           title="Throughput: spawn vs async/await"
+          wide
         >
           <SpawnRace />
         </SlideShell>
       ),
+      section: 'Parallelism',
+      title: 'Throughput',
     },
 
     {
       id: 'section-evals',
-      section: 'Evals',
-      title: 'Evals',
       node: (
         <SectionDivider
+          blurb="Tests that live with the code."
           index="Section 4"
           title="Evals"
-          blurb="Tests that live with the code."
         />
       ),
+      section: 'Evals',
+      title: 'Evals',
     },
 
     {
       id: 'test-testset',
-      section: 'Evals',
-      title: 'test & testset',
       node: (
-        <SlideShell wide kicker="Evals" title="test & testset">
+        <SlideShell kicker="Evals" title="test & testset" wide>
           <Split
             left={
               <Bullets
@@ -808,17 +806,17 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Evals',
+      title: 'test & testset',
     },
 
     {
       id: 'llm-judge',
-      section: 'Evals',
-      title: 'LLM-as-judge & data-driven tests',
       node: (
         <SlideShell
-          wide
           kicker="Evals"
           title="LLM-as-judge, and tests from data"
+          wide
         >
           <Split
             left={
@@ -833,17 +831,17 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Evals',
+      title: 'LLM-as-judge & data-driven tests',
     },
 
     {
       id: 'with-clauses',
-      section: 'Evals',
-      title: 'Flaky results',
       node: (
         <SlideShell
-          wide
           kicker="Evals"
           title="Flaky results? Assert a threshold"
+          wide
         >
           <Split
             left={
@@ -865,27 +863,27 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Evals',
+      title: 'Flaky results',
     },
 
     {
       id: 'section-types',
-      section: 'Type system',
-      title: 'Type system',
       node: (
         <SectionDivider
+          blurb="Unions, recursion, named everything."
           index="Section 5"
           title="Type system"
-          blurb="Unions, recursion, named everything."
         />
       ),
+      section: 'Type system',
+      title: 'Type system',
     },
 
     {
       id: 'unions',
-      section: 'Type system',
-      title: 'Unions & recursive types',
       node: (
-        <SlideShell wide kicker="Type system" title="Unions & recursive types">
+        <SlideShell kicker="Type system" title="Unions & recursive types" wide>
           <Split
             left={
               <Bullets
@@ -902,14 +900,14 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Type system',
+      title: 'Unions & recursive types',
     },
 
     {
       id: 'classes',
-      section: 'Type system',
-      title: 'Classes & methods',
       node: (
-        <SlideShell wide kicker="Type system" title="Classes, methods, names">
+        <SlideShell kicker="Type system" title="Classes, methods, names" wide>
           <Split
             left={
               <Bullets
@@ -926,27 +924,27 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Type system',
+      title: 'Classes & methods',
     },
 
     {
       id: 'section-errors',
-      section: 'Errors',
-      title: 'Error handling',
       node: (
         <SectionDivider
+          blurb="Errors are types, inferred for you."
           index="Section 6"
           title="Error handling"
-          blurb="Errors are types, inferred for you."
         />
       ),
+      section: 'Errors',
+      title: 'Error handling',
     },
 
     {
       id: 'typed-errors',
-      section: 'Errors',
-      title: 'Typed errors',
       node: (
-        <SlideShell wide kicker="Errors" title="Errors are part of the type">
+        <SlideShell kicker="Errors" title="Errors are part of the type" wide>
           <Split
             left={
               <Bullets
@@ -962,27 +960,27 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Errors',
+      title: 'Typed errors',
     },
 
     {
       id: 'section-adoption',
-      section: 'Adoption',
-      title: 'Incremental adoption',
       node: (
         <SectionDivider
+          blurb="BAML as an embedded language."
           index="Section 7"
           title="Incremental adoption"
-          blurb="BAML as an embedded language."
         />
       ),
+      section: 'Adoption',
+      title: 'Incremental adoption',
     },
 
     {
       id: 'embed-python',
-      section: 'Adoption',
-      title: 'Just call it from Python',
       node: (
-        <SlideShell wide kicker="Adoption" title="Just call it from Python">
+        <SlideShell kicker="Adoption" title="Just call it from Python" wide>
           <Split
             left={
               <Bullets
@@ -994,29 +992,29 @@ export function getSlides(): Slide[] {
                 ]}
               />
             }
-            right={<BamlCode lang="python" filename="app.py" code={PY_EMBED} />}
+            right={<BamlCode code={PY_EMBED} filename="app.py" lang="python" />}
           />
         </SlideShell>
       ),
+      section: 'Adoption',
+      title: 'Just call it from Python',
     },
 
     {
       id: 'section-start',
-      section: 'Getting started',
-      title: 'Getting started',
       node: (
         <SectionDivider
+          blurb="Five minutes to your first function."
           index="Section 8"
           title="Getting started"
-          blurb="Five minutes to your first function."
         />
       ),
+      section: 'Getting started',
+      title: 'Getting started',
     },
 
     {
       id: 'getting-started',
-      section: 'Getting started',
-      title: 'Try it',
       node: (
         <SlideShell kicker="Getting started" title="Try it now">
           <Bullets
@@ -1028,12 +1026,12 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Getting started',
+      title: 'Try it',
     },
 
     {
       id: 'agents-better',
-      section: 'Roadmap',
-      title: 'Making agents better',
       node: (
         <SlideShell kicker="Roadmap" title="How we make agents better, daily">
           <Lead>
@@ -1050,25 +1048,27 @@ export function getSlides(): Slide[] {
           />
         </SlideShell>
       ),
+      section: 'Roadmap',
+      title: 'Making agents better',
     },
 
     {
       id: 'closing',
-      section: 'Getting started',
-      title: 'Get started',
       node: (
         <div className="l2-close">
           <Terminal lines={['brew install baml']} />
           <a
             className="l2-close-link font-mono"
             href="https://new.boundaryml.com/quickstart"
-            target="_blank"
             rel="noreferrer"
+            target="_blank"
           >
             new.boundaryml.com/quickstart →
           </a>
         </div>
       ),
+      section: 'Getting started',
+      title: 'Get started',
     },
   ];
 }

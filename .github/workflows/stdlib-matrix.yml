@@ -57,7 +57,10 @@ jobs:
     timeout-minutes: 120
     # Holds ANTHROPIC_API_KEY. Pages needs its own environment, which is why
     # deploying is a separate job — a job may name only one.
-    environment: boundary-tools-dev
+    #
+    # -prod rather than -dev: the key in -dev was rejected on every one of 199
+    # sessions, and the one here is the more recently rotated.
+    environment: boundary-tools-prod
     outputs:
       changed: ${{ steps.ratchet.outputs.changed }}
     steps:
@@ -168,7 +171,14 @@ jobs:
             # The ratchet step already extracted; reuse exactly what it judged.
             args=(--skip-extract --previous "${GITHUB_WORKSPACE}/previous.json")
           fi
-          tools/stdlib-matrix/run --llm "${args[@]}"
+          # Written straight into the site's public directory rather than copied
+          # there afterwards. `run` creates the destination directory, and that
+          # directory is one git cannot supply: it holds nothing but the report,
+          # which is gitignored, so a fresh checkout has no `public/` at all and
+          # the copy that used to follow failed on it.
+          tools/stdlib-matrix/run --llm \
+            --json-output typescript2/app-stdlib-matrix/public/matrix.json \
+            "${args[@]}"
 
       # A session that did not come back leaves symbols unjudged, which in the
       # published report is indistinguishable from symbols nothing reached — so
@@ -186,7 +196,7 @@ jobs:
         if: steps.ratchet.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          report=tools/stdlib-matrix/report/matrix.json
+          report=typescript2/app-stdlib-matrix/public/matrix.json
           failures="$(jq -er '.failures | length' "${report}")"
           if ((failures > 0)); then
             echo "::warning::${failures} sessions did not come back; their symbols are unjudged" >&2
@@ -194,11 +204,25 @@ jobs:
           fi
           jq -er '.counts | "matched \(.matched) · unnecessary \(.unnecessary) · absent \(.unmatched) · unjudged \(.unjudged)"' "${report}"
 
+          # A run that mostly failed is not a thin report, it is a broken one.
+          # This is checked before the comparison below, because "nothing to be
+          # thinner than" was letting the worst case through: the first run
+          # published 0 judgements and 2780 unjudged symbols — every session
+          # having failed identically on a rejected API key — and an empty
+          # matrix went live because there was no previous report to be worse
+          # than. A healthy run leaves close to nothing unjudged.
+          now="$(jq -er '.counts.unjudged' "${report}")"
+          total="$(jq -er '.counts.ts_symbols' "${report}")"
+          if ((now * 2 > total)); then
+            echo "::error::${now} of ${total} symbols went unjudged; this run did not work, keeping whatever is deployed" >&2
+            exit 1
+          fi
+
           if [[ "${{ steps.previous.outputs.have }}" != "true" ]]; then
-            # Nothing to be thinner than. A first run publishes whatever it got.
+            # Nothing to be thinner than, and the check above says it is not
+            # broken. A first run publishes what it got.
             exit 0
           fi
-          now="$(jq -er '.counts.unjudged' "${report}")"
           before="$(jq -er '.counts.unjudged' previous.json)"
           if ((now > before)); then
             echo "::error::coverage regressed: ${before} unjudged deployed, ${now} in this run; keeping the deployed report" >&2
@@ -211,7 +235,8 @@ jobs:
         working-directory: typescript2/app-stdlib-matrix
         run: |
           set -euo pipefail
-          cp "${GITHUB_WORKSPACE}/tools/stdlib-matrix/report/matrix.json" public/matrix.json
+          # No copy: the report was written here directly, which is also what
+          # created this directory.
           pnpm exec tsc -b --noEmit
           pnpm exec vite build
           cp "${GITHUB_WORKSPACE}/tools/stdlib-matrix/report/matrix.md" dist/matrix.md
