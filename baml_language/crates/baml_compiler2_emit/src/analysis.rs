@@ -1754,13 +1754,15 @@ fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
         | Rvalue::Len(_)
         | Rvalue::IsType { .. }
         | Rvalue::IsTypeTag { .. }
+        | Rvalue::RuntimeIsType { .. }
         | Rvalue::MakeClosure { .. }
         | Rvalue::MakeBoundMethod { .. }
         | Rvalue::MakeVirtualBoundMethod { .. }
         | Rvalue::VirtualFieldAccess { .. }
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. }
-        | Rvalue::LoadType(_) => false,
+        | Rvalue::LoadType(_)
+        | Rvalue::CurrentPackage(_) => false,
     }
 }
 
