@@ -1,0 +1,133 @@
+<figure class="fig fig-06-status-evidence-quadrant">
+  <div class="seq-wrap">
+    <div class="seq-axisy">status: how the program did</div>
+
+    <div class="seq-main">
+      <div class="seq-axisx">evidence: how much of what Studio promised is present</div>
+      <div class="fig-scroll">
+      <div class="seq-grid">
+        <div class="seq-corner" aria-hidden="true"></div>
+        <div class="seq-colhead">Evidence complete</div>
+        <div class="seq-colhead">Evidence incomplete</div>
+
+        <div class="seq-rowhead">Run succeeded</div>
+
+        <div class="seq-cell">
+          <div class="seq-pin"><code>run1</code></div>
+          <div class="seq-marks">
+            <span class="seq-st"><i class="seq-dot seq-dot-ok"></i>succeeded</span>
+            <span class="seq-evm"><i class="seq-evbar seq-evbar-solid"></i>complete</span>
+          </div>
+          <p class="seq-note">Trust every number.</p>
+        </div>
+
+        <div class="seq-cell">
+          <div class="seq-pin"><code>runX</code> <span class="seq-hyp">hypothetical</span></div>
+          <div class="seq-marks">
+            <span class="seq-st"><i class="seq-dot seq-dot-ok"></i>succeeded</span>
+            <span class="seq-evm"><i class="seq-evbar seq-evbar-hatch"></i>incomplete</span>
+          </div>
+          <p class="seq-note">Succeeded, yet 10,000 events are missing: anything
+            computed over the run is a lower bound.</p>
+          <div class="seq-issue">
+            <span class="seq-issuelabel">one row in <code>evidence_issues</code></span>
+            <code class="seq-issuerow">kind=structure reason=records_dropped count=10,000</code>
+            <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span>
+          </div>
+        </div>
+
+        <div class="seq-rowhead">Run failed</div>
+
+        <div class="seq-cell">
+          <div class="seq-pin"><code>run3</code></div>
+          <div class="seq-marks">
+            <span class="seq-st"><i class="seq-dot seq-dot-err"></i>failed</span>
+            <span class="seq-evm"><i class="seq-evbar seq-evbar-solid"></i>complete</span>
+          </div>
+          <p class="seq-note">The failure is fully evidenced: tape dump
+            <code>dump2</code>, the retained calls, and the captured error value
+            are present, so it can be debugged.</p>
+        </div>
+
+        <div class="seq-cell seq-absent">
+          <p class="seq-note">no example run: worst case, and both facts are
+            still labeled</p>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <aside class="seq-pending">
+      <div class="fh">a third case</div>
+      <div class="seq-pin"><code>run2</code> <span class="sp sp-run">running</span></div>
+      <p class="seq-note">Evidence <em>pending</em>, not incomplete: counters
+        are &ldquo;so far&rdquo;, and running data never masquerades as final.
+        <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></p>
+    </aside>
+  </div>
+
+  <figcaption>A run&rsquo;s status answers how the program did; its evidence
+    answers how much of what Studio promised is present; neither implies the
+    other, and the hypothetical <code>runX</code> shows success with suspect
+    numbers. The still-running <code>run2</code> sits outside the grid: its
+    evidence is pending, not incomplete <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span>.</figcaption>
+
+  <style>
+    .fig-06-status-evidence-quadrant .seq-wrap{display:flex;gap:1rem;align-items:stretch}
+    .fig-06-status-evidence-quadrant .seq-axisy{writing-mode:vertical-rl;transform:rotate(180deg);
+      font-size:.68rem;color:var(--muted);text-align:center;align-self:center;flex:0 0 auto}
+    .fig-06-status-evidence-quadrant .seq-main{flex:1 1 auto;min-width:0}
+    .fig-06-status-evidence-quadrant .seq-axisx{font-size:.68rem;color:var(--muted);
+      text-align:center;margin-bottom:.45rem}
+    .fig-06-status-evidence-quadrant .seq-grid{display:grid;
+      grid-template-columns:max-content 1fr 1fr;gap:.45rem;align-items:stretch}
+    .fig-06-status-evidence-quadrant .seq-colhead{font-size:.72rem;font-weight:650;
+      color:var(--ink);text-align:center;align-self:end;padding-bottom:.1rem}
+    .fig-06-status-evidence-quadrant .seq-rowhead{font-size:.72rem;font-weight:650;
+      color:var(--ink);display:flex;align-items:center;max-width:4.6rem;line-height:1.3}
+    .fig-06-status-evidence-quadrant .seq-cell{border:1px solid var(--line);border-radius:8px;
+      background:var(--card);padding:.55rem .7rem;display:flex;flex-direction:column;
+      gap:.35rem;font-size:.78rem}
+    .fig-06-status-evidence-quadrant .seq-absent{border-style:dashed;background:transparent;
+      align-items:center;justify-content:center;text-align:center}
+    .fig-06-status-evidence-quadrant .seq-pin{font-size:.84rem;font-weight:650;
+      display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+    .fig-06-status-evidence-quadrant .seq-hyp{font-size:.62rem;font-weight:650;
+      letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+      border:1px dashed var(--muted);border-radius:99px;padding:.05em .55em}
+    .fig-06-status-evidence-quadrant .seq-marks{display:flex;align-items:center;
+      gap:.8rem;flex-wrap:wrap}
+    .fig-06-status-evidence-quadrant .seq-st,
+    .fig-06-status-evidence-quadrant .seq-evm{display:inline-flex;align-items:center;
+      gap:.35em;font-size:.72rem;color:var(--ink);white-space:nowrap}
+    .fig-06-status-evidence-quadrant .seq-dot{width:.6em;height:.6em;border-radius:50%;flex:0 0 auto}
+    .fig-06-status-evidence-quadrant .seq-dot-ok{background:var(--fig-ok)}
+    .fig-06-status-evidence-quadrant .seq-dot-err{background:var(--fig-err)}
+    .fig-06-status-evidence-quadrant .seq-evbar{width:36px;height:9px;border-radius:2px;flex:0 0 auto}
+    .fig-06-status-evidence-quadrant .seq-evbar-solid{
+      background:color-mix(in srgb,var(--ink) 55%,transparent);
+      border:1px solid color-mix(in srgb,var(--ink) 55%,transparent)}
+    .fig-06-status-evidence-quadrant .seq-evbar-hatch{
+      background:repeating-linear-gradient(45deg,
+        color-mix(in srgb,var(--ink) 45%,transparent) 0 3px,transparent 3px 7px);
+      border:1px dashed color-mix(in srgb,var(--ink) 45%,transparent)}
+    .fig-06-status-evidence-quadrant .seq-note{margin:0;font-size:.74rem;
+      color:var(--muted);line-height:1.45;font-variant-numeric:tabular-nums}
+    .fig-06-status-evidence-quadrant .seq-issue{border:1px solid var(--line);border-radius:6px;
+      background:var(--code-bg);padding:.3rem .5rem;font-size:.68rem;
+      display:flex;flex-wrap:wrap;align-items:center;gap:.15rem .5rem}
+    .fig-06-status-evidence-quadrant .seq-issuelabel{color:var(--muted)}
+    .fig-06-status-evidence-quadrant .seq-issuerow{font-variant-numeric:tabular-nums;
+      overflow-wrap:anywhere}
+    .fig-06-status-evidence-quadrant .seq-pending{flex:0 0 172px;border:1px dotted var(--muted);
+      border-radius:8px;background:color-mix(in srgb,var(--muted) 6%,transparent);
+      padding:.6rem .7rem;font-size:.78rem;display:flex;flex-direction:column;
+      gap:.35rem;justify-content:center;align-self:stretch}
+    @media (max-width:860px){
+      .fig-06-status-evidence-quadrant .seq-wrap{flex-direction:column;gap:.7rem}
+      .fig-06-status-evidence-quadrant .seq-axisy{writing-mode:horizontal-tb;transform:none;
+        align-self:auto;text-align:center;order:-1}
+      .fig-06-status-evidence-quadrant .seq-pending{flex-basis:auto}
+    }
+  </style>
+</figure>

@@ -1,0 +1,133 @@
+<figure class="fig fig-08-error-storm">
+  <div class="fh">Outage with upload configured: spool growth, then a
+    predeclared choice
+    <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></div>
+  <div class="es-grid">
+
+    <div class="es-left">
+      <div class="es-collabel">the spool</div>
+      <div class="es-gaugewrap">
+        <div class="es-alabel">outage: spool grows</div>
+        <div class="es-arrow" aria-hidden="true"></div>
+        <div class="es-gauge">
+          <div class="es-boundary"><span
+            class="es-blabel">hard boundary (budget)</span></div>
+          <div class="es-fill"><span>unreceipted bytes</span></div>
+        </div>
+      </div>
+      <p class="es-note">never pruning candidates: receipt gate outranks
+      size budget</p>
+    </div>
+
+    <div class="es-right">
+      <div class="es-collabel">at the hard boundary, in order</div>
+      <ol class="es-ladder">
+        <li><span class="es-n">1</span> stop admitting new runs</li>
+        <li><span class="es-n">2</span> reserve room to close the runs in flight</li>
+        <li><span class="es-n">3</span> apply the predeclared behavior</li>
+      </ol>
+      <div class="es-fan" aria-hidden="true"></div>
+      <div class="es-choices">
+        <div class="fcard es-choice es-default">
+          <h5>fail the run</h5>
+          <div class="es-tag">recommended default
+            <span class="chip c-open" title="Decision not yet made">open</span></div>
+        </div>
+        <div class="fcard es-choice">
+          <h5>abort the process</h5>
+        </div>
+        <div class="fcard es-choice">
+          <h5>continue with the run marked incomplete</h5>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <figcaption>With upload configured, an outage grows the spool toward a hard
+  boundary; unreceipted bytes are never pruning candidates, so the spool fills
+  rather than dropping unshipped evidence. At the boundary the design stops
+  admitting new runs, reserves room to close the runs in flight, then applies
+  one of three predeclared behaviors (committed v1 work, none of it on
+  this branch); which behavior is the default in each environment is an open
+  policy decision.</figcaption>
+  <style>
+    .fig-08-error-storm .es-grid{display:grid;
+      grid-template-columns:minmax(185px,235px) 1fr;gap:.4rem 1.5rem;
+      align-items:start;margin-top:.2rem}
+    .fig-08-error-storm .es-collabel{font-size:.66rem;font-weight:650;
+      letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+      margin:0 0 .5rem}
+    /* left: spool gauge */
+    .fig-08-error-storm .es-gaugewrap{display:flex;gap:.5rem;
+      align-items:stretch;height:225px}
+    .fig-08-error-storm .es-alabel{writing-mode:vertical-rl;
+      transform:rotate(180deg);font-size:.66rem;color:var(--muted);
+      align-self:center;white-space:nowrap}
+    .fig-08-error-storm .es-arrow{flex:0 0 2px;width:2px;
+      background:var(--line);position:relative;margin:23% 0 8px}
+    .fig-08-error-storm .es-arrow::after{content:"";position:absolute;
+      top:-7px;left:50%;transform:translateX(-50%);
+      border-bottom:7px solid var(--line);
+      border-left:5px solid transparent;border-right:5px solid transparent}
+    .fig-08-error-storm .es-gauge{flex:1;max-width:160px;position:relative;
+      border:1.5px solid var(--line);border-radius:8px;background:var(--card)}
+    .fig-08-error-storm .es-boundary{position:absolute;left:-5px;right:-5px;
+      top:16%;height:0;border-top:3px solid var(--ink)}
+    .fig-08-error-storm .es-blabel{position:absolute;left:.45rem;bottom:3px;
+      font-size:.64rem;font-weight:700;color:var(--ink);white-space:nowrap}
+    .fig-08-error-storm .es-fill{position:absolute;left:6px;right:6px;
+      bottom:6px;height:58%;border-radius:5px;display:flex;
+      align-items:center;justify-content:center;
+      border:1px solid color-mix(in srgb,var(--ochre) 45%,transparent);
+      background:repeating-linear-gradient(45deg,
+        color-mix(in srgb,var(--ochre) 40%,transparent) 0 3px,
+        transparent 3px 8px), var(--ochre-soft)}
+    .fig-08-error-storm .es-fill span{font-size:.68rem;color:var(--ink);
+      background:var(--card);padding:.1em .4em;border-radius:4px;
+      white-space:nowrap}
+    .fig-08-error-storm .es-note{margin:.55rem 0 0;font-size:.7rem;
+      color:var(--muted);line-height:1.45}
+    /* right: ordered ladder fanning into three cards */
+    .fig-08-error-storm .es-ladder{list-style:none;margin:0;padding:0;
+      position:relative}
+    .fig-08-error-storm .es-ladder::before{content:"";position:absolute;
+      left:calc(.72rem - 1px);top:.7rem;bottom:0;width:2px;
+      background:var(--line)}
+    .fig-08-error-storm .es-ladder li{position:relative;
+      padding:0 0 .95rem 2.05rem;font-size:.8rem;color:var(--ink);
+      line-height:1.5}
+    .fig-08-error-storm .es-ladder li:last-child{padding-bottom:.3rem}
+    .fig-08-error-storm .es-n{position:absolute;left:0;top:0;
+      width:1.45rem;height:1.45rem;border-radius:50%;
+      border:1.5px solid var(--ink);color:var(--ink);background:var(--card);
+      font-size:.72rem;font-weight:700;font-variant-numeric:tabular-nums;
+      display:flex;align-items:center;justify-content:center}
+    .fig-08-error-storm .es-fan{position:relative;height:14px;
+      margin:0 0 10px}
+    .fig-08-error-storm .es-fan::before{content:"";position:absolute;
+      left:calc(.72rem - 1px);top:-4px;width:2px;height:calc(100% + 4px);
+      background:var(--line)}
+    .fig-08-error-storm .es-fan::after{content:"";position:absolute;
+      left:calc(.72rem - 1px);right:16.6%;bottom:0;height:2px;
+      background:var(--line)}
+    .fig-08-error-storm .es-choices{display:grid;
+      grid-template-columns:repeat(3,1fr);gap:.55rem;position:relative}
+    .fig-08-error-storm .es-choice{position:relative}
+    .fig-08-error-storm .es-choice::before{content:"";position:absolute;
+      left:50%;top:-12px;width:2px;height:12px;background:var(--line);
+      transform:translateX(-50%)}
+    .fig-08-error-storm .es-choice h5{font-weight:650}
+    .fig-08-error-storm .es-default{
+      border-color:color-mix(in srgb,var(--teal) 55%,transparent);
+      background:color-mix(in srgb,var(--teal) 7%,transparent)}
+    .fig-08-error-storm .es-tag{font-size:.68rem;color:var(--muted);
+      margin-top:.25rem}
+    @media (max-width:860px){
+      .fig-08-error-storm .es-grid{grid-template-columns:1fr;gap:1rem}
+      .fig-08-error-storm .es-gaugewrap{max-width:260px}
+      .fig-08-error-storm .es-fan{display:none}
+      .fig-08-error-storm .es-choice::before{display:none}
+      .fig-08-error-storm .es-choices{grid-template-columns:1fr;gap:.5rem}
+    }
+  </style>
+</figure>

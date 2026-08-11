@@ -1,0 +1,3 @@
+{"doc": "04",
+ "place": {"type": "swap_table", "key": "~40 events"},
+ "also":  [{"type": "remove_table", "key": "same propagating error"}]}

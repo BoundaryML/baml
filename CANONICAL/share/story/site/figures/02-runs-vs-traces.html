@@ -1,0 +1,200 @@
+<figure class="fig fig-02-runs-vs-traces">
+  <div class="rvt-cols">
+
+    <!-- LEFT: trace = correlation -->
+    <div class="rvt-pan">
+      <div class="rvt-phead">
+        <strong>A trace is a correlation</strong>
+        <span class="rvt-kick">structure inferred from stitching</span>
+      </div>
+
+      <div class="fh">emitted spans, in arrival order</div>
+      <div class="rvt-strip">
+        <span class="rvt-span">span d19 · parent b07</span>
+        <span class="rvt-span">span b07 · parent e41</span>
+        <span class="rvt-span">span a63 · parent f8c</span>
+        <span class="rvt-span">span e41 · root</span>
+        <span class="rvt-span rvt-span-q">span f8c · parent ?</span>
+        <span class="rvt-span">span c52 · parent e41</span>
+      </div>
+
+      <div class="rvt-stitch" aria-hidden="true">
+        <svg viewBox="0 0 160 26" width="160" height="26" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2 L80 21" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3" fill="none"/>
+          <path d="M80 2 L80 21" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3" fill="none"/>
+          <path d="M148 2 L80 21" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3" fill="none"/>
+          <path d="M75 17 L80 24 L85 17" stroke="var(--muted)" stroke-width="1" fill="none"/>
+        </svg>
+      </div>
+      <div class="rvt-stitchlabel">a backend later stitches matching IDs into a tree</div>
+
+      <div class="rvt-asm">
+        <div class="rvt-stree">
+          <div class="rvt-srow"><span class="rvt-sn">span e41</span></div>
+          <div class="rvt-srow"><span class="rvt-si t"></span><span class="rvt-sn">span b07</span></div>
+          <div class="rvt-srow"><span class="rvt-si v"></span><span class="rvt-si l"></span><span class="rvt-sn">span d19</span></div>
+          <div class="rvt-srow"><span class="rvt-si l"></span><span class="rvt-sn">span c52</span></div>
+        </div>
+        <div class="rvt-ghost">
+          <div class="rvt-srow"><span class="rvt-sn">span f8c</span></div>
+          <div class="rvt-srow"><span class="rvt-si l"></span><span class="rvt-sn">span a63</span></div>
+          <div class="rvt-glabel">orphaned: never attached</div>
+        </div>
+      </div>
+
+      <div class="rvt-callout">unpropagated ID → subtree orphaned. No record it existed.</div>
+
+      <div class="rvt-pfoot">
+        <strong>silent hole</strong>: the tree is simply smaller.
+        <span class="rvt-pnote">under sampling, most requests produce no tree at all</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: run = produced -->
+    <div class="rvt-pan">
+      <div class="rvt-phead">
+        <strong>A run is produced</strong>
+        <span class="rvt-kick">the runtime creates every call
+          <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></span>
+      </div>
+
+      <div class="fh">no spans to stitch, none to sample away</div>
+
+      <div class="fig-scroll">
+        <div class="rt">
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"></span>
+              <span class="rt-id">call1</span>
+              <span class="rt-fn"><span class="rt-tag">entrypoint</span></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          </div>
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i t"></i></span>
+              <span class="rt-id">call2</span>
+              <span class="rt-fn"></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          </div>
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i t"></i></span>
+              <span class="rt-id">call3</span>
+              <span class="rt-fn"></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          </div>
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i v"></i><i class="rt-i l"></i></span>
+              <span class="rt-id">call4</span>
+              <span class="rt-fn"></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          </div>
+          <div class="rt-row">
+            <span class="rt-main rt-wide">
+            <span class="rt-tree"><i class="rt-i l"></i></span>
+            <span class="rvt-gap">
+              <span class="rvt-gaphead"><span aria-hidden="true">⚠</span>
+                <span class="sp sp-warn">records lost</span>
+                <span class="rvt-gapwhy">process died mid-run, or records dropped under extreme load</span></span>
+              <span class="rvt-gapnote">the loss is recorded as a typed, queryable fact; the tree is marked
+                incomplete (doc 06)
+                <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></span>
+            </span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rvt-pfoot">
+        <strong>declared gap</strong>: the loss itself is on the record.
+      </div>
+    </div>
+  </div>
+
+  <div class="rvt-xstrip">cross-process work is a <strong>related run</strong>: linked and separately
+    clocked, never spliced into one timeline
+    <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></div>
+
+  <figcaption>Both panels show structure being lost. In the trace the hole is silent:
+  the assembled tree is simply smaller; in the run the loss is declared where it
+  happened and the tree is marked incomplete (recording the tree at creation is
+  built; declared-loss persistence is v1).</figcaption>
+
+  <style>
+    .fig-02-runs-vs-traces .rvt-cols{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;align-items:stretch}
+    .fig-02-runs-vs-traces .rvt-pan{border:1px solid var(--line);border-radius:8px;background:var(--card);
+      padding:.65rem .8rem .6rem;display:flex;flex-direction:column;gap:.45rem;min-width:0}
+    .fig-02-runs-vs-traces .rvt-phead{display:flex;flex-direction:column;gap:.1rem}
+    .fig-02-runs-vs-traces .rvt-phead strong{font-size:.84rem;color:var(--ink)}
+    .fig-02-runs-vs-traces .rvt-kick{font-size:.7rem;color:var(--muted)}
+    .fig-02-runs-vs-traces .fh{margin:.15rem 0 .1rem}
+
+    /* arrival strip */
+    .fig-02-runs-vs-traces .rvt-strip{display:flex;flex-wrap:wrap;gap:.3rem}
+    .fig-02-runs-vs-traces .rvt-span{font-family:var(--font-mono);font-size:.66rem;color:var(--muted);
+      border:1px solid var(--line);border-radius:4px;padding:.08em .4em;white-space:nowrap}
+    .fig-02-runs-vs-traces .rvt-span-q{border:1px dashed var(--fig-warn);color:var(--fig-warn);
+      background:color-mix(in srgb,var(--fig-warn) 12%,transparent)}
+
+    /* stitch step */
+    .fig-02-runs-vs-traces .rvt-stitch{display:flex;justify-content:center;margin-top:.05rem}
+    .fig-02-runs-vs-traces .rvt-stitch svg{max-width:100%;height:auto}
+    .fig-02-runs-vs-traces .rvt-stitchlabel{text-align:center;font-size:.68rem;color:var(--muted)}
+
+    /* stitched tree (dotted rails) + orphaned ghost */
+    .fig-02-runs-vs-traces .rvt-asm{display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+    .fig-02-runs-vs-traces .rvt-srow{display:flex;align-items:stretch}
+    .fig-02-runs-vs-traces .rvt-sn{font-family:var(--font-mono);font-size:.7rem;color:var(--ink);
+      padding:.12rem 0;white-space:nowrap}
+    .fig-02-runs-vs-traces .rvt-si{width:1.05rem;position:relative;flex:none}
+    .fig-02-runs-vs-traces .rvt-si.v::before,
+    .fig-02-runs-vs-traces .rvt-si.t::before{content:"";position:absolute;left:calc(50% - .5px);
+      top:0;bottom:0;border-left:1px dotted var(--muted)}
+    .fig-02-runs-vs-traces .rvt-si.l::before{content:"";position:absolute;left:calc(50% - .5px);
+      top:0;height:50%;border-left:1px dotted var(--muted)}
+    .fig-02-runs-vs-traces .rvt-si.t::after,
+    .fig-02-runs-vs-traces .rvt-si.l::after{content:"";position:absolute;left:calc(50% - .5px);
+      right:0;top:calc(50% - .5px);border-top:1px dotted var(--muted)}
+    .fig-02-runs-vs-traces .rvt-ghost{opacity:.55;border:1px dashed var(--line);border-radius:6px;
+      padding:.25rem .55rem .3rem}
+    .fig-02-runs-vs-traces .rvt-ghost .rvt-sn{color:var(--muted)}
+    .fig-02-runs-vs-traces .rvt-glabel{font-family:system-ui,sans-serif;font-size:.62rem;
+      color:var(--muted);margin-top:.1rem}
+    .fig-02-runs-vs-traces .rvt-callout{font-size:.7rem;color:var(--muted);
+      border-left:2px solid var(--fig-warn);padding:.05rem 0 .05rem .5rem}
+
+    /* panel footer */
+    .fig-02-runs-vs-traces .rvt-pfoot{margin-top:auto;border-top:1px solid var(--line);
+      padding-top:.4rem;font-size:.72rem;color:var(--muted)}
+    .fig-02-runs-vs-traces .rvt-pfoot strong{color:var(--ink);font-weight:650}
+    .fig-02-runs-vs-traces .rvt-pnote{display:block;font-size:.66rem;margin-top:.15rem}
+
+    /* run tree (right): shared .rt component, sized for a half panel */
+    .fig-02-runs-vs-traces .rt{min-width:0;font-size:.74rem;column-gap:.5rem}
+    .fig-02-runs-vs-traces .rt-main{column-gap:.5rem}
+
+    /* declared gap slot (stretches across its .rt-main.rt-wide row) */
+    .fig-02-runs-vs-traces .rvt-gap{flex:1 1 auto;min-width:0;margin:.15rem 0;display:flex;
+      flex-direction:column;gap:.2rem;border:1px dashed var(--fig-warn);border-radius:6px;
+      padding:.4rem .6rem;background:repeating-linear-gradient(45deg,
+        color-mix(in srgb,var(--fig-warn) 8%,transparent) 0 5px,transparent 5px 10px)}
+    .fig-02-runs-vs-traces .rvt-gaphead{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;
+      font-size:.7rem;color:var(--fig-warn)}
+    .fig-02-runs-vs-traces .rvt-gapwhy{color:var(--muted)}
+    .fig-02-runs-vs-traces .rvt-gapnote{font-size:.68rem;color:var(--muted);line-height:1.5}
+
+    /* related-run strip */
+    .fig-02-runs-vs-traces .rvt-xstrip{margin-top:.8rem;border:1px dashed var(--line);
+      border-radius:8px;padding:.4rem .7rem;font-size:.72rem;color:var(--muted)}
+    .fig-02-runs-vs-traces .rvt-xstrip strong{color:var(--ink);font-weight:650}
+
+    @media (max-width:860px){
+      .fig-02-runs-vs-traces .rvt-cols{grid-template-columns:1fr}
+    }
+  </style>
+</figure>

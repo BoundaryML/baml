@@ -1,0 +1,64 @@
+/* Shared figure system. Status colors validated with the dataviz palette
+   checker against both surfaces (CVD + normal-vision separation pass; teal
+   chroma / ochre lightness flags are pre-existing site brand tokens, and
+   status is never color-alone: every pill carries its text label). */
+:root{
+  --fig-ok:#0F6B62; --fig-ok-soft:#E3EEEC;
+  --fig-warn:#A96A14; --fig-warn-soft:#F3EADB;
+  --fig-err:#A8253E; --fig-err-soft:#F5E1E5;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --fig-ok:#3FA396; --fig-ok-soft:#17322E;
+  --fig-warn:#D19A4E; --fig-warn-soft:#33270F;
+  --fig-err:#E06C8A; --fig-err-soft:#3A1620;
+}}
+:root[data-theme="dark"]{
+  --fig-ok:#3FA396; --fig-ok-soft:#17322E;
+  --fig-warn:#D19A4E; --fig-warn-soft:#33270F;
+  --fig-err:#E06C8A; --fig-err-soft:#3A1620;
+}
+
+/* base card */
+.fig{margin:1.6rem 0;border:1px solid var(--line);border-radius:10px;
+  background:var(--card);padding:1rem 1.1rem;max-width:860px;
+  font-family:system-ui,-apple-system,sans-serif}
+.fig figcaption{font-size:.8rem;color:var(--muted);margin-top:.9rem;
+  line-height:1.5;text-align:left;hyphens:none}
+.fig .fig-scroll{overflow-x:auto;scrollbar-color:var(--line) transparent;scrollbar-width:thin}
+.fig code{font-family:var(--font-mono);background:none;padding:0;font-size:.9em}
+.fig .chip{margin-left:.3rem;text-transform:none;letter-spacing:.05em}
+
+/* section header inside a figure */
+.fig .fh{font-size:.68rem;font-weight:650;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted);margin:.2rem 0 .5rem}
+
+/* status pills: never color-alone: the label is the datum */
+.sp{display:inline-block;font-size:.66rem;font-weight:650;letter-spacing:.03em;
+  padding:.06em .5em;border-radius:99px;white-space:nowrap;line-height:1.5}
+.sp-ok{background:color-mix(in srgb,var(--fig-ok) 14%,transparent);color:var(--fig-ok)}
+.sp-err{background:color-mix(in srgb,var(--fig-err) 14%,transparent);color:var(--fig-err)}
+.sp-warn{background:color-mix(in srgb,var(--fig-warn) 16%,transparent);color:var(--fig-warn)}
+.sp-run{background:color-mix(in srgb,var(--muted) 14%,transparent);color:var(--muted)}
+.sp-neutral{border:1px solid var(--line);color:var(--muted)}
+
+/* layer panels: mirror the doc-00 spine so layers read as one system */
+.lp{border-radius:10px;padding:.85rem 1.1rem;border:1px solid var(--line)}
+.lp-complete{background:var(--teal-soft);border-color:color-mix(in srgb,var(--teal) 35%,transparent)}
+.lp-retained{background:var(--ochre-soft);border-color:color-mix(in srgb,var(--ochre) 35%,transparent)}
+.lp h4{margin:0 0 .35rem;font-size:.84rem;font-weight:650}
+.lp-complete h4{color:var(--teal)}
+.lp-retained h4{color:var(--ochre)}
+
+/* generic card + absence card */
+.fcard{border:1px solid var(--line);border-radius:8px;background:var(--card);
+  padding:.6rem .8rem;font-size:.8rem;line-height:1.45}
+.fcard h5{margin:0 0 .25rem;font-size:.78rem;font-weight:650}
+.fcard.absent,.fig .absent{border-style:dashed;background:transparent;color:var(--muted)}
+.fcard.ghost{opacity:.55;border-style:dashed}
+
+/* small arrows / connector labels */
+.fig .arrow-label{font-size:.68rem;color:var(--muted)}
+
+@media (max-width:860px){
+  .fig{padding:.8rem .8rem}
+}

@@ -183,6 +183,7 @@ flowchart LR
 
 ## Read by need
 
+- “I am reviewing this for the first time — ease me in.” → [The story: start here](share/story/00-start-here.md)
 - “What is the product and how does a user move through it?” → [Product and lifecycle](design/01-product-and-lifecycle.md)
 - “How do the components and authorities fit together?” → [System architecture](design/02-system-architecture.md)
 - “How does the profiler work, and what is already built?” → [Profiler](design/03-profiler.md)

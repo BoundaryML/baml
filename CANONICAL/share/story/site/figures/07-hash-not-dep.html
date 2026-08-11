@@ -1,0 +1,112 @@
+<figure class="fig fig-07-hash-not-dep">
+  <div class="hnd-grid">
+
+    <div class="hnd-scope">
+      <span class="hnd-scopetag">what the hash covers</span>
+      <div class="fig-scroll">
+        <pre class="hnd-code"><span class="k">function</span> ClassifyCustomer(c: <span class="hnd-ref">Customer</span>) -&gt; Verdict {
+  <span class="k">client</span> <span class="k">"openai/gpt-5"</span>
+  <span class="k">prompt</span> #"
+    &hellip; {{ c.name }} &hellip;  <span class="cmt">&larr; renders customer data</span>
+  "#
+}</pre>
+      </div>
+      <div class="hnd-scopenote">one function&rsquo;s <em>own</em> compiled signature and bytecode &rarr; local hash <code>lh_9a</code></div>
+    </div>
+
+    <div class="hnd-link">
+      <span class="hnd-linklabel">referenced by name only; contents not hashed</span>
+      <span class="hnd-line" aria-hidden="true"></span>
+    </div>
+
+    <div class="hnd-refwrap">
+      <span class="hnd-reftag">outside the hash</span>
+      <div class="hnd-class">
+        <div class="hnd-classhead"><span class="k">class</span> <span class="hnd-ref">Customer</span></div>
+        <div class="hnd-frow">name string</div>
+        <div class="hnd-frow">email string</div>
+        <div class="hnd-frow">plan string</div>
+        <div class="hnd-frow hnd-new"><span>+ new field</span><span class="hnd-hyp">hypothetical</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="hnd-verdicts">
+    <div class="hnd-v">
+      <span class="hnd-vk">revision</span>
+      <span class="hnd-vv">new</span>
+      <span class="hnd-vn">whole-program rule: any edit makes a new revision</span>
+    </div>
+    <div class="hnd-v">
+      <span class="hnd-vk">local hash</span>
+      <span class="hnd-vv">unchanged &middot; <code>lh_9a</code></span>
+      <span class="hnd-vn">its own text still says only &ldquo;Customer&rdquo;</span>
+    </div>
+    <div class="hnd-v hnd-vq">
+      <span class="hnd-vk">behavior</span>
+      <span class="hnd-vv">may differ?</span>
+      <span class="hnd-vn">the prompt renders customer data: uncertainty, not a detected change</span>
+    </div>
+  </div>
+
+  <div class="hnd-alt">
+    <strong>Deferred alternative:</strong> an honest <em>dependency-aware</em> hash
+    (equal hash meaning equal behavior) would hash the full dependency
+    closure: every referenced type, template, and callee. A real future design,
+    explicitly not in v1 <span class="chip c-open" title="Decision not yet made">open</span>.
+  </div>
+
+  <figcaption>A hypothetical third revision adds a field to
+  <code>class Customer</code>: a new revision under the whole-program rule, an
+  unchanged local hash (<code>lh_9a</code>), and possibly different behavior.
+  An unchanged local hash never proves unchanged behavior; the revision remains
+  the only exact statement of &ldquo;this program&rdquo;.</figcaption>
+</figure>
+<style>
+.fig-07-hash-not-dep .hnd-grid{display:grid;grid-template-columns:minmax(0,1.25fr) auto minmax(0,1fr);gap:.75rem;align-items:center;margin-top:.5rem}
+
+.fig-07-hash-not-dep .hnd-scope{position:relative;border:1.5px solid color-mix(in srgb,var(--ink) 45%,transparent);border-radius:10px;background:var(--card);padding:1rem .8rem .6rem}
+.fig-07-hash-not-dep .hnd-scopetag{position:absolute;top:-.6em;left:.7rem;background:var(--card);padding:0 .4em;font-size:.68rem;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--ink);white-space:nowrap}
+.fig-07-hash-not-dep .hnd-code{margin:0;font-family:var(--font-mono);font-size:.72rem;line-height:1.6;color:var(--ink);white-space:pre}
+.fig-07-hash-not-dep .hnd-code .k{color:var(--muted)}
+.fig-07-hash-not-dep .hnd-code .cmt{color:var(--muted);font-style:italic;font-family:system-ui,-apple-system,sans-serif;font-size:.68rem}
+.fig-07-hash-not-dep .hnd-ref{background:var(--ochre-soft);border:1px dashed color-mix(in srgb,var(--ochre) 55%,transparent);border-radius:4px;padding:0 .2em}
+.fig-07-hash-not-dep .hnd-scopenote{margin-top:.55rem;font-size:.7rem;color:var(--muted);line-height:1.45}
+
+.fig-07-hash-not-dep .hnd-link{display:flex;flex-direction:column;align-items:center;gap:.45rem;width:8.5rem}
+.fig-07-hash-not-dep .hnd-linklabel{font-size:.68rem;color:var(--muted);text-align:center;line-height:1.45}
+.fig-07-hash-not-dep .hnd-line{position:relative;display:block;width:100%;height:0;border-top:2px dashed var(--muted)}
+.fig-07-hash-not-dep .hnd-line::after{content:"";position:absolute;right:-2px;top:-5px;width:0;height:0;border-left:8px solid var(--muted);border-top:4px solid transparent;border-bottom:4px solid transparent}
+
+.fig-07-hash-not-dep .hnd-refwrap{display:flex;flex-direction:column;gap:.4rem}
+.fig-07-hash-not-dep .hnd-reftag{font-size:.68rem;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.fig-07-hash-not-dep .hnd-class{border:1px solid var(--line);border-radius:8px;background:var(--card);overflow:hidden;font-family:var(--font-mono);font-size:.72rem}
+.fig-07-hash-not-dep .hnd-classhead{padding:.4rem .6rem;border-bottom:1px solid var(--line);background:var(--code-bg);color:var(--ink)}
+.fig-07-hash-not-dep .hnd-classhead .k{color:var(--muted)}
+.fig-07-hash-not-dep .hnd-frow{padding:.26rem .6rem;color:var(--ink)}
+.fig-07-hash-not-dep .hnd-frow+.hnd-frow{border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+.fig-07-hash-not-dep .hnd-frow.hnd-new{display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:var(--ochre-soft);border-top:1px dashed color-mix(in srgb,var(--ochre) 55%,transparent);font-style:italic}
+.fig-07-hash-not-dep .hnd-hyp{font-family:system-ui,-apple-system,sans-serif;font-style:normal;font-size:.68rem;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border:1px dashed var(--line);border-radius:99px;padding:.05em .5em;white-space:nowrap}
+
+.fig-07-hash-not-dep .hnd-verdicts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem;margin-top:.9rem}
+.fig-07-hash-not-dep .hnd-v{display:flex;flex-direction:column;gap:.18rem;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:.5rem .65rem}
+.fig-07-hash-not-dep .hnd-vk{font-size:.68rem;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fig-07-hash-not-dep .hnd-vv{font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
+.fig-07-hash-not-dep .hnd-vv code{text-transform:none;font-weight:600}
+.fig-07-hash-not-dep .hnd-vn{font-size:.68rem;color:var(--muted);line-height:1.45}
+.fig-07-hash-not-dep .hnd-v.hnd-vq{border-style:dashed}
+.fig-07-hash-not-dep .hnd-v.hnd-vq .hnd-vv{color:var(--muted);font-style:italic}
+
+.fig-07-hash-not-dep .hnd-alt{margin-top:.6rem;border:1px dashed var(--line);border-radius:8px;padding:.45rem .7rem;font-size:.7rem;color:var(--muted);line-height:1.55}
+.fig-07-hash-not-dep .hnd-alt strong{font-weight:650;color:var(--muted)}
+
+@media (max-width:860px){
+  .fig-07-hash-not-dep .hnd-grid{grid-template-columns:minmax(0,1fr)}
+  .fig-07-hash-not-dep .hnd-link{flex-direction:row;justify-content:flex-start;gap:.6rem;width:auto;margin-left:.4rem}
+  .fig-07-hash-not-dep .hnd-linklabel{text-align:left;order:2}
+  .fig-07-hash-not-dep .hnd-line{order:1;width:0;height:30px;border-top:none;border-left:2px dashed var(--muted)}
+  .fig-07-hash-not-dep .hnd-line::after{right:auto;top:auto;left:-5px;bottom:-2px;border:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:8px solid var(--muted)}
+  .fig-07-hash-not-dep .hnd-verdicts{grid-template-columns:minmax(0,1fr)}
+}
+</style>

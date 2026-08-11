@@ -1,5 +1,10 @@
 # Project Studio data model and query examples
 
+> **Start with the story instead.** This document is now the appendix-grade
+> schema reference. The eased-in, reviewer-facing version — which teaches the
+> vocabulary before using it — is
+> [share/story/00-start-here.md](story/00-start-here.md).
+
 ## Start with four questions
 
 1. What happened across every call?

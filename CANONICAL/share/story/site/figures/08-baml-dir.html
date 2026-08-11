@@ -1,0 +1,65 @@
+<figure class="fig fig-08-baml-dir">
+  <div class="dhead">
+    <span class="fold" aria-hidden="true"></span><code>.baml/</code><span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>
+    <span class="dnote">one directory next to the project: every run so far, recorded without touching the network</span>
+  </div>
+
+  <div class="rt rt-plain">
+
+    <div class="rt-row">
+      <span class="rt-main">
+        <span class="rt-tree"><i class="rt-i t"></i></span>
+        <span class="rt-fn"><span class="fold" aria-hidden="true"></span><code>history/</code><span class="dnote">one directory per run</span></span>
+      </span>
+    </div>
+
+    <div class="rt-row">
+      <span class="rt-main">
+        <span class="rt-tree"><i class="rt-i v"></i><i class="rt-i t"></i></span>
+        <span class="rt-fn"><span class="fold" aria-hidden="true"></span><code>…-run1/</code><span class="dnote"><code>run1</code>&rsquo;s sealed aggregate rows (the four <code>calling_contexts</code> rows from doc 03), its outcome, and its captured values</span></span>
+      </span>
+    </div>
+
+    <div class="rt-row">
+      <span class="rt-main">
+        <span class="rt-tree"><i class="rt-i v"></i><i class="rt-i l"></i></span>
+        <span class="rt-fn"><span class="fold" aria-hidden="true"></span><code>…-run3/</code><span class="dnote"><code>run3</code>: same shape, plus the retained calls <code>call1</code> and <code>call3</code></span></span>
+      </span>
+    </div>
+
+    <div class="rt-row">
+      <span class="rt-main">
+        <span class="rt-tree"><i class="rt-i t"></i></span>
+        <span class="rt-fn"><span class="fold" aria-hidden="true"></span><code>sessions/&lt;process&nbsp;P&gt;/</code><span class="dnote">the process&rsquo;s own state; tape dumps <code>dump1</code> and <code>dump2</code> landed here the moment their triggers fired (doc 04)</span></span>
+      </span>
+    </div>
+
+    <div class="rt-row">
+      <span class="rt-main">
+        <span class="rt-tree"><i class="rt-i l"></i></span>
+        <span class="rt-fn"><span class="fold" aria-hidden="true"></span><code>store/</code><span class="dnote">the value store, shared across runs: Ada&rsquo;s <code>Customer</code> stored once (doc 05)</span></span>
+      </span>
+    </div>
+
+  </div>
+
+  <figcaption><code>run1</code>&rsquo;s and <code>run3</code>&rsquo;s evidence at
+  rest in one local directory, written without touching the network. Names are
+  simplified: this is not a literal on-disk layout; real directory and file
+  names are longer and are implementation details.</figcaption>
+
+  <style>
+    .fig-08-baml-dir .dhead{display:flex;align-items:center;flex-wrap:wrap;
+      row-gap:.1rem;font-size:.78rem;line-height:1.5;margin-bottom:.1rem}
+    .fig-08-baml-dir .fold{position:relative;display:inline-block;flex:none;
+      width:.92rem;height:.6rem;margin-right:.5rem;vertical-align:-.02em;
+      border-radius:2px;
+      background:color-mix(in srgb,var(--muted) 34%,transparent)}
+    .fig-08-baml-dir .fold::before{content:"";position:absolute;top:-.17rem;
+      left:0;width:.44rem;height:.2rem;border-radius:2px 2px 0 0;
+      background:color-mix(in srgb,var(--muted) 34%,transparent)}
+    .fig-08-baml-dir .dnote{font-size:.72rem;color:var(--muted);
+      margin-left:.5rem}
+    .fig-08-baml-dir .rt-fn code{white-space:nowrap}
+  </style>
+</figure>

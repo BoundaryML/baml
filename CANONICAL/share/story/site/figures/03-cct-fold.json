@@ -1,0 +1,3 @@
+{"doc": "03",
+ "place": {"type": "swap_table", "key": "8.40s"},
+ "also":  [{"type": "remove_fence", "key": "Calling pattern"}]}

@@ -1,0 +1,194 @@
+<figure class="fig fig-05-capture-roles">
+  <div class="rt-run">
+    <header class="rt-runhead">
+      <span class="sp sp-ok">succeeded</span>
+      <code class="rt-runid">run1</code>
+      <span class="rt-tag">the tree from doc 02 · value slots in place of durations</span>
+    </header>
+
+    <div class="cr-legend">
+      <span class="cr-item"><span class="cr-slot cr-cap">args ✓</span> captured</span>
+      <span class="cr-item"><span class="cr-slot cr-off">args off</span> not captured (off by policy)</span>
+      <span class="cr-item"><span class="cr-none">no error</span> role does not exist for that call</span>
+    </div>
+
+    <div class="fig-scroll">
+      <div class="rt">
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"></span>
+            <span class="rt-id">call1</span>
+            <span class="rt-fn"><code>ProcessCustomers([Ada, Bo, Cy], "aug-batch")</code> <span class="rt-tag">entrypoint</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-cap">args ✓</span>
+            <span class="cr-slot cr-cap">return ✓</span>
+            <span class="cr-none">no error</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">root</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main rt-wide">
+            <span class="rt-tree"><i class="rt-i v"></i></span>
+            <span class="cr-vals">captured: args <code>[Ada, Bo, Cy]</code>, <code>batch_label = "aug-batch"</code> · return <code>[Approve, Review, Approve]</code></span>
+          </span>
+        </div>
+
+        <div class="rt-row rt-lane">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i t"></i></span>
+            <span class="rt-id">call2</span>
+            <span class="rt-fn"><code>WriteAuditLog("aug-batch")</code> <span class="rt-tag"><code>thread2</code> · spawned</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-off">args off</span>
+            <span class="cr-slot cr-off">return off</span>
+            <span class="cr-none">no error</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">helper</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i v"></i></span>
+            <span class="rt-lanelabel">main thread</span>
+          </span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i t"></i></span>
+            <span class="rt-id">call3</span>
+            <span class="rt-fn"><code>ProcessCustomer(Ada)</code></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-off">args off</span>
+            <span class="cr-slot cr-off">return off</span>
+            <span class="cr-none">no error</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">helper</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i v"></i><i class="rt-i l"></i></span>
+            <span class="rt-id">call4</span>
+            <span class="rt-fn"><code>ClassifyCustomer(Ada)</code><span class="rt-note">→ Approve</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-cap">args ✓</span>
+            <span class="cr-slot cr-cap">return ✓</span>
+            <span class="cr-none">no error</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">LLM</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i t"></i></span>
+            <span class="rt-id">call5</span>
+            <span class="rt-fn"><code>ProcessCustomer(Bo)</code><span class="rt-note">→ Review (fallback)</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-off">args off</span>
+            <span class="cr-slot cr-off">return off</span>
+            <span class="cr-none">no error</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">helper</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i v"></i><i class="rt-i l"></i></span>
+            <span class="rt-id">call6</span>
+            <span class="rt-fn"><code>ClassifyCustomer(Bo)</code><span class="rt-note">provider HTTP 500</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-err">failed</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-cap">args ✓</span>
+            <span class="cr-none">no return (role does not exist)</span>
+            <span class="cr-slot cr-cap">error ✓</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">LLM</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i l"></i></span>
+            <span class="rt-id">call7</span>
+            <span class="rt-fn"><code>ProcessCustomer(Cy)</code></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-off">args off</span>
+            <span class="cr-slot cr-off">return off</span>
+            <span class="cr-none">no error</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">helper</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i s"></i><i class="rt-i l"></i></span>
+            <span class="rt-id">call8</span>
+            <span class="rt-fn"><code>ClassifyCustomer(Cy)</code><span class="rt-note">→ Approve</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+          <span class="cr-slots">
+            <span class="cr-slot cr-cap">args ✓</span>
+            <span class="cr-slot cr-cap">return ✓</span>
+            <span class="cr-none">no error</span>
+          </span>
+          <span class="cr-kind"><span class="rt-tag">LLM</span></span>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="cr-helpnote">helpers <code>call2</code>, <code>call3</code>, <code>call5</code>, <code>call7</code>: errors only by policy; these succeeded, so nothing captured</div>
+    <footer class="rt-runfoot">8 calls ran → values exist for 4: <code>call1</code>, <code>call4</code>, <code>call6</code>, <code>call8</code></footer>
+  </div>
+
+  <figcaption>Run <code>run1</code> under the shipped capture policy: root and LLM
+  calls capture args, return, and error by default, and plain helpers capture only
+  errors: eight calls ran, values exist for four <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>.
+  These defaults are the implemented default, not product policy: decision X1 is <span class="chip c-open" title="Decision not yet made">open</span>;
+  a hollow slot is policy, not loss, and doc 06 shows how a query tells
+  &ldquo;off by policy&rdquo; from &ldquo;went wrong.&rdquo;</figcaption>
+
+  <style>
+    /* main (rail+id+fn) | status | value slots | call kind */
+    .fig-05-capture-roles .rt{
+      grid-template-columns:minmax(0,1fr) max-content max-content max-content;
+      min-width:46rem}
+    .fig-05-capture-roles .cr-slots{grid-column:3;display:flex;align-items:center;
+      gap:.32rem;white-space:nowrap;padding:.2rem 0}
+    .fig-05-capture-roles .cr-kind{grid-column:4;justify-self:end}
+    .fig-05-capture-roles .cr-slot{display:inline-block;font-size:.64rem;font-weight:600;
+      letter-spacing:.02em;border-radius:99px;padding:.05em .5em;line-height:1.5;
+      white-space:nowrap}
+    .fig-05-capture-roles .cr-cap{background:var(--teal-soft);
+      border:1px solid color-mix(in srgb,var(--teal) 45%,transparent);color:var(--teal)}
+    .fig-05-capture-roles .cr-off{background:transparent;border:1px solid var(--line);
+      color:var(--muted)}
+    .fig-05-capture-roles .cr-none{font-size:.66rem;font-style:italic;color:var(--muted);
+      white-space:nowrap}
+    .fig-05-capture-roles .cr-vals{font-size:.7rem;
+      color:var(--muted);padding:.02rem 0 .32rem}
+    .fig-05-capture-roles .cr-vals code{color:var(--ink)}
+    .fig-05-capture-roles .cr-legend{display:flex;flex-wrap:wrap;align-items:center;
+      gap:.3rem .9rem;font-size:.7rem;color:var(--muted);margin:.5rem 0 0}
+    .fig-05-capture-roles .cr-item{display:inline-flex;align-items:center;gap:.35rem;
+      white-space:nowrap}
+    .fig-05-capture-roles .cr-helpnote{margin-top:.5rem;font-size:.7rem;color:var(--muted)}
+    .fig-05-capture-roles .cr-helpnote code,
+    .fig-05-capture-roles .rt-runfoot code{font-size:.95em}
+  </style>
+</figure>

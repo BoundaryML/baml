@@ -1,0 +1,74 @@
+<figure class="fig fig-04-trigger-fan">
+  <div class="fh">What can create these rows</div>
+  <div class="tf">
+    <div class="tf-triggers">
+      <div class="fcard tf-t">an unhandled error reaches the run root</div>
+      <div class="fcard tf-t">a call crosses the latency threshold</div>
+      <div class="fcard tf-t">a manual request</div>
+    </div>
+    <svg class="tf-conv" viewBox="0 0 600 28" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M100 0 V14 M300 0 V14 M500 0 V14 M100 14 H500 M300 14 V28"
+            fill="none" stroke="var(--ochre)" stroke-width="2"
+            vector-effect="non-scaling-stroke"/>
+    </svg>
+    <div class="tf-node">any one of these fires <strong>the trigger</strong></div>
+    <div class="tf-outputs">
+      <div class="fcard tf-o">
+        <h5><code>tape_dumps</code></h5>
+        one ledger row: the sealed tape window, a preserved moment
+      </div>
+      <div class="fcard tf-o">
+        <h5><code>retained_calls</code></h5>
+        one row per qualifying call, each with its retention reason
+        <div class="tf-side">other reasons add rows here without any
+          trigger: a sampling policy, an explicit request, a captured
+          value (doc 05)</div>
+      </div>
+    </div>
+    <div class="tf-not">handled errors and cancellations do not fire (policy below)</div>
+  </div>
+  <figcaption>Any of the three trigger kinds fills both tables at once.
+  Both tables are part of the table-schema freeze
+  <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span>;
+  per-kind status, and what deliberately does not fire, are in "What fires
+  a trigger" below.</figcaption>
+
+  <style>
+    .fig-04-trigger-fan .tf{max-width:40rem;margin:0 auto}
+    .fig-04-trigger-fan .tf-triggers{display:grid;
+      grid-template-columns:repeat(3,1fr);gap:.5rem}
+    .fig-04-trigger-fan .tf-t{font-size:.76rem;text-align:center;
+      display:flex;align-items:center;justify-content:center;
+      border-color:color-mix(in srgb,var(--ochre) 45%,transparent)}
+    .fig-04-trigger-fan .tf-conv{display:block;width:100%;height:1.6rem}
+    .fig-04-trigger-fan .tf-node{width:fit-content;margin:0 auto;
+      font-size:.76rem;color:var(--ink);background:var(--ochre-soft);
+      border:1px solid color-mix(in srgb,var(--ochre) 45%,transparent);
+      border-radius:99px;padding:.2rem .9rem}
+    .fig-04-trigger-fan .tf-outputs{display:grid;
+      grid-template-columns:1fr 1fr;gap:.7rem;margin-top:.25rem}
+    .fig-04-trigger-fan .tf-o{position:relative;margin-top:1.5rem}
+    .fig-04-trigger-fan .tf-o::before{content:"";position:absolute;
+      top:-1.5rem;left:50%;width:2px;height:1.05rem;
+      background:var(--ochre);transform:translateX(-50%)}
+    .fig-04-trigger-fan .tf-o::after{content:"";position:absolute;
+      top:-.55rem;left:50%;transform:translateX(-50%);width:0;height:0;
+      border-left:5px solid transparent;border-right:5px solid transparent;
+      border-top:6px solid var(--ochre)}
+    .fig-04-trigger-fan .tf-o h5{font-size:.8rem}
+    .fig-04-trigger-fan .tf-o{font-size:.76rem;background:var(--ochre-soft);
+      border-color:color-mix(in srgb,var(--ochre) 35%,transparent)}
+    .fig-04-trigger-fan .tf-side{margin-top:.4rem;padding:.3rem .5rem;
+      font-size:.7rem;color:var(--muted);
+      border-left:2px dashed color-mix(in srgb,var(--muted) 45%,transparent)}
+    .fig-04-trigger-fan .tf-not{margin-top:.7rem;font-size:.7rem;
+      color:var(--muted);border:1px dashed var(--line);border-radius:8px;
+      padding:.3rem .8rem;text-align:center}
+    @media (max-width:860px){
+      .fig-04-trigger-fan .tf-triggers{grid-template-columns:1fr;gap:.4rem}
+      .fig-04-trigger-fan .tf-conv{display:none}
+      .fig-04-trigger-fan .tf-node{margin-top:.6rem}
+      .fig-04-trigger-fan .tf-outputs{grid-template-columns:1fr}
+    }
+  </style>
+</figure>

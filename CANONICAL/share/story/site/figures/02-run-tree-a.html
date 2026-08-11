@@ -1,0 +1,122 @@
+<figure class="fig fig-02-run-tree-a">
+  <div class="rt-proc">
+    <div class="rt-prochead">
+      <strong>Process <code>P</code></strong>
+      <span class="rt-sub">one server process</span>
+      <span class="rt-tag">running revision <code>rev1</code></span>
+    </div>
+
+    <section class="rt-run">
+      <header class="rt-runhead">
+        <span class="sp sp-ok">succeeded</span>
+        <code class="rt-runid">run1</code>
+        <code>ProcessCustomers([Ada, Bo, Cy], "aug-batch")</code>
+        <span class="rt-tag">entrypoint call · <code>call1</code></span>
+        <span class="rt-rundur">8.4s</span>
+      </header>
+      <div class="fig-scroll">
+        <div class="rt">
+
+          <div class="rt-row rt-lane">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i t"></i></span>
+              <span class="rt-id">call2</span>
+              <span class="rt-fn"><code>WriteAuditLog("aug-batch")</code> <span class="rt-tag"><code>thread2</code> · spawned</span></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+            <span class="rt-dur"><span class="rt-bar" style="--f:.036"></span><span class="rt-val">0.3s</span></span>
+          </div>
+
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i v"></i></span>
+              <span class="rt-lanelabel">main thread</span>
+            </span>
+          </div>
+
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i t"></i></span>
+              <span class="rt-id">call3</span>
+              <span class="rt-fn"><code>ProcessCustomer(Ada)</code></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+            <span class="rt-dur"><span class="rt-bar" style="--f:.137"></span><span class="rt-val">1.15s</span></span>
+          </div>
+
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i v"></i><i class="rt-i l"></i></span>
+              <span class="rt-id">call4</span>
+              <span class="rt-fn"><code>ClassifyCustomer(Ada)</code><span class="rt-note">→ Approve</span> <span class="rt-tag">child call</span></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+            <span class="rt-dur"><span class="rt-bar" style="--f:.131"></span><span class="rt-val">1.10s</span></span>
+          </div>
+
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i t"></i></span>
+              <span class="rt-id">call5</span>
+              <span class="rt-fn"><code>ProcessCustomer(Bo)</code><span class="rt-note">→ Review (fallback)</span></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+            <span class="rt-dur"><span class="rt-bar" style="--f:.113"></span><span class="rt-val">0.95s</span></span>
+          </div>
+
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i v"></i><i class="rt-i l"></i></span>
+              <span class="rt-id">call6</span>
+              <span class="rt-fn"><code>ClassifyCustomer(Bo)</code><span class="rt-note">provider HTTP 500</span></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-err">failed</span></span>
+            <span class="rt-dur"><span class="rt-bar" style="--f:.107"></span><span class="rt-val">0.90s</span></span>
+          </div>
+
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i l"></i></span>
+              <span class="rt-id">call7</span>
+              <span class="rt-fn"><code>ProcessCustomer(Cy)</code></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+            <span class="rt-dur"><span class="rt-bar" style="--f:.744"></span><span class="rt-val">6.25s</span></span>
+          </div>
+
+          <div class="rt-row">
+            <span class="rt-main">
+              <span class="rt-tree"><i class="rt-i s"></i><i class="rt-i l"></i></span>
+              <span class="rt-id">call8</span>
+              <span class="rt-fn"><code>ClassifyCustomer(Cy)</code><span class="rt-note">→ Approve</span> <span class="rt-flag">← slow</span></span>
+            </span>
+            <span class="rt-st"><span class="sp sp-ok">succeeded</span></span>
+            <span class="rt-dur"><span class="rt-bar" style="--f:.738"></span><span class="rt-val">6.20s</span></span>
+          </div>
+
+        </div>
+      </div>
+      <footer class="rt-runfoot"><code>total_calls = 8</code> · <code>total_errors = 1</code></footer>
+    </section>
+
+    <section class="rt-run">
+      <header class="rt-runhead">
+        <span class="sp sp-run rt-pulse">running</span>
+        <code class="rt-runid">run2</code>
+        <code>ProcessCustomers([Dee], null)</code>
+      </header>
+    </section>
+  </div>
+
+  <figcaption>Process <code>P</code> hosts a finished run and a running one on
+  revision <code>rev1</code>; the runtime records the calls, threads, and
+  statuses as they happen <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>.
+  <code>run1</code> succeeded even though <code>call6</code> failed inside it,
+  and bars show per-call duration on <code>run1</code>&rsquo;s 8.4s scale.</figcaption>
+  <style>
+    /* Floor tuned to this instance's content so the full row set (including
+       the ← slow flag) fits without horizontal scroll at typical article
+       widths; _tree.css's 40rem default stays for other .rt users. */
+    .fig-02-run-tree-a .rt{min-width:36rem}
+  </style>
+</figure>

@@ -1,0 +1,128 @@
+<figure class="fig fig-04-dump-coverage">
+  <div class="fh">What a dump covers
+    <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>
+  </div>
+  <div class="fig-scroll">
+    <div class="dc">
+
+      <div class="dc-lane">
+        <div class="dc-head"><code>run1</code><span class="dc-sub">long run</span></div>
+        <div class="dc-toprow">
+          <span class="dc-open-note">&#9666; earlier activity</span>
+          <span class="dc-trig">trigger: <code>call8</code> completes, <span class="dc-num">6.2&nbsp;s</span></span>
+        </div>
+        <div class="dc-track">
+          <div class="dc-bar dc-bar-fade"></div>
+          <div class="dc-bracket dc-br1">
+            <span class="dc-backarrow" aria-hidden="true"></span>
+            <span class="dc-x" aria-hidden="true">&#10005;</span>
+            <span class="dc-trigflag" aria-hidden="true"><i class="dc-trighead"></i></span>
+          </div>
+        </div>
+        <div class="dc-under dc-under1">
+          <div class="dc-reach">the window reaches back just over six seconds; Bo's provider failure (<code>call6</code> <span class="dc-xs">&#10005;</span>, handled, fired nothing) sits just inside its edge</div>
+          <div class="dc-tag"><code>dump1</code> &middot; ~130 events, the <span class="dc-num">6.2&nbsp;s</span> ending at the trigger</div>
+        </div>
+      </div>
+
+      <div class="dc-lane">
+        <div class="dc-head"><code>run3</code><span class="dc-sub">short run</span></div>
+        <div class="dc-toprow dc-toprow3">
+          <span class="dc-trig dc-trig3">trigger: unhandled error at root (the error <span class="dc-xs">&#10005;</span> is the trigger)</span>
+        </div>
+        <div class="dc-track">
+          <div class="dc-bar dc-bar3"></div>
+          <div class="dc-bracket dc-br3">
+            <span class="dc-backarrow" aria-hidden="true"></span>
+            <span class="dc-x dc-x3" aria-hidden="true">&#10005;</span>
+            <span class="dc-trigflag" aria-hidden="true"><i class="dc-trighead"></i></span>
+          </div>
+        </div>
+        <div class="dc-under">
+          <div class="dc-tag"><code>dump2</code> &middot; ~40 events, the whole short run</div>
+        </div>
+      </div>
+
+      <div class="dc-legend">
+        <span class="dc-lg"><span class="dc-lg-bracket" aria-hidden="true"></span> saved tape slice (dump)</span>
+        <span class="dc-lg"><span class="dc-lg-trig" aria-hidden="true"><i class="dc-trighead"></i></span> trigger: the dump copies the tape at this moment, reaching backwards</span>
+        <span class="dc-lg"><span class="dc-xs">&#10005;</span> failure event (fires a dump only when unhandled at the root)</span>
+      </div>
+
+    </div>
+  </div>
+  <figcaption>Coverage of the two dumps from the toy program. A dump reaches backwards from its trigger, never forward: <code>dump1</code>'s window ends at the slow-call trigger, and <code>call6</code>'s handled failure sits inside it only because the window reaches back that far. <code>dump2</code> encloses all of short <code>run3</code> because the run fits in the tape; <code>run1</code>'s earlier activity continues past the left edge, and the drawing claims no total run length.</figcaption>
+
+  <style>
+    .fig-04-dump-coverage .dc{min-width:620px;padding:.2rem 0 .1rem;
+      font-variant-numeric:tabular-nums}
+    .fig-04-dump-coverage .dc-lane{margin:.3rem 0 1.15rem}
+    .fig-04-dump-coverage .dc-head{font-size:.8rem;font-weight:650;
+      color:var(--ink);margin-bottom:.35rem}
+    .fig-04-dump-coverage .dc-sub{font-size:.72rem;font-weight:400;
+      color:var(--muted);margin-left:.5rem}
+
+    .fig-04-dump-coverage .dc-toprow{display:flex;justify-content:space-between;
+      align-items:flex-end;font-size:.7rem;color:var(--muted);margin-bottom:3px;
+      line-height:1.3}
+    .fig-04-dump-coverage .dc-toprow3{display:block;position:relative;
+      height:1.05rem}
+    .fig-04-dump-coverage .dc-trig3{position:absolute;left:28.5%;
+      white-space:nowrap}
+    .fig-04-dump-coverage .dc-open-note{color:var(--muted)}
+    .fig-04-dump-coverage .dc-down{font-style:normal;color:var(--muted)}
+
+    .fig-04-dump-coverage .dc-track{position:relative;height:28px}
+    .fig-04-dump-coverage .dc-bar{position:absolute;top:9px;height:10px;
+      border-radius:2px}
+    .fig-04-dump-coverage .dc-bar-fade{left:0;right:0;
+      background:linear-gradient(to right,transparent,
+        color-mix(in srgb,var(--muted) 30%,transparent) 24%)}
+    .fig-04-dump-coverage .dc-bar3{left:1.5%;width:27%;
+      background:color-mix(in srgb,var(--muted) 30%,transparent)}
+
+    .fig-04-dump-coverage .dc-bracket{position:absolute;top:1px;bottom:1px;
+      border:2px solid var(--ochre);border-bottom:none;
+      border-radius:3px 3px 0 0}
+    .fig-04-dump-coverage .dc-br1{left:38%;right:0}
+    .fig-04-dump-coverage .dc-br3{left:0;width:30%}
+
+    .fig-04-dump-coverage .dc-x{position:absolute;top:50%;
+      transform:translateY(-50%);left:5px;color:var(--fig-err);
+      font-weight:700;font-size:.72rem;line-height:1}
+    .fig-04-dump-coverage .dc-x3{left:auto;right:6px}
+    .fig-04-dump-coverage .dc-xs{color:var(--fig-err);font-weight:700}
+    /* trigger flag: stem down the bracket's right edge + solid arrowhead
+       on top; the dump window visibly hangs off this moment */
+    .fig-04-dump-coverage .dc-trigflag{position:absolute;top:-14px;
+      right:-2px;bottom:-1px;width:2px;background:var(--ochre)}
+    .fig-04-dump-coverage .dc-trighead{position:absolute;top:-1px;
+      left:50%;transform:translateX(-50%);width:0;height:0;
+      border-left:5px solid transparent;border-right:5px solid transparent;
+      border-top:7px solid var(--ochre)}
+    .fig-04-dump-coverage .dc-lg-trig{position:relative;display:inline-block;
+      width:10px;height:12px;vertical-align:-2px}
+    .fig-04-dump-coverage .dc-lg-trig .dc-trighead{top:2px}
+    /* dashed left-pointing arrow inside the bracket, above the bar:
+       the window extends backwards from the trigger */
+    .fig-04-dump-coverage .dc-backarrow{position:absolute;top:4px;left:14px;
+      right:10px;border-top:1px dashed color-mix(in srgb,var(--ochre) 65%,transparent)}
+    .fig-04-dump-coverage .dc-backarrow::before{content:"";position:absolute;
+      left:-6px;top:-4px;width:0;height:0;
+      border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;
+      border-right:6px solid color-mix(in srgb,var(--ochre) 80%,transparent)}
+
+    .fig-04-dump-coverage .dc-under{font-size:.7rem;color:var(--muted);
+      margin-top:4px;line-height:1.5}
+    .fig-04-dump-coverage .dc-under1{margin-left:38%}
+    .fig-04-dump-coverage .dc-tag{font-size:.74rem;color:var(--ink);
+      margin-top:2px}
+
+    .fig-04-dump-coverage .dc-legend{display:flex;gap:1.5rem;font-size:.7rem;
+      color:var(--muted);border-top:1px solid var(--line);padding-top:.55rem;
+      margin-top:.2rem}
+    .fig-04-dump-coverage .dc-lg-bracket{display:inline-block;width:1.1em;
+      height:.5em;border:2px solid var(--ochre);border-bottom:none;
+      border-radius:2px 2px 0 0;vertical-align:baseline}
+  </style>
+</figure>

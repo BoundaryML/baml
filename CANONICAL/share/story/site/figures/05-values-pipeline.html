@@ -1,0 +1,88 @@
+<figure class="fig fig-05-values-pipeline">
+  <div class="vp-pipe">
+
+    <section class="vp-station">
+      <h5 class="vp-name">The call</h5>
+      <div class="vp-where">hot path</div>
+      <p class="vp-body">Bounded deep copy out of the program&rsquo;s memory:
+        no disk, no hash, the program never waits.
+        <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></p>
+    </section>
+
+    <div class="vp-arrow">
+      <span class="vp-arrowlabel">bounded deep copy</span>
+    </div>
+
+    <section class="vp-station">
+      <h5 class="vp-name">Drafts in memory</h5>
+      <div class="vp-where">until run end</div>
+      <p class="vp-body">Role + call identity; encoded once, synchronously,
+        at run end; a promoted draft joins the same write.
+        <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></p>
+      <p class="vp-hazard">crash before run end: drafts lost;
+        structural tape survives (doc&nbsp;08)</p>
+      <p class="vp-note">incremental flush while a run is open: drain service
+        exists, unused
+        <span class="chip c-open" title="Decision not yet made">open</span></p>
+    </section>
+
+    <div class="vp-arrow">
+      <span class="vp-arrowlabel">encode at run end</span>
+    </div>
+
+    <section class="vp-station">
+      <h5 class="vp-name">Value store</h5>
+      <div class="vp-where">this machine</div>
+      <p class="vp-body">One copy per distinct content.</p>
+      <p class="vp-stat">64-turn agent conversation: &ge;20&times; reduction
+        <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></p>
+      <p class="vp-note">local first: nothing uploads by default;
+        upload is explicit opt-in (doc&nbsp;08)
+        <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></p>
+      <p class="vp-note">&ldquo;bodies live only in the value store&rdquo; is
+        the v1 target
+        <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></p>
+    </section>
+
+  </div>
+
+  <figcaption>A value is copied once on the hot path, encoded once at run
+  end, and stored once per distinct content, locally. Drafts still in memory
+  when a run crashes mid-flight are lost; the structural tape survives with
+  its intact prefix (doc 08).</figcaption>
+
+  <style>
+  .fig-05-values-pipeline .vp-pipe{display:grid;
+    grid-template-columns:1fr auto 1fr auto 1fr;gap:.55rem;
+    align-items:stretch}
+  .fig-05-values-pipeline .vp-station{border:1px solid var(--line);
+    border-radius:8px;background:var(--card);padding:.6rem .75rem;
+    display:flex;flex-direction:column;gap:.35rem}
+  .fig-05-values-pipeline .vp-name{margin:0;font-size:.72rem;
+    font-weight:650;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--ink)}
+  .fig-05-values-pipeline .vp-where{font-size:.68rem;color:var(--muted);
+    margin-top:-.25rem}
+  .fig-05-values-pipeline .vp-body{margin:0;font-size:.78rem;
+    line-height:1.45;color:var(--ink)}
+  .fig-05-values-pipeline .vp-stat{margin:0;font-size:.74rem;
+    line-height:1.45;color:var(--ink);font-variant-numeric:tabular-nums}
+  .fig-05-values-pipeline .vp-note{margin:0;font-size:.68rem;
+    line-height:1.45;color:var(--muted)}
+  .fig-05-values-pipeline .vp-hazard{margin:0;font-size:.7rem;
+    line-height:1.4;color:var(--ink);background:var(--fig-warn-soft);
+    border-left:3px solid var(--fig-warn);
+    border-radius:6px;padding:.3rem .45rem}
+  .fig-05-values-pipeline .vp-arrow{align-self:center;display:flex;
+    flex-direction:column;align-items:center;gap:.1rem;text-align:center}
+  .fig-05-values-pipeline .vp-arrowlabel{font-size:.68rem;
+    color:var(--muted);max-width:6.5rem}
+  .fig-05-values-pipeline .vp-arrow::after{content:"\2192";
+    color:var(--muted);font-size:1.05rem;line-height:1}
+  @media (max-width:860px){
+    .fig-05-values-pipeline .vp-pipe{grid-template-columns:1fr}
+    .fig-05-values-pipeline .vp-arrow::after{content:"\2193"}
+    .fig-05-values-pipeline .vp-arrowlabel{max-width:none}
+  }
+  </style>
+</figure>

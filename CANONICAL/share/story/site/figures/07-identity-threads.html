@@ -1,0 +1,171 @@
+<figure class="fig fig-07-identity-threads">
+  <div class="fh">One function across two revisions <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></div>
+
+  <div class="fig-scroll">
+    <div class="it-grid">
+
+      <div class="it-panelhead">
+        <strong><code>rev1</code> · August</strong>
+        <span class="sub">hosted <code>run1</code>, <code>run2</code>, <code>run3</code></span>
+      </div>
+      <div class="it-connhead" aria-hidden="true"></div>
+      <div class="it-panelhead">
+        <strong><code>rev2</code> · September</strong>
+        <span class="sub">hosted <code>run4</code>; only <code>ClassifyCustomer</code>&rsquo;s prompt text differs</span>
+      </div>
+
+      <div class="it-cell top">
+        <span class="it-k">name</span>
+        <span class="it-v"><code>ClassifyCustomer</code></span>
+      </div>
+      <div class="it-conn">
+        <span class="it-line" aria-hidden="true"><i class="l"></i></span>
+      </div>
+      <div class="it-cell top">
+        <span class="it-k">name</span>
+        <span class="it-v"><code>ClassifyCustomer</code></span>
+      </div>
+
+      <div class="it-cell bt0">
+        <span class="it-k">function_id</span>
+        <span class="it-v"><code>18</code></span>
+      </div>
+      <div class="it-conn">
+        <span class="it-cl">renumbered <span class="sub">revision-scoped: assigned fresh at each compile, meaningless without a <code>revision_id</code></span></span>
+        <span class="it-line dash" aria-hidden="true"><i class="l"></i><b class="ah">►</b></span>
+      </div>
+      <div class="it-cell bt0">
+        <span class="it-k">function_id</span>
+        <span class="it-v"><code>16</code></span>
+      </div>
+
+      <div class="it-cell bt0">
+        <span class="it-k">local hash</span>
+        <span class="it-v"><code>lh_9a</code></span>
+      </div>
+      <div class="it-conn">
+        <span class="it-cl">changed <span class="sub">its prompt is its own code</span></span>
+        <span class="it-line dash" aria-hidden="true"><i class="l"></i><b class="ah">►</b></span>
+      </div>
+      <div class="it-cell bt0">
+        <span class="it-k">local hash</span>
+        <span class="it-v"><code>lh_f3</code></span>
+      </div>
+
+      <div class="it-cell bt0 bot dk">
+        <span class="it-k">definition_key</span>
+        <span class="it-v"><code>dk4</code></span>
+      </div>
+      <div class="it-conn">
+        <span class="it-cl">the same <span class="sub">the cross-revision thread: one logical function</span></span>
+        <span class="it-line band" aria-hidden="true"><i class="l"></i></span>
+      </div>
+      <div class="it-cell bt0 bot dk">
+        <span class="it-k">definition_key</span>
+        <span class="it-v"><code>dk4</code></span>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="it-inset">
+    <div class="it-insethead">
+      <span class="sp sp-neutral">hypothetical</span>
+      a later revision renames <code>ClassifyCustomer</code> &rarr; <code>ScoreCustomer</code> (not part of the toy program)
+    </div>
+    <div class="it-insetrow">
+      <code>dk4</code>
+      <span class="it-cutband" aria-hidden="true"><i class="seg"></i></span>
+      <b class="cutword">cut</b>
+      <span class="it-cutband" aria-hidden="true"><i class="seg"></i></span>
+      <span class="newkey">a new definition_key, changed on purpose</span>
+    </div>
+    <p class="it-insetnote">Studio does not guess intent: a rename makes a new logical function, and a hash match across a rename is a hint, not identity.</p>
+  </div>
+
+  <p class="it-foot"><code>dk4</code>, <code>lh_9a</code>, and the integer ids are teaching placeholders. The real key is a readable string closer to <code>function:user.ClassifyCustomer</code> <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>; its exact physical spelling, like every physical identifier form, is not frozen for v1 <span class="chip c-open" title="Decision not yet made">open</span>.</p>
+
+  <figcaption><code>ClassifyCustomer</code> across two revisions: <code>function_id</code> and local hash are revision-scoped; the <code>definition_key</code> is the identity that survives, and a rename cuts it on purpose. The integers 18 and 16 are illustrative; dense ids are assigned fresh at each compile, in an order the contract does not specify.</figcaption>
+
+  <style>
+    .fig-07-identity-threads .it-grid{
+      display:grid;
+      grid-template-columns:minmax(10rem,1fr) minmax(13rem,1.4fr) minmax(10rem,1fr);
+      align-items:stretch;
+      min-width:600px;
+    }
+    .fig-07-identity-threads .it-panelhead{
+      display:flex;flex-direction:column;gap:.1rem;padding:0 .15rem .5rem;
+    }
+    .fig-07-identity-threads .it-panelhead strong{font-size:.8rem;color:var(--ink)}
+    .fig-07-identity-threads .it-panelhead .sub{font-size:.68rem;color:var(--muted);line-height:1.4}
+    .fig-07-identity-threads .it-cell{
+      border:1px solid var(--line);background:var(--code-bg);
+      padding:.45rem .75rem;display:flex;flex-direction:column;gap:.1rem;
+      justify-content:center;
+    }
+    .fig-07-identity-threads .it-cell.bt0{border-top:0}
+    .fig-07-identity-threads .it-cell.top{border-radius:8px 8px 0 0}
+    .fig-07-identity-threads .it-cell.bot{border-radius:0 0 8px 8px}
+    .fig-07-identity-threads .it-cell.dk{background:var(--teal-soft)}
+    .fig-07-identity-threads .it-k{
+      font-size:.68rem;font-weight:600;letter-spacing:.05em;
+      text-transform:uppercase;color:var(--muted);
+    }
+    .fig-07-identity-threads .it-v{font-size:.84rem;color:var(--ink)}
+    .fig-07-identity-threads .it-v code{font-variant-numeric:tabular-nums}
+    .fig-07-identity-threads .it-conn{
+      display:flex;flex-direction:column;justify-content:center;align-items:center;
+      padding:.4rem .7rem;text-align:center;
+    }
+    .fig-07-identity-threads .it-cl{
+      font-size:.72rem;font-weight:600;color:var(--ink);
+      line-height:1.35;margin-bottom:.3rem;
+    }
+    .fig-07-identity-threads .it-cl .sub{
+      display:block;font-size:.68rem;font-weight:400;color:var(--muted);
+    }
+    .fig-07-identity-threads .it-line{
+      display:flex;align-items:center;width:100%;gap:.15rem;
+    }
+    .fig-07-identity-threads .it-line .l{flex:1;height:0;border-top:1px solid var(--line)}
+    .fig-07-identity-threads .it-line.dash .l{
+      border-top:2px dashed color-mix(in srgb,var(--muted) 60%,transparent);
+    }
+    .fig-07-identity-threads .it-line .ah{
+      font-size:.6rem;line-height:1;
+      color:color-mix(in srgb,var(--muted) 75%,transparent);
+    }
+    .fig-07-identity-threads .it-line.band .l{
+      border:0;height:7px;background:var(--teal);border-radius:99px;
+    }
+    .fig-07-identity-threads .it-inset{
+      border:1px dashed var(--line);border-radius:8px;
+      padding:.6rem .85rem;margin-top:.9rem;
+    }
+    .fig-07-identity-threads .it-insethead{
+      font-size:.78rem;color:var(--ink);line-height:1.5;
+      display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;
+    }
+    .fig-07-identity-threads .it-insetrow{
+      display:flex;align-items:center;gap:.45rem;margin:.55rem 0 .1rem;
+      font-size:.8rem;color:var(--ink);
+    }
+    .fig-07-identity-threads .it-cutband{flex:1;display:flex;align-items:center;min-width:2.5rem}
+    .fig-07-identity-threads .it-cutband .seg{
+      flex:1;height:7px;background:var(--teal);border-radius:99px;
+    }
+    .fig-07-identity-threads .cutword{font-size:.68rem;font-weight:650;color:var(--muted)}
+    .fig-07-identity-threads .newkey{font-size:.74rem;color:var(--muted);white-space:nowrap}
+    .fig-07-identity-threads .it-insetnote{
+      margin:.35rem 0 0;font-size:.72rem;color:var(--muted);line-height:1.5;
+    }
+    .fig-07-identity-threads .it-foot{
+      margin:.8rem 0 0;font-size:.72rem;color:var(--muted);line-height:1.55;
+    }
+    @media (max-width:860px){
+      .fig-07-identity-threads .it-conn{padding:.4rem .4rem}
+      .fig-07-identity-threads .newkey{white-space:normal}
+    }
+  </style>
+</figure>

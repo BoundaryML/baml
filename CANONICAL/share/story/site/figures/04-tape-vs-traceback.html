@@ -1,0 +1,130 @@
+<figure class="fig fig-04-tape-vs-traceback">
+  <div class="tvt-panels">
+
+    <section class="tvt-panel tvt-left">
+      <div class="tvt-phead">
+        <div class="fh">The traceback</div>
+        <span class="tvt-badge">t = 0.19 s</span>
+      </div>
+      <div class="tvt-sub">one stack, one thread, one instant</div>
+      <div class="tvt-stack">
+        <div class="tvt-frame"><code>validate_email</code><span class="tvt-ftag">the failing call</span></div>
+        <div class="tvt-arrow">&darr;</div>
+        <div class="tvt-frame"><code>ProcessCustomer</code></div>
+        <div class="tvt-arrow">&darr;</div>
+        <div class="tvt-frame"><code>map</code></div>
+        <div class="tvt-arrow">&darr;</div>
+        <div class="tvt-frame"><code>ProcessCustomers</code><span class="tvt-ftag">the root</span></div>
+      </div>
+      <div class="tvt-empty">no record of anything else</div>
+    </section>
+
+    <section class="tvt-panel tvt-right">
+      <div class="tvt-phead">
+        <div class="fh"><code>dump2</code> &middot; <code>run3</code> <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></div>
+      </div>
+      <div class="tvt-sub">~40 events &middot; shape only</div>
+      <div class="fig-scroll">
+        <div class="tvt-timeline">
+          <div class="tvt-axis">
+            <span class="tvt-tick r1 first" style="left:0">0.00&#8202;s</span>
+            <span class="tvt-tick r2" style="left:5%">0.01</span>
+            <span class="tvt-tick r1" style="left:10%">0.02</span>
+            <span class="tvt-tick r2" style="left:95%">0.19</span>
+            <span class="tvt-tick r1 last" style="left:100%">0.20&#8202;s</span>
+            <div class="tvt-axisline">
+              <i class="tvt-tm" style="left:0"></i>
+              <i class="tvt-tm" style="left:5%"></i>
+              <i class="tvt-tm" style="left:10%"></i>
+              <i class="tvt-tm" style="left:95%"></i>
+              <i class="tvt-tm" style="left:100%"></i>
+            </div>
+          </div>
+          <div class="tvt-lanes">
+            <i class="tvt-grid" style="left:0"></i>
+            <i class="tvt-grid" style="left:5%"></i>
+            <i class="tvt-grid" style="left:10%"></i>
+            <i class="tvt-grid" style="left:95%"></i>
+            <i class="tvt-grid" style="left:100%"></i>
+
+            <div class="tvt-lane">
+              <div class="tvt-lanelabel"><code>thread1</code></div>
+              <div class="tvt-row">
+                <div class="tvt-bar cap-err" style="left:0;width:100%"><code>call1</code> &middot; <code>ProcessCustomers</code></div>
+                <i class="tvt-trig" style="left:100%"></i>
+              </div>
+              <div class="tvt-row">
+                <div class="tvt-bar cap-err" style="left:10%;width:85%"><code>call3</code> &middot; <code>ProcessCustomer</code><i class="tvt-hatch"></i></div>
+              </div>
+              <div class="tvt-ann" style="padding-left:10%"><i class="tvt-swatch"></i> pause / resume records elided: ~30 of the ~40 events, including <code>validate_email</code>&rsquo;s work</div>
+              <div class="tvt-ann ra" style="padding-right:5%"><code>call3</code> <span class="sp sp-err">errored</span> <span class="tvt-t">0.19&#8202;s</span> &middot; the failure</div>
+              <div class="tvt-ann ra"><code>call1</code> <span class="sp sp-err">errored</span> <span class="tvt-t">0.20&#8202;s</span> &middot; root observes it; <i class="tvt-trigmark"></i>trigger fires</div>
+            </div>
+
+            <div class="tvt-lane">
+              <div class="tvt-lanelabel"><code>thread2</code></div>
+              <div class="tvt-ann" style="padding-left:5%"><i class="tvt-dot"></i> thread starts &middot; spawned by <code>call1</code></div>
+              <div class="tvt-row">
+                <div class="tvt-bar cap-warn" style="left:5%;width:95%"><code>call2</code> &middot; <code>WriteAuditLog</code></div>
+              </div>
+              <div class="tvt-ann ra"><code>call2</code> <span class="sp sp-warn">cancelled</span> <span class="tvt-t">0.20&#8202;s</span> &middot; teardown, adjacent to the failure</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tvt-note">Event names simplified. About ten of the ~40 events are the call and
+      thread records drawn here; the rest are the pause / resume records an awaiting
+      thread writes.</div>
+    </section>
+
+  </div>
+  <figcaption>The traceback for <code>run3</code>&rsquo;s error (the chain of
+  frames waiting on the failing call) is complete for its purpose but records
+  one stack, on one thread, at one instant. <code>dump2</code>, saved when the error
+  reached the root, also preserves the audit thread that was alive beside the failure
+  and cancelled at teardown: structural events only, no data bodies.</figcaption>
+</figure>
+<style>
+.fig-04-tape-vs-traceback *{box-sizing:border-box}
+.fig-04-tape-vs-traceback .tvt-panels{display:grid;grid-template-columns:minmax(185px,230px) 1fr;gap:.8rem;align-items:stretch}
+.fig-04-tape-vs-traceback .tvt-panel{border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;display:flex;flex-direction:column;min-width:0}
+.fig-04-tape-vs-traceback .tvt-phead{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem}
+.fig-04-tape-vs-traceback .tvt-phead .fh{margin:0}
+.fig-04-tape-vs-traceback .fh code{text-transform:none;letter-spacing:normal;font-size:1.05em}
+.fig-04-tape-vs-traceback .tvt-sub{font-size:.72rem;color:var(--muted);margin:.15rem 0 .6rem}
+.fig-04-tape-vs-traceback .tvt-badge{font-size:.68rem;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:.05em .45em;white-space:nowrap;font-variant-numeric:tabular-nums}
+.fig-04-tape-vs-traceback .tvt-frame{border:1px solid color-mix(in srgb,var(--fig-err) 55%,transparent);background:color-mix(in srgb,var(--fig-err) 5%,transparent);border-radius:6px;padding:.28rem .55rem;font-size:.78rem;display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}
+.fig-04-tape-vs-traceback .tvt-ftag{font-size:.64rem;color:var(--muted);white-space:nowrap}
+.fig-04-tape-vs-traceback .tvt-arrow{text-align:center;color:var(--muted);font-size:.72rem;line-height:1.1;margin:.05rem 0}
+.fig-04-tape-vs-traceback .tvt-empty{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;margin-top:.7rem;min-height:3rem;padding:.5rem;border:1px dashed color-mix(in srgb,var(--muted) 35%,transparent);border-radius:6px;color:var(--muted);opacity:.65;font-size:.7rem;font-style:italic}
+.fig-04-tape-vs-traceback .tvt-timeline{min-width:430px;padding-right:6px;position:relative}
+.fig-04-tape-vs-traceback .tvt-axis{position:relative;height:2rem;font-size:.66rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.fig-04-tape-vs-traceback .tvt-tick{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.fig-04-tape-vs-traceback .tvt-tick.first{transform:none}
+.fig-04-tape-vs-traceback .tvt-tick.last{transform:translateX(-100%)}
+.fig-04-tape-vs-traceback .tvt-tick.r1{top:0}
+.fig-04-tape-vs-traceback .tvt-tick.r2{top:.72rem}
+.fig-04-tape-vs-traceback .tvt-axisline{position:absolute;left:0;right:0;bottom:0;border-bottom:1px solid var(--line)}
+.fig-04-tape-vs-traceback .tvt-tm{position:absolute;bottom:0;width:1px;height:5px;background:var(--line)}
+.fig-04-tape-vs-traceback .tvt-lanes{position:relative;margin-top:.45rem}
+.fig-04-tape-vs-traceback .tvt-grid{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,var(--line) 55%,transparent)}
+.fig-04-tape-vs-traceback .tvt-lane{position:relative;padding:.1rem 0 .45rem}
+.fig-04-tape-vs-traceback .tvt-lanelabel{font-size:.66rem;color:var(--muted);margin:.15rem 0 .3rem}
+.fig-04-tape-vs-traceback .tvt-row{position:relative;height:20px;margin:3px 0}
+.fig-04-tape-vs-traceback .tvt-bar{position:absolute;top:0;height:100%;background:color-mix(in srgb,var(--muted) 9%,transparent);border:1px solid var(--line);border-radius:4px;font-size:.68rem;line-height:18px;padding:0 .45rem;white-space:nowrap;overflow:hidden;color:var(--ink)}
+.fig-04-tape-vs-traceback .tvt-bar.cap-err{border-right:3px solid var(--fig-err)}
+.fig-04-tape-vs-traceback .tvt-bar.cap-warn{border-right:3px dashed var(--fig-warn)}
+.fig-04-tape-vs-traceback .tvt-hatch{position:absolute;top:2px;bottom:2px;left:42%;right:5px;border-radius:3px;background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--muted) 38%,transparent) 0 2px,transparent 2px 6px)}
+.fig-04-tape-vs-traceback .tvt-trig{position:absolute;top:-5px;width:9px;height:9px;background:var(--fig-err);transform:translateX(-50%) rotate(45deg)}
+.fig-04-tape-vs-traceback .tvt-trigmark{display:inline-block;width:7px;height:7px;background:var(--fig-err);transform:rotate(45deg);margin:0 .3rem 0 .1rem}
+.fig-04-tape-vs-traceback .tvt-swatch{display:inline-block;width:14px;height:9px;border:1px solid var(--line);border-radius:2px;vertical-align:-1px;background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--muted) 38%,transparent) 0 2px,transparent 2px 6px)}
+.fig-04-tape-vs-traceback .tvt-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-right:.15rem}
+.fig-04-tape-vs-traceback .tvt-ann{position:relative;font-size:.68rem;color:var(--muted);margin:1px 0 5px;line-height:1.5}
+.fig-04-tape-vs-traceback .tvt-ann.ra{text-align:right}
+.fig-04-tape-vs-traceback .tvt-t{font-variant-numeric:tabular-nums}
+.fig-04-tape-vs-traceback .tvt-note{font-size:.66rem;color:var(--muted);margin-top:.5rem;line-height:1.5}
+@media (max-width:860px){
+  .fig-04-tape-vs-traceback .tvt-panels{grid-template-columns:1fr}
+  .fig-04-tape-vs-traceback .tvt-empty{min-height:2rem}
+}
+</style>

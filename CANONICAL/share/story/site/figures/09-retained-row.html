@@ -1,0 +1,146 @@
+<figure class="fig fig-09-retained-row">
+  <div class="fh">one <code>retained_calls</code> row</div>
+  <div class="fig-scroll">
+    <div class="rr-grid">
+
+      <!-- row 1: group headers -->
+      <div class="rr-gh rr-gh-res"><span class="rr-gk">resident</span> &middot;
+        physically in the analytical store: small, typed, filterable</div>
+      <div class="rr-gh rr-gh-virt"><span class="rr-gk">virtual</span> &middot;
+        exists only in the SQL surface
+        <span class="rr-ghsub">ordinary SQL predicates apply
+          <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></span></div>
+
+      <!-- row 2: subgroup labels -->
+      <div class="rr-sub rr-s-id">identity</div>
+      <div class="rr-sub rr-s-life">lifecycle</div>
+      <div class="rr-sub rr-s-why">why kept</div>
+      <div class="rr-sub rr-s-dump">dump links</div>
+      <div class="rr-sub rr-s-avail">availability</div>
+
+      <!-- row 3: the row strip -->
+      <div class="rr-cell"><code>run_id</code></div>
+      <div class="rr-cell"><code>call_<wbr>id</code></div>
+      <div class="rr-cell"><code>node_<wbr>id</code></div>
+      <div class="rr-cell"><code>thread_<wbr>id</code></div>
+      <div class="rr-cell"><code>status</code></div>
+      <div class="rr-cell"><code>duration_<wbr>ns</code></div>
+      <div class="rr-cell"><code>retention_<wbr>reasons</code></div>
+      <div class="rr-cell"><code>tape_<wbr>dump_<wbr>ids</code></div>
+      <div class="rr-cell"><code>args_<wbr>state</code></div>
+      <div class="rr-cell"><code>return_<wbr>state</code></div>
+      <div class="rr-cell"><code>error_<wbr>state</code></div>
+      <div class="rr-cell rr-vcell rr-v1"><code>args</code></div>
+      <div class="rr-cell rr-vcell rr-v2"><code>return</code></div>
+      <div class="rr-cell rr-vcell rr-v3"><code>error</code></div>
+
+      <!-- row 4: availability-vs-body tie -->
+      <div class="rr-tie">
+        <div class="rr-tieline"></div>
+        <div class="rr-tielabel">the availability enum is resident; the body is not</div>
+      </div>
+
+      <!-- row 5: arrows -->
+      <div class="rr-arrows rr-arrows-res">
+        <div class="rr-arrowrow"><i class="rr-ar"></i><i class="rr-ar"></i><i class="rr-ar"></i></div>
+        <div class="rr-alabel">direct column reads</div>
+      </div>
+      <div class="rr-arrows rr-arrows-virt">
+        <div class="rr-arrowrow"><i class="rr-ar rr-dash"></i><i class="rr-ar rr-dash"></i><i class="rr-ar rr-dash"></i></div>
+        <div class="rr-alabel">loads on demand via private evidence handles:
+          real work at query time, not a column read</div>
+      </div>
+
+      <!-- row 6: storage -->
+      <div class="rr-store rr-store-wh">
+        <h5>ClickHouse projection</h5>
+        <div class="rr-ssub">rebuilt from sealed evidence
+          <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></div>
+      </div>
+      <div class="rr-store rr-store-val">
+        <h5>value store &middot; local <code>.baml/</code> + S3</h5>
+        <div class="rr-ssub">value bodies live here, never in the warehouse</div>
+      </div>
+
+    </div>
+  </div>
+
+  <figcaption>One <code>retained_calls</code> row. Resident columns are
+  physically present in the analytical store; <code>args</code>,
+  <code>return</code>, and <code>error</code> exist only in the SQL surface,
+  and their value bodies load from evidence on demand rather than from
+  warehouse columns. The columns shown are representative; the schema table
+  above is the authority.</figcaption>
+
+  <style>
+  .fig-09-retained-row .rr-grid{display:grid;
+    grid-template-columns:repeat(11,minmax(3.4rem,1fr)) .55rem repeat(3,minmax(3.4rem,1fr));
+    column-gap:.3rem;row-gap:.35rem;min-width:880px;align-items:stretch}
+
+  .fig-09-retained-row .rr-gh{grid-row:1;font-size:.7rem;color:var(--muted);
+    line-height:1.4;align-self:end;margin-bottom:.1rem}
+  .fig-09-retained-row .rr-gh-res{grid-column:1/12}
+  .fig-09-retained-row .rr-gh-virt{grid-column:13/16}
+  .fig-09-retained-row .rr-gk{font-weight:700;color:var(--ink);
+    text-transform:uppercase;font-size:.64rem;letter-spacing:.05em}
+  .fig-09-retained-row .rr-ghsub{display:block;font-size:.64rem}
+
+  .fig-09-retained-row .rr-sub{grid-row:2;font-size:.58rem;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    text-align:center;align-self:end;padding-bottom:.12rem;
+    border-bottom:2px solid color-mix(in srgb,var(--muted) 30%,transparent)}
+  .fig-09-retained-row .rr-s-id{grid-column:1/5}
+  .fig-09-retained-row .rr-s-life{grid-column:5/7}
+  .fig-09-retained-row .rr-s-why{grid-column:7}
+  .fig-09-retained-row .rr-s-dump{grid-column:8}
+  .fig-09-retained-row .rr-s-avail{grid-column:9/12}
+
+  .fig-09-retained-row .rr-cell{grid-row:3;border:1px solid var(--line);
+    border-radius:6px;background:var(--code-bg);padding:.4rem .3rem;
+    text-align:center;display:flex;align-items:center;justify-content:center;
+    min-width:0}
+  .fig-09-retained-row .rr-cell code{font-size:.66rem;line-height:1.25;
+    color:var(--ink)}
+  .fig-09-retained-row .rr-vcell{border-style:dashed;background:transparent;
+    border-color:color-mix(in srgb,var(--muted) 55%,transparent);opacity:.85}
+  .fig-09-retained-row .rr-vcell code{color:var(--muted)}
+  /* the virtual trio must be pinned: auto-placement would drop `return`
+     into the .55rem spacer column (12) and render it as a sliver */
+  .fig-09-retained-row .rr-v1{grid-column:13}
+  .fig-09-retained-row .rr-v2{grid-column:14}
+  .fig-09-retained-row .rr-v3{grid-column:15}
+
+  .fig-09-retained-row .rr-tie{grid-row:4;grid-column:9/12;display:flex;
+    flex-direction:column;gap:.12rem;margin:0 2%}
+  .fig-09-retained-row .rr-tieline{height:.45rem;
+    border-left:1px solid var(--muted);border-right:1px solid var(--muted);
+    border-bottom:1px solid var(--muted);border-radius:0 0 6px 6px}
+  .fig-09-retained-row .rr-tielabel{font-size:.62rem;color:var(--muted);
+    text-align:center;line-height:1.3}
+
+  .fig-09-retained-row .rr-arrows{grid-row:5;display:flex;
+    flex-direction:column;gap:.2rem}
+  .fig-09-retained-row .rr-arrows-res{grid-column:1/12}
+  .fig-09-retained-row .rr-arrows-virt{grid-column:13/16}
+  .fig-09-retained-row .rr-arrowrow{flex:1;display:flex;
+    justify-content:space-around;min-height:1.15rem}
+  .fig-09-retained-row .rr-ar{display:block;width:0;
+    border-left:1px solid var(--muted);position:relative}
+  .fig-09-retained-row .rr-ar::after{content:"";position:absolute;bottom:0;
+    left:-4px;width:0;height:0;border:3.5px solid transparent;
+    border-top:4.5px solid var(--muted);border-bottom:none}
+  .fig-09-retained-row .rr-dash{border-left-style:dashed}
+  .fig-09-retained-row .rr-alabel{font-size:.64rem;color:var(--muted);
+    text-align:center;line-height:1.35}
+
+  .fig-09-retained-row .rr-store{grid-row:6;border:1px solid var(--line);
+    border-radius:8px;padding:.5rem .65rem;
+    background:color-mix(in srgb,var(--muted) 6%,transparent)}
+  .fig-09-retained-row .rr-store-wh{grid-column:1/12}
+  .fig-09-retained-row .rr-store-val{grid-column:13/16}
+  .fig-09-retained-row .rr-store h5{margin:0 0 .15rem;font-size:.72rem;
+    font-weight:650;color:var(--ink)}
+  .fig-09-retained-row .rr-ssub{font-size:.66rem;color:var(--muted);
+    line-height:1.4}
+  </style>
+</figure>

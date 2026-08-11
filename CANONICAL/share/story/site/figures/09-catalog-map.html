@@ -1,0 +1,163 @@
+<figure class="fig fig-09-catalog-map">
+  <div class="fh">table-schema v1 &middot; eleven relations, two data patterns</div>
+
+  <div class="fcard cm-anchor">
+    <span class="cm-kicker">the anchor</span>
+    <h5><code>runs</code> <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></h5>
+    <p class="cm-grain">one row per run, never per call; complete: every run has a row</p>
+  </div>
+
+  <div class="cm-grid">
+    <div class="lp lp-complete cm-bg cm-bg-complete" aria-hidden="true"></div>
+    <div class="lp lp-retained cm-bg cm-bg-retained" aria-hidden="true"></div>
+
+    <div class="cm-h cm-h-complete">
+      <h4>Complete layer</h4>
+      <p class="cm-sub">complete: every call contributes</p>
+    </div>
+    <div class="cm-h cm-h-retained">
+      <h4>Retained layer</h4>
+      <p class="cm-sub">exact evidence, selected by policy</p>
+    </div>
+
+    <div class="fcard cm-card cm-cc">
+      <h5><code>calling_contexts</code></h5>
+      <p class="cm-grain">one aggregate: run × calling context</p>
+    </div>
+    <div class="fcard cm-card cm-rc">
+      <h5><code>retained_calls</code></h5>
+      <p class="cm-grain">one kept call</p>
+    </div>
+
+    <div class="fcard cm-card cm-llm">
+      <h5><code>llm_usage</code> <span class="cm-flag">provisional</span> <span class="chip c-open" title="Decision not yet made">open</span></h5>
+      <p class="cm-grain">&hellip; × provider × model</p>
+    </div>
+    <div class="fcard cm-card cm-td">
+      <h5><code>tape_dumps</code></h5>
+      <p class="cm-grain">one saved tape slice</p>
+    </div>
+
+    <div class="fcard cm-card cm-te">
+      <h5><code>thread_edges</code> <span class="cm-flag">conditional</span> <span class="chip c-open" title="Decision not yet made">open</span></h5>
+      <p class="cm-grain">one spawn edge</p>
+    </div>
+    <div class="fcard cm-card cm-rt">
+      <h5><code>retained_threads</code> <span class="cm-flag">conditional</span> <span class="chip c-open" title="Decision not yet made">open</span></h5>
+      <p class="cm-grain">one kept spawned thread</p>
+    </div>
+
+    <div class="cm-link cm-link-1" aria-hidden="true"></div>
+    <div class="cm-link cm-link-2" aria-hidden="true"></div>
+  </div>
+
+  <p class="cm-mirror"><span class="cm-dotline" aria-hidden="true"></span> dotted
+    pairs, same two-layer pattern: <code>thread_edges</code>&hairsp;/&hairsp;<code>retained_threads</code>
+    repeats <code>calling_contexts</code>&hairsp;/&hairsp;<code>retained_calls</code> for spawns</p>
+
+  <div class="cm-strips">
+    <div class="fcard cm-strip">
+      <h5>Code identity</h5>
+      <p class="cm-grain"><code>revisions</code> &middot; <code>functions</code> &middot;
+        <code>call_sites</code>: one compiled program, one function in it,
+        one call expression; complete per revision</p>
+      <p class="cm-flagline"><code>call_sites</code> producer not built, so it is
+        not yet navigable <span class="chip c-open" title="Decision not yet made">open</span></p>
+    </div>
+    <div class="fcard cm-strip">
+      <h5>Evidence health</h5>
+      <p class="cm-grain"><code>evidence_issues</code>: one grouped report
+        of evidence Studio failed to keep; complete, and empty when healthy</p>
+    </div>
+  </div>
+
+  <div class="fcard absent cm-cut">
+    <h5><span class="cm-cutlabel">cut from v1</span> <s><code>cct_windows</code></s></h5>
+    <p class="cm-grain">never existed as a public table: grew with active
+      locations × time buckets; mutable open bucket</p>
+  </div>
+
+  <figcaption>Table-schema v1 as layer membership and grain: eleven relations, two
+    data patterns (complete-layer aggregates every call contributes to,
+    retained-layer evidence selected by policy), with the spawn pair
+    repeating the calls pair; join keys stay in the relationship diagram above.
+    <code>cct_windows</code> was cut from v1 and never existed as a public
+    table; table names are rename proposals <span class="chip c-open" title="Decision not yet made">open</span>, and the public relations
+    freeze at table-schema v1 <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span>.</figcaption>
+
+  <style>
+    .fig-09-catalog-map .cm-anchor{display:flex;flex-wrap:wrap;align-items:baseline;
+      gap:.2rem .6rem;border-color:color-mix(in srgb,var(--ink) 30%,transparent)}
+    .fig-09-catalog-map .cm-anchor h5,
+    .fig-09-catalog-map .cm-anchor p{margin:0}
+    .fig-09-catalog-map .cm-kicker{font-size:.62rem;font-weight:650;
+      letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+    .fig-09-catalog-map .cm-grain{margin:0;font-size:.74rem;color:var(--muted);
+      line-height:1.45}
+    .fig-09-catalog-map .cm-card h5{display:flex;align-items:center;
+      flex-wrap:wrap;gap:.1rem .35rem}
+    .fig-09-catalog-map .cm-flag{font-size:.62rem;font-weight:650;
+      letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+
+    .fig-09-catalog-map .cm-grid{display:grid;
+      grid-template-columns:1fr 2.2rem 1fr;row-gap:.55rem;margin-top:.7rem}
+    .fig-09-catalog-map .cm-bg{padding:0;grid-row:1/5}
+    .fig-09-catalog-map .cm-bg-complete{grid-column:1}
+    .fig-09-catalog-map .cm-bg-retained{grid-column:3}
+    .fig-09-catalog-map .cm-h{margin:.65rem .85rem 0}
+    .fig-09-catalog-map .cm-h-complete{grid-column:1;grid-row:1}
+    .fig-09-catalog-map .cm-h-retained{grid-column:3;grid-row:1}
+    .fig-09-catalog-map .cm-h h4{margin:0;font-size:.82rem;font-weight:650}
+    .fig-09-catalog-map .cm-h-complete h4{color:var(--teal)}
+    .fig-09-catalog-map .cm-h-retained h4{color:var(--ochre)}
+    .fig-09-catalog-map .cm-sub{margin:.1rem 0 0;font-size:.7rem;color:var(--muted)}
+    .fig-09-catalog-map .cm-card{margin:0 .85rem}
+    .fig-09-catalog-map .cm-cc{grid-column:1;grid-row:2}
+    .fig-09-catalog-map .cm-llm{grid-column:1;grid-row:3}
+    .fig-09-catalog-map .cm-te{grid-column:1;grid-row:4;margin-bottom:.75rem}
+    .fig-09-catalog-map .cm-rc{grid-column:3;grid-row:2}
+    .fig-09-catalog-map .cm-td{grid-column:3;grid-row:3}
+    .fig-09-catalog-map .cm-rt{grid-column:3;grid-row:4;margin-bottom:.75rem}
+    .fig-09-catalog-map .cm-link{grid-column:2;align-self:center;height:0;
+      margin:0 -.88rem;
+      border-top:2px dotted color-mix(in srgb,var(--ink) 45%,transparent)}
+    .fig-09-catalog-map .cm-link-1{grid-row:2}
+    .fig-09-catalog-map .cm-link-2{grid-row:4}
+
+    .fig-09-catalog-map .cm-mirror{margin:.45rem 0 0;font-size:.7rem;
+      color:var(--muted);text-align:center;line-height:1.5}
+    .fig-09-catalog-map .cm-dotline{display:inline-block;width:22px;height:0;
+      vertical-align:middle;
+      border-top:2px dotted color-mix(in srgb,var(--ink) 45%,transparent)}
+
+    .fig-09-catalog-map .cm-strips{display:grid;grid-template-columns:1fr 1fr;
+      gap:.7rem;margin-top:.7rem}
+    .fig-09-catalog-map .cm-strip h5{margin:0 0 .25rem}
+    .fig-09-catalog-map .cm-strip p{margin:0}
+    .fig-09-catalog-map .cm-flagline{margin:.3rem 0 0;font-size:.7rem;
+      color:var(--muted)}
+
+    .fig-09-catalog-map .cm-cut{margin-top:.7rem}
+    .fig-09-catalog-map .cm-cut h5{display:flex;align-items:baseline;
+      flex-wrap:wrap;gap:.1rem .5rem;margin:0 0 .2rem}
+    .fig-09-catalog-map .cm-cutlabel{font-size:.62rem;font-weight:650;
+      letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+    .fig-09-catalog-map .cm-cut s{text-decoration-thickness:1.5px}
+
+    @media (max-width:860px){
+      .fig-09-catalog-map .cm-grid{grid-template-columns:1fr}
+      .fig-09-catalog-map .cm-bg-complete{grid-column:1;grid-row:1/5}
+      .fig-09-catalog-map .cm-bg-retained{grid-column:1;grid-row:6/10}
+      .fig-09-catalog-map .cm-h-complete{grid-column:1;grid-row:1}
+      .fig-09-catalog-map .cm-h-retained{grid-column:1;grid-row:6}
+      .fig-09-catalog-map .cm-cc{grid-column:1;grid-row:2}
+      .fig-09-catalog-map .cm-llm{grid-column:1;grid-row:3}
+      .fig-09-catalog-map .cm-te{grid-column:1;grid-row:4}
+      .fig-09-catalog-map .cm-rc{grid-column:1;grid-row:7}
+      .fig-09-catalog-map .cm-td{grid-column:1;grid-row:8}
+      .fig-09-catalog-map .cm-rt{grid-column:1;grid-row:9}
+      .fig-09-catalog-map .cm-link{display:none}
+      .fig-09-catalog-map .cm-strips{grid-template-columns:1fr}
+    }
+  </style>
+</figure>

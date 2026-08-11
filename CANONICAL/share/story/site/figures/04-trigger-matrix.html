@@ -1,0 +1,86 @@
+<figure class="fig fig-04-trigger-matrix">
+  <div class="tm-group tm-a">
+    <div class="fh">fires a dump</div>
+
+    <div class="tm-row">
+      <div class="tm-kind">unhandled error at the root</div>
+      <div class="tm-case"><code>run3</code>: Eve's malformed email makes <code>validate_email</code> throw; nothing handles the error, and it reaches the run root.</div>
+      <div class="tm-result"><span class="tm-fire">→ <code>dump2</code></span><span class="tm-resnote">one dump, not three, however many frames rethrow the error</span></div>
+      <div class="tm-chips">
+        <span class="tm-chipline"><span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span><span class="tm-chipnote">root firing today</span></span>
+        <span class="tm-chipline"><span class="chip c-open" title="Decision not yet made">open</span><span class="tm-chipnote">exact propagation point and rethrow-dedup rule not frozen</span></span>
+      </div>
+    </div>
+
+    <div class="tm-row">
+      <div class="tm-kind">slow call</div>
+      <div class="tm-case"><code>run1</code>: <code>call8</code> at <span class="tm-num">6.2&nbsp;s</span> crosses the toy threshold of <span class="tm-num">≈5&nbsp;s</span>.<span class="tm-subnote">the threshold is a knob, not policy; the toy value is teaching fiction, and no product default is confirmed on this branch</span></div>
+      <div class="tm-result"><span class="tm-fire">→ <code>dump1</code></span><span class="tm-resnote">fires when the call completes</span></div>
+      <div class="tm-chips">
+        <span class="tm-chipline"><span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></span>
+      </div>
+    </div>
+
+    <div class="tm-row">
+      <div class="tm-kind">manual request</div>
+      <div class="tm-case">"save the tape now": an explicit request makes the same machinery a debugging tool.<span class="tm-subnote">engine-internal today; the user-facing surface (builtin, SDK call, or CLI command) is not yet designed</span></div>
+      <div class="tm-result"><span class="tm-fire">→ a dump</span></div>
+      <div class="tm-chips">
+        <span class="tm-chipline"><span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span><span class="tm-chipnote">machinery</span></span>
+        <span class="tm-chipline"><span class="chip c-open" title="Decision not yet made">open</span><span class="tm-chipnote">user-facing surface</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tm-group tm-b">
+    <div class="fh">deliberately does not fire</div>
+
+    <div class="tm-row">
+      <div class="tm-kind">handled error</div>
+      <div class="tm-case"><code>run1</code>: <code>call6</code> fails with a provider HTTP 500, but ProcessCustomer handles it and returns the Review fallback: normal control flow, not an incident.<span class="tm-subnote tm-kept">still recorded: counted in aggregate row <code>context4</code> (errored&nbsp;=&nbsp;1), and the error body is kept under the value rules for LLM functions (doc&nbsp;05)</span></div>
+      <div class="tm-result"><span class="tm-nodump">no dump</span></div>
+      <div class="tm-chips"></div>
+    </div>
+
+    <div class="tm-row">
+      <div class="tm-kind">cancellation</div>
+      <div class="tm-case"><code>run3</code>: the audit thread is cancelled at run end; that cancellation preserved nothing, and it appears inside <code>dump2</code> as an event.<span class="tm-subnote">racing two futures cancels the loser by design; if cancellation fired dumps, <code>future.race</code> would saturate the rate limiter with recordings of healthy behavior</span></div>
+      <div class="tm-result"><span class="tm-nodump">no dump</span></div>
+      <div class="tm-chips">
+        <span class="tm-chipline"><span class="chip c-open" title="Decision not yet made">open</span><span class="tm-chipnote">design position: the final trigger matrix is still to be frozen</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tm-footer">A trigger that fires may also <strong>promote</strong>: upgrade material staged cheaply in memory into durable storage. Promotion is something a trigger does, not a fourth trigger kind. Staging and promotion machinery <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>; automatically staging helper data so it is there to promote <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span> (doc&nbsp;05).</div>
+
+  <figcaption>The trigger taxonomy: three kinds fire a dump; a handled error and a cancellation deliberately do not. The final trigger matrix is not yet frozen.</figcaption>
+
+  <style>
+    .fig-04-trigger-matrix .tm-group{padding:.2rem .7rem .35rem;border:1px solid transparent;border-radius:10px}
+    .fig-04-trigger-matrix .tm-group+.tm-group{margin-top:.75rem}
+    .fig-04-trigger-matrix .tm-b{border:1px dashed var(--line)}
+    .fig-04-trigger-matrix .tm-row{display:grid;grid-template-columns:7.4rem minmax(0,1fr) 8.2rem 10.4rem;gap:.25rem .9rem;padding:.55rem 0;align-items:start}
+    .fig-04-trigger-matrix .tm-row+.tm-row{border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+    .fig-04-trigger-matrix .tm-kind{font-size:.78rem;font-weight:650;color:var(--ink);line-height:1.4}
+    .fig-04-trigger-matrix .tm-case{font-size:.74rem;color:var(--ink);line-height:1.5}
+    .fig-04-trigger-matrix .tm-subnote{display:block;margin-top:.25rem;font-size:.68rem;color:var(--muted);line-height:1.5}
+    .fig-04-trigger-matrix .tm-b .tm-kind,
+    .fig-04-trigger-matrix .tm-b .tm-case{color:var(--muted)}
+    .fig-04-trigger-matrix .tm-b .tm-kept{color:var(--ink)}
+    .fig-04-trigger-matrix .tm-result{display:flex;flex-direction:column;gap:.25rem;align-items:flex-start}
+    .fig-04-trigger-matrix .tm-fire{display:inline-block;font-size:.72rem;font-weight:650;padding:.1em .55em;border-radius:6px;background:var(--ochre-soft);border:1px solid color-mix(in srgb,var(--ochre) 35%,transparent);color:var(--ink);white-space:nowrap}
+    .fig-04-trigger-matrix .tm-resnote{font-size:.68rem;color:var(--muted);line-height:1.45}
+    .fig-04-trigger-matrix .tm-nodump{display:inline-block;font-size:.68rem;font-weight:650;letter-spacing:.03em;padding:.12em .6em;border-radius:99px;border:1px dashed var(--muted);color:var(--muted);white-space:nowrap}
+    .fig-04-trigger-matrix .tm-chips{display:flex;flex-direction:column;gap:.3rem}
+    .fig-04-trigger-matrix .tm-chipline{display:flex;align-items:baseline;gap:.4rem}
+    .fig-04-trigger-matrix .tm-chipline .chip{margin-left:0;flex:none}
+    .fig-04-trigger-matrix .tm-chipnote{font-size:.68rem;color:var(--muted);line-height:1.45}
+    .fig-04-trigger-matrix .tm-num{font-variant-numeric:tabular-nums}
+    .fig-04-trigger-matrix .tm-footer{margin-top:.8rem;padding:.6rem .7rem 0;border-top:1px solid var(--line);font-size:.72rem;color:var(--muted);line-height:1.6}
+    @media (max-width:720px){
+      .fig-04-trigger-matrix .tm-row{grid-template-columns:minmax(0,1fr);gap:.3rem}
+      .fig-04-trigger-matrix .tm-result{flex-direction:row;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+    }
+  </style>
+</figure>

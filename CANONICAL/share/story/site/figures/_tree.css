@@ -1,0 +1,135 @@
+/* _tree.css: shared run/call-tree component, .rt- prefix.
+   Owner: figure 02-run-tree (instances 02-run-tree-a / 02-run-tree-b).
+   Reused by: 02-runs-vs-traces, 03-cct-fold, 03-run3-fold, 05-capture-roles,
+   08-baml-dir (03-run3-fold uses the row cells inside its own .r3f grid).
+
+   Structure
+     .rt-proc  > .rt-prochead + .rt-run*     outer process card (optional)
+     .rt-run   > .rt-runhead [+ .fig-scroll > .rt] [+ .rt-runfoot]
+     .rt                                     the row grid (3 columns)
+       .rt-row (display:contents; cells carry all visuals) >
+         .rt-main col 1   in-flow flex cell holding rail + id + label, so a
+                          row's OWN rail width indents its content: child
+                          calls start visibly right of their parent, like
+                          the ASCII tree ("│   └── call4 …"). Children:
+           .rt-tree       rail/connector; one .rt-i unit per depth:
+                          .v continue │ · .t tee ├ · .l last-child └ ·
+                          .s blank (each row carries its full prefix; an
+                          empty .rt-tree is hidden so depth-0 rows start
+                          at x = 0)
+           .rt-id         call id (mono, muted)
+           .rt-fn         function + args; inline .rt-note / .rt-tag
+         .rt-st   col 2   status pill cell (use .sp from _shared.css);
+                          a shared grid column, so pills align across rows
+         .rt-dur  col 3   duration: .rt-bar sized by --f (fraction of the
+                          run's scale, width = --f * --rt-track) + .rt-val
+                          label; omit the whole cell when there is no number
+       Cells may be omitted per row: explicit grid-column keeps alignment.
+     .rt-main.rt-wide                        main cell spans every column, for
+                                             full-width row content (gap boxes,
+                                             captured-value lines)
+     .rt-absent                              dashed absence cell inside
+                                             .rt-main: no id, no pill
+                                             ("never ran")
+     .rt-row.rt-lane                         spawned-thread lane accent on the
+                                             row's rail cell
+     .rt-lanelabel                           one-line lane label inside .rt-main
+     .rt-tag                                 small neutral outline tag (rev id,
+                                             role tags, "thread2 · spawned")
+     .rt-flag                                inline emphasis marker ("← slow")
+     .rt-esc / .rt-esc-a                     escaped-error marker + arrow glyph
+     .rt-pulse                               subtle pulse for a running pill;
+                                             disabled under reduced motion
+     .rt.rt-plain                            variant for non-call trees (e.g.
+                                             directory trees): single column;
+                                             rows are .rt-main > .rt-tree +
+                                             .rt-fn only
+*/
+
+/* row grid: main (rail + id + label) | status | duration.  The rail lives
+   INSIDE the main cell rather than in a shared grid column, so per-row rail
+   width actually indents that row's id and label. */
+.rt{display:grid;
+  grid-template-columns:minmax(0,1fr) max-content max-content;
+  column-gap:.65rem;align-items:center;
+  font-size:.78rem;line-height:1.5;min-width:40rem;--rt-track:6.2rem}
+.rt-row{display:contents}
+.rt-main{grid-column:1;align-self:stretch;min-width:0;
+  display:flex;align-items:center;column-gap:.65rem}
+.rt-main.rt-wide{grid-column:1/-1}
+.rt-tree{align-self:stretch;display:flex;flex:none}
+.rt-tree:empty{display:none}
+.rt-id{font-family:var(--font-mono);font-size:.74rem;color:var(--muted);white-space:nowrap;flex:none}
+.rt-fn{min-width:0;padding:.24rem 0}
+.rt-fn code{white-space:nowrap}
+.rt-st{grid-column:2;white-space:nowrap}
+.rt-dur{grid-column:3;display:flex;align-items:center;gap:.4rem;white-space:nowrap}
+
+/* connector units (pure CSS rails) */
+.rt-i{width:1.05rem;position:relative;flex:none}
+.rt-i.v::before,.rt-i.t::before{content:"";position:absolute;left:calc(50% - .5px);
+  top:0;bottom:0;border-left:1px solid var(--line)}
+.rt-i.l::before{content:"";position:absolute;left:calc(50% - .5px);
+  top:0;height:50%;border-left:1px solid var(--line)}
+.rt-i.t::after,.rt-i.l::after{content:"";position:absolute;left:calc(50% - .5px);
+  right:0;top:calc(50% - .5px);border-top:1px solid var(--line)}
+
+/* duration bars: thin marks, shared left baseline, label beside the mark */
+.rt-bar{height:.42rem;border-radius:2px;flex:none;min-width:2px;
+  width:calc(var(--f,0)*var(--rt-track));
+  background:color-mix(in srgb,var(--muted) 52%,transparent)}
+.rt-val{font-variant-numeric:tabular-nums;font-size:.72rem;color:var(--muted)}
+
+/* annotations */
+.rt-note{font-size:.7rem;color:var(--muted);margin-left:.45rem;white-space:nowrap}
+.rt-flag{font-size:.68rem;font-weight:600;color:var(--muted);margin-left:.15rem;white-space:nowrap}
+.rt-esc{font-size:.7rem;color:var(--muted);margin-left:.45rem;white-space:nowrap}
+.rt-esc-a{color:var(--fig-err);font-weight:700}
+
+/* small neutral tag (never a status: statuses use .sp pills) */
+.rt-tag{display:inline-block;font-family:system-ui,sans-serif;font-size:.64rem;
+  font-weight:600;letter-spacing:.02em;color:var(--muted);
+  border:1px solid var(--line);border-radius:99px;padding:.02em .5em;
+  white-space:nowrap;vertical-align:.05em}
+.rt-tag code{font-size:.95em;color:inherit}
+
+/* spawned-thread lane: tinted left-edge accent on the rail cell + lane label */
+.rt-lane .rt-tree{box-shadow:inset 2.5px 0 color-mix(in srgb,var(--muted) 45%,transparent)}
+.rt-lanelabel{font-size:.6rem;font-weight:650;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);padding:.18rem 0 .04rem}
+
+/* absence row: dashed, no call id, no status pill */
+.rt-absent{margin:.2rem 0;
+  border:1px dashed var(--line);border-radius:6px;color:var(--muted);
+  font-size:.72rem;padding:.1rem .55rem}
+
+/* run card */
+.rt-run{border:1px solid var(--line);border-radius:8px;background:var(--card);
+  padding:.55rem .75rem .6rem}
+.rt-run+.rt-run{margin-top:.6rem}
+.rt-runhead{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;font-size:.8rem}
+.rt-runhead code{white-space:nowrap}
+.rt-runhead .sp{flex:none}
+.rt-runid{font-weight:700}
+.rt-rundur{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:650;
+  font-size:.78rem;color:var(--ink)}
+.rt-run>.fig-scroll{margin-top:.4rem}
+.rt-runfoot{margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--line);
+  font-size:.72rem;color:var(--muted)}
+.rt-runfoot code{font-size:.95em}
+
+/* outer process card */
+.rt-proc{border:1px solid var(--line);border-radius:10px;background:var(--side-bg);
+  padding:.7rem .8rem .8rem}
+.rt-prochead{display:flex;align-items:baseline;gap:.55rem;flex-wrap:wrap;
+  margin:0 .1rem .6rem;font-size:.84rem}
+.rt-prochead .rt-sub{font-size:.72rem;color:var(--muted)}
+
+/* running-status pulse; must stay subtle and honor reduced motion */
+@keyframes rt-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.rt-pulse{animation:rt-pulse 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.rt-pulse{animation:none}}
+
+/* variant hook for non-call trees (directory trees etc.): rail + label only,
+   one grid column; the rail inside .rt-main indents each row by its depth */
+.rt.rt-plain{grid-template-columns:minmax(0,1fr);min-width:0}

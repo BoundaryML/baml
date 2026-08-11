@@ -1,0 +1,54 @@
+<figure class="fig fig-02-run-tree-b">
+  <section class="rt-run">
+    <header class="rt-runhead">
+      <span class="sp sp-err">failed</span>
+      <code class="rt-runid">run3</code>
+      <code>ProcessCustomers([Eve], "retry-batch")</code>
+      <span class="rt-tag">entrypoint call · <code>call1</code></span>
+      <span class="rt-tag">revision <code>rev1</code></span>
+      <span class="rt-rundur">0.2s</span>
+    </header>
+    <div class="fig-scroll">
+      <div class="rt">
+
+        <div class="rt-row rt-lane">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i t"></i></span>
+            <span class="rt-id">call2</span>
+            <span class="rt-fn"><code>WriteAuditLog("retry-batch")</code> <span class="rt-tag"><code>thread2</code> · spawned</span> <span class="rt-note">cancelled at run end</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-warn">cancelled</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i l"></i></span>
+            <span class="rt-id">call3</span>
+            <span class="rt-fn"><code>ProcessCustomer(Eve)</code> <span class="rt-note">ValidationError: malformed email</span> <span class="rt-esc"><span class="rt-esc-a">↑</span> error escaped to root</span></span>
+          </span>
+          <span class="rt-st"><span class="sp sp-err">failed</span></span>
+        </div>
+
+        <div class="rt-row">
+          <span class="rt-main">
+            <span class="rt-tree"><i class="rt-i s"></i><i class="rt-i s"></i></span>
+            <span class="rt-absent">(<code>ClassifyCustomer</code> never ran)</span>
+          </span>
+        </div>
+
+      </div>
+    </div>
+    <footer class="rt-runfoot"><code>total_calls = 3</code> · <code>total_errors = 2</code></footer>
+  </section>
+
+  <figcaption><code>run3</code> fails because the <code>ValidationError</code>
+  escapes to the root, ending both <code>call3</code> and the entrypoint call;
+  the audit thread is cancelled (a normal ending, not an error). Call IDs are
+  scoped to their run.</figcaption>
+  <style>
+    /* Lower floor than _tree.css's 40rem default: this instance has no
+       duration column, and its long inline notes may wrap instead of
+       forcing a horizontal scroll that would hide the status pills. */
+    .fig-02-run-tree-b .rt{min-width:33rem}
+  </style>
+</figure>

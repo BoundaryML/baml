@@ -1,0 +1,85 @@
+<figure class="fig fig-05-million-failures">
+  <div class="fh">One incident, three bounded destinations</div>
+  <div class="mf-grid">
+
+    <div class="mf-src">
+      <div class="mf-count">1,000,000</div>
+      <div class="mf-what"><code>ClassifyCustomer</code> calls <span class="sp sp-err">failed</span></div>
+      <div class="mf-why">provider outage</div>
+    </div>
+
+    <div class="mf-arrow mf-a1" aria-hidden="true"></div>
+    <div class="fcard mf-dest">
+      <h5><span class="mf-k">Aggregates</span> &middot; everything, cheaply <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></h5>
+      <p>All million failures increment counters on the same few
+      <code>calling_contexts</code> rows. Counting is never sampled or turned
+      off: a million failures cost the same rows as three.</p>
+    </div>
+
+    <div class="mf-arrow" aria-hidden="true"></div>
+    <div class="fcard mf-dest">
+      <h5><span class="mf-k">Tape dumps</span> &middot; a bounded few <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></h5>
+      <p>Error triggers are rate-limited: at least five seconds between
+      dumps, at most sixteen per engine (implementation defaults).
+      Dumps suppressed by the limit are counted.</p>
+    </div>
+
+    <div class="mf-arrow" aria-hidden="true"></div>
+    <div class="fcard mf-dest">
+      <h5><span class="mf-k">Values</span> &middot; by policy, deduplicated <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span></h5>
+      <p>Each failing LLM call&rsquo;s error is captured per the policy matrix and
+      stored by content: many small capture rows, <strong>one</strong> stored
+      body per distinct content. The rows scale with the failures; only the
+      body is shared: a million copies of the same provider error are
+      one stored body.</p>
+      <p class="mf-foot">Staged helper values, once wired, are bounded by the
+      staging buffer, with evictions counted
+      (<code>staging_evicted</code>) <span class="chip c-open" title="Decision not yet made">open</span></p>
+    </div>
+
+  </div>
+  <figcaption>A provider outage fans one million failed
+  <code>ClassifyCustomer</code> calls into three bounded destinations: counter
+  increments on the same few <code>calling_contexts</code> rows, a
+  rate-limited handful of tape dumps, and per-policy error values whose
+  identical bodies are stored once. Every bound is explicit and gets a counter
+  by design rule, and a hit limit is queryable (doc 06).</figcaption>
+  <style>
+    .fig-05-million-failures .mf-grid{display:grid;
+      grid-template-columns:minmax(150px,190px) 40px 1fr;gap:.6rem 0;
+      align-items:center;margin-top:.2rem}
+    .fig-05-million-failures .mf-src{grid-row:1 / span 3;grid-column:1;
+      align-self:center;text-align:center;padding:.85rem .7rem;
+      border-radius:8px;background:var(--fig-err-soft);
+      border:1px solid color-mix(in srgb,var(--fig-err) 45%,transparent)}
+    .fig-05-million-failures .mf-count{font-size:1.35rem;font-weight:700;
+      color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.2}
+    .fig-05-million-failures .mf-what{font-size:.78rem;color:var(--ink);
+      margin-top:.2rem;line-height:1.5}
+    .fig-05-million-failures .mf-why{font-size:.7rem;color:var(--muted);
+      margin-top:.3rem}
+    .fig-05-million-failures .mf-arrow{grid-column:2;height:2px;
+      background:var(--line);align-self:center;position:relative}
+    .fig-05-million-failures .mf-arrow::after{content:"";position:absolute;
+      right:-1px;top:50%;transform:translateY(-50%);
+      border-left:7px solid var(--line);border-top:5px solid transparent;
+      border-bottom:5px solid transparent}
+    .fig-05-million-failures .mf-dest{grid-column:3}
+    .fig-05-million-failures .mf-dest p{margin:0;line-height:1.45}
+    .fig-05-million-failures .mf-dest h5 .mf-k{text-transform:uppercase;
+      letter-spacing:.06em;font-size:.72rem}
+    .fig-05-million-failures .mf-foot{margin-top:.45rem;padding-top:.4rem;
+      border-top:1px dashed var(--line);font-size:.7rem;color:var(--muted)}
+    @media (max-width:860px){
+      .fig-05-million-failures .mf-grid{display:flex;flex-direction:column;
+        gap:.55rem;align-items:stretch}
+      .fig-05-million-failures .mf-arrow{display:none}
+      .fig-05-million-failures .mf-a1{display:block;width:2px;height:16px;
+        background:var(--line);align-self:center}
+      .fig-05-million-failures .mf-a1::after{right:auto;left:50%;top:auto;
+        bottom:-2px;transform:translateX(-50%);
+        border-left:5px solid transparent;border-right:5px solid transparent;
+        border-top:7px solid var(--line);border-bottom:0}
+    }
+  </style>
+</figure>

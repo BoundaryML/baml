@@ -1,0 +1,61 @@
+<figure class="fig fig-01-tension-matrix">
+  <div class="fig-scroll">
+    <div class="txm">
+      <div class="txm-corner">standard escape</div>
+      <div class="txm-h">complete counting</div>
+      <div class="txm-h">exact evidence</div>
+      <div class="txm-h">bounded cost</div>
+      <div class="txm-h txm-q3 txm-q3-top">loss accounting (Q3)<span class="txm-hsub">&ldquo;what is missing?&rdquo;</span></div>
+
+      <div class="txm-rl">one record per call</div>
+      <div class="txm-cell"><span class="sp sp-ok"><span class="txm-g" aria-hidden="true">✓</span> kept</span></div>
+      <div class="txm-cell"><span class="sp sp-ok"><span class="txm-g" aria-hidden="true">✓</span> kept</span></div>
+      <div class="txm-cell"><span class="sp sp-warn"><span class="txm-g" aria-hidden="true">✕</span> cost unbounded</span></div>
+      <div class="txm-cell txm-q3"><span class="txm-dash" role="img" aria-label="absent">none</span></div>
+
+      <div class="txm-rl txm-sep">sample (keep ~1%)</div>
+      <div class="txm-cell txm-sep"><span class="sp sp-warn"><span class="txm-g" aria-hidden="true">✕</span> completeness gone</span></div>
+      <div class="txm-cell txm-sep"><span class="sp sp-ok"><span class="txm-g" aria-hidden="true">✓</span> kept</span></div>
+      <div class="txm-cell txm-sep"><span class="sp sp-ok"><span class="txm-g" aria-hidden="true">✓</span> kept</span></div>
+      <div class="txm-cell txm-q3"><span class="txm-dash" role="img" aria-label="absent">none</span></div>
+
+      <div class="txm-rl txm-sep">metrics only</div>
+      <div class="txm-cell txm-sep"><span class="sp sp-ok"><span class="txm-g" aria-hidden="true">✓</span> kept</span></div>
+      <div class="txm-cell txm-sep"><span class="sp sp-warn"><span class="txm-g" aria-hidden="true">✕</span> exact evidence gone</span></div>
+      <div class="txm-cell txm-sep"><span class="sp sp-ok"><span class="txm-g" aria-hidden="true">✓</span> kept</span></div>
+      <div class="txm-cell txm-q3"><span class="txm-dash" role="img" aria-label="absent">none</span></div>
+
+      <div class="txm-band txm-q3">absent from all three</div>
+    </div>
+  </div>
+
+  <figcaption>Each standard escape keeps two of the three required properties and gives up the third; loss accounting (question 3) is absent from all three.</figcaption>
+
+  <style>
+    .fig-01-tension-matrix .txm{display:grid;
+      grid-template-columns:minmax(9rem,max-content) repeat(3,minmax(9.6rem,1fr)) .4rem minmax(8.6rem,1.1fr);
+      column-gap:.45rem;row-gap:0;align-items:stretch}
+    .fig-01-tension-matrix .txm-q3{grid-column:6}
+    .fig-01-tension-matrix .txm-corner,
+    .fig-01-tension-matrix .txm-h{font-size:.68rem;font-weight:650;letter-spacing:.05em;
+      text-transform:uppercase;color:var(--muted);padding:.45rem .55rem .5rem;
+      display:flex;flex-direction:column;justify-content:flex-end;line-height:1.4;
+      border-bottom:1px solid var(--line)}
+    .fig-01-tension-matrix .txm-h.txm-q3{border-bottom:1px solid color-mix(in srgb,var(--muted) 30%,transparent);text-align:center;align-items:center}
+    .fig-01-tension-matrix .txm-hsub{display:block;margin-top:.15rem;font-size:.68rem;font-weight:400;
+      letter-spacing:normal;text-transform:none;color:var(--muted)}
+    .fig-01-tension-matrix .txm-rl{font-size:.8rem;font-weight:650;color:var(--ink);
+      font-variant-numeric:tabular-nums;padding:.55rem .55rem;display:flex;align-items:center;line-height:1.4}
+    .fig-01-tension-matrix .txm-cell{padding:.55rem .45rem;display:flex;align-items:center}
+    .fig-01-tension-matrix .txm-sep{border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+    .fig-01-tension-matrix .txm-g{margin-right:.15em}
+    .fig-01-tension-matrix .txm-cell.txm-q3{justify-content:center;border-top:none}
+    .fig-01-tension-matrix .txm-q3{background:color-mix(in srgb,var(--muted) 8%,transparent)}
+    .fig-01-tension-matrix .txm-q3-top{border-radius:8px 8px 0 0}
+    .fig-01-tension-matrix .txm-dash{color:var(--muted);font-size:.84rem}
+    .fig-01-tension-matrix .txm-band{font-size:.68rem;font-weight:650;letter-spacing:.04em;
+      text-transform:uppercase;color:var(--muted);text-align:center;padding:.5rem .55rem;
+      border-top:1px dashed color-mix(in srgb,var(--muted) 35%,transparent);
+      border-radius:0 0 8px 8px;line-height:1.4}
+  </style>
+</figure>

@@ -1,0 +1,128 @@
+<figure class="fig fig-06-query-outcome">
+  <div class="qo-flow">
+
+    <section class="qo-panel">
+      <div class="fh">rows the query touches</div>
+      <p class="qo-sub">retained <code>ClassifyCustomer</code> calls with
+        <code>status&nbsp;=&nbsp;'succeeded'</code>; window widened to include <code>runX</code></p>
+      <div class="qo-calls">
+        <div class="fcard qo-call">
+          <h5><code>call8</code> <span class="qo-src">healthy runs</span></h5>
+          <div class="qo-ret"><span class="qo-k">return</span> <code>Approve</code> <span class="sp sp-ok">available</span></div>
+        </div>
+        <div class="fcard qo-call">
+          <h5>retained call <span class="qo-src"><code>runX</code></span></h5>
+          <div class="qo-ret"><span class="qo-k">return</span> <span class="sp sp-ok">available</span></div>
+        </div>
+        <div class="fcard qo-call qo-lost">
+          <h5>retained call <span class="qo-src"><code>runX</code></span></h5>
+          <div class="qo-ret"><span class="qo-k">return</span> <span class="qo-unknown">unknown: lost</span></div>
+          <div class="qo-note">promised return lost in the overload</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="qo-arrow"><span class="qo-glyph"></span><span class="arrow-label">evaluate<br>"return"</span></div>
+
+    <section class="qo-panel">
+      <div class="fh">evaluating the lost value</div>
+      <div class="qo-path qo-no">
+        <div class="qo-ph"><s>SQL <code>NULL</code></s> <span class="sp sp-err">never</span></div>
+        <div class="qo-pb"><s>silent non-match: count comes back one short, no warning</s></div>
+      </div>
+      <div class="qo-path qo-yes">
+        <div class="qo-ph">typed unknown <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></div>
+        <div class="qo-pb">a marked non-answer carrying its reason (<code>lost</code>),
+          settled decision D12. Excluded from the count, declared in the outcome.</div>
+      </div>
+      <div class="qo-note">a captured BAML <code>null</code> is ordinary data, never confused with a typed unknown</div>
+    </section>
+
+    <div class="qo-arrow"><span class="qo-glyph"></span><span class="arrow-label">reconcile</span></div>
+
+    <section class="qo-panel">
+      <div class="fh">the query outcome <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span></div>
+      <p class="qo-sub">exactly one per query, delivered alongside the rows (settled decision D13)</p>
+      <div class="qo-inflow">
+        <div class="qo-in"><span class="qo-in-n">2</span> available returns → evaluated against <code>'Approve'</code></div>
+        <div class="qo-in"><span class="qo-in-n">1</span> <span class="qo-unknown">unknown: lost</span> → not counted, declared below</div>
+      </div>
+      <div class="qo-card">
+        <div class="qo-row"><span class="qo-fk">resultState</span><span class="sp sp-warn">incomplete</span></div>
+        <div class="qo-grp">valueEvaluations</div>
+        <div class="qo-row qo-ind"><span class="qo-fk">attempted</span><span class="qo-fv">3</span></div>
+        <div class="qo-row qo-ind"><span class="qo-fk">available</span><span class="qo-fv">2</span></div>
+        <div class="qo-row qo-ind"><span class="qo-fk">unavailable</span><span class="qo-fv">1</span></div>
+        <div class="qo-row qo-ind"><span class="qo-fk">byReason</span><span class="qo-fv">{ lost: 1 }</span></div>
+        <div class="qo-cardnote">field names and wire shape illustrative <span class="chip c-open" title="Decision not yet made">open</span></div>
+      </div>
+      <p class="qo-result">the rows' <code>approvals</code> count reads as a <strong>labeled lower bound</strong>, not a silent undercount</p>
+    </section>
+
+  </div>
+  <figcaption>Widened to include <code>runX</code>, the approvals query touches three
+    retained calls, and one promised return value was lost. The lost value evaluates
+    to a typed unknown rather than SQL <code>NULL</code>, and the query outcome
+    reconciles the totals: the count is a labeled lower bound, not a silent
+    undercount; outcome field names and wire shape are illustrative.</figcaption>
+  <style>
+    .fig-06-query-outcome .qo-flow{display:grid;
+      grid-template-columns:minmax(0,1fr) auto minmax(0,1.02fr) auto minmax(0,1.1fr);
+      gap:.5rem;align-items:stretch}
+    .fig-06-query-outcome .qo-panel{border:1px solid var(--line);border-radius:8px;
+      padding:.6rem .65rem;display:flex;flex-direction:column;gap:.45rem;min-width:0}
+    .fig-06-query-outcome .fh{margin:0}
+    .fig-06-query-outcome .fh .chip{text-transform:none}
+    .fig-06-query-outcome .qo-sub{font-size:.7rem;color:var(--muted);line-height:1.45;margin:0}
+    .fig-06-query-outcome .qo-calls{display:flex;flex-direction:column;gap:.4rem}
+    .fig-06-query-outcome .qo-call{padding:.45rem .55rem}
+    .fig-06-query-outcome .qo-call h5{display:flex;align-items:baseline;gap:.4rem;
+      flex-wrap:wrap;margin:0 0 .25rem}
+    .fig-06-query-outcome .qo-src{font-size:.68rem;font-weight:400;color:var(--muted)}
+    .fig-06-query-outcome .qo-ret{display:flex;align-items:center;gap:.4rem;
+      flex-wrap:wrap;font-size:.78rem}
+    .fig-06-query-outcome .qo-k{font-size:.68rem;color:var(--muted)}
+    .fig-06-query-outcome .qo-lost{border-color:color-mix(in srgb,var(--fig-warn) 55%,transparent)}
+    .fig-06-query-outcome .qo-unknown{display:inline-block;border:1.5px solid var(--fig-warn);
+      color:var(--fig-warn);background:var(--fig-warn-soft);border-radius:4px;
+      padding:.02em .4em;font-size:.7rem;font-weight:650;font-family:var(--font-mono);
+      white-space:nowrap}
+    .fig-06-query-outcome .qo-note{font-size:.68rem;color:var(--muted);line-height:1.45}
+    .fig-06-query-outcome .qo-arrow{display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:.1rem;color:var(--muted)}
+    .fig-06-query-outcome .qo-glyph::before{content:"\2192";font-size:.95rem}
+    .fig-06-query-outcome .qo-arrow .arrow-label{text-align:center;line-height:1.25}
+    .fig-06-query-outcome .qo-path{border-radius:7px;padding:.45rem .55rem;
+      font-size:.72rem;line-height:1.45}
+    .fig-06-query-outcome .qo-no{border:1px dashed var(--line);color:var(--muted)}
+    .fig-06-query-outcome .qo-yes{background:var(--fig-ok-soft);
+      border:1px solid color-mix(in srgb,var(--fig-ok) 45%,transparent)}
+    .fig-06-query-outcome .qo-ph{font-size:.78rem;font-weight:650;color:var(--ink);
+      display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.15rem}
+    .fig-06-query-outcome .qo-no .qo-ph{color:var(--muted)}
+    .fig-06-query-outcome .qo-inflow{display:flex;flex-direction:column;gap:.25rem}
+    .fig-06-query-outcome .qo-in{font-size:.7rem;color:var(--muted);line-height:1.5}
+    .fig-06-query-outcome .qo-in-n{font-variant-numeric:tabular-nums;font-weight:650;
+      color:var(--ink)}
+    .fig-06-query-outcome .qo-card{background:var(--code-bg);border:1px solid var(--line);
+      border-radius:7px;padding:.5rem .6rem;display:flex;flex-direction:column;gap:.22rem}
+    .fig-06-query-outcome .qo-row{display:flex;justify-content:space-between;
+      align-items:center;gap:.6rem;font-size:.74rem}
+    .fig-06-query-outcome .qo-fk{font-family:var(--font-mono);color:var(--muted)}
+    .fig-06-query-outcome .qo-fv{font-family:var(--font-mono);color:var(--ink);
+      font-variant-numeric:tabular-nums}
+    .fig-06-query-outcome .qo-grp{font-family:var(--font-mono);font-size:.7rem;
+      color:var(--muted);margin-top:.15rem}
+    .fig-06-query-outcome .qo-ind{padding-left:.8rem}
+    .fig-06-query-outcome .qo-cardnote{font-size:.66rem;color:var(--muted);
+      margin-top:.3rem;border-top:1px dashed var(--line);padding-top:.35rem}
+    .fig-06-query-outcome .qo-result{font-size:.74rem;color:var(--ink);
+      line-height:1.45;margin:0}
+    @media (max-width:860px){
+      .fig-06-query-outcome .qo-flow{grid-template-columns:1fr}
+      .fig-06-query-outcome .qo-arrow{flex-direction:row;gap:.4rem;padding:.1rem 0}
+      .fig-06-query-outcome .qo-glyph::before{content:"\2193"}
+      .fig-06-query-outcome .qo-arrow .arrow-label br{display:none}
+    }
+  </style>
+</figure>

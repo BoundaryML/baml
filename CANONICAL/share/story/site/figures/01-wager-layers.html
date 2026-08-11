@@ -1,0 +1,64 @@
+<figure class="fig fig-01-wager-layers">
+  <div class="fh">count everything, keep the interesting ones</div>
+  <div class="wl-panels">
+    <div class="lp lp-complete">
+      <h4>Layer 1: the complete layer</h4>
+      <p class="wl-desc">cheap, bounded summaries of <strong>every call</strong>: always on, no sampling</p>
+      <p class="wl-q"><span class="wl-qtag">Q1</span> what happened across every call? <span class="wl-doc">&rarr; doc&nbsp;03</span></p>
+    </div>
+    <div class="lp lp-retained">
+      <h4>Layer 2: the retained layer</h4>
+      <p class="wl-desc">exact evidence (real events and values) for the <strong>interesting few</strong>, selected by explicit policy, not by chance</p>
+      <p class="wl-q"><span class="wl-qtag">Q2</span> which exact call, with what context? <span class="wl-doc">&rarr; docs&nbsp;04&ndash;05</span></p>
+    </div>
+  </div>
+  <div class="wl-band">
+    <span class="wl-qtag">Q3</span> what is missing? when the machinery itself drops
+    something, the loss is recorded and queryable
+    <span class="wl-doc">&rarr; doc&nbsp;06</span>
+  </div>
+  <div class="wl-footer">
+    <div class="wl-foot-item">
+      <span class="wl-qtag">Q4</span> which code produced it? the exact compiled
+      version, known to the runtime
+      <span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>
+      <span class="wl-doc">&rarr; doc&nbsp;07</span>
+    </div>
+    <div class="wl-foot-item">
+      query it all: <code>baml query</code>, plain SQL
+      <span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span>
+    </div>
+  </div>
+  <figcaption>The two layers and where each of the four questions is
+  answered: complete summaries for counting (doc 03), evidence selected by
+  policy (docs 04&ndash;05), loss declared by the machinery itself (doc 06),
+  and compiled identity (doc 07). <code>baml query</code> is the committed
+  v1 target, not on the branch today.</figcaption>
+
+  <style>
+    .fig-01-wager-layers .wl-panels{display:grid;grid-template-columns:1fr 1fr;
+      gap:.8rem;margin-bottom:.8rem}
+    .fig-01-wager-layers .lp p{margin:.2rem 0;font-size:.8rem;line-height:1.5;
+      color:var(--ink)}
+    .fig-01-wager-layers .wl-q{margin-top:.5rem;color:var(--muted)}
+    .fig-01-wager-layers .wl-qtag{display:inline-block;font-size:.66rem;
+      font-weight:650;letter-spacing:.04em;color:var(--muted);
+      border:1px solid var(--line);border-radius:99px;padding:.02em .45em;
+      margin-right:.25em;background:var(--card);
+      font-variant-numeric:tabular-nums}
+    .fig-01-wager-layers .wl-doc{font-size:.72rem;color:var(--muted);
+      white-space:nowrap}
+    .fig-01-wager-layers .wl-band{border:1px dashed color-mix(in srgb,var(--muted) 40%,transparent);
+      border-radius:8px;background:color-mix(in srgb,var(--muted) 8%,transparent);
+      padding:.55rem .8rem;font-size:.8rem;line-height:1.5;color:var(--ink)}
+    .fig-01-wager-layers .wl-footer{display:flex;flex-wrap:wrap;gap:.4rem 1.6rem;
+      justify-content:space-between;margin-top:.8rem;padding-top:.65rem;
+      border-top:1px solid var(--line)}
+    .fig-01-wager-layers .wl-foot-item{font-size:.78rem;line-height:1.6;
+      color:var(--ink)}
+    @media (max-width:860px){
+      .fig-01-wager-layers .wl-panels{grid-template-columns:1fr}
+      .fig-01-wager-layers .wl-footer{flex-direction:column}
+    }
+  </style>
+</figure>

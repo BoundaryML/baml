@@ -1,0 +1,169 @@
+<figure class="fig fig-04-stored-rows">
+  <div class="sr-head">
+    <span class="fh">The stored rows &middot; toy program</span>
+    <span class="sr-chips">
+      <span class="sr-chipname">capture machinery</span><span class="chip c-built" title="On this branch today; numbers are implementation defaults, not frozen contracts">built</span>
+      <span class="sr-chipname">both tables</span><span class="chip c-v1" title="Committed target with a delivery gate; designed, not built">v1</span>
+      <span class="sr-chipname">reason enumeration</span><span class="chip c-open" title="Decision not yet made">open</span>
+    </span>
+  </div>
+
+  <div class="fig-scroll">
+    <div class="sr-inner">
+
+      <div class="sr-cols">
+        <div class="sr-colhead"><code>tape_dumps</code><span>one row per preserved moment</span></div>
+        <div class="sr-colhead"><code>retained_calls</code><span>one row per kept call</span></div>
+      </div>
+
+      <div class="sr-run">
+        <div class="sr-runlabel"><code>run1</code></div>
+        <div class="sr-grid">
+          <div class="sr-card sr-dump">
+            <div class="sr-tag">tape_dumps row</div>
+            <div class="sr-title"><code>dump1</code></div>
+            <dl class="sr-fields">
+              <div><dt>run</dt><dd><code>run1</code></dd></div>
+              <div><dt>trigger</dt><dd>slow call (<code>call8</code>)</dd></div>
+              <div><dt>events</dt><dd class="sr-num">~130</dd></div>
+              <div><dt>covers</dt><dd>the <span class="sr-num">6.2&nbsp;s</span> ending at the trigger</dd></div>
+            </dl>
+          </div>
+          <div class="sr-card sr-call sr-linked">
+            <div class="sr-tag">retained_calls row</div>
+            <div class="sr-title"><code>call8</code> <span class="sp sp-ok">succeeded</span> <span class="sr-num sr-dur">6.2&nbsp;s</span></div>
+            <dl class="sr-fields">
+              <div><dt>run</dt><dd><code>run1</code></dd></div>
+              <div><dt>function</dt><dd>ClassifyCustomer</dd></div>
+              <div><dt>context</dt><dd><code>context4</code> <span class="sr-note">joins the aggregate row (doc 03)</span></dd></div>
+              <div><dt>reason</dt><dd>slow call</dd></div>
+              <div><dt>dump links</dt><dd><code>dump1</code> <span class="sr-note">the dump that covers it</span></dd></div>
+              <div><dt>values</dt><dd>args, return <span class="sr-note">bodies load via the row's virtual fields (docs 05, 09)</span></dd></div>
+            </dl>
+          </div>
+          <div class="sr-card sr-call">
+            <div class="sr-tag">retained_calls row</div>
+            <div class="sr-title"><code>call6</code> <span class="sp sp-err">failed</span> <span class="sr-note">provider 500</span></div>
+            <dl class="sr-fields">
+              <div><dt>run</dt><dd><code>run1</code></dd></div>
+              <div><dt>function</dt><dd>ClassifyCustomer</dd></div>
+              <div><dt>context</dt><dd><code>context4</code></dd></div>
+              <div><dt>reason</dt><dd>error body kept under LLM value rules</dd></div>
+              <div><dt>dump links</dt><dd>none <span class="sr-note">handled failure: no trigger fired</span></dd></div>
+              <div><dt>values</dt><dd>args, error <span class="sr-note">the captured error is this row's reason</span></dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div class="sr-run">
+        <div class="sr-runlabel"><code>run3</code></div>
+        <div class="sr-grid">
+          <div class="sr-card sr-dump">
+            <div class="sr-tag">tape_dumps row</div>
+            <div class="sr-title"><code>dump2</code></div>
+            <dl class="sr-fields">
+              <div><dt>run</dt><dd><code>run3</code></dd></div>
+              <div><dt>trigger</dt><dd>unhandled error at root</dd></div>
+              <div><dt>events</dt><dd class="sr-num">~40</dd></div>
+              <div><dt>covers</dt><dd>the whole short run</dd></div>
+            </dl>
+          </div>
+          <div class="sr-card sr-call sr-linked">
+            <div class="sr-tag">retained_calls row</div>
+            <div class="sr-title"><code>call1</code> <span class="sp sp-err">failed</span></div>
+            <dl class="sr-fields">
+              <div><dt>run</dt><dd><code>run3</code></dd></div>
+              <div><dt>function</dt><dd>ProcessCustomers</dd></div>
+              <div><dt>context</dt><dd><code>context1</code></dd></div>
+              <div><dt>reason</dt><dd>unhandled error at root</dd></div>
+              <div><dt>dump links</dt><dd><code>dump2</code></dd></div>
+              <div><dt>values</dt><dd>args, error</dd></div>
+            </dl>
+          </div>
+          <div class="sr-card sr-call sr-linked">
+            <div class="sr-tag">retained_calls row</div>
+            <div class="sr-title"><code>call3</code> <span class="sp sp-err">failed</span></div>
+            <dl class="sr-fields">
+              <div><dt>run</dt><dd><code>run3</code></dd></div>
+              <div><dt>function</dt><dd>ProcessCustomer</dd></div>
+              <div><dt>context</dt><dd><code>context3</code></dd></div>
+              <div><dt>reason</dt><dd>unhandled error (same propagating error)</dd></div>
+              <div><dt>dump links</dt><dd><code>dump2</code></dd></div>
+              <div><dt>values</dt><dd>error <span class="sr-note">one stored body, shared with <code>call1</code> (doc 05)</span></dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <figcaption>Every row the toy program stores: two <code>tape_dumps</code>
+  ledger rows and four <code>retained_calls</code> rows, grouped by run. A
+  retained row lists the dumps that cover it and the calling context it joins
+  in the complete layer; a dump never retains the calls inside it, so
+  <code>dump1</code> covers every call in its window while only
+  <code>call8</code> earned a row, and <code>call6</code>&rsquo;s dump list is
+  empty because its handled failure fired no trigger. The values field lists
+  the roles captured for that call under doc 05's policy; the bodies live in
+  the value store and load through the row's virtual fields (doc 09).</figcaption>
+
+  <style>
+  .fig-04-stored-rows .sr-head{display:flex;flex-wrap:wrap;gap:.3rem .9rem;
+    align-items:baseline;justify-content:space-between;margin-bottom:.7rem}
+  .fig-04-stored-rows .sr-head .fh{margin:0}
+  .fig-04-stored-rows .sr-head .fh code{text-transform:none;letter-spacing:normal;
+    font-size:1.05em}
+  .fig-04-stored-rows .sr-chips{display:inline-flex;flex-wrap:wrap;
+    gap:.15rem .2rem;align-items:baseline}
+  .fig-04-stored-rows .sr-chipname{font-size:.7rem;color:var(--muted);
+    margin-left:.55rem}
+  .fig-04-stored-rows .sr-chipname:first-child{margin-left:0}
+  .fig-04-stored-rows .sr-inner{min-width:640px}
+  .fig-04-stored-rows .sr-cols,
+  .fig-04-stored-rows .sr-grid{display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.45fr);column-gap:1.7rem}
+  .fig-04-stored-rows .sr-cols{margin-bottom:.6rem}
+  .fig-04-stored-rows .sr-colhead{font-size:.74rem;color:var(--ink);
+    border-bottom:1px solid var(--line);padding-bottom:.3rem}
+  .fig-04-stored-rows .sr-colhead code{font-weight:650}
+  .fig-04-stored-rows .sr-colhead span{margin-left:.5rem;font-size:.68rem;
+    color:var(--muted)}
+  .fig-04-stored-rows .sr-run{margin-bottom:1rem}
+  .fig-04-stored-rows .sr-run:last-child{margin-bottom:.1rem}
+  .fig-04-stored-rows .sr-runlabel{font-size:.72rem;color:var(--muted);
+    margin-bottom:.35rem}
+  .fig-04-stored-rows .sr-grid{row-gap:.7rem}
+  .fig-04-stored-rows .sr-card{border-radius:8px;padding:.5rem .65rem;
+    font-size:.75rem;line-height:1.45;
+    border:1px solid color-mix(in srgb,var(--ochre) 45%,transparent)}
+  .fig-04-stored-rows .sr-dump{grid-column:1;grid-row:1 / span 2;
+    background:var(--ochre-soft)}
+  .fig-04-stored-rows .sr-call{grid-column:2;background:var(--card);
+    position:relative}
+  .fig-04-stored-rows .sr-linked::before{content:"";position:absolute;
+    top:50%;left:-1.7rem;width:1.7rem;border-top:2px solid var(--ochre)}
+  .fig-04-stored-rows .sr-linked::after{content:"";position:absolute;
+    top:50%;left:-1.7rem;transform:translateY(-50%);
+    border-top:4px solid transparent;border-bottom:4px solid transparent;
+    border-right:7px solid var(--ochre)}
+  .fig-04-stored-rows .sr-tag{font-size:.64rem;font-weight:650;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    margin-bottom:.2rem}
+  .fig-04-stored-rows .sr-title{display:flex;flex-wrap:wrap;gap:.35rem;
+    align-items:baseline;margin-bottom:.35rem}
+  .fig-04-stored-rows .sr-title code{font-size:.82rem;font-weight:650}
+  .fig-04-stored-rows .sr-dur{font-size:.7rem;color:var(--muted)}
+  .fig-04-stored-rows .sr-fields{margin:0}
+  .fig-04-stored-rows .sr-fields>div{display:grid;
+    grid-template-columns:5.2rem minmax(0,1fr);gap:.45rem;
+    padding:.14rem 0;
+    border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+  .fig-04-stored-rows .sr-fields dt{font-size:.68rem;color:var(--muted)}
+  .fig-04-stored-rows .sr-fields dd{margin:0;font-size:.73rem;
+    color:var(--ink)}
+  .fig-04-stored-rows .sr-note{font-size:.66rem;color:var(--muted)}
+  .fig-04-stored-rows .sr-num{font-variant-numeric:tabular-nums}
+  </style>
+</figure>
