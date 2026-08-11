@@ -9500,14 +9500,12 @@ impl LoweringContext<'_> {
             let AstTypeArg::Static(type_arg) = type_arg else {
                 unreachable!()
             };
-            // A `_` wildcard (or a nested one, e.g. `Box<_>`) is a compile
-            // error whose lowering cannot cross the runtime boundary. Where TIR
-            // recorded a type for that position, swap it in; otherwise lower
-            // the written type faithfully (a bare frame `T` → `TypeArgRef`, a
-            // concrete arg → itself).
-            let template = if self.type_arg_is_infer_hole(type_arg, &generic_params)
-                && let Some(solved) = solved_type_args.get(idx)
-            {
+            // Prefer a type argument recorded by TIR: besides substituting for
+            // an unlowerable `_`, this preserves context-sensitive lowering
+            // such as P-7's omitted-throws wildcard in an extraction contract.
+            // Ordinary explicit arguments have no recorded entry and continue
+            // to lower faithfully from their syntax.
+            let template = if let Some(solved) = solved_type_args.get(idx) {
                 self.ty_to_template(solved, &generic_params)
             } else {
                 self.type_expr_to_template(type_arg, &generic_params)

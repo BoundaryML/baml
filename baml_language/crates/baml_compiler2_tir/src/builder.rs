@@ -2678,6 +2678,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let self_ty = self.body_self_ty.clone();
         let suppress_diags = self.is_auto_derived_body;
         let extraction_contract = self.is_reflect_package_get_function(callee_id);
+        let mut resolved_type_args = Vec::with_capacity(type_args.len());
         for ((param_name, param_bounds), type_arg) in declared_params
             .iter()
             .zip(declared_bounds.iter())
@@ -2739,7 +2740,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report_simple(d, call_expr_id);
                 }
             }
+            resolved_type_args.push(ty.clone());
             bindings.insert(param_name.clone(), ty);
+        }
+        // MIR normally re-lowers written type arguments from syntax. Preserve
+        // extraction contracts' context-sensitive lowering in the call plan so
+        // an omitted outer `throws` remains P-7's wildcard at runtime instead
+        // of being re-lowered as ordinary `throws never`.
+        if extraction_contract {
+            self.record_call_type_args(call_expr_id, resolved_type_args);
         }
         Some(bindings)
     }
@@ -2984,15 +2993,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 None => None,
             })
             .collect();
-        self.call_plans.insert(
-            expr_id,
-            crate::inference::CallPlan {
+        self.call_plans
+            .entry(expr_id)
+            .and_modify(|plan| {
+                plan.bindings.clone_from(&plan_bindings);
+                plan.side_channels = crate::inference::CallSideChannels { runtime_id };
+            })
+            .or_insert_with(|| crate::inference::CallPlan {
                 bindings: plan_bindings,
                 type_args: Vec::new(),
                 instantiated_throws: None,
                 side_channels: crate::inference::CallSideChannels { runtime_id },
-            },
-        );
+            });
 
         pairs
     }
