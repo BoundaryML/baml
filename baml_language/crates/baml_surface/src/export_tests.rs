@@ -26,24 +26,39 @@ fn assert_package_exports_fully() {
     insta::assert_snapshot!(serde_json::to_string_pretty(&export).unwrap());
 }
 
-/// Every `id` in the document addresses exactly one record.
+/// Every `id` in the document addresses exactly one *symbol*.
 ///
 /// Consumers key on ids — a report diffs on them, a cache blesses on them — so
 /// a collision is not a cosmetic flaw but a wrong answer about a different
 /// symbol. The pressure is entirely on impl blocks: an inherited default is
-/// re-listed by every implementor (13 impls inherit `baml.iter.Iterator.chain`)
-/// and a method declared in a free impl has no symbol id at all, which is why
-/// an impl entry is addressed under its block and keeps the declaration in
-/// `declared_by`.
+/// re-listed by every implementor (13 impls inherit `baml.iter.Iterator.chain`),
+/// which is why an impl entry is addressed through its block and keeps the
+/// declaration in `declared_by`.
+///
+/// One symbol may legitimately appear twice, and the invariant is stated on
+/// records rather than on strings for that reason: a method written in a class
+/// body's `implements` block is both a method of the class and a method of the
+/// block, and both views list it. What must never happen is one id covering two
+/// *different* records, so equal ids are required to carry equal content.
 #[test]
 fn every_exported_id_is_unique() {
     let db = make_db();
     let json = serde_json::to_value(export_package(&db, Package::named(&db, "baml"))).unwrap();
 
     let mut ids: Vec<String> = Vec::new();
+    let mut records: std::collections::HashMap<String, serde_json::Value> =
+        std::collections::HashMap::new();
+    let mut conflicts: Vec<String> = Vec::new();
     let mut collect = |value: &serde_json::Value| {
         if let Some(id) = value.get("id").and_then(serde_json::Value::as_str) {
             ids.push(id.to_string());
+            match records.get(id) {
+                Some(existing) if existing != value => conflicts.push(id.to_string()),
+                Some(_) => {}
+                None => {
+                    records.insert(id.to_string(), value.clone());
+                }
+            }
         }
     };
     for item in json["items"].as_array().unwrap() {
@@ -77,21 +92,26 @@ fn every_exported_id_is_unique() {
     }
 
     assert!(ids.len() > 1000, "the census actually walked the document");
-    let mut sorted = ids.clone();
-    sorted.sort();
-    sorted.dedup();
-    if sorted.len() != ids.len() {
-        let mut seen = std::collections::HashSet::new();
-        let mut duplicates: Vec<&String> = ids.iter().filter(|id| !seen.insert(*id)).collect();
-        duplicates.sort();
-        duplicates.dedup();
-        panic!(
-            "{} of {} ids collide, e.g. {:?}",
-            ids.len() - sorted.len(),
-            ids.len(),
-            &duplicates[..duplicates.len().min(5)]
-        );
-    }
+    conflicts.sort();
+    conflicts.dedup();
+    assert!(
+        conflicts.is_empty(),
+        "{} id(s) cover more than one record, e.g. {:?}",
+        conflicts.len(),
+        &conflicts[..conflicts.len().min(5)]
+    );
+
+    // No `::` anywhere: it is Rust's path separator and appears nowhere in
+    // BAML's grammar, so an id containing one can be neither pasted into
+    // `describe` nor written in source. Impl entries were once addressed
+    // `<block id>::<name>`.
+    let rustish: Vec<&String> = ids.iter().filter(|id| id.contains("::")).collect();
+    assert!(
+        rustish.is_empty(),
+        "{} id(s) are spelled with `::`, e.g. {:?}",
+        rustish.len(),
+        &rustish[..rustish.len().min(5)]
+    );
 }
 
 #[test]
