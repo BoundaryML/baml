@@ -111,6 +111,9 @@ Gate:
   serialized-byte, public-CID, or opaque-handle equality;
 - planning tests for every capability and forbidden construct;
 - fixed-snapshot and running/pending semantics tests;
+- revision-identity tests proving every behavior-affecting compiler input is
+  committed, and local-definition-hash tests proving both direct-change
+  sensitivity and documented non-transitive behavior;
 - every SQL stream has exactly one terminal **query_outcome**, including planning/execution failure, budget exhaustion, and cancellation; and
 - no dependency from the core to CLI, runtime host, AWS SDK, concrete SQLite, or concrete ClickHouse client.
 

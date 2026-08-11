@@ -17,7 +17,8 @@ From one BAML project, a user will be able to:
 - inspect the exact retained inputs, outputs, errors, logs, and nearby events when policy captured them;
 - distinguish “no match” from “the value was not captured, was redacted, was lost, or exceeded a query budget”;
 - query the same versioned logical catalog locally and in the hosted service;
-- compare behavior across revisions by stable definition identity;
+- compare observed behavior across revisions by stable logical function
+  identity while keeping each exact program revision separate;
 - ask an agent a natural-language question and let it inspect the schema, issue SQL, and cite the runs and values behind its answer;
 - upload immutable evidence to the hosted service without putting network work on the runtime hot path;
 - rebuild every analytical projection from canonical artifacts; and

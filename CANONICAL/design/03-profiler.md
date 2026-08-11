@@ -195,7 +195,7 @@ One protobuf dictionary per revision maps dense IDs to:
 - stable definition key;
 - owner/lambda/package/namespace identity;
 - capture flags; and
-- definition content hash.
+- local definition content hash.
 
 The full schema is [bamldict.proto](../../baml_language/crates/bex_events/src/dict/proto/bamldict.proto).
 
@@ -204,10 +204,35 @@ The full schema is [bamldict.proto](../../baml_language/crates/bex_events/src/di
 Use:
 
 - **definition_key** for stable semantic identity across recompiles;
-- **def_content_hash** to indicate whether that definition’s behavior changed; and
+- the artifact's **def_content_hash** to indicate whether that function's own
+  compiled signature or bytecode changed; and
 - FQN/source only for display and secondary diagnostics.
 
-A rename intentionally changes the definition key. Equal content hashes across a rename are a hint, not identity.
+A rename intentionally changes the definition key. Equal content hashes across
+a rename are a hint, not identity.
+
+The hash is deliberately local and layout-independent. Named types contribute
+their nominal identity and referenced functions contribute their definition
+key; their definition contents are not hashed recursively. Changing a class
+schema or callee body always changes the whole-program revision, but it need
+not change the hash of a function that consumes that class or calls that
+callee. The public query catalog therefore names this field
+**local_definition_hash**. It must not be described as a dependency-aware
+behavior version.
+
+The source snapshot is BLAKE3-256 over sorted project-relative source paths and
+their content hashes plus `baml.toml`. The revision is a domain-separated
+BLAKE3-256 hash over that snapshot, compiler identity, optimization level and
+`emit_test_cases`. V1 must audit the revision constructor whenever another
+behavior-affecting compiler input is introduced.
+
+### Call-site identity
+
+A call site is a static source expression, not a runtime invocation. A compact
+call-site ID is revision-local and maps to a file and source span. The protobuf
+shape exists, but the current dictionary builder emits an empty call-site
+section. Producer emission, dictionary population and retained-call
+consumption must land together before source navigation relies on it.
 
 ## Canonical value store
 

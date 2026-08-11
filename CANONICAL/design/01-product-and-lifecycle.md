@@ -39,7 +39,17 @@ Counting retained rows never becomes a population claim. This rule is reflected 
 
 ### Program snapshot
 
-The content identity of the BAML source/schema and compiler inputs that explain a run. Dense function IDs are revision-local. Cross-revision comparison uses **definition_key** and annotates **def_content_hash**.
+The content identity of the BAML source/schema and compiler inputs that explain
+a run. A source or type-definition edit creates a new revision. Dense function
+IDs are revision-local. Cross-revision comparison uses **definition_key** and
+may annotate the artifact's **def_content_hash**, exposed publicly as
+**local_definition_hash**.
+
+That hash covers one function's own compiled signature and bytecode. It does
+not recursively include the contents of referenced types, callees, clients,
+prompts, or other definitions. An equal local hash is therefore not proof of
+equal effective behavior across revisions; the revision remains the exact
+program boundary.
 
 Deployment, git revision, application build, service, and release are dimensions attached to a program snapshot; they are not the snapshot identity itself.
 

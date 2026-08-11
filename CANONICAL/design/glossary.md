@@ -46,6 +46,7 @@ Terms in this document set are normative unless marked otherwise.
 | **Lane** | Ordered hosted ingest/projection routing subdivision inside a cell. |
 | **Ledger date** | Object/ledger routing partition fixed at first authorization. It is not part of artifact-chunk identity. |
 | **Logical catalog** | Versioned public relations, columns, types, grains, identities, availability, and semantics exposed to users. Physical schemas remain private mappings. |
+| **Local definition hash** | Public name for the revision dictionary's `def_content_hash`: BLAKE3-256 over one function's own compiled signature and canonicalized bytecode. It includes referenced definition names, not their contents, and is not a dependency-aware behavior version. |
 | **Observation** | Individually discoverable retained operation (run, retained call, model attempt, tool/resource operation) with sufficient emitted identity and lifecycle evidence. Not every call becomes one. |
 | **Opaque provider handle** | Private, non-bearer locator carried by resident metadata and resolved only within an authorized QueryScope. |
 | **Population grain / tally** | Complete-at-snapshot aggregate evidence to which every runtime call contributes, primarily through the CCT. |
@@ -60,7 +61,7 @@ Terms in this document set are normative unless marked otherwise.
 | **Reindex / reproject** | Rebuild a derived provider/projection from a fixed canonical evidence barrier. |
 | **Resident column/operator** | Logical data or work available in the local provider or ClickHouse without fetching customer value content. |
 | **Retained-instance grain** | Individually discoverable calls/events retained by policy, exact windows, promotion, or another explicit mechanism. Counting these rows is not a population count. |
-| **Revision dictionary** | Per-revision protobuf mapping dense function IDs to names, source spans, kind/origin, definition key, content hash, and capture flags. |
+| **Revision dictionary** | Per-revision protobuf mapping dense function IDs to names, source spans, kind/origin, definition key, local definition hash, and capture flags. Its call-site section exists but is currently empty. |
 | **Run** | One runtime-owned causal graph rooted at a BAML boundary, including structural, value, loss, and program identity. Cross-process relations remain explicit rather than inventing one clock. |
 | **Running/so-far fact** | Durably committed nonterminal row with explicit pending state and snapshot-relative totals/duration. It is queryable, not silently omitted. |
 | **S3/CAS hydration** | Authorized, bounded resolution and canonical decoding of distinct value handles after resident candidate filtering. |
@@ -86,5 +87,7 @@ Terms in this document set are normative unless marked otherwise.
 - **Query completed** is not the same as “all requested evidence was available.”
 - **Catalog version** is not **physical projection generation**, artifact format version, or program revision.
 - **Definition key** is not revision-local **function ID**.
+- **Local definition hash** is not whole-program **revision identity** or a
+  transitive dependency hash.
 - **S3 canonical evidence** is not a **ClickHouse projection** or an SQS notification.
 - **Reopen/reconstruct/reindex** do not execute user code; **rerun** does and is deferred.

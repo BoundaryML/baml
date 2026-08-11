@@ -133,15 +133,15 @@ The following is the reconciled relation inventory. A relation marked **freeze r
 | Relation | Grain | Known required columns | Status |
 |---|---|---|---|
 | **runs_v1** | one boundary/run | run_id, started_at, ended_at, duration_ns, status, revision_id, entry function/entrypoint, total_calls, total_errors, structural/value/integrity/projection/retention states | Required; no run-level LLM totals or free-form degraded/diagnostic columns |
-| **cct_population_v1** | run × call-tree location at bound snapshot | run/node/parent/depth, function/revision/definition identity, started and terminal counts, inclusive/self/await time, optional fixed histogram | Required; no precomputed display path |
+| **cct_population_v1** | run × call-tree location at bound snapshot | run/node/parent/depth, function/revision/definition identity including local definition hash, started and terminal counts, inclusive/self/await time, optional fixed histogram | Required; no precomputed display path; local hash is not dependency-closure identity |
 | **llm_population_v1** | run × call-tree location × provider × model | run/node/provider/model identity, llm_calls, token availability, nullable input/output tokens, provider_errors, parse_errors | Provisional pending Aaron's LLM changes |
 | **spawn_edges_v1** | aggregate spawn edge | run/parent-location/child-function identity, spawned/completed/errored/cancelled counts, running/awaiting totals, retained-instance and dropped counts | Conditional on concurrency diagnosis being P0 |
 | **spawn_instances_v1** | retained spawn instance | run/edge/spawn/thread identity, optional retained parent/child calls, status, start/end, exact-window/evidence references and state | Conditional retained-instance grain |
 | **exact_windows_v1** | one retained exact-evidence region | run/window/session identity, source/trigger, optional trigger node/call, time bounds, event count, evidence state/reasons and logical evidence ID | Required evidence ledger; event bodies stay outside ClickHouse |
 | **evidence_issues_v1** | one immutable grouped issue summary | issue/run/session/evidence identity, source, affected kind, typed reason, count, first/last seen, optional policy version | Required; not one row per affected event |
-| **functions_v1** | revision × function | revision/function/definition identity, names, source span, kind/origin, decoded capture policy | Required |
-| **call_sites_v1** | revision × call site | revision/call-site identity and source path/span/line | Required for retained-call source navigation |
-| **revisions_v1** | one compiled revision | revision/source-snapshot/compiler identity, conditional compiler-options hash, capture-policy version, identity state, first seen | Required |
+| **functions_v1** | revision × function | revision/function/definition identity, local definition hash, names, source span, kind/origin, decoded capture policy | Required; local hash covers the function's own compiled definition only |
+| **call_sites_v1** | revision × call site | revision/call-site identity and source path/span/line | Target metadata required with retained-call source navigation; current dictionary emits no rows |
+| **revisions_v1** | one compiled revision | revision/source-snapshot/compiler identity, capture-policy version, identity state, first seen | Required; revision identity must commit to every behavior-affecting compiler input |
 
 **cct_windows_v1 is not in the minimal v1 catalog.** It grows with active
 call-tree locations multiplied by elapsed time buckets and has mutable open

@@ -88,12 +88,16 @@ Add:
 - Run entrypoint identity and exact duration.
 - `retained_calls.node_id` to connect an exact call to its complete summary.
 - `call_sites` because `retained_calls.call_site_id` otherwise has no public
-  target.
+  target once call-site IDs are emitted; the current dictionary section is
+  present but empty.
 - First/last timestamps on grouped loss summaries.
 - LLM provider identity and token-availability state.
 - Stable IDs on spawn instances and exact-evidence windows.
 - Whole-value equality and nested value traversal through ordinary SQL
   operators and subscripts.
+- The public name `local_definition_hash` for the artifact's existing
+  `def_content_hash`, so an implementation-local signal is not mistaken for a
+  dependency-aware behavior version.
 
 Still unresolved:
 
@@ -199,7 +203,7 @@ The historical name means **call-tree summaries**.
 | `function_id` | `id`; identity within one revision | Joins the location to its compiled function metadata. |
 | `revision_id` | `id`; repeated for fast grouping | Allows hot cross-run and cross-revision grouping without joining through `runs`, which is the reason to accept this duplication. |
 | `definition_key` | `string?`; absent for synthetic functions | Groups the same logical function across revisions without a dimension join. |
-| `definition_hash` | `bytes?` | Separates observations of changed implementations that share a logical function identity. |
+| `local_definition_hash` | `bytes?` | Separates observations whose function's own compiled signature or body changed; it does not include the contents of referenced types or functions. |
 | `fqn` | `string`; full function name | Supports common display and name grouping without a dimension join. |
 | `calls_started` | `count` | Provides total demand and is the base denominator for rates and average time. |
 | `calls_succeeded` | `count` | Separates successful terminal calls from failures, cancellation, and other exits. |
@@ -514,6 +518,33 @@ that final record are not a completed answer.
 
 ## 5. `functions`, `call_sites`, and `revisions`
 
+These relations are an identity dictionary for observations, not a complete
+version-control system for every BAML definition.
+
+- `revision_id` answers **which exact compiled program produced this
+  observation?** It is BLAKE3-256 over the source snapshot, compiler identity,
+  and the currently included compiler options. The source snapshot hashes all
+  project source files plus `baml.toml`, so any type-definition edit creates a
+  new revision.
+- `function_id` answers **which compact runtime function does this record
+  name?** It is a dense integer meaningful only inside one revision.
+- `definition_key` answers **which logical function is this across
+  revisions?** A rename intentionally changes it.
+- `local_definition_hash` answers **did this function's own compiled signature
+  or body change?** It hashes the artifact's function kind, arity, nominal
+  parameter/return/error types, canonicalized bytecode and referenced
+  definition names. It does not recursively hash the contents of referenced
+  types, functions, clients, prompts, or other definitions.
+- `call_site_id` answers **which static source expression made this call?** It
+  is not an invocation ID and is meaningful only inside one revision.
+
+For example, adding a field to a class always changes `revision_id`. A function
+that accepts the same named class may keep the same `definition_key` and
+`local_definition_hash` when its own signature encoding and bytecode do not
+change. Likewise, changing a callee's body does not automatically change its
+caller's local hash. Equal local hashes therefore do not prove equal effective
+behavior across revisions.
+
 ### Proposed schemas
 
 #### `functions`
@@ -523,7 +554,7 @@ that final record are not a completed answer.
 | `revision_id` | `id`; primary key with `function_id` | Scopes revision-local function IDs and joins the function to its compiled artifact. |
 | `function_id` | `id` | Provides the compact runtime identity emitted in call evidence. |
 | `definition_key` | `string?`; absent for synthetic/internal functions | Connects the same logical user function across revisions. |
-| `definition_hash` | `bytes?` | Detects when the implementation behind a stable definition key changed. |
+| `local_definition_hash` | `bytes?`; artifact field `def_content_hash` | Detects a change to this function's own compiled signature or body without claiming that its dependency closure is unchanged. |
 | `fqn` | `string`; fully qualified name | Gives an unambiguous user-facing name for display and grouping. |
 | `display_name` | `string` | Gives a concise label for tree and list views where the full name is too noisy. |
 | `source_path` | `string?` | Navigates user-defined functions to their source file; it is absent for functions without source. |
@@ -538,6 +569,11 @@ that final record are not a completed answer.
 | `promote_on_error` | `enum`; disabled/auto/enabled | Explains whether a failure should cause otherwise unretained call evidence to be promoted. |
 
 #### `call_sites`
+
+This is a target relation. The protobuf section and row shape exist, but the
+current revision-dictionary builder emits no call-site rows. Do not expose
+`retained_calls.call_site_id` as navigable until the producer and dictionary
+population land together.
 
 | Column | Type / rule | Why this row field is necessary |
 | --- | --- | --- |
@@ -555,17 +591,18 @@ that final record are not a completed answer.
 | `revision_id` | `id`; primary key | Gives compiled program structure a stable identity and scopes runtime function/call-site IDs. |
 | `source_snapshot_id` | `id` | Connects observations to the exact source snapshot users need to inspect. |
 | `compiler_id` | `string` | Records which compiler produced the artifact so behavior can be reproduced and version differences investigated. |
-| `compiler_options_hash` | `bytes?`; conditional | Distinguishes behavior-affecting compiler options only if `revision_id` does not already commit to them; otherwise remove it. |
 | `capture_policy_version` | `integer` | Connects the revision to the policy semantics used by decoded function capture fields. |
 | `identity_state` | `enum`; verified/fallback_legacy | Warns when cross-revision identity used a legacy fallback rather than verified artifact identity. |
 | `first_seen_at` | `timestamp` | Supports revision discovery and ordering when source or deployment metadata is unavailable. |
 
 ### Why they exist
 
-- **Rows:** one function, call site, or compiled revision.
+- **Rows:** one function or call site within a revision, or one compiled
+  revision.
 - **Growth:** compile-time program structure, not invocation volume.
-- **Keep:** yes; runtime IDs are revision-local and meaningless without these
-  tables.
+- **Keep:** `revisions` and `functions` are required. `call_sites` becomes
+  required when retained records emit call-site IDs and exact source navigation
+  is part of the shipped surface.
 - **Enables:** source navigation, capture-policy explanation, revision filters,
   and cross-revision comparison through `definition_key`.
 
@@ -573,11 +610,30 @@ The artifact dictionary also contains declared names, owner/lambda identity,
 package/namespace parts, and a raw capture bitfield. P0 omits display-only
 identity parts and exposes only decoded policy fields with a user question.
 
-The current revision dictionary does not emit `compiler_options_hash`. Either
-add it to the authoritative revision evidence or prove `revision_id` already
-commits to every behavior-affecting option and remove this public column.
+Do not add a public `compiler_options_hash` merely to duplicate identity. The
+revision constructor currently commits to optimization level and
+`emit_test_cases`; Q1 must audit every behavior-affecting compiler input and add
+any missing input to `revision_id`. Expose decoded options later only when a
+user-facing query needs to explain the difference.
 
-### Did a function change across revisions?
+### Did this function's own compiled definition change?
+
+**English:** Show the local compiled-definition hash for the same logical
+function in each revision. Different hashes prove its own signature or
+bytecode changed. Equal hashes do not prove that referenced definitions stayed
+the same.
+
+```sql
+SELECT
+    revision_id,
+    definition_key,
+    local_definition_hash
+FROM functions
+WHERE definition_key = :definition_key
+ORDER BY revision_id;
+```
+
+### How did the same logical function behave across revisions?
 
 **English:** Compare volume, failures, and average direct time for the same
 logical function across revisions.
@@ -595,7 +651,9 @@ GROUP BY revision_id, definition_key
 ORDER BY revision_id;
 ```
 
-This is an investigation signal, not statistical proof of a regression.
+This is an investigation signal, not statistical proof of a regression. Keep
+`revision_id` in the result: grouping only by `definition_key` would combine
+different whole-program contexts.
 
 ## 6. `llm_population` — provisional
 
@@ -819,7 +877,7 @@ authoritative or indefinite evidence.
 | `retained_calls` | Required and bounded | Retained calls |
 | `evidence_issues` | Required and grouped | Source scopes containing issues |
 | `functions` | Required metadata | Functions per revision |
-| `call_sites` | Required metadata | Call sites per revision |
+| `call_sites` | Target metadata; producer not built | Static call expressions per revision, not invocations |
 | `revisions` | Required metadata | Compiled revisions |
 | `exact_windows` | Required ledger | Retained incidents/dumps |
 | `llm_population` | Provisional | Unique run/location/provider/model combinations |
@@ -834,7 +892,9 @@ authoritative or indefinite evidence.
 3. Use `retained_calls` only for selected exact evidence.
 4. Filter on small columns before requesting values.
 5. Group revisions with `definition_key`, not `function_id`.
-6. Check value states, `evidence_issues`, and `query_outcome` before claiming
+6. Treat `local_definition_hash` as a local-change signal, not proof that the
+   function's dependency closure is unchanged.
+7. Check value states, `evidence_issues`, and `query_outcome` before claiming
    completeness.
 
 ## References

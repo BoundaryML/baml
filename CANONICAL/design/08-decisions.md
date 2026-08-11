@@ -44,6 +44,7 @@
 | Capture/upload separation | Instrumentation, drain adapter, durable spool and transport are separate responsibilities |
 | Cross-process execution | Related runs with explicit links, not one merged exact graph |
 | Snapshot identity | Content identity; deployment/release/git/build are dimensions |
+| Cross-revision function identity | Revision ID names the exact compiled program; definition key groups the logical function; local definition hash covers only that function's own compiled signature and bytecode |
 | Active execution | A bounded rebuildable active index may accelerate discovery but is never evidence |
 | Duplicate delivery | Deterministic logical IDs/batches; serving semantics must be duplicate/conflict safe |
 | Structural exhaustion target | fail_run recommended default; abort_process strict opt-in; continue_incomplete only for diagnostic admission |

@@ -86,7 +86,7 @@ issue relation explains degraded evidence.
 tenant_id, project_id, environment_id, projection_generation
 run_id
 node_id, parent_node_id, depth
-function_id, revision_id, fqn, definition_key, def_content_hash
+function_id, revision_id, fqn, definition_key, local_definition_hash
 calls_started
 calls_succeeded, calls_errored, calls_cancelled, calls_exited
 inclusive_ns, self_ns, await_ns
@@ -96,7 +96,10 @@ projected_through
 provenance + logical row/batch identity/hash
 ~~~
 
-**node_id** is run/session-epoch scoped, never global. Cross-revision grouping uses **definition_key**, not function_id.
+**node_id** is run/session-epoch scoped, never global. Cross-revision grouping
+uses **definition_key**, not function_id. **local_definition_hash** is projected
+from the artifact's `def_content_hash`; it covers only the function's own
+compiled signature and bytecode, not referenced-definition contents.
 
 Precomputed display paths are not resident. Parent IDs and depth preserve the
 tree. The histogram is resident only if P0 includes tail/percentile questions
@@ -200,10 +203,12 @@ evidence issue:
 
 Function columns mirror the revision dictionary's required identity, name,
 source-span, kind/origin, and decoded capture-policy fields. Call-site columns
-map revision-local call-site IDs to source spans. Revision columns carry source
-snapshot/compiler identity, capture-policy version, identity state, first-seen
-time, and compiler-options identity only if revision identity does not already
-commit to it. Function names and source paths remain classified tenant data.
+map revision-local call-site IDs to source spans once the currently empty
+dictionary section is populated. Revision columns carry source
+snapshot/compiler identity, capture-policy version, identity state and
+first-seen time. Every behavior-affecting compiler input belongs in the
+revision identity; do not add a second opaque options hash merely to duplicate
+it. Function names and source paths remain classified tenant data.
 
 ### Observation/run-detail projections
 

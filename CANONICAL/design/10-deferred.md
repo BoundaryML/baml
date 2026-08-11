@@ -80,6 +80,11 @@ ClickHouse cannot be the value index. A future text/vector/scalar index is a sep
 
 - Provider-attempt, tool, agent and resource observations until language-owned versioned records land.
 - Effective-schema overlays and complete historical type-aware queries.
+- Dependency-aware behavior versioning across functions, classes, enums,
+  interfaces, clients, prompts and other behavior-affecting definitions. A
+  future design may add per-definition schema/content hashes, revision-scoped
+  dependency edges, and a cycle-safe effective hash or impact query. V1 keeps
+  the existing local function hash and never presents it as transitive proof.
 - First-class application user/session dimensions beyond bounded tags.
 - Production wiring for speculative helper-value promotion.
 - A bounded full-trace writer and its exact budget contract.
