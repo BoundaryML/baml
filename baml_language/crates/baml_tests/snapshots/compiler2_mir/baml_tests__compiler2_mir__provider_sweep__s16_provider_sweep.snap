@@ -12,6 +12,7 @@ ruled canonical-order: 8
 ruled empty-list-adoption+receiver-seeding: 1
 ruled literal-widening: 75
 ruled literal-widening+receiver-seeding+void-union: 1
+ruled literal-widening+thrown-literal: 2
 ruled literal-widening+tir-never-test: 2
 ruled literal-widening+tir-never-test+tir-unknown: 1
 ruled literal-widening+tir-unknown: 15
@@ -22,7 +23,7 @@ ruled throws-precision: 33
 ruled throws-precision+tir-unknown: 1
 ruled tir-never-test: 4
 ruled tir-unknown: 93
-differing: 24
+differing: 22
 panics: 0
 top-level lets: not diffed (no body renderer yet)
 
@@ -48,9 +49,6 @@ top-level lets: not diffed (no body renderer yet)
 [2x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: _ = load_type(generic_match_subtype.Shape | generic_match_subtype.Sq);
     hir: _ = load_type(generic_match_subtype.Shape);
-[2x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_match_or_chain_narrows
-    tir: _ = narrow_bind copy _ as Literal(Int(10), Regular, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb, bb];
-    hir: _ = narrow_bind copy _ as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb, bb];
 [2x] e.g. ns_interfaces/interfaces_3.baml :: uf09_main
     tir: branch copy _ -> [bb, bb];
     hir: <absent>
@@ -111,9 +109,6 @@ top-level lets: not diffed (no body renderer yet)
 [1x] e.g. ns_interfaces/interfaces_3.baml :: uf09_main
     tir: _ = narrow_bind copy _ as Class(QualifiedTypeName { pkg: Local, namespace: ["interfaces"], name: "Uf09Dog" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb, bb];
     hir: <absent>
-[1x] e.g. ns_patterns_new_runtime/patterns_new_runtime.baml :: test_match_chain_binding_guard
-    tir: _ = narrow_bind copy _ as Literal(Int(4), Regular, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb, bb];
-    hir: _ = narrow_bind copy _ as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb, bb];
 [1x] e.g. ns_generic_match_subtype/generic_match_subtype.baml :: generic_match_subtype_narrow_default_fn
     tir: _ = user.generic_match_subtype.Sq { const 0_i64 };
     hir: <absent>
@@ -235,14 +230,6 @@ ns_patterns_new_runtime/patterns_new_runtime.baml :: test_fn_is_matching
     ...         _1 = make_closure lambda[0]();
     tir:         _2 = is_type(copy _1, (int) -> int throws never);
     hir:         _2 = is_type(copy _1, (int) -> int throws unknown);
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_match_or_chain_narrows
-    ...     let _3: int // x
-    tir:     let _4: 10
-    hir:     let _4: int
-ns_patterns_new_runtime/patterns_new_runtime.baml :: test_match_chain_binding_guard
-    ...     let _2: int // n
-    tir:     let _3: true
-    hir:     let _3: bool
 ns_patterns_new_runtime/patterns_new_runtime.baml :: test_for_nested_rest_irrefutable
     ...     let _1: int // total
     tir:     let _2: (int[] | never[])[]

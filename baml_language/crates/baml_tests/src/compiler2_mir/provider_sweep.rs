@@ -201,6 +201,10 @@ fn aligned_events(tir: &str, hir: &str) -> Vec<AlignEvent> {
     events
 }
 
+fn hir_stripped_lines(hir: &str) -> std::collections::BTreeSet<String> {
+    hir.lines().map(strip_local_ids).collect()
+}
+
 fn classify_diff(tir: &str, hir: &str) -> Option<String> {
     let mut buckets: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
     let mut renumber_only = false;
@@ -253,6 +257,14 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
             }
             AlignEvent::TirOnly(tl) => {
                 if structural_line(&tl) {
+                    tir_only_structural += 1;
+                } else if tl.trim_start().starts_with("_ = call const fn ")
+                    && hir_stripped_lines(hir).contains(&tl)
+                {
+                    // TIR duplicates the call across dispatch arms its
+                    // unabsorbed union forces; the SAME call exists in
+                    // hir's output - duplication, never disappearance
+                    // (a call with no hir counterpart stays itemized).
                     tir_only_structural += 1;
                 } else {
                     return None;
@@ -499,7 +511,12 @@ fn thrown_literal_narrow_pair(tir: &str, hir: &str) -> bool {
     let t_ty = tir[t_as + " as ".len()..].trim_start();
     let h_ty = hir[h_as + " as ".len()..].trim_start();
     for base in ["String", "Int", "Bigint", "Float", "Bool"] {
-        if t_ty.starts_with(base) && h_ty.starts_with(&format!("Literal({base}(")) {
+        // Thrown-literal direction: hir narrows to the literal code TIR
+        // widened. Written-ascription direction: hir records the WRITTEN
+        // base where TIR narrowed to the literal. Both ruled.
+        if (t_ty.starts_with(base) && h_ty.starts_with(&format!("Literal({base}(")))
+            || (h_ty.starts_with(base) && t_ty.starts_with(&format!("Literal({base}(")))
+        {
             return true;
         }
     }
