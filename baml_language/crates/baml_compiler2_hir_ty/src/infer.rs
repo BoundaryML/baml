@@ -592,6 +592,18 @@ fn infer_let_body<'db>(
     infer_body_impl(db, BodyOwnerId::Let(let_binding))
 }
 
+/// TRACKED: a function's parameter-default arena as its own inference
+/// root (r-a's `DefWithBodyId::VariantId` shape - small expression
+/// contexts are ordinary body owners). No cycle seed: nothing on the
+/// signature road consults default inference.
+#[salsa::tracked(returns(ref))]
+fn infer_parameter_defaults<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> InferenceResult<'db> {
+    infer_body_impl(db, BodyOwnerId::ParameterDefaults(function))
+}
+
 /// Infers types for one body owner (function or top-level let), keyed by
 /// the S1 `BodyOwnerId` (rust-analyzer's `DefWithBodyId` shape). Lambdas
 /// are typed inside their owner's run; parameter defaults get their own
@@ -605,6 +617,7 @@ pub fn infer_body<'db>(
     match owner {
         BodyOwnerId::Function(function) => infer_function_body(db, function),
         BodyOwnerId::Let(let_binding) => infer_let_body(db, let_binding),
+        BodyOwnerId::ParameterDefaults(function) => infer_parameter_defaults(db, function),
     }
 }
 
@@ -633,14 +646,31 @@ fn infer_body_impl<'db>(
                 data.throws.map(|throws| (&data.type_refs, throws)),
             )
         }
+        // Defaults type in the FUNCTION's environment (its frame makes
+        // `T` in a default resolve; its parameter types are each
+        // default's expectation) with no return expectation and no
+        // declared throws clause of their own.
+        BodyOwnerId::ParameterDefaults(function) => {
+            let signature = function_signature(db, function);
+            (
+                function_generic_frame(db, function),
+                signature.params.iter().map(|param| param.ty.clone()).collect(),
+                None,
+                None,
+            )
+        }
         BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None, None),
     };
     let bounds = match owner {
-        BodyOwnerId::Function(function) => crate::lower::function_generic_bounds(db, function),
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
+            crate::lower::function_generic_bounds(db, function)
+        }
         BodyOwnerId::Let(_) => FxHashMap::default(),
     };
     let concrete_self = match owner {
-        BodyOwnerId::Function(function) => crate::lower::owner_self_ty(db, function, &frame),
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
+            crate::lower::owner_self_ty(db, function, &frame)
+        }
         BodyOwnerId::Let(_) => None,
     };
     let lower = lower_ctx_for_file(db, owner.file(db))
@@ -695,10 +725,33 @@ fn infer_body_impl<'db>(
     ctx.declared_throws = declared_throws;
     ctx.declared_throws_open = declared_throws_open;
     ctx.body_owner = match owner {
-        BodyOwnerId::Function(function) => Some(function),
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
+            Some(function)
+        }
         BodyOwnerId::Let(_) => None,
     };
-    if let Some(expr_body) = body.expr_body() {
+    ctx.defaults_owner = matches!(owner, BodyOwnerId::ParameterDefaults(_));
+    if let BodyOwnerId::ParameterDefaults(function) = owner {
+        // The defaults arena has no single root: each parameter's default
+        // checks against that parameter's declared type (its expectation
+        // at the call boundary, the rule MIR's callee-entry prologue
+        // relies on).
+        let defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
+        if let Some(arena) = body.expr_body() {
+            for (index, default) in defaults.params.iter().enumerate() {
+                let Some(default) = default else { continue };
+                match ctx.param_tys.get(index).cloned() {
+                    Some(param_ty) if !param_ty.has_error() => {
+                        ctx.check_expr(arena, default.expr.expr(), &param_ty);
+                    }
+                    _ => {
+                        ctx.infer_expr(arena, default.expr.expr(), &Expectation::None);
+                    }
+                }
+            }
+            ctx.backfill_untyped_patterns(arena);
+        }
+    } else if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
     }
     ctx.finish()
@@ -854,6 +907,13 @@ struct InferenceContext<'db> {
     /// function - the resolver for owner-scoped receivers (`default`
     /// inside an `implements` block, like `self`).
     body_owner: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+    /// Whether this run infers a parameter-default arena: the semantic
+    /// index keys those expressions under
+    /// `ExprMetadataScope::ParameterDefault` (the builder's
+    /// `walk_parameter_defaults`), so metadata lookups at the OWNER scope
+    /// switch variant. Lambda descents swap `current_scope` and key
+    /// `Body` as everywhere else.
+    defaults_owner: bool,
     /// One frame per enclosing `OptionalChain` (chains nest through
     /// arguments): a `?.` link whose base was nullable sets the top
     /// frame, and the chain BOUNDARY unions `null` back into its
@@ -897,10 +957,25 @@ impl<'db> InferenceContext<'db> {
             obligations: Vec::new(),
             obligation_anchor: None,
             body_owner: None,
+            defaults_owner: false,
             chain_nullable: Vec::new(),
             diverges: Diverges::Maybe,
             result: InferenceResult::default(),
         }
+    }
+
+    /// The semantic-index key for an expression under the CURRENT scope:
+    /// `ParameterDefault` when this run infers a default arena and the
+    /// walk sits at the owner scope, `Body` everywhere else (lambda
+    /// bodies included - their descent swaps `current_scope`).
+    fn metadata_key(&self, expr: ExprId) -> Option<ExprMetadataKey> {
+        let scope = self.current_scope?;
+        let metadata_scope = if self.defaults_owner && Some(scope) == self.owner_scope {
+            ExprMetadataScope::ParameterDefault(scope)
+        } else {
+            ExprMetadataScope::Body(scope)
+        };
+        Some(ExprMetadataKey::new(metadata_scope, expr))
     }
 
     fn infer_expr_body(&mut self, body: &ExprBody) {
@@ -921,10 +996,15 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
-        // Backfill patterns the walk did not type. A TYPE-EXPRESSION
-        // node (an annotation or ascription, or an OR of them) records
-        // the type it DENOTES - typed coverage, TIR's convention (A2);
-        // everything else records the sentinel so gaps stay visible.
+        self.backfill_untyped_patterns(body);
+    }
+
+    /// Backfills patterns the walk did not type. A TYPE-EXPRESSION node
+    /// (an annotation or ascription, or an OR of them) records the type
+    /// it DENOTES - typed coverage, TIR's convention (A2); everything
+    /// else records the sentinel so gaps stay visible. Shared by the
+    /// body drive and the parameter-defaults drive.
+    fn backfill_untyped_patterns(&mut self, body: &ExprBody) {
         let unfilled: Vec<PatId> = body
             .patterns
             .iter()
@@ -3777,12 +3857,9 @@ impl<'db> InferenceContext<'db> {
         // lambda join (keyed by the lambda expression itself). Registering
         // the deduced params there is what makes the body's parameter
         // references resolve.
-        let lambda_scope = self.current_scope.and_then(|scope| {
-            self.index.lambda_scope(ExprMetadataKey::new(
-                ExprMetadataScope::Body(scope),
-                expr,
-            ))
-        });
+        let lambda_scope = self
+            .metadata_key(expr)
+            .and_then(|key| self.index.lambda_scope(key));
         if let Some(scope) = lambda_scope {
             self.lambda_params.insert(scope, param_tys.clone());
         }
@@ -4233,8 +4310,7 @@ impl<'db> InferenceContext<'db> {
     /// `current_scope`: a lambda body's expressions live in the semantic
     /// index under the LAMBDA's scope, not the owner's.
     fn path_resolves_locally(&self, expr: ExprId) -> bool {
-        self.current_scope.is_some_and(|scope| {
-            let key = ExprMetadataKey::new(ExprMetadataScope::Body(scope), expr);
+        self.metadata_key(expr).is_some_and(|key| {
             matches!(
                 self.index.path_resolution(key),
                 Some(PathResolution::Local(_))
@@ -4275,10 +4351,9 @@ impl<'db> InferenceContext<'db> {
     /// lambda parameters from the signatures `infer_lambda` deduced.
     /// Non-local names go through `resolve_value_path`.
     fn infer_path(&mut self, expr: ExprId) -> Ty {
-        let Some(scope) = self.current_scope else {
+        let Some(key) = self.metadata_key(expr) else {
             return Ty::error();
         };
-        let key = ExprMetadataKey::new(ExprMetadataScope::Body(scope), expr);
         match self.index.path_resolution(key) {
             Some(PathResolution::Local(binding_id)) => match binding_id.kind {
                 BindingKind::Local(_) => {

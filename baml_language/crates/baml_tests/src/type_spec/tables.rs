@@ -331,3 +331,48 @@ function ea_use() -> int throws never {
         "optional-param name drift records a FunctionAdapter at the checked expr"
     );
 }
+
+#[test]
+fn infers_parameter_defaults_as_own_root() {
+    let source = r#"
+function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> int throws never {
+    a
+}
+"#;
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", source);
+    let functions = baml_compiler2_ppir::item_data::file_functions(&db, file);
+    let function = *functions.first().expect("one function");
+    let owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(function);
+    let result = infer_body(&db, owner);
+    let defaults = baml_compiler2_ppir::function_parameter_defaults(&db, function);
+    let rendered: Vec<String> = defaults
+        .params
+        .iter()
+        .enumerate()
+        .filter_map(|(index, default)| {
+            let default = default.as_ref()?;
+            let expr = default.expr.expr();
+            let ty = result
+                .type_of_expr
+                .get(&expr)
+                .map(|ty| ty.to_plain().render_canonical())
+                .unwrap_or_else(|| "<missing>".into());
+            let mismatch = if result.type_mismatches.contains_key(&expr) {
+                " MISMATCH"
+            } else {
+                ""
+            };
+            Some(format!("{index}: {ty}{mismatch}"))
+        })
+        .collect();
+    assert_eq!(
+        rendered,
+        vec![
+            "1: \"t\"".to_string(),
+            "2: 3".to_string(),
+            "3: \"x\" MISMATCH".to_string(),
+        ],
+        "defaults check against their parameter's declared type"
+    );
+}

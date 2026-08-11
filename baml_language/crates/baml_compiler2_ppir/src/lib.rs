@@ -694,6 +694,9 @@ pub fn body<'db>(
         BodyOwnerId::Let(let_binding) => {
             OwnerBody::Let(baml_compiler2_hir::body::let_body(db, let_binding))
         }
+        BodyOwnerId::ParameterDefaults(function) => {
+            OwnerBody::ParameterDefaults(function_parameter_defaults(db, function))
+        }
     }
 }
 
@@ -708,6 +711,12 @@ pub fn body_source_map<'db>(
         BodyOwnerId::Let(let_binding) => {
             baml_compiler2_hir::body::let_body_source_map(db, let_binding)
         }
+        BodyOwnerId::ParameterDefaults(function) => Some(
+            function_parameter_defaults(db, function)
+                .defaults
+                .source_map
+                .clone(),
+        ),
     }
 }
 
@@ -720,6 +729,9 @@ pub fn body_scope<'db>(
     match owner {
         BodyOwnerId::Function(function) => item_data::function_scope(db, function),
         BodyOwnerId::Let(let_binding) => item_data::let_scope(db, let_binding),
+        // Defaults are keyed under the FUNCTION's scope (the semantic
+        // index walks them there, `ExprMetadataScope::ParameterDefault`).
+        BodyOwnerId::ParameterDefaults(function) => item_data::function_scope(db, function),
     }
 }
 
@@ -786,7 +798,22 @@ pub fn body_type_refs<'db>(
     match owner {
         BodyOwnerId::Function(function) => function_body_type_refs(db, function),
         BodyOwnerId::Let(let_binding) => let_body_type_refs(db, let_binding),
+        BodyOwnerId::ParameterDefaults(function) => {
+            parameter_defaults_type_refs(db, function)
+        }
     }
+}
+
+/// Per-body type references for a function's parameter-default arena.
+#[salsa::tracked]
+pub fn parameter_defaults_type_refs<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let defaults = function_parameter_defaults(db, function);
+    Arc::new(
+        baml_compiler2_hir::body_type_refs::collect_body_type_refs(&defaults.defaults.exprs).0,
+    )
 }
 
 /// Canonical function signature — uses PPIR's item tree.

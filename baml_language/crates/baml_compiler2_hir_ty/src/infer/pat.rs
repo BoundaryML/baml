@@ -198,11 +198,7 @@ impl<'db> InferenceContext<'db> {
         if segments.len() != 1 {
             return None;
         }
-        let scope = self.current_scope?;
-        let key = baml_compiler2_hir::semantic_index::ExprMetadataKey::new(
-            baml_compiler2_hir::semantic_index::ExprMetadataScope::Body(scope),
-            expr,
-        );
+        let key = self.metadata_key(expr)?;
         match self.index.path_resolution(key) {
             Some(baml_compiler2_hir::semantic_index::PathResolution::Local(binding)) => {
                 // Captured bindings are never narrowed (the lambda could

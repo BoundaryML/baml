@@ -115,13 +115,17 @@ pub fn let_body_source_map<'db>(
 /// `DefWithBodyId`.
 ///
 /// Lambdas are deliberately not members: a lambda's body lives in its owner's
-/// arena and is typed by the owner's inference pass. Parameter-default
-/// expressions get their own inference root later (rust-analyzer's signature
-/// root pattern); this enum does not widen for them.
+/// arena and is typed by the owner's inference pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
 pub enum BodyOwnerId<'db> {
     Function(FunctionLoc<'db>),
     Let(LetLoc<'db>),
+    /// A function's parameter-default expressions - ONE owner per
+    /// function because all its defaults share one arena
+    /// (`FunctionDefaults.exprs`). Small expression contexts as ordinary
+    /// body owners is rust-analyzer's shape (`DefWithBodyId::VariantId`
+    /// for enum discriminants, `AnonConstId` in the new solver).
+    ParameterDefaults(FunctionLoc<'db>),
 }
 
 impl<'db> BodyOwnerId<'db> {
@@ -129,6 +133,7 @@ impl<'db> BodyOwnerId<'db> {
         match self {
             BodyOwnerId::Function(function) => function.file(db),
             BodyOwnerId::Let(let_binding) => let_binding.file(db),
+            BodyOwnerId::ParameterDefaults(function) => function.file(db),
         }
     }
 }
@@ -151,6 +156,7 @@ impl<'db> From<LetLoc<'db>> for BodyOwnerId<'db> {
 pub enum OwnerBody {
     Function(Arc<FunctionBody>),
     Let(Arc<LetBody>),
+    ParameterDefaults(Arc<crate::signature::FunctionParameterDefaults>),
 }
 
 impl OwnerBody {
@@ -166,6 +172,7 @@ impl OwnerBody {
                 LetBody::Expr(expr_body) => Some(expr_body),
                 LetBody::Missing => None,
             },
+            OwnerBody::ParameterDefaults(defaults) => Some(&defaults.defaults.exprs),
         }
     }
 }
