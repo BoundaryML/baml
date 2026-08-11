@@ -850,10 +850,6 @@ fn completions_for_package_path(
                     CompletionKind::Function,
                     format_function_signature(db, *func_loc),
                 ),
-                Definition::TemplateString(_) => (
-                    CompletionKind::TemplateString,
-                    "template_string".to_string(),
-                ),
                 Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
                 Definition::RetryPolicy(_) => {
                     (CompletionKind::RetryPolicy, "retry_policy".to_string())
@@ -1502,10 +1498,6 @@ fn completions_for_value_position(
                     CompletionKind::Function,
                     format_function_signature(db, *func_loc),
                 ),
-                Definition::TemplateString(_) => (
-                    CompletionKind::TemplateString,
-                    "template_string".to_string(),
-                ),
                 Definition::Client(_) => (CompletionKind::Client, "client".to_string()),
                 Definition::RetryPolicy(_) => {
                     (CompletionKind::RetryPolicy, "retry_policy".to_string())
@@ -1584,10 +1576,6 @@ fn completions_for_top_level() -> Vec<Completion> {
             .with_detail("retry policy declaration")
             .with_snippet("retry_policy ${1:Name} {\n  max_retries ${2:3}\n  $0\n}")
             .with_sort("06_retry_policy"),
-        Completion::new("template_string", CompletionKind::Keyword)
-            .with_detail("template string declaration")
-            .with_snippet("template_string ${1:Name}(${2}) `\n  $0\n`")
-            .with_sort("07_template_string"),
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")
             .with_snippet("type ${1:Name} = ${2:string}$0")

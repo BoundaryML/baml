@@ -4,7 +4,7 @@
 // call sites may rely on type inference (via the let-binding / return-type
 // annotation) to fill `<TStream, TFinal>` rather than spelling them
 // explicitly. This project locks in that *call shape* — the stdlib must
-// continue to accept `stream_llm_function(client, name, args)` without
+// continue to infer type arguments for `stream_llm_function` without
 // explicit type args.
 //
 // Note: the PPIR-synthesized `$stream`/`$parse_stream`/`$parse` companions
@@ -34,5 +34,5 @@ function TestFunc(input: string) -> string {
 }
 
 function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
-    baml.llm.stream_llm_function(TestClient, "TestFunc", { "input": "world" })
+    baml.llm.stream_llm_function(TestClient, "TestFunc", { "input": "world" }, prompt_closure = (ctx: baml.llm.Context) -> { baml.llm.assemble_prompt_ast(["hi world"], []) })
 }

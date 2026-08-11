@@ -2290,12 +2290,18 @@ impl ConfigValue {
     ///
     /// Returns `None` if the node contains no significant tokens.
     pub fn scalar_text(&self) -> Option<String> {
-        if let Some(backtick) = self.syntax.descendants().find_map(BacktickStringLiteral::cast) {
+        if let Some(backtick) = self
+            .syntax
+            .descendants()
+            .find_map(BacktickStringLiteral::cast)
+        {
             let mut text = String::new();
             for segment in backtick.segments() {
                 match segment {
                     BacktickSegment::Text(part) => text.push_str(&part),
-                    BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    BacktickSegment::Interp(_)
+                    | BacktickSegment::For(_)
+                    | BacktickSegment::If(_) => {
                         return None;
                     }
                 }

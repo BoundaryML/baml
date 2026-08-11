@@ -489,19 +489,6 @@ mod backtick_format_tests {
         assert_eq!(formatted, second);
     }
 
-    /// A backtick `template_string` body is accepted and its interior re-indented
-    /// (closing backtick at column 0, like a raw-string body).
-    #[test]
-    fn backtick_template_string_dedents() {
-        let source = "template_string Foo(name: string) `\n        Hello ${name}\n        Bye\n`\n";
-        let expected = "template_string Foo(name: string) `\n    Hello ${name}\n    Bye\n`\n";
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(formatted, expected, "got:\n{formatted}");
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second);
-    }
-
     /// Backtick string in expression position re-indents its over-indented
     /// interior to the surrounding block.
     #[test]

@@ -4,7 +4,7 @@
 // call sites may rely on type inference (via the let-binding / return-type
 // annotation) to fill `<TStream, TFinal>` rather than spelling them
 // explicitly. This project locks in that *call shape* — the stdlib must
-// continue to accept `stream_llm_function(client, name, args)` without
+// continue to infer type arguments for `stream_llm_function` without
 // explicit type args.
 //
 // Note: the PPIR-synthesized `$stream`/`$parse_stream`/`$parse` companions
@@ -34,7 +34,7 @@ function TestFunc(input: string) -> string {
 }
 
 function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
-    baml.llm.stream_llm_function(TestClient, "TestFunc", { "input": "world" })
+    baml.llm.stream_llm_function(TestClient, "TestFunc", { "input": "world" }, prompt_closure = (ctx: baml.llm.Context) -> { baml.llm.assemble_prompt_ast(["hi world"], []) })
 }
 
 //----
@@ -48,7 +48,7 @@ function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
 // stream_llm_inferred_typeargs.baml:4:1 (comment) len=75 "// call sites may rely on type inference (via the let-binding / return-type"
 // stream_llm_inferred_typeargs.baml:5:1 (comment) len=68 "// annotation) to fill `<TStream, TFinal>` rather than spelling them"
 // stream_llm_inferred_typeargs.baml:6:1 (comment) len=74 "// explicitly. This project locks in that *call shape* — the stdlib must"
-// stream_llm_inferred_typeargs.baml:7:1 (comment) len=71 "// continue to accept `stream_llm_function(client, name, args)` without"
+// stream_llm_inferred_typeargs.baml:7:1 (comment) len=69 "// continue to infer type arguments for `stream_llm_function` without"
 // stream_llm_inferred_typeargs.baml:8:1 (comment) len=22 "// explicit type args."
 // stream_llm_inferred_typeargs.baml:9:1 (comment) len=2 "//"
 // stream_llm_inferred_typeargs.baml:10:1 (comment) len=75 "// Note: the PPIR-synthesized `$stream`/`$parse_stream`/`$parse` companions"
@@ -107,3 +107,17 @@ function call_stream_inferred() -> baml.llm.Stream<null | string, string> {
 // stream_llm_inferred_typeargs.baml:37:46 (string) len=10 "\"TestFunc\""
 // stream_llm_inferred_typeargs.baml:37:60 (string) len=7 "\"input\""
 // stream_llm_inferred_typeargs.baml:37:69 (string) len=7 "\"world\""
+// stream_llm_inferred_typeargs.baml:37:80 (parameter) len=14 "prompt_closure"
+// stream_llm_inferred_typeargs.baml:37:95 (operator) len=1 "="
+// stream_llm_inferred_typeargs.baml:37:98 (parameter) [declaration] len=3 "ctx"
+// stream_llm_inferred_typeargs.baml:37:103 (namespace) [defaultLibrary] len=4 "baml"
+// stream_llm_inferred_typeargs.baml:37:107 (namespace) [defaultLibrary] len=1 "."
+// stream_llm_inferred_typeargs.baml:37:108 (namespace) [defaultLibrary] len=3 "llm"
+// stream_llm_inferred_typeargs.baml:37:111 (namespace) [defaultLibrary] len=1 "."
+// stream_llm_inferred_typeargs.baml:37:112 (class) [defaultLibrary] len=7 "Context"
+// stream_llm_inferred_typeargs.baml:37:126 (namespace) [defaultLibrary] len=4 "baml"
+// stream_llm_inferred_typeargs.baml:37:130 (namespace) [defaultLibrary] len=1 "."
+// stream_llm_inferred_typeargs.baml:37:131 (namespace) [defaultLibrary] len=3 "llm"
+// stream_llm_inferred_typeargs.baml:37:134 (namespace) [defaultLibrary] len=1 "."
+// stream_llm_inferred_typeargs.baml:37:135 (function) len=19 "assemble_prompt_ast"
+// stream_llm_inferred_typeargs.baml:37:156 (string) len=10 "\"hi world\""

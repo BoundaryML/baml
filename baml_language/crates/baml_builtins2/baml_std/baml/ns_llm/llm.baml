@@ -4,13 +4,9 @@ class OrchestrationStep {
 }
 
 class ExecutionContext {
-  jinja_string string
-  args map<string, unknown>
   function_name string
-  /// BEP-049 §10 (M5e/M5f). For new-mode (backtick) LLM functions, the compiled
-  /// `prompt`…`` closure the orchestrator invokes per attempt with a built
-  /// `Context`, replacing the Jinja render. `null` for legacy `#"..."#` functions.
-  prompt_closure ((Context) -> PromptAst throws never)?
+  /// Compiled backtick prompt invoked per attempt with a built `Context`.
+  prompt_closure (Context) -> PromptAst throws never
 }
 
 class PlannerState {
@@ -33,46 +29,23 @@ class PlannerState {
   }
 }
 
-/// Renders the Jinja prompt template for `function_name` with the given `args` using `client`'s configuration.
-/// Returns the specialized `PromptAst` ready to be sent to the LLM provider.
-/// The Jinja template to render for `function_name`. New-mode (BEP-049 M5)
-/// functions have no template registered — their compiled `prompt`…`` closure
-/// renders the prompt — so only look one up for the legacy `#"..."#` path.
-function prompt_template_for(function_name: string, prompt_closure: ((Context) -> PromptAst throws never)?) -> string throws root.errors.InvalidArgument {
-  match (prompt_closure) {
-    null => get_jinja_template(function_name),
-    _ => "",
-  }
-}
-
-function render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> PromptAst {
+function render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> PromptAst {
   let return_type = get_return_type(function_name);
-  // Rendering is offline: it needs the client's provider/role metadata but no
-  // credentials. Construct leniently so a missing `api_key` env var doesn't
-  // panic — `<Fn>$render_prompt` must work without a key set. (`build_request`
-  // below stays strict, so the network paths still require the key.)
   let primitive_client = client.to_primitive_client(lenient = true);
-  let template = prompt_template_for(function_name, prompt_closure);
-  // `render_specialized_prompt` is the same render the orchestrator uses, so the
-  // playground preview/cURL render byte-identically to execution.
-  primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
+  primitive_client.render_specialized_prompt(return_type, prompt_closure)
 }
 
-function build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> root.http.Request {
+function build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> root.http.Request {
   let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();
-  let template = prompt_template_for(function_name, prompt_closure);
-  let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
-
+  let specialized_prompt = primitive_client.render_specialized_prompt(return_type, prompt_closure);
   primitive_client.build_request(specialized_prompt, return_type)
 }
 
-function build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> root.http.Request {
+function build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> root.http.Request {
   let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();
-  let template = prompt_template_for(function_name, prompt_closure);
-  let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
-
+  let specialized_prompt = primitive_client.render_specialized_prompt(return_type, prompt_closure);
   primitive_client.build_request_stream(specialized_prompt, return_type)
 }
 
@@ -108,17 +81,8 @@ function __new_stream_cache<TStream, TFinal>() -> StreamCache<TStream, TFinal> t
 /// UNSAFE: do not call from user code
 ///
 /// Call an LLM function and return its full result.
-function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> T {
-  // New-mode (backtick) functions have no Jinja template registered; the
-  // closure renders the prompt, so only look one up for the legacy path.
-  let jinja_string = match (prompt_closure) {
-    null => get_jinja_template(function_name),
-    _ => "",
-  };
-
+function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> T {
   let context = ExecutionContext {
-    jinja_string: jinja_string,
-    args: args,
     function_name: function_name,
     prompt_closure: prompt_closure,
   };
@@ -132,17 +96,8 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
 /// The streaming counterpart of `call_llm_function`.
 ///
 /// Sends the request and returns a `Stream<TStream, TFinal>` which can be used to consume the data as it arrives.
-function stream_llm_function<TStream, TFinal>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> Stream<TStream, TFinal> {
-    // New-mode (backtick) functions have no Jinja template registered; the
-    // closure renders the prompt, so only look one up for the legacy path.
-    let jinja_string = match (prompt_closure) {
-        null => get_jinja_template(function_name),
-        _ => "",
-    };
-
+function stream_llm_function<TStream, TFinal>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> Stream<TStream, TFinal> {
     let context = ExecutionContext {
-        jinja_string: jinja_string,
-        args: args,
         function_name: function_name,
         prompt_closure: prompt_closure,
     };

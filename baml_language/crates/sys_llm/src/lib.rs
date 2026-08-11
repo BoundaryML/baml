@@ -2,14 +2,12 @@
 //!
 //! This crate consolidates all LLM-related functionality:
 //! - `types` - Error types and output format schema types
-//! - `jinja` - Jinja template rendering for BAML prompts
 //! - `specialize_prompt()` - Transform a generic `PromptAst` for a specific LLM provider
 //! - `execute_*` entry points for trait-based dispatch from `sys_types`
 
 mod auth_request;
 pub mod baml_std;
 mod build_request;
-pub(crate) mod jinja;
 mod model_features;
 pub(crate) mod parse_response;
 mod provider;
@@ -21,16 +19,11 @@ pub(crate) mod types;
 use std::{str::FromStr, sync::Arc};
 
 use bex_external_types::BexExternalValue;
-// Used by bex_engine tests
-pub use jinja::{
-    OutputFormatContent, RenderContext, RenderContextClient, RenderEnum, RenderEnumVariant,
-    RenderPromptError, preprocess_template, render_prompt,
-};
+pub use types::OutputFormatContent;
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
 // Used by sys_types (From<LlmOpError> for VmBamlError)
 pub use provider::LlmProvider;
-pub use sys_jinja::undeclared_prompt_variables;
 pub use types::LlmOpError;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
 pub use types::SapStreamCache;
@@ -67,46 +60,6 @@ pub(crate) fn ensure_rustls_crypto_provider() {}
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
 // ============================================================================
-
-/// Render a Jinja template given already-extracted owned types.
-///
-/// `args` is expected to be `BexExternalValue::Map { entries, .. }`.
-pub fn execute_render_prompt_from_owned(
-    client: &baml_std::PrimitiveClient,
-    template: &str,
-    args: &BexExternalValue,
-    return_type: &baml_type::RuntimeTy,
-    ctx: &::sys_types::SysOpContext,
-) -> Result<bex_vm_types::PromptAst, LlmOpError> {
-    let BexExternalValue::Map {
-        entries: template_args,
-        ..
-    } = args
-    else {
-        return Err(LlmOpError::TypeError {
-            expected: "map",
-            actual: args.type_name().to_string(),
-        });
-    };
-
-    let output_format = build_output_format_content(return_type, ctx);
-
-    let render_ctx = jinja::RenderContext {
-        client: jinja::RenderContextClient {
-            name: client.name.clone(),
-            provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles.clone(),
-        },
-        output_format,
-        tags: indexmap::IndexMap::new(),
-        enums: std::collections::HashMap::new(),
-    };
-
-    let prompt_ast = jinja::render_prompt(template, template_args, &render_ctx)
-        .map_err(|e| LlmOpError::RenderPrompt(e.to_string()))?;
-    Ok(std::sync::Arc::new(prompt_ast))
-}
 
 /// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
 /// string a `prompt` body reads as `ctx.output_format`. Equivalent to the Jinja

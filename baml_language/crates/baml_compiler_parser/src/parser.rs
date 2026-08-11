@@ -8120,7 +8120,13 @@ impl<'a> Parser<'a> {
     /// Parse a template string declaration
     pub(crate) fn parse_template_string(&mut self) {
         self.with_node(SyntaxKind::TEMPLATE_STRING_DEF, |p| {
-            // 'template_string' keyword
+            p.error_here(
+                "`template_string` is no longer supported. Use backtick strings with `${...}` interpolation instead."
+                    .to_string(),
+            );
+
+            // Keep parsing the declaration for lossless recovery and to avoid
+            // cascading diagnostics after the unsupported keyword.
             p.expect(TokenKind::TemplateString);
 
             // Template name
@@ -9242,7 +9248,11 @@ function Demo() -> string {{
             );
 
             let (root, errors) = parse_source(&source);
-            assert_eq!(errors.len(), 1, "expected one unsupported hash-string diagnostic");
+            assert_eq!(
+                errors.len(),
+                1,
+                "expected one unsupported hash-string diagnostic"
+            );
             assert!(
                 matches!(
                     &errors[0],
@@ -9261,6 +9271,32 @@ function Demo() -> string {{
                 "raw string should retain marker {marker:?}: {raw_string:?}"
             );
         }
+    }
+
+    #[test]
+    fn template_string_reports_targeted_unsupported_error() {
+        let source = "template_string Greeting(name: string) `Hello ${name}`";
+        let (root, errors) = parse_source(source);
+
+        assert_eq!(
+            errors.len(),
+            1,
+            "expected one unsupported template_string diagnostic"
+        );
+        assert!(
+            matches!(
+                &errors[0],
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("`template_string` is no longer supported")
+                        && message.contains("`${...}` interpolation")
+            ),
+            "unexpected diagnostic: {errors:#?}"
+        );
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::TEMPLATE_STRING_DEF),
+            "unsupported declaration should remain in the tree for recovery"
+        );
     }
 
     #[test]
@@ -9617,7 +9653,11 @@ function Demo(x #"hello"#) -> int {
 
         let (root, errors) = parse_source(source);
 
-        assert_eq!(errors.len(), 1, "expected one unsupported hash-string diagnostic");
+        assert_eq!(
+            errors.len(),
+            1,
+            "expected one unsupported hash-string diagnostic"
+        );
         assert!(
             matches!(
                 &errors[0],

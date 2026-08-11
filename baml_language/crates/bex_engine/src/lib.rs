@@ -1797,7 +1797,6 @@ impl BexEngine {
         let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
-            template_strings_macros: Arc::new(bytecode.template_strings_macros),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bex_vm::package_load::all_recursive_type_aliases(
@@ -2026,15 +2025,10 @@ impl BexEngine {
             // SAFETY: ptr is from resolved_function_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Function(func) = obj {
-                if let Some(FunctionMeta::Llm {
-                    prompt_template,
-                    client,
-                }) = &func.body_meta
-                {
+                if let Some(FunctionMeta::Llm { client }) = &func.body_meta {
                     llm_functions.insert(
                         name.clone(),
                         sys_types::LlmFunctionInfo {
-                            prompt_template: prompt_template.clone(),
                             client_name: client.clone(),
                             return_type: declared_symbolic(&func.return_type, func),
                         },

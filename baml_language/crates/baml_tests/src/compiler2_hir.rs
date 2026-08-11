@@ -2100,7 +2100,6 @@ implements MyIface for MyClass {
   function m(self) -> int { 1 }
 }
 
-template_string MyTemplate(x: string) `${x}`
 
 client<llm> MyClient {
   provider openai
@@ -2163,15 +2162,6 @@ test my_test {
         assert_eq!(
             text(item_data::interface_source_map(&db, iface).name_span),
             "MyIface"
-        );
-
-        let template = *item_data::file_template_strings(&db, file)
-            .iter()
-            .find(|&&t| item_data::template_string_data(&db, t).name.as_str() == "MyTemplate")
-            .unwrap();
-        assert_eq!(
-            text(item_data::template_string_source_map(&db, template).name_span),
-            "MyTemplate"
         );
 
         // `client<llm>` and `retry_policy` desugar to top-level lets

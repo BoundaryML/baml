@@ -26,7 +26,9 @@ function Greet(name: string) -> string {
     `
 }
 
-// Backtick body in a `template_string`.
-template_string Header(title: string) `
-    # ${title}
-`
+// Backtick value returned by a regular function.
+function Header(title: string) -> string {
+    `
+        # ${title}
+    `
+}

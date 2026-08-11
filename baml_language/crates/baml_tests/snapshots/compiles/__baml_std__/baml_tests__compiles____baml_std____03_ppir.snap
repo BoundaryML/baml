@@ -1197,16 +1197,12 @@ function baml.json.to_string(v: T) -> string  [builtin]
 
 --- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.ExecutionContext {
-  jinja_string: string
-  args: map<string, unknown>
   function_name: string
-  prompt_closure: (Context) -> PromptAst throws never?
+  prompt_closure: (Context) -> PromptAst throws never
 }
 class baml.llm.ExecutionContext$stream {
-  jinja_string: string | null
-  args: map<string, unknown>
   function_name: string | null
-  prompt_closure: unknown | null
+  prompt_closure: unknown
 }
 class baml.llm.OrchestrationStep {
   primitive_client: PrimitiveClient
@@ -1225,23 +1221,20 @@ class baml.llm.PlannerState$stream {
 function baml.llm.__new_stream_cache() -> StreamCache<TStream, TFinal>  [expr] {
   { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } cache
 }
-function baml.llm.build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> root.http.Request  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request(specialized_prompt, return_type)
+function baml.llm.build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> root.http.Request  [expr] {
+  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let specialized_prompt = primitive_client.render_specialized_prompt(return_type, prompt_closure) } primitive_client.build_request(specialized_prompt, return_type)
 }
-function baml.llm.build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> root.http.Request  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request_stream(specialized_prompt, return_type)
+function baml.llm.build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> root.http.Request  [expr] {
+  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let specialized_prompt = primitive_client.render_specialized_prompt(return_type, prompt_closure) } primitive_client.build_request_stream(specialized_prompt, return_type)
 }
-function baml.llm.call_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> T  [expr] {
-  { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: T = client.execute_oneshot(context, 0) } result
+function baml.llm.call_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> T  [expr] {
+  { let context = baml.llm.ExecutionContext { function_name: function_name, prompt_closure: prompt_closure }; let result: T = client.execute_oneshot(context, 0) } result
 }
 function baml.llm.parse(json: string) -> TFinal  [expr] {
   { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache) catch (_) { root.errors.LlmClient { message: message } => throw root.errors.ParseError { message: message } }
 }
-function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Context) -> PromptAst throws never?) -> string  [expr] {
-  {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }
-}
-function baml.llm.render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> PromptAst  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(lenient = true); let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
+function baml.llm.render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> PromptAst  [expr] {
+  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(lenient = true) } primitive_client.render_specialized_prompt(return_type, prompt_closure)
 }
 function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
   { let offset = 0; for seen_name in self.rr_client_names {  } if (seen_name Eq client_name) { offset Add= 1 } } offset
@@ -1249,8 +1242,8 @@ function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
 function baml.llm.rr_pick_index(self: ?, client_name: string, counter: int, sub_client_count: int) -> int  [expr] {
   { let local_offset = self.rr_local_offset(client_name); self.rr_client_names.push(client_name) } counter Add local_offset Mod sub_client_count
 }
-function baml.llm.stream_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> Stream<TStream, TFinal>  [expr] {
-  { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) } result
+function baml.llm.stream_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never) -> Stream<TStream, TFinal>  [expr] {
+  { let context = baml.llm.ExecutionContext { function_name: function_name, prompt_closure: prompt_closure }; let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) } result
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
@@ -1508,10 +1501,10 @@ function baml.llm.build_request(self: ?, prompt: baml.llm.PromptAst, return_type
 function baml.llm.build_request_stream(self: ?, prompt: baml.llm.PromptAst, return_type: type) -> root.http.Request  [builtin]
 function baml.llm.content(self: ?) -> string  [builtin]
 function baml.llm.execute_once_oneshot(self: ?, context: ExecutionContext, active_delay_ms: int) -> T  [expr] {
-  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure); let http_request = primitive.build_request(specialized, return_type); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: T = primitive.parse(body) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw e } } } result else { let error_body = http_response.text() catch (e) { _ => {  } "" }; if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw root.errors.DevOther { message: "HTTP request fail..." Add error_body } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: T = sub.execute_oneshot(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: T = self.sub_clients[idx].execute_oneshot(context, active_delay_ms); return result3 } }
+  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let specialized = primitive.render_specialized_prompt(return_type, context.prompt_closure); let http_request = primitive.build_request(specialized, return_type); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: T = primitive.parse(body) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw e } } } result else { let error_body = http_response.text() catch (e) { _ => {  } "" }; if (active_delay_ms Gt 0) {  } root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms Mul 1000000n)); throw root.errors.DevOther { message: "HTTP request fail..." Add error_body } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: T = sub.execute_oneshot(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: T = self.sub_clients[idx].execute_oneshot(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_once_stream(self: ?, context: ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<TStream, TFinal>  [expr] {
-  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = get_return_type(context.function_name); let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<TStream, TFinal> = self.__make_stream(sse); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<TStream, TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms); return result3 } }
+  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = get_return_type(context.function_name); let specialized = primitive.render_specialized_prompt(return_type, context.prompt_closure); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<TStream, TFinal> = self.__make_stream(sse); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<TStream, TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_oneshot(self: ?, context: ExecutionContext, inherited_delay_ms: int) -> T  [expr] {
   {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_or_default(); { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier_or_default() } if (next Gt r.max_delay_or_default()) { current_delay = r.max_delay_or_default() } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: T = self.execute_once_oneshot(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: T = self.execute_once_oneshot(context, inherited_delay_ms); return result } }
@@ -1525,7 +1518,6 @@ function baml.llm.final(self: ?) -> TFinal  [expr] {
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
 function baml.llm.from_shorthand(shorthand: string) -> baml.llm.PrimitiveClient  [builtin]
 function baml.llm.get_constructor(self: ?) -> (bool) -> baml.llm.PrimitiveClient throws root.errors.InvalidArgument  [builtin]
-function baml.llm.get_jinja_template(function_name: string) -> string  [builtin]
 function baml.llm.get_return_type(function_name: string) -> type  [builtin]
 function baml.llm.initial_delay_or_default(self: ?) -> float  [expr] {
   {  } self.initial_delay_ms NullCoalesce 200 Add 0.0
@@ -1555,9 +1547,8 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
   { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, t.values) } } render
 }
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
-function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
-function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst throws never?) -> baml.llm.PromptAst  [expr] {
-  { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
+function baml.llm.render_specialized_prompt(self: ?, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst throws never) -> baml.llm.PromptAst  [expr] {
+  { let prompt = prompt_closure(build_prompt_context(self, return_type)) } self.specialize_prompt(prompt)
 }
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
 function baml.llm.text(self: ?) -> string  [builtin]

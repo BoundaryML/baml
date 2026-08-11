@@ -806,25 +806,21 @@ test TestName {
   }
 }
 
-// We can define other "template string" variables that can be used in a prompt.
+// Prompt helper input type.
 class UserMessage {
   message string
   role string
 }
 
 // prompt strings and template strings use backticks with `${...}` interpolation.
-template_string PrintMessages(messages: UserMessage[]) `
-  ${for (let m in messages)}
-    ${role(m.role)}
-    ${m.message}
-  ${endfor}
-`
-
 function ClassifyConversation(messages: UserMessage[]) -> Category[] {
   client GPT4o
   prompt `
     Classify this conversation:
-    ${PrintMessages(messages)}
+    ${for (let m in messages)}
+      ${role(m.role)}
+      ${m.message}
+    ${endfor}
 
     Use the following categories:
     ${ctx.output_format}

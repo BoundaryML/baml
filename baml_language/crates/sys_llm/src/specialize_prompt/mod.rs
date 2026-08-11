@@ -22,6 +22,7 @@ pub(crate) fn specialize_prompt_from_owned(
     let provider = LlmProvider::from_str(&client.provider).unwrap_or(LlmProvider::OpenAiGeneric);
 
     let features = ModelFeatures::for_provider(provider, &client.options);
+    let prompt = transformations::trim_prompt_text(prompt);
     let prompt = transformations::wrap_simple_as_message(prompt, &client.default_role);
     let prompt = if provider_promotes_media_to_user(provider) {
         transformations::promote_media_to_user_when_no_user_message(prompt)

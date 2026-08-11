@@ -230,3 +230,14 @@ function user.Greet$stream(name: string, client: baml.llm.Client) -> baml.llm.St
     call baml.llm.stream_llm_function
     return
 }
+
+function user.Header(title: string) -> string {
+    load_type string
+    load_var title
+    call baml.String.from
+    store_var _2
+    load_const "# "
+    load_var _2
+    bin_op +
+    return
+}

@@ -57,38 +57,3 @@ source: crates/baml_tests/src/generated_tests.rs
  41 │ function BadRequiredAfterDefault(a: int = 1, b: int) -> int {
     ·                                              ──────
     ╰────
-
-  [hir] E0010
-
-  × parameter defaults are not supported in template_string `Greeting`
-   ╭─[unsupported_contexts.baml:1:41]
- 1 │ template_string Greeting(name: string = "world") `hello ${name}`
-   ·                                         ───┬───
-   ·                                            ╰── default value is not allowed here
-   ╰────
-
-  [type] E0001
-
-  × `self` cannot have a default value
-   ╭─[unsupported_contexts.baml:9:27]
- 9 │   function Current(self = null) -> int {
-   ·                           ────
-   ╰────
-
-  [hir] E0010
-
-  × parameter defaults are not supported in lambda parameters
-    ╭─[unsupported_contexts.baml:15:21]
- 15 │   let f = (x: int = 1) -> int { x }
-    ·                     ┬
-    ·                     ╰── default value is not allowed here
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[unsupported_contexts.baml:24:23]
- 24 │   let f: NamedLimit = Filtered
-    ·                       ────┬───
-    ·                           ╰── expected `NamedLimit`, found `(query: string, filter?: string | null) -> int throws never`
-    ╰────

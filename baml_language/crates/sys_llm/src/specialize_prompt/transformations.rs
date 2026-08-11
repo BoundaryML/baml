@@ -5,6 +5,38 @@ use serde_json::Value;
 
 use crate::{AllowedMetadata, ModelFeatures};
 
+/// Normalize template boundary whitespace before provider-specific transforms.
+pub(super) fn trim_prompt_text(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
+    fn trim_simple(content: &Arc<PromptAstSimple>) -> Arc<PromptAstSimple> {
+        Arc::new(match content.as_ref() {
+            PromptAstSimple::String(text) => PromptAstSimple::String(text.trim().to_string()),
+            PromptAstSimple::Media(media) => PromptAstSimple::Media(media.clone()),
+            PromptAstSimple::Multiple(items) => {
+                PromptAstSimple::Multiple(items.iter().map(trim_simple).collect())
+            }
+        })
+    }
+
+    Arc::new(match prompt.as_ref() {
+        PromptAst::Simple(content) => PromptAst::Simple(trim_simple(content)),
+        PromptAst::Message {
+            role,
+            content,
+            metadata,
+        } => PromptAst::Message {
+            role: role.clone(),
+            content: trim_simple(content),
+            metadata: metadata.clone(),
+        },
+        PromptAst::Vec(items) => PromptAst::Vec(
+            items
+                .iter()
+                .map(|item| trim_prompt_text(item.clone()))
+                .collect(),
+        ),
+    })
+}
+
 /// Wrap a top-level `PromptAst::Simple` in a `Message` with the client's default role.
 ///
 /// Prompts without explicit `{{ _.role() }}` directives produce `Simple` nodes.

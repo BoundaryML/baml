@@ -71,7 +71,6 @@ function Foo6(arg: int) -> float {
 //  4 |
 //  5 | function Foo2(arg: int) -> float {
 //    |
-// error: Expected a template_string value, but received string value `"..."`.
 //   -->  functions_v2/invalid2.baml:11
 //    |
 // 10 |   client bar

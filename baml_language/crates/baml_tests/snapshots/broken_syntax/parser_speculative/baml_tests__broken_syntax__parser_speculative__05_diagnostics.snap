@@ -2,6 +2,56 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0005
+
+  × expected 4 argument(s), got 3
+   ╭─[ambiguous_function.baml:2:1]
+ 2 │ ╭─▶ function Ambiguous(input: string) -> string {
+ 3 │ │     client GPT4  // This keyword determines it's an LLM function
+ 4 │ │     // Even though it starts like it could be expression function
+ 5 │ ╰─▶ }
+   ╰────
+
+  [type] E0005
+
+  × expected 4 argument(s), got 3
+   ╭─[ambiguous_function.baml:2:1]
+ 2 │ ╭─▶ function Ambiguous(input: string) -> string {
+ 3 │ │     client GPT4  // This keyword determines it's an LLM function
+ 4 │ │     // Even though it starts like it could be expression function
+ 5 │ ╰─▶ }
+   ╰────
+
+  [type] E0005
+
+  × expected 4 argument(s), got 3
+   ╭─[ambiguous_function.baml:2:45]
+ 2 │ ╭─▶ function Ambiguous(input: string) -> string {
+ 3 │ │     client GPT4  // This keyword determines it's an LLM function
+ 4 │ │     // Even though it starts like it could be expression function
+ 5 │ ╰─▶ }
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+   ╭─[ambiguous_function.baml:2:45]
+ 2 │ ╭─▶ function Ambiguous(input: string) -> string {
+ 3 │ │     client GPT4  // This keyword determines it's an LLM function
+ 4 │ │     // Even though it starts like it could be expression function
+ 5 │ ╰─▶ }
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+   ╭─[ambiguous_function.baml:2:45]
+ 2 │ ╭─▶ function Ambiguous(input: string) -> string {
+ 3 │ │     client GPT4  // This keyword determines it's an LLM function
+ 4 │ │     // Even though it starts like it could be expression function
+ 5 │ ╰─▶ }
+   ╰────
+
   [type] E0003
 
   × unresolved name: `GPT4`

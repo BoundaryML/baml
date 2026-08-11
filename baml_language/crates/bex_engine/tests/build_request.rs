@@ -122,17 +122,17 @@ client C {
 // ============================================================================
 
 #[tokio::test]
-async fn test_openai_template_string_expansion() {
+async fn test_openai_helper_function_expansion() {
     let source = [
         OPENAI_CLIENT,
         r##"
-template_string Greet(name: string) `Hello, ${name}!`
+function Greet(name: string) -> string { `Hello, ${name}!` }
 function F(name: string) -> string {
     client C
     prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
     ]
@@ -179,7 +179,7 @@ function F(name: string) -> string {
     prompt `Hello, ${name}!`
 }
 function get_auth() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).headers.get("authorization") ?? "MISSING"
+    F$build_request("Alice").headers.get("authorization") ?? "MISSING"
 }
 "##,
     ]
@@ -316,7 +316,7 @@ function F(p: Person) -> string {
     prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    F$build_request(Person { name: "Bob", age: 42 }).body
 }
 "##,
     ]
@@ -358,7 +358,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -397,7 +397,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -443,7 +443,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -495,7 +495,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -555,7 +555,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -604,7 +604,7 @@ function F(img: image) -> string {
     prompt `What is in this image? ${img}`
 }
 function get_body(img: image) -> string {
-    baml.llm.build_request(C, "F", { "img": img }).body
+    F$build_request(img).body
 }
 "##,
     ]
@@ -649,7 +649,7 @@ function F(name: string) -> string {
     prompt `Hello, ${name}!`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "World" }).body
+    F$build_request("World").body
 }
 "##,
     ]
@@ -680,7 +680,7 @@ function F() -> image {
     prompt `Draw a brass desk lamp on a walnut table.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -711,7 +711,7 @@ function F() -> image {
     prompt `Draw a brass desk lamp.`
 }
 function get_url() -> string {
-    baml.llm.build_request(C, "F", {}).url
+    F$build_request().url
 }
 "##,
     ]
@@ -734,7 +734,7 @@ function F() -> image {
     prompt `Generate a square logo of a brass desk lamp.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -761,7 +761,7 @@ function F() -> image[] {
     prompt `Generate two product photos of a brass desk lamp.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -788,7 +788,7 @@ function F() -> (string | image)[] {
     prompt `Return a caption, then generate an illustration of a brass desk lamp.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -827,7 +827,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -877,17 +877,17 @@ client C {
 
 #[tokio::test]
 #[ignore = "anthropic build_request missing max_tokens"]
-async fn test_anthropic_template_string_expansion() {
+async fn test_anthropic_helper_function_expansion() {
     let source = [
         ANTHROPIC_CLIENT,
         r##"
-template_string Greet(name: string) `Hello, ${name}!`
+function Greet(name: string) -> string { `Hello, ${name}!` }
 function F(name: string) -> string {
     client C
     prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
     ]
@@ -928,7 +928,7 @@ function F(p: Person) -> string {
     prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    F$build_request(Person { name: "Bob", age: 42 }).body
 }
 "##,
     ]
@@ -972,7 +972,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1025,7 +1025,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1081,7 +1081,7 @@ function F(img: image) -> string {
     prompt `What is in this image? ${img}`
 }
 function get_body(img: image) -> string {
-    baml.llm.build_request(C, "F", { "img": img }).body
+    F$build_request(img).body
 }
 "##,
     ]
@@ -1124,7 +1124,7 @@ function F(audio: audio) -> string {
     prompt `Transcribe this audio: ${audio}`
 }
 function get_body(audio: audio) -> string {
-    baml.llm.build_request(C, "F", { "audio": audio }).body
+    F$build_request(audio).body
 }
 "##,
     ]
@@ -1178,7 +1178,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1226,17 +1226,17 @@ client C {
 // ============================================================================
 
 #[tokio::test]
-async fn test_bedrock_template_string_expansion() {
+async fn test_bedrock_helper_function_expansion() {
     let source = [
         BEDROCK_CLIENT,
         r##"
-template_string Greet(name: string) `Hello, ${name}!`
+function Greet(name: string) -> string { `Hello, ${name}!` }
 function F(name: string) -> string {
     client C
     prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
     ]
@@ -1271,7 +1271,7 @@ function F(p: Person) -> string {
     prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    F$build_request(Person { name: "Bob", age: 42 }).body
 }
 "##,
     ]
@@ -1307,7 +1307,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1346,7 +1346,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1388,7 +1388,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1437,7 +1437,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##;
 
@@ -1474,7 +1474,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1523,17 +1523,17 @@ macro_rules! gemini_body_tests {
             use super::*;
 
             #[tokio::test]
-            async fn template_string_expansion() {
+            async fn helper_function_expansion() {
                 let source = [
                     $client,
                     r##"
-template_string Greet(name: string) `Hello, ${name}!`
+function Greet(name: string) -> string { `Hello, ${name}!` }
 function F(name: string) -> string {
     client C
     prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
                 ]
@@ -1564,7 +1564,7 @@ function F(p: Person) -> string {
     prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    F$build_request(Person { name: "Bob", age: 42 }).body
 }
 "##,
                 ]
@@ -1596,7 +1596,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1633,7 +1633,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1677,7 +1677,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1714,7 +1714,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1746,7 +1746,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1795,7 +1795,7 @@ function F() -> string {
     prompt `${role("user")}Hi`
 }
 function get_url() -> string {
-    baml.llm.build_request(C, "F", {}).url
+    F$build_request().url
 }
 "##,
     ]
@@ -1830,7 +1830,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1867,7 +1867,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1910,7 +1910,7 @@ function F() -> string {
     `
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##;
 

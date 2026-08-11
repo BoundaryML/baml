@@ -161,42 +161,6 @@ fn shorthand_to_primitive_client(
 /// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
 /// Uses new IO traits from the `io` module.
 impl<T> io::IoClassLlmPrimitiveClient for T {
-    fn render_prompt(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        template: String,
-        args: indexmap::IndexMap<String, BexExternalValue>,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        let args_ext = BexExternalValue::Map {
-            key_type: baml_type::RuntimeTy::string(),
-            value_type: baml_type::RuntimeTy::unknown(),
-            entries: args,
-        };
-        SysOpOutput::Ready(
-            sys_llm::execute_render_prompt_from_owned(
-                &old_client,
-                &template,
-                &args_ext,
-                &return_type,
-                ctx,
-            )
-            .map(wrap_prompt_ast)
-            .map_err(VmRustFnError::from),
-        )
-    }
-
     fn specialize_prompt(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -1162,32 +1126,6 @@ mod schema {
 }
 
 impl<T> io::IoNamespaceLlm for T {
-    fn get_jinja_template(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        // Aligned with `get_constructor`: the function name passed here is
-        // synthesised by the compiler from the call site, so a missing entry
-        // indicates a build artifact mismatch (a synthesis bug), not a
-        // user-recoverable argument error. Ambiguity is surfaced separately
-        // (rather than collapsed to "not found") so debuggers see the
-        // actual failure mode.
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        let dedented = sys_llm::preprocess_template(&info.prompt_template);
-        let template = if ctx.template_strings_macros.is_empty() {
-            dedented
-        } else {
-            format!("{}\n{}", ctx.template_strings_macros, dedented)
-        };
-        SysOpOutput::ok(template)
-    }
-
     fn render_output_format(
         &self,
         _heap: &std::sync::Arc<BexHeap>,

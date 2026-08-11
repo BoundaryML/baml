@@ -19,8 +19,14 @@ function user.TestFunc$build_request_stream(input: string, client: baml.llm.Clie
 }
 function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> throws never {
   { : baml.llm.Stream<null | string, string>
-    baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" }) : baml.llm.Stream<null | string, string>
+    baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" }, prompt_closure = (ctx: baml.llm.Context) -> { ... }) : baml.llm.Stream<null | string, string>
+      (ctx: baml.llm.Context) -> { ... } : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+        {
+          baml.llm.assemble_prompt_ast(["hi world"], [])
+        }
   }
+}
+lambda user.call_stream_inferred {
 }
 function user.TestFunc$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "TestFunc", map { "input": input }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>

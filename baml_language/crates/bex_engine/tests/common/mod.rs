@@ -165,7 +165,7 @@ pub(crate) async fn render_output_format(baml_types: &str, return_type: &str) ->
     render_output_format_with_opts(baml_types, return_type, "").await
 }
 
-/// Like `render_output_format` but with custom kwargs on `ctx.output_format(...)`.
+/// Like `render_output_format` but with custom arguments on `ctx.output_format_with(...)`.
 ///
 /// `kwargs` is inserted directly, e.g. `"prefix=null"` or `"map_style='angle'"`.
 /// Pass `""` for default behavior.
@@ -180,7 +180,7 @@ pub(crate) async fn render_output_format_with_opts(
     let output_format_call = if kwargs.is_empty() {
         "ctx.output_format".to_string()
     } else {
-        format!("ctx.output_format({kwargs})")
+        format!("ctx.output_format_with({kwargs})")
     };
 
     let source = format!(
@@ -197,14 +197,13 @@ client TestClient {{
 function TestFunc(input: string) -> {return_type} {{
     client TestClient
     prompt `
-        ${{{ input}}}
-        ${{{ {output_format_call}}}}
+        ${{input}}
+        ${{{output_format_call}}}
     `
 }}
 
 function get_prompt() -> baml.llm.PromptAst {{
-    let args: map<string, unknown> = {{ "input": "test" }};
-    baml.llm.render_prompt(TestClient, "TestFunc", args)
+    TestFunc$render_prompt("test")
 }}
 "##
     );

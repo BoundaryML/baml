@@ -334,7 +334,7 @@ class Client {
         // Render + specialize via the shared `render_specialized_prompt` (same
         // path as oneshot and the static `build_request_stream` companion).
         let specialized = primitive.render_specialized_prompt(
-          context.jinja_string, context.args, return_type, context.prompt_closure);
+          return_type, context.prompt_closure);
 
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
@@ -439,7 +439,7 @@ class Client {
         // `render_specialized_prompt`, the same path the static `build_request`
         // companion uses — so execution and preview never drift.
         let specialized = primitive.render_specialized_prompt(
-          context.jinja_string, context.args, return_type, context.prompt_closure)
+          return_type, context.prompt_closure)
         let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
 
@@ -724,15 +724,6 @@ class PrimitiveClient {
   provider string
   options PrimitiveClientOptions
 
-  function render_prompt(
-    self,
-    template: string,
-    args: map<string, unknown>,
-    return_type: type,
-  ) -> PromptAst throws root.errors.RenderPrompt {
-    $rust_io_function
-  }
-
   function specialize_prompt(
     self,
     prompt: PromptAst,
@@ -740,25 +731,13 @@ class PrimitiveClient {
     $rust_io_function
   }
 
-  /// BEP-049 M5: turn a function's prompt into a request-ready (specialized)
-  /// `PromptAst`, dispatching on mode. A new-mode `prompt`…`` compiles to a
-  /// `(Context) -> PromptAst` closure rendered against a per-attempt `Context`;
-  /// a legacy `#"..."#` function (null closure) renders the stored Jinja
-  /// `template`. This is the SINGLE source of truth for prompt rendering: the
-  /// orchestrator (`execute_once_oneshot` / `execute_stream`) and the static
-  /// `render_prompt` / `build_request` companions both call it, so the playground
-  /// preview/cURL and actual execution render byte-identically.
+  /// Render a compiled backtick prompt and specialize it for this client.
   function render_specialized_prompt(
     self,
-    template: string,
-    args: map<string, unknown>,
     return_type: type,
-    prompt_closure: ((Context) -> PromptAst throws never)?,
+    prompt_closure: (Context) -> PromptAst throws never,
   ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
-    let prompt = match (prompt_closure) {
-      null => self.render_prompt(template, args, return_type),
-      let closure: (Context) -> PromptAst throws never => closure(build_prompt_context(self, return_type)),
-    };
+    let prompt = prompt_closure(build_prompt_context(self, return_type));
     self.specialize_prompt(prompt)
   }
 
@@ -806,10 +785,6 @@ class PrimitiveClient {
 function from_shorthand(
   shorthand: string,
 ) -> PrimitiveClient throws root.errors.InvalidArgument {
-  $rust_io_function
-}
-
-function get_jinja_template(function_name: string) -> string throws root.errors.InvalidArgument {
   $rust_io_function
 }
 

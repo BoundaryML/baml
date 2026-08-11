@@ -17,6 +17,11 @@ function user.Greet$build_request(name: string, client: baml.llm.Client = Fast) 
 function user.Greet$build_request_stream(name: string, client: baml.llm.Client = Fast) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
+function user.Header(title: string) -> string throws never {
+  { : string
+    `...` : string
+  }
+}
 function user.Greet$stream(name: string, client: baml.llm.Client = Fast) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
 }

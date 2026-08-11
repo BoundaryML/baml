@@ -1204,14 +1204,6 @@ mod tests {
             "BamlHttpFetch"
         );
         assert_eq!(make("baml.sys.panic").sys_op_variant_name(), "BamlSysPanic");
-        assert_eq!(
-            make("baml.llm.PrimitiveClient.render_prompt").sys_op_variant_name(),
-            "BamlLlmPrimitiveClientRenderPrompt"
-        );
-        assert_eq!(
-            make("baml.llm.get_jinja_template").sys_op_variant_name(),
-            "BamlLlmGetJinjaTemplate"
-        );
     }
 
     #[test]
@@ -1336,12 +1328,6 @@ mod tests {
             .find(|b| b.path == "baml.http._fetch")
             .unwrap();
         assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
-
-        let render_prompt = io_builtins
-            .iter()
-            .find(|b| b.path == "baml.llm.PrimitiveClient.render_prompt")
-            .unwrap();
-        assert_eq!(render_prompt.throws, throws(&["RenderPrompt"]));
 
         let specialize = io_builtins
             .iter()
