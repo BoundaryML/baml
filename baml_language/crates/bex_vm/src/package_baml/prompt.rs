@@ -207,7 +207,11 @@ impl Continuation for PromptAssembly {
 
 impl BamlClassPrompt for PackageAiImpl {
     fn text(vm: &BexVm, prompt: &ai_view::Prompt<'_>) -> bex_str::BexStr {
-        bex_str::BexStr::from(prompt._data::<PromptAst>(vm).render_text())
+        let data = prompt.instance.load_field(0);
+        let prompt = vm
+            .as_rust_data::<PromptAst>(&data)
+            .expect("ai.Prompt._data must contain baml_builtins2::PromptAst");
+        bex_str::BexStr::from(prompt.render_text())
     }
 
     fn messages(vm: &mut BexVm, prompt: &Value) -> Vec<Value> {
