@@ -566,6 +566,9 @@ enum PendingDiag {
         pat: PatId,
         name: baml_type::Name,
     },
+    VoidResultUsed {
+        expr: ExprId,
+    },
     UnnecessaryOptionalChain {
         expr: ExprId,
         expr_text: String,
@@ -1825,6 +1828,14 @@ impl<'db> InferenceContext<'db> {
                     None => match initializer {
                         Some(init) => {
                             let init_ty = self.infer_expr(body, init, &Expectation::None);
+                            // A VOID call result has no value to bind
+                            // (void == unit interim, but the WRITTEN void
+                            // contract says "no result").
+                            let resolved = self.table.resolve_completely(&init_ty);
+                            if matches!(resolved.kind(), TyKind::Void { .. }) {
+                                self.pending_diags
+                                    .push(PendingDiag::VoidResultUsed { expr: init });
+                            }
                             self.widen_fresh(&init_ty)
                         }
                         None => Ty::error(),
@@ -5454,6 +5465,9 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::VoidResultUsed { expr } => {
+                        (TirTypeError::VoidFunctionResultUsed, expr)
+                    }
                     PendingDiag::UnresolvedPatternName { pat, name } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::UnresolvedName { name },
