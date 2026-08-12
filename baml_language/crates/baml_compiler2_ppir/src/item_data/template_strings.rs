@@ -14,7 +14,7 @@ pub struct TemplateStringData {
     /// Type references in this template's parameter list. Scoped to the item.
     pub type_refs: TypeRefStore,
     pub params: Vec<FunctionParamData>,
-    /// Template body text (Jinja).
+    /// Legacy template body text retained for parser recovery.
     pub body: Option<String>,
 }
 

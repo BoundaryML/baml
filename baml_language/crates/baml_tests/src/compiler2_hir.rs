@@ -2096,7 +2096,7 @@ implements MyIface for MyClass {
   function m(self) -> int { 1 }
 }
 
-template_string MyTemplate(x: string) #"{{ x }}"#
+function MyTemplate(x: string) -> string { `${x}` }
 
 client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
 
@@ -2154,12 +2154,12 @@ test my_test {
             "MyIface"
         );
 
-        let template = *item_data::file_template_strings(&db, file)
+        let template = *item_data::file_functions(&db, file)
             .iter()
-            .find(|&&t| item_data::template_string_data(&db, t).name.as_str() == "MyTemplate")
+            .find(|&&f| item_data::function_data(&db, f).name.as_str() == "MyTemplate")
             .unwrap();
         assert_eq!(
-            text(item_data::template_string_source_map(&db, template).name_span),
+            text(item_data::function_source_map(&db, template).name_span),
             "MyTemplate"
         );
 

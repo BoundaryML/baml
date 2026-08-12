@@ -17,8 +17,8 @@ use crate::{
     ast::{
         AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
-        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation, Item, LambdaDef,
-        LambdaKind, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
+        ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
+        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
         TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
@@ -156,6 +156,9 @@ pub fn lower_file_with_path_and_test_owner(
                 diags.push(lower_generator_deprecation(&child));
             }
             baml_compiler_syntax::SyntaxKind::TEMPLATE_STRING_DEF => {
+                diags.push(LoweringDiagnostic::TemplateStringRemoved {
+                    span: child.span_range(),
+                });
                 if let Some(ts) = lower_template_string(&child, &mut diags) {
                     items.push(Item::TemplateString(ts));
                 }
@@ -343,10 +346,9 @@ fn lower_function(
 
         // Jinja prompts are removed: the single-path world renders prompts as
         // plain backtick templates through the spec.
-        if llm.prompt_field().and_then(|pf| pf.raw_string()).is_some() {
+        if let Some(raw_prompt) = llm.prompt_field().and_then(|pf| pf.raw_string()) {
             diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
-                function_name: name.as_str().to_string(),
-                span: llm_body_def.span,
+                span: raw_prompt.syntax().span_range(),
             });
         }
 
@@ -397,9 +399,22 @@ fn lower_function(
             .iter()
             .any(|(t, _)| t == "spec")
         {
+            let spec_type_args = generic_params
+                .iter()
+                .map(|param| {
+                    crate::ast::TypeExprKind::Path {
+                        segments: vec![param.name.clone()],
+                        generic_args: vec![],
+                        associated_type_bindings: vec![],
+                        attrs: vec![],
+                    }
+                    .at(llm_body_def.span)
+                })
+                .collect();
             let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
                 &param_names,
+                spec_type_args,
                 return_type.clone(),
                 llm_body_def.span,
             );
@@ -693,14 +708,8 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         .and_then(|cf| cf.value())
         .map(|name| Name::new(&name));
 
-    let prompt = llm_body
-        .prompt_field()
-        .and_then(|pf| pf.raw_string())
-        .map(|raw_str| lower_raw_prompt(&raw_str));
-
     LlmBodyDef {
         client,
-        prompt,
         // Filled in by the LLM-function branch once param names are known.
         companion_bodies: Vec::new(),
         has_tools: llm_tools_present(llm_body),
@@ -828,46 +837,10 @@ fn tools_value_element(
 }
 
 fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
-    use baml_compiler_syntax::{
-        SyntaxKind,
-        ast::{JinjaExpression, JinjaStatement, PromptText},
-    };
-
-    let mut text = String::new();
-    let mut interpolations = Vec::new();
     let prompt_span = raw_string.syntax().span_range();
-
-    for child in raw_string.syntax().children() {
-        match child.kind() {
-            SyntaxKind::PROMPT_TEXT => {
-                if let Some(prompt_text) = PromptText::cast(child.clone()) {
-                    text.push_str(&prompt_text.text());
-                }
-            }
-            SyntaxKind::TEMPLATE_INTERPOLATION => {
-                if let Some(jinja_expr) = JinjaExpression::cast(child.clone()) {
-                    let inner = jinja_expr.inner_text();
-                    let full = jinja_expr.full_text();
-                    let span = child.span_range();
-                    interpolations.push(Interpolation {
-                        content: inner,
-                        span,
-                    });
-                    text.push_str(&full);
-                }
-            }
-            SyntaxKind::TEMPLATE_CONTROL => {
-                if let Some(jinja_stmt) = JinjaStatement::cast(child.clone()) {
-                    text.push_str(&jinja_stmt.full_text());
-                }
-            }
-            _ => {}
-        }
-    }
-
     RawPrompt {
-        text,
-        interpolations,
+        text: crate::parse_string_attr_value(&raw_string.syntax().text().to_string())
+            .unwrap_or_default(),
         span: prompt_span,
     }
 }

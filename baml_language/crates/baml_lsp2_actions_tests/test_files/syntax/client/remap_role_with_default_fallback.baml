@@ -12,10 +12,10 @@ client<llm> MyClient {
 
 function TestRemapWithFallback(input: string) -> string {
   client MyClient
-  prompt #"
-    {{ _.chat("assistant") }}
-    This should fallback to system role and then be remapped to instructions: {{ input }}
-  "#
+  prompt `
+    ${role("assistant")}
+    This should fallback to system role and then be remapped to instructions: ${input}
+  `
 }
 
 //----
@@ -38,16 +38,10 @@ function TestRemapWithFallback(input: string) -> string {
 //  11 │ ├─▶ }
 //     · ╰──── replace with `client Name = <expr>;`
 //     ╰────
-// E0010
+// E0003
 //
-//   × LLM function `TestRemapWithFallback` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
-//     ╭─[client_remap_role_with_default_fallback.baml:13:57]
-//  13 │ ╭─▶ function TestRemapWithFallback(input: string) -> string {
-//  14 │ │     client MyClient
-//  15 │ │     prompt #"
-//  16 │ │       {{ _.chat("assistant") }}
-//  17 │ │       This should fallback to system role and then be remapped to instructions: {{ input }}
-//  18 │ │     "#
-//  19 │ ├─▶ }
-//     · ╰──── migrate to a backtick prompt
+//   × unresolved name: `MyClient`
+//     ╭─[client_remap_role_with_default_fallback.baml:14:10]
+//  14 │   client MyClient
+//     ·          ────────
 //     ╰────

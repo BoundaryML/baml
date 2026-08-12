@@ -2544,7 +2544,7 @@ function Workflow(input: string) -> string {
             r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 "##,
         );
@@ -2689,7 +2689,7 @@ function GuessingGame() -> string {
             r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 
 function Workflow(input: string) -> string {
@@ -3027,12 +3027,12 @@ test "renders workflow" {
         let source = r##"
 function Summarize(input: string) -> string {
     client GPT4
-    prompt #"Summarize {{ input }}"#
+    prompt `Summarize ${input}`
 }
 "##;
         db.add_or_update_file(path, source);
 
-        for needle in ["client", "GPT4", "prompt", "Summarize {{ input }}"] {
+        for needle in ["client", "GPT4", "prompt", "Summarize ${input}"] {
             let offset = u32::try_from(source.find(needle).expect("needle exists")).unwrap();
             let ctx = db.playground_cursor_context(path.to_str().unwrap(), offset);
 

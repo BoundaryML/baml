@@ -30,7 +30,7 @@ fn editing_function_body_preserves_item_tree() {
         r##"
 function Greet(name: string) -> string {
     client GPT4
-    prompt #"Hello {{name}}"#
+    prompt `Hello ${name}`
 }
 "##,
     );
@@ -47,7 +47,7 @@ function Greet(name: string) -> string {
     file.set_text(test_db.db_mut()).to(r##"
 function Greet(name: string) -> string {
     client GPT4
-    prompt #"Hi there {{name}}!"#
+    prompt `Hi there ${name}!`
 }
 "##
     .to_string());
@@ -73,7 +73,7 @@ fn renaming_function_invalidates_item_tree() {
         r##"
 function OldName(x: string) -> string {
     client GPT4
-    prompt #"test"#
+    prompt `test`
 }
 "##,
     );
@@ -90,7 +90,7 @@ function OldName(x: string) -> string {
     file.set_text(test_db.db_mut()).to(r##"
 function NewName(x: string) -> string {
     client GPT4
-    prompt #"test"#
+    prompt `test`
 }
 "##
     .to_string());
@@ -266,7 +266,7 @@ fn type_inference_cached_on_no_change() {
         r##"
 function Greet(name: string) -> string {
     client GPT4
-    prompt #"Hello {{name}}"#
+    prompt `Hello ${name}`
 }
 "##,
     );
@@ -287,7 +287,7 @@ fn type_inference_cached_on_whitespace_change() {
         "test.baml",
         r##"function Greet(name: string) -> string {
     client GPT4
-    prompt #"Hello {{name}}"#
+    prompt `Hello ${name}`
 }"##,
     );
 
@@ -298,7 +298,7 @@ fn type_inference_cached_on_whitespace_change() {
     file.set_text(test_db.db_mut())
         .to(r##"function Greet(name: string) -> string {
     client GPT4
-    prompt #"Hello {{name}}"#
+    prompt `Hello ${name}`
 }
 
 
@@ -324,7 +324,7 @@ fn type_inference_invalidated_on_signature_change() {
         r##"
 function Greet(name: string) -> string {
     client GPT4
-    prompt #"Hello {{name}}"#
+    prompt `Hello ${name}`
 }
 "##,
     );
@@ -336,7 +336,7 @@ function Greet(name: string) -> string {
     file.set_text(test_db.db_mut()).to(r##"
 function Greet(name: string) -> int {
     client GPT4
-    prompt #"Hello {{name}}"#
+    prompt `Hello ${name}`
 }
 "##
     .to_string());
@@ -928,7 +928,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
 
     let file = test_db.db_mut().add_file(
         "test.baml",
-        "function Greet(name: string) -> string {\n  client GPT4\n  prompt #\"Hi {{name}}\"#\n}\n",
+        "function Greet(name: string) -> string {\n  client GPT4\n  prompt `Hi ${name}`\n}\n",
     );
 
     let before = {
@@ -940,7 +940,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
     // Rewrite only the prompt — the client (the one fact the projection keeps) is
     // untouched.
     file.set_text(test_db.db_mut()).to(
-        "function Greet(name: string) -> string {\n  client GPT4\n  prompt #\"Hello there {{name}}!\"#\n}\n"
+        "function Greet(name: string) -> string {\n  client GPT4\n  prompt `Hello there ${name}!`\n}\n"
             .to_string(),
     );
 

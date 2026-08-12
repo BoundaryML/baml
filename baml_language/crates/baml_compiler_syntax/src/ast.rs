@@ -163,12 +163,6 @@ ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
 ast_node!(BacktickText, BACKTICK_TEXT);
 ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
-// Jinja template components (inside raw strings)
-ast_node!(JinjaExpression, TEMPLATE_INTERPOLATION);
-ast_node!(JinjaStatement, TEMPLATE_CONTROL);
-ast_node!(JinjaComment, TEMPLATE_COMMENT);
-ast_node!(PromptText, PROMPT_TEXT);
-
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
 ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
@@ -1152,19 +1146,15 @@ impl ClientField {
 }
 
 impl PromptField {
-    /// Get the raw string literal node containing the prompt.
-    ///
-    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node
-    /// (the legacy Jinja form). Returns `None` for a new-mode backtick prompt.
+    /// Get a legacy raw-string prompt for migration diagnostics.
     pub fn raw_string(&self) -> Option<RawStringLiteral> {
         self.syntax.children().find_map(RawStringLiteral::cast)
     }
 
-    /// Get the backtick string literal node containing a new-mode prompt.
+    /// Get the backtick string literal node containing the prompt.
     ///
     /// For `` prompt `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
-    /// BEP-049 (M5f): a backtick prompt compiles to a prompt-tag closure instead
-    /// of a stored Jinja template. Returns `None` for a `#"..."#` prompt.
+    /// A backtick prompt compiles to a prompt-tag closure.
     pub fn backtick_string(&self) -> Option<BacktickStringLiteral> {
         self.syntax.children().find_map(BacktickStringLiteral::cast)
     }
@@ -1773,40 +1763,6 @@ pub struct BacktickIfSegment {
 pub struct BacktickIfBranch {
     pub header: SyntaxNode,
     pub body: Vec<BacktickSegment>,
-}
-
-impl JinjaExpression {
-    /// Get the inner text of the Jinja expression, without the {{ }} delimiters.
-    ///
-    /// For `{{ input.name }}`, returns `input.name` (with whitespace trimmed).
-    pub fn inner_text(&self) -> String {
-        let text = self.syntax.text().to_string();
-        // Strip {{ and }}
-        if text.starts_with("{{") && text.ends_with("}}") {
-            text[2..text.len() - 2].trim().to_string()
-        } else {
-            text
-        }
-    }
-
-    /// Get the full text of the Jinja expression, including {{ }} delimiters.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
-impl JinjaStatement {
-    /// Get the full text of the Jinja statement, including {% %} delimiters.
-    pub fn full_text(&self) -> String {
-        self.syntax.text().to_string()
-    }
-}
-
-impl PromptText {
-    /// Get the text content.
-    pub fn text(&self) -> String {
-        self.syntax.text().to_string()
-    }
 }
 
 impl Parameter {

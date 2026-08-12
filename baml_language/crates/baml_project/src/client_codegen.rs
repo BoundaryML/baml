@@ -933,7 +933,7 @@ client<llm> GPT4 {
 
 function Extract(client: string, text: string) -> string {
   client GPT4
-  prompt #"{{ text }}"#
+  prompt `${text}`
 }
 "##,
         );

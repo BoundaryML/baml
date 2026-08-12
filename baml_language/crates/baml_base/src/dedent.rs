@@ -1,22 +1,15 @@
-//! Template-string dedenting.
+//! Backtick-string dedenting.
 //!
-//! Shared with `sys_llm::jinja::render::preprocess_template`; both implement the
-//! same algorithm and should remain in lockstep until that callsite migrates to
-//! this one.
-//!
-//! Algorithm (BEP-049 §12, Kotlin `trimIndent` rule):
+//! Algorithm (BEP-049 section 12, Kotlin `trimIndent` rule):
 //! 1. Compute the longest common leading-whitespace *prefix* across all non-blank
 //!    lines, compared character-by-character. Tabs and spaces don't mix: a
 //!    tab-indented line and a space-indented line share no common prefix, so the
-//!    strip column drops to zero (§12 Rule 2).
+//!    strip column drops to zero (section 12, rule 2).
 //! 2. Strip that common prefix from every line that has it; otherwise keep the
 //!    line as-is (its content is whitespace-only).
 //! 3. Trim leading/trailing whitespace from the overall result.
 //!
-//! Used by BEP-049 backtick string literals (multi-line auto-dedent, §12). The
-//! legacy Jinja prompt pipeline (`sys_llm::preprocess_template`) keeps the older
-//! byte-count-min variant until that path is removed (M6) — they intentionally
-//! diverge on mixed tab/space indentation, which only the new backtick form specs.
+//! Used by BEP-049 backtick string literals for multi-line auto-dedent.
 // Walk leading whitespace by *char* so we never split a multi-byte
 // Unicode whitespace codepoint (NBSP U+00A0 = 2 bytes, LINE SEPARATOR
 // U+2028 = 3 bytes, etc.). A naive `line.len() - line.trim_start().len()`

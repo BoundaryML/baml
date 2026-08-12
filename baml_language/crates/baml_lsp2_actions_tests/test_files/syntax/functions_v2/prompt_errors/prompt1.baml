@@ -1,12 +1,12 @@
 client Bar = openai.OpenAiClient.new(model = "gpt-4o");
 
-template_string Foo() #"
-  This! {{ b}}
-"#
+function Foo() -> string {
+  `This! ${b}`
+}
 
-template_string Foo2() #"
-  Also This!
-"#
+function Foo2() -> string {
+  `Also This!`
+}
 
 function FooBar(a: string, b: int | bool) -> int {
   client Bar
@@ -32,10 +32,10 @@ function Bar1(a: string) -> int {
 
 //----
 //- diagnostics
-// E0070
+// E0003
 //
-//   ⚠ Variable `b` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
+//   × unresolved name: `b`
 //    ╭─[functions_v2_prompt_errors_prompt1.baml:4:12]
-//  4 │   This! {{ b}}
+//  4 │   `This! ${b}`
 //    ·            ─
 //    ╰────

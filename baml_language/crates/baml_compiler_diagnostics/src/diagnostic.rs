@@ -170,26 +170,6 @@ pub enum DiagnosticId {
     AliasCycle,
     ClassCycle,
 
-    // Jinja template diagnostics (E0070-E0086)
-    JinjaUnresolvedVariable,
-    JinjaFunctionReferenceWithoutCall,
-    JinjaInvalidFilter,
-    JinjaInvalidType,
-    JinjaPropertyNotDefined,
-    JinjaEnumValuePropertyAccess,
-    JinjaEnumStringComparison,
-    JinjaPropertyNotFoundInUnion,
-    JinjaPropertyTypeMismatchInUnion,
-    JinjaNonClassInUnion,
-    JinjaWrongArgCount,
-    JinjaMissingArg,
-    JinjaUnknownArg,
-    JinjaWrongArgType,
-    JinjaParseError,
-    JinjaUnsupportedFeature,
-    JinjaInvalidSyntax,
-    JinjaInvalidTest,
-
     // Catch binding errors (E0093)
     InvalidCatchBindingType,
 
@@ -476,26 +456,6 @@ impl DiagnosticId {
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",
             DiagnosticId::ClassCycle => "E0069",
-
-            // Jinja template diagnostics
-            DiagnosticId::JinjaUnresolvedVariable => "E0070",
-            DiagnosticId::JinjaFunctionReferenceWithoutCall => "E0071",
-            DiagnosticId::JinjaInvalidFilter => "E0072",
-            DiagnosticId::JinjaInvalidType => "E0073",
-            DiagnosticId::JinjaPropertyNotDefined => "E0074",
-            DiagnosticId::JinjaEnumValuePropertyAccess => "E0075",
-            DiagnosticId::JinjaEnumStringComparison => "E0076",
-            DiagnosticId::JinjaPropertyNotFoundInUnion => "E0077",
-            DiagnosticId::JinjaPropertyTypeMismatchInUnion => "E0078",
-            DiagnosticId::JinjaNonClassInUnion => "E0079",
-            DiagnosticId::JinjaWrongArgCount => "E0080",
-            DiagnosticId::JinjaMissingArg => "E0081",
-            DiagnosticId::JinjaUnknownArg => "E0082",
-            DiagnosticId::JinjaWrongArgType => "E0083",
-            DiagnosticId::JinjaParseError => "E0084",
-            DiagnosticId::JinjaUnsupportedFeature => "E0085",
-            DiagnosticId::JinjaInvalidSyntax => "E0086",
-            DiagnosticId::JinjaInvalidTest => "E0087",
 
             // Reserved prefix errors
             DiagnosticId::ReservedStreamPrefix => "E0100",

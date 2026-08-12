@@ -24,14 +24,14 @@ retry_policy LegacyRetry {
     max_retries: 3,
 }
 
-// Removed: Jinja `#"..."#` prompt on an LLM function.
-function LegacyJinjaPrompt(input: string) -> string {
+// Jinja prompt migrated to a backtick prompt.
+function MigratedPrompt(input: string) -> string {
     client: ValidClient
-    prompt: #"Echo: {{ input }}"#
+    prompt: `Echo: ${input}`
 }
 
 // Structural role markers remain valid while the surrounding fixture checks
-// the independently removed client/Jinja forms.
+// the independently removed client forms.
 function LegacyRoleMarker(input: string) -> string {
     client: ValidClient
     prompt: `${role("system")}Be terse. ${input}`

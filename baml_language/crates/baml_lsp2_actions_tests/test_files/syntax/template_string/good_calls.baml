@@ -1,14 +1,14 @@
-template_string WithParams(a: int) #"
-  ...
-"#
+function WithParams(a: int) -> string {
+  `Value: ${a}`
+}
 
-template_string GoodCall1 #"
-  {{ WithParams(a=2) }}
-"#
+function GoodCall1() -> string {
+  `${WithParams(a = 2)}`
+}
 
-template_string GoodCall2 #"
-  {{ WithParams(2) }}
-"#
+function GoodCall2() -> string {
+  `${WithParams(2)}`
+}
 
 //----
 //- diagnostics
