@@ -5296,13 +5296,19 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::UnresolvedName { expr, name } => {
                         (TirTypeError::UnresolvedName { name }, expr)
                     }
-                    PendingDiag::UnresolvedMember { expr, base, member } => (
-                        TirTypeError::UnresolvedMember {
-                            base_type: self.finalize_ty(&base).to_plain(),
-                            member,
-                        },
-                        expr,
-                    ),
+                    PendingDiag::UnresolvedMember { expr, base, member } => {
+                        // Literal grain widens for DISPLAY: the member set
+                        // is the base type's (TIR's spelling).
+                        let finalized = self.finalize_ty(&base);
+                        let widened = self.widen_fresh(&finalized);
+                        (
+                            TirTypeError::UnresolvedMember {
+                                base_type: widened.to_plain(),
+                                member,
+                            },
+                            expr,
+                        )
+                    }
                     PendingDiag::NotCallable { expr, ty } => (
                         TirTypeError::NotCallable {
                             ty: self.finalize_ty(&ty).to_plain(),
