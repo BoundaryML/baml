@@ -569,6 +569,10 @@ enum PendingDiag {
     VoidResultUsed {
         expr: ExprId,
     },
+    DeadCode {
+        at: baml_compiler2_ast::StmtId,
+        unreachable_count: usize,
+    },
     UnknownPatternField {
         pat: PatId,
         class_name: baml_type::QualifiedTypeName,
@@ -1255,8 +1259,33 @@ impl<'db> InferenceContext<'db> {
             }
             Expr::Block { stmts, tail_expr } => {
                 let entry_diverges = self.diverges;
-                for stmt in stmts {
+                let mut first_unreachable: Option<usize> = None;
+                for (index, stmt) in stmts.iter().enumerate() {
+                    // Dead code counts only after a syntactic TERMINATOR
+                    // statement (return/throw/break/continue) - a
+                    // never-typed call is divergence the checker knows,
+                    // not noise the user wrote past.
+                    if first_unreachable.is_none()
+                        && entry_diverges == Diverges::Maybe
+                        && self.diverges == Diverges::Always
+                        && index > 0
+                        && matches!(
+                            body.stmts[stmts[index - 1]],
+                            Stmt::Return { .. }
+                                | Stmt::Throw { .. }
+                                | Stmt::Break { .. }
+                                | Stmt::Continue { .. }
+                        )
+                    {
+                        first_unreachable = Some(index);
+                    }
                     self.infer_stmt(body, *stmt);
+                }
+                if let Some(index) = first_unreachable {
+                    self.pending_diags.push(PendingDiag::DeadCode {
+                        at: stmts[index],
+                        unreachable_count: stmts.len() - index,
+                    });
                 }
                 match tail_expr {
                     Some(tail) => self.infer_expr(body, *tail, expected),
@@ -5382,19 +5411,13 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::UnresolvedName { expr, name } => {
                         (TirTypeError::UnresolvedName { name }, expr)
                     }
-                    PendingDiag::UnresolvedMember { expr, base, member } => {
-                        // Literal grain widens for DISPLAY: the member set
-                        // is the base type's (TIR's spelling).
-                        let finalized = self.finalize_ty(&base);
-                        let widened = self.widen_fresh(&finalized);
-                        (
-                            TirTypeError::UnresolvedMember {
-                                base_type: widened.to_plain(),
-                                member,
-                            },
-                            expr,
-                        )
-                    }
+                    PendingDiag::UnresolvedMember { expr, base, member } => (
+                        TirTypeError::UnresolvedMember {
+                            base_type: self.finalize_ty(&base).to_plain(),
+                            member,
+                        },
+                        expr,
+                    ),
                     PendingDiag::NotCallable { expr, ty } => (
                         TirTypeError::NotCallable {
                             ty: self.finalize_ty(&ty).to_plain(),
@@ -5470,6 +5493,21 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::DeadCode {
+                        at,
+                        unreachable_count,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::DeadCode {
+                                after: at,
+                                unreachable_count,
+                            },
+                            severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Stmt(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::UnknownPatternField {
                         pat,
                         class_name,
