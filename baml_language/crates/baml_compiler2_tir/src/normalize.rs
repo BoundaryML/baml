@@ -4,7 +4,8 @@
 //! ([`baml_type::normalize`], driven by a [`crate::type_context`] context); this
 //! module holds the two things that are *not* part of that relation:
 //!
-//! - [`find_recursive_aliases`]: which type aliases are self-referential, so
+//! - recursive-alias detection (now `ResolvedAliases::from_aliases` in
+//!   `baml_type`): which type aliases are self-referential, so
 //!   runtime lowering ([`baml_type::ResolvedAliases`]) knows which to keep opaque
 //!   rather than expand.
 //! - [`find_invalid_alias_cycles`] / [`find_invalid_class_cycles`]: the
@@ -20,99 +21,6 @@ use crate::ty::{QualifiedTypeName, Ty};
 // ═══════════════════════════════════════════════════════════════════════════
 // RECURSIVE ALIAS DETECTION
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// Find all recursive type aliases via DFS.
-pub fn find_recursive_aliases(
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-) -> HashSet<QualifiedTypeName> {
-    let mut recursive = HashSet::new();
-    for name in aliases.keys() {
-        let mut visited = HashSet::new();
-        let mut stack = HashSet::new();
-        if has_cycle(name, aliases, &mut visited, &mut stack) {
-            recursive.insert(name.clone());
-        }
-    }
-    recursive
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// CYCLE DETECTION
-// ═══════════════════════════════════════════════════════════════════════════
-
-fn has_cycle(
-    name: &QualifiedTypeName,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    visited: &mut HashSet<QualifiedTypeName>,
-    stack: &mut HashSet<QualifiedTypeName>,
-) -> bool {
-    if stack.contains(name) {
-        return true;
-    }
-    if visited.contains(name) {
-        return false;
-    }
-    visited.insert(name.clone());
-    stack.insert(name.clone());
-    let result = aliases
-        .get(name)
-        .is_some_and(|ty| ty_has_cycle(ty, aliases, visited, stack));
-    stack.remove(name);
-    result
-}
-
-fn ty_has_cycle(
-    ty: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    visited: &mut HashSet<QualifiedTypeName>,
-    stack: &mut HashSet<QualifiedTypeName>,
-) -> bool {
-    match ty {
-        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            ty_has_cycle(inner, aliases, visited, stack)
-        }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
-            ty_has_cycle(key, aliases, visited, stack)
-                || ty_has_cycle(value, aliases, visited, stack)
-        }
-        Ty::Union(types, _) => types
-            .iter()
-            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Class(_, type_args, _) => type_args
-            .iter()
-            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args
-                .iter()
-                .any(|t| ty_has_cycle(t, aliases, visited, stack))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| ty_has_cycle(ty, aliases, visited, stack))
-        }
-        Ty::AssociatedTypeProjection {
-            base, interface, ..
-        } => {
-            ty_has_cycle(base, aliases, visited, stack)
-                || interface
-                    .tys()
-                    .any(|t| ty_has_cycle(t, aliases, visited, stack))
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|param| ty_has_cycle(&param.ty, aliases, visited, stack))
-                || ty_has_cycle(ret, aliases, visited, stack)
-                || ty_has_cycle(throws, aliases, visited, stack)
-        }
-        _ => false,
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INVALID CYCLE DETECTION (Tarjan's SCC + structural edges)
@@ -639,7 +547,11 @@ mod tests {
             ),
         );
 
-        assert!(find_recursive_aliases(&aliases).contains(&qn("List")));
+        assert!(
+            baml_type::ResolvedAliases::from_aliases(aliases.clone())
+                .recursive
+                .contains(&qn("List"))
+        );
     }
 
     #[test]
@@ -653,7 +565,11 @@ mod tests {
             },
         );
 
-        assert!(!find_recursive_aliases(&aliases).contains(&qn("MyInt")));
+        assert!(
+            !baml_type::ResolvedAliases::from_aliases(aliases.clone())
+                .recursive
+                .contains(&qn("MyInt"))
+        );
     }
 
     #[test]
@@ -668,7 +584,9 @@ mod tests {
         );
 
         assert!(
-            find_recursive_aliases(&aliases).contains(&qn("A")),
+            baml_type::ResolvedAliases::from_aliases(aliases.clone())
+                .recursive
+                .contains(&qn("A")),
             "expected `type A = Box<A>` to be detected as recursive"
         );
     }
@@ -689,7 +607,9 @@ mod tests {
         );
 
         assert!(
-            find_recursive_aliases(&aliases).contains(&qn("A")),
+            baml_type::ResolvedAliases::from_aliases(aliases.clone())
+                .recursive
+                .contains(&qn("A")),
             "expected `type A = BoxLike<A>` to be detected as recursive"
         );
     }

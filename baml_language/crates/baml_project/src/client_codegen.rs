@@ -12,7 +12,6 @@ use baml_compiler2_ast::{self as ast, FunctionOrigin};
 use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::PackageId};
 use baml_compiler2_tir::{
     lower_type_expr,
-    normalize::find_recursive_aliases,
     ty::{QualifiedTypeName, Ty as TirTy},
 };
 use baml_db::Name;
@@ -116,8 +115,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
         let (alias_map, recursive_aliases) = alias_caches.entry(pkg.clone()).or_insert_with(|| {
             let aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-            let recursive = find_recursive_aliases(&aliases);
-            (aliases, recursive)
+            let resolved = baml_type::ResolvedAliases::from_aliases(aliases);
+            (resolved.aliases, resolved.recursive)
         });
         let alias_map: &HashMap<QualifiedTypeName, TirTy> = alias_map;
         let recursive_aliases: &std::collections::HashSet<QualifiedTypeName> = recursive_aliases;

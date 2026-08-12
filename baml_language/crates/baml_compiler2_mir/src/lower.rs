@@ -74,15 +74,30 @@ pub fn resolved_aliases_for_package(
     use baml_compiler2_hir::package::{package_dependencies, package_items};
 
     let pkg_items = package_items(db, pkg_id);
-    let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+    let mut aliases = collect_type_aliases(db, pkg_items);
     for &dep_id in package_dependencies(db, pkg_id) {
-        let dep_items = package_items(db, dep_id);
-        aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
-            db, dep_items,
-        ));
+        aliases.extend(collect_type_aliases(db, package_items(db, dep_id)));
     }
-    let recursive = baml_compiler2_tir::normalize::find_recursive_aliases(&aliases);
-    ResolvedAliases { aliases, recursive }
+    ResolvedAliases::from_aliases(aliases)
+}
+
+/// Every type alias a package declares, resolved to its (one-level) value
+/// through hir_ty's lowering, keyed by qualified name.
+fn collect_type_aliases<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+) -> HashMap<QualifiedTypeName, Tir2Ty> {
+    use baml_compiler2_hir::contributions::Definition;
+    let mut aliases = HashMap::new();
+    for ns in pkg_items.namespaces.values() {
+        for (name, def) in &ns.types {
+            if let Definition::TypeAlias(loc) = def {
+                let value = baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain();
+                aliases.insert(qualify_def(db, Definition::TypeAlias(*loc), name), value);
+            }
+        }
+    }
+    aliases
 }
 
 // ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
@@ -1049,10 +1064,19 @@ fn resolution_to_item_ref(
             // method ref — the runtime dispatches on the concrete receiver's registered impl,
             // which is correct. (A direct static call to `func_loc` is a valid optimization,
             // not required for correctness; it is deferred.)
-            let data = baml_compiler2_tir::interfaces::impl_data(db, *impl_loc)
-                .as_ref()
-                .ok()?;
-            let iface_loc = data.interface;
+            let block = baml_compiler2_ppir::item_data::impl_block_data(db, *impl_loc);
+            let impl_pkg = file_package(db, impl_loc.file(db));
+            let impl_pkg_items = baml_compiler2_ppir::package_items(
+                db,
+                baml_compiler2_hir::package::PackageId::new(db, impl_pkg.package.clone()),
+            );
+            let iface_loc = resolve_ref_to_interface_loc(
+                db,
+                &block.type_refs,
+                block.interface_target,
+                impl_pkg_items,
+                &impl_pkg.namespace_path,
+            )?;
             let pkg_info = file_package(db, iface_loc.file(db));
             let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
