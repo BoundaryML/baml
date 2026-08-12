@@ -40,7 +40,12 @@ module Baml
                   "This Ruby process already initialized a different generated BAML program"
           end
 
-          load_api!(candidate_path) unless @api
+          unless @api
+            # Another initializer may have released the shared claim after a
+            # failed open while this thread waited for the mutex.
+            claim_process!
+            load_api!(candidate_path)
+          end
           begin
             @api.initialize_runtime(program)
           rescue IncompatibleRuntimeError => error

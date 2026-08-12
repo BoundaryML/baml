@@ -146,6 +146,71 @@ when "open_retry"
   initialize_fixture
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
   assert_equal(3, fixture_inspection.count("baml_test_free_count"))
+when "concurrent_open_failure_preserves_claim"
+  runtime_class = Baml::Bridge.const_get(:ProcessRuntime, false)
+  runtime = runtime_class.new
+  first_claimed = Queue.new
+  second_claimed = Queue.new
+  first_open_failed = Queue.new
+
+  runtime.define_singleton_method(:configured_runtime_path!) do
+    Thread.current[:baml_test_runtime_path]
+  end
+  runtime.define_singleton_method(:claim_process!) do
+    super()
+    claim_count = (Thread.current[:baml_test_claim_count] || 0) + 1
+    Thread.current[:baml_test_claim_count] = claim_count
+    if claim_count == 1
+      if Thread.current[:baml_test_runtime_path] == INVALID_LIBRARY
+        first_claimed << true
+        second_claimed.pop
+      else
+        second_claimed << true
+        first_open_failed.pop
+      end
+    end
+  end
+
+  first_error = Queue.new
+  first = Thread.new do
+    Thread.current[:baml_test_runtime_path] = INVALID_LIBRARY
+    runtime.initialize!(VALID_PROGRAM)
+  rescue Exception => error
+    first_error << error
+    first_open_failed << true
+  end
+  first_claimed.pop
+
+  second_error = Queue.new
+  second = Thread.new do
+    Thread.current[:baml_test_runtime_path] = FIXTURE
+    runtime.initialize!(VALID_PROGRAM)
+  rescue Exception => error
+    second_error << error
+  end
+
+  [first, second].each(&:join)
+  error = first_error.pop
+  assert(error.is_a?(Baml::Bridge::RuntimeLoadError), error.inspect)
+  assert(second_error.empty?, "surviving initializer failed")
+  assert_equal(Process.pid, runtime.instance_variable_get(:@owner_pid))
+
+  if Process.respond_to?(:fork)
+    read_pipe, write_pipe = IO.pipe
+    child = fork do
+      read_pipe.close
+      error = assert_raises(Baml::Bridge::ForkSafetyError) do
+        runtime.initialize!(VALID_PROGRAM)
+      end
+      write_pipe.write(error.message)
+      exit! 0
+    end
+    write_pipe.close
+    status = wait_for_child(child)
+    message = read_pipe.read
+    assert(status.success?, message)
+    assert(message.include?("must exec before using BAML"), message)
+  end
 when "terminal_mode"
   terminal_failure(mode: ARGV.fetch(1))
 when "terminal_missing_getter"

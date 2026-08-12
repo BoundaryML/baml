@@ -26,6 +26,7 @@ class BridgeLoaderTest < Minitest::Test
   def test_configuration_and_open_failures_can_retry
     run_scenario("configuration_retry")
     run_scenario("open_retry")
+    run_scenario("concurrent_open_failure_preserves_claim")
   end
 
   def test_opened_incompatible_libraries_are_terminal
