@@ -61,6 +61,19 @@ impl BridgeLanguage {
         }
     }
 
+    pub(crate) const fn package_kind(self) -> &'static str {
+        match self {
+            Self::NodeJs | Self::Web => "the npm package",
+            Self::Python => "the Python package",
+            Self::Go => "the Go module",
+            Self::Rust => "the Rust crate",
+            Self::CSharp => "the NuGet package",
+            Self::Cpp => "the C++ bridge",
+            Self::Java => "the Maven package",
+            Self::Swift => "the Swift package",
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) const fn legacy_runtime_name(self) -> &'static str {
         match self {
@@ -217,5 +230,23 @@ mod tests {
         let error = registry.register(info(BridgeLanguage::Python)).unwrap_err();
         assert!(error.contains("already registered by @boundaryml/baml-bridge"));
         assert!(error.contains("cannot also register baml-bridge"));
+    }
+
+    #[test]
+    fn every_bridge_language_names_its_package_ecosystem() {
+        let cases = [
+            (BridgeLanguage::NodeJs, "the npm package"),
+            (BridgeLanguage::Python, "the Python package"),
+            (BridgeLanguage::Go, "the Go module"),
+            (BridgeLanguage::Rust, "the Rust crate"),
+            (BridgeLanguage::CSharp, "the NuGet package"),
+            (BridgeLanguage::Cpp, "the C++ bridge"),
+            (BridgeLanguage::Java, "the Maven package"),
+            (BridgeLanguage::Swift, "the Swift package"),
+            (BridgeLanguage::Web, "the npm package"),
+        ];
+        for (language, expected) in cases {
+            assert_eq!(language.package_kind(), expected);
+        }
     }
 }

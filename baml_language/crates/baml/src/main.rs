@@ -14,6 +14,7 @@ use anyhow::{Context, Result, anyhow};
 use baml_release::WrapperManifest;
 use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest};
 use serde::{Deserialize, Serialize};
+use toml_edit::{DocumentMut, Item, Key, Table, Value};
 
 const CONFIG_FILE: &str = "config.toml";
 const STATE_FILE: &str = "state.toml";
@@ -120,6 +121,7 @@ Usage:
 
 Commands:
   use <canary|nightly|version|path>  Install if needed and select as default
+  pin <version>                      Pin an exact version in the nearest baml.toml
   install <canary|nightly|version>   Download without selecting
   update                             Advance the active channel
   status                             Check latest remote version without installing
@@ -368,6 +370,18 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             })?;
             use_toolchain(selector, manifest_base_url.as_deref())
         }
+        Some("pin") => {
+            let version = args
+                .get(1)
+                .ok_or_else(|| anyhow!("usage: baml toolchain pin <version>"))?;
+            if args.len() > 2 {
+                return Err(anyhow!(
+                    "usage: baml toolchain pin <version>\nunexpected arguments: {}",
+                    args[2..].join(" ")
+                ));
+            }
+            pin_toolchain(version, manifest_base_url.as_deref())
+        }
         Some("update") => update_toolchain(manifest_base_url.as_deref()),
         Some("status") => status_toolchain(manifest_base_url.as_deref()),
         Some("list") => {
@@ -563,6 +577,21 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
         }
     }
     Ok(None)
+}
+
+fn find_project_manifest(start: &Path) -> Option<PathBuf> {
+    let mut dir = start.to_path_buf();
+    let home = env::var_os("HOME").map(PathBuf::from);
+    loop {
+        let candidate = dir.join("baml.toml");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
+            break;
+        }
+    }
+    None
 }
 
 fn concrete_version_for_selector(selector: &ResolvedSelector) -> Result<String> {
@@ -1250,6 +1279,68 @@ fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+fn pin_toolchain(version: &str, override_url: Option<&str>) -> Result<()> {
+    if is_channel(version) || is_path_selector(version) || semver::Version::parse(version).is_err()
+    {
+        return Err(anyhow!(
+            "baml toolchain pin requires an exact BAML SemVer, but found {version:?}"
+        ));
+    }
+
+    let cwd = env::current_dir()?;
+    let manifest_path = find_project_manifest(&cwd).ok_or_else(|| {
+        anyhow!(
+            "no baml.toml found from {} up to the home directory\nRun this command inside a BAML project.",
+            cwd.display()
+        )
+    })?;
+    let content = fs::read_to_string(&manifest_path)
+        .with_context(|| format!("failed to read {}", manifest_path.display()))?;
+    let updated = pin_version_in_manifest(&content, version)
+        .with_context(|| format!("failed to update {}", manifest_path.display()))?;
+
+    if !toolchain_cli_path(version).exists() {
+        install_toolchain(version, false, override_url, false)?;
+    }
+
+    write_text_atomic(&manifest_path, &updated)
+        .with_context(|| format!("failed to write {}", manifest_path.display()))?;
+    println!(
+        "pinned BAML toolchain {version} in {}",
+        manifest_path.display()
+    );
+    Ok(())
+}
+
+fn pin_version_in_manifest(content: &str, version: &str) -> Result<String> {
+    let mut document = content
+        .parse::<DocumentMut>()
+        .context("invalid baml.toml")?;
+    if document.get("toolchain").is_none() {
+        document.insert("toolchain", Item::Table(Table::new()));
+    }
+    let toolchain = document["toolchain"]
+        .as_table_mut()
+        .context("`toolchain` must be a TOML table")?;
+    let decorated_selector = toolchain
+        .remove_entry("version")
+        .or_else(|| toolchain.remove_entry("channel"))
+        .or_else(|| toolchain.remove_entry("path"));
+    toolchain.remove("channel");
+    toolchain.remove("path");
+
+    let mut key = Key::new("version");
+    let mut version_value = Value::from(version);
+    if let Some((old_key, old_item)) = decorated_selector {
+        *key.leaf_decor_mut() = old_key.leaf_decor().clone();
+        if let Some(old_value) = old_item.as_value() {
+            *version_value.decor_mut() = old_value.decor().clone();
+        }
+    }
+    toolchain.insert_formatted(&key, Item::Value(version_value));
+    Ok(document.to_string())
+}
+
 fn update_toolchain(override_url: Option<&str>) -> Result<()> {
     let config = read_config();
     if is_path_selector(&config.default.selector) {
@@ -1824,6 +1915,34 @@ mod tests {
             normalize_selector("0.412.0", Path::new(TEST_BASE)),
             "0.412.0"
         );
+    }
+
+    #[test]
+    fn pin_version_adds_toolchain_table_without_reformatting_manifest() {
+        let input = "# project comment\n[package]\nname = \"demo\"\n";
+        let output = pin_version_in_manifest(input, "0.15.1-nightly.20260807.a").unwrap();
+        assert!(output.starts_with(input), "{output}");
+        assert!(
+            output.contains("[toolchain]\nversion = \"0.15.1-nightly.20260807.a\""),
+            "{output}"
+        );
+    }
+
+    #[test]
+    fn pin_version_replaces_conflicting_selector_and_preserves_comments() {
+        let input = "[package]\nname = \"demo\"\n\n[toolchain]\n# keep this comment\nchannel = \"nightly\"\n";
+        let output = pin_version_in_manifest(input, "0.16.0").unwrap();
+        assert!(output.contains("# keep this comment"), "{output}");
+        assert!(output.contains("version = \"0.16.0\""), "{output}");
+        assert!(!output.contains("channel ="), "{output}");
+    }
+
+    #[test]
+    fn pin_version_rejects_non_table_toolchain() {
+        let error = pin_version_in_manifest("toolchain = \"nightly\"\n", "0.16.0")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("must be a TOML table"), "{error}");
     }
 
     #[test]
