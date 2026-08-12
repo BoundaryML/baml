@@ -177,16 +177,14 @@ fn pin_accepts_and_activates_a_local_path() {
         String::from_utf8_lossy(&output.stderr)
     );
     let manifest = fs::read_to_string(project.join("baml.toml")).unwrap();
-    let expected_cli = nested
-        .canonicalize()
-        .unwrap()
-        .join("local")
-        .join(local_cli_name);
+    let expected_cli = local_cli.canonicalize().unwrap();
     let manifest_value = manifest.parse::<toml::Value>().unwrap();
     let toolchain = manifest_value["toolchain"].as_table().unwrap();
     assert_eq!(
-        toolchain["path"].as_str(),
-        Some(expected_cli.to_str().unwrap()),
+        Path::new(toolchain["path"].as_str().unwrap())
+            .canonicalize()
+            .unwrap(),
+        expected_cli,
         "{manifest}"
     );
     assert!(!toolchain.contains_key("version"), "{manifest}");
@@ -205,13 +203,22 @@ fn pin_accepts_and_activates_a_local_path() {
         String::from_utf8_lossy(&status.stderr)
     );
     let stdout = String::from_utf8_lossy(&status.stdout);
-    assert!(
-        stdout.contains(&format!("active selector: {}", expected_cli.display())),
+    let active_selector = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("active selector: "))
+        .unwrap_or_else(|| panic!("{stdout}"));
+    assert_eq!(
+        Path::new(active_selector).canonicalize().unwrap(),
+        expected_cli,
         "{stdout}"
     );
-    let expected_manifest = project.canonicalize().unwrap().join("baml.toml");
-    assert!(
-        stdout.contains(&format!("source: set by {}", expected_manifest.display())),
+    let source_manifest = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("source: set by "))
+        .unwrap_or_else(|| panic!("{stdout}"));
+    assert_eq!(
+        Path::new(source_manifest).canonicalize().unwrap(),
+        project.join("baml.toml").canonicalize().unwrap(),
         "{stdout}"
     );
     assert!(
