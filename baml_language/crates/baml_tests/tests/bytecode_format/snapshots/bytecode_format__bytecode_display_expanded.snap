@@ -6396,7 +6396,7 @@ function claude_code.internal.tool_protocol(tb: ai.tools.Toolbox) -> string {
         63   load_var 11                        (_30)
         64   call 138 ntypeargs=1               (baml.String.from)
         65   store_var 10                       (_29)
-        66   load_const 12                      ("The output contract is one object with an outcome field. Set outcome\nto either the final result or a tool request. The tools in the catalog\nbelow are NOT installed in your environment — never attempt to invoke\nthem directly; any such attempt fails. The ONLY way to run one is to\nfinish your reply with outcome set to\n{\"calls\": [{\"id\": \"<unique id>\", \"name\": \"<exact tool name>\", \"args\": {...}}]};\nthe caller executes the calls and re-invokes you with their results in\nthe conversation. If the Conversation so far section shows no tool\nresults yet, your outcome MUST be a calls request — never invent data a\ntool can provide. After tool results appear in the conversation, use\nthem; the Conversation so far section is authoritative. A tool result\nwith is_error=false means that call already ran — never repeat the same\nsuccessful tool call. Request only tools that are still necessary, or\nreturn the final result.\n\nApplication tool catalog (request via outcome.calls only):\n[")
+        66   load_const 12                      ("\n\nThe output contract is one object with an outcome field. Set outcome\nto either the final result or a tool request. The tools in the catalog\nbelow are NOT installed in your environment — never attempt to invoke\nthem directly; any such attempt fails. The ONLY way to run one is to\nfinish your reply with outcome set to\n{\"calls\": [{\"id\": \"<unique id>\", \"name\": \"<exact tool name>\", \"args\": {...}}]};\nthe caller executes the calls and re-invokes you with their results in\nthe conversation. If the Conversation so far section shows no tool\nresults yet, your outcome MUST be a calls request — never invent data a\ntool can provide. After tool results appear in the conversation, use\nthem; the Conversation so far section is authoritative. A tool result\nwith is_error=false means that call already ran — never repeat the same\nsuccessful tool call. Request only tools that are still necessary, or\nreturn the final result.\n\nApplication tool catalog (request via outcome.calls only):\n[")
         67   load_var 10                        (_29)
         68   bin_op +                           
         69   load_const 13                      ("]")
@@ -6621,7 +6621,7 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
        194   load_var 30                        (_79)
        195   call 138 ntypeargs=1               (baml.String.from)
        196   store_var 29                       (_78)
-       197   load_const 29                      ("Conversation so far:\n")
+       197   load_const 29                      ("\n\nConversation so far:\n")
        198   load_var 29                        (_78)
        199   bin_op +                           
 
