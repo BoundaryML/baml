@@ -168,6 +168,21 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
+        // CLASS generic-bound diagnostics.
+        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
+            for (range, error) in
+                baml_compiler2_hir_ty::lower::class_lowering_diagnostics(db, class_loc)
+            {
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.to_string(),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
         // INTERFACE requires-clause diagnostics.
         for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, file) {
             for (range, error) in

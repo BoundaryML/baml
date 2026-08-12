@@ -1280,15 +1280,76 @@ pub fn signature_lowering_diagnostics<'db>(
     let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
     for bound in func_data.generic_param_bounds.iter().flatten() {
         let lowered = ctx.lower_type_ref(&func_data.type_refs, *bound);
-        if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
-            out.push((
-                source_map.type_refs.span(*bound),
-                TirTypeError::GenericBoundNotInterface {
-                    bound: lowered.to_plain(),
-                },
-            ));
+        match lowered.kind() {
+            // The compiler-derived builtin interface is a VALUE type,
+            // never a bound (E0154).
+            TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                out.push((
+                    source_map.type_refs.span(*bound),
+                    TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn.clone(),
+                    },
+                ));
+            }
+            TyKind::Interface(..) => {}
+            _ if lowered.has_error() => {}
+            _ => {
+                out.push((
+                    source_map.type_refs.span(*bound),
+                    TirTypeError::GenericBoundNotInterface {
+                        bound: lowered.to_plain(),
+                    },
+                ));
+            }
         }
     }
+    out
+}
+
+/// The check layer's CLASS-declaration diagnostic walk: generic-param
+/// bounds re-lowered with the sink under the class frame (unresolved,
+/// arity, non-interface and builtin-not-a-bound rules).
+pub fn class_lowering_diagnostics<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ClassLoc<'db>,
+) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
+    use crate::diagnostics::TirTypeError;
+    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let frame = class_generic_frame(db, class);
+    let ctx = lower_ctx_for_file(db, class.file(db))
+        .with_frame(frame)
+        .with_diagnostics();
+    let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
+    let mut out = Vec::new();
+    for bound in data.generic_param_bounds.iter().flatten() {
+        let lowered = ctx.lower_type_ref(&data.type_refs, *bound);
+        match lowered.kind() {
+            TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                out.push((
+                    source_map.type_refs.span(*bound),
+                    TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn.clone(),
+                    },
+                ));
+            }
+            TyKind::Interface(..) => {}
+            _ if lowered.has_error() => {}
+            _ => {
+                out.push((
+                    source_map.type_refs.span(*bound),
+                    TirTypeError::GenericBoundNotInterface {
+                        bound: lowered.to_plain(),
+                    },
+                ));
+            }
+        }
+    }
+    out.extend(ctx.take_diagnostics().into_iter().map(|diag| {
+        (
+            source_map.type_refs.span(diag.type_ref),
+            lowering_diag_error(&diag.kind),
+        )
+    }));
     out
 }
 
@@ -1308,6 +1369,32 @@ pub fn interface_lowering_diagnostics<'db>(
         .with_diagnostics();
     let source_map = baml_compiler2_ppir::item_data::interface_source_map(db, interface);
     let mut out = Vec::new();
+    // Associated-type bounds (`type X extends B`): the same bound rules
+    // generic params carry.
+    for assoc in &data.associated_types {
+        let Some(bound) = assoc.bound else { continue };
+        let lowered = ctx.lower_type_ref(&data.type_refs, bound);
+        match lowered.kind() {
+            TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                out.push((
+                    source_map.type_refs.span(bound),
+                    TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn.clone(),
+                    },
+                ));
+            }
+            TyKind::Interface(..) => {}
+            _ if lowered.has_error() => {}
+            _ => {
+                out.push((
+                    source_map.type_refs.span(bound),
+                    TirTypeError::GenericBoundNotInterface {
+                        bound: lowered.to_plain(),
+                    },
+                ));
+            }
+        }
+    }
     for &target in &data.requires {
         let lowered = ctx.lower_type_ref(&data.type_refs, target);
         if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
