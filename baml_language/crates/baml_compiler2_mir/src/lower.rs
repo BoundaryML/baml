@@ -209,6 +209,49 @@ fn lower_expr_in_scope<'db>(
     )
 }
 
+/// A `recv.NAME(..)` / `Prefix.NAME(..)` callee shape - the desugar
+/// trigger the engines and this lowering share.
+fn is_sugar_callee(expr: &baml_compiler2_ast::Expr, name: &str) -> bool {
+    match expr {
+        baml_compiler2_ast::Expr::MemberAccess { member, .. } => member.as_str() == name,
+        baml_compiler2_ast::Expr::Path(segments) => {
+            segments.len() >= 2
+                && segments
+                    .last()
+                    .is_some_and(|segment| segment.as_str() == name)
+        }
+        _ => false,
+    }
+}
+
+/// Resolve a written interface reference to its declaration: the hir_ty
+/// lowering road (written pins only) plus the facts definition lookup.
+fn resolve_ref_to_interface_loc<'db>(
+    db: &'db dyn crate::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    let lowered = lower_ref_in_scope(
+        db,
+        store,
+        target,
+        pkg_items,
+        namespace_path,
+        &[],
+        &FxHashMap::default(),
+        None,
+    );
+    let Tir2Ty::Interface(qtn, ..) = lowered else {
+        return None;
+    };
+    match baml_compiler2_hir_ty::facts::Facts::new(db).definition_of(&qtn) {
+        Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => Some(loc),
+        _ => None,
+    }
+}
+
 /// A definition's fully qualified name - its declaring file's package
 /// and namespace plus the short name (the spelling the runtime tags
 /// use).
@@ -6814,7 +6857,7 @@ impl<'db> LoweringContext<'db> {
         let callee_expr = self.body.exprs[callee].clone();
         // Trigger shape (shared with TIR type inference + throws analysis): a
         // `to_string` member/path call.
-        if !baml_compiler2_tir::throws_analysis::is_to_string_call_callee(&callee_expr) {
+        if !is_sugar_callee(&callee_expr, "to_string") {
             return false;
         }
         // Fires only when TIR left the callee *untyped* (`Unknown`/`Error`) — no
@@ -6963,7 +7006,7 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
         let callee_expr = self.body.exprs[callee].clone();
-        if !baml_compiler2_tir::throws_analysis::is_to_json_call_callee(&callee_expr) {
+        if !is_sugar_callee(&callee_expr, "to_json") {
             return false;
         }
         // Fires only when TIR left the callee untyped (no real `to_json` method).
@@ -7091,7 +7134,7 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
         let callee_expr = self.body.exprs[callee].clone();
-        if !baml_compiler2_tir::throws_analysis::is_from_json_call_callee(&callee_expr) {
+        if !is_sugar_callee(&callee_expr, "from_json") {
             return false;
         }
         // Fire only for a type-name receiver (`Type.from_json`), never a value
@@ -7249,7 +7292,7 @@ impl<'db> LoweringContext<'db> {
             let current_pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file);
             let pkg_id = PackageId::new(self.db, current_pkg.package.clone());
             let pkg_items = package_items(self.db, pkg_id);
-            if let Some(iface_loc) = baml_compiler2_tir::interfaces::resolve_ref_to_interface(
+            if let Some(iface_loc) = resolve_ref_to_interface_loc(
                 self.db,
                 &target.type_refs,
                 target.target,
@@ -10425,7 +10468,7 @@ impl<'db> LoweringContext<'db> {
         // `target` and the class-side `associated_type_bindings` index the class's
         // own arena; the interface's associated-type defaults index the interface's.
         let target_store = &class_data.type_refs;
-        let target_loc = baml_compiler2_tir::interfaces::resolve_ref_to_interface(
+        let target_loc = resolve_ref_to_interface_loc(
             self.db,
             target_store,
             target,
@@ -10527,24 +10570,14 @@ impl<'db> LoweringContext<'db> {
     /// method.
     fn implements_subject_tir_ty(&self) -> Option<Tir2Ty> {
         use baml_compiler2_ppir::item_data::{
-            ImplSubjectData, MethodOwner, class_data, impl_block_data, method_owner,
+            ImplSubjectData, MethodOwner, impl_block_data, method_owner,
         };
         let fl = self.func_loc?;
         match method_owner(self.db, fl)? {
             MethodOwner::Class(class_loc) => {
-                let class = class_data(self.db, class_loc);
-                let qtn = qualify_def(
-                    self.db,
-                    baml_compiler2_hir::contributions::Definition::Class(class_loc),
-                    &class.name,
-                );
-                let args = baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc)
-                    .iter()
-                    .map(|p| Tir2Ty::TypeVar(p.clone(), TyAttr::default()))
-                    .collect();
-                Some(baml_compiler2_tir::self_type::receiver_type_for_class_at(
-                    qtn, args,
-                ))
+                // The declared receiver at the class's own frame, through
+                // the builtin-container bridge (`Array` self IS `T[]`).
+                Some(baml_compiler2_hir_ty::lower::class_self_ty(self.db, class_loc).to_plain())
             }
             MethodOwner::FreeImpl(impl_loc) => {
                 let block = impl_block_data(self.db, impl_loc);
