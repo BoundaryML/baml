@@ -541,6 +541,15 @@ enum PendingDiag {
         pat: PatId,
         context: crate::diagnostics::IrrefutableContextKind,
     },
+    /// A `match`/`is` type pattern PROVABLY dead against its scrutinee - no
+    /// realization of the in-scope rigid type variables gives them a common
+    /// value (the overlap oracle's `No`). Reported like any concrete
+    /// pattern/scrutinee mismatch (TIR's policy and message).
+    PatternScrutMismatch {
+        pat: PatId,
+        expected: Ty,
+        found: Ty,
+    },
     OperatorNotApplicable {
         expr: ExprId,
         interface: &'static str,
@@ -817,10 +826,17 @@ fn infer_body_impl<'db>(
         }
         BodyOwnerId::Let(_) => None,
     };
+    let impl_target = match owner {
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
+            crate::lower::owner_impl_target(db, function, &frame)
+        }
+        BodyOwnerId::Let(_) => None,
+    };
     let lower = lower_ctx_for_file(db, owner.file(db))
         .with_frame(frame)
         .with_bounds(bounds.clone())
         .with_self_ty(concrete_self)
+        .with_impl_target(impl_target)
         .with_diagnostics();
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
     let plain_bounds = bounds
@@ -874,6 +890,7 @@ fn infer_body_impl<'db>(
         }
         BodyOwnerId::Let(_) => None,
     };
+    ctx.owner_file = Some(owner.file(db));
     ctx.defaults_owner = matches!(owner, BodyOwnerId::ParameterDefaults(_));
     if let BodyOwnerId::ParameterDefaults(function) = owner {
         // The defaults arena has no single root: each parameter's default
@@ -1058,7 +1075,7 @@ struct InferenceContext<'db> {
     /// The irreducible `Sub` residue: pairs that were neither ground nor
     /// var-headed nor decomposable when emitted; re-examined at finish once
     /// resolution has run.
-    deferred_subs: Vec<(Ty, Ty)>,
+    deferred_subs: Vec<(Ty, Ty, Option<ExprId>)>,
     /// The obligation worklist (I4): registered during the walk,
     /// discharged at finish interleaved with bound resolution.
     obligations: Vec<obligations::Obligation>,
@@ -1084,6 +1101,13 @@ struct InferenceContext<'db> {
     /// see the non-null type.
     chain_nullable: Vec<bool>,
     diverges: Diverges,
+    /// The body's file, for package-scoped lookups (the overlap oracle's
+    /// alias map enumerates the owning package plus its dependency closure).
+    owner_file: Option<baml_base::SourceFile>,
+    /// The pattern-reachability oracle's pre-folded alias map, built once
+    /// per inference on first use (TIR's `normalized_overlap_aliases`).
+    overlap_aliases:
+        std::cell::OnceCell<std::collections::HashMap<baml_type::QualifiedTypeName, baml_type::Ty>>,
     result: InferenceResult<'db>,
 }
 
@@ -1125,6 +1149,8 @@ impl<'db> InferenceContext<'db> {
             defaults_owner: false,
             chain_nullable: Vec::new(),
             diverges: Diverges::Maybe,
+            owner_file: None,
+            overlap_aliases: std::cell::OnceCell::new(),
             result: InferenceResult::default(),
         }
     }
@@ -1577,8 +1603,13 @@ impl<'db> InferenceContext<'db> {
                         attr: TyAttr::default(),
                     })
                 } else if entries.is_empty() {
+                    // The key is `string` outright, not a fresh var: map
+                    // keys are string-domain by language contract (see
+                    // `checked_map_key`), so a key var has exactly one
+                    // legal solution and leaving it open lets `m[0] = 1`
+                    // silently solve `?K := int`.
                     Ty::intern(TyKind::Map {
-                        key: self.table.new_var_ty(),
+                        key: Ty::string(),
                         value: self.table.new_var_ty(),
                         attr: TyAttr::default(),
                     })
@@ -1849,7 +1880,7 @@ impl<'db> InferenceContext<'db> {
             // narrowing to the matched type; the else arm covers the
             // residual, so the initializer is never CHECKED against the
             // written type.
-            self.infer_let_destructure(body, pattern, initializer);
+            self.infer_let_destructure(body, pattern, initializer, true);
             return self.finish_let_else(body, else_branch);
         }
         match &body.patterns[pattern] {
@@ -1892,7 +1923,7 @@ impl<'db> InferenceContext<'db> {
             // itself; the let-level entry keeps the initializer type for
             // the pattern node (refutability is S17's diagnostic).
             _ => {
-                self.infer_let_destructure(body, pattern, initializer);
+                self.infer_let_destructure(body, pattern, initializer, else_branch.is_some());
                 self.finish_let_else(body, else_branch);
             }
         }
@@ -2173,7 +2204,8 @@ impl<'db> InferenceContext<'db> {
                         return self.sub(&source, &target);
                     }
                 }
-                self.deferred_subs.push((actual, expected));
+                self.deferred_subs
+                    .push((actual, expected, self.obligation_anchor));
                 true
             }
             // Invariant constructors: Sub decays to Eq of the pieces.
@@ -2318,7 +2350,8 @@ impl<'db> InferenceContext<'db> {
                         }
                         return true;
                     }
-                    self.deferred_subs.push((actual, expected));
+                    self.deferred_subs
+                        .push((actual, expected, self.obligation_anchor));
                     true
                 }
             }
@@ -2348,8 +2381,9 @@ impl<'db> InferenceContext<'db> {
         // deferred `Sub` residue is that ledger here: both directions
         // (this is Eq), re-examined at finish after resolution.
         if a.has_projection() || b.has_projection() {
-            self.deferred_subs.push((a.clone(), b.clone()));
-            self.deferred_subs.push((b, a));
+            self.deferred_subs
+                .push((a.clone(), b.clone(), self.obligation_anchor));
+            self.deferred_subs.push((b, a, self.obligation_anchor));
             return true;
         }
         self.table.unify(&a, &b).is_ok()
@@ -3913,16 +3947,21 @@ impl<'db> InferenceContext<'db> {
             self.result.desugared_callees.insert(expr);
             return fn_ty;
         }
-        self.pending_diags.push(PendingDiag::UnresolvedName {
-            expr,
-            name: baml_type::Name::new(
-                segments
-                    .iter()
-                    .map(|segment| segment.as_str())
-                    .collect::<Vec<_>>()
-                    .join("."),
-            ),
-        });
+        // A name that RESOLVES to a definition kind this road doesn't
+        // type (clients, top-level lets outside their tier) is not
+        // unresolved - it stays the silent sentinel it always was.
+        if self.lower.resolve_value(segments).is_none() {
+            self.pending_diags.push(PendingDiag::UnresolvedName {
+                expr,
+                name: baml_type::Name::new(
+                    segments
+                        .iter()
+                        .map(|segment| segment.as_str())
+                        .collect::<Vec<_>>()
+                        .join("."),
+                ),
+            });
+        }
         Ty::error()
     }
 
@@ -5358,6 +5397,36 @@ impl<'db> InferenceContext<'db> {
                 break;
             }
         }
+        // Quiescence: a residue pair still open on BOTH sides can never
+        // be decided by more solving. Skolemize the unsolved vars (rigid
+        // placeholders - the leak-check discipline) and judge: a pair no
+        // substitution could satisfy is a definite mismatch, reported at
+        // the expr that deposited it (`let m = []; m = {}` - the heads
+        // clash whatever the elements become). A pair a substitution
+        // COULD satisfy passes the skolem judgment too (rigid vars are
+        // opaque, so only head-level impossibility fails), keeping this
+        // report-only. Projection pairs stay undecidable (their bases
+        // never resolved) and drop, as do anchorless VarBounds flushes.
+        for (actual, expected, anchor) in std::mem::take(&mut self.deferred_subs) {
+            let Some(anchor) = anchor else { continue };
+            let actual = self.table.resolve_completely(&actual);
+            let expected = self.table.resolve_completely(&expected);
+            if actual.has_projection()
+                || expected.has_projection()
+                || actual.has_error()
+                || expected.has_error()
+            {
+                continue;
+            }
+            let judged_actual = skolemize_infer(&actual);
+            let judged_expected = skolemize_infer(&expected);
+            if !is_subtype_interned(&judged_actual, &judged_expected, &self.facts) {
+                self.result
+                    .type_mismatches
+                    .entry(anchor)
+                    .or_insert((expected, actual));
+            }
+        }
         // BAML's only defaulting rule: an unconstrained EFFECT is `never`
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
@@ -5412,9 +5481,16 @@ impl<'db> InferenceContext<'db> {
             let mut diags: Vec<TirDiagnostic<'db>> = Vec::new();
             for (&expr, (expected, actual)) in &result.type_mismatches {
                 // rustc's tainted_by_errors discipline: a mismatch whose
-                // operands already carry an error sentinel is a CASCADE of
-                // a reported failure, not a second finding.
-                if expected.has_error() || actual.has_error() {
+                // operand IS the error sentinel is a CASCADE of a reported
+                // failure. Error LEAVES inside a structural head are a
+                // different case - `list<!e>` against `map<...>` is a real
+                // head mismatch (unsolved container vars finalize their
+                // elements to the sentinel without erasing the finding).
+                let tainted = |ty: &Ty| {
+                    ty.has_error()
+                        && matches!(ty.kind(), TyKind::Error { .. } | TyKind::Unknown { .. })
+                };
+                if tainted(expected) || tainted(actual) {
                     continue;
                 }
                 // A check can fail MID-INFERENCE on still-open variables
@@ -5577,6 +5653,22 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::VoidResultUsed { expr } => {
                         (TirTypeError::VoidFunctionResultUsed, expr)
+                    }
+                    PendingDiag::PatternScrutMismatch {
+                        pat,
+                        expected,
+                        found,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::TypeMismatch {
+                                expected: self.finalize_ty(&expected).to_plain(),
+                                got: self.finalize_ty(&found).to_plain(),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
                     }
                     PendingDiag::UnresolvedPatternName { pat, name } => {
                         diags.push(TirDiagnostic {
@@ -5981,10 +6073,10 @@ impl<'db> InferenceContext<'db> {
         }
         let var_ty = Ty::infer_var(var);
         for deferred in deferred_lowers {
-            self.deferred_subs.push((deferred, var_ty.clone()));
+            self.deferred_subs.push((deferred, var_ty.clone(), None));
         }
         for deferred in deferred_uppers {
-            self.deferred_subs.push((var_ty.clone(), deferred));
+            self.deferred_subs.push((var_ty.clone(), deferred, None));
         }
         let solution = if lowers.is_empty() {
             // No values flowed in: the MINIMUM upper is the meet
@@ -6167,6 +6259,86 @@ impl<'db> InferenceContext<'db> {
         resolved
     }
 
+    /// The pattern-reachability oracle over this scope (TIR's
+    /// `pattern_overlap_verdict`, its inputs rebuilt from the hir world):
+    /// can `pat` and `member` share a value under some realization of the
+    /// in-scope rigid params? `Yes`/`Unknown` = possible, `No` = provably
+    /// dead. Trust a `No` only when both inputs pass
+    /// `baml_type::unify::all_typevars_within` for this scope's frame.
+    fn pattern_overlap_verdict(
+        &self,
+        pat: &baml_type::Ty,
+        member: &baml_type::Ty,
+    ) -> baml_type::unify::Overlap {
+        use baml_type::normalize::TypeContext as _;
+        let aliases = self.overlap_alias_map();
+        let enum_variants = |qtn: &baml_type::QualifiedTypeName| self.facts.enum_variants(qtn);
+        let implements = |ty: &baml_type::Ty, iface: &baml_type::Interface| {
+            self.facts.implements_interface(ty, iface)
+        };
+        baml_type::pattern_overlap::pattern_overlap(
+            pat,
+            member,
+            &baml_type::pattern_overlap::PatternOverlapEnv {
+                vars: self.lower.generic_params(),
+                bounds: self.facts.bounds(),
+                aliases,
+                enum_variants: &enum_variants,
+                implements: &implements,
+            },
+        )
+    }
+
+    /// The oracle's alias input: every alias visible to the body's package
+    /// (own plus dependency closure), bodies pre-folded to `nf`'s canonical
+    /// union form - see `baml_type::unify` for why raw bodies mis-decide
+    /// alias-obscured unions at invariant positions.
+    fn overlap_alias_map(
+        &self,
+    ) -> &std::collections::HashMap<baml_type::QualifiedTypeName, baml_type::Ty> {
+        self.overlap_aliases.get_or_init(|| {
+            use baml_compiler2_hir::contributions::Definition;
+            use baml_type::normalize::TypeContext as _;
+            let mut aliases = std::collections::HashMap::new();
+            let Some(file) = self.owner_file else {
+                return aliases;
+            };
+            let info = baml_compiler2_hir::file_package::file_package(self.db, file);
+            let pkg = baml_compiler2_hir::package::PackageId::new(self.db, info.package.clone());
+            let mut packages = vec![pkg];
+            packages.extend(baml_compiler2_hir::package::package_dependency_closure(
+                self.db, pkg,
+            ));
+            for pkg_id in packages {
+                let items = baml_compiler2_ppir::package_items(self.db, pkg_id);
+                for ns in items.namespaces.values() {
+                    for (name, def) in &ns.types {
+                        let Definition::TypeAlias(loc) = def else {
+                            continue;
+                        };
+                        let def_info = baml_compiler2_hir::file_package::file_package(
+                            self.db,
+                            loc.file(self.db),
+                        );
+                        let qtn = baml_type::QualifiedTypeName::new(
+                            def_info.package,
+                            def_info.namespace_path,
+                            name.clone(),
+                        );
+                        aliases.entry(qtn).or_insert_with(|| {
+                            crate::lower::type_alias_value(self.db, *loc).to_plain()
+                        });
+                    }
+                }
+            }
+            let enum_variants = |qtn: &baml_type::QualifiedTypeName| self.facts.enum_variants(qtn);
+            for body in aliases.values_mut() {
+                *body = baml_type::unify::nf(body, &enum_variants);
+            }
+            aliases
+        })
+    }
+
     /// Re-drives the deferred `Sub` residue inside the finish fixpoint:
     /// a pair whose counterpart has since RESOLVED decomposes through
     /// `sub` again, landing bounds on the still-open side (`?E[] <= ?T`
@@ -6178,33 +6350,69 @@ impl<'db> InferenceContext<'db> {
     fn drain_deferred_subs(&mut self) -> bool {
         let deferred = std::mem::take(&mut self.deferred_subs);
         let mut progressed = false;
-        for (actual, expected) in deferred {
+        for (actual, expected, anchor) in deferred {
             let actual = self.table.resolve_completely(&actual);
             let expected = self.table.resolve_completely(&expected);
             if actual.has_infer() && expected.has_infer() {
-                self.deferred_subs.push((actual, expected));
+                self.deferred_subs.push((actual, expected, anchor));
                 continue;
             }
             if !actual.has_infer() && !expected.has_infer() {
-                // KNOWN GAP (S17): a failed post-hoc bound is dropped
-                // here - recording it needs provenance (an anchor expr)
-                // threaded through VarBounds, the diagnostics slice's
-                // business. The quiescence tiering above makes this
-                // reachable only for genuinely ill-typed programs.
-                let _ = is_subtype_interned(&actual, &expected, &self.facts);
+                // A failed post-hoc bound reports at the expr that
+                // deposited it (check_expr's anchor rides the pair):
+                // `let m = []; m = {}` retires `map <: list` here, the
+                // only place both sides are ground. Anchorless pairs
+                // (the VarBounds flush) still drop - threading THEIR
+                // provenance is VarBounds' business. The quiescence
+                // tiering makes a failure here reachable only for
+                // genuinely ill-typed programs.
+                if !is_subtype_interned(&actual, &expected, &self.facts)
+                    && let Some(anchor) = anchor
+                {
+                    self.result
+                        .type_mismatches
+                        .entry(anchor)
+                        .or_insert((expected, actual));
+                }
                 continue;
             }
+            let saved_anchor = std::mem::replace(&mut self.obligation_anchor, anchor);
             let before = self.deferred_subs.len();
             let _ = self.sub(&actual, &expected);
+            self.obligation_anchor = saved_anchor;
             let re_deferred = self.deferred_subs[before..]
                 .iter()
-                .any(|(a, e)| *a == actual && *e == expected);
+                .any(|(a, e, _)| *a == actual && *e == expected);
             if !re_deferred {
                 progressed = true;
             }
         }
         progressed
     }
+}
+
+/// Replaces every unsolved inference var with a RIGID placeholder (a
+/// `TypeVar` named after the var, same var -> same placeholder) for the
+/// quiescence judgment: rigid vars are opaque to the subtype oracle, so
+/// the substituted pair fails only when NO solution could satisfy it.
+fn skolemize_infer(ty: &Ty) -> Ty {
+    if !ty.has_infer() {
+        return ty.clone();
+    }
+    if let TyKind::Infer {
+        var: Some(var),
+        attr,
+    } = ty.kind()
+    {
+        return Ty::intern(TyKind::TypeVar(
+            baml_type::ParamTy::new(
+                u32::MAX - var.index(),
+                baml_type::Name::new(format!("?{}", var.index())),
+            ),
+            attr.clone(),
+        ));
+    }
+    Ty::intern(ty.kind().map_children(skolemize_infer))
 }
 
 /// Every unsolved inference var occurring in `ty`, for structural
@@ -6346,7 +6554,7 @@ fn operand_members(ty: &Ty) -> Vec<Ty> {
             TyKind::Literal(literal, _, attr) => Ty::intern(literal_base(literal, attr.clone())),
             // A builtin primitive-companion class receiver (`self` inside
             // `class Float`) IS its primitive for dispatch - the single
-            // collapse rule (`QualifiedTypeName::builtin_primitive`).
+            // collapse rule (`baml_type::QualifiedTypeName::builtin_primitive`).
             TyKind::Class(qtn, args, attr) if args.is_empty() => {
                 use baml_type::PrimitiveType;
                 match qtn.builtin_primitive() {

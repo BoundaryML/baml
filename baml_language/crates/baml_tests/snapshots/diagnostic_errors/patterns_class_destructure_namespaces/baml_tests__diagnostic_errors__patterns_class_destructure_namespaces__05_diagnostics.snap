@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42669
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -26,6 +27,14 @@ source: crates/baml_tests/src/generated_tests.rs
     ·         ────────────────────────────────
     ╰────
 
+  [type] E0063
+
+  × unreachable arm
+    ╭─[main.baml:16:14]
+ 16 │         _ => 0
+    ·              ─
+    ╰────
+
   [type] E0001
 
   × type `Response` expects 0 type argument(s), got 1
@@ -40,4 +49,12 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[main.baml:28:9]
  28 │         root.llm.openai.Response { missing } => 1,
     ·         ────────────────────────────────────
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[main.baml:29:14]
+ 29 │         _ => 0
+    ·              ─
     ╰────

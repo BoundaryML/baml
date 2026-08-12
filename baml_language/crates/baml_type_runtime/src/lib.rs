@@ -671,39 +671,7 @@ pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
     normalize_union_members([a.clone(), b.clone()], TyAttr::default())
 }
 
-/// Flatten nested unions, drop `Never`, deduplicate; collapse a single survivor
-/// to a bare type and an empty result to `Never`.
-pub fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
-    let mut normalized = Vec::new();
-    for member in members {
-        match member {
-            Ty::Never { .. } => {}
-            Ty::Union(inner, _) => {
-                for inner_member in inner {
-                    if !matches!(inner_member, Ty::Never { .. })
-                        && !normalized.contains(&inner_member)
-                    {
-                        normalized.push(inner_member);
-                    }
-                }
-            }
-            other if !normalized.contains(&other) => normalized.push(other),
-            _ => {}
-        }
-    }
-
-    match normalized.len() {
-        0 => Ty::Never { attr },
-        1 => normalized.pop().expect("length checked"),
-        _ => {
-            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
-            // single "original attr" to preserve. If inputs carry different attrs, which one
-            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
-            // attrs describe declaration sites rather than computed types.
-            Ty::Union(normalized, attr)
-        }
-    }
-}
+pub use baml_type::unify::normalize_union_members;
 
 // ── Pure `Ty` walks (substitution, typevar queries, erasure) ──────────────────
 //
@@ -725,106 +693,7 @@ pub fn bind_type_vars(generic_params: &[ParamTy], concrete_args: &[Ty]) -> FxHas
     bindings
 }
 
-/// Substitute type variables in a `Ty` using the provided bindings.
-///
-/// Recursively walks the type, replacing any `Ty::TypeVar` present in
-/// `bindings`. This is used both for callable generic instantiation and for
-/// interface implementation rule instantiation, so it must preserve the full
-/// TIR shape rather than only class/member-signature types.
-pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
-    if bindings.is_empty() {
-        return ty.clone();
-    }
-    match ty {
-        Ty::TypeVar(name, _) => bindings.get(name).cloned().unwrap_or_else(|| ty.clone()),
-        Ty::List(inner, attr) => Ty::List(Box::new(substitute_ty(inner, bindings)), attr.clone()),
-        Ty::EvolvingList(inner, attr) => {
-            Ty::EvolvingList(Box::new(substitute_ty(inner, bindings)), attr.clone())
-        }
-        Ty::Map {
-            key: k,
-            value: v,
-            attr,
-        } => Ty::Map {
-            key: Box::new(substitute_ty(k, bindings)),
-            value: Box::new(substitute_ty(v, bindings)),
-            attr: attr.clone(),
-        },
-        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
-            Box::new(substitute_ty(k, bindings)),
-            Box::new(substitute_ty(v, bindings)),
-            attr.clone(),
-        ),
-        Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(substitute_ty(value, bindings)),
-            Box::new(substitute_ty(error, bindings)),
-            attr.clone(),
-        ),
-        Ty::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            attr,
-        } => Ty::AssociatedTypeProjection {
-            base: Box::new(substitute_ty(base, bindings)),
-            interface: Box::new(interface.map_tys(|t| substitute_ty(t, bindings))),
-            member: member.clone(),
-            attr: attr.clone(),
-        },
-        Ty::Union(members, attr) => normalize_union_members(
-            members.iter().map(|m| substitute_ty(m, bindings)),
-            attr.clone(),
-        ),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            attr,
-        } => {
-            // Function values are realized: a function type carries no generics of
-            // its own, only free typevars from the enclosing context — so there is
-            // nothing to shadow and substitution recurses with the same bindings.
-            Ty::Function {
-                params: params
-                    .iter()
-                    .map(|param| FunctionParamTy {
-                        name: param.name.clone(),
-                        ty: substitute_ty(&param.ty, bindings),
-                        mode: param.mode,
-                    })
-                    .collect(),
-                ret: Box::new(substitute_ty(ret, bindings)),
-                throws: Box::new(substitute_ty(throws, bindings)),
-                attr: attr.clone(),
-            }
-        }
-        Ty::Class(name, type_args, attr) => {
-            let substituted_args: Vec<Ty> = type_args
-                .iter()
-                .map(|t| substitute_ty(t, bindings))
-                .collect();
-            Ty::Class(name.clone(), substituted_args, attr.clone())
-        }
-        Ty::Interface(name, type_args, associated_bindings, attr) => {
-            let substituted_args: Vec<Ty> = type_args
-                .iter()
-                .map(|t| substitute_ty(t, bindings))
-                .collect();
-            let substituted_bindings = associated_bindings
-                .iter()
-                .map(|(name, ty)| (name.clone(), substitute_ty(ty, bindings)))
-                .collect();
-            Ty::Interface(
-                name.clone(),
-                substituted_args,
-                substituted_bindings,
-                attr.clone(),
-            )
-        }
-        // All other types are leaves (primitives, enums, etc.) — pass through.
-        _ => ty.clone(),
-    }
-}
+pub use baml_type::unify::substitute_ty;
 
 /// Deep any-node predicate over a type tree: does `pred` hold for `ty` itself
 /// or for any type nested inside it? The single traversal behind the

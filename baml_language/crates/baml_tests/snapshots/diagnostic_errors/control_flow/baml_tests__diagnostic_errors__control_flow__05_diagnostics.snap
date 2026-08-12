@@ -7,5 +7,5 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `int` has no member `to_string_BAML_NOT_A_METHOD`
     ╭─[main.baml:21:5]
  21 │     z.to_string_BAML_NOT_A_METHOD()
-    ·     ─────────────────────────────
+    ·     ───────────────────────────────
     ╰────

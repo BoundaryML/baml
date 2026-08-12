@@ -139,7 +139,7 @@ fn type_suggestions(
 /// *conjunction* of interface constraints bounding it (`T extends A & B` yields
 /// two entries in `T`'s `Vec`). The bounds helpers
 /// ([`class_generic_param_bounds`] and friends) produce this shape natively.
-pub type TypeVarBoundsMap = rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>;
+pub use baml_type::pattern_overlap::TypeVarBoundsMap;
 
 /// The general lowering scope: a package's items, a namespace, the in-scope type-variable
 /// names, and their bounds. Constructed directly at each lowering site and passed to

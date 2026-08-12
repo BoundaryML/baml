@@ -38,6 +38,12 @@ impl<'db> Facts<'db> {
         Facts { db, bounds }
     }
 
+    /// The scope's param env verbatim - the overlap oracle's `bounds` input
+    /// shares this shape (`TypeVarBoundsMap`).
+    pub fn bounds(&self) -> &rustc_hash::FxHashMap<ParamTy, Vec<Interface>> {
+        &self.bounds
+    }
+
     /// Resolves a qualified name back to its definition through the owning
     /// package's canonical (ppir) items.
     pub fn definition_of(&self, name: &QualifiedTypeName) -> Option<Definition<'db>> {

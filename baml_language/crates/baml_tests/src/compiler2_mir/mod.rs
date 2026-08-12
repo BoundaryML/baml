@@ -746,9 +746,7 @@ fn s17_dump_diagnostics() {
     let Ok(path) = std::env::var("S17_DUMP_PATH") else {
         return;
     };
-    // The dump measures the hir_ty diagnostic driver (dark-launched).
-    // SAFETY: test-only, single-threaded within this test.
-    unsafe { std::env::set_var("BAML_S17_HIR_DIAGS", "1") };
+
     let root = concat!(env!("CARGO_MANIFEST_DIR"), "/projects/diagnostic_errors");
     let mut out = String::new();
     let mut dirs: Vec<_> = std::fs::read_dir(root)
@@ -803,4 +801,3 @@ fn walkdir_baml(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     }
     out
 }
-

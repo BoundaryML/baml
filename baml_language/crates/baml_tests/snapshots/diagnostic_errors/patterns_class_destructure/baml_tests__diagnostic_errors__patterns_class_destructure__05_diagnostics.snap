@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42423
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0007
@@ -82,21 +83,20 @@ source: crates/baml_tests/src/generated_tests.rs
      ·         ──────────────────
      ╰────
 
+  [type] E0063
+
+  × unreachable arm
+     ╭─[patterns_class_destructure.baml:104:14]
+ 104 │         _ => 0
+     ·              ─
+     ╰────
+
   [type] E0003
 
   × unresolved name: `MissingClass`
      ╭─[patterns_class_destructure.baml:109:5]
  109 │     let MissingClass { age } = Person {
      ·     ────────────────────────
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:119:23]
- 119 │         Person { age: string } => 1,
-     ·                       ───┬──
-     ·                          ╰── expected `int`, found `string`
      ╰────
 
   [type] E0001
@@ -118,18 +118,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × generic class destructure `Box { ... }` must specify type arguments
-     ╭─[patterns_class_destructure.baml:146:25]
+     ╭─[patterns_class_destructure.baml:146:5]
  146 │     let Box { value } = boxed;
-     ·                         ─────
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:147:5]
- 147 │     value
-     ·     ──┬──
-     ·       ╰── expected `int`, found `T`
+     ·     ─────────────────
      ╰────
 
   [type] E0111
@@ -189,13 +180,12 @@ source: crates/baml_tests/src/generated_tests.rs
      ·     ───────────────────────────────
      ╰────
 
-  [type] E0001
+  [type] E0111
 
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:223:30]
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:223:5]
  223 │     let Box<string> { value: int } = boxed;
-     ·                              ─┬─
-     ·                               ╰── expected `string`, found `int`
+     ·     ──────────────────────────────
      ╰────
 
   [hir] E0094
@@ -207,28 +197,48 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                   ╰── alternatives bind different names
      ╰────
 
+  [type] E0003
+
+  × unresolved name: `age`
+     ╭─[patterns_class_destructure.baml:237:33]
+ 237 │         Person { age } | int => age
+     ·                                 ───
+     ╰────
+
   [type] E0001
 
   × or-pattern binding `age` has conflicting types: int and string
-     ╭─[patterns_class_destructure.baml:243:34]
+     ╭─[patterns_class_destructure.baml:243:9]
  243 │         Person { age } | Admin { age } => age
-     ·                                  ───
+     ·         ──────────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:247:105]
+ 247 │ ╭─▶ function class_destructure_or_pattern_same_binding_conflicting_types_reversed(v: Person | Admin) -> int {
+ 248 │ │       match (v) {
+ 249 │ │           Admin { age } | Person { age } => age
+ 250 │ │       }
+ 251 │ ├─▶ }
+     · ╰──── expected `int`, found `string`
      ╰────
 
   [type] E0001
 
   × or-pattern binding `age` has conflicting types: string and int
-     ╭─[patterns_class_destructure.baml:249:34]
+     ╭─[patterns_class_destructure.baml:249:9]
  249 │         Admin { age } | Person { age } => age
-     ·                                  ───
+     ·         ──────────────────────────────
      ╰────
 
   [type] E0001
 
   × or-pattern binding `value` has conflicting types: int and string
-     ╭─[patterns_class_destructure.baml:255:62]
+     ╭─[patterns_class_destructure.baml:255:9]
  255 │         Box<int> { value: let value } | Box<string> { value: let value } => 1
-     ·                                                              ─────────
+     ·         ────────────────────────────────────────────────────────────────
      ╰────
 
   [hir] E0094
@@ -241,15 +251,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                      ╰── `value` first bound here
      ╰────
 
-  [type] E0001
-
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:271:42]
- 271 │         Person { address: Address { zip: string } } => 1,
-     ·                                          ───┬──
-     ·                                             ╰── expected `int`, found `string`
-     ╰────
-
   [type] E0007
 
   × class `Person` has no field `missing`
@@ -259,11 +260,10 @@ source: crates/baml_tests/src/generated_tests.rs
  279 │ ╰─▶     } = Person {
      ╰────
 
-  [type] E0001
+  [type] E0111
 
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:289:27]
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:289:9]
  289 │         let Person { age: string } = p;
-     ·                           ───┬──
-     ·                              ╰── expected `int`, found `string`
+     ·         ──────────────────────────
      ╰────

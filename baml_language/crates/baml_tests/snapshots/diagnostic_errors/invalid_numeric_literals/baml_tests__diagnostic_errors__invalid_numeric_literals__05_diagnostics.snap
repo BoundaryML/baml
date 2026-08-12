@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 38525
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0152
@@ -153,14 +154,6 @@ source: crates/baml_tests/src/generated_tests.rs
  29 │   let too_large_octal = 0o2_000_000_000_000_000_000_000;
     ·                         ───────────────┬───────────────
     ·                                        ╰── does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision
-    ╰────
-
-  [type] E0150
-
-  × integer literal `4611686018427387904` is out of range for `int` (which holds -4611686018427387904 to 4611686018427387903); append `n` to write it as a `bigint`
-    ╭─[negative.baml:32:26]
- 32 │   let beyond_int_range = 0x4000_0000_0000_0000;
-    ·                          ─────────────────────
     ╰────
 
   [hir] E0152

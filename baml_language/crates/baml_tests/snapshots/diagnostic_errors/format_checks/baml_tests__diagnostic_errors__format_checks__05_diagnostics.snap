@@ -7,7 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
     ╭─[chain_expr.baml:86:5]
  86 │     user.name.len();
-    ·     ─────────────
+    ·     ───────────────
     ╰────
 
   [type] E0007
@@ -15,7 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
     ╭─[chain_expr.baml:87:5]
  87 │     items.len();
-    ·     ─────────
+    ·     ───────────
     ╰────
 
   [type] E0007
@@ -23,19 +23,24 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
     ╭─[chain_expr.baml:90:5]
  90 │     user.profile.items.get(0);
-    ·     ──────────────────────
+    ·     ─────────────────────────
     ╰────
 
   [type] E0007
 
   × type `ChainItem[]` has no member `get`
-    ╭─[chain_expr.baml:94:5]
- 94 │ ╭─▶     items // 2 callee trailing
- 95 │ │       // 3 open paren leading
- 96 │ │       . // 4 dot trailing
- 97 │ │       // 5 method leading
- 98 │ ╰─▶     get // 6 method trailing
-    ╰────
+     ╭─[chain_expr.baml:94:5]
+  94 │ ╭─▶     items // 2 callee trailing
+  95 │ │       // 3 open paren leading
+  96 │ │       . // 4 dot trailing
+  97 │ │       // 5 method leading
+  98 │ │       get // 6 method trailing
+  99 │ │       ( // 7 open paren trailing
+ 100 │ │       // 8 arg leading
+ 101 │ │       0 // 9 arg trailing
+ 102 │ │       // 10 close paren leading
+ 103 │ ╰─▶     ) // 11 close paren trailing
+     ╰────
 
   [type] E0007
 
@@ -45,7 +50,12 @@ source: crates/baml_tests/src/generated_tests.rs
  109 │ │       /* 3 dot leading */
  110 │ │       . /* 4 dot trailing */
  111 │ │       /* 5 method leading */
- 112 │ ╰─▶     get /* 6 method trailing */
+ 112 │ │       get /* 6 method trailing */
+ 113 │ │       ( /* 7 open paren trailing */
+ 114 │ │       /* 8 arg leading */
+ 115 │ │       0 /* 9 arg trailing */
+ 116 │ │       /* 10 close paren leading */
+ 117 │ ╰─▶     ) /* 11 close paren trailing */
      ╰────
 
   [type] E0007
@@ -53,7 +63,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
      ╭─[chain_expr.baml:149:5]
  149 │     user.name.len().to_string();
-     ·     ─────────────
+     ·     ───────────────
      ╰────
 
   [type] E0007
@@ -61,15 +71,55 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `string` has no member `len`
      ╭─[chain_expr.baml:152:5]
  152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ·     ───────────────────────────────────────────
+     ·     ─────────────────────────────────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:155:44]
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ─────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:152:5]
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ·     ───────────────────────────────────────────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
  155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     ·                                            ───
+     ·     ────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ──────────────────────────────────────────────────────────────
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:155:5]
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ·     ────────────────────────────────────────────────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -77,7 +127,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
      ╭─[chain_expr.baml:158:5]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·     ──────────────────────
+     ·     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -85,7 +135,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:28]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                            ──────────────────────
+     ·                            ────────────────────────
      ╰────
 
   [type] E0007
@@ -93,7 +143,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:59]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                                                           ──────────────────────
+     ·                                                           ────────────────────────
      ╰────
 
   [type] E0007
@@ -101,7 +151,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:158:90]
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ·                                                                                          ──────────────────────
+     ·                                                                                          ────────────────────────
      ╰────
 
   [type] E0005
@@ -117,7 +167,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:161:33]
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     ·                                 ──────────────────────
+     ·                                 ────────────────────────
      ╰────
 
   [type] E0007
@@ -139,7 +189,43 @@ source: crates/baml_tests/src/generated_tests.rs
  177 │ │       color // 14 trailing
  178 │ │       . // 15 trailing
  179 │ │       // 16 leading
- 180 │ ╰─▶     len // 17 trailing
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ ╰─▶     ) // 19 trailing
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:165:5]
+ 165 │ ╭─▶     user // 2 trailing
+ 166 │ │       . // 3 trailing
+ 167 │ │       // 4 leading
+ 168 │ │       profile // 5 trailing
+ 169 │ │       . // 6 trailing
+ 170 │ │       // 7 leading
+ 171 │ │       settings // 8 trailing
+ 172 │ │       . // 9 trailing
+ 173 │ │       // 10 leading
+ 174 │ │       preferences // 11 trailing
+ 175 │ │       . // 12 trailing
+ 176 │ │       // 13 leading
+ 177 │ │       color // 14 trailing
+ 178 │ │       . // 15 trailing
+ 179 │ │       // 16 leading
+ 180 │ │       len // 17 trailing
+ 181 │ │       ( // 18 trailing
+ 182 │ │       ) // 19 trailing
+ 183 │ │       . // 20 trailing
+ 184 │ │       // 21 leading
+ 185 │ │       to_string // 22 trailing
+ 186 │ │       ( // 23 trailing
+ 187 │ │       ) // 24 trailing
+ 188 │ │       . // 25 trailing
+ 189 │ │       // 26 leading
+ 190 │ │       len // 27 trailing
+ 191 │ │       ( // 28 trailing
+ 192 │ ╰─▶     ) // 29 trailing
      ╰────
 
   [type] E0007
@@ -161,7 +247,43 @@ source: crates/baml_tests/src/generated_tests.rs
  209 │ │       color /* 14 trailing */
  210 │ │       . /* 15 trailing */
  211 │ │       /* 16 leading */
- 212 │ ╰─▶     len /* 17 trailing */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ ╰─▶     ) /* 19 trailing */
+     ╰────
+
+  [type] E0007
+
+  × type `string` has no member `len`
+     ╭─[chain_expr.baml:197:5]
+ 197 │ ╭─▶     user /* 2 trailing */
+ 198 │ │       . /* 3 trailing */
+ 199 │ │       /* 4 leading */
+ 200 │ │       profile /* 5 trailing */
+ 201 │ │       . /* 6 trailing */
+ 202 │ │       /* 7 leading */
+ 203 │ │       settings /* 8 trailing */
+ 204 │ │       . /* 9 trailing */
+ 205 │ │       /* 10 leading */
+ 206 │ │       preferences /* 11 trailing */
+ 207 │ │       . /* 12 trailing */
+ 208 │ │       /* 13 leading */
+ 209 │ │       color /* 14 trailing */
+ 210 │ │       . /* 15 trailing */
+ 211 │ │       /* 16 leading */
+ 212 │ │       len /* 17 trailing */
+ 213 │ │       ( /* 18 trailing */
+ 214 │ │       ) /* 19 trailing */
+ 215 │ │       . /* 20 trailing */
+ 216 │ │       /* 21 leading */
+ 217 │ │       to_string /* 22 trailing */
+ 218 │ │       ( /* 23 trailing */
+ 219 │ │       ) /* 24 trailing */
+ 220 │ │       . /* 25 trailing */
+ 221 │ │       /* 26 leading */
+ 222 │ │       len /* 27 trailing */
+ 223 │ │       ( /* 28 trailing */
+ 224 │ ╰─▶     ) /* 29 trailing */
      ╰────
 
   [type] E0007
@@ -177,7 +299,11 @@ source: crates/baml_tests/src/generated_tests.rs
  235 │ │       items // 8 trailing
  236 │ │       . // 9 trailing
  237 │ │       // 10 leading
- 238 │ ╰─▶     get // 11 trailing
+ 238 │ │       get // 11 trailing
+ 239 │ │       ( // 12 trailing
+ 240 │ │       // 13 leading
+ 241 │ │       user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+ 242 │ ╰─▶     ) // 15 trailing
      ╰────
 
   [type] E0007
@@ -185,7 +311,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:241:5]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     ·     ──────────────────────
+     ·     ────────────────────────
      ╰────
 
   [type] E0007
@@ -193,7 +319,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `len`
      ╭─[chain_expr.baml:241:36]
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     ·                                    ──────────────────────
+     ·                                    ────────────────────────
      ╰────
 
   [type] E0007
@@ -201,15 +327,15 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `int[][]` has no member `len`
      ╭─[chain_expr.baml:251:17]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     ·                 ───────────────
+     ·                 ─────────────────
      ╰────
 
   [type] E0007
 
   × type `int[]` has no member `len`
-     ╭─[chain_expr.baml:251:55]
+     ╭─[chain_expr.baml:251:40]
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     ·                                                       ───
+     ·                                        ────────────────────
      ╰────
 
   [type] E0007
@@ -217,23 +343,23 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `ChainItem[]` has no member `get`
      ╭─[chain_expr.baml:256:5]
  256 │     items  .  get  (  0  );
-     ·     ─────────────
+     ·     ──────────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:259:18]
+     ╭─[chain_expr.baml:259:5]
  259 │     user.tags[0].len();
-     ·                  ───
+     ·     ──────────────────
      ╰────
 
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:261:20]
+     ╭─[chain_expr.baml:261:5]
  261 │     items[0].label.len();
-     ·                    ───
+     ·     ────────────────────
      ╰────
 
   [hir] E0015
@@ -292,7 +418,7 @@ source: crates/baml_tests/src/generated_tests.rs
  216 │ │           }
  217 │ │       }
  218 │ ├─▶ }
-     · ╰──── expected `string`, found `map<string, bool | int | map<string, string>>`
+     · ╰──── expected `string`, found `map<string, int | bool | map<string, string>>`
      ╰────
 
   [validation] E0011
@@ -341,10 +467,11 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[function_decls.baml:73:5]
- 73 │     1
-    ·     ┬
-    ·     ╰── expected `(x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never`, found `1`
+    ╭─[function_decls.baml:72:167]
+ 72 │ ╭─▶ function DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
+ 73 │ │       1
+ 74 │ ├─▶ }
+    · ╰──── expected `(x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never`, found `1`
     ╰────
 
   [type] E0003
@@ -394,29 +521,84 @@ source: crates/baml_tests/src/generated_tests.rs
  494 │ ╰─▶ }
      ╰────
 
-  [type] E0146
+  [type] E0003
 
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[loop_stmts.baml:403:21]
- 403 │                     break;
-     ·                     ──────
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:577:5]
+ 577 │     assert x > 0;
+     ·     ──────
      ╰────
 
-  [type] E0146
+  [type] E0003
 
-  ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[loop_stmts.baml:407:21]
- 407 │                     continue;
-     ·                     ─────────
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:578:5]
+ 578 │     assert x < 100;
+     ·     ──────
      ╰────
 
-  [type] E0001
+  [type] E0003
 
-  × mismatched types
-     ╭─[match_exprs.baml:161:9]
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:582:5]
+ 582 │     assert // 2 assert keyword trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:589:5]
+ 589 │     assert /* 2 assert keyword trailing */
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:595:5]
+ 595 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:598:5]
+ 598 │     assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000;
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:602:5]
+ 602 │     assert // 2 assert trailing
+     ·     ──────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `assert`
+     ╭─[loop_stmts.baml:611:5]
+ 611 │     assert /* 2 assert trailing */
+     ·     ──────
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:161:18]
  161 │         "bye" => "farewell",
-     ·         ──┬──
-     ·           ╰── expected `"hello"`, found `"bye"`
+     ·                  ──────────
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exprs.baml:162:14]
+ 162 │         _ => "other"
+     ·              ───────
      ╰────
 
   [type] E0004
@@ -502,15 +684,6 @@ source: crates/baml_tests/src/generated_tests.rs
  419 │ ╭─▶     match (x) {
  420 │ │           (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
  421 │ ╰─▶     }
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[match_exprs.baml:420:68]
- 420 │         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
-     ·                                                                    ┬
-     ·                                                                    ╰── expected `string`, found `0`
      ╰────
 
   [validation] E0011

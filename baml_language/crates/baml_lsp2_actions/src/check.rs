@@ -109,11 +109,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // descendant scope is parse-tainted - the same cascades the per-scope
     // walk suppressed.
     //
-    // DARK LAUNCH (S17): hir_ty's diagnostics drive under
-    // BAML_S17_HIR_DIAGS=1 (the parity burn-down's measurement switch);
-    // TIR's renderer stays the default until the 49 diagnostic suites
-    // re-bless clean. The switch and the TIR arm die with TIR.
-    if std::env::var("BAML_S17_HIR_DIAGS").is_ok() {
+    // THE DIAGNOSTIC FLIP (S17, 2026-08-12): hir_ty's diagnostics are
+    // the default; `BAML_S17_TIR_DIAGS=1` opts back onto the retiring
+    // renderer while it exists. The switch and the TIR arm die with TIR.
+    if std::env::var("BAML_S17_TIR_DIAGS").is_err() {
         use baml_compiler2_hir::body::BodyOwnerId;
         let mut owners: Vec<BodyOwnerId> = Vec::new();
         for owner in baml_compiler2_ppir::file_body_owners(db, file) {

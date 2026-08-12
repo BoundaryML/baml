@@ -190,6 +190,7 @@ impl<'db> InferenceContext<'db> {
         body: &ExprBody,
         pattern: PatId,
         initializer: Option<ExprId>,
+        has_else: bool,
     ) {
         let init_ty = match initializer {
             Some(init) => {
@@ -201,8 +202,11 @@ impl<'db> InferenceContext<'db> {
         let resolved = self.scrutinee_demand(&init_ty);
         let outcome = self.lower_pattern(body, pattern, &resolved);
         // A refutable pattern in an irrefutable position has nowhere to
-        // go when it fails (E0111). Error-typed scrutinees are cascades.
-        if !outcome.covers_type
+        // go when it fails (E0111) - unless the `else` branch IS that
+        // somewhere (`let Ok(v) = f() else { return }` is the refutable
+        // let's legal form). Error-typed scrutinees are cascades.
+        if !has_else
+            && !outcome.covers_type
             && !outcome.matched_ty.has_error()
             && !resolved.has_error()
             && !resolved.has_infer()
@@ -316,7 +320,7 @@ impl<'db> InferenceContext<'db> {
                     .copied()
                     .map(|type_ref| self.lower_body_annotation(type_ref))
                     .unwrap_or_else(Ty::error);
-                self.type_pattern_outcome(scrut, &pat_ty)
+                self.type_pattern_outcome(pat, scrut, &pat_ty)
             }
             Pattern::Class { class, fields, .. } => {
                 let class = class.clone();
@@ -549,13 +553,46 @@ impl<'db> InferenceContext<'db> {
     /// members; claiming requires PROVABLE overlap in either direction
     /// (the B-633 rule - undecidable rigid-vs-concrete pairs stay
     /// unclaimed and therefore uncovered).
-    fn type_pattern_outcome(&mut self, scrut: &Ty, pat_ty: &Ty) -> PatternOutcome {
+    fn type_pattern_outcome(&mut self, pat: PatId, scrut: &Ty, pat_ty: &Ty) -> PatternOutcome {
         let mut outcome = self.type_pattern_outcome_inner(scrut, pat_ty);
         // The recorded form is the WRITTEN annotation whenever it is not
         // error-carrying (error ascriptions already record the written
         // shape through matched_ty).
         if !pat_ty.has_error() {
             outcome.recorded_ty = Some(pat_ty.clone());
+        }
+        // The rigid dead-arm rule: a pair the equality/subtype relations
+        // cannot decide (rigid vars or projections involved) asks the
+        // reachability oracle, and a provable `No` - no realization of the
+        // in-scope rigids gives the pattern and scrutinee a common value -
+        // reports like any concrete pattern/scrutinee mismatch. The `No`
+        // is trusted only when the oracle can see every variable (the
+        // `all_typevars_within` caller obligation).
+        if !outcome.covers_type
+            && !pat_ty.has_error()
+            && !scrut.has_error()
+            && !pat_ty.has_infer()
+            && !scrut.has_infer()
+            && (pat_ty.has_typevar()
+                || pat_ty.has_projection()
+                || scrut.has_typevar()
+                || scrut.has_projection())
+        {
+            let pat_plain = pat_ty.to_plain();
+            let scrut_plain = scrut.to_plain();
+            let vars = self.lower.generic_params();
+            if baml_type::unify::all_typevars_within(&pat_plain, vars)
+                && baml_type::unify::all_typevars_within(&scrut_plain, vars)
+                && self.pattern_overlap_verdict(&pat_plain, &scrut_plain)
+                    == baml_type::unify::Overlap::No
+            {
+                self.pending_diags
+                    .push(super::PendingDiag::PatternScrutMismatch {
+                        pat,
+                        expected: scrut.clone(),
+                        found: pat_ty.clone(),
+                    });
+            }
         }
         outcome
     }
@@ -1017,10 +1054,14 @@ impl<'db> InferenceContext<'db> {
         if let Some(rest) = rest
             && let Some(rest_pat) = rest.pat
         {
-            // The rest slot carries a BINDING only: `..let name`
-            // (optionally ascribed). Structural sub-patterns have no
-            // sliced-middle semantics (E0001's rest-sub-pattern rule).
-            if !matches!(body.patterns[rest_pat], Pattern::Bind { .. }) {
+            // The rest slot carries a BINDING (`..let name`, optionally
+            // ascribed) or the wildcard (`.._` ignores the middle).
+            // Structural sub-patterns have no sliced-middle semantics
+            // (E0001's rest-sub-pattern rule).
+            if !matches!(
+                body.patterns[rest_pat],
+                Pattern::Bind { .. } | Pattern::Wildcard
+            ) {
                 self.pending_diags
                     .push(super::PendingDiag::RestNotBinding { pat: rest_pat });
             }

@@ -82,6 +82,11 @@ pub struct LowerCtx<'db> {
     /// (there `Self` is the frame's universal slot 0, found by the
     /// param fallback first).
     self_ty: Option<Ty>,
+    /// The impl's written interface target when this scope is an
+    /// implements-block (or free-impl) method: the qualifier `Self.Member`
+    /// projects through (rustc resolves `Self::Assoc` in an impl via the
+    /// impl's trait ref the same way).
+    self_impl_target: Option<baml_type::interned::InterfaceRef>,
     /// The frame's declared interface bounds (I2's param env): each
     /// param's CONJUNCTION. Projections (`T.Output`) determine their
     /// interface through these.
@@ -105,6 +110,7 @@ pub fn lower_ctx_for_file(
         ns_context: info.namespace_path,
         generic_params: Vec::new(),
         self_ty: None,
+        self_impl_target: None,
         bounds: FxHashMap::default(),
     }
 }
@@ -126,6 +132,7 @@ pub fn lower_ctx_for_package<'db>(
         ns_context,
         generic_params: Vec::new(),
         self_ty: None,
+        self_impl_target: None,
         bounds: FxHashMap::default(),
     }
 }
@@ -165,11 +172,22 @@ impl<'db> LowerCtx<'db> {
     }
 
     #[must_use]
+    /// The in-scope rigid params (function + owner generics, `Self` in
+    /// interface-owned bodies) - the overlap oracle's `vars` input.
+    pub fn generic_params(&self) -> &[ParamTy] {
+        &self.generic_params
+    }
+
     pub fn with_frame(mut self, frame: Vec<ParamTy>) -> LowerCtx<'db> {
         self.generic_params = frame;
         self
     }
     /// See [`LowerCtx::self_ty`].
+    pub fn with_impl_target(mut self, target: Option<baml_type::interned::InterfaceRef>) -> Self {
+        self.self_impl_target = target;
+        self
+    }
+
     pub fn with_self_ty(mut self, self_ty: Option<Ty>) -> Self {
         self.self_ty = self_ty;
         self
@@ -396,6 +414,15 @@ impl<'db> LowerCtx<'db> {
                     _ => None,
                 }
             }
+            // A concrete impl subject: `Self.Member` in an implements
+            // block projects through the impl's WRITTEN interface target
+            // when that target declares the member; the registry's
+            // resolved pin reduces it from there.
+            _ if Some(base) == self.self_ty.as_ref() => self
+                .self_impl_target
+                .as_ref()
+                .filter(|target| declares(&target.name))
+                .cloned(),
             _ => None,
         }
     }
@@ -485,16 +512,29 @@ impl<'db> LowerCtx<'db> {
         // 0), and each further segment projects through the interface its
         // base determines (the unique declaring bound; a chained step
         // resolves through the previous member's declared bound).
-        if segments.len() > 1
-            && args.is_empty()
-            && bindings.is_empty()
-            && let Some(param) = self
+        let projection_head = || {
+            if let Some(param) = self
                 .generic_params
                 .iter()
                 .rev()
                 .find(|param| param.name() == &segments[0])
+            {
+                return Some(Ty::intern(TyKind::TypeVar(param.clone(), attr())));
+            }
+            // `Self.Member` under a concrete impl owner: the head is the
+            // subject itself; `projection_interface_for`'s concrete-Self
+            // arm supplies the impl target as qualifier.
+            if segments[0].as_str() == "Self" {
+                return self.self_ty.clone();
+            }
+            None
+        };
+        if segments.len() > 1
+            && args.is_empty()
+            && bindings.is_empty()
+            && let Some(head) = projection_head()
         {
-            let mut ty = Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+            let mut ty = head;
             for member in &segments[1..] {
                 let Some(interface) = self.projection_interface_for(&ty, member) else {
                     if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
@@ -1198,6 +1238,45 @@ pub fn owner_self_ty<'db>(
     }
 }
 
+/// The realized interface target of an implements-block (or free-impl)
+/// method: the written reference plus its written `type Member = ...`
+/// bindings as pins - the qualifier `Self.Member` projects through in
+/// this scope. `None` for plain methods and interface-owned bodies
+/// (there `Self` is the frame's slot 0 and bounds qualify).
+pub fn owner_impl_target<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+    frame: &[baml_type::ParamTy],
+) -> Option<baml_type::interned::InterfaceRef> {
+    let target = baml_compiler2_ppir::item_data::method_interface_target(db, function).as_ref()?;
+    let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.to_vec());
+    let interface = baml_type::interned::InterfaceRef::of_ty(
+        &ctx.lower_type_ref(&target.type_refs, target.target),
+    )?;
+    let mut pins = target
+        .associated_type_bindings
+        .iter()
+        .filter_map(|binding| {
+            binding.type_ref.map(|type_ref| {
+                (
+                    binding.name.clone(),
+                    ctx.lower_type_ref(&target.type_refs, type_ref),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    for (name, ty) in interface.associated_types.iter() {
+        if !pins.iter().any(|(have, _)| have == name) {
+            pins.push((name.clone(), ty.clone()));
+        }
+    }
+    Some(baml_type::interned::InterfaceRef::new(
+        interface.name.clone(),
+        interface.generics.clone(),
+        pins,
+    ))
+}
+
 /// TRACKED (S2/S3): the signature firewall - a body edit that leaves the
 /// signature unchanged cuts off every caller's re-inference.
 /// The check layer's SIGNATURE diagnostic walk: re-lower every written
@@ -1242,10 +1321,12 @@ pub fn signature_lowering_diagnostics<'db>(
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
     let concrete_self = owner_self_ty(db, function, &frame);
+    let impl_target = owner_impl_target(db, function, &frame);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame)
         .with_bounds(bounds)
         .with_self_ty(concrete_self)
+        .with_impl_target(impl_target)
         .with_diagnostics();
     for param in &data.params {
         // The unannotated-`self` slot lowers as Unknown by elaboration;
@@ -1263,20 +1344,28 @@ pub fn signature_lowering_diagnostics<'db>(
     if let Some(throws) = data.throws {
         ctx.lower_type_ref(&data.type_refs, throws);
     }
-    let source_map = baml_compiler2_ppir::item_data::function_source_map(db, function);
+    // Params/ret/throws lowered from the ELABORATED store: their ids index
+    // the elaborated source map, not the written one (the two stores number
+    // independently - a raw-map lookup here is an out-of-bounds panic on any
+    // function whose elaboration allocates extra refs).
+    let elaborated_map =
+        baml_compiler2_ppir::item_data::elaborated_function_source_map(db, function);
     let mut out: Vec<(text_size::TextRange, TirTypeError)> = ctx
         .take_diagnostics()
         .into_iter()
         .map(|diag| {
             (
-                source_map.type_refs.span(diag.type_ref),
+                elaborated_map.type_refs.span(diag.type_ref),
                 lowering_diag_error(&diag.kind),
             )
         })
         .collect();
     // A bound must name an interface DIRECTLY (E0145): an alias denotes
     // a type, never the interface itself. `function_generic_bounds`
-    // silently skips such bounds; the diagnostic walk names them.
+    // silently skips such bounds; the diagnostic walk names them. Bounds
+    // lower from the WRITTEN store, so this walk's spans (and its sink
+    // records, taken separately below) use the written source map.
+    let source_map = baml_compiler2_ppir::item_data::function_source_map(db, function);
     let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
     for bound in func_data.generic_param_bounds.iter().flatten() {
         let lowered = ctx.lower_type_ref(&func_data.type_refs, *bound);
@@ -1303,6 +1392,14 @@ pub fn signature_lowering_diagnostics<'db>(
             }
         }
     }
+    // The bounds walk's own sink records (an unresolved name INSIDE a
+    // bound's arguments) - written-store ids, written-map spans.
+    out.extend(ctx.take_diagnostics().into_iter().map(|diag| {
+        (
+            source_map.type_refs.span(diag.type_ref),
+            lowering_diag_error(&diag.kind),
+        )
+    }));
     out
 }
 
@@ -1431,10 +1528,12 @@ pub fn function_signature<'db>(
     // directly. Interface owners provide none - their `Self` is the
     // frame's universal slot 0, resolved as a param.
     let concrete_self = owner_self_ty(db, function, &frame);
+    let impl_target = owner_impl_target(db, function, &frame);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.clone())
         .with_bounds(bounds)
-        .with_self_ty(concrete_self.clone());
+        .with_self_ty(concrete_self.clone())
+        .with_impl_target(impl_target);
     let owner = baml_compiler2_ppir::item_data::method_owner(db, function);
     let self_ty = |param: &baml_compiler2_ppir::item_data::ElaboratedParamData| {
         if param.name.as_str() != "self"
