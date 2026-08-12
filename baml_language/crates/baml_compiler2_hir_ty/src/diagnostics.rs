@@ -1935,6 +1935,9 @@ pub enum DiagnosticLocation {
     /// A pattern's span (hir_ty's emissions stay arena-anchored; TIR
     /// resolved pattern spans eagerly through its held source map).
     Pat(baml_compiler2_ast::PatId),
+    /// A written type reference (body annotation), resolved through the
+    /// body's `TypeRefSourceMap` at render time.
+    TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
     Span(TextRange),
 }
 
@@ -1963,6 +1966,18 @@ impl<'db> TirDiagnostic<'db> {
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
     ) -> RenderedTirDiagnostic {
+        self.render_with_type_refs(db, scope_file, source_map, None)
+    }
+
+    /// [`Self::render`] with the body's type-ref span map, for the
+    /// annotation-anchored diagnostics (`DiagnosticLocation::TypeRef`).
+    pub fn render_with_type_refs(
+        &self,
+        db: &'db dyn baml_compiler2_ppir::Db,
+        scope_file: SourceFile,
+        source_map: Option<&AstSourceMap>,
+        type_ref_spans: Option<&baml_compiler2_hir::type_ref::TypeRefSourceMap>,
+    ) -> RenderedTirDiagnostic {
         let primary_range = match &self.primary {
             DiagnosticLocation::Expr(id) => {
                 source_map.map(|sm| sm.expr_span(*id)).unwrap_or_default()
@@ -1981,6 +1996,9 @@ impl<'db> TirDiagnostic<'db> {
                 .unwrap_or_default(),
             DiagnosticLocation::Pat(id) => source_map
                 .map(|sm| sm.pattern_span(*id))
+                .unwrap_or_default(),
+            DiagnosticLocation::TypeRef(id) => type_ref_spans
+                .map(|spans| spans.span(*id))
                 .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };

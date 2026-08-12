@@ -772,6 +772,33 @@ pub fn function_body_type_refs<'db>(
     Arc::new(refs)
 }
 
+/// The span map for a body's collected type references (the `.1` the
+/// tracked ref query drops; recomputed on demand - the check layer's
+/// annotation-diagnostic anchors resolve through it).
+pub fn body_type_ref_spans(
+    db: &dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'_>,
+) -> Option<baml_compiler2_hir::type_ref::TypeRefSourceMap> {
+    use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, LetBody};
+    match owner {
+        BodyOwnerId::Function(function) => match function_body(db, function).as_ref() {
+            FunctionBody::Expr(expr_body) => {
+                Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
+            }
+            _ => None,
+        },
+        BodyOwnerId::Let(let_binding) => {
+            match baml_compiler2_hir::body::let_body(db, let_binding).as_ref() {
+                LetBody::Expr(expr_body) => {
+                    Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
+                }
+                LetBody::Missing => None,
+            }
+        }
+        BodyOwnerId::ParameterDefaults(_) => None,
+    }
+}
+
 /// Per-body type references for a top-level let's initializer.
 #[salsa::tracked]
 pub fn let_body_type_refs<'db>(

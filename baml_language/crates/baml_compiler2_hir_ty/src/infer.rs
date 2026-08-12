@@ -547,6 +547,10 @@ enum PendingDiag {
         lhs: Ty,
         rhs: Option<Ty>,
     },
+    UnresolvedTypeAnnot {
+        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        name: baml_type::Name,
+    },
 }
 
 /// Grows one map per slice; consumers must treat a missing entry as "not
@@ -761,7 +765,8 @@ fn infer_body_impl<'db>(
     let lower = lower_ctx_for_file(db, owner.file(db))
         .with_frame(frame)
         .with_bounds(bounds.clone())
-        .with_self_ty(concrete_self);
+        .with_self_ty(concrete_self)
+        .with_diagnostics();
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
     let plain_bounds = bounds
         .into_iter()
@@ -5203,6 +5208,14 @@ impl<'db> InferenceContext<'db> {
                     related: Vec::new(),
                 });
             }
+            // The body LowerCtx's sink: every written annotation whose
+            // path resolved nowhere (E0002), anchored at its TypeRefId.
+            for lowering in self.lower.take_diagnostics() {
+                self.pending_diags.push(PendingDiag::UnresolvedTypeAnnot {
+                    type_ref: lowering.type_ref,
+                    name: lowering.name,
+                });
+            }
             for pending in std::mem::take(&mut self.pending_diags) {
                 let (error, expr) = match pending {
                     PendingDiag::NonExhaustiveMatch {
@@ -5285,6 +5298,18 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
+                    PendingDiag::UnresolvedTypeAnnot { type_ref, name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::UnresolvedType {
+                                name,
+                                suggestions: Box::default(),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::TypeRef(type_ref),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::RefutableLet { pat, context } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::RefutablePatternInLet { context },
@@ -5311,6 +5336,7 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation::Stmt(id) => (1, u32::from(id.into_raw())),
                 DiagnosticLocation::TypeAnnot(id) => (2, u32::from(id.into_raw())),
                 DiagnosticLocation::Pat(id) => (4, u32::from(id.into_raw())),
+                DiagnosticLocation::TypeRef(id) => (5, u32::from(id.into_raw())),
                 DiagnosticLocation::Span(range) => (3, u32::from(range.start())),
             });
             diags.dedup();

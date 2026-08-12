@@ -120,6 +120,8 @@ impl<'db> InferContext<'db> {
             DiagnosticLocation::Stmt(id) => sm.stmt_span(*id),
             DiagnosticLocation::TypeAnnot(id) => sm.type_annotation_span(*id),
             DiagnosticLocation::Pat(id) => sm.pattern_span(*id),
+            // TIR never emits TypeRef anchors (hir_ty's channel).
+            DiagnosticLocation::TypeRef(_) => return loc.clone(),
             // Already absolute (e.g. a deeper lambda's frozen diagnostic, or a
             // class-field span) — leave it.
             DiagnosticLocation::Span(r) => *r,

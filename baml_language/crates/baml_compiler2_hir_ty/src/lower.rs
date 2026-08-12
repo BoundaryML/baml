@@ -38,7 +38,22 @@ use rustc_hash::FxHashMap;
 
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
+/// One unresolved written type (E0002), anchored at its `TypeRefId` -
+/// r-a's TyLoweringDiagnostic shape (ids here; the check layer resolves
+/// spans through the body's TypeRefSourceMap on demand).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoweringDiag {
+    pub type_ref: TypeRefId,
+    pub name: Name,
+}
+
 pub struct LowerCtx<'db> {
+    /// Sink for lowering diagnostics, enabled by [`LowerCtx::with_diagnostics`]
+    /// (signatures/declarations lower without one; bodies collect).
+    diags: Option<std::cell::RefCell<Vec<LoweringDiag>>>,
+    /// The innermost `TypeRefId` currently lowering - the anchor an
+    /// unresolved path reports at.
+    current_ref: std::cell::Cell<Option<TypeRefId>>,
     db: &'db dyn baml_compiler2_ppir::Db,
     package_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     ns_context: Vec<Name>,
@@ -67,6 +82,8 @@ pub fn lower_ctx_for_file(
     let package_items =
         baml_compiler2_ppir::package_items(db, PackageId::new(db, info.package.clone()));
     LowerCtx {
+        diags: None,
+        current_ref: std::cell::Cell::new(None),
         db,
         package_items,
         ns_context: info.namespace_path,
@@ -86,6 +103,8 @@ pub fn lower_ctx_for_package<'db>(
     ns_context: Vec<Name>,
 ) -> LowerCtx<'db> {
     LowerCtx {
+        diags: None,
+        current_ref: std::cell::Cell::new(None),
         db,
         package_items,
         ns_context,
@@ -96,6 +115,21 @@ pub fn lower_ctx_for_package<'db>(
 }
 
 impl<'db> LowerCtx<'db> {
+    /// Enable the lowering-diagnostic sink (bodies; declarations lower
+    /// silent). Drain with [`LowerCtx::take_diagnostics`].
+    #[must_use]
+    pub fn with_diagnostics(mut self) -> LowerCtx<'db> {
+        self.diags = Some(std::cell::RefCell::new(Vec::new()));
+        self
+    }
+
+    pub fn take_diagnostics(&self) -> Vec<LoweringDiag> {
+        self.diags
+            .as_ref()
+            .map(|cell| std::mem::take(&mut *cell.borrow_mut()))
+            .unwrap_or_default()
+    }
+
     #[must_use]
     pub fn with_frame(mut self, frame: Vec<ParamTy>) -> LowerCtx<'db> {
         self.generic_params = frame;
@@ -119,6 +153,13 @@ impl<'db> LowerCtx<'db> {
     // -- Span-free surface (signatures, fields, aliases) ----------------------
 
     pub fn lower_type_ref(&self, store: &TypeRefStore, id: TypeRefId) -> Ty {
+        let saved = self.current_ref.replace(Some(id));
+        let ty = self.lower_type_ref_inner(store, id);
+        self.current_ref.set(saved);
+        ty
+    }
+
+    fn lower_type_ref_inner(&self, store: &TypeRefStore, id: TypeRefId) -> Ty {
         let attr = TyAttr::default;
         match &store[id].kind {
             TypeRefKind::Int => Ty::int(),
@@ -424,6 +465,18 @@ impl<'db> LowerCtx<'db> {
             return ty;
         }
 
+        if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
+            diags.borrow_mut().push(LoweringDiag {
+                type_ref,
+                name: Name::new(
+                    segments
+                        .iter()
+                        .map(Name::as_str)
+                        .collect::<Vec<_>>()
+                        .join("."),
+                ),
+            });
+        }
         Ty::error()
     }
 
@@ -1085,6 +1138,47 @@ pub fn owner_self_ty<'db>(
 
 /// TRACKED (S2/S3): the signature firewall - a body edit that leaves the
 /// signature unchanged cuts off every caller's re-inference.
+/// The check layer's SIGNATURE diagnostic walk: re-lower every written
+/// signature type reference with the sink enabled and hand back each
+/// unresolved path with its resolved span (the item source map's
+/// type-ref spans). Untracked and pure - spans never enter salsa
+/// results (r-a's ide-layer discipline).
+pub fn signature_lowering_diagnostics<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> Vec<(text_size::TextRange, Name)> {
+    let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
+    let frame = function_generic_frame(db, function);
+    let bounds = function_generic_bounds(db, function);
+    let concrete_self = owner_self_ty(db, function, &frame);
+    let ctx = lower_ctx_for_file(db, function.file(db))
+        .with_frame(frame)
+        .with_bounds(bounds)
+        .with_self_ty(concrete_self)
+        .with_diagnostics();
+    for param in &data.params {
+        // The unannotated-`self` slot lowers as Unknown by elaboration;
+        // it is not a written reference.
+        if param.name.as_str() == "self"
+            && matches!(data.type_refs[param.type_ref].kind, TypeRefKind::Unknown)
+        {
+            continue;
+        }
+        ctx.lower_type_ref(&data.type_refs, param.type_ref);
+    }
+    if let Some(ret) = data.return_type {
+        ctx.lower_type_ref(&data.type_refs, ret);
+    }
+    if let Some(throws) = data.throws {
+        ctx.lower_type_ref(&data.type_refs, throws);
+    }
+    let source_map = baml_compiler2_ppir::item_data::function_source_map(db, function);
+    ctx.take_diagnostics()
+        .into_iter()
+        .map(|diag| (source_map.type_refs.span(diag.type_ref), diag.name))
+        .collect()
+}
+
 #[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
 pub fn function_signature<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,

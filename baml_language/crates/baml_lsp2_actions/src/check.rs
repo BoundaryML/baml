@@ -141,8 +141,34 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 continue;
             }
             let source_map = baml_compiler2_ppir::body_source_map(db, owner);
+            let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
             for diagnostic in &result.diagnostics {
-                let rendered = diagnostic.render(db, file, source_map.as_ref());
+                let rendered = diagnostic.render_with_type_refs(
+                    db,
+                    file,
+                    source_map.as_ref(),
+                    type_ref_spans.as_ref(),
+                );
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
+        // SIGNATURE-side unresolved types (E0002): every function's
+        // written signature references, re-lowered with the sink.
+        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+            for (range, name) in
+                baml_compiler2_hir_ty::lower::signature_lowering_diagnostics(db, func_loc)
+            {
+                let error = baml_compiler2_hir_ty::diagnostics::TirTypeError::UnresolvedType {
+                    name,
+                    suggestions: Box::default(),
+                };
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.to_string(),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
