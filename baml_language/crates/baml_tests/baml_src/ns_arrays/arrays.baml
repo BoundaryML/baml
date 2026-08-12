@@ -157,7 +157,7 @@ test "array_sort_by_callback_throws" {
 test "array_sort_by_later_merge_throw_does_not_write_back" {
     let xs = [4, 3, 2, 1];
     let comparisons = 0;
-    let caught = {
+    assert.is_true({
         xs.sort_by((a: int, b: int) -> int throws string {
             comparisons += 1;
             // The first two calls sort the width-1 runs. The third call is the
@@ -168,9 +168,9 @@ test "array_sort_by_later_merge_throw_does_not_write_back" {
         false
     } catch (e) {
         string => true
-    };
-    assert.is_true(caught);
-    assert.equal(comparisons, 3);
+    });
+    let expected_comparisons = 3;
+    assert.equal(comparisons, expected_comparisons);
     let expected = [4, 3, 2, 1];
     assert.equal(xs, expected)
 }
@@ -190,7 +190,7 @@ test "array_sort_by_is_stable" {
 
 // A fixed-size operation-count assertion is deterministic and distinguishes
 // O(n log n) sorting from the old insertion sort without relying on CI timing.
-// Reverse input plus a descending comparator is the old implementation's
+// Reverse input plus an ascending comparator is the old implementation's
 // quadratic case: it made n(n-1)/2 = 32,640 calls for n=256.
 test "array_sort_by_comparison_count_is_n_log_n" {
     let xs: int[] = [];
@@ -202,11 +202,11 @@ test "array_sort_by_comparison_count_is_n_log_n" {
     let comparisons = 0;
     xs.sort_by((a: int, b: int) -> int {
         comparisons += 1;
-        b - a
+        a - b
     });
     assert.is_true(comparisons <= 4096);
-    assert.equal(xs.at(0), 256);
-    assert.equal(xs.at(255), 1)
+    assert.equal(xs.at(0), 1);
+    assert.equal(xs.at(255), 256)
 }
 
 // Bottom-up merge passes visit pairs deterministically and callbacks never run
