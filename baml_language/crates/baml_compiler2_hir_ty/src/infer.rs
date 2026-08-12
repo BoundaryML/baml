@@ -559,6 +559,12 @@ enum PendingDiag {
         pat: PatId,
         class_name: baml_type::Name,
     },
+    OrBindingConflict {
+        pat: PatId,
+        name: baml_type::Name,
+        first: Ty,
+        other: Ty,
+    },
 }
 
 /// Grows one map per slice; consumers must treat a missing entry as "not
@@ -5373,6 +5379,24 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::OrBindingConflict {
+                        pat,
+                        name,
+                        first,
+                        other,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::OrPatternBindingTypeMismatch {
+                                name,
+                                first_type: self.finalize_ty(&first).to_plain(),
+                                other_type: self.finalize_ty(&other).to_plain(),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::GenericDestructureNoArgs { pat, class_name } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::GenericClassDestructureRequiresTypeArgs {

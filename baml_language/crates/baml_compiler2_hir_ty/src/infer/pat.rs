@@ -332,6 +332,38 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|&alt| self.lower_pattern(body, alt, scrut))
                     .collect();
+                // Alternatives bind the SAME names (HIR enforces); their
+                // NARROW types must agree - a name bound `int` in one alt
+                // and `string` in another has no one type at the join.
+                {
+                    let mut first: rustc_hash::FxHashMap<baml_type::Name, Ty> =
+                        rustc_hash::FxHashMap::default();
+                    for &alt in &alts {
+                        let mut binds = Vec::new();
+                        collect_bind_types(self, body, alt, &mut binds);
+                        for (name, ty) in binds {
+                            if ty.has_error() || ty.has_infer() {
+                                continue;
+                            }
+                            match first.get(&name) {
+                                None => {
+                                    first.insert(name, ty);
+                                }
+                                Some(existing) if *existing == ty => {}
+                                Some(existing) => {
+                                    self.pending_diags.push(
+                                        super::PendingDiag::OrBindingConflict {
+                                            pat,
+                                            name: name.clone(),
+                                            first: existing.clone(),
+                                            other: ty.clone(),
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
                 let matched = self.join(
                     &outcomes
                         .iter()
@@ -1205,5 +1237,51 @@ impl HirPatCtx<'_, '_> {
             },
             _ => ty,
         }
+    }
+}
+
+/// Every `(name, recorded type)` bind under `pat` (or-alternative
+/// conflict detection walks each alternative's binds).
+fn collect_bind_types(
+    ctx: &super::InferenceContext<'_>,
+    body: &ExprBody,
+    pat: PatId,
+    out: &mut Vec<(baml_type::Name, Ty)>,
+) {
+    match &body.patterns[pat] {
+        Pattern::Bind { name, subpat } => {
+            if let Some(ty) = ctx.result.type_of_pat.get(&pat) {
+                out.push((name.clone(), ty.clone()));
+            }
+            if let Some(sub) = subpat {
+                collect_bind_types(ctx, body, *sub, out);
+            }
+        }
+        Pattern::Class { fields, .. } => {
+            for field in fields {
+                collect_bind_types(ctx, body, field.pat, out);
+            }
+        }
+        Pattern::Array {
+            prefix,
+            rest,
+            suffix,
+            ..
+        } => {
+            for &p in prefix.iter().chain(suffix.iter()) {
+                collect_bind_types(ctx, body, p, out);
+            }
+            if let Some(rest) = rest
+                && let Some(rest_pat) = rest.pat
+            {
+                collect_bind_types(ctx, body, rest_pat, out);
+            }
+        }
+        Pattern::Or(alts) => {
+            for &alt in alts {
+                collect_bind_types(ctx, body, alt, out);
+            }
+        }
+        _ => {}
     }
 }
