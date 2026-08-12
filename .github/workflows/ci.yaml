@@ -476,11 +476,6 @@ jobs:
         working-directory: baml_language
 
       - name: "Run prek"
-        env:
-          # `mise run` auto-installs every tool from the inherited root
-          # mise.toml by default. setup-mise already installed this job's
-          # complete tool set, so keep hook task wrappers offline here.
-          MISE_TASK_RUN_AUTO_INSTALL: "false"
         run: |
           echo '```console' > "$GITHUB_STEP_SUMMARY"
           # Enable color output for prek and remove it for the summary

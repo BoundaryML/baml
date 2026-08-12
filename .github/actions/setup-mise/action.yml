@@ -79,3 +79,9 @@ runs:
         # defeats install_args entirely and, on Windows where those cargo:*
         # tools fall back to failing source compiles, it breaks the job.
         add_shims_to_path: false
+
+    - name: Disable mise task auto-install
+      shell: bash
+      run: |
+        echo "disabling MISE_TASK_RUN_AUTO_INSTALL, all CI workflows must explicitly install the mise deps they use"
+        echo "MISE_TASK_RUN_AUTO_INSTALL=false" >> "$GITHUB_ENV"
