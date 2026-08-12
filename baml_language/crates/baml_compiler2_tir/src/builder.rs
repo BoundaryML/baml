@@ -380,22 +380,7 @@ struct IrrefutablePatternContext {
     fallback_expr: Option<ExprId>,
 }
 
-/// Where a refutable pattern is being rejected. Used to make the
-/// `RefutablePatternInLet` diagnostic's prose specific to the binding form.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum IrrefutableContextKind {
-    Let,
-    ForLet,
-}
-
-impl IrrefutableContextKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Let => "let",
-            Self::ForLet => "for-let",
-        }
-    }
-}
+pub use baml_compiler2_hir_ty::diagnostics::IrrefutableContextKind;
 
 /// Which container kind a literal in checking position is — selects the shape
 /// [`TypeInferenceBuilder::adopted_container_for_literal`] looks for in the

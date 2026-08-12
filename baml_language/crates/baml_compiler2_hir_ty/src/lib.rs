@@ -26,6 +26,7 @@
 
 pub mod callable;
 pub mod coherence;
+pub mod diagnostics;
 pub mod exhaustiveness;
 pub mod facts;
 pub mod impls;
