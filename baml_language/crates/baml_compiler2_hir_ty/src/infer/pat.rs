@@ -77,6 +77,7 @@ impl<'db> InferenceContext<'db> {
         let mut arm_tys = Vec::new();
         let mut matrix_arms: Vec<DPat> = Vec::new();
         let mut matrix_arm_bodies: Vec<ExprId> = Vec::new();
+        let mut any_pattern_error = false;
         let mut all_diverge = super::Diverges::Always;
         // The residual accumulator (B-774): each unguarded arm that is
         // refutable by type alone subtracts what it matched, so a later
@@ -86,6 +87,7 @@ impl<'db> InferenceContext<'db> {
         for &arm_id in arms {
             let arm = &body.match_arms[arm_id];
             let outcome = self.lower_pattern(body, arm.pattern, &scrut_resolved);
+            any_pattern_error |= outcome.matched_ty.has_error();
             // A pattern irrefutable against the full scrutinee is really
             // matching the residual; typed arms take their own refinement.
             let narrow_ty = if outcome.covers_type {
@@ -124,7 +126,12 @@ impl<'db> InferenceContext<'db> {
         let col_ty = scrut_resolved.to_plain();
         let ctx = HirPatCtx { infer: self };
         let report = compute_match_usefulness(&ctx, &matrix_arms, col_ty);
+        // An errored arm pattern makes the reachability verdicts noise
+        // (TIR's pattern_had_error suppression).
         for arm in &report.unreachable_arms {
+            if any_pattern_error {
+                break;
+            }
             if let Some(&arm_body) = matrix_arm_bodies.get(arm.0) {
                 self.pending_diags
                     .push(super::PendingDiag::UnreachableArm { expr: arm_body });
@@ -195,7 +202,11 @@ impl<'db> InferenceContext<'db> {
         let outcome = self.lower_pattern(body, pattern, &resolved);
         // A refutable pattern in an irrefutable position has nowhere to
         // go when it fails (E0111). Error-typed scrutinees are cascades.
-        if !outcome.covers_type && !resolved.has_error() && !resolved.has_infer() {
+        if !outcome.covers_type
+            && !outcome.matched_ty.has_error()
+            && !resolved.has_error()
+            && !resolved.has_infer()
+        {
             self.pending_diags.push(super::PendingDiag::RefutableLet {
                 pat: pattern,
                 context: crate::diagnostics::IrrefutableContextKind::Let,
@@ -738,6 +749,21 @@ impl<'db> InferenceContext<'db> {
         field_pats: &[(baml_type::Name, PatId)],
         scrut: &Ty,
     ) -> PatternOutcome {
+        // Under an ERRORED scrutinee the whole destructure is tainted:
+        // fields lower against the sentinel (their bindings type error,
+        // so uses do not cascade) and nothing reports.
+        if scrut.has_error() {
+            for &(_, field_pat) in field_pats {
+                self.lower_pattern(body, field_pat, &Ty::error());
+            }
+            return PatternOutcome {
+                dpat: DPat::wildcard(scrut.to_plain()),
+                matched_ty: Ty::error(),
+                recorded_ty: None,
+                covers_type: false,
+                consumes_matched: false,
+            };
+        }
         let definition = self.lower.resolve_type_definition(class_path);
         // Destructure spelled with an INTERFACE name: the existential's
         // declared FIELDS destructure like a class's.
@@ -748,6 +774,21 @@ impl<'db> InferenceContext<'db> {
                 .lower_interface_pattern(body, pat, interface, class_path, field_pats, scrut);
         }
         let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
+            // The destructured name resolves nowhere (or to a non-class):
+            // E0003 at the pattern, fields lower against the sentinel.
+            if definition.is_none() {
+                self.pending_diags
+                    .push(super::PendingDiag::UnresolvedPatternName {
+                        pat,
+                        name: baml_type::Name::new(
+                            class_path
+                                .iter()
+                                .map(baml_type::Name::as_str)
+                                .collect::<Vec<_>>()
+                                .join("."),
+                        ),
+                    });
+            }
             for &(_, field_pat) in field_pats {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }

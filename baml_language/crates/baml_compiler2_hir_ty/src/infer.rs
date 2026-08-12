@@ -562,6 +562,10 @@ enum PendingDiag {
     RestNotBinding {
         pat: PatId,
     },
+    UnresolvedPatternName {
+        pat: PatId,
+        name: baml_type::Name,
+    },
     UnnecessaryOptionalChain {
         expr: ExprId,
         expr_text: String,
@@ -1749,7 +1753,11 @@ impl<'db> InferenceContext<'db> {
                     _ => self.iteration_item(&collection_ty, *collection),
                 };
                 let outcome = self.lower_pattern(body, *binding, &element);
-                if !outcome.covers_type && !element.has_error() && !element.has_infer() {
+                if !outcome.covers_type
+                    && !outcome.matched_ty.has_error()
+                    && !element.has_error()
+                    && !element.has_infer()
+                {
                     self.pending_diags.push(PendingDiag::RefutableLet {
                         pat: *binding,
                         context: crate::diagnostics::IrrefutableContextKind::ForLet,
@@ -5446,6 +5454,15 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::UnresolvedPatternName { pat, name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::UnresolvedName { name },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::RestNotBinding { pat } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::RestSubPatternNotBinding,
