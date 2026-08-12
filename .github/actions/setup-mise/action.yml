@@ -54,6 +54,7 @@ runs:
     - name: Install mise
       uses: jdx/mise-action@v4.0.1
       with:
+        fetch_from_github: false
         # Our own prefix (not the upstream default), shared across every
         # baml_language workflow. Bump the trailing number to invalidate
         # every consumer's cache at once.

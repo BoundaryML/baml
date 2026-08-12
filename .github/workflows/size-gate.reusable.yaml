@@ -58,9 +58,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: jdx/mise-action@v4.0.1
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -143,9 +144,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: jdx/mise-action@v4.0.1
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -232,9 +234,13 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: jdx/mise-action@v4.0.1
+      # Cargo linking uses rust-lld from the Rust toolchain on Windows. The
+      # extra clang tool is installed through mise for llvm-strip, replacing
+      # the previous Chocolatey LLVM install.
+      - name: "Install sccache, direnv, and clang"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          install_args: "sccache direnv clang"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -334,9 +340,10 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: jdx/mise-action@v4.0.1
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -433,9 +440,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - uses: jdx/mise-action@v4.0.1
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version

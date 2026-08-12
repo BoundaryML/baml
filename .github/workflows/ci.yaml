@@ -452,9 +452,17 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      - uses: jdx/mise-action@v4.0.1
+      # prek hooks invoke cargo (from rustup), mise tasks that shell out
+      # to cargo, and python scripts that begin with `#!/usr/bin/env -S
+      # uv run --script` (e.g. validate-markdown). We don't
+      # need go/ruby/etc here, just the prek binary, a python/uv pair
+      # for hook scripts, node for the grammar check, and clang-format.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          # Temporarily omit Hawk while its CI check is disabled.
+          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
+          install_args: "cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
         uses: actions/cache@v5
@@ -470,7 +478,7 @@ jobs:
       - name: "Run prek"
         env:
           # `mise run` auto-installs every tool from the inherited root
-          # mise.toml by default. mise-action already installed this job's
+          # mise.toml by default. setup-mise already installed this job's
           # complete tool set, so keep hook task wrappers offline here.
           MISE_TASK_RUN_AUTO_INSTALL: "false"
         run: |
@@ -829,9 +837,14 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      - uses: jdx/mise-action@v4.0.1
+      # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
+      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
+      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
+      # (not mise), so we don't need `go` itself here either.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          install_args: "node npm:pnpm protoc protoc-gen-go"
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -928,9 +941,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: jdx/mise-action@v4.0.1
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
         with:
-          fetch_from_github: false
+          install_args: "ast-grep"
 
       - name: "Install Rust toolchain"
         working-directory: baml_language
