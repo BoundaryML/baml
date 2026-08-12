@@ -510,8 +510,27 @@ function ai.tools.tool(handler: baml.AnyFunction, name: string? = null, descript
 lambda (t) in get: captures [name]
 
 --- <builtin>/ai/ns_wire/wire.baml ---
+class ai.wire.ResolvedMedia {
+  url: string?
+  base64: string?
+  mime_type: string
+}
+class ai.wire.ResolvedMedia$stream {
+  url: string | null
+  base64: string | null
+  mime_type: string | null
+}
+function ai.wire._media_mime_type(explicit: string?, source_value: string, kind: string) -> string  [expr] {
+  { if let supplied: string = explicit { return supplied }; let source = source_value.to_lower_case() } if (source.includes(".jpg") Or source.includes(".jpeg")) {  } "image/jpeg" else if (source.includes(".png")) {  } "image/png" else if (source.includes(".webp")) {  } "image/webp" else if (source.includes(".gif")) {  } "image/gif" else if (source.includes(".svg")) {  } "image/svg+xml" else if (source.includes(".wav")) {  } "audio/wav" else if (source.includes(".mp3")) {  } "audio/mpeg" else if (source.includes(".flac")) {  } "audio/flac" else if (source.includes(".ogg")) {  } "audio/ogg" else if (source.includes(".webm")) {  } if (kind Eq "audio") {  } "audio/webm" else {  } "video/webm" else if (source.includes(".mov")) {  } "video/quicktime" else if (source.includes(".mp4")) {  } "video/mp4" else if (source.includes(".avi")) {  } "video/x-msvideo" else if (source.includes(".mkv")) {  } "video/x-matroska" else if (source.includes(".pdf")) {  } "application/pdf" else if (kind Eq "audio") {  } "audio/mpeg" else if (kind Eq "video") {  } "video/mp4" else if (kind Eq "pdf") {  } "application/pdf" else {  } "image/png"
+}
+function ai.wire._resolve_media_content(url: string?, file: string?, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia  [expr] {
+  { if let path: string = file { let handle = baml.fs.open(path, "r"); let data = handle.bytes().to_base64(); handle.close(); return ai.wire.ResolvedMedia { url: null, base64: data, mime_type: mime } }; if (inline Ne "") { return ai.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) {  } if let separator: int = media_url.index_of(";base64,") { return ai.wire.ResolvedMedia { url: null, base64: media_url.substring(separator Add 8, media_url.length()), mime_type: media_url.substring(5, separator) } }; if (Not fetch_url Or media_url.starts_with("gs://")) { return ai.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; let response = baml.http.fetch(media_url); if (Not response.ok()) { throw root.errors.NetworkFailure { provider: "media", detail: `...`, raw_body: null } }; let response_mime = response.headers.get("content-type") NullCoalesce mime; return ai.wire.ResolvedMedia { url: null, base64: response.bytes().to_base64(), mime_type: response_mime.split(";").at(0) NullCoalesce mime } }; throw baml.errors.InvalidArgument { message: "media has no URL,..." } }
+}
 function ai.wire.render_output_format(t: type) -> string  [expr] {
   {  } baml.prompt.render_output_format(t)
+}
+function ai.wire.resolve_media(media: ai.MediaPart, fetch_url: bool) -> ai.wire.ResolvedMedia  [expr] {
+  {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } _resolve_media_content(image.url(), image.file(), image.base64(), _media_mime_type(image.mime_type(), source, "image"), fetch_url), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } _resolve_media_content(audio.url(), audio.file(), audio.base64(), _media_mime_type(audio.mime_type(), source, "audio"), fetch_url), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } _resolve_media_content(video.url(), video.file(), video.base64(), _media_mime_type(video.mime_type(), source, "video"), fetch_url), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } _resolve_media_content(pdf.url(), pdf.file(), pdf.base64(), _media_mime_type(pdf.mime_type(), source, "pdf"), fetch_url) }
 }
 function ai.wire.send_as(req: baml.http.Request, provider: string) -> T  [expr] {
   { let resp = baml.http.send(req) catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { _ => { throw root.errors.NetworkFailure { provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
@@ -587,11 +606,17 @@ class ai.Prompt$stream {
 class ai.PromptMessage {
   role: string
   content: string
+  parts: ai.PromptPart[]
 }
 class ai.PromptMessage$stream {
   role: string | null
   content: string | null
+  parts: ai.PromptPart$stream[]
 }
+type ai.MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+type ai.MediaPart$stream = baml.media.Image$stream | baml.media.Audio$stream | baml.media.Video$stream | baml.media.Pdf$stream
+type ai.PromptPart = string | ai.MediaPart
+type ai.PromptPart$stream = string | ai.MediaPart$stream
 function ai.arguments(self: ?) -> map<string, unknown>  [expr] {
   {  } self.args
 }

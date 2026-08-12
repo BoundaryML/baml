@@ -82,28 +82,38 @@ impl PromptAst {
         }
     }
 
-    /// Flatten this prompt into an ordered list of `(role, content)` chat
-    /// messages. A `Message` node contributes its role; a role-less `Simple`
-    /// node contributes an empty role; nested `Vec` nodes are flattened in
-    /// document order. Backs the stdlib `PromptAst.messages()` accessor.
-    pub fn to_messages(&self) -> Vec<(String, String)> {
+    /// Flatten this prompt into an ordered list of structural chat messages.
+    /// A `Message` node contributes its role; a role-less `Simple` node
+    /// contributes an empty role; nested `Vec` nodes are flattened in document
+    /// order. The content stays structural so stdlib clients can lower media to
+    /// their provider-specific wire representation.
+    pub fn to_structured_messages(&self) -> Vec<(String, Arc<PromptAstSimple>)> {
         let mut out = Vec::new();
-        self.collect_messages(&mut out);
+        self.collect_structured_messages(&mut out);
         out
     }
 
-    fn collect_messages(&self, out: &mut Vec<(String, String)>) {
+    fn collect_structured_messages(&self, out: &mut Vec<(String, Arc<PromptAstSimple>)>) {
         match self {
-            PromptAst::Simple(content) => out.push((String::new(), content.to_text())),
+            PromptAst::Simple(content) => out.push((String::new(), content.clone())),
             PromptAst::Message { role, content, .. } => {
-                out.push((role.clone(), content.to_text()));
+                out.push((role.clone(), content.clone()));
             }
             PromptAst::Vec(items) => {
                 for item in items {
-                    item.collect_messages(out);
+                    item.collect_structured_messages(out);
                 }
             }
         }
+    }
+
+    /// Readable projection of [`Self::to_structured_messages`]. Media becomes
+    /// a placeholder here, but remains structural in the underlying prompt.
+    pub fn to_messages(&self) -> Vec<(String, String)> {
+        self.to_structured_messages()
+            .into_iter()
+            .map(|(role, content)| (role, content.to_text()))
+            .collect()
     }
 
     /// Render this prompt as readable plain text: each chat message as a

@@ -997,6 +997,158 @@ function ai.wire.render_output_format(t: type) -> string throws never {
     baml.prompt.render_output_format(t) : string
   }
 }
+class ai.wire.ResolvedMedia {
+  url: string | null
+  base64: string | null
+  mime_type: string
+}
+function ai.wire._media_mime_type(explicit: string | null, source_value: string, kind: string) -> string throws never {
+  { : "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf"
+    if let <pat> = explicit { 1 stmts } : void
+    let source = source_value.to_lower_case() : string
+    if (source.includes(".jpg") || source.includes(".jpeg") : bool) : "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf"
+      { : "image/jpeg"
+        "image/jpeg" : "image/jpeg"
+      }
+    else
+      if (source.includes(".png") : bool) : "image/png" | "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf"
+        { : "image/png"
+          "image/png" : "image/png"
+        }
+      else
+        if (source.includes(".webp") : bool) : "image/webp" | "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+          { : "image/webp"
+            "image/webp" : "image/webp"
+          }
+        else
+          if (source.includes(".gif") : bool) : "image/gif" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+            { : "image/gif"
+              "image/gif" : "image/gif"
+            }
+          else
+            if (source.includes(".svg") : bool) : "image/svg+xml" | "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+              { : "image/svg+xml"
+                "image/svg+xml" : "image/svg+xml"
+              }
+            else
+              if (source.includes(".wav") : bool) : "audio/wav" | "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+                { : "audio/wav"
+                  "audio/wav" : "audio/wav"
+                }
+              else
+                if (source.includes(".mp3") : bool) : "audio/mpeg" | "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "image/png"
+                  { : "audio/mpeg"
+                    "audio/mpeg" : "audio/mpeg"
+                  }
+                else
+                  if (source.includes(".flac") : bool) : "audio/flac" | "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                    { : "audio/flac"
+                      "audio/flac" : "audio/flac"
+                    }
+                  else
+                    if (source.includes(".ogg") : bool) : "audio/ogg" | "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                      { : "audio/ogg"
+                        "audio/ogg" : "audio/ogg"
+                      }
+                    else
+                      if (source.includes(".webm") : bool) : "audio/webm" | "video/webm" | "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                        { : "audio/webm" | "video/webm"
+                          if (kind == "audio" : bool) : "audio/webm" | "video/webm"
+                            { : "audio/webm"
+                              "audio/webm" : "audio/webm"
+                            }
+                          else
+                            { : "video/webm"
+                              "video/webm" : "video/webm"
+                            }
+                        }
+                      else
+                        if (source.includes(".mov") : bool) : "video/quicktime" | "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                          { : "video/quicktime"
+                            "video/quicktime" : "video/quicktime"
+                          }
+                        else
+                          if (source.includes(".mp4") : bool) : "video/mp4" | "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "image/png"
+                            { : "video/mp4"
+                              "video/mp4" : "video/mp4"
+                            }
+                          else
+                            if (source.includes(".avi") : bool) : "video/x-msvideo" | "video/x-matroska" | "application/pdf" | "audio/mpeg" | "video/mp4" | "image/png"
+                              { : "video/x-msvideo"
+                                "video/x-msvideo" : "video/x-msvideo"
+                              }
+                            else
+                              if (source.includes(".mkv") : bool) : "video/x-matroska" | "application/pdf" | "audio/mpeg" | "video/mp4" | "image/png"
+                                { : "video/x-matroska"
+                                  "video/x-matroska" : "video/x-matroska"
+                                }
+                              else
+                                if (source.includes(".pdf") : bool) : "application/pdf" | "audio/mpeg" | "video/mp4" | "image/png"
+                                  { : "application/pdf"
+                                    "application/pdf" : "application/pdf"
+                                  }
+                                else
+                                  if (kind == "audio" : bool) : "audio/mpeg" | "video/mp4" | "application/pdf" | "image/png"
+                                    { : "audio/mpeg"
+                                      "audio/mpeg" : "audio/mpeg"
+                                    }
+                                  else
+                                    if (kind == "video" : bool) : "video/mp4" | "application/pdf" | "image/png"
+                                      { : "video/mp4"
+                                        "video/mp4" : "video/mp4"
+                                      }
+                                    else
+                                      if (kind == "pdf" : bool) : "application/pdf" | "image/png"
+                                        { : "application/pdf"
+                                          "application/pdf" : "application/pdf"
+                                        }
+                                      else
+                                        { : "image/png"
+                                          "image/png" : "image/png"
+                                        }
+  }
+}
+function ai.wire._resolve_media_content(url: string | null, file: string | null, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia throws never {
+  { : never
+    if let <pat> = file { 4 stmts } : void
+    if (inline != "" : bool) : void
+      { : never
+        return ResolvedMedia { url: null, base64: inline, mime_type: mime } : ai.wire.ResolvedMedia
+      }
+    if let <pat> = url { 6 stmts } : void
+    throw baml.errors.InvalidArgument { message: "media has no URL,..." } : baml.errors.InvalidArgument
+  }
+}
+function ai.wire.resolve_media(media: ai.MediaPart, fetch_url: bool) -> ai.wire.ResolvedMedia throws never {
+  { : ai.wire.ResolvedMedia
+    match (media : ai.MediaPart) : ai.wire.ResolvedMedia
+      image: baml.media.Image =>
+        { : ai.wire.ResolvedMedia
+          let source = image.file() ?? image.url() ?? "" : string
+          _resolve_media_content(image.url(), image.file(), image.base64(), _media_mime_type(image.mime_type(), source, "image"), fetch_url) : ai.wire.ResolvedMedia
+        }
+      audio: baml.media.Audio =>
+        { : ai.wire.ResolvedMedia
+          let source = audio.file() ?? audio.url() ?? "" : string
+          _resolve_media_content(audio.url(), audio.file(), audio.base64(), _media_mime_type(audio.mime_type(), source, "audio"), fetch_url) : ai.wire.ResolvedMedia
+        }
+      video: baml.media.Video =>
+        { : ai.wire.ResolvedMedia
+          let source = video.file() ?? video.url() ?? "" : string
+          _resolve_media_content(video.url(), video.file(), video.base64(), _media_mime_type(video.mime_type(), source, "video"), fetch_url) : ai.wire.ResolvedMedia
+        }
+      pdf: baml.media.Pdf =>
+        { : ai.wire.ResolvedMedia
+          let source = pdf.file() ?? pdf.url() ?? "" : string
+          _resolve_media_content(pdf.url(), pdf.file(), pdf.base64(), _media_mime_type(pdf.mime_type(), source, "pdf"), fetch_url) : ai.wire.ResolvedMedia
+        }
+  }
+}
+class ai.wire.ResolvedMedia$stream {
+  url: string | null
+  base64: string | null
+  mime_type: string | null
+}
 
 --- <builtin>/ai/runner.baml ---
 class ai.RunResult {
@@ -1191,9 +1343,12 @@ class ai.Agent$stream {
 }
 
 --- <builtin>/ai/spec.baml ---
+type ai.MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+type ai.PromptPart = string | ai.MediaPart
 class ai.PromptMessage {
   role: string
   content: string
+  parts: ai.PromptPart[]
 }
 class ai.Prompt {
   _data: $rust_type
@@ -1248,9 +1403,12 @@ function ai.FunctionSpec.tools(self: ai.FunctionSpec<Out>) -> ai.tools.Toolbox t
     self.toolbox : ai.tools.Toolbox
   }
 }
+type ai.MediaPart$stream = baml.media.Image$stream | baml.media.Audio$stream | baml.media.Video$stream | baml.media.Pdf$stream
+type ai.PromptPart$stream = string | ai.MediaPart$stream
 class ai.PromptMessage$stream {
   role: string | null
   content: string | null
+  parts: ai.PromptPart$stream[]
 }
 class ai.Prompt$stream {
   _data: $rust_type

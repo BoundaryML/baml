@@ -101,3 +101,36 @@ function main() -> ai.PromptMessage[] {
         other => panic!("expected a PromptMessage array, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn message_parts_preserve_all_media_structurally() {
+    let output = run_string(
+        r#"
+function main() -> string {
+  let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = baml.prompt.Context { client: cc, tags: {} }
+  let img = image.from_url("https://example.com/photo.png", "image/png")
+  let sound = audio.from_url("https://example.com/sound.mp3", "audio/mpeg")
+  let movie = video.from_url("https://example.com/movie.mp4", "video/mp4")
+  let document = pdf.from_url("https://example.com/document.pdf", "application/pdf")
+  let render = prompt`before:${img}:${sound}:${movie}:${document}:after`
+  let kinds: string[] = []
+  for (let part in render(ctx).messages()[0].parts) {
+    match (part) {
+      let text: string => kinds.push(`text=${text}`),
+      let image: baml.media.Image => kinds.push(`image=${image.url() ?? ""}`),
+      let audio: baml.media.Audio => kinds.push(`audio=${audio.url() ?? ""}`),
+      let video: baml.media.Video => kinds.push(`video=${video.url() ?? ""}`),
+      let pdf: baml.media.Pdf => kinds.push(`pdf=${pdf.url() ?? ""}`),
+    };
+  }
+  kinds.join("|")
+}
+"#,
+    )
+    .await;
+    assert_eq!(
+        output,
+        "text=before:|image=https://example.com/photo.png|text=:|audio=https://example.com/sound.mp3|text=:|video=https://example.com/movie.mp4|text=:|pdf=https://example.com/document.pdf|text=:after"
+    );
+}

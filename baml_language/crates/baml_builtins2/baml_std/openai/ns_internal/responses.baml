@@ -33,6 +33,89 @@ class OaResponse {
 // content uses the ordinary user role; `tool` is not a valid
 // free-standing Responses message role, so authored tool context is user
 // content (actual tool outputs come from the journal path below).
+function _openai_prompt_content(message: ai.PromptMessage, role: string) -> map<string, unknown>[] {
+    let content: map<string, unknown>[] = [];
+    for (let part in message.parts) {
+        match (part) {
+            let text: string => {
+                let item: map<string, unknown> = {};
+                let _ = item.set(
+                    "type",
+                    if (role == "assistant") {
+                        "output_text"
+                    } else {
+                        "input_text"
+                    },
+                );
+                let _ = item.set("text", text);
+                content.push(item);
+                null
+            },
+            let image: baml.media.Image => {
+                if (role != "user") {
+                    throw baml.errors.InvalidArgument {
+                        message: `OpenAI Responses only supports image input in user messages, found ${role}`,
+                    }
+                }
+                let resolved = ai.wire.resolve_media(image, false);
+                let image_url = resolved.url ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
+                let item: map<string, unknown> = {};
+                let _ = item.set("type", "input_image");
+                let _ = item.set("image_url", image_url);
+                content.push(item);
+                null
+            },
+            let audio: baml.media.Audio => {
+                if (role != "user") {
+                    throw baml.errors.InvalidArgument {
+                        message: `OpenAI Responses only supports audio input in user messages, found ${role}`,
+                    }
+                }
+                let resolved = ai.wire.resolve_media(audio, true);
+                let format = if (resolved.mime_type == "audio/wav" || resolved.mime_type == "audio/x-wav") {
+                    "wav"
+                } else if (resolved.mime_type == "audio/mpeg" || resolved.mime_type == "audio/mp3") {
+                    "mp3"
+                } else if (resolved.mime_type == "audio/flac" || resolved.mime_type == "audio/x-flac") {
+                    "flac"
+                } else if (resolved.mime_type == "audio/ogg") {
+                    "ogg"
+                } else if (resolved.mime_type == "audio/webm") {
+                    "webm"
+                } else {
+                    resolved.mime_type
+                };
+                let item: map<string, unknown> = {};
+                let _ = item.set("type", "input_audio");
+                let _ = item.set("data", resolved.base64 ?? "");
+                let _ = item.set("format", format);
+                content.push(item);
+                null
+            },
+            let pdf: baml.media.Pdf => {
+                if (role != "user") {
+                    throw baml.errors.InvalidArgument {
+                        message: `OpenAI Responses only supports PDF input in user messages, found ${role}`,
+                    }
+                }
+                let resolved = ai.wire.resolve_media(pdf, false);
+                let file_data = resolved.url ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
+                let item: map<string, unknown> = {};
+                let _ = item.set("type", "input_file");
+                let _ = item.set("file_data", file_data);
+                content.push(item);
+                null
+            },
+            let video: baml.media.Video => {
+                throw baml.errors.InvalidArgument {
+                    message: "OpenAI Responses does not support video prompt input",
+                }
+            },
+        };
+    }
+    content
+}
+
 function openai_lower_prompt(prompt: ai.Prompt) -> map<string, unknown>[] {
     let items: map<string, unknown>[] = [];
     for (let message in prompt.messages()) {
@@ -45,7 +128,7 @@ function openai_lower_prompt(prompt: ai.Prompt) -> map<string, unknown>[] {
         };
         let item: map<string, unknown> = {};
         let _ = item.set("role", role);
-        let _ = item.set("content", message.content);
+        let _ = item.set("content", _openai_prompt_content(message, role));
         items.push(item);
     }
     items

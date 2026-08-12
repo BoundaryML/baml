@@ -54,6 +54,54 @@ function _gm_text_part(text: string) -> map<string, unknown> {
     p
 }
 
+function _gm_media_part(media: ai.MediaPart) -> map<string, unknown> {
+    let resolved = ai.wire.resolve_media(media, true);
+    let media_part: map<string, unknown> = {};
+    if let url: string = resolved.url {
+        let file_data: map<string, unknown> = {};
+        let _ = file_data.set("mimeType", resolved.mime_type);
+        let _ = file_data.set("fileUri", url);
+        let _ = media_part.set("fileData", file_data);
+        null
+    } else {
+        let inline_data: map<string, unknown> = {};
+        let _ = inline_data.set("mimeType", resolved.mime_type);
+        let _ = inline_data.set("data", resolved.base64 ?? "");
+        let _ = media_part.set("inlineData", inline_data);
+        null
+    };
+    media_part
+}
+
+function _gm_prompt_parts(message: ai.PromptMessage) -> map<string, unknown>[] {
+    let parts: map<string, unknown>[] = [];
+    for (let part in message.parts) {
+        match (part) {
+            let text: string => {
+                parts.push(_gm_text_part(text));
+                null
+            },
+            let image: baml.media.Image => {
+                parts.push(_gm_media_part(image));
+                null
+            },
+            let audio: baml.media.Audio => {
+                parts.push(_gm_media_part(audio));
+                null
+            },
+            let video: baml.media.Video => {
+                parts.push(_gm_media_part(video));
+                null
+            },
+            let pdf: baml.media.Pdf => {
+                parts.push(_gm_media_part(pdf));
+                null
+            },
+        };
+    }
+    parts
+}
+
 // One {functionResponse: {name, response}} part.
 function _gm_function_response(
     name: string,
@@ -80,9 +128,11 @@ function google_lower_prompt(prompt: ai.Prompt) -> GooglePrompt {
     let contents: map<string, unknown>[] = [];
     let first_role = "";
     for (let message in prompt.messages()) {
-        let part = _gm_text_part(message.content);
+        let parts = _gm_prompt_parts(message);
         if (message.role == "system") {
-            system_parts.push(part);
+            for (let part in parts) {
+                system_parts.push(part);
+            }
             null
         } else {
             let role = if (message.role == "assistant") {
@@ -96,7 +146,7 @@ function google_lower_prompt(prompt: ai.Prompt) -> GooglePrompt {
             } else {
                 null
             };
-            contents.push(_gm_content(role, [part]));
+            contents.push(_gm_content(role, parts));
             null
         };
     }

@@ -47,15 +47,84 @@ class AnthropicPrompt {
     messages: AnthropicMessage[],
 }
 
+function _anthropic_media_block(media: ai.MediaPart, block_type: string) -> map<string, unknown> {
+    let resolved = ai.wire.resolve_media(media, false);
+    let source: map<string, unknown> = {};
+    if let url: string = resolved.url {
+        let _ = source.set("type", "url");
+        let _ = source.set("url", url);
+        null
+    } else {
+        let _ = source.set("type", "base64");
+        let _ = source.set("media_type", resolved.mime_type);
+        let _ = source.set("data", resolved.base64 ?? "");
+        null
+    };
+    let block: map<string, unknown> = {};
+    let _ = block.set("type", block_type);
+    let _ = block.set("source", source);
+    block
+}
+
+function _anthropic_prompt_blocks(
+    message: ai.PromptMessage,
+    role: string,
+) -> map<string, unknown>[] {
+    let blocks: map<string, unknown>[] = [];
+    for (let part in message.parts) {
+        match (part) {
+            let text: string => {
+                let block: map<string, unknown> = {};
+                let _ = block.set("type", "text");
+                let _ = block.set("text", text);
+                blocks.push(block);
+                null
+            },
+            let image: baml.media.Image => {
+                if (role != "user") {
+                    throw baml.errors.InvalidArgument {
+                        message: `Anthropic only supports image input in user messages, found ${role}`,
+                    }
+                }
+                blocks.push(_anthropic_media_block(image, "image"));
+                null
+            },
+            let audio: baml.media.Audio => {
+                if (role != "user") {
+                    throw baml.errors.InvalidArgument {
+                        message: `Anthropic only supports audio input in user messages, found ${role}`,
+                    }
+                }
+                blocks.push(_anthropic_media_block(audio, "input_audio"));
+                null
+            },
+            let pdf: baml.media.Pdf => {
+                if (role != "user") {
+                    throw baml.errors.InvalidArgument {
+                        message: `Anthropic only supports PDF input in user messages, found ${role}`,
+                    }
+                }
+                blocks.push(_anthropic_media_block(pdf, "document"));
+                null
+            },
+            let video: baml.media.Video => {
+                throw baml.errors.InvalidArgument {
+                    message: "Anthropic does not support video prompt input",
+                }
+            },
+        };
+    }
+    blocks
+}
+
 function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
     let system: map<string, unknown>[] = [];
     let messages: AnthropicMessage[] = [];
     for (let message in prompt.messages()) {
-        let block: map<string, unknown> = {};
-        let _ = block.set("type", "text");
-        let _ = block.set("text", message.content);
         if (message.role == "system") {
-            system.push(block);
+            for (let block in _anthropic_prompt_blocks(message, "system")) {
+                system.push(block);
+            }
             null
         } else {
             let role = if (message.role == "assistant") {
@@ -63,7 +132,13 @@ function _anthropic_lower_prompt(prompt: ai.Prompt) -> AnthropicPrompt {
             } else {
                 "user"
             };
-            messages.push(AnthropicMessage { role: role, tool_results: false, blocks: [block] });
+            messages.push(
+                AnthropicMessage {
+                    role: role,
+                    tool_results: false,
+                    blocks: _anthropic_prompt_blocks(message, role),
+                },
+            );
             null
         };
     }

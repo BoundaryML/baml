@@ -3325,9 +3325,662 @@ function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unk
     throw
 }
 
+function ai.wire._media_mime_type(explicit: string | null, source_value: string, kind: string) -> string {
+    load_var explicit
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=4
+    pop_jump_if_false L0
+    jump L41
+
+  L0:
+    load_var source_value
+    call baml.String.to_lower_case
+    store_var source
+    load_var source
+    load_const ".jpg"
+    call baml.String.includes
+    jump_if_false L1
+    jump L2
+
+  L1:
+    pop 1
+    load_var source
+    load_const ".jpeg"
+    call baml.String.includes
+
+  L2:
+    pop_jump_if_false L3
+    jump L40
+
+  L3:
+    load_var source
+    load_const ".png"
+    call baml.String.includes
+    pop_jump_if_false L4
+    jump L39
+
+  L4:
+    load_var source
+    load_const ".webp"
+    call baml.String.includes
+    pop_jump_if_false L5
+    jump L38
+
+  L5:
+    load_var source
+    load_const ".gif"
+    call baml.String.includes
+    pop_jump_if_false L6
+    jump L37
+
+  L6:
+    load_var source
+    load_const ".svg"
+    call baml.String.includes
+    pop_jump_if_false L7
+    jump L36
+
+  L7:
+    load_var source
+    load_const ".wav"
+    call baml.String.includes
+    pop_jump_if_false L8
+    jump L35
+
+  L8:
+    load_var source
+    load_const ".mp3"
+    call baml.String.includes
+    pop_jump_if_false L9
+    jump L34
+
+  L9:
+    load_var source
+    load_const ".flac"
+    call baml.String.includes
+    pop_jump_if_false L10
+    jump L33
+
+  L10:
+    load_var source
+    load_const ".ogg"
+    call baml.String.includes
+    pop_jump_if_false L11
+    jump L32
+
+  L11:
+    load_var source
+    load_const ".webm"
+    call baml.String.includes
+    pop_jump_if_false L12
+    jump L29
+
+  L12:
+    load_var source
+    load_const ".mov"
+    call baml.String.includes
+    pop_jump_if_false L13
+    jump L28
+
+  L13:
+    load_var source
+    load_const ".mp4"
+    call baml.String.includes
+    pop_jump_if_false L14
+    jump L27
+
+  L14:
+    load_var source
+    load_const ".avi"
+    call baml.String.includes
+    pop_jump_if_false L15
+    jump L26
+
+  L15:
+    load_var source
+    load_const ".mkv"
+    call baml.String.includes
+    pop_jump_if_false L16
+    jump L25
+
+  L16:
+    load_var source
+    load_const ".pdf"
+    call baml.String.includes
+    pop_jump_if_false L17
+    jump L24
+
+  L17:
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L18
+    jump L23
+
+  L18:
+    load_var kind
+    load_const "video"
+    cmp_op ==
+    pop_jump_if_false L19
+    jump L22
+
+  L19:
+    load_var kind
+    load_const "pdf"
+    cmp_op ==
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_const "image/png"
+    jump L42
+
+  L21:
+    load_const "application/pdf"
+    jump L42
+
+  L22:
+    load_const "video/mp4"
+    jump L42
+
+  L23:
+    load_const "audio/mpeg"
+    jump L42
+
+  L24:
+    load_const "application/pdf"
+    jump L42
+
+  L25:
+    load_const "video/x-matroska"
+    jump L42
+
+  L26:
+    load_const "video/x-msvideo"
+    jump L42
+
+  L27:
+    load_const "video/mp4"
+    jump L42
+
+  L28:
+    load_const "video/quicktime"
+    jump L42
+
+  L29:
+    load_var kind
+    load_const "audio"
+    cmp_op ==
+    pop_jump_if_false L30
+    jump L31
+
+  L30:
+    load_const "video/webm"
+    jump L42
+
+  L31:
+    load_const "audio/webm"
+    jump L42
+
+  L32:
+    load_const "audio/ogg"
+    jump L42
+
+  L33:
+    load_const "audio/flac"
+    jump L42
+
+  L34:
+    load_const "audio/mpeg"
+    jump L42
+
+  L35:
+    load_const "audio/wav"
+    jump L42
+
+  L36:
+    load_const "image/svg+xml"
+    jump L42
+
+  L37:
+    load_const "image/gif"
+    jump L42
+
+  L38:
+    load_const "image/webp"
+    jump L42
+
+  L39:
+    load_const "image/png"
+    jump L42
+
+  L40:
+    load_const "image/jpeg"
+    jump L42
+
+  L41:
+    load_var _4
+
+  L42:
+    return
+}
+
+function ai.wire._resolve_media_content(url: string | null, file: string | null, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia {
+    load_var file
+    store_var _6
+    load_var _6
+    narrow_bind string, slot=6
+    pop_jump_if_false L0
+    jump L15
+
+  L0:
+    load_var inline
+    load_const ""
+    cmp_op !=
+    pop_jump_if_false L1
+    jump L14
+
+  L1:
+    load_var url
+    store_var _15
+    load_var _15
+    narrow_bind string, slot=9
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "media has no URL, file, or base64 content"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L3:
+    load_var _15
+    store_var media_url
+    load_var media_url
+    load_const "data:"
+    call baml.String.starts_with
+    pop_jump_if_false L4
+    load_var media_url
+    load_const ";base64,"
+    call baml.String.index_of
+    store_var _19
+    load_var _19
+    narrow_bind int, slot=11
+    pop_jump_if_false L4
+    jump L13
+
+  L4:
+    load_var fetch_url
+    unary_op !
+    jump_if_false L5
+    jump L6
+
+  L5:
+    pop 1
+    load_var media_url
+    load_const "gs://"
+    call baml.String.starts_with
+
+  L6:
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var media_url
+    load_const <omitted>
+    call baml.http.fetch
+    store_var response
+    load_var response
+    call baml.http.Response.ok
+    unary_op !
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_type string
+    load_type string
+    load_var response
+    load_field .headers
+    load_const "content-type"
+    call baml.Map.get
+    store_var _45
+    load_var _45
+    store_var response_mime
+    load_var _45
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    load_var mime
+    store_var response_mime
+
+  L9:
+    load_var response
+    sys_op baml.http.Response.bytes
+    call baml.Uint8Array.to_base64
+    store_var _50
+    load_var response_mime
+    load_const ";"
+    call baml.String.split
+    store_var _54
+    load_type string
+    load_var _54
+    load_const 0
+    call baml.Array.at
+    store_var _53
+    load_var _53
+    store_var _52
+    load_var _53
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_var mime
+    store_var _52
+
+  L10:
+    load_const null
+    load_var2 22 23
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L16
+
+  L11:
+    load_type string
+    load_var media_url
+    call baml.String.from
+    store_var _38
+    load_type int
+    load_var response
+    load_field .status_code
+    call baml.String.from
+    store_var _41
+    load_const "media"
+    load_const "media URL "
+    load_var _38
+    bin_op +
+    load_const " returned HTTP "
+    bin_op +
+    load_var _41
+    bin_op +
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    throw
+
+  L12:
+    load_var media_url
+    load_const null
+    load_var mime
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L16
+
+  L13:
+    load_var _19
+    store_var_load_var separator
+    load_const 8
+    add_int
+    store_var _22
+    load_var media_url
+    call baml.String.length
+    store_var _24
+    load_var2 10 14
+    load_var _24
+    call baml.String.substring
+    store_var _21
+    load_var media_url
+    load_const 5
+    load_var separator
+    call baml.String.substring
+    store_var _25
+    load_const null
+    load_var2 13 16
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L16
+
+  L14:
+    load_const null
+    load_var2 3 4
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+    jump L16
+
+  L15:
+    load_var _6
+    load_const "r"
+    sys_op baml.fs.open
+    store_var handle
+    load_var handle
+    sys_op baml.fs.File.bytes
+    call baml.Uint8Array.to_base64
+    store_var data
+    load_var handle
+    sys_op baml.fs.File.close
+    pop 1
+    load_const null
+    load_var2 8 4
+    init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
+
+  L16:
+    return
+}
+
 function ai.wire.render_output_format(t: type) -> string {
     load_var t
     sys_op baml.prompt.render_output_format
+    return
+}
+
+function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
+    load_var media
+    store_var _3
+    load_var _3
+    narrow_bind baml.media.Image, slot=3
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var media
+    store_var _16
+    load_var _16
+    narrow_bind baml.media.Audio, slot=12
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var media
+    store_var _29
+    load_var _29
+    narrow_bind baml.media.Video, slot=21
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var media
+    call baml.media.Pdf.file
+    store_var _45
+    load_var _45
+    store_var _44
+    load_var _45
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_var media
+    call baml.media.Pdf.url
+    store_var _44
+
+  L3:
+    load_var _44
+    store_var source
+    load_var _44
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const ""
+    store_var source
+
+  L4:
+    load_var media
+    call baml.media.Pdf.url
+    store_var _48
+    load_var media
+    call baml.media.Pdf.file
+    store_var _49
+    load_var media
+    call baml.media.Pdf.base64
+    store_var _50
+    load_var media
+    call baml.media.Pdf.mime_type
+    load_var source
+    load_const "pdf"
+    call ai.wire._media_mime_type
+    store_var _51
+    load_var2 33 34
+    load_var2 35 36
+    load_var fetch_url
+    call ai.wire._resolve_media_content
+    jump L14
+
+  L5:
+    load_var _29
+    store_var video
+    load_var video
+    call baml.media.Video.file
+    store_var _33
+    load_var _33
+    store_var _32
+    load_var _33
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    load_var video
+    call baml.media.Video.url
+    store_var _32
+
+  L6:
+    load_var _32
+    store_var source
+    load_var _32
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const ""
+    store_var source
+
+  L7:
+    load_var video
+    call baml.media.Video.url
+    store_var _36
+    load_var video
+    call baml.media.Video.file
+    store_var _37
+    load_var video
+    call baml.media.Video.base64
+    store_var _38
+    load_var video
+    call baml.media.Video.mime_type
+    load_var source
+    load_const "video"
+    call ai.wire._media_mime_type
+    store_var _39
+    load_var2 26 27
+    load_var2 28 29
+    load_var fetch_url
+    call ai.wire._resolve_media_content
+    jump L14
+
+  L8:
+    load_var _16
+    store_var audio
+    load_var audio
+    call baml.media.Audio.file
+    store_var _20
+    load_var _20
+    store_var _19
+    load_var _20
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    load_var audio
+    call baml.media.Audio.url
+    store_var _19
+
+  L9:
+    load_var _19
+    store_var source
+    load_var _19
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_const ""
+    store_var source
+
+  L10:
+    load_var audio
+    call baml.media.Audio.url
+    store_var _23
+    load_var audio
+    call baml.media.Audio.file
+    store_var _24
+    load_var audio
+    call baml.media.Audio.base64
+    store_var _25
+    load_var audio
+    call baml.media.Audio.mime_type
+    load_var source
+    load_const "audio"
+    call ai.wire._media_mime_type
+    store_var _26
+    load_var2 17 18
+    load_var2 19 20
+    load_var fetch_url
+    call ai.wire._resolve_media_content
+    jump L14
+
+  L11:
+    load_var _3
+    store_var image
+    load_var image
+    call baml.media.Image.file
+    store_var _7
+    load_var _7
+    store_var _6
+    load_var _7
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_var image
+    call baml.media.Image.url
+    store_var _6
+
+  L12:
+    load_var _6
+    store_var source
+    load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L13
+    load_const ""
+    store_var source
+
+  L13:
+    load_var image
+    call baml.media.Image.url
+    store_var _10
+    load_var image
+    call baml.media.Image.file
+    store_var _11
+    load_var image
+    call baml.media.Image.base64
+    store_var _12
+    load_var image
+    call baml.media.Image.mime_type
+    load_var source
+    load_const "image"
+    call ai.wire._media_mime_type
+    store_var _13
+    load_var2 8 9
+    load_var2 10 11
+    load_var fetch_url
+    call ai.wire._resolve_media_content
+
+  L14:
     return
 }
 
