@@ -398,6 +398,32 @@ impl Ty {
     /// Recurses into `Union`, `List`, `Map`, and `Optional` so that compound
     /// types like `(1 | 2 | 3)[]` widen to `int[]` at unannotated bindings.
     #[must_use]
+    /// Remove `null` from this type: `T?` gives `T`, a union drops its
+    /// null member (single survivor collapses), bare `null` gives
+    /// `never`, everything else passes through unchanged.
+    pub fn remove_null(&self) -> Ty {
+        match self {
+            Ty::Union(members, _) => {
+                let filtered: Vec<Ty> = members
+                    .iter()
+                    .filter(|member| !matches!(member, Ty::Null { .. }))
+                    .cloned()
+                    .collect();
+                match filtered.len() {
+                    0 => Ty::Never {
+                        attr: TyAttr::default(),
+                    },
+                    1 => filtered.into_iter().next().expect("length checked"),
+                    _ => Ty::Union(filtered, TyAttr::default()),
+                }
+            }
+            Ty::Null { .. } => Ty::Never {
+                attr: TyAttr::default(),
+            },
+            _ => self.clone(),
+        }
+    }
+
     pub fn widen_fresh(self) -> Ty {
         match self {
             Ty::Literal(lit, Freshness::Fresh, attr) => {

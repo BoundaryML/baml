@@ -1045,9 +1045,12 @@ impl NormalTy {
         assumptions: &mut HashSet<(NormalTy, NormalTy)>,
     ) -> NormalTy {
         match self {
-            NormalTy::Class(qn, args) => {
-                NormalTy::Class(qn, args.into_iter().map(|a| a.canonicalize(ctx, assumptions)).collect())
-            }
+            NormalTy::Class(qn, args) => NormalTy::Class(
+                qn,
+                args.into_iter()
+                    .map(|a| a.canonicalize(ctx, assumptions))
+                    .collect(),
+            ),
             NormalTy::Interface(qn, args, bindings) => {
                 let mut bindings: Vec<_> = bindings
                     .into_iter()
@@ -1056,7 +1059,9 @@ impl NormalTy {
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::Interface(
                     qn,
-                    args.into_iter().map(|a| a.canonicalize(ctx, assumptions)).collect(),
+                    args.into_iter()
+                        .map(|a| a.canonicalize(ctx, assumptions))
+                        .collect(),
                     bindings,
                 )
             }
@@ -1124,7 +1129,10 @@ impl NormalTy {
                 }
             }
             NormalTy::Union(members) => {
-                let members = members.into_iter().map(|m| m.canonicalize(ctx, assumptions)).collect();
+                let members = members
+                    .into_iter()
+                    .map(|m| m.canonicalize(ctx, assumptions))
+                    .collect();
                 Self::canonicalize_union(members, ctx, assumptions)
             }
             leaf => leaf,
@@ -1327,8 +1335,11 @@ impl NormalTy {
                 })
             }
             (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).iter().any(|bound| {
-                NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions)
-                    .is_subtype_of(sup, ctx, assumptions)
+                NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions).is_subtype_of(
+                    sup,
+                    ctx,
+                    assumptions,
+                )
             }),
 
             // A still-symbolic associated-type projection is a subtype of `sup` if
@@ -1345,17 +1356,16 @@ impl NormalTy {
                     ..
                 },
                 _,
-            ) => (**iface).clone().into_interface().is_some_and(|i| {
-                ctx.associated_type_bound(&i, member.clone())
-                    .iter()
-                    .any(|bound| {
-                        NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions).is_subtype_of(
-                            sup,
-                            ctx,
-                            assumptions,
-                        )
-                    })
-            }),
+            ) => {
+                (**iface).clone().into_interface().is_some_and(|i| {
+                    ctx.associated_type_bound(&i, member.clone())
+                        .iter()
+                        .any(|bound| {
+                            NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions)
+                                .is_subtype_of(sup, ctx, assumptions)
+                        })
+                })
+            }
 
             // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by
             // every function type, with the parameter list erased. Conformance
@@ -2103,4 +2113,3 @@ pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &
     .canonicalize(ctx, &mut HashSet::new());
     interned::Ty::from_plain(&normal.into_ty())
 }
-

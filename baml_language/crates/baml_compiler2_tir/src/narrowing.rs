@@ -387,26 +387,7 @@ fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
 /// | `null`              | `never`                    |
 /// | `T` (not nullable)  | `T` (unchanged)            |
 pub fn remove_null(ty: &Ty) -> Ty {
-    match ty {
-        Ty::Union(members, _) => {
-            let filtered: Vec<Ty> = members
-                .iter()
-                .filter(|m| !matches!(m, Ty::Null { .. }))
-                .cloned()
-                .collect();
-            match filtered.len() {
-                0 => Ty::Never {
-                    attr: TyAttr::default(),
-                },
-                1 => filtered.into_iter().next().unwrap(),
-                _ => Ty::Union(filtered, TyAttr::default()),
-            }
-        }
-        Ty::Null { .. } => Ty::Never {
-            attr: TyAttr::default(),
-        },
-        _ => ty.clone(),
-    }
+    ty.remove_null()
 }
 
 // ── Narrowing application helpers ─────────────────────────────────────────────

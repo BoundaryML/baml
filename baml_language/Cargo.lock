@@ -878,6 +878,7 @@ dependencies = [
  "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_type",
+ "baml_type_runtime",
  "baml_workspace",
  "indexmap",
  "num-bigint",
