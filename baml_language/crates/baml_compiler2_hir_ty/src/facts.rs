@@ -192,7 +192,9 @@ impl TypeContext for Facts<'_> {
                     .map(|(pin_name, ty)| (pin_name.clone(), crate::impls::interned_ty(ty)))
                     .collect(),
             );
-            let base_interned = crate::impls::interned_ty(base);
+            let Some(base_interned) = crate::impls::try_interned_ty(base) else {
+                return ProjectionStep::Opaque;
+            };
             if let Some(default) =
                 crate::impls::realized_assoc_default(self.db, &base_target, &base_interned, member)
             {
@@ -200,7 +202,9 @@ impl TypeContext for Facts<'_> {
             }
             return ProjectionStep::Opaque;
         }
-        let base_interned = crate::impls::interned_ty(base);
+        let Some(base_interned) = crate::impls::try_interned_ty(base) else {
+            return ProjectionStep::Opaque;
+        };
         if let Some(resolved) = crate::impls::resolve_impl(self.db, &base_interned, &target)
             && let Some(pin) =
                 crate::impls::resolved_pin(self.db, &resolved, &base_interned, member)

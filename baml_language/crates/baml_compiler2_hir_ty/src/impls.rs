@@ -46,8 +46,44 @@ use rustc_hash::FxHashMap;
 const BLANKET_IMPL_BOUND_DEPTH: u32 = 16;
 
 /// The plain-to-interned conversion at the `TypeContext` boundary.
-pub(crate) fn interned_ty(ty: &baml_type::Ty) -> Ty {
+pub fn interned_ty(ty: &baml_type::Ty) -> Ty {
     Ty::from_plain(ty)
+}
+
+/// [`interned_ty`], declining input the interned family cannot
+/// represent (TIR's `Unknown`/`Evolving` inference sentinels, live only
+/// while the dual provider serves TIR-typed tables). An oracle asked
+/// about such a type answers "undecidable", never panics.
+pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
+    fn representable(ty: &baml_type::Ty) -> bool {
+        use baml_type::Ty as P;
+        match ty {
+            P::Unknown { .. } | P::EvolvingList(..) | P::EvolvingMap(..) => false,
+            P::List(inner, _) => representable(inner),
+            P::Map { key, value, .. } => representable(key) && representable(value),
+            P::Future(value, error, _) => representable(value) && representable(error),
+            P::Union(members, _) => members.iter().all(representable),
+            P::Class(_, args, _) => args.iter().all(representable),
+            P::Interface(_, args, pins, _) => {
+                args.iter().all(representable) && pins.iter().all(|(_, ty)| representable(ty))
+            }
+            P::AssociatedTypeProjection {
+                base, interface, ..
+            } => representable(base) && interface.tys().all(representable),
+            P::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params.iter().all(|param| representable(&param.ty))
+                    && representable(ret)
+                    && representable(throws)
+            }
+            _ => true,
+        }
+    }
+    representable(ty).then(|| Ty::from_plain(ty))
 }
 
 /// One impl's resolution-relevant facts, normalized to the free shape.

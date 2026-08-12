@@ -102,32 +102,6 @@ fn collect_type_aliases<'db>(
 
 // ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
 
-/// Run `f` with a [`GlobalTypeContext`](baml_compiler2_tir::type_context::GlobalTypeContext) over
-/// `pkg_id`'s canonical facts — the checker's own type context — so MIR reduces projections and
-/// compares types exactly as TIR does, instead of a parallel resolver. `bounds` carry each type
-/// variable's single-`Ty` bound as its interface constraint. The context borrows an owned bounds
-/// map + the salsa-cached resolution context, so it can't escape `f`.
-fn with_global_ctx<R>(
-    db: &dyn baml_compiler2_tir::Db,
-    pkg_id: baml_compiler2_hir::package::PackageId<'_>,
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
-    bounds: &FxHashMap<ParamTy, Tir2Ty>,
-    f: impl FnOnce(&baml_compiler2_tir::type_context::GlobalTypeContext<'_, '_>) -> R,
-) -> R {
-    let bounds_map: baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap = bounds
-        .iter()
-        .filter_map(|(name, ty)| ty.as_interface().map(|iface| (name.clone(), vec![iface])))
-        .collect();
-    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
-    let ctx = baml_compiler2_tir::type_context::GlobalTypeContext {
-        db,
-        res_ctx,
-        aliases,
-        bounds: &bounds_map,
-    };
-    f(&ctx)
-}
-
 /// Lower a type expression, treating the `bindings` map's keys as the in-scope type variables,
 /// then substitute those bindings. Threads the in-scope typevar `bounds` so a `T.member`
 /// projection resolves through `T`'s bound rather than erasing to `unknown`. Replaces the
@@ -222,6 +196,42 @@ fn lower_expr_in_scope<'db>(
         bounds,
         self_ty,
     )
+}
+
+/// The transitive `requires` closure of an interface, as declaration
+/// locations (BFS from the root, the root first) - resolution through
+/// the same hir road every written interface reference takes.
+fn interface_requires_closure_locs<'db>(
+    db: &'db dyn crate::Db,
+    root: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    let mut out = Vec::new();
+    let mut seen: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> = FxHashSet::default();
+    let mut queue = std::collections::VecDeque::from([root]);
+    while let Some(loc) = queue.pop_front() {
+        if !seen.insert(loc) {
+            continue;
+        }
+        out.push(loc);
+        let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
+        let pkg = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
+        let pkg_items = baml_compiler2_ppir::package_items(
+            db,
+            baml_compiler2_hir::package::PackageId::new(db, pkg.package.clone()),
+        );
+        for &parent in &iface.requires {
+            if let Some(parent_loc) = resolve_ref_to_interface_loc(
+                db,
+                &iface.type_refs,
+                parent,
+                pkg_items,
+                &pkg.namespace_path,
+            ) {
+                queue.push_back(parent_loc);
+            }
+        }
+    }
+    out
 }
 
 /// A `recv.NAME(..)` / `Prefix.NAME(..)` callee shape - the desugar
@@ -2985,33 +2995,13 @@ impl<'db> LoweringContext<'db> {
     ) -> Vec<baml_compiler2_tir::interfaces::ResolvedImpl<'db>> {
         let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
         let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg);
-        let res_ctx =
-            baml_compiler2_tir::package_interface::package_resolution_context(self.db, pkg_id);
-        let bounds: baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap = self
-            .enclosing_generic_param_bounds()
-            .into_iter()
-            .map(|(param, conjunction)| {
-                (
-                    param,
-                    conjunction
-                        .iter()
-                        .filter_map(|bound| plain_interface_ty(bound).as_interface())
-                        .collect(),
-                )
-            })
-            .collect();
-        let gctx = baml_compiler2_tir::type_context::GlobalTypeContext {
-            db: self.db,
-            res_ctx,
-            aliases: &self.resolved_aliases.aliases,
-            bounds: &bounds,
-        };
+        let facts = self.hir_facts();
         baml_compiler2_tir::interfaces::impls_for_type(
             self.db,
             pkg_id,
             recv,
             &self.resolved_aliases.aliases,
-            |a, b| baml_type::normalize::is_subtype(a, b, &gctx),
+            |a, b| baml_type::normalize::is_subtype(a, b, &facts),
         )
     }
 
@@ -3077,7 +3067,7 @@ impl<'db> LoweringContext<'db> {
         else {
             return false;
         };
-        baml_compiler2_tir::interfaces::interface_closure_locs(self.db, root_loc)
+        interface_requires_closure_locs(self.db, root_loc)
             .into_iter()
             .any(|iface_loc| {
                 use baml_compiler2_ppir::item_data::{function_data, interface_data};
@@ -10401,13 +10391,19 @@ impl<'db> LoweringContext<'db> {
     /// Reduce every determinable associated-type projection in `ty` to a fixpoint, via the
     /// canonical `normalize` (the checker's own reduction — no parallel resolver).
     fn resolve_ty_projections(&self, ty: &Tir2Ty) -> Tir2Ty {
-        with_global_ctx(
-            self.db,
-            self.package_id(),
-            &self.resolved_aliases.aliases,
-            &self.generic_param_bounds,
-            |ctx| baml_type::normalize::normalize(ty, ctx),
-        )
+        baml_type::normalize::normalize(ty, &self.hir_facts())
+    }
+
+    /// The hir_ty facts oracle over this context's carried bounds - the
+    /// ONE alias/projection/subtype authority (aliases resolve through
+    /// definitions directly; no precomputed map).
+    fn hir_facts(&self) -> baml_compiler2_hir_ty::facts::Facts<'db> {
+        let bounds = self
+            .generic_param_bounds
+            .iter()
+            .filter_map(|(param, ty)| ty.as_interface().map(|iface| (param.clone(), vec![iface])))
+            .collect();
+        baml_compiler2_hir_ty::facts::Facts::with_bounds(self.db, bounds)
     }
 
     /// The declared bound of an *unreduced* (symbolic-base) projection `(base as I).member` —
@@ -10423,18 +10419,11 @@ impl<'db> LoweringContext<'db> {
         else {
             return None;
         };
-        with_global_ctx(
-            self.db,
-            self.package_id(),
-            &self.resolved_aliases.aliases,
-            &self.generic_param_bounds,
-            |ctx| {
-                ctx.associated_type_bound(iface, member.clone())
-                    .into_iter()
-                    .next()
-                    .map(|bound| bound.to_ty())
-            },
-        )
+        self.hir_facts()
+            .associated_type_bound(iface, member.clone())
+            .into_iter()
+            .next()
+            .map(|bound| bound.to_ty())
     }
 
     fn interface_closure_type_name_views(
@@ -10451,18 +10440,62 @@ impl<'db> LoweringContext<'db> {
         else {
             return None;
         };
-        Some(
-            baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
-                self.db,
-                requested_root_loc,
-                iface_type_args,
-                iface_assoc,
-                true,
-            )
-            .into_iter()
-            .map(|(loc, args, assoc)| (interface_type_name_from_loc(self.db, loc), args, assoc))
-            .collect(),
-        )
+        // The root view is the request itself, verbatim; only the
+        // `requires` EXPANSION goes through hir_ty's realized closure.
+        // A TIR-internal sentinel in an argument (`Unknown`/`Evolving`,
+        // dual-provider only) cannot intern - it degrades to the error
+        // sentinel FOR THE WALK, while the root view keeps the plain
+        // originals.
+        let interned = |ty: &Tir2Ty| {
+            baml_compiler2_hir_ty::impls::try_interned_ty(ty)
+                .unwrap_or_else(baml_type::interned::Ty::error)
+        };
+        let root = baml_type::interned::InterfaceRef::new(
+            baml_type::TypeName::new(
+                iface_tn.package().clone(),
+                iface_ns.clone(),
+                iface_tn.name().clone(),
+            ),
+            iface_type_args
+                .iter()
+                .map(interned)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            iface_assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), interned(ty)))
+                .collect(),
+        );
+        let subject = root.existential();
+        let mut views: Vec<InterfaceTypeView> = vec![(
+            iface_tn.clone(),
+            iface_type_args.to_vec(),
+            iface_assoc.to_vec(),
+        )];
+        views.extend(
+            baml_compiler2_hir_ty::impls::direct_requires_closure(self.db, &root, &subject, 8)
+                .into_iter()
+                .map(|reference| {
+                    // A required interface's pins realize as PROJECTIONS on
+                    // the subject (`(subject as Iterator).Error`); the
+                    // oracle reduces them here - runtime dispatch types
+                    // carry the reduced members, exactly as TIR's eager
+                    // substitution emitted them.
+                    let reduce = |ty: &baml_type::interned::Ty| -> Tir2Ty {
+                        self.resolve_ty_projections(&ty.to_plain())
+                    };
+                    (
+                        reference.name.clone(),
+                        reference.generics.iter().map(reduce).collect(),
+                        reference
+                            .associated_types
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), reduce(ty)))
+                            .collect(),
+                    )
+                }),
+        );
+        Some(views)
     }
 
     fn resolve_class_loc_by_type_name(
