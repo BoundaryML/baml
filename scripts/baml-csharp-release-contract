@@ -1,0 +1,626 @@
+#!/usr/bin/env python3
+"""Validate and assemble the C# projection of shared bridge_cffi artifacts."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import shutil
+import stat
+import sys
+import zipfile
+from pathlib import Path
+from typing import Any
+from xml.etree import ElementTree
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PLATFORMS = ROOT / "release" / "platforms.json"
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+SOURCE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+VERSION_RE = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-[0-9A-Za-z](?:[0-9A-Za-z.-]*[0-9A-Za-z])?)?$"
+)
+GENERATED_SOURCE_SENTINELS = (
+    "Baml/Generated/BamlProgram.g.cs",
+    "CsharpSlice/Functions.g.cs",
+)
+
+
+class ContractError(ValueError):
+    """A fail-closed release contract violation."""
+
+
+def fail(message: str) -> None:
+    raise ContractError(message)
+
+
+def load_json(path: Path, description: str) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail(f"{description} does not exist: {path}")
+    except json.JSONDecodeError as exc:
+        fail(f"{description} is not valid JSON: {path}: {exc}")
+
+
+def require_string(value: Any, description: str) -> str:
+    if not isinstance(value, str) or not value:
+        fail(f"{description} must be a nonempty string")
+    return value
+
+
+def expected_rid(target: dict[str, Any]) -> str:
+    arch = target.get("arch")
+    arch_token = {"aarch64": "arm64", "x86_64": "x64"}.get(arch)
+    if arch_token is None:
+        fail(f"{target.get('triple', '<unknown>')}: unsupported C# architecture {arch!r}")
+
+    os_name = target.get("os")
+    if os_name == "macos":
+        return f"osx-{arch_token}"
+    if os_name == "linux":
+        libc = target.get("libc")
+        return (
+            f"linux-musl-{arch_token}"
+            if libc == "musl"
+            else f"linux-{arch_token}"
+        )
+    if os_name == "windows":
+        return f"win-{arch_token}"
+    fail(f"{target.get('triple', '<unknown>')}: unsupported C# OS {os_name!r}")
+
+
+def expected_native_asset(target: dict[str, Any]) -> str:
+    return {
+        "macos": "libbridge_cffi.dylib",
+        "linux": "libbridge_cffi.so",
+        "windows": "bridge_cffi.dll",
+    }.get(target.get("os")) or fail(
+        f"{target.get('triple', '<unknown>')}: unsupported C# OS"
+    )
+
+
+def validate_consumer_runner(
+    target: dict[str, Any], runner: str
+) -> None:
+    os_name = target["os"]
+    marker = {
+        "macos": "macos",
+        "linux": "ubuntu",
+        "windows": "windows",
+    }[os_name]
+    if marker not in runner.lower():
+        fail(
+            f"{target['triple']}: C# consumer runner {runner!r} "
+            f"does not match {os_name}"
+        )
+    if target["arch"] == "aarch64" and os_name in {"linux", "windows"}:
+        if not any(token in runner.lower() for token in ("arm", "aarch64")):
+            fail(
+                f"{target['triple']}: C# arm64 consumer runner {runner!r} "
+                "is not an arm64 runner"
+            )
+
+
+def csharp_targets(platforms_path: Path) -> list[dict[str, Any]]:
+    contract = load_json(platforms_path, "platform contract")
+    if not isinstance(contract, dict) or contract.get("schema") != 1:
+        fail("platform contract must be a schema-1 JSON object")
+    targets = contract.get("targets")
+    if not isinstance(targets, list):
+        fail("platform contract targets must be a JSON array")
+
+    seen_targets: set[str] = set()
+    seen_rids: set[str] = set()
+    result: list[dict[str, Any]] = []
+    for index, target in enumerate(targets):
+        if not isinstance(target, dict):
+            fail(f"platform target {index} must be a JSON object")
+        triple = require_string(target.get("triple"), f"platform target {index}.triple")
+        if triple in seen_targets:
+            fail(f"duplicate platform target: {triple}")
+        seen_targets.add(triple)
+
+        artifacts = target.get("artifacts")
+        if not isinstance(artifacts, dict):
+            fail(f"{triple}: artifacts must be a JSON object")
+        csharp = artifacts.get("csharp")
+        if csharp is None:
+            continue
+        if not isinstance(csharp, dict):
+            fail(f"{triple}: C# artifact must be a JSON object")
+        cffi = artifacts.get("cffi")
+        if not isinstance(cffi, dict):
+            fail(f"{triple}: C# requires a CFFI source artifact")
+
+        rid = require_string(csharp.get("rid"), f"{triple}: C# rid")
+        native_asset = require_string(
+            csharp.get("native_asset"), f"{triple}: C# native_asset"
+        )
+        consumer_runner = require_string(
+            csharp.get("consumer_runner"), f"{triple}: C# consumer_runner"
+        )
+        package_policy = require_string(
+            csharp.get("package_policy"), f"{triple}: C# package_policy"
+        )
+        producer_asset = require_string(cffi.get("asset"), f"{triple}: CFFI asset")
+
+        if rid != expected_rid(target):
+            fail(f"{triple}: C# RID {rid!r} does not match target fields")
+        if rid in seen_rids:
+            fail(f"duplicate C# RID: {rid}")
+        seen_rids.add(rid)
+        if native_asset != expected_native_asset(target):
+            fail(
+                f"{triple}: C# native asset {native_asset!r} "
+                "does not match the target OS"
+            )
+        if package_policy != "rid-native":
+            fail(f"{triple}: unsupported C# package policy {package_policy!r}")
+        if csharp.get("experimental", False):
+            fail(f"{triple}: the eight-RID C# product cannot be experimental")
+        if cffi.get("experimental", False):
+            fail(f"{triple}: required C# cannot consume experimental CFFI")
+        validate_consumer_runner(target, consumer_runner)
+
+        result.append(
+            {
+                "target": triple,
+                "arch": require_string(target.get("arch"), f"{triple}: arch"),
+                "libc": target.get("libc"),
+                "rid": rid,
+                "canonical": native_asset,
+                "runner": consumer_runner,
+                "producer_asset": producer_asset,
+            }
+        )
+
+    if not result:
+        fail("platform contract has no C# targets")
+    return sorted(result, key=lambda entry: entry["target"])
+
+
+def matrix(platforms_path: Path) -> dict[str, Any]:
+    return {
+        "include": [
+            {
+                key: entry[key]
+                for key in ("target", "arch", "libc", "rid", "canonical", "runner")
+            }
+            for entry in csharp_targets(platforms_path)
+        ]
+    }
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def generated_source_digests(root: Path) -> dict[str, str]:
+    if root.is_symlink():
+        fail(f"generated source root must not be a symlink: {root}")
+    if not root.is_dir():
+        fail(f"generated source root is missing: {root}")
+
+    digests: dict[str, str] = {}
+    for path in root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            fail(f"generated source tree contains a symlink: {relative}")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            fail(f"generated source tree contains a non-file: {relative}")
+        if not path.name.endswith(".g.cs"):
+            fail(f"generated source tree contains a non-.g.cs file: {relative}")
+        if "\n" in relative or "\r" in relative:
+            fail(f"generated source tree contains an unsafe path: {relative!r}")
+        digests[relative] = sha256(path)
+
+    missing = [
+        relative
+        for relative in GENERATED_SOURCE_SENTINELS
+        if relative not in digests
+    ]
+    if missing:
+        fail(f"generated source tree is missing required entry points: {missing}")
+    return dict(sorted(digests.items()))
+
+
+def parse_generated_source_manifest(path: Path) -> dict[str, str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        fail(f"generated source manifest does not exist: {path}")
+    except UnicodeDecodeError:
+        fail(f"generated source manifest is not UTF-8: {path}")
+
+    entries: dict[str, str] = {}
+    for index, line in enumerate(text.splitlines(), start=1):
+        match = re.fullmatch(r"([0-9a-f]{64})  ([^\r\n]+\.g\.cs)", line)
+        if match is None:
+            fail(f"generated source manifest has an invalid row {index}: {path}")
+        digest, relative = match.groups()
+        parts = Path(relative).parts
+        if (
+            relative.startswith("/")
+            or "\\" in relative
+            or Path(relative).as_posix() != relative
+            or any(part in {"", ".", ".."} for part in parts)
+        ):
+            fail(
+                f"generated source manifest has an unsafe path on row {index}: "
+                f"{relative}"
+            )
+        if relative in entries:
+            fail(f"generated source manifest repeats a path: {relative}")
+        entries[relative] = digest
+
+    if not entries:
+        fail(f"generated source manifest is empty: {path}")
+    return entries
+
+
+def write_generated_manifest(args: argparse.Namespace) -> None:
+    digests = generated_source_digests(args.root)
+    content = "".join(
+        f"{digest}  {relative}\n"
+        for relative, digest in digests.items()
+    )
+    write_new(args.manifest, content)
+
+
+def verify_generated_sources(args: argparse.Namespace) -> None:
+    actual = generated_source_digests(args.root)
+    if args.manifest is None:
+        return
+
+    expected = parse_generated_source_manifest(args.manifest)
+    missing = sorted(set(expected) - set(actual))
+    unexpected = sorted(set(actual) - set(expected))
+    modified = sorted(
+        relative
+        for relative in set(actual) & set(expected)
+        if actual[relative] != expected[relative]
+    )
+    if missing or unexpected or modified:
+        fail(
+            "generated source tree does not match its preparation manifest: "
+            f"missing={missing}, unexpected={unexpected}, modified={modified}"
+        )
+
+
+def artifact_files(root: Path) -> list[Path]:
+    if not root.is_dir():
+        fail(f"expected producer artifact directory is missing: {root}")
+    files: list[Path] = []
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            fail(f"producer artifact contains a symlink: {path}")
+        if path.is_file():
+            files.append(path)
+    return files
+
+
+def parse_sidecar(path: Path, expected_name: str) -> str:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        fail(f"checksum sidecar is not UTF-8: {path}")
+    # GNU sha256sum writes two spaces for text mode; shasum on Windows writes
+    # a space plus `*` for binary mode. Both are standard checksum sidecars.
+    match = re.fullmatch(r"([0-9a-f]{64}) ([ *])([^\r\n]+)\n?", text)
+    if match is None or match.group(3) != expected_name:
+        fail(
+            f"checksum sidecar must contain '<sha256>  {expected_name}': {path}"
+        )
+    return match.group(1)
+
+
+def write_new(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(content)
+    except FileExistsError:
+        fail(f"release contract output already exists: {path}")
+
+
+def stage_native(args: argparse.Namespace) -> None:
+    if SOURCE_SHA_RE.fullmatch(args.source_sha) is None:
+        fail("--source-sha must be a lowercase 40-character Git SHA")
+    if VERSION_RE.fullmatch(args.release_version) is None:
+        fail("--release-version must be a canonical BAML version")
+    if not args.workflow_run_id.isdigit() or int(args.workflow_run_id) < 1:
+        fail("--workflow-run-id must be a positive decimal run ID")
+
+    downloads = args.downloads.resolve()
+    staging = args.staging.resolve()
+    if staging.exists() and any(staging.iterdir()):
+        fail(f"staging directory must be empty: {staging}")
+    staging.mkdir(parents=True, exist_ok=True)
+
+    provenance_entries: list[dict[str, str]] = []
+    for entry in csharp_targets(args.platforms):
+        artifact_name = f"bridge-cffi-{entry['target']}"
+        root = downloads / artifact_name
+        files = artifact_files(root)
+        sources = [path for path in files if path.name == entry["producer_asset"]]
+        sidecars = [
+            path for path in files if path.name == f"{entry['producer_asset']}.sha256"
+        ]
+        if len(files) != 2 or len(sources) != 1 or len(sidecars) != 1:
+            fail(
+                f"{artifact_name} must contain exactly the native library and "
+                f"checksum sidecar; found {[path.name for path in files]}"
+            )
+        source = sources[0]
+        sidecar = sidecars[0]
+        if source.parent != sidecar.parent:
+            fail(f"{artifact_name}: native library and checksum are not siblings")
+        digest = parse_sidecar(sidecar, entry["producer_asset"])
+        if sha256(source) != digest:
+            fail(f"{artifact_name}: native checksum does not match")
+
+        runtime_path = (
+            Path("runtimes") / entry["rid"] / "native" / entry["canonical"]
+        )
+        destination = staging / runtime_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists():
+            fail(f"duplicate C# runtime destination: {runtime_path.as_posix()}")
+        shutil.copyfile(source, destination)
+        destination.chmod(
+            destination.stat().st_mode
+            | stat.S_IXUSR
+            | stat.S_IXGRP
+            | stat.S_IXOTH
+        )
+        if sha256(destination) != digest:
+            fail(f"{artifact_name}: staged native checksum does not match")
+        provenance_entries.append(
+            {
+                "target": entry["target"],
+                "producer_filename": entry["producer_asset"],
+                "runtime_path": runtime_path.as_posix(),
+                "sha256": digest,
+            }
+        )
+
+    provenance_entries.sort(key=lambda item: item["runtime_path"])
+    provenance = {
+        "schema": 1,
+        "source_sha": args.source_sha,
+        "release_version": args.release_version,
+        "workflow_run_id": args.workflow_run_id,
+        "artifacts": provenance_entries,
+    }
+    write_new(
+        args.provenance,
+        json.dumps(provenance, indent=2, sort_keys=True) + "\n",
+    )
+    write_new(
+        args.manifest,
+        "".join(
+            f"{entry['sha256']}  {entry['runtime_path']}\n"
+            for entry in provenance_entries
+        ),
+    )
+
+
+def load_plan(path: Path) -> tuple[str, str]:
+    plan = load_json(path, "release plan")
+    if not isinstance(plan, dict) or plan.get("schema") != 3:
+        fail("release plan must be a schema-3 JSON object")
+    canonical = require_string(plan.get("canonical_version"), "canonical_version")
+    registry_versions = plan.get("registry_versions")
+    if not isinstance(registry_versions, dict):
+        fail("release plan registry_versions must be a JSON object")
+    nuget = require_string(registry_versions.get("nuget"), "registry_versions.nuget")
+    return canonical, nuget
+
+
+def parse_manifest(path: Path) -> dict[str, str]:
+    rows: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        fail(f"native manifest does not exist: {path}")
+    for line in lines:
+        match = re.fullmatch(r"([0-9a-f]{64})  (runtimes/[^/\s]+/native/[^/\s]+)", line)
+        if match is None:
+            fail(f"invalid native manifest row: {line!r}")
+        runtime_path = match.group(2)
+        if runtime_path in rows:
+            fail(f"duplicate native manifest path: {runtime_path}")
+        rows[runtime_path] = match.group(1)
+    return rows
+
+
+def package_version(package: zipfile.ZipFile) -> str:
+    nuspec_names = [name for name in package.namelist() if name.endswith(".nuspec")]
+    if len(nuspec_names) != 1:
+        fail(f"NuGet package must contain exactly one nuspec; found {nuspec_names}")
+    try:
+        root = ElementTree.fromstring(package.read(nuspec_names[0]))
+    except ElementTree.ParseError as exc:
+        fail(f"NuGet nuspec is invalid XML: {exc}")
+    versions = [
+        element.text
+        for element in root.iter()
+        if element.tag.rsplit("}", 1)[-1] == "version"
+    ]
+    if len(versions) != 1 or not versions[0]:
+        fail("NuGet nuspec must contain exactly one nonempty version")
+    return versions[0]
+
+
+def verify_product(args: argparse.Namespace) -> None:
+    if SOURCE_SHA_RE.fullmatch(args.source_sha) is None:
+        fail("--source-sha must be a lowercase 40-character Git SHA")
+    canonical, nuget = load_plan(args.release_plan)
+    expected = csharp_targets(args.platforms)
+
+    provenance = load_json(args.provenance, "native provenance")
+    if not isinstance(provenance, dict):
+        fail("native provenance must be a JSON object")
+    if set(provenance) != {
+        "schema",
+        "source_sha",
+        "release_version",
+        "workflow_run_id",
+        "artifacts",
+    }:
+        fail("native provenance has an unexpected schema")
+    if provenance["schema"] != 1:
+        fail("native provenance schema must be 1")
+    if provenance["source_sha"] != args.source_sha:
+        fail("native provenance source SHA does not match")
+    if provenance["release_version"] != canonical:
+        fail("native provenance release version does not match")
+    if not isinstance(provenance["workflow_run_id"], str) or not provenance[
+        "workflow_run_id"
+    ].isdigit():
+        fail("native provenance workflow_run_id must be a decimal string")
+    artifacts = provenance["artifacts"]
+    if not isinstance(artifacts, list):
+        fail("native provenance artifacts must be an array")
+
+    expected_by_target = {entry["target"]: entry for entry in expected}
+    actual_by_target: dict[str, dict[str, str]] = {}
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or set(artifact) != {
+            "target",
+            "producer_filename",
+            "runtime_path",
+            "sha256",
+        }:
+            fail("native provenance artifact has an unexpected schema")
+        target = require_string(artifact.get("target"), "provenance target")
+        if target in actual_by_target:
+            fail(f"duplicate native provenance target: {target}")
+        if SHA256_RE.fullmatch(str(artifact.get("sha256"))) is None:
+            fail(f"{target}: invalid native provenance SHA-256")
+        actual_by_target[target] = artifact
+
+    if set(actual_by_target) != set(expected_by_target):
+        fail(
+            "native provenance target mismatch "
+            f"missing={sorted(set(expected_by_target) - set(actual_by_target))} "
+            f"extra={sorted(set(actual_by_target) - set(expected_by_target))}"
+        )
+
+    manifest = parse_manifest(args.manifest)
+    expected_paths: set[str] = set()
+    for target, entry in expected_by_target.items():
+        artifact = actual_by_target[target]
+        runtime_path = f"runtimes/{entry['rid']}/native/{entry['canonical']}"
+        expected_paths.add(runtime_path)
+        if artifact["producer_filename"] != entry["producer_asset"]:
+            fail(f"{target}: provenance producer filename does not match")
+        if artifact["runtime_path"] != runtime_path:
+            fail(f"{target}: provenance runtime path does not match")
+        if manifest.get(runtime_path) != artifact["sha256"]:
+            fail(f"{target}: native manifest digest does not match provenance")
+        if args.native_root is not None:
+            native = args.native_root / runtime_path
+            if not native.is_file() or sha256(native) != artifact["sha256"]:
+                fail(f"{target}: staged native does not match provenance")
+
+    if set(manifest) != expected_paths:
+        fail("native manifest paths do not match the C# platform contract")
+
+    if args.package is not None:
+        try:
+            with zipfile.ZipFile(args.package) as package:
+                names = package.namelist()
+                if len(names) != len(set(names)):
+                    fail("NuGet package contains duplicate entries")
+                if package_version(package) != nuget:
+                    fail("NuGet package version does not match the release plan")
+                for runtime_path in expected_paths:
+                    try:
+                        payload = package.read(runtime_path)
+                    except KeyError:
+                        fail(f"NuGet package is missing {runtime_path}")
+                    if hashlib.sha256(payload).hexdigest() != manifest[runtime_path]:
+                        fail(f"NuGet package native digest mismatch: {runtime_path}")
+        except FileNotFoundError:
+            fail(f"NuGet package does not exist: {args.package}")
+        except zipfile.BadZipFile as exc:
+            fail(f"NuGet package is not a valid zip archive: {exc}")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    validate = subparsers.add_parser("validate")
+    validate.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
+
+    matrix_parser = subparsers.add_parser("matrix")
+    matrix_parser.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
+
+    write_generated = subparsers.add_parser("write-generated-manifest")
+    write_generated.add_argument("--root", type=Path, required=True)
+    write_generated.add_argument("--manifest", type=Path, required=True)
+
+    verify_generated = subparsers.add_parser("verify-generated-sources")
+    verify_generated.add_argument("--root", type=Path, required=True)
+    verify_generated.add_argument("--manifest", type=Path)
+
+    stage = subparsers.add_parser("stage-native")
+    stage.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
+    stage.add_argument("--downloads", type=Path, required=True)
+    stage.add_argument("--staging", type=Path, required=True)
+    stage.add_argument("--source-sha", required=True)
+    stage.add_argument("--release-version", required=True)
+    stage.add_argument("--workflow-run-id", required=True)
+    stage.add_argument("--provenance", type=Path, required=True)
+    stage.add_argument("--manifest", type=Path, required=True)
+
+    verify = subparsers.add_parser("verify-product")
+    verify.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
+    verify.add_argument("--release-plan", type=Path, required=True)
+    verify.add_argument("--source-sha", required=True)
+    verify.add_argument("--provenance", type=Path, required=True)
+    verify.add_argument("--manifest", type=Path, required=True)
+    verify.add_argument("--native-root", type=Path)
+    verify.add_argument("--package", type=Path)
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    try:
+        if args.command == "validate":
+            targets = csharp_targets(args.platforms)
+            print(f"ok: {len(targets)} required C# targets")
+        elif args.command == "matrix":
+            print(json.dumps(matrix(args.platforms), separators=(",", ":")))
+        elif args.command == "write-generated-manifest":
+            write_generated_manifest(args)
+            print("ok: wrote C# generated source manifest")
+        elif args.command == "verify-generated-sources":
+            verify_generated_sources(args)
+            print("ok: C# generated source integrity")
+        elif args.command == "stage-native":
+            stage_native(args)
+        elif args.command == "verify-product":
+            verify_product(args)
+            print("ok: C# release product identity")
+    except ContractError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f() -> type {
+    // Locals:
+    let _0: type // _0 // return
+
+    bb0: {
+        _0 = load_type(#0[]);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

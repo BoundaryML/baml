@@ -2637,6 +2637,28 @@ export const TestAws = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestAwsCaching" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ * @param { string } not_cached - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestAwsCaching = async (
+  input: string,
+  not_cached: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestAwsCaching(
+    input,
+    not_cached,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestAwsClaude37" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -4370,6 +4392,25 @@ export const TestVertexClaude = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const __stream__ = b.stream.TestVertexClaude(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestVertexClaudeGlobal" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestVertexClaudeGlobal = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestVertexClaudeGlobal(
     input,
   );
   return Promise.resolve(__stream__.toStreamable());

@@ -1,0 +1,55 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Negative `is`-operator tests (moved from tests/is_operator.rs Group I).
+// Each function must fail to compile with a name/type-resolution error; the
+// diagnostics snapshot is the assertion. Valid syntax, so no parse errors.
+
+// `is` pattern bindings are scoped to the pattern test — they must NOT leak
+// into the surrounding scope, so `x` is unresolved afterwards.
+function binding_leak_scope() -> int {
+    let v: int | string = 7;
+    let _ = v is let x: int;
+    x
+}
+
+// Same property inside an `if` condition: the binding must not leak into the
+// `then` branch the way Rust's `if let` would.
+function binding_leak_if() -> int {
+    let v: int | string = 7;
+    if (v is let x: int) {
+        x
+    } else {
+        0
+    }
+}
+
+// Or-pattern bindings on each side also do not escape the pattern test.
+function or_pattern_leak() -> int {
+    let v: int | string = 7;
+    let _ = v is (let x: int) | (let x: string);
+    x
+}
+
+// Unresolved class head in a destructure pattern anchors at the type name.
+class WrapNonGeneric {
+    x: int,
+}
+
+function unresolved_class_head(v: WrapNonGeneric) -> bool {
+    v is Frobnitz { x }
+}
+
+// Unresolved generic argument in a class pattern anchors at the type name.
+class WrapGeneric<T> {
+    val: T,
+}
+
+function unresolved_generic_arg(v: WrapGeneric<int>) -> bool {
+    v is WrapGeneric<Missing>
+}
+
+// Unresolved type in a bare type pattern anchors at the type name.
+function unresolved_type_pattern(v: int | string) -> bool {
+    v is Frobnitz
+}

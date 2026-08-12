@@ -45,6 +45,13 @@ macro_rules! impl_options_convenience_methods {
             pub fn with_client_registry(&self, registry: &baml::ClientRegistry) -> Self {
                 self.with_options(self.options.clone().with_client_registry(registry))
             }
+
+            pub fn with_on_tick<F>(&self, callback: F) -> Self
+            where
+                F: Fn(&baml::FunctionLog) + Send + Sync + 'static,
+            {
+                self.with_options(self.options.clone().with_on_tick(callback))
+            }
         }
     };
 }

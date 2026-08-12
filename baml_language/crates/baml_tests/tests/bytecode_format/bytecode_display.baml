@@ -43,23 +43,23 @@ type Input = User | ErrorInfo
 //   discriminant, jump_table, type_tag, instanceof, copy, pop
 function score(input: Input, threshold: int) -> Report {
     let name = match (input) {
-        u: User => u.name,
-        e: ErrorInfo => e.message
+        let u: User => u.name,
+        let e: ErrorInfo => e.message
     };
 
     let age = match (input) {
-        u: User => u.age,
-        e: ErrorInfo => -e.code
+        let u: User => u.age,
+        let e: ErrorInfo => -e.code
     };
 
     let role_mult = match (input) {
-        u: User => match (u.role) {
+        let u: User => match (u.role) {
             Role.Admin => threshold,
             Role.Editor => threshold,
             Role.Viewer => threshold,
             Role.Guest => threshold
         },
-        e: ErrorInfo => threshold
+        let e: ErrorInfo => threshold
     };
 
     let base = age * 2 + role_mult;

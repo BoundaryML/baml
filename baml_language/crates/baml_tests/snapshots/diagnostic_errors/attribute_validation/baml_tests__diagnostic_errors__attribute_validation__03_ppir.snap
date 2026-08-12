@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 38200
+---
+=== PPIR ===
+class user.HasDuplicateDescription {
+  name: string
+}
+class user.HasDuplicateDescription$stream {
+  name: string | null
+}
+class user.HasDuplicateField {
+  name: string
+  age: int
+  name: int
+}
+class user.HasDuplicateField$stream {
+  name: string | null
+  age: int | null
+  name: int | null
+}
+class user.HasDuplicateFieldAttr {
+  name: string
+}
+class user.HasDuplicateFieldAttr$stream {
+  name: string | null
+}
+enum user.HasDuplicateEnumAttr {ONE, TWO}
+enum user.HasDuplicateVariant {RED, BLUE, RED}
+enum user.HasDuplicateVariantAttr {ACTIVE, INACTIVE}

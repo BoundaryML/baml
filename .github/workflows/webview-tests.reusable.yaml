@@ -15,12 +15,12 @@ defaults:
     shell: bash
 
 jobs:
-  unit-tests:
-    name: "Unit Tests (jsdom)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  typecheck:
+    name: "Typecheck"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -39,11 +39,79 @@ jobs:
           workspaces: "baml_language -> target"
           # Share cache across similar Linux WASM jobs for better hit rates
           shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
-      - name: "Install wasm-pack"
-        uses: taiki-e/install-action@v2
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
         with:
-          tool: wasm-pack
+          install_args: "github:rustwasm/wasm-pack"
+
+      # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
+      # and pkg-proto/src/generated, so both must be present before tsc runs.
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Generate proto types"
+        run: pnpm --filter @b/pkg-proto generate
+        working-directory: typescript2
+
+      - name: "Typecheck pkg-proto"
+        run: pnpm --filter @b/pkg-proto typecheck
+        working-directory: typescript2
+
+      - name: "Typecheck app-vscode-webview"
+        run: pnpm --filter app-vscode-webview typecheck
+        working-directory: typescript2
+
+  unit-tests:
+    name: "Unit Tests (jsdom)"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux WASM jobs for better hit rates
+          shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm
@@ -55,10 +123,10 @@ jobs:
 
   browser-tests:
     name: "Browser Tests (Playwright)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
         with:
           persist-credentials: false
 
@@ -77,11 +145,21 @@ jobs:
           workspaces: "baml_language -> target"
           # Share cache across similar Linux WASM jobs for better hit rates
           shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
 
-      - name: "Install wasm-pack"
-        uses: taiki-e/install-action@v2
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # node + pnpm come from setup-node2 above; we only need mise for
+      # wasm-pack here.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
         with:
-          tool: wasm-pack
+          install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
         run: pnpm --filter pkg-playground build:wasm
@@ -94,48 +172,3 @@ jobs:
       - name: "Run browser tests"
         run: pnpm --filter app-vscode-webview test:browser:run
         working-directory: typescript2
-
-  hmr-tests:
-    name: "HMR Tests (Hot Reload)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Setup Node.js for typescript2"
-        uses: ./.github/actions/setup-node2
-
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-
-      - name: "Install wasm-pack"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-pack
-
-      - name: "Build WASM (initial)"
-        run: pnpm --filter pkg-playground build:wasm
-        working-directory: typescript2
-
-      - name: "Install Playwright browsers"
-        run: npx playwright install chromium
-        working-directory: typescript2/app-vscode-webview
-
-      - name: "Run HMR tests"
-        run: pnpm --filter app-vscode-webview test:hmr
-        working-directory: typescript2
-        timeout-minutes: 0.5
-        env:
-          DEBUG_HMR: "1"

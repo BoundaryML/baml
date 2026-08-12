@@ -398,3 +398,53 @@ class WithDesc {
 // don't leak into user types with the same name.
 // TODO: Add project-based test in projects/stream_crosspackage/ once
 // multi-package test support is available.
+
+// ── Generic args threaded through stream-expanded references ────────────────
+
+#[test]
+fn stream_companion_preserves_generic_args_in_class_field() {
+    // `Container.inner: Box<int>` should round-trip into `Container$stream`
+    // with `inner: null | Box$stream<int>`. Without threading `generic_args`
+    // through PPIR's stream rewrite, `Box$stream` would lose its arg and
+    // mismatch the synthesized `Box$stream<T>` arity.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box<T> {
+    value T
+}
+
+class Container {
+    inner Box<int>
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn stream_companion_preserves_generic_args_for_llm_return_type() {
+    // Reviewer's exact scenario: an LLM function returning `Box<int>` pulls
+    // the stream-expanded `Box$stream<int>` type companion into play. With
+    // generic-arg threading, the reference matches `Box$stream<T>`'s arity.
+    // (The legacy LLM `$stream`/`$parse_stream` function companions are gone;
+    // the class-level `$stream` type expansion is what this pins now.)
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box<T> {
+    value T
+}
+
+client Dummy = openai.OpenAiClient.new(model = "gpt-4");
+
+function GetBoxedInt() -> Box<int> {
+    client Dummy
+    prompt `Give me a box`
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}

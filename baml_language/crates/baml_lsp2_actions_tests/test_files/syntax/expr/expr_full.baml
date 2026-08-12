@@ -1,18 +1,18 @@
 function MakePoem(length: int) -> string {
     client GPT4o
-    prompt #"Write a poem {{ length }} lines long."#
+    prompt `Write a poem ${length} lines long.`
 }
 
 function CombinePoems(poem1: string, poem2: string) -> string {
     client GPT4o
-    prompt #"Combine the following two poems into one poem.
+    prompt `Combine the following two poems into one poem.
 
     Poem 1:
-    {{ poem1 }}
+    ${poem1}
 
     Poem 2:
-    {{ poem2 }}
-    "#
+    ${poem2}
+    `
 }
 
 let poem = MakePoem(10);
@@ -56,13 +56,10 @@ test OuterPyramid() {
   args { }
 }
 
-client<llm> GPT4o {
-  provider openai
-  options {
-    model gpt-4o
-    api_key env.OPENAI_API_KEY
-  }
-}
+client GPT4o = openai.OpenAiClient.new(
+    model = "gpt-4o",
+    api_key = env.OPENAI_API_KEY,
+);
 
 test TestMakePoem() {
     functions [MakePoem]
@@ -71,57 +68,164 @@ test TestMakePoem() {
 
 //----
 //- diagnostics
-// Error: remove parentheses from test name: `test TestPipeline`
-//     ╭─[ expr_expr_full.baml:44:18 ]
-//     │
+// E0003
+//
+//   × unresolved name: `poem`
+//     ╭─[expr_expr_full.baml:41:16]
+//  41 │   CombinePoems(poem, another)
+//     ·                ────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `another`
+//     ╭─[expr_expr_full.baml:41:22]
+//  41 │   CombinePoems(poem, another)
+//     ·                      ───────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `TestPipeline`
+//     ╭─[expr_expr_full.baml:44:6]
 //  44 │ test TestPipeline() {
-//     │                  ─┬  
-//     │                   ╰── remove parentheses from test name: `test TestPipeline`
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: remove parentheses from test name: `test TestPyramid`
-//     ╭─[ expr_expr_full.baml:49:17 ]
-//     │
+//     ·      ────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:45:3]
+//  45 │   functions [Pipeline]
+//     ·   ─────────
+//     ╰────
+// E0002
+//
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:46:3]
+//  46 │   args { }
+//     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `TestPyramid`
+//     ╭─[expr_expr_full.baml:49:6]
 //  49 │ test TestPyramid() {
-//     │                 ─┬  
-//     │                  ╰── remove parentheses from test name: `test TestPyramid`
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: remove parentheses from test name: `test OuterPyramid`
-//     ╭─[ expr_expr_full.baml:54:18 ]
-//     │
-//  54 │ test OuterPyramid() {
-//     │                  ─┬  
-//     │                   ╰── remove parentheses from test name: `test OuterPyramid`
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: remove parentheses from test name: `test TestMakePoem`
-//     ╭─[ expr_expr_full.baml:67:18 ]
-//     │
-//  67 │ test TestMakePoem() {
-//     │                  ─┬  
-//     │                   ╰── remove parentheses from test name: `test TestMakePoem`
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: unresolved name: poem
-//     ╭─[ expr_expr_full.baml:41:16 ]
-//     │
-//  41 │   CombinePoems(poem, another)
-//     │                ──┬─  
-//     │                  ╰─── unresolved name: poem
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: another
-//     ╭─[ expr_expr_full.baml:41:22 ]
-//     │
-//  41 │   CombinePoems(poem, another)
-//     │                      ───┬───  
-//     │                         ╰───── unresolved name: another
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·      ───────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:50:3]
+//  50 │   functions [Pyramid]
+//     ·   ─────────
+//     ╰────
+// E0002
+//
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:51:3]
+//  51 │   args { }
+//     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:55:3]
+//  55 │   functions [OuterPyramid]
+//     ·   ─────────
+//     ╰────
+// E0002
+//
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:56:3]
+//  56 │   args { }
+//     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `TestMakePoem`
+//     ╭─[expr_expr_full.baml:64:6]
+//  64 │ test TestMakePoem() {
+//     ·      ────────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:65:5]
+//  65 │     functions [MakePoem]
+//     ·     ─────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `args`
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     args { length 4 }
+//     ·     ────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `length`
+//     ╭─[expr_expr_full.baml:66:12]
+//  66 │     args { length 4 }
+//     ·            ──────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:45:3]
+//  45 │   functions [Pipeline]
+//     ·   ─────────
+//     ╰────
+// E0002
+//
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:46:3]
+//  46 │   args { }
+//     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:50:3]
+//  50 │   functions [Pyramid]
+//     ·   ─────────
+//     ╰────
+// E0002
+//
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:51:3]
+//  51 │   args { }
+//     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:55:3]
+//  55 │   functions [OuterPyramid]
+//     ·   ─────────
+//     ╰────
+// E0002
+//
+//   × unresolved type: args
+//     ╭─[expr_expr_full.baml:56:3]
+//  56 │   args { }
+//     ·   ────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `functions`
+//     ╭─[expr_expr_full.baml:65:5]
+//  65 │     functions [MakePoem]
+//     ·     ─────────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `args`
+//     ╭─[expr_expr_full.baml:66:5]
+//  66 │     args { length 4 }
+//     ·     ────
+//     ╰────
+// E0003
+//
+//   × unresolved name: `length`
+//     ╭─[expr_expr_full.baml:66:12]
+//  66 │     args { length 4 }
+//     ·            ──────
+//     ╰────

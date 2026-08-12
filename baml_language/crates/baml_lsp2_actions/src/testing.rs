@@ -4,6 +4,7 @@
 //! the cursor position (immediately to the LEFT of the marker).
 
 use std::{
+    fmt::Write as _,
     path::PathBuf,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -15,6 +16,7 @@ use text_size::TextSize;
 
 use crate::{
     definition::{Location, definition_at},
+    describe::SymbolDescription,
     usages::usages_at,
 };
 
@@ -277,6 +279,187 @@ fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize) {
     let last_newline = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
     let column = clamped - last_newline + 1;
     (line, column)
+}
+
+// ── Project-level test infrastructure (no cursor needed) ────────────────────
+
+/// A test project with multiple BAML files for project-level IDE features.
+pub(crate) struct ProjectTest {
+    pub(crate) db: TestDb,
+    pub(crate) files: Vec<SourceFile>,
+}
+
+impl ProjectTest {
+    /// Create a builder for multi-file project tests.
+    pub(crate) fn builder() -> ProjectTestBuilder {
+        ProjectTestBuilder::default()
+    }
+
+    /// Run `describe()` on a symbol name and return the results.
+    pub(crate) fn describe(&self, name: &str) -> Vec<SymbolDescription> {
+        crate::describe::describe(&self.db, &self.files, name)
+    }
+
+    /// Run `describe()` using the compiler2-visible file set.
+    #[allow(dead_code)]
+    pub(crate) fn describe_compiler2_visible(&self, name: &str) -> Vec<SymbolDescription> {
+        let files = baml_compiler2_hir::compiler2_all_files(&self.db);
+        crate::describe::describe(&self.db, &files, name)
+    }
+
+    /// Run `list_package_items()` for the user package and return the result.
+    pub(crate) fn list_package_items_user(&self) -> Vec<crate::listing::ListingEntry> {
+        let package_id =
+            baml_compiler2_hir::package::PackageId::new(&self.db, baml_base::Name::new("user"));
+        crate::listing::list_package_items(&self.db, package_id)
+    }
+
+    /// Run `list_namespace_items()` for a user namespace.
+    pub(crate) fn list_namespace_items_user(
+        &self,
+        ns_segments: &[&str],
+    ) -> Option<Vec<crate::listing::ListingEntry>> {
+        let package_id =
+            baml_compiler2_hir::package::PackageId::new(&self.db, baml_base::Name::new("user"));
+        let ns_path: Vec<baml_base::Name> = ns_segments.iter().map(baml_base::Name::new).collect();
+        crate::listing::list_namespace_items(&self.db, package_id, &ns_path)
+    }
+
+    /// Format a `ListingEntry` for snapshot comparison.
+    pub(crate) fn format_listing_entry(&self, entry: &crate::listing::ListingEntry) -> String {
+        let filename = entry
+            .file
+            .path(&self.db)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        format!(
+            "{:<16} {:<32} {}:{}",
+            entry.kind.as_str(),
+            entry.fqn(),
+            filename,
+            entry.line,
+        )
+    }
+
+    /// Format a `SymbolDescription` for snapshot comparison.
+    pub(crate) fn format_description(&self, desc: &SymbolDescription) -> String {
+        let mut out = String::new();
+        let filename = desc
+            .file
+            .path(&self.db)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let text = desc.file.text(&self.db);
+        let offset: usize = desc.name_span.start().into();
+        let (line, _col) = offset_to_line_col(text, offset);
+
+        let fqn = desc
+            .canonical_fqn
+            .as_deref()
+            .map(|f| format!("  ({f})"))
+            .unwrap_or_default();
+        writeln!(
+            out,
+            "{} {}{}  {}:{}",
+            desc.kind, desc.name, fqn, filename, line
+        )
+        .unwrap();
+        if let Some(ref doc) = desc.docstring {
+            for line in doc.lines() {
+                if line.is_empty() {
+                    writeln!(out, "///").unwrap();
+                } else {
+                    writeln!(out, "/// {line}").unwrap();
+                }
+            }
+        }
+        writeln!(out, "shape: {}", desc.shape).unwrap();
+        if !desc.instance_methods.is_empty() {
+            writeln!(out, "methods:").unwrap();
+            for m in &desc.instance_methods {
+                if let Some(doc) = &m.docstring {
+                    writeln!(out, "  /// {doc}").unwrap();
+                }
+                writeln!(out, "  {}", m.signature).unwrap();
+            }
+        }
+        if !desc.static_methods.is_empty() {
+            writeln!(out, "static_methods:").unwrap();
+            for m in &desc.static_methods {
+                if let Some(doc) = &m.docstring {
+                    writeln!(out, "  /// {doc}").unwrap();
+                }
+                writeln!(out, "  {}", m.signature).unwrap();
+            }
+        }
+        if let Some(ref c) = desc.container {
+            writeln!(out, "container: {}", c.name).unwrap();
+        }
+        if !desc.dependencies.is_empty() {
+            out.push_str("deps:");
+            for dep in &desc.dependencies {
+                write!(out, " {}", dep.name).unwrap();
+            }
+            out.push('\n');
+        }
+        if !desc.references.is_empty() {
+            writeln!(out, "refs: {}", desc.references.len()).unwrap();
+            for r in &desc.references {
+                let rfile = r
+                    .file
+                    .path(&self.db)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                writeln!(out, "  {}:{}  {}", rfile, r.line_number, r.line_text.trim()).unwrap();
+            }
+        }
+        out
+    }
+}
+
+/// Builder for project tests supporting multiple files (no cursor).
+#[derive(Default)]
+pub(crate) struct ProjectTestBuilder {
+    sources: Vec<(String, String)>,
+}
+
+impl ProjectTestBuilder {
+    /// Add a source file to the test project.
+    pub(crate) fn source(&mut self, filename: &str, content: &str) -> &mut Self {
+        self.sources
+            .push((filename.to_string(), content.to_string()));
+        self
+    }
+
+    /// Build the project test.
+    pub(crate) fn build(self) -> ProjectTest {
+        let mut db = TestDb::default();
+        db.init();
+
+        let mut user_files: Vec<SourceFile> = Vec::new();
+        for (filename, content) in &self.sources {
+            let path = PathBuf::from("/test").join(filename);
+            let file = db.add_file(path, content);
+            user_files.push(file);
+        }
+
+        // Update the project's file list.
+        db.project
+            .unwrap()
+            .set_files(&mut db)
+            .to(user_files.clone());
+
+        ProjectTest {
+            db,
+            files: user_files,
+        }
+    }
 }
 
 #[cfg(test)]

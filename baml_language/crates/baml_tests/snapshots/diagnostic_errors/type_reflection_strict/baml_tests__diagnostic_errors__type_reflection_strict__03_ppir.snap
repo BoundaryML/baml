@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.User {
+  name: string
+}
+class user.User$stream {
+  name: string | null
+}
+function user.reflect_type_to_int() -> int  [expr] {
+  { let x: int = reflect.type_of(); return x }
+}
+function user.too_many_type_args() -> type  [expr] {
+  {  } reflect.type_of()
+}
+function user.unknown_type_in_reflect() -> type  [expr] {
+  {  } reflect.type_of()
+}
+function user.assign_type_to_int(function_name: string) -> int  [expr] {
+  { let x: int = baml.prompt.get_return_type(function_name); return x }
+}
+function user.pass_type_as_string(function_name: string) -> string  [expr] {
+  { let t = baml.prompt.get_return_type(function_name); return t }
+}
+function user.type_to_type(function_name: string) -> type  [expr] {
+  { let t: type = baml.prompt.get_return_type(function_name); return t }
+}

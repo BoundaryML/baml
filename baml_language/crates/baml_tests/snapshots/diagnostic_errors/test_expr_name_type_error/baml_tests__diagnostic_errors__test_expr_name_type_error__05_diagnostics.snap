@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0004
+
+  × operator `+` cannot be applied to `"a"` and `1`
+   ╭─[main.baml:3:6]
+ 3 │ test "a" + 1 {
+   ·      ───────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[main.baml:7:6]
+ 7 │ test 42 {
+   ·      ─┬
+   ·       ╰── expected `string`, found `42`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:13:11]
+ 13 │     test (5 + i) {
+    ·           ──┬──
+    ·             ╰── expected `string`, found `int`
+    ╰────

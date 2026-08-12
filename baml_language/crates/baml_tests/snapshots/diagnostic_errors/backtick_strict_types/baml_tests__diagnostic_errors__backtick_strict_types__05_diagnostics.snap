@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[main.baml:23:12]
+ 23 │     `val: ${x}`
+    ·            ───
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[main.baml:34:14]
+ 34 │     `count: ${c}`
+    ·              ───
+    ╰────

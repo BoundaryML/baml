@@ -1,6 +1,10 @@
-//! Unified tests for filesystem operations.
+//! Filesystem operation tests requiring host-side capabilities.
+//!
+//! Tests here need features BAML doesn't support: creating symlinks and
+//! asserting compile-time type mismatches via `#[should_panic]`.
 
 use baml_tests::baml_test;
+#[cfg(unix)]
 use bex_external_types::BexExternalValue;
 use indexmap::{IndexMap, indexmap};
 
@@ -16,89 +20,78 @@ fn tmp(files: IndexMap<&str, &str>) -> (tempfile::TempDir, String) {
     (tmp, root)
 }
 
-/// Replace the temp dir path with a stable placeholder.
-fn stabilize(s: &str, root: &str) -> String {
-    s.replace(root, "{TMPDIR}")
-}
-
 #[tokio::test]
-async fn fs_open_only() {
-    let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from BAML!" });
+#[should_panic(expected = "mismatched types")]
+async fn fs_file_invalid_mode() {
+    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
 
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> int {{
-                let file = baml.fs.open("{root}/hello.txt");
-                42
-            }}
-        "#
-    ));
-
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
-    function main() -> int {
-        load_const "{TMPDIR}/hello.txt"
-        dispatch_future baml.fs.open
-        await
-        store_var file
-        load_const 42
-        return
-    }
-    "#);
-    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
-}
-
-#[tokio::test]
-async fn fs_open_and_read() {
-    let (_tmp, root) = tmp(indexmap! { "hello.txt" => "Hello from BAML!" });
-
-    let output = baml_test!(&format!(
+    // The mode parameter is a string-literal union, so invalid modes like "x"
+    // are caught at compile time as a type mismatch.
+    let _output = baml_test!(&format!(
         r#"
             function main() -> string {{
-                let file = baml.fs.open("{root}/hello.txt");
-                file.read()
+                let file = baml.fs.open("{root}/file.txt", "x");
+                file.text()
             }}
         "#
     ));
-
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
-    function main() -> string {
-        load_const "{TMPDIR}/hello.txt"
-        dispatch_future baml.fs.open
-        await
-        dispatch_future baml.fs.File.read
-        await
-        return
-    }
-    "#);
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("Hello from BAML!".to_string()))
-    );
 }
 
+#[cfg(unix)]
 #[tokio::test]
-async fn fs_open_nonexistent_file() {
+async fn fs_remove_on_symlink_to_dir_removes_link() {
+    // remove() detects directories via symlink_metadata, which does NOT follow
+    // the final component — so a symlink pointing at a directory is removed as a
+    // link (it does not trigger the "it is a directory" guidance), and the real
+    // directory it targets survives.
     let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/real_dir")).unwrap();
+    std::fs::write(format!("{root}/real_dir/keep.txt"), "x").unwrap();
+    std::os::unix::fs::symlink(format!("{root}/real_dir"), format!("{root}/link")).unwrap();
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> string {{
-                let file = baml.fs.open("{root}/nonexistent.txt");
-                file.read()
+            function main() -> null {{
+                baml.fs.remove("{root}/link")
             }}
         "#
     ));
 
-    insta::assert_snapshot!(stabilize(&output.bytecode, &root), @r#"
-    function main() -> string {
-        load_const "{TMPDIR}/nonexistent.txt"
-        dispatch_future baml.fs.open
-        await
-        dispatch_future baml.fs.File.read
-        await
-        return
-    }
-    "#);
-    // Error message contains OS error text which may differ across platforms.
-    assert!(output.result.is_err());
+    assert!(output.result.is_ok(), "got: {:?}", output.result);
+    assert!(!std::path::Path::new(&format!("{root}/link")).exists());
+    // The symlink's target and its contents are untouched.
+    assert!(std::path::Path::new(&format!("{root}/real_dir/keep.txt")).exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_read_dir_reports_symlink_flag() {
+    let (_tmp, root) = tmp(indexmap! { "target.txt" => "content" });
+    std::os::unix::fs::symlink(format!("{root}/target.txt"), format!("{root}/link.txt")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> baml.fs.DirEntry[] {{
+                baml.fs.read_dir("{root}")
+            }}
+        "#
+    ));
+
+    let Ok(BexExternalValue::Array { items, .. }) = &output.result else {
+        panic!("expected array, got: {:?}", output.result);
+    };
+    let link = items
+        .iter()
+        .find_map(|item| {
+            let BexExternalValue::Instance { fields, .. } = item else {
+                return None;
+            };
+            match &fields["name"] {
+                BexExternalValue::String(name) if name == "link.txt" => Some(fields),
+                _ => None,
+            }
+        })
+        .expect("expected link.txt entry");
+
+    assert_eq!(link["is_symlink"], BexExternalValue::Bool(true));
 }

@@ -1,0 +1,22 @@
+id: go-test
+language: Go
+rule:
+  pattern: 'func $NAME($T *testing.T) { $$$BODY }'
+constraints:
+  NAME:
+    regex: '^Test_[A-Za-z0-9_]+$'
+---
+id: go-audit-test
+language: Go
+rule:
+  pattern: 'func $NAME($T *testing.T) { $$$BODY }'
+constraints:
+  NAME:
+    regex: '^Test[A-Za-z0-9_]*$'
+---
+id: sdk-parity-lint-skip
+language: Go
+rule:
+  all:
+    - kind: comment
+    - regex: 'SDK_PARITY_LINT\(skip\):'

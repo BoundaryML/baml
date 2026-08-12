@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use baml_builtins::PromptAst;
+use baml_builtins2::{PromptAst, PromptAstSimple};
 use serde_json::Value;
 
 use crate::{AllowedMetadata, ModelFeatures};
@@ -84,6 +84,69 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
     }
 }
 
+/// If a prompt has media but no user message, move media-bearing messages to
+/// the user role for providers whose media inputs belong there.
+///
+/// This preserves the normal `OpenAI` default of treating unrole-tagged text as
+/// a system message while keeping unrole-tagged image prompts valid: a simple
+/// `Describe this: {{ img }}` prompt is wrapped as `system` first, then changed
+/// to `user` only because it contains media and there are no user messages.
+pub(super) fn promote_media_to_user_when_no_user_message(
+    prompt: bex_vm_types::PromptAst,
+) -> bex_vm_types::PromptAst {
+    if has_user_message(&prompt) || !has_media(&prompt) {
+        return prompt;
+    }
+
+    promote_media_messages_to_user(prompt)
+}
+
+fn has_user_message(prompt: &bex_vm_types::PromptAst) -> bool {
+    match prompt.as_ref() {
+        PromptAst::Message { role, .. } => role == "user",
+        PromptAst::Vec(items) => items.iter().any(has_user_message),
+        PromptAst::Simple(_) => false,
+    }
+}
+
+fn has_media(prompt: &bex_vm_types::PromptAst) -> bool {
+    match prompt.as_ref() {
+        PromptAst::Message { content, .. } | PromptAst::Simple(content) => {
+            simple_has_media(content.as_ref())
+        }
+        PromptAst::Vec(items) => items.iter().any(has_media),
+    }
+}
+
+fn simple_has_media(content: &PromptAstSimple) -> bool {
+    match content {
+        PromptAstSimple::String(_) => false,
+        PromptAstSimple::Media(_) => true,
+        PromptAstSimple::Multiple(items) => items.iter().any(|item| simple_has_media(item)),
+    }
+}
+
+fn promote_media_messages_to_user(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
+    match prompt.as_ref() {
+        PromptAst::Message {
+            role,
+            content,
+            metadata,
+        } if role != "user" && simple_has_media(content.as_ref()) => Arc::new(PromptAst::Message {
+            role: "user".to_string(),
+            content: content.clone(),
+            metadata: metadata.clone(),
+        }),
+        PromptAst::Vec(items) => Arc::new(PromptAst::Vec(
+            items
+                .iter()
+                .map(|item| promote_media_messages_to_user(item.clone()))
+                .collect(),
+        )),
+        _ => prompt,
+    }
+}
+
 /// Consolidate system prompts based on provider capabilities.
 ///
 /// When `max_one_system_prompt` is true:
@@ -152,6 +215,53 @@ pub(super) fn consolidate_system_prompts(
             metadata: metadata.clone(),
         }),
         _ => prompt,
+    }
+}
+
+/// Validate that all message roles are in `allowed_roles`, then remap them.
+///
+/// Validation happens on the original role names (before remapping).
+/// Roles not present in the remap map are left unchanged.
+pub(super) fn validate_and_remap_roles(
+    prompt: bex_vm_types::PromptAst,
+    allowed_roles: &[String],
+    remap: Option<&indexmap::IndexMap<String, String>>,
+) -> Result<bex_vm_types::PromptAst, super::SpecializePromptError> {
+    validate_and_remap_recursive(prompt, allowed_roles, remap)
+}
+
+fn validate_and_remap_recursive(
+    prompt: bex_vm_types::PromptAst,
+    allowed_roles: &[String],
+    remap: Option<&indexmap::IndexMap<String, String>>,
+) -> Result<bex_vm_types::PromptAst, super::SpecializePromptError> {
+    match prompt.as_ref() {
+        PromptAst::Message {
+            role,
+            content,
+            metadata,
+        } => {
+            if !allowed_roles.contains(role) {
+                return Err(super::SpecializePromptError::DisallowedRole {
+                    role: role.clone(),
+                    allowed: allowed_roles.to_vec(),
+                });
+            }
+            let new_role = remap.and_then(|m| m.get(role)).unwrap_or(role).clone();
+            Ok(Arc::new(PromptAst::Message {
+                role: new_role,
+                content: content.clone(),
+                metadata: metadata.clone(),
+            }))
+        }
+        PromptAst::Vec(items) => {
+            let mapped = items
+                .iter()
+                .map(|item| validate_and_remap_recursive(item.clone(), allowed_roles, remap))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Arc::new(PromptAst::Vec(mapped)))
+        }
+        PromptAst::Simple(_) => Ok(prompt),
     }
 }
 
@@ -269,13 +379,13 @@ mod tests {
 
     #[test]
     fn test_override_max_one_system_prompt() {
-        let features = ModelFeatures::for_provider(
+        let mut features = ModelFeatures::for_provider(
             LlmProvider::Anthropic,
-            &crate::baml_std::PrimitiveClientOptions {
-                max_one_system_prompt: Some(false),
-                ..crate::baml_std::PrimitiveClientOptions::default()
-            },
+            &crate::baml_std::PrimitiveClientOptions::default(),
         );
+        // Override max_one_system_prompt directly since the field was removed
+        // from PrimitiveClientOptions.
+        features.max_one_system_prompt = false;
         assert!(!features.max_one_system_prompt);
     }
 
@@ -451,5 +561,91 @@ mod tests {
             msg("assistant", "I'm fine"),
         ]));
         assert_eq!(result, expected);
+    }
+
+    // ---- validate_and_remap_roles tests ----
+
+    fn allowed(roles: &[&str]) -> Vec<String> {
+        roles.iter().map(std::string::ToString::to_string).collect()
+    }
+
+    #[test]
+    fn test_validate_and_remap_no_remap() {
+        let prompt = msg("user", "Hello");
+        let result = validate_and_remap_roles(prompt.clone(), &allowed(&["user"]), None).unwrap();
+        assert_eq!(result, prompt);
+    }
+
+    #[test]
+    fn test_validate_and_remap_empty_map() {
+        let prompt = msg("user", "Hello");
+        let result = validate_and_remap_roles(
+            prompt.clone(),
+            &allowed(&["user"]),
+            Some(&indexmap::IndexMap::new()),
+        )
+        .unwrap();
+        assert_eq!(result, prompt);
+    }
+
+    #[test]
+    fn test_validate_and_remap_single_message() {
+        let mut map = indexmap::IndexMap::new();
+        map.insert("user".to_string(), "human".to_string());
+        let prompt = msg("user", "Hello");
+        let result = validate_and_remap_roles(prompt, &allowed(&["user"]), Some(&map)).unwrap();
+        assert_eq!(result, msg("human", "Hello"));
+    }
+
+    #[test]
+    fn test_validate_and_remap_multiple_messages() {
+        let mut map = indexmap::IndexMap::new();
+        map.insert("user".to_string(), "human".to_string());
+        map.insert("assistant".to_string(), "ai".to_string());
+        map.insert("system".to_string(), "instructions".to_string());
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "Be helpful"),
+            msg("user", "Hello"),
+            msg("assistant", "Hi there"),
+        ]));
+        let result = validate_and_remap_roles(
+            prompt,
+            &allowed(&["system", "user", "assistant"]),
+            Some(&map),
+        )
+        .unwrap();
+        let expected = Arc::new(PromptAst::Vec(vec![
+            msg("instructions", "Be helpful"),
+            msg("human", "Hello"),
+            msg("ai", "Hi there"),
+        ]));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_validate_and_remap_unmapped_role_unchanged() {
+        let mut map = indexmap::IndexMap::new();
+        map.insert("user".to_string(), "human".to_string());
+
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "Be helpful"),
+            msg("user", "Hello"),
+        ]));
+        let result =
+            validate_and_remap_roles(prompt, &allowed(&["system", "user"]), Some(&map)).unwrap();
+        let expected = Arc::new(PromptAst::Vec(vec![
+            msg("system", "Be helpful"),
+            msg("human", "Hello"),
+        ]));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_validate_rejects_disallowed_role() {
+        let prompt = msg("admin", "Hello");
+        let result = validate_and_remap_roles(prompt, &allowed(&["user", "assistant"]), None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("admin"));
     }
 }

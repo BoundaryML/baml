@@ -14,7 +14,7 @@ macro_rules! baml_tyannotated {
         $crate::baml_tyannotated!($($inner)+ $(@$first_part$(.$part)*$(($($attr_args)*))?)*)
     };
     // Negative literal
-    (-$lit:literal $(@$attr_name:ident($($attr_args:tt)*))*) => {
+    (-$lit:literal $(@$attr_name:ident$(($($attr_args:tt)*))?)*) => {
         $crate::sap_model::AnnotatedTy::new(
             $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::from($crate::sap_model::LiteralTy::from(-$lit))),
             $crate::__parse_ty_attrs!{$(@$attr_name($($attr_args)*))*}
@@ -25,22 +25,22 @@ macro_rules! baml_tyannotated {
         $crate::sap_model::TyWithMeta::new($crate::baml_ty!($ty), annotations)
     }};
     // StreamState cannot have attributes as it is not a user-provided type.
-    (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*>) => {
+    (StreamState<$inner:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*>) => {
         $crate::sap_model::TyWithMeta::new(
-            $crate::baml_ty!(StreamState<$inner $(@$attr_name($($attr_args)*))*>),
+            $crate::baml_ty!(StreamState<$inner $(@$attr_name$(($($attr_args)*))?)*>),
             $crate::sap_model::TypeAnnotations::default(),
         )
     };
     (map<
-        $key_ty:tt $(@$key_attr_name:ident($($key_attr_args:tt)*))*,
-        $value_ty:tt $(@$value_attr_name:ident($($value_attr_args:tt)*))*
-    > $(@$attr_name:ident($($attr_args:tt)*))*) => {
+        $key_ty:tt $(@$key_attr_name:ident$(($($key_attr_args:tt)*))?)*,
+        $value_ty:tt $(@$value_attr_name:ident$(($($value_attr_args:tt)*))?)*
+    > $(@$attr_name:ident$(($($attr_args:tt)*))?)*) => {
         $crate::sap_model::TyWithMeta::new(
             $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Map($crate::sap_model::MapTy {
-                key: Box::new($crate::baml_tyannotated!($key_ty $(@$key_attr_name($($key_attr_args)*))*)),
-                value: Box::new($crate::baml_tyannotated!($value_ty $(@$value_attr_name($($value_attr_args)*))*)),
+                key: Box::new($crate::baml_tyannotated!($key_ty $(@$key_attr_name$(($($key_attr_args)*))?)*)),
+                value: Box::new($crate::baml_tyannotated!($value_ty $(@$value_attr_name$(($($value_attr_args)*))?)*)),
             })),
-            $crate::__parse_ty_attrs!{$(@$attr_name($($attr_args)*))*}
+            $crate::__parse_ty_attrs!{$(@$attr_name$(($($attr_args)*))?)*}
         )
     };
     ($($tt:tt)+) => {{
@@ -76,9 +76,9 @@ macro_rules! __baml_tyannotated_union_muncher {
         $crate::__parse_ty_attrs!{$(@$attr($($attr_args)*))*}
     }};
     // last as tt
-    ($vec:ident <= ($last:tt $(@$last_attr:ident($($last_attr_args:tt)*))*)) => {{
+    ($vec:ident <= ($last:tt $(@$last_attr:ident$(($($last_attr_args:tt)*))?)*)) => {{
         $vec.push($crate::baml_tyannotated!($last));
-        $crate::__parse_ty_attrs!{$(@$last_attr($($last_attr_args)*))*}
+        $crate::__parse_ty_attrs!{$(@$last_attr$(($($last_attr_args)*))?)*}
     }};
     // item as StreamState (stream state cannot have attributes)
     ($vec:ident <= (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*> | $($rest:tt)+)) => {{
@@ -114,6 +114,9 @@ macro_rules! baml_ty {
     (int) => {
         $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Int($crate::sap_model::IntTy))
     };
+    (bigint) => {
+        $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Bigint($crate::sap_model::BigintTy))
+    };
     (float) => {
         $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Float($crate::sap_model::FloatTy))
     };
@@ -148,15 +151,9 @@ macro_rules! __parse_ty_attrs {
     {} => {
         $crate::sap_model::TypeAnnotations::default()
     };
-    // TODO: asserts
-    {@assert($($assert:tt)*) $($rest:tt)*} => {{
+    {@parse_without_null $($rest:tt)*} => {{
         let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
-        // attrs.asserts.push($crate::__parse_assert!{$($assert)*});
-        attrs
-    }};
-    {@parse_as($($ty:tt)+) $($rest:tt)*} => {{
-        let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
-        attrs.parse_as = Some(Box::new($crate::baml_tyannotated!{$($ty)+}));
+        attrs.parse_without_null = true;
         attrs
     }};
     {@in_progress($lit:tt) $($rest:tt)*} => {{
@@ -266,6 +263,9 @@ macro_rules! baml_tyresolved {
     (int) => {
         $crate::sap_model::TyResolved::Int($crate::sap_model::IntTy)
     };
+    (bigint) => {
+        $crate::sap_model::TyResolved::Bigint($crate::sap_model::BigintTy)
+    };
     (float) => {
         $crate::sap_model::TyResolved::Float($crate::sap_model::FloatTy)
     };
@@ -288,9 +288,9 @@ macro_rules! baml_tyresolved {
             ty: Box::new($crate::baml_tyannotated!($($inner)+)),
         })
     };
-    (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*>) => {
+    (StreamState<$inner:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*>) => {
         $crate::sap_model::TyResolved::StreamState($crate::sap_model::StreamStateTy {
-            value: Box::new($crate::baml_tyannotated!($inner $(@$attr_name($($attr_args)*))*)),
+            value: Box::new($crate::baml_tyannotated!($inner $(@$attr_name$(($($attr_args)*))?)*)),
         })
     };
     (map<
@@ -428,13 +428,13 @@ macro_rules! __class_fields {
     };
     {
         $name:ident: StreamState<
-            $ty:tt $(@$attr_name:ident($($attr_args:tt)*))*
-        > $(@$field_attr_name:ident($($field_attr_args:tt)*))*,
+            $ty:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*
+        > $(@$field_attr_name:ident$(($($field_attr_args:tt)*))?)*,
         $($rest:tt)*
     } => {
         {
             let mut fields = $crate::__class_fields!($($rest)*);
-            let (aliases, _, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$field_attr_name($($field_attr_args)*))*);
+            let (aliases, _, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$field_attr_name$(($($field_attr_args)*))?)*);
             let field = $crate::sap_model::AnnotatedField {
                 name: ::std::borrow::Cow::Borrowed({
                     let raw = stringify!($name);
@@ -443,7 +443,7 @@ macro_rules! __class_fields {
                         ::std::option::Option::None => raw,
                     }
                 }),
-                ty: $crate::baml_tyannotated!(StreamState<$ty $(@$attr_name($($attr_args)*))*>),
+                ty: $crate::baml_tyannotated!(StreamState<$ty $(@$attr_name$(($($attr_args)*))?)*>),
                 class_in_progress_field_missing,
                 class_completed_field_missing,
                 aliases,
@@ -486,12 +486,12 @@ macro_rules! __class_fields {
         }
     };
     {
-        $name:ident: $ty:tt $(@$attr_name:ident($($attr_args:tt)*))*,
+        $name:ident: $ty:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*,
         $($rest:tt)*
     } => {
         {
             let mut fields = $crate::__class_fields!($($rest)*);
-            let (aliases, type_annotations, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$attr_name($($attr_args)*))*);
+            let (aliases, type_annotations, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$attr_name$(($($attr_args)*))?)*);
             let field = $crate::sap_model::AnnotatedField {
                 name: ::std::borrow::Cow::Borrowed({
                     let raw = stringify!($name);
@@ -539,31 +539,15 @@ macro_rules! __class_field_args {
         [$type_annotations:expr]
         [$in_progress_opt:expr]
         [$completed_opt:expr]
-        { @parse_as($($ty:tt)+) $($rest:tt)* }
+        { @parse_without_null $($rest:tt)* }
     ) => {
         $crate::__class_field_args!(<><><> __INTERNAL__
             [$($aliases),*]
             [{
                 let mut ta = $type_annotations;
-                ta.parse_as = Some(Box::new($crate::baml_tyannotated!{$($ty)+}));
+                ta.parse_without_null = true;
                 ta
             }]
-            [$in_progress_opt]
-            [$completed_opt]
-            { $($rest)* }
-        )
-    };
-    (<><><> __INTERNAL__
-        [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$completed_opt:expr]
-        { @assert($($assertion:tt)+) $($rest:tt)* }
-    ) => {
-        // TODO: make assertions work
-        $crate::__class_field_args!(<><><> __INTERNAL__
-            [$($aliases),*]
-            [$type_annotations]
             [$in_progress_opt]
             [$completed_opt]
             { $($rest)* }

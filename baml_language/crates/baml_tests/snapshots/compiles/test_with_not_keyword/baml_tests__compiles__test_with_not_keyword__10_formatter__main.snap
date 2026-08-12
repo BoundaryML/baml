@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// "with" should be a contextual keyword, not a global keyword.
+// It should only have special meaning after test/testset names.
+// BUG: "with" is reserved globally, so foo.with(...) breaks.
+
+class Foo {
+    x: int,
+}
+
+function make_foo() -> Foo {
+    Foo { x: 1 }
+}
+
+// "with" as a variable name should work.
+function use_with_as_var() -> int {
+    let with = 42;
+    with
+}
+
+// "with" as a field name should work.
+class HasWith {
+    with: int,
+}
+
+test "with as field" {
+    let h = HasWith { with: 1 };
+    assert.equal(h.with, 1)
+}

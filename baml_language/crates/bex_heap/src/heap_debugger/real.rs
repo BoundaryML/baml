@@ -7,7 +7,7 @@ use std::{
 };
 
 use bex_vm_types::{
-    Future, HeapPtr, Object, ObjectIndex, Value,
+    FutureRead, HeapPtr, Object, Value,
     types::{ObjectType, SentinelKind},
 };
 
@@ -154,13 +154,12 @@ impl BexHeap {
             return;
         }
 
-        let active = self.active_space_index();
         let ct_len = self.compile_time_len();
         let runtime_len = self.len().saturating_sub(ct_len);
         let max_index = ct_len + runtime_len;
 
         unsafe {
-            let space = &*self.spaces[active].get();
+            let gen0 = &*self.gen0.get();
             for raw in canaries {
                 assert!(
                     raw >= ct_len,
@@ -171,7 +170,7 @@ impl BexHeap {
                     "tlab canary out of bounds: idx={raw} max={max_index}"
                 );
                 let runtime_idx = raw - ct_len;
-                let obj = &space[runtime_idx];
+                let obj = &gen0[runtime_idx];
                 match obj {
                     Object::Sentinel(SentinelKind::TlabCanary { .. }) => {}
                     _ => {
@@ -202,9 +201,6 @@ impl BexHeap {
     }
 
     fn verify_quick_impl(&self) {
-        let active = self.active_space_index();
-        assert!(active <= 1, "heap active_space out of range: {active}");
-
         let next_chunk = self.next_chunk_value();
         let runtime_len = self.len().saturating_sub(self.compile_time_len());
         assert!(
@@ -239,11 +235,11 @@ impl BexHeap {
             self.verify_object_invariants(idx, obj, ct_len);
         }
 
-        let active = self.active_space_index();
+        // Verify all runtime objects in Gen0 (the active nursery)
         unsafe {
-            let space = &*self.spaces[active].get();
-            for (runtime_idx, obj) in space.iter().enumerate() {
-                let ptr = space.get_ptr(runtime_idx);
+            let gen0 = &*self.gen0.get();
+            for (runtime_idx, obj) in gen0.iter().enumerate() {
+                let ptr = gen0.get_ptr(runtime_idx);
                 let idx = HeapPtr::from_ptr(ptr, self.heap_epoch());
                 if self.debug_handle_runtime_sentinel(idx, obj, ct_len) {
                     continue;
@@ -294,13 +290,18 @@ impl BexHeap {
 
     fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
+            // SAFETY: heap-debugger verification runs under STW (it's
+            // called from the GC verifier path); no mutator is concurrently
+            // active.
             Object::Array(values) => {
-                for value in values {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.iter() {
                     self.debug_assert_valid_value(value);
                 }
             }
             Object::Map(values) => {
-                for value in values.values() {
+                let data = unsafe { values.data_unchecked() };
+                for value in data.values() {
                     self.debug_assert_valid_value(value);
                 }
             }
@@ -317,8 +318,8 @@ impl BexHeap {
                     instance.fields.len(),
                     class.fields.len()
                 );
-                for value in &instance.fields {
-                    self.debug_assert_valid_value(value);
+                for slot in &instance.fields {
+                    self.debug_assert_valid_value(&slot.load());
                 }
             }
             Object::Variant(variant) => {
@@ -335,31 +336,59 @@ impl BexHeap {
                     enm.variants.len()
                 );
             }
-            Object::Future(fut) => match fut {
-                Future::Pending(pending) => {
-                    for value in &pending.args {
-                        self.debug_assert_valid_value(value);
-                    }
+            Object::Future(fut) => match fut.read() {
+                FutureRead::Ready(value) | FutureRead::Error(value) => {
+                    self.debug_assert_valid_value(&value);
                 }
-                Future::Ready(value) => {
+                FutureRead::Pending(_)
+                | FutureRead::Cancelled
+                | FutureRead::InternalError(_) => {}
+            },
+            Object::UnscheduledFuture(future) => {
+                if let Some(name_ptr) = future.name {
+                    self.debug_assert_valid_index(name_ptr);
+                }
+                self.debug_assert_valid_index(future.closure);
+            }
+            Object::Closure(closure) => {
+                self.debug_assert_valid_index(closure.function);
+                for value in &closure.captures {
                     self.debug_assert_valid_value(value);
                 }
-            },
+            }
+            Object::BoundMethod(bm) => {
+                self.debug_assert_valid_index(bm.function);
+                self.debug_assert_valid_value(&bm.receiver);
+            }
+            Object::Cell(cell) => {
+                self.debug_assert_valid_value(&cell.load());
+            }
             Object::Function(_)
+            | Object::GenericFunction(_)
             | Object::Class(_)
             | Object::Enum(_)
+            // Compile-time program metadata; their pointers target other
+            // immortal compile-time objects, valid by construction.
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
-            | Object::Type(_) => {}
+            | Object::Type(_)
+            | Object::Float(_)
+            // `HostClosure` carries no heap references.
+            | Object::HostClosure(_) => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
     }
 
     fn debug_assert_valid_value(&self, value: &Value) {
-        if let Value::Object(idx) = value {
-            let _ = unsafe { self.get_object(*idx) };
+        if let Some(idx) = value.as_object_ptr() {
+            let _ = unsafe { self.get_object(idx) };
         }
     }
 
@@ -402,10 +431,10 @@ impl BexHeap {
         })
     }
 
-    pub(crate) fn finalize_from_space(&self, from_space: usize) {
+    pub(crate) fn finalize_inactive_space(&self) {
         let epoch = self.heap_epoch();
         unsafe {
-            let space = &mut *self.spaces[from_space].get();
+            let space = &mut *self.inactive.get();
             for slot in space.iter_mut() {
                 *slot = Object::Sentinel(SentinelKind::FromSpacePoison { epoch });
             }
@@ -428,11 +457,5 @@ impl BexHeap {
     #[inline]
     pub(crate) unsafe fn make_heap_ptr(&self, ptr: *mut Object) -> HeapPtr {
         unsafe { HeapPtr::from_ptr(ptr, self.heap_epoch()) }
-    }
-
-    /// Create an ObjectIndex from a raw index.
-    /// In debug mode, includes the current epoch for stale pointer detection.
-    pub(crate) fn make_object_index(&self, raw: usize) -> ObjectIndex {
-        ObjectIndex::from_raw_epoch(raw, self.heap_epoch())
     }
 }

@@ -6,5 +6,5 @@ class user.DynamicClass {
   name: string
 }
 class user.DynamicClass$stream {
-  name: null | string
+  name: string | null
 }

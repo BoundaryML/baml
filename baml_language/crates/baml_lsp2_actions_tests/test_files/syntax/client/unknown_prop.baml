@@ -1,5 +1,5 @@
 client<llm> MyClient {
-  provider baml-openai-chat
+  provider openai
   myExtraProp "hello"
   options {
     max_tokens 100
@@ -9,10 +9,23 @@ client<llm> MyClient {
 // error: Error validating: Unknown field `myExtraProp` in client
 //   -->  client/unknown_prop.baml:3
 //    |
-//  2 |   provider baml-openai-chat
+//  2 |   provider openai
 //  3 |   myExtraProp "hello"
 //    |
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[client_unknown_prop.baml:1:1]
+//  1 │ ╭─▶ client<llm> MyClient {
+//  2 │ │     provider openai
+//  3 │ │     myExtraProp "hello"
+//  4 │ │     options {
+//  5 │ │       max_tokens 100
+//  6 │ │     }
+//  7 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

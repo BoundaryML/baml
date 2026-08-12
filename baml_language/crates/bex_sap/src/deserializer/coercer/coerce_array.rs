@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
-    baml_value::{BamlArray, BamlValue},
+    baml_value::BamlArray,
     deserializer::{
         deserialize_flags::{DeserializerConditions, Flag},
         types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
@@ -76,28 +76,6 @@ where
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
 
-        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
-            let parse_as = ctx
-                .db
-                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                .ok()?;
-            let TyResolvedRef::Array(parse_as_arr) = parse_as.ty else {
-                // Only arrays can be subtypes of arrays
-                return None;
-            };
-            debug_assert!(
-                parse_as_arr != target.ty,
-                "If parse_as is the same, it should be `None`."
-            );
-            let arr = ArrayTy::try_cast(ctx, TyWithMeta::new(parse_as_arr, parse_as.meta), value)?;
-            let value = BamlValue::Array(arr.value);
-            target.meta.expect_asserts(&value, ctx).ok()?;
-            let BamlValue::Array(ret) = value else {
-                unreachable!("we just wrapped it in a BamlValue::Array");
-            };
-            return Some(ValueWithFlags::new(ret, arr.meta));
-        }
-
         // For empty arrays, we can return immediately
         if arr.is_empty() {
             return Some(ValueWithFlags::new(
@@ -164,32 +142,6 @@ where
                 );
                 return Ok(Some(ret));
             }
-            (_, _) if target.meta.parse_as.is_some() => {
-                let parse_as_ty = target.meta.parse_as.as_ref().unwrap_or_else(|| unreachable!("We just checked it is Some. Once let guards are stabilized, we can remove this."));
-                let parse_as = ctx
-                    .db
-                    .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                    .map_err(|name| ctx.error_type_resolution(name))?;
-                let TyResolvedRef::Array(parse_as_arr) = parse_as.ty else {
-                    // Only arrays can be subtypes of arrays
-                    return Err(ctx.error_internal("parse_as should always be an array"));
-                };
-                debug_assert!(
-                    parse_as_arr != target.ty,
-                    "If parse_as is the same, it should be `None`."
-                );
-                let arr =
-                    ArrayTy::coerce(ctx, TyWithMeta::new(parse_as_arr, parse_as.meta), value)?;
-                let Some(arr) = arr else {
-                    return Ok(None);
-                };
-                let value = BamlValue::Array(arr.value);
-                target.meta.expect_asserts(&value, ctx)?;
-                let BamlValue::Array(ret) = value else {
-                    unreachable!("we just wrapped it in a BamlValue::Array");
-                };
-                return Ok(Some(ValueWithFlags::new(ret, arr.meta)));
-            }
             (crate::jsonish::Value::Array(arr, c), _) => {
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
@@ -233,11 +185,7 @@ where
             }
         }
 
-        let ret = BamlValue::Array(BamlArray { value: items });
-        target.meta.expect_asserts(&ret, ctx)?;
-        let BamlValue::Array(ret) = ret else {
-            unreachable!("we just wrapped it in a BamlValue::Array");
-        };
+        let ret = BamlArray { value: items };
 
         Ok(Some(ValueWithFlags::new(
             ret,

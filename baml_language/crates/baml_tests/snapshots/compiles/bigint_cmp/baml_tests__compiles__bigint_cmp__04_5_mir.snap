@@ -1,0 +1,70 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.EqSameAlloc() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.EqDistinctAllocs() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: bigint // a
+    let _2: bigint // b
+    let _3: bigint
+    let _4: bigint
+
+    bb0: {
+        _1 = const 42n;
+        _2 = call const fn baml.Bigint.parse(const "42") -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3 == copy _4;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.OrderingLt() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.OrderingGtEq() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

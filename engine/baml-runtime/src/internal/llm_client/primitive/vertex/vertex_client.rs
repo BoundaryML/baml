@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use baml_types::BamlMediaContent;
 use chrono::Utc;
-use eventsource_stream::Eventsource;
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
 use gcp_auth::TokenProvider;
@@ -283,8 +282,13 @@ impl RequestBuilder for VertexClient {
                         va.project_id().await?.to_string()
                     }
                 };
+                let publisher = if self.properties.anthropic_version.is_some() {
+                    "anthropic"
+                } else {
+                    "google"
+                };
                 format!(
-                    "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models",
+                    "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/{publisher}/models",
                 )
             }
         };

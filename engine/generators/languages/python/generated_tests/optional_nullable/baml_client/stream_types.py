@@ -96,3 +96,22 @@ class User(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (10)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+ComplexOptional.model_rebuild()
+MixedOptionalNullable.model_rebuild()
+NullableTypes.model_rebuild()
+OptionalData.model_rebuild()
+OptionalFields.model_rebuild()
+OptionalItem.model_rebuild()
+OptionalValue.model_rebuild()
+Product.model_rebuild()
+UnionWithNull.model_rebuild()
+User.model_rebuild()

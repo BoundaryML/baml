@@ -6,7 +6,6 @@ use crate::baml_client::baml_source_map::get_baml_files;
 use std::sync::OnceLock;
 
 /// Options for BAML function calls.
-#[derive(Debug, Clone)]
 pub struct FunctionOptions {
     env: Option<HashMap<String, String>>,
     tags: Option<HashMap<String, String>>,
@@ -15,6 +14,37 @@ pub struct FunctionOptions {
     client: Option<String>,
     client_registry: Option<baml::ClientRegistry>,
     cancellation_token: Option<baml::CancellationToken>,
+    on_tick: Option<baml::OnTickCallback>,
+}
+
+impl std::fmt::Debug for FunctionOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionOptions")
+            .field("env", &self.env)
+            .field("tags", &self.tags)
+            .field("type_builder", &self.type_builder)
+            .field("collectors", &self.collectors)
+            .field("client", &self.client)
+            .field("client_registry", &self.client_registry)
+            .field("cancellation_token", &self.cancellation_token)
+            .field("on_tick", &self.on_tick.as_ref().map(|_| "<on_tick>"))
+            .finish()
+    }
+}
+
+impl Clone for FunctionOptions {
+    fn clone(&self) -> Self {
+        Self {
+            env: self.env.clone(),
+            tags: self.tags.clone(),
+            type_builder: self.type_builder.clone(),
+            collectors: self.collectors.clone(),
+            client: self.client.clone(),
+            client_registry: self.client_registry.clone(),
+            cancellation_token: self.cancellation_token.clone(),
+            on_tick: self.on_tick.clone(),
+        }
+    }
 }
 
 impl Default for FunctionOptions {
@@ -34,6 +64,7 @@ impl FunctionOptions {
             client: None,
             client_registry: None,
             cancellation_token: None,
+            on_tick: None,
         }
     }
 
@@ -105,6 +136,39 @@ impl FunctionOptions {
         self
     }
 
+    /// Set an on-tick callback for streaming calls.
+    ///
+    /// The callback is invoked for each SSE streaming chunk received from the LLM,
+    /// with a `FunctionLog` providing access to SSE chunks, thinking tokens, usage,
+    /// and timing data as they arrive.
+    ///
+    /// A collector is automatically created internally by the runtime at call time.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let mut stream = B.MyFunction
+    ///     .with_on_tick(|log: &baml::FunctionLog| {
+    ///         for call in log.calls() {
+    ///             if let Some(stream_call) = call.as_stream() {
+    ///                 if let Some(chunks) = stream_call.sse_chunks() {
+    ///                     for chunk in &chunks {
+    ///                         println!("SSE: {}", chunk.text());
+    ///                     }
+    ///                 }
+    ///             }
+    ///         }
+    ///     })
+    ///     .stream(args)
+    ///     .expect("Failed to start stream");
+    /// ```
+    pub fn with_on_tick<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(&baml::FunctionLog) + Send + Sync + 'static,
+    {
+        self.on_tick = Some(std::sync::Arc::new(callback));
+        self
+    }
+
     pub(super) fn to_baml_args(&self) -> baml::FunctionArgs {
         let mut args = baml::FunctionArgs::new();
         for (env, values) in std::env::vars() {
@@ -148,6 +212,10 @@ impl FunctionOptions {
 
         if let Some(cancellation_token) = &self.cancellation_token {
             args = args.with_cancellation_token(Some(cancellation_token.clone()));
+        }
+
+        if let Some(on_tick) = &self.on_tick {
+            args = args.with_on_tick_arc(on_tick.clone());
         }
 
         args

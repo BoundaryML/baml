@@ -9,10 +9,10 @@ use anyhow::{Context, Result, bail};
 use flate2::{Compression, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 
-use crate::config::ArtifactConfig;
+use crate::config::{ArtifactConfig, ArtifactKind, PackConfig};
 
 /// Measurements for a single artifact.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ArtifactMeasurement {
     pub file_bytes: u64,
 
@@ -26,12 +26,30 @@ pub(crate) struct ArtifactMeasurement {
 }
 
 /// Build a single artifact and return the path to the output file.
-pub(crate) fn build_artifact(workspace_root: &Path, config: &ArtifactConfig) -> Result<PathBuf> {
+pub(crate) fn build_artifact(
+    workspace_root: &Path,
+    name: &str,
+    config: &ArtifactConfig,
+) -> Result<PathBuf> {
+    match config.kind {
+        ArtifactKind::Pack => return build_pack(workspace_root, name, config),
+        ArtifactKind::Cdylib => run_cargo_build(workspace_root, config, &[])?,
+        ArtifactKind::Bin => {
+            let bin = bin_name(config)?;
+            run_cargo_build(workspace_root, config, &["--bin", &bin])?;
+        }
+    }
+
+    locate_artifact(workspace_root, name, config)
+}
+
+/// Run `cargo build --release -p <package>` with the artifact's
+/// target/feature flags, plus any `extra` arguments.
+fn run_cargo_build(workspace_root: &Path, config: &ArtifactConfig, extra: &[&str]) -> Result<()> {
+    let package = config.require_package()?;
+
     let mut cmd = Command::new("cargo");
-    cmd.arg("build")
-        .arg("--release")
-        .arg("-p")
-        .arg(&config.package);
+    cmd.arg("build").arg("--release").arg("-p").arg(package);
 
     if let Some(target) = &config.target {
         cmd.arg("--target").arg(target);
@@ -45,11 +63,12 @@ pub(crate) fn build_artifact(workspace_root: &Path, config: &ArtifactConfig) -> 
         cmd.arg("--features").arg(feat);
     }
 
+    cmd.args(extra);
     cmd.current_dir(workspace_root);
 
     eprintln!(
         "  building {} ({})",
-        config.package,
+        package,
         if config.no_default_features {
             "no-default-features"
         } else {
@@ -59,37 +78,129 @@ pub(crate) fn build_artifact(workspace_root: &Path, config: &ArtifactConfig) -> 
 
     let status = cmd.status().context("failed to run cargo build")?;
     if !status.success() {
-        bail!("cargo build failed for {}", config.package);
+        bail!("cargo build failed for {package}");
     }
 
-    locate_artifact(workspace_root, config)
+    Ok(())
+}
+
+/// Build the CLI + pack host, then run `baml pack` on the fixture and
+/// return the path to the produced standalone executable.
+fn build_pack(workspace_root: &Path, name: &str, config: &ArtifactConfig) -> Result<PathBuf> {
+    let pack = config.require_pack()?;
+
+    // Build the CLI and the pack host in one release invocation. The host
+    // binary must land next to the CLI in target/release so `baml pack`
+    // resolves it locally (no GitHub download).
+    eprintln!("  building {} + {}", pack.cli_package, pack.host_package);
+    let status = Command::new("cargo")
+        .arg("build")
+        .arg("--release")
+        .args(["-p", &pack.cli_package, "--bin", &pack.cli_bin])
+        .args(["-p", &pack.host_package, "--bin", &pack.host_bin])
+        .current_dir(workspace_root)
+        .status()
+        .context("failed to run cargo build for pack")?;
+    if !status.success() {
+        bail!(
+            "cargo build failed for pack ({} + {})",
+            pack.cli_package,
+            pack.host_package
+        );
+    }
+
+    run_baml_pack(workspace_root, name, pack)
+}
+
+/// Run the freshly built CLI's `baml pack` on the fixture, writing the
+/// output to a deterministic path under `target/size-gate/`.
+fn run_baml_pack(workspace_root: &Path, name: &str, pack: &PackConfig) -> Result<PathBuf> {
+    let cli_path = workspace_root
+        .join("target/release")
+        .join(exe_filename(&pack.cli_bin));
+    if !cli_path.exists() {
+        bail!("pack CLI not found at {}", cli_path.display());
+    }
+
+    let fixture = workspace_root.join(&pack.fixture);
+    if !fixture.exists() {
+        bail!("pack fixture not found at {}", fixture.display());
+    }
+
+    let output = pack_output_path(workspace_root, name);
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+
+    eprintln!("  packing {} -> {}", pack.function, output.display());
+    let status = Command::new(&cli_path)
+        .arg("pack")
+        .arg("--file")
+        .arg(&fixture)
+        .arg(&pack.function)
+        .arg("-o")
+        .arg(&output)
+        .current_dir(workspace_root)
+        .status()
+        .with_context(|| format!("failed to run {} pack", cli_path.display()))?;
+    if !status.success() {
+        bail!("`baml pack` failed for fixture {}", fixture.display());
+    }
+
+    if !output.exists() {
+        bail!("pack produced no output at {}", output.display());
+    }
+    Ok(output)
+}
+
+/// Deterministic output path for a packed artifact.
+fn pack_output_path(workspace_root: &Path, name: &str) -> PathBuf {
+    workspace_root
+        .join("target/size-gate")
+        .join(exe_filename(name))
 }
 
 /// Find the built artifact in the target directory (public for --no-build mode).
 pub(crate) fn locate_artifact_public(
     workspace_root: &Path,
+    name: &str,
     config: &ArtifactConfig,
 ) -> Result<PathBuf> {
-    locate_artifact(workspace_root, config)
+    locate_artifact(workspace_root, name, config)
 }
 
 /// Find the built artifact in the target directory.
-fn locate_artifact(workspace_root: &Path, config: &ArtifactConfig) -> Result<PathBuf> {
-    let lib_name = resolve_lib_name(workspace_root, &config.package)?;
-
-    let (dir, filename) =
-        if config.wasm || config.target.as_deref() == Some("wasm32-unknown-unknown") {
-            let dir = workspace_root.join("target/wasm32-unknown-unknown/release");
-            // WASM cdylib uses the package name with underscores (Cargo convention)
-            let wasm_name = config.package.replace('-', "_");
-            (dir, format!("{wasm_name}.wasm"))
-        } else if let Some(target) = &config.target {
-            let dir = workspace_root.join(format!("target/{target}/release"));
-            (dir, native_lib_filename(&lib_name))
-        } else {
+fn locate_artifact(workspace_root: &Path, name: &str, config: &ArtifactConfig) -> Result<PathBuf> {
+    let (dir, filename) = match config.kind {
+        ArtifactKind::Pack => {
+            let path = pack_output_path(workspace_root, name);
+            if !path.exists() {
+                bail!("packed artifact not found (expected at {})", path.display());
+            }
+            return Ok(path);
+        }
+        ArtifactKind::Bin => {
             let dir = workspace_root.join("target/release");
-            (dir, native_lib_filename(&lib_name))
-        };
+            (dir, exe_filename(&bin_name(config)?))
+        }
+        ArtifactKind::Cdylib => {
+            let package = config.require_package()?;
+            let lib_name = resolve_lib_name(workspace_root, package)?;
+            if config.is_wasm() {
+                let dir = workspace_root.join("target/wasm32-unknown-unknown/release");
+                // WASM cdylib output is `<lib_name>.wasm` (the resolved lib
+                // target name, which may differ from the package name).
+                (dir, format!("{lib_name}.wasm"))
+            } else if let Some(target) = &config.target {
+                let dir = workspace_root.join(format!("target/{target}/release"));
+                (dir, native_lib_filename(&lib_name))
+            } else {
+                let dir = workspace_root.join("target/release");
+                (dir, native_lib_filename(&lib_name))
+            }
+        }
+    };
 
     let path = dir.join(&filename);
     if !path.exists() {
@@ -100,6 +211,24 @@ fn locate_artifact(workspace_root: &Path, config: &ArtifactConfig) -> Result<Pat
         );
     }
     Ok(path)
+}
+
+/// Resolve the `bin` name for a `kind = "bin"` artifact, defaulting to
+/// the package name when unset.
+fn bin_name(config: &ArtifactConfig) -> Result<String> {
+    if let Some(bin) = &config.bin {
+        return Ok(bin.clone());
+    }
+    Ok(config.require_package()?.to_owned())
+}
+
+/// Append the platform executable extension (`.exe` on Windows).
+fn exe_filename(stem: &str) -> String {
+    if cfg!(target_os = "windows") {
+        format!("{stem}.exe")
+    } else {
+        stem.to_owned()
+    }
 }
 
 /// Resolve the lib name for a package using cargo metadata.
@@ -155,14 +284,17 @@ fn native_lib_filename(lib_name: &str) -> String {
     }
 }
 
-/// Measure a built artifact.
-pub(crate) fn measure_artifact(artifact_path: &Path, is_wasm: bool) -> Result<ArtifactMeasurement> {
+/// Measure a built artifact. When `strip` is false (WASM and `pack`
+/// outputs) the file is measured as-is; otherwise it is stripped to a
+/// temp copy first and the stripped size is recorded.
+pub(crate) fn measure_artifact(artifact_path: &Path, strip: bool) -> Result<ArtifactMeasurement> {
     let file_bytes = std::fs::metadata(artifact_path)
         .with_context(|| format!("failed to stat {}", artifact_path.display()))?
         .len();
 
-    let (stripped_bytes, gzip_source) = if is_wasm {
-        // WASM: no strip needed (Cargo profile already strips), gzip the original
+    let (stripped_bytes, gzip_source) = if !strip {
+        // No strip (Cargo profile already stripped, or stripping would
+        // drop a packed binary's appended section): gzip the original.
         (None, artifact_path.to_path_buf())
     } else {
         // Native: strip to a temp copy, then gzip the stripped version
@@ -196,35 +328,42 @@ fn strip_artifact(path: &Path) -> Result<PathBuf> {
     std::fs::copy(path, &stripped)
         .with_context(|| format!("failed to copy {} for stripping", path.display()))?;
 
-    let (program, args): (&str, &[&str]) = if cfg!(target_os = "macos") {
-        ("strip", &["-x"])
-    } else if cfg!(target_os = "windows") {
-        ("llvm-strip", &["--strip-unneeded"])
-    } else {
-        ("strip", &["--strip-unneeded"])
-    };
-
-    let status = Command::new(program)
-        .args(args)
-        .arg(&stripped)
-        .status()
-        .with_context(|| format!("failed to run {program}"))?;
-
-    if !status.success() {
-        // Try llvm-strip as fallback on Linux
-        if cfg!(target_os = "linux") {
-            let fallback = Command::new("llvm-strip").arg("-x").arg(&stripped).status();
-            if let Ok(s) = fallback {
-                if s.success() {
-                    return Ok(stripped);
-                }
-            }
+    let mut failures = Vec::new();
+    for (program, args) in strip_candidates() {
+        match Command::new(program).args(args).arg(&stripped).status() {
+            Ok(status) if status.success() => return Ok(stripped),
+            Ok(status) => failures.push(format!("{program} exited with {status}")),
+            Err(err) => failures.push(format!("{program}: {err}")),
         }
-        eprintln!("  warning: strip failed, using unstripped size");
-        // Return the copy as-is (unstripped)
+    }
+
+    if failures.is_empty() {
+        eprintln!("  warning: no strip command configured, using unstripped size");
+    } else {
+        eprintln!(
+            "  warning: strip failed ({}), using unstripped size",
+            failures.join("; ")
+        );
     }
 
     Ok(stripped)
+}
+
+fn strip_candidates() -> Vec<(&'static str, &'static [&'static str])> {
+    if cfg!(target_os = "macos") {
+        vec![("strip", &["-x"])]
+    } else if cfg!(target_os = "windows") {
+        vec![
+            ("llvm-strip", &["--strip-unneeded"]),
+            ("llvm-strip.exe", &["--strip-unneeded"]),
+        ]
+    } else {
+        vec![
+            ("strip", &["--strip-unneeded"]),
+            ("llvm-strip", &["--strip-unneeded"]),
+            ("llvm-strip", &["-x"]),
+        ]
+    }
 }
 
 /// Compute gzip size of a file in memory (no temp file).

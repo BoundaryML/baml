@@ -58,7 +58,7 @@ web-time.workspace = true
 either = "1.8.1"
 itertools = "0.13.0"
 once_cell.workspace = true
-stream-cancel = "0.8"
+tokio-util = { version = "0.7", features = ["rt"] }
 tsify.workspace = true
 
 [dev-dependencies]
@@ -73,7 +73,10 @@ wasmtimer = "0.4.1"
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 
 [features]
-default = []
+default = ["bedrock"]
+# AWS Bedrock provider support, forwarded to the runtime. On by default; build
+# with --no-default-features to drop the aws-* dependency tree.
+bedrock = ["baml-runtime/bedrock"]
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 thir-interpreter = ["baml-runtime/thir-interpreter"]
 

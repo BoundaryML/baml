@@ -1,0 +1,108 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Group G: block attributes on enums and classes, and how referencing classes behave.
+
+// ── Enums ──────────────────────────────────────────────────
+
+// G1: enum with @@stream.done
+enum GStatus {
+    Active,
+    Inactive,
+    Pending,
+    @@stream.done
+}
+
+// G2: enum without @@stream.done (control group)
+enum GRole {
+    Admin,
+    User,
+    Guest,
+}
+
+// G3: enum with @@description + variant @alias + @description
+enum GPriority {
+    P0 @alias("critical") @description("drop everything"),
+    P1 @alias("high"),
+    P2 @alias("normal"),
+    P3 @alias("low") @description("backlog"),
+    @@description("Incident priority levels")
+}
+
+// G4: enum with @@stream.done + @@description + variant attrs (all layers)
+enum GSeverity {
+    Low @description("minor"),
+    Medium @alias("med"),
+    High @alias("hi") @description("urgent"),
+    @@stream.done
+    @@description("Issue severity")
+}
+
+// G5: enum with @@description + @@alias (multiple block attrs, no stream)
+enum GSize {
+    Small,
+    Medium,
+    Large,
+    @@description("T-shirt sizes")
+    @@alias("TShirtSize")
+}
+
+// ── Classes with block attrs ───────────────────────────────
+
+// G6: class with @@stream.done (referenced by G9)
+class GPoint {
+    x: float,
+    y: float,
+    @@stream.done
+}
+
+// G7: class without @@stream.done (control group, referenced by G9)
+class GCoord {
+    lat: float,
+    lng: float,
+}
+
+// G8: class with @@stream.done + @@description
+class GConfig {
+    key: string,
+    value: string,
+    @@stream.done
+    @@description("Configuration entry")
+}
+
+// ── Referencing classes ────────────────────────────────────
+
+// G9: references both @@stream.done and plain types — compare $stream behavior
+class GProfile {
+    status: GStatus,
+    role: GRole,
+    name: string,
+    location: GPoint,
+    fallback: GCoord,
+}
+
+// G10: references @@stream.done types with field @alias
+class GAliased {
+    status: GStatus @alias("s"),
+    role: GRole @alias("r"),
+    point: GPoint @alias("p"),
+    coord: GCoord @alias("c"),
+}
+
+// G11: @@stream.done types in complex type positions
+class GComplex {
+    statuses: GStatus[],
+    maybe_status: GStatus?,
+    role_or_status: GRole | GStatus,
+    points: GPoint[],
+    maybe_point: GPoint?,
+    config_map: map<string, GConfig>,
+}
+
+// G12: references enum with all layers (@@stream.done + @@description + variant attrs)
+class GIncident {
+    severity: GSeverity,
+    priority: GPriority,
+    title: string,
+    config: GConfig,
+}

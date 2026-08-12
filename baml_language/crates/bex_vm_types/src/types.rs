@@ -1,9 +1,40 @@
-use std::{any::Any, collections::HashMap, sync::Arc};
+//! Heap object types and runtime values.
+//!
+//! `Future` uses `AtomicU8` + `UnsafeCell<MaybeUninit<Value>>` to allow
+//! the engine's spawned task and the VM to read/write the heap object
+//! concurrently without a data race. See the `Future` doc for the safety
+//! argument; the unsafe code here is intentional and necessary.
 
-use baml_type::Ty;
+#![allow(unsafe_code)]
+mod class;
+mod const_value;
+mod containers;
+mod enums;
+mod function;
+mod future;
+mod interface;
+mod object;
+mod package;
+mod value;
+
+use std::collections::HashMap;
+
+use baml_type::RuntimeTy;
+use borsh::{BorshDeserialize, BorshSerialize};
+pub use class::*;
+pub use const_value::*;
+pub use containers::*;
+pub use enums::*;
+pub use function::*;
+pub use future::*;
 use indexmap::IndexMap;
+pub use interface::*;
+pub use object::*;
+pub use package::*;
+pub use tokio_util::sync::CancellationToken;
+pub use value::*;
 
-use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -25,12 +56,18 @@ pub mod type_tags {
 ///
 /// Note: At compile time, globals use `ConstValue` (with `ObjectIndex` for object refs).
 /// At load time (`BexEngine::new`), these are converted to `Value` (with `HeapPtr`).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct Program {
     /// Object pool containing functions, classes, strings, etc.
     pub objects: ObjectPool,
 
     /// Global variables (converted from `ConstValue` to Value at load time).
+    ///
+    /// # Init-only invariant
+    /// Globals are populated by `$init` (top-level let bindings) at engine
+    /// load time and **not** mutated again. The runtime freezes them into a
+    /// shared `Arc<[Value]>` after `$init` finishes; only `$init` may emit a
+    /// `StoreGlobal` against the still-mutable pool. See `Instruction::StoreGlobal`.
     pub globals: Vec<ConstValue>,
 
     /// Maps function names to their object indices.
@@ -45,10 +82,6 @@ pub struct Program {
     /// until `$init` runs at load time via `StoreGlobal`.
     pub let_global_indices: HashMap<String, usize>,
 
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    /// Prepended to function prompt templates by `get_jinja_template`.
-    pub template_strings_macros: String,
-
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
     pub client_metadata: HashMap<String, ClientBuildMeta>,
@@ -61,16 +94,21 @@ pub struct Program {
     /// Empty when there are no top-level let bindings in any package.
     pub package_init_order: Vec<String>,
 
-    /// Recursive type alias definitions for output format rendering.
-    /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Keyed by [`baml_type::TypeName`] for consistent identity with `Ty::TypeAlias`.
-    pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
+    /// Per-package program structure (global-index-keyed), sorted by package name
+    /// for deterministic output. Holds each package's classes, enums, interfaces,
+    /// impl rules, and recursive type aliases. The loader allocates the heap
+    /// `Object::Package` / `Object::Interface` / `Object::ImplRule` objects and the
+    /// `vm.packages` index from this, resolving each `ObjectIndex` to a
+    /// compile-time `HeapPtr` (every slot is pre-allocated, so cross-package
+    /// references are order-independent). The single source of truth for interface
+    /// dispatch, named-item lookup, and recursive-alias rendering.
+    pub packages: IndexMap<baml_type::Name, ProgramPackage>,
 }
 
 /// Metadata for building a client tree at runtime.
 ///
 /// Stored on `Program` during compilation, transferred to `SysOpContext` during engine construction.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ClientBuildMeta {
     /// Provider type mapped to client type enum.
     pub client_type: ClientBuildType,
@@ -83,7 +121,7 @@ pub struct ClientBuildMeta {
 }
 
 /// Client type for build metadata (mirrors runtime `LlmClientType`).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub enum ClientBuildType {
     #[default]
     Primitive,
@@ -92,7 +130,7 @@ pub enum ClientBuildType {
 }
 
 /// Retry policy metadata stored at compile time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct RetryPolicyMeta {
     pub max_retries: i64,
     pub initial_delay_ms: i64,
@@ -110,6 +148,25 @@ impl Program {
         let idx = self.objects.len();
         self.objects.push(object);
         idx
+    }
+
+    /// Flatten every package's recursive type aliases into one
+    /// `TypeName → RuntimeTy` map (only recursive aliases survive; non-recursive
+    /// ones are expanded inline), reconstructing each qualified name from its
+    /// package + `LocalName`. The shape output-format rendering consumes.
+    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, RuntimeTy> {
+        let mut out = IndexMap::new();
+        for (pkg_name, package) in &self.packages {
+            for (local, ty) in &package.recursive_type_aliases {
+                let qtn = baml_type::TypeName::new(
+                    pkg_name.clone(),
+                    local.namespace.clone(),
+                    local.name.clone(),
+                );
+                out.insert(qtn, ty.clone());
+            }
+        }
+        out
     }
 
     /// Add a global value (`ConstValue`, converted to Value at load time).
@@ -130,14 +187,20 @@ impl Program {
 /// Contract-level error categories for `sys_op` throw contracts.
 ///
 /// These are the finite set of categories that `#[throws(...)]` annotations
-/// reference. Each `OpErrorKind` variant maps to exactly one category via
-/// `OpErrorKind::category()`. Rich detail stays in `OpErrorKind`; this enum
-/// is purely for contract enforcement and compiler analysis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// reference. Each [`VmBamlError`](crate::errors::VmBamlError) variant maps
+/// to exactly one category via `VmBamlError::category()`. Rich detail stays
+/// in `VmBamlError`; this enum is purely for contract enforcement and
+/// compiler analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SysOpErrorCategory {
     Io,
     Timeout,
     InvalidArgument,
+    /// A parser surfaced a structurally-bad input (e.g. UTF-8 decode, JSON
+    /// parse, base64 decode). Distinct from `InvalidArgument` so callers
+    /// can distinguish "your argument shape was wrong" from "the bytes/
+    /// stream we tried to parse are malformed".
+    ParseError,
     Unsupported,
     NotImplemented,
     AccessError,
@@ -146,6 +209,8 @@ pub enum SysOpErrorCategory {
     /// Wildcard for development convenience. Must be explicitly declared in
     /// `#[throws(DevOther)]` and should be migrated to named categories.
     DevOther,
+    /// A host-language callable raised an exception or invalid-argument error.
+    HostCallable,
 }
 
 impl std::fmt::Display for SysOpErrorCategory {
@@ -154,18 +219,20 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::Io => write!(f, "Io"),
             Self::Timeout => write!(f, "Timeout"),
             Self::InvalidArgument => write!(f, "InvalidArgument"),
+            Self::ParseError => write!(f, "ParseError"),
             Self::Unsupported => write!(f, "Unsupported"),
             Self::NotImplemented => write!(f, "NotImplemented"),
             Self::AccessError => write!(f, "AccessError"),
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
             Self::DevOther => write!(f, "DevOther"),
+            Self::HostCallable => write!(f, "HostCallable"),
         }
     }
 }
 
 /// Contract-level panic categories for `sys_op` panic contracts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SysOpPanicCategory {
     HostPanic,
 }
@@ -191,278 +258,6 @@ impl std::fmt::Display for SysOpPanicCategory {
 // Display, and sys_op_for_path() — generated from .baml $rust_io_function definitions.
 include!(concat!(env!("OUT_DIR"), "/sys_op_generated.rs"));
 
-// ============================================================================
-// Function Types
-// ============================================================================
-
-/// Function type.
-///
-/// # Native Function Pointers
-///
-/// Native functions are stored as type-erased `*const ()` pointers to avoid
-/// a circular dependency between crates:
-///
-/// - `baml_vm` defines `NativeFunction = fn(&mut Vm, &[Value]) -> Result<...>`
-/// - This type references `Vm`, which is defined in `baml_vm`
-/// - `baml_vm_types` cannot depend on `baml_vm` (that would be circular)
-///
-/// The type erasure allows different stages:
-///
-/// - **Compile time**: The compiler emits `NativeUnresolved` for built-in functions
-/// - **Runtime**: The VM resolves these to `Native(ptr)` at load time
-///
-/// The resolution happens in `baml_vm::native::attach_builtins()`, which looks up
-/// native function names and casts the real function pointers to `*const ()`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum FunctionKind {
-    /// Regular executable function.
-    ///
-    /// The VM pushes a call frame onto the call stack and runs the bytecode.
-    Bytecode,
-
-    /// System operation (LLM calls, HTTP requests, file I/O, etc.).
-    ///
-    /// The VM yields control to the engine which executes the operation
-    /// asynchronously via static dispatch on the `SysOp` enum.
-    SysOp(SysOp),
-
-    /// Unresolved native function (placeholder).
-    ///
-    /// The compiler emits this for built-in functions. The VM resolves these
-    /// to `Native(ptr)` at load time. Panics if executed without resolution.
-    NativeUnresolved,
-
-    /// Rust native function (type-erased pointer).
-    ///
-    /// Contains a type-erased function pointer that the VM casts back to
-    /// the real `NativeFunction` type when calling.
-    ///
-    /// # Safety
-    ///
-    /// The pointer must be cast from a valid `NativeFunction` and only
-    /// cast back to that same type when calling.
-    Native(*const ()),
-}
-
-// SAFETY: FunctionKind contains a raw pointer (*const ()) that points to
-// immutable code (function pointers). Code doesn't change at runtime,
-// so sharing the pointer between threads is safe.
-#[allow(unsafe_code)]
-unsafe impl Send for FunctionKind {}
-#[allow(unsafe_code)]
-unsafe impl Sync for FunctionKind {}
-
-/// LLM-specific metadata for a function.
-#[derive(Clone, Debug)]
-pub enum FunctionMeta {
-    Llm {
-        prompt_template: String,
-        client: String,
-    },
-}
-
-/// Represents any Baml function.
-#[derive(Clone, Debug)]
-pub struct Function {
-    /// Function name.
-    pub name: String,
-
-    /// Number of arguments the function accepts.
-    pub arity: usize,
-
-    /// Number of additional local slots (beyond callee + params) needed by the frame.
-    ///
-    /// The VM allocates these slots when creating a bytecode frame, instead of
-    /// relying on a dedicated bytecode instruction.
-    pub real_local_count: usize,
-
-    /// Bytecode to execute.
-    ///
-    /// Only relevant if [`Self::kind`] is [`FunctionKind::Bytecode`].
-    pub bytecode: Bytecode,
-
-    /// Type of function.
-    pub kind: FunctionKind,
-
-    /// Local variable names indexed by slot number.
-    ///
-    /// Debug info: maps eval-stack slot indices to variable names.
-    /// Slot 0 is the function reference, slots 1..arity are parameters.
-    pub local_names: Vec<String>,
-
-    /// Lexical scope metadata for named locals.
-    ///
-    /// Used by debugger UIs to determine which variables are visible at a
-    /// given source location.
-    pub debug_locals: Vec<crate::bytecode::DebugLocalScope>,
-
-    /// Span of the function as computed by the parser.
-    pub span: baml_base::Span,
-
-    /// Block notifications for this function.
-    ///
-    /// Stores metadata about annotated blocks (//# annotations) in this function.
-    /// Instructions reference these by index.
-    pub block_notifications: Vec<crate::bytecode::BlockNotification>,
-
-    /// Control-flow visualization metadata indexed by VizEnter/VizExit instructions.
-    ///
-    /// Stores metadata about control flow structure (branches, loops, scopes).
-    pub viz_nodes: Vec<crate::bytecode::VizNodeMeta>,
-
-    /// Return type of the function.
-    pub return_type: Ty,
-
-    /// Parameter names in declaration order.
-    pub param_names: Vec<String>,
-
-    /// Parameter types in declaration order.
-    pub param_types: Vec<Ty>,
-
-    /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
-    pub body_meta: Option<FunctionMeta>,
-
-    /// Whether this function should be traced (emit span notifications on call/return).
-    /// Set to `true` for LLM functions by the compiler.
-    pub trace: bool,
-}
-
-impl std::fmt::Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<fn {}>", self.name)
-    }
-}
-
-impl Function {
-    /// Get the source span associated with a bytecode PC.
-    pub fn source_span_for_pc(&self, pc: usize) -> Option<baml_base::Span> {
-        self.bytecode.line_entry_for_pc(pc).map(|entry| entry.span)
-    }
-
-    /// Get named locals whose lexical scope contains the source span at `pc`.
-    pub fn debug_locals_in_scope(&self, pc: usize) -> Vec<&crate::bytecode::DebugLocalScope> {
-        let Some(span) = self.source_span_for_pc(pc) else {
-            return Vec::new();
-        };
-
-        self.debug_locals
-            .iter()
-            .filter(|local| {
-                local.scope_span.file_id == span.file_id
-                    && local.scope_span.range.start() <= span.range.start()
-                    && local.scope_span.range.end() >= span.range.end()
-            })
-            .collect()
-    }
-}
-
-/// A field within a runtime class, carrying type and schema metadata.
-#[derive(Clone, Debug)]
-pub struct ClassField {
-    pub name: String,
-    pub field_type: Ty,
-    pub description: Option<String>,
-    pub alias: Option<String>,
-    pub skip: bool,
-}
-
-/// Runtime class representation.
-#[derive(Clone, Debug)]
-pub struct Class {
-    /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
-    pub name: baml_type::TypeName,
-
-    /// Class fields with type and schema metadata.
-    pub fields: Vec<ClassField>,
-
-    /// Class-level description for LLM prompt schema rendering.
-    pub description: Option<String>,
-
-    /// Class-level serialization alias.
-    pub alias: Option<String>,
-
-    /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
-    /// Assigned during codegen as `CLASS_BASE + class_index`.
-    pub type_tag: i64,
-
-    /// Class-level type attribute (e.g., from @@stream.done).
-    pub ty_attr: baml_type::TyAttr,
-}
-
-impl std::fmt::Display for Class {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<class {}>", self.name)
-    }
-}
-
-/// Runtime instance representation.
-#[derive(Clone, Debug)]
-pub struct Instance {
-    /// Pointer to the class object in the heap.
-    pub class: HeapPtr,
-
-    /// Fields are accessed by index. No string lookups.
-    pub fields: Vec<Value>,
-}
-
-impl std::fmt::Display for Instance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<instance of {:p}>", self.class.as_ptr())
-    }
-}
-
-/// A variant within a runtime enum, carrying schema metadata.
-#[derive(Clone, Debug)]
-pub struct EnumVariant {
-    pub name: String,
-    pub description: Option<String>,
-    pub alias: Option<String>,
-    pub skip: bool,
-}
-
-/// Runtime enum representation.
-#[derive(Clone, Debug)]
-pub struct Enum {
-    /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string.
-    pub name: baml_type::TypeName,
-
-    /// Enum variants with schema metadata.
-    pub variants: Vec<EnumVariant>,
-
-    /// Enum-level description.
-    pub description: Option<String>,
-
-    /// Enum-level serialization alias.
-    pub alias: Option<String>,
-
-    /// Enum-level type attribute.
-    pub ty_attr: baml_type::TyAttr,
-}
-
-impl std::fmt::Display for Enum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<enum {}>", self.name)
-    }
-}
-
-/// Same as [`Instance`] but for enums.
-#[derive(Clone, Debug)]
-pub struct Variant {
-    /// Pointer to the enum object in the heap.
-    pub enm: HeapPtr,
-
-    /// Index of the variant in the ordered list of variants.
-    pub index: usize,
-}
-
-impl std::fmt::Display for Variant {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<variant of {:p}>", self.enm.as_ptr())
-    }
-}
-
 #[cfg(feature = "heap_debug")]
 #[derive(Clone, Debug)]
 pub enum SentinelKind {
@@ -476,42 +271,90 @@ pub enum SentinelKind {
     },
 }
 
-/// Runtime values.
+/// Box every unique `ConstValue::Float` reachable from `compile_time_objects`
+/// (in `Object::Function` constants) and `globals` into a fresh
+/// `Object::Float` entry appended to `compile_time_objects`, and rewrite the
+/// function `ConstValue::Float` entries to `ConstValue::Object(idx)`. Returns
+/// the bit-pattern → object-index map so callers can rewrite their globals.
 ///
-/// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of `Vm::objects` (in `bex_vm` crate) to understand how allocated
-/// objects work in the virtual machine.
+/// Required because the tagged-pointer `Value` encoding can no longer hold a
+/// float inline.
 ///
-/// # On `Hash`
-/// `Value` does not yet implement `Hash`, and should not implement `Eq`. Besides floating point which can be addressed,
-/// strings do not yet have referential equality, i.e "hello" can be represented with two different
-/// object indices. This makes comparisons nontrivial since they have to fetch the string. Same
-/// would happen with any other object type that we don't want to have referential equality for.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Value {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-
-    /// Pointer to a heap-allocated object.
-    ///
-    /// This is a raw pointer (`HeapPtr`) that points directly into the heap.
-    /// Strings are also objects, don't add `Value::String`.
-    Object(HeapPtr),
-}
-
-impl std::fmt::Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::Null => write!(f, "null"),
-            Value::Int(int) => write!(f, "{int}"),
-            Value::Float(float) => write!(f, "{float}"),
-            Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Object(ptr) => write!(f, "{ptr}"),
+/// Globals are *not* rewritten in place — callers typically need to consume
+/// them by value (to convert `ConstValue` → `Value`) and rewrite during that
+/// pass.
+pub fn box_compile_time_floats(
+    compile_time_objects: &mut Vec<Object>,
+    globals: &[crate::ConstValue],
+) -> HashMap<u64, usize> {
+    let mut float_indices: HashMap<u64, usize> = HashMap::new();
+    // Pre-scan to discover unique floats.
+    for obj in &*compile_time_objects {
+        if let Object::Function(func) = obj {
+            for cv in &func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let next_idx = compile_time_objects.len() + float_indices.len();
+                    float_indices.entry(f.to_bits()).or_insert(next_idx);
+                }
+            }
         }
     }
+    for cv in globals {
+        if let ConstValue::Float(f) = cv {
+            let next_idx = compile_time_objects.len() + float_indices.len();
+            float_indices.entry(f.to_bits()).or_insert(next_idx);
+        }
+    }
+    // Append boxes in index order.
+    let mut float_entries: Vec<(u64, usize)> =
+        float_indices.iter().map(|(k, v)| (*k, *v)).collect();
+    float_entries.sort_by_key(|(_, idx)| *idx);
+    for (bits, _) in float_entries {
+        compile_time_objects.push(Object::Float(f64::from_bits(bits)));
+    }
+    // Rewrite each function-constant ConstValue::Float -> ConstValue::Object(idx).
+    for obj in compile_time_objects.iter_mut() {
+        if let Object::Function(func) = obj {
+            for cv in &mut func.bytecode.constants {
+                if let ConstValue::Float(f) = cv {
+                    let idx = float_indices[&f.to_bits()];
+                    *cv = ConstValue::Object(crate::indexable::ObjectIndex::from_raw(idx));
+                }
+            }
+        }
+    }
+    float_indices
 }
+
+/// Format an f64 to string, following JS/TS conventions for special values
+/// and preserving `.0` for whole-number floats.
+///
+/// - `1.0` → `"1.0"` (not `"1"` — preserves float identity)
+/// - `3.14` → `"3.14"`
+/// - `f64::INFINITY` → `"Infinity"` (JS-style)
+/// - `f64::NEG_INFINITY` → `"-Infinity"` (JS-style)
+/// - `f64::NAN` → `"NaN"` (JS-style)
+pub fn format_float(f: f64) -> String {
+    if f.is_nan() {
+        return "NaN".to_string();
+    }
+    if f.is_infinite() {
+        return if f.is_sign_positive() {
+            "Infinity".to_string()
+        } else {
+            "-Infinity".to_string()
+        };
+    }
+    let s = f.to_string();
+    if s.contains('.') { s } else { format!("{s}.0") }
+}
+
+// Error class / instance enums — generated from `errors.baml` class definitions.
+// ErrorClass (tag enum), ErrorInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
+// Panic class / instance enums — generated from `panics.baml` class definitions.
+// PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 
 // ============================================================================
 // Test Cases
@@ -522,7 +365,7 @@ impl std::fmt::Display for Value {
 /// Self-contained type with no dependency on HIR or external types.
 /// Converted from HIR's `TestArgValue` during emission, and converted
 /// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum TestArgValue {
     Null,
     Int(i64),
@@ -530,18 +373,18 @@ pub enum TestArgValue {
     Bool(bool),
     String(String),
     Array {
-        element_type: Ty,
+        element_type: RuntimeTy,
         items: Vec<TestArgValue>,
     },
     Map {
-        key_type: Ty,
-        value_type: Ty,
+        key_type: RuntimeTy,
+        value_type: RuntimeTy,
         entries: IndexMap<String, TestArgValue>,
     },
 }
 
 /// A compiled test case, ready for execution.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct TestCase {
     /// Test name (e.g., "`TestAddOne`").
     pub name: String,
@@ -549,46 +392,23 @@ pub struct TestCase {
     pub function_names: Vec<String>,
     /// Test arguments, keyed by parameter name.
     pub args: IndexMap<String, TestArgValue>,
-}
-
-/// Compile-time constant values.
-///
-/// Similar to `Value` but uses `ObjectIndex` for object references instead of `HeapPtr`.
-/// Used in bytecode constants which are converted to `Value` when loading into the engine.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ConstValue {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    /// Index into the object pool (converted to `HeapPtr` at load time).
-    Object(crate::ObjectIndex),
-}
-
-impl ConstValue {
-    /// Convert to a runtime `Value` using a function to resolve object indices to heap pointers.
-    pub fn to_value<F>(&self, resolve: F) -> Value
-    where
-        F: Fn(crate::ObjectIndex) -> HeapPtr,
-    {
-        match self {
-            ConstValue::Null => Value::Null,
-            ConstValue::Int(v) => Value::Int(*v),
-            ConstValue::Float(v) => Value::Float(*v),
-            ConstValue::Bool(v) => Value::Bool(*v),
-            ConstValue::Object(idx) => Value::Object(resolve(*idx)),
-        }
-    }
+    /// Project-root-relative path of the file that *defines* this test block.
+    ///
+    /// Recorded so `baml test --list` reports the test-defining file
+    /// identically whether the program was freshly compiled or served from the
+    /// bytecode cache. Empty only for programs compiled before this field
+    /// existed.
+    pub source_file: String,
 }
 
 /// Media value.
 ///
 /// Kept as a type alias for compatibility with downstream crates that still use it.
 /// Within `bex_vm`, media is now stored as `Object::Instance` with a `$rust_type` `_data` field.
-pub type MediaValue = std::sync::Arc<baml_builtins::MediaValue>;
+pub type MediaValue = std::sync::Arc<baml_builtins2::MediaValue>;
 
 /// Prompt AST tree node.
-pub type PromptAst = std::sync::Arc<baml_builtins::PromptAst>;
+pub type PromptAst = std::sync::Arc<baml_builtins2::PromptAst>;
 
 /// Opaque handle to a `Collector` object from `bex_events`.
 ///
@@ -603,120 +423,40 @@ impl PartialEq for CollectorRef {
     }
 }
 
-/// Any data that the Baml program can reference and is allocated on heap.
+/// A mutable cell wrapping a single captured value.
 ///
-/// `Vm` (in `bex_vm` crate) should own objects and give references to them to the running Baml
-/// program. Internally, in the `Vm` code, note that by reference I don't mean
-/// a Rust reference (& or &mut), but rather a [`usize`] that is used to index
-/// into the `Vm::objects` pool.
-///
-/// Read `Vm::objects` for more information.
-#[derive(Clone, Debug)]
-pub enum Object {
-    /// Function object.
-    Function(Box<Function>),
-
-    /// Class object.
-    Class(Class),
-
-    /// Class instance object.
-    Instance(Instance),
-
-    /// Enum object.
-    Enum(Enum),
-
-    /// Enum value object.
-    Variant(Variant),
-
-    /// Heap allocated string.
-    ///
-    /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
-    /// In Rust it's not easy to implement because `Vm::objects`
-    /// owns the strings allocated on heap, but the interner would be something
-    /// like `HashSet`<&str> and it would store pointers to the strings. That
-    /// reference will cause some lifetime issues because the VM would have
-    /// pointers to itself, so we'd have to figure how to implement it
-    /// otherwise.
-    String(String),
-
-    /// List of values.
-    Array(Vec<Value>),
-
-    /// Map of values.
-    Map(IndexMap<String, Value>),
-
-    Future(Future),
-
-    /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
-    /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
-    RustData(Arc<dyn Any + Send + Sync>),
-
-    /// Collector object (opaque handle to `bex_events::Collector`).
-    Collector(CollectorRef),
-
-    /// A type descriptor value — wraps a `baml_type::Ty`.
-    Type(baml_type::Ty),
-
-    #[cfg(feature = "heap_debug")]
-    Sentinel(SentinelKind),
+/// Variables that are closed over are heap-allocated as `Cell` objects so that
+/// both the enclosing scope and any closures share the same storage.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct Cell {
+    pub value: AtomicValueSlot,
 }
 
-impl std::fmt::Display for Object {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Object::Function(function) => function.fmt(f),
-            Object::Class(class) => class.fmt(f),
-            Object::Instance(instance) => instance.fmt(f),
-            Object::Enum(enm) => enm.fmt(f),
-            Object::Variant(value) => value.fmt(f),
-            Object::String(string) => string.fmt(f),
-            Object::Array(array) => write!(f, "<array len={}>", array.len()),
-            Object::Map(map) => write!(f, "<map len={}>", map.len()),
-            Object::RustData(_) => write!(f, "<rust_data>"),
-            Object::Collector(_) => write!(f, "<collector>"),
-            Object::Type(ty) => write!(f, "<type: {ty}>"),
-            Object::Future(future) => match future {
-                Future::Pending(future) => {
-                    write!(f, "<pending: {}>", future.operation)
-                }
-                Future::Ready(value) => write!(f, "<ready: {value}>"),
-            },
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
-            // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
+impl Cell {
+    pub fn new(value: Value) -> Self {
+        Self {
+            value: AtomicValueSlot::new(value),
         }
     }
-}
 
-#[derive(Clone, Debug)]
-pub enum Future {
-    /// Pending future.
-    ///
-    /// Only LLM calls for now.
-    Pending(PendingFuture),
+    #[inline]
+    pub fn load(&self) -> Value {
+        self.value.load()
+    }
 
-    /// Ready value for the future.
-    Ready(Value),
-}
-
-/// A pending external operation.
-///
-/// External operations are async functions that run outside the VM, such as
-/// LLM calls, HTTP requests, file I/O, or shell commands.
-#[derive(Clone, Debug)]
-pub struct PendingFuture {
-    /// The system operation to execute.
-    pub operation: SysOp,
-    /// Arguments to the operation.
-    pub args: Vec<Value>,
+    #[inline]
+    pub fn store(&self, value: Value) {
+        self.value.store(value);
+    }
 }
 
 /// Types of values.
 ///
 /// Used for checking type errors at runtime. We can probably use some lib
 /// that creates this automatically based on the [`Value`] enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum Type {
+    OmittedArg,
     Int,
     Float,
     Bool,
@@ -726,6 +466,7 @@ pub enum Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Type::OmittedArg => write!(f, "omitted argument"),
             Type::Int => write!(f, "int"),
             Type::Float => write!(f, "float"),
             Type::Bool => write!(f, "bool"),
@@ -742,143 +483,85 @@ impl<O: Into<ObjectType>> From<O> for Type {
 
 impl Type {
     /// Get the type of a value.
+    ///
+    /// Heap-boxed floats are normalised back to the top-level `Type::Float`
+    /// so callers comparing `expected` against `got` see the same variant
+    /// regardless of which side originated as an inline label vs. a
+    /// runtime heap deref.
     pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
-        match value {
-            Value::Int(_) => Type::Int,
-            Value::Float(_) => Type::Float,
-            Value::Bool(_) => Type::Bool,
-            Value::Object(ptr) => Type::Object(when_object(*ptr)),
+        match value.kind() {
+            ValueKind::OmittedArg => Type::OmittedArg,
+            ValueKind::Int(_) => Type::Int,
+            ValueKind::Bool(_) => Type::Bool,
+            ValueKind::Object(ptr) => match when_object(ptr) {
+                ObjectType::Float => Type::Float,
+                other => Type::Object(other),
+            },
             // TODO: Actually?
-            Value::Null => Type::Object(ObjectType::Any),
+            ValueKind::Null => Type::Object(ObjectType::Any),
         }
     }
 }
 
-/// Object type lattice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ObjectType {
-    /// Top type of the lattice. It is castable to any of the other
-    /// types.
-    Any,
-    Instance,
-    Array,
-    Map,
-    Function(FunctionType),
-    Class,
-    String,
-    Enum,
-    Variant,
-    Future(FutureType),
-    Collector,
-    Type,
-    RustData,
-}
+#[cfg(test)]
+mod tests {
+    use super::{ConstValue, HeapPtr, Instance, Type, Value, format_float};
 
-impl ObjectType {
-    pub fn of(ob: &Object) -> Self {
-        match ob {
-            Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
-            Object::Class(_) => Self::Class,
-            Object::Instance(_) => Self::Instance,
-            Object::Enum(_) => Self::Enum,
-            Object::Variant(_) => Self::Enum,
-            Object::String(_) => Self::String,
-            Object::Array(_) => Self::Array,
-            Object::Map(_) => Self::Map,
-            Object::RustData(_) => Self::RustData,
-            Object::Collector(_) => Self::Collector,
-            Object::Type(_) => Self::Type,
-            Object::Future(fut) => Self::Future(fut.into()),
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(_) => Self::Any,
-            // Object::BamlType(_) => Self::Any, // TODO
-        }
+    #[test]
+    fn test_format_float() {
+        // Whole-number floats must include ".0"
+        assert_eq!(format_float(0.0), "0.0");
+        assert_eq!(format_float(1.0), "1.0");
+        assert_eq!(format_float(-1.0), "-1.0");
+        assert_eq!(format_float(100.0), "100.0");
+        assert_eq!(format_float(999_999_999_999_999.0), "999999999999999.0");
+
+        // Fractional floats unchanged
+        assert_eq!(format_float(2.5), "2.5");
+        assert_eq!(format_float(0.1), "0.1");
+        assert_eq!(format_float(-0.001), "-0.001");
+
+        // Non-finite values: JS-style names, no ".0"
+        assert_eq!(format_float(f64::INFINITY), "Infinity");
+        assert_eq!(format_float(f64::NEG_INFINITY), "-Infinity");
+        assert_eq!(format_float(f64::NAN), "NaN");
     }
-}
 
-impl From<FutureType> for ObjectType {
-    fn from(value: FutureType) -> Self {
-        ObjectType::Future(value)
+    #[test]
+    fn omitted_arg_roundtrip_stays_in_sync() {
+        let value = ConstValue::OmittedArg.to_value(|_| unreachable!("no object expected"));
+
+        assert_eq!(value, Value::OMITTED_ARG);
+        assert_eq!(
+            Type::of(&value, |_| unreachable!("omitted arg is not an object")),
+            Type::OmittedArg
+        );
+        assert_eq!(value.to_string(), "<omitted>");
     }
-}
 
-impl From<FunctionType> for ObjectType {
-    fn from(value: FunctionType) -> Self {
-        ObjectType::Function(value)
+    #[test]
+    fn instance_field_helpers_load_and_store_checked_slots() {
+        let instance = Instance::new(
+            HeapPtr::null(),
+            Box::new([]),
+            vec![Value::int(10), Value::int(20)],
+        );
+
+        assert_eq!(instance.field_len(), 2);
+        assert_eq!(instance.try_load_field(0), Some(Value::int(10)));
+        assert_eq!(instance.try_load_field(2), None);
+        assert_eq!(instance.load_field(1), Value::int(20));
+
+        assert_eq!(instance.try_store_field(1, Value::int(99)), Ok(()));
+        assert_eq!(instance.try_load_field(1), Some(Value::int(99)));
+        assert_eq!(instance.try_store_field(2, Value::int(123)), Err(2));
     }
-}
 
-impl std::fmt::Display for ObjectType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ObjectType::Any => write!(f, "any"),
-            ObjectType::Instance => write!(f, "instance"),
-            ObjectType::Array => write!(f, "array"),
-            ObjectType::Map => write!(f, "map"),
-            ObjectType::Function(function_type) => write!(f, "{function_type}"),
-            ObjectType::Class => write!(f, "class"),
-            ObjectType::Enum => write!(f, "enum"),
-            ObjectType::Variant => write!(f, "variant"),
-            ObjectType::Future(future_type) => write!(f, "{future_type}"),
-            ObjectType::String => write!(f, "string"),
-            ObjectType::Collector => write!(f, "collector"),
-            ObjectType::Type => write!(f, "type"),
-            ObjectType::RustData => write!(f, "rust_data"),
-        }
-    }
-}
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn instance_load_field_panics_for_invalid_slot() {
+        let instance = Instance::new(HeapPtr::null(), Box::new([]), vec![Value::int(10)]);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FunctionType {
-    /// Top of function type lattice: represents all function types.
-    Any,
-    Callable,
-    SysOp,
-}
-
-impl std::fmt::Display for FunctionType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FunctionType::Any => write!(f, "any"),
-            FunctionType::Callable => write!(f, "callable"),
-            FunctionType::SysOp => write!(f, "sys_op"),
-        }
-    }
-}
-
-impl From<&FunctionKind> for FunctionType {
-    fn from(value: &FunctionKind) -> Self {
-        if matches!(value, FunctionKind::SysOp(_)) {
-            FunctionType::SysOp
-        } else {
-            FunctionType::Callable
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FutureType {
-    /// Top of future type lattice: represents all future types.
-    Any,
-    Pending,
-    Ready,
-}
-
-impl std::fmt::Display for FutureType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FutureType::Any => write!(f, "any"),
-            FutureType::Pending => write!(f, "pending"),
-            FutureType::Ready => write!(f, "ready"),
-        }
-    }
-}
-
-impl From<&Future> for FutureType {
-    fn from(value: &Future) -> Self {
-        match value {
-            Future::Pending(_) => Self::Pending,
-            Future::Ready(_) => Self::Ready,
-        }
+        let _ = instance.load_field(1);
     }
 }

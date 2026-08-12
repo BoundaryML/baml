@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [validation] E0011
+
+  × name `A` defined 3 times as: class, class, type
+   ╭─[repro.baml:1:7]
+ 1 │ class A {
+   ·       ┬
+   ·       ╰── first defined as class here
+   ╰────
+   ╭─[repro.baml:5:7]
+ 5 │ class A {
+   ·       ┬
+   ·       ╰── duplicate class definition
+   ╰────
+   ╭─[repro.baml:9:6]
+ 9 │ type A = int
+   ·      ┬
+   ·      ╰── duplicate type definition
+   ╰────

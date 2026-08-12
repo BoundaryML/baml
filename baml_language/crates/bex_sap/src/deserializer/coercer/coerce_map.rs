@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
-    baml_value::{BamlMap, BamlValue},
+    baml_value::BamlMap,
     deserializer::{
         deserialize_flags::{DeserializerConditions, Flag},
         types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
@@ -55,28 +55,6 @@ where
             }
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
-
-        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
-            let parse_as = ctx
-                .db
-                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                .ok()?;
-            let TyResolvedRef::Map(parse_as_map) = parse_as.ty else {
-                // Only maps can be subtypes of maps
-                return None;
-            };
-            debug_assert!(
-                parse_as_map != target.ty,
-                "If parse_as is the same, it should be `None`."
-            );
-            let obj = MapTy::try_cast(ctx, TyWithMeta::new(parse_as_map, parse_as.meta), value)?;
-            let value = BamlValue::Map(obj.value);
-            target.meta.expect_asserts(&value, ctx).ok()?;
-            let BamlValue::Map(ret) = value else {
-                unreachable!("we just wrapped it in a BamlValue::Map");
-            };
-            return Some(ValueWithFlags::new(ret, obj.meta));
-        }
 
         flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
 
@@ -189,36 +167,6 @@ where
                 flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 target.ty.from_literal(lit, ctx)?
             }
-            (_, _) if target.meta.parse_as.is_some() => {
-                let parse_as_ty = target.meta.parse_as.as_ref().unwrap_or_else(|| {
-                    unreachable!(
-                        "We just checked it is Some.
-                        Once let guards are stabilized, we can remove this."
-                    )
-                });
-                let parse_as = ctx
-                    .db
-                    .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                    .map_err(|name| ctx.error_type_resolution(name))?;
-                let TyResolvedRef::Map(parse_as_map) = parse_as.ty else {
-                    // Only maps can be subtypes of maps
-                    return Err(ctx.error_internal("parse_as should always be an map"));
-                };
-                debug_assert!(
-                    parse_as_map != target.ty,
-                    "If parse_as is the same, it should be `None`."
-                );
-                let obj = MapTy::coerce(ctx, TyWithMeta::new(parse_as_map, parse_as.meta), value)?;
-                let Some(obj) = obj else {
-                    return Ok(None);
-                };
-                let value = BamlValue::Map(obj.value);
-                target.meta.expect_asserts(&value, ctx)?;
-                let BamlValue::Map(ret) = value else {
-                    unreachable!("we just wrapped it in a BamlValue::Map");
-                };
-                return Ok(Some(ValueWithFlags::new(ret, obj.meta)));
-            }
             (jsonish::Value::Object(obj, completion_state), _) => {
                 let mut items = IndexMap::new();
                 for (idx, (key, value)) in obj.iter().enumerate() {
@@ -274,11 +222,6 @@ where
             _ => return Err(ctx.error_unexpected_type(&target, value)),
         };
 
-        let ret = BamlValue::Map(ret);
-        target.meta.expect_asserts(&ret, ctx)?;
-        let BamlValue::Map(ret) = ret else {
-            unreachable!("we just wrapped it in a BamlValue::Map");
-        };
         Ok(Some(
             ValueWithFlags::new(ret, DeserializerMeta::new(target)).with_flags(flags.flags),
         ))

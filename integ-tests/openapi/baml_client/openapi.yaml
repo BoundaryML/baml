@@ -1949,6 +1949,19 @@ paths:
                 title: TestAwsResponse
                 type: string
       operationId: TestAws
+  /call/TestAwsCaching:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsCaching'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsCachingResponse
+                type: string
+      operationId: TestAwsCaching
   /call/TestAwsClaude37:
     post:
       requestBody:
@@ -3159,6 +3172,19 @@ paths:
                 title: TestVertexClaudeResponse
                 type: string
       operationId: TestVertexClaude
+  /call/TestVertexClaudeGlobal:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestVertexClaudeGlobal'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestVertexClaudeGlobalResponse
+                type: string
+      operationId: TestVertexClaudeGlobal
   /call/TestVertexWithSystemInstructions:
     post:
       requestBody:
@@ -5568,6 +5594,25 @@ components:
             required:
             - input
             additionalProperties: false
+    TestAwsCaching:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsCachingRequest
+            type: object
+            properties:
+              input:
+                type: string
+              not_cached:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            - not_cached
+            additionalProperties: false
     TestAwsClaude37:
       required: true
       content:
@@ -7048,6 +7093,22 @@ components:
         application/json:
           schema:
             title: TestVertexClaudeRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestVertexClaudeGlobal:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestVertexClaudeGlobalRequest
             type: object
             properties:
               input:

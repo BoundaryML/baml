@@ -1,5 +1,5 @@
 client<l> MyClient2 {
-  provider baml-openai-chat
+  provider openai
 }
 
 // error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
@@ -7,9 +7,18 @@ client<l> MyClient2 {
 //    |
 //    |
 //  1 | client<l> MyClient2 {
-//  2 |   provider baml-openai-chat
+//  2 |   provider openai
 //    |
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient2 = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[client_bad_template_args.baml:1:1]
+//  1 │ ╭─▶ client<l> MyClient2 {
+//  2 │ │     provider openai
+//  3 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

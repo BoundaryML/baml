@@ -9,8 +9,8 @@
 //! let mut builder = MirBuilder::new(Name::new("my_function"), 1);
 //!
 //! // Declare return place and parameter
-//! let ret = builder.declare_local(Some("_return".into()), Ty::Int, None);
-//! let param = builder.declare_local(Some("x".into()), Ty::Int, None);
+//! let ret = builder.declare_local(Some("_return".into()), RuntimeTy::Int, None);
+//! let param = builder.declare_local(Some("x".into()), RuntimeTy::Int, None);
 //!
 //! // Create blocks
 //! let entry = builder.create_block();
@@ -26,14 +26,13 @@
 //! let mir = builder.build();
 //! ```
 
-use std::collections::HashMap;
-
 use baml_base::{Name, Span};
-use baml_type::Ty;
+use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
-    BasicBlock, BlockId, Constant, ItemRef, Local, LocalDecl, MirFunction, MirFunctionBody,
-    MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator, VizNode,
+    BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
+    MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
+    VizNode,
 };
 
 /// Builder for constructing MIR functions.
@@ -47,10 +46,11 @@ pub(crate) struct MirBuilder {
     viz_nodes: Vec<VizNode>,
     /// Current source span for tagging statements/terminators.
     pub(crate) current_source_span: Option<Span>,
-    /// Maps unwind handler block -> error local, populated during catch lowering.
-    pub(crate) unwind_error_locals: HashMap<BlockId, Local>,
+    /// Catch regions recorded during lowering for exception table construction.
+    pub(crate) catch_regions: Vec<CatchRegion>,
 }
 
+// Some builder utilities are not yet used but will be needed as MIR 2 matures.
 #[allow(dead_code)]
 impl MirBuilder {
     /// Create a new MIR builder for a function.
@@ -64,8 +64,13 @@ impl MirBuilder {
             span: None,
             viz_nodes: Vec::new(),
             current_source_span: None,
-            unwind_error_locals: HashMap::new(),
+            catch_regions: Vec::new(),
         }
+    }
+
+    /// Return the function name.
+    pub(crate) fn name(&self) -> &Name {
+        &self.name
     }
 
     /// Set the source span for the function.
@@ -86,9 +91,8 @@ impl MirBuilder {
     pub(crate) fn declare_local(
         &mut self,
         name: Option<Name>,
-        ty: Ty,
+        ty: RuntimeTy,
         span: Option<Span>,
-        is_watched: bool,
     ) -> Local {
         let id = Local(self.locals.len());
         self.locals.push(LocalDecl {
@@ -96,14 +100,14 @@ impl MirBuilder {
             ty,
             span,
             scope_span: None,
-            is_watched,
+            is_captured: false,
         });
         id
     }
 
     /// Allocate a temporary (unnamed local).
-    pub(crate) fn temp(&mut self, ty: Ty) -> Local {
-        self.declare_local(None, ty, None, false)
+    pub(crate) fn temp(&mut self, ty: RuntimeTy) -> Local {
+        self.declare_local(None, ty, None)
     }
 
     /// Get the number of locals declared so far.
@@ -115,8 +119,16 @@ impl MirBuilder {
     ///
     /// Used by `bind_pattern` in `lower.rs` to propagate the scrutinee's type
     /// to catch binding locals when TIR has not populated the pattern type map.
-    pub(crate) fn local_ty(&self, local: Local) -> Ty {
+    pub(crate) fn local_ty(&self, local: Local) -> RuntimeTy {
         self.locals[local.0].ty.clone()
+    }
+
+    /// Get a mutable reference to a local declaration.
+    ///
+    /// Used by Phase 4 to set `is_captured = true` after lowering the function body
+    /// but before calling `build()`.
+    pub(crate) fn local_decl_mut(&mut self, local: Local) -> &mut LocalDecl {
+        &mut self.locals[local.0]
     }
 
     // ========================================================================
@@ -128,6 +140,13 @@ impl MirBuilder {
         let id = BlockId(self.blocks.len());
         self.blocks.push(BasicBlock::new(id));
         id
+    }
+
+    /// Number of blocks created so far. Block IDs are dense `0..num_blocks()`,
+    /// so a range captured around a lowering step names exactly the blocks that
+    /// step created (used to record a catch handler body, BEP-042).
+    pub(crate) fn num_blocks(&self) -> usize {
+        self.blocks.len()
     }
 
     /// Set the current block for emitting statements and terminators.
@@ -187,9 +206,35 @@ impl MirBuilder {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
+    /// Emit an open-world interface-field store.
+    pub(crate) fn virtual_field_store(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        receiver: Operand,
+        field_index: u32,
+        field: baml_base::Name,
+        value: Operand,
+    ) {
+        self.push_statement(
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                field,
+                value,
+            },
+            None,
+        );
+    }
+
     /// Emit a drop statement.
     pub(crate) fn drop(&mut self, place: Place) {
         self.push_statement(StatementKind::Drop(place), None);
+    }
+
+    /// Emit a fresh-cell statement for a loop variable.
+    pub(crate) fn fresh_cell(&mut self, local: Local) {
+        self.push_statement(StatementKind::FreshCell(local), None);
     }
 
     /// Emit a nop statement.
@@ -197,31 +242,11 @@ impl MirBuilder {
         self.push_statement(StatementKind::Nop, None);
     }
 
-    /// Emit an unwatch statement for a watched local going out of scope.
-    pub(crate) fn unwatch(&mut self, local: Local) {
-        self.push_statement(StatementKind::Unwatch(local), None);
-    }
-
-    /// Emit a `watch_options` statement to update the filter for a watched local.
-    pub(crate) fn watch_options(&mut self, local: Local, filter: Operand) {
-        self.push_statement(StatementKind::WatchOptions { local, filter }, None);
-    }
-
-    /// Emit a `watch_notify` statement to manually trigger notification for a watched local.
-    pub(crate) fn watch_notify(&mut self, local: Local) {
-        self.push_statement(StatementKind::WatchNotify(local), None);
-    }
-
     /// Set debug scope span for a local variable.
     pub(crate) fn set_local_scope_span(&mut self, local: Local, scope_span: Option<Span>) {
         if let Some(local_decl) = self.locals.get_mut(local.0) {
             local_decl.scope_span = scope_span;
         }
-    }
-
-    /// Emit an assert statement.
-    pub(crate) fn assert(&mut self, condition: Operand) {
-        self.push_statement(StatementKind::Assert(condition), None);
     }
 
     // ========================================================================
@@ -247,6 +272,41 @@ impl MirBuilder {
             condition,
             then_block,
             else_block,
+        });
+    }
+
+    pub(crate) fn narrow_bind(
+        &mut self,
+        source: Operand,
+        ty_template: TyTemplate,
+        destination: Local,
+        then_block: BlockId,
+        else_block: BlockId,
+    ) {
+        self.set_terminator(Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
+            then_block,
+            else_block,
+        });
+    }
+
+    /// Emit a short-circuit `&&` / `||` terminator.
+    pub(crate) fn short_circuit(
+        &mut self,
+        operand: Operand,
+        is_and: bool,
+        destination: Place,
+        eval_rhs: BlockId,
+        join: BlockId,
+    ) {
+        self.set_terminator(Terminator::ShortCircuit {
+            operand,
+            is_and,
+            destination,
+            eval_rhs,
+            join,
         });
     }
 
@@ -285,6 +345,45 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.call_with_type_args(callee, args, 0, destination, target, unwind);
+    }
+
+    /// Emit a function call with an explicit type-argument count.
+    ///
+    /// The first `ntypeargs` entries of `args` must be `Object::Type` values
+    /// produced by `Rvalue::LoadType`.  Regular value args follow after them.
+    pub(crate) fn call_with_type_args(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        self.call_with_type_args_and_runtime_id(
+            callee,
+            args,
+            ntypeargs,
+            None,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit a function call with an optional hidden runtime-id operand.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn call_with_type_args_and_runtime_id(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
@@ -292,6 +391,69 @@ impl MirBuilder {
         self.set_terminator(Terminator::Call {
             callee,
             args,
+            ntypeargs,
+            runtime_id,
+            destination,
+            target,
+            unwind,
+        });
+    }
+
+    /// Emit an open-world virtual interface-method call. The implementation is
+    /// resolved at runtime from the receiver's concrete type (the first `args`
+    /// entry) against `iface`. Used for statically-undetermined receivers
+    /// (bounded type-var / interface-existential / `Self` in a default body).
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn virtual_call(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        method: String,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        self.virtual_call_with_runtime_id(
+            iface,
+            method,
+            args,
+            ntypeargs,
+            None,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit an open-world virtual interface-method call with an optional hidden
+    /// runtime-id operand.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn virtual_call_with_runtime_id(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        method: String,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "VirtualCall destination must be a local place"
+        );
+        debug_assert!(
+            args.len() > ntypeargs,
+            "VirtualCall must carry at least the receiver value argument"
+        );
+        self.set_terminator(Terminator::VirtualCall {
+            iface,
+            method,
+            args,
+            ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -308,23 +470,52 @@ impl MirBuilder {
         self.set_terminator(Terminator::Throw { value });
     }
 
-    /// Emit a dispatch future (for LLM calls).
-    pub(crate) fn dispatch_future(
+    /// Emit a rethrow terminator for a caught error value.
+    pub(crate) fn rethrow(&mut self, value: Operand) {
+        self.set_terminator(Terminator::Rethrow { value });
+    }
+
+    /// Emit a throw-if-panic terminator: if the value is a panic instance,
+    /// throw it; otherwise continue to `otherwise`.
+    pub(crate) fn throw_if_panic(&mut self, value: Operand, otherwise: BlockId) {
+        self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
+    }
+
+    /// BEP-034 phase D′: emit a sys-op call. The sys-op is invoked
+    /// inline in the engine (single VM↔engine round trip) and its
+    /// return value is bound directly into `destination`.
+    pub(crate) fn sys_op(
         &mut self,
         callee: Operand,
         args: Vec<Operand>,
-        future: Place,
-        resume: BlockId,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        self.sys_op_with_runtime_id(callee, args, None, destination, target, unwind);
+    }
+
+    /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
+    pub(crate) fn sys_op_with_runtime_id(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
     ) {
         debug_assert!(
-            matches!(future, Place::Local(_)),
-            "DispatchFuture future handle place must be local"
+            matches!(destination, Place::Local(_)),
+            "SysOp destination must be a local place"
         );
-        self.set_terminator(Terminator::DispatchFuture {
+        self.set_terminator(Terminator::SysOp {
             callee,
             args,
-            future,
-            resume,
+            runtime_id,
+            destination,
+            target,
+            unwind,
         });
     }
 
@@ -349,6 +540,53 @@ impl MirBuilder {
             destination,
             target,
             unwind,
+        });
+    }
+
+    /// BEP-034: emit an `await_any` terminator — suspend until the first of
+    /// the `futures` array settles and bind its `int` index into `destination`.
+    pub(crate) fn await_any(
+        &mut self,
+        futures: Operand,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "AwaitAny destination must be a local place"
+        );
+        self.set_terminator(Terminator::AwaitAny {
+            futures,
+            destination,
+            target,
+            unwind,
+        });
+    }
+
+    /// BEP-034: emit a spawn terminator. Pops a closure operand plus an
+    /// optional name operand and binds the resulting `Future<T, E>`
+    /// handle into `future`.
+    pub(crate) fn spawn(
+        &mut self,
+        closure: Operand,
+        name: Operand,
+        config: Option<Box<Operand>>,
+        future_ty: Box<crate::ir::SpawnFutureTy>,
+        future: Place,
+        resume: BlockId,
+    ) {
+        debug_assert!(
+            matches!(future, Place::Local(_)),
+            "Spawn future handle place must be local"
+        );
+        self.set_terminator(Terminator::Spawn {
+            closure,
+            name,
+            config,
+            future_ty,
+            future,
+            resume,
         });
     }
 
@@ -412,9 +650,11 @@ impl MirBuilder {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                unwind_error_locals: self.unwind_error_locals,
+                catch_regions: self.catch_regions.clone(),
                 viz_nodes: self.viz_nodes,
             }),
+            lambdas: vec![],
+            signature: None,
         }
     }
 
@@ -431,7 +671,7 @@ impl MirBuilder {
             blocks: self.blocks,
             entry: BlockId(0),
             locals: self.locals,
-            unwind_error_locals: self.unwind_error_locals,
+            catch_regions: self.catch_regions,
             viz_nodes: self.viz_nodes,
         }
     }
@@ -453,9 +693,11 @@ impl MirBuilder {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                unwind_error_locals: self.unwind_error_locals,
+                catch_regions: self.catch_regions.clone(),
                 viz_nodes: self.viz_nodes,
             }),
+            lambdas: vec![],
+            signature: None,
         }
     }
 
@@ -468,15 +710,5 @@ impl MirBuilder {
         let idx = self.viz_nodes.len();
         self.viz_nodes.push(node);
         idx
-    }
-
-    /// Emit a `VizEnter` statement for the given node index.
-    pub(crate) fn viz_enter(&mut self, node_idx: usize) {
-        self.push_statement(StatementKind::VizEnter(node_idx), None);
-    }
-
-    /// Emit a `VizExit` statement for the given node index.
-    pub(crate) fn viz_exit(&mut self, node_idx: usize) {
-        self.push_statement(StatementKind::VizExit(node_idx), None);
     }
 }

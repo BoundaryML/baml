@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0003
+
+  × unresolved name: `my_runner`
+   ╭─[main.baml:8:27]
+ 8 │ test "simple runner" with my_runner {
+   ·                           ─────────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:23:32]
+ 23 │ test "constructor runner" with MyRunner { threshold: 0.5 } {
+    ·                                ─────────────┬─────────────
+    ·                                             ╰── expected `testing.TestRunner | null`, found `MyRunner`
+    ╰────

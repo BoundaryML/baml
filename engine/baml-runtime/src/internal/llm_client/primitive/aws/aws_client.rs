@@ -116,19 +116,41 @@ fn media_to_content_block_json(media: &BamlMedia) -> Result<serde_json::Value> {
     }
 }
 
-fn system_part_to_json(part: &ChatMessagePart) -> Result<serde_json::Value> {
+fn cache_point_json() -> serde_json::Value {
+    json!({"cachePoint": {"type": "default"}})
+}
+
+fn system_part_to_json(
+    part: &ChatMessagePart,
+    allowed_metadata: &AllowedRoleMetadata,
+) -> Result<Vec<serde_json::Value>> {
     match part {
-        ChatMessagePart::Text(t) => Ok(json!({ "text": t })),
-        ChatMessagePart::WithMeta(p, _) => system_part_to_json(p),
+        ChatMessagePart::Text(t) => Ok(vec![json!({ "text": t })]),
+        ChatMessagePart::WithMeta(p, meta) => {
+            let mut blocks = system_part_to_json(p, allowed_metadata)?;
+            if allowed_metadata.is_allowed("cache_control") && meta.contains_key("cache_control") {
+                blocks.push(cache_point_json());
+            }
+            Ok(blocks)
+        }
         other => anyhow::bail!("AWS Bedrock only supports text system blocks, but got {other:?}"),
     }
 }
 
-fn chat_part_to_json(part: &ChatMessagePart) -> Result<serde_json::Value> {
+fn chat_part_to_json(
+    part: &ChatMessagePart,
+    allowed_metadata: &AllowedRoleMetadata,
+) -> Result<Vec<serde_json::Value>> {
     match part {
-        ChatMessagePart::Text(t) => Ok(json!({ "text": t })),
-        ChatMessagePart::Media(media) => media_to_content_block_json(media),
-        ChatMessagePart::WithMeta(inner, _) => chat_part_to_json(inner),
+        ChatMessagePart::Text(t) => Ok(vec![json!({ "text": t })]),
+        ChatMessagePart::Media(media) => Ok(vec![media_to_content_block_json(media)?]),
+        ChatMessagePart::WithMeta(inner, meta) => {
+            let mut blocks = chat_part_to_json(inner, allowed_metadata)?;
+            if allowed_metadata.is_allowed("cache_control") && meta.contains_key("cache_control") {
+                blocks.push(cache_point_json());
+            }
+            Ok(blocks)
+        }
     }
 }
 
@@ -333,6 +355,7 @@ impl AwsClient {
         &self,
         prompt: &[RenderedChatMessage],
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let allowed_metadata = &self.properties.allowed_role_metadata;
         let mut system_blocks: Option<Vec<serde_json::Value>> = None;
         let mut chat_slice = prompt;
 
@@ -340,7 +363,7 @@ impl AwsClient {
             if first.role == "system" {
                 let mut blocks = Vec::new();
                 for part in &first.parts {
-                    blocks.push(system_part_to_json(part)?);
+                    blocks.extend(system_part_to_json(part, allowed_metadata)?);
                 }
                 system_blocks = Some(blocks);
                 chat_slice = remainder;
@@ -351,7 +374,7 @@ impl AwsClient {
         for message in chat_slice {
             let mut content_blocks = Vec::new();
             for part in &message.parts {
-                content_blocks.push(chat_part_to_json(part)?);
+                content_blocks.extend(chat_part_to_json(part, allowed_metadata)?);
             }
             messages_json.push(json!({
                 "role": message.role,
@@ -696,7 +719,7 @@ impl AwsClient {
                 bedrock::types::ContentBlock::ToolUse(_) => "toolUse",
                 bedrock::types::ContentBlock::Text(_) => "text",
                 bedrock::types::ContentBlock::ReasoningContent(_) => "reasoningContent",
-                // bedrock::types::ContentBlock::CachePoint(_) => "cachePoint",
+                bedrock::types::ContentBlock::CachePoint(_) => "cachePoint",
                 bedrock::types::ContentBlock::Document(_) => "document",
                 bedrock::types::ContentBlock::Video(_) => "video",
                 _ => "unknown",
@@ -714,13 +737,12 @@ impl AwsClient {
 
         if let Some((first, remainder_slice)) = chat_slice.split_first() {
             if first.role == "system" {
-                system_message = Some(
-                    first
-                        .parts
-                        .iter()
-                        .map(Self::part_to_system_message)
-                        .collect::<Result<_>>()?,
-                );
+                let allowed_metadata = &self.properties.allowed_role_metadata;
+                let mut blocks = Vec::new();
+                for part in &first.parts {
+                    blocks.extend(Self::part_to_system_message(part, allowed_metadata)?);
+                }
+                system_message = Some(blocks);
                 chat_slice = remainder_slice;
             }
         }
@@ -1068,8 +1090,8 @@ impl WithStreamChat for AwsClient {
                                             Some(usage.output_tokens() as u64);
                                         new_state.metadata.total_tokens =
                                             Some((usage.total_tokens()) as u64);
-                                        // AWS Bedrock does not currently support cached tokens
-                                        new_state.metadata.cached_input_tokens = None;
+                                        new_state.metadata.cached_input_tokens =
+                                            usage.cache_read_input_tokens().map(|v| v as u64);
                                     }
                                 }
                                 _ => {
@@ -1245,11 +1267,14 @@ impl AwsClient {
     }
 
     fn role_to_message(&self, msg: &RenderedChatMessage) -> Result<bedrock::types::Message> {
-        let content = msg
+        let content: Vec<_> = msg
             .parts
             .iter()
             .map(|part| self.part_to_message(part))
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
 
         bedrock::types::Message::builder()
             .set_role(Some(msg.role.as_str().into()))
@@ -1260,25 +1285,51 @@ impl AwsClient {
 
     fn part_to_system_message(
         part: &ChatMessagePart,
-    ) -> Result<bedrock::types::SystemContentBlock> {
+        allowed_metadata: &AllowedRoleMetadata,
+    ) -> Result<Vec<bedrock::types::SystemContentBlock>> {
         match part {
-            ChatMessagePart::Text(t) => Ok(bedrock::types::SystemContentBlock::Text(t.clone())),
+            ChatMessagePart::Text(t) => {
+                Ok(vec![bedrock::types::SystemContentBlock::Text(t.clone())])
+            }
             ChatMessagePart::Media(_) => anyhow::bail!(
                 "AWS Bedrock only supports text blocks for system messages, but got {:#?}",
                 part
             ),
-            ChatMessagePart::WithMeta(p, _) => Self::part_to_system_message(p),
+            ChatMessagePart::WithMeta(p, meta) => {
+                let mut blocks = Self::part_to_system_message(p, allowed_metadata)?;
+                if allowed_metadata.is_allowed("cache_control")
+                    && meta.contains_key("cache_control")
+                {
+                    blocks.push(bedrock::types::SystemContentBlock::CachePoint(
+                        bedrock::types::CachePointBlock::builder()
+                            .r#type(bedrock::types::CachePointType::Default)
+                            .build()?,
+                    ));
+                }
+                Ok(blocks)
+            }
         }
     }
 
-    fn part_to_message(&self, part: &ChatMessagePart) -> Result<bedrock::types::ContentBlock> {
+    fn part_to_message(&self, part: &ChatMessagePart) -> Result<Vec<bedrock::types::ContentBlock>> {
         match part {
-            ChatMessagePart::Text(t) => self.to_chat_message(t),
-            ChatMessagePart::Media(m) => self.to_media_message(m),
-            ChatMessagePart::WithMeta(p, _) => {
-                // All metadata is dropped as AWS does not support it
-                // this means caching, etc.
-                self.part_to_message(p)
+            ChatMessagePart::Text(t) => Ok(vec![self.to_chat_message(t)?]),
+            ChatMessagePart::Media(m) => Ok(vec![self.to_media_message(m)?]),
+            ChatMessagePart::WithMeta(p, meta) => {
+                let mut blocks = self.part_to_message(p)?;
+                if self
+                    .properties
+                    .allowed_role_metadata
+                    .is_allowed("cache_control")
+                    && meta.contains_key("cache_control")
+                {
+                    blocks.push(bedrock::types::ContentBlock::CachePoint(
+                        bedrock::types::CachePointBlock::builder()
+                            .r#type(bedrock::types::CachePointType::Default)
+                            .build()?,
+                    ));
+                }
+                Ok(blocks)
             }
         }
     }
@@ -1287,10 +1338,11 @@ impl AwsClient {
         &self,
         parts: &[ChatMessagePart],
     ) -> Result<Vec<bedrock::types::ContentBlock>> {
-        parts
-            .iter()
-            .map(|p| self.part_to_message(p))
-            .collect::<Result<Vec<_>>>()
+        let mut result = Vec::new();
+        for p in parts {
+            result.extend(self.part_to_message(p)?);
+        }
+        Ok(result)
     }
 }
 
@@ -1426,7 +1478,10 @@ impl WithChat for AwsClient {
                         .usage
                         .as_ref()
                         .and_then(|i| i.total_tokens.try_into().ok()),
-                    cached_input_tokens: None, // AWS Bedrock does not currently support cached tokens
+                    cached_input_tokens: response
+                        .usage
+                        .as_ref()
+                        .and_then(|i| i.cache_read_input_tokens().map(|v| v as u64)),
                 },
             }),
             Err(e) => LLMResponse::LLMFailure(LLMErrorResponse {

@@ -1,0 +1,269 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × class `Person` has no field `missing`
+    ╭─[patterns_class_destructure.baml:31:5]
+ 31 │     let Person { missing } = Person {
+    ·     ──────────────────────
+    ╰────
+
+  [hir] E0012
+
+  × duplicate field `age` in class destructure pattern
+    ╭─[patterns_class_destructure.baml:42:9]
+ 41 │         age: let first,
+    ·         ─┬─
+    ·          ╰── field `age` first destructured here
+ 42 │         age: let second
+    ·         ─┬─
+    ·          ╰── field `age` destructured again here
+    ╰────
+
+  [hir] E0012
+
+  × duplicate field `age` in class destructure pattern
+    ╭─[patterns_class_destructure.baml:53:26]
+ 53 │         Person { age: _, age: _ } => 1
+    ·                  ─┬─     ─┬─
+    ·                   │       ╰── field `age` destructured again here
+    ·                   ╰── field `age` first destructured here
+    ╰────
+
+  [hir] E0094
+
+  × duplicate binding `age` in pattern
+    ╭─[patterns_class_destructure.baml:60:23]
+ 59 │         age,
+    ·         ─┬─
+    ·          ╰── `age` first bound here
+ 60 │         flexible_age: let age
+    ·                       ───┬───
+    ·                          ╰── `age` bound again here
+    ╰────
+
+  [hir] E0094
+
+  × duplicate binding `field` in pattern
+    ╭─[patterns_class_destructure.baml:71:43]
+ 71 │         field: let field: SameNameInner { field }
+    ·                ─────────────────┬────────────────┬
+    ·                                 │                ╰── `field` bound again here
+    ·                                 ╰── `field` first bound here
+    ╰────
+
+  [hir] E0094
+
+  × duplicate binding `field` in pattern
+    ╭─[patterns_class_destructure.baml:82:32]
+ 81 │         field: SameNameInner { field },
+    ·                                ──┬──
+    ·                                  ╰── `field` first bound here
+ 82 │         other: SameNameInner { field }
+    ·                                ──┬──
+    ·                                  ╰── `field` bound again here
+    ╰────
+
+  [type] E0007
+
+  × class `Address` has no field `missing`
+    ╭─[patterns_class_destructure.baml:92:18]
+ 92 │         address: Address { missing }
+    ·                  ───────────────────
+    ╰────
+
+  [type] E0007
+
+  × class `Person` has no field `missing`
+     ╭─[patterns_class_destructure.baml:103:9]
+ 103 │         Person { missing } => 1,
+     ·         ──────────────────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `MissingClass`
+     ╭─[patterns_class_destructure.baml:109:5]
+ 109 │     let MissingClass { age } = Person {
+     ·     ────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:119:23]
+ 119 │         Person { age: string } => 1,
+     ·                       ───┬──
+     ·                          ╰── expected `int`, found `string`
+     ╰────
+
+  [type] E0001
+
+  × type `Box` expects 1 type argument(s), got 0
+     ╭─[patterns_class_destructure.baml:135:9]
+ 135 │         Box => 1
+     ·         ───
+     ╰────
+
+  [type] E0001
+
+  × type `Box` expects 1 type argument(s), got 0
+     ╭─[patterns_class_destructure.baml:141:20]
+ 141 │         let value: Box => 1
+     ·                    ───
+     ╰────
+
+  [type] E0001
+
+  × generic class destructure `Box { ... }` must specify type arguments
+     ╭─[patterns_class_destructure.baml:146:25]
+ 146 │     let Box { value } = boxed;
+     ·                         ─────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:147:5]
+ 147 │     value
+     ·     ──┬──
+     ·       ╰── expected `int`, found `T`
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:164:5]
+ 164 │     let Person { age } = v;
+     ·     ──────────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:169:10]
+ 169 │     for (let Person { age } in [
+     ·          ──────────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:179:5]
+ 179 │     let Person { flexible_age: int } = Person {
+     ·     ────────────────────────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:188:5]
+ 188 │     let Person { age: 1 } = Person {
+     ·     ─────────────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:197:5]
+ 197 │ ╭─▶     let Person {
+ 198 │ │           address: Address { zip: 1 }
+ 199 │ ╰─▶     } = Person {
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:208:10]
+ 208 │     for (let Person { flexible_age: int } in [
+     ·          ────────────────────────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[patterns_class_destructure.baml:217:5]
+ 217 │     let OptionalPerson { age: int } = OptionalPerson { age: 1 };
+     ·     ───────────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:223:30]
+ 223 │     let Box<string> { value: int } = boxed;
+     ·                              ─┬─
+     ·                               ╰── expected `string`, found `int`
+     ╰────
+
+  [hir] E0094
+
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: age
+     ╭─[patterns_class_destructure.baml:237:9]
+ 237 │         Person { age } | int => age
+     ·         ──────────┬─────────
+     ·                   ╰── alternatives bind different names
+     ╰────
+
+  [type] E0001
+
+  × or-pattern binding `age` has conflicting types: int and string
+     ╭─[patterns_class_destructure.baml:243:34]
+ 243 │         Person { age } | Admin { age } => age
+     ·                                  ───
+     ╰────
+
+  [type] E0001
+
+  × or-pattern binding `age` has conflicting types: string and int
+     ╭─[patterns_class_destructure.baml:249:34]
+ 249 │         Admin { age } | Person { age } => age
+     ·                                  ───
+     ╰────
+
+  [type] E0001
+
+  × or-pattern binding `value` has conflicting types: int and string
+     ╭─[patterns_class_destructure.baml:255:62]
+ 255 │         Box<int> { value: let value } | Box<string> { value: let value } => 1
+     ·                                                              ─────────
+     ╰────
+
+  [hir] E0094
+
+  × duplicate binding `value` in pattern
+     ╭─[patterns_class_destructure.baml:264:50]
+ 264 │         value: let value: SameNameInner { field: let value }
+     ·                ──────────────────────┬──────────────────────┬
+     ·                                      │                      ╰── `value` bound again here
+     ·                                      ╰── `value` first bound here
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:271:42]
+ 271 │         Person { address: Address { zip: string } } => 1,
+     ·                                          ───┬──
+     ·                                             ╰── expected `int`, found `string`
+     ╰────
+
+  [type] E0007
+
+  × class `Person` has no field `missing`
+     ╭─[patterns_class_destructure.baml:277:5]
+ 277 │ ╭─▶     let Person {
+ 278 │ │           missing: let renamed
+ 279 │ ╰─▶     } = Person {
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:289:27]
+ 289 │         let Person { age: string } = p;
+     ·                           ───┬──
+     ·                              ╰── expected `int`, found `string`
+     ╰────

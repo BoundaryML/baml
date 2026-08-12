@@ -2,8 +2,7 @@
 
 use std::collections::HashMap;
 
-use serde::ser::SerializeMap as _;
-use serde::Serialize;
+use serde::{ser::SerializeMap as _, Serialize};
 
 use super::{
     baml_value::BamlValue, from_baml_value::FromBamlValue, from_baml_value_ref::FromBamlValueRef,

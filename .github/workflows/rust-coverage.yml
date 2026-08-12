@@ -18,12 +18,12 @@ concurrency:
 
 jobs:
   rust-coverage:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # Don't fail the PR if coverage fails
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools

@@ -12,8 +12,8 @@
 use baml_base::SourceFile;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, LetMarker, LocalItemId,
-    RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
 };
 
 #[salsa::interned]
@@ -35,6 +35,12 @@ pub struct EnumLoc<'db> {
 }
 
 #[salsa::interned]
+pub struct InterfaceLoc<'db> {
+    pub file: SourceFile,
+    pub id: LocalItemId<InterfaceMarker>,
+}
+
+#[salsa::interned]
 pub struct TypeAliasLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<TypeAliasMarker>,
@@ -53,12 +59,6 @@ pub struct TestLoc<'db> {
 }
 
 #[salsa::interned]
-pub struct GeneratorLoc<'db> {
-    pub file: SourceFile,
-    pub id: LocalItemId<GeneratorMarker>,
-}
-
-#[salsa::interned]
 pub struct TemplateStringLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<TemplateStringMarker>,
@@ -74,6 +74,18 @@ pub struct RetryPolicyLoc<'db> {
 pub struct LetLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<LetMarker>,
+}
+
+/// Stable identity for an `implements` block (both kinds: in-body and
+/// out-of-body). Unlike the other `*Loc` types, an impl has no declared name,
+/// so its `LocalItemId` is seeded from the impl's structural identity (its
+/// interface-target and for-target heads) rather than a name hash — see
+/// `ItemTree` allocation. Impls are not name-addressable, so `ImplLoc` is
+/// intentionally absent from `Definition`/`ItemId`.
+#[salsa::interned]
+pub struct ImplLoc<'db> {
+    pub file: SourceFile,
+    pub id: LocalItemId<ImplMarker>,
 }
 
 // ── Manual Debug impls ───────────────────────────────────────────────────────
@@ -98,6 +110,12 @@ impl std::fmt::Debug for EnumLoc<'_> {
     }
 }
 
+impl std::fmt::Debug for InterfaceLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "InterfaceLoc(..)")
+    }
+}
+
 impl std::fmt::Debug for TypeAliasLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TypeAliasLoc(..)")
@@ -113,12 +131,6 @@ impl std::fmt::Debug for ClientLoc<'_> {
 impl std::fmt::Debug for TestLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TestLoc(..)")
-    }
-}
-
-impl std::fmt::Debug for GeneratorLoc<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GeneratorLoc(..)")
     }
 }
 
@@ -140,6 +152,12 @@ impl std::fmt::Debug for LetLoc<'_> {
     }
 }
 
+impl std::fmt::Debug for ImplLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ImplLoc(..)")
+    }
+}
+
 // ── ItemId ───────────────────────────────────────────────────────────────────
 
 /// Sum type for any top-level item location.
@@ -148,10 +166,10 @@ pub enum ItemId<'db> {
     Function(FunctionLoc<'db>),
     Class(ClassLoc<'db>),
     Enum(EnumLoc<'db>),
+    Interface(InterfaceLoc<'db>),
     TypeAlias(TypeAliasLoc<'db>),
     Client(ClientLoc<'db>),
     Test(TestLoc<'db>),
-    Generator(GeneratorLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
@@ -163,10 +181,10 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Function(_) => write!(f, "ItemId::Function(..)"),
             ItemId::Class(_) => write!(f, "ItemId::Class(..)"),
             ItemId::Enum(_) => write!(f, "ItemId::Enum(..)"),
+            ItemId::Interface(_) => write!(f, "ItemId::Interface(..)"),
             ItemId::TypeAlias(_) => write!(f, "ItemId::TypeAlias(..)"),
             ItemId::Client(_) => write!(f, "ItemId::Client(..)"),
             ItemId::Test(_) => write!(f, "ItemId::Test(..)"),
-            ItemId::Generator(_) => write!(f, "ItemId::Generator(..)"),
             ItemId::TemplateString(_) => write!(f, "ItemId::TemplateString(..)"),
             ItemId::RetryPolicy(_) => write!(f, "ItemId::RetryPolicy(..)"),
             ItemId::Let(_) => write!(f, "ItemId::Let(..)"),

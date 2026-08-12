@@ -5,50 +5,145 @@ use ::eframe::egui::{
 };
 use ::std::borrow::Cow;
 
-use crate::state::SapVisualizerState;
+use crate::{compile, state::SapVisualizerState};
+
+const DEFAULT_BAML_SOURCE: &str = r#"enum Degree {
+  HighSchool
+  Associate
+  Bachelor
+  Master
+  Doctorate @alias("PhD")
+}
+
+class Education {
+  school string
+  degree Degree
+  year int?
+}
+
+class Resume {
+  name string
+  email string
+  phone string?
+  experience int[]
+  education Education[]
+  skills string[]
+}"#;
+
+const DEFAULT_TYPE_EXPR: &str = "Resume";
+
+/// Result received from the background compilation thread.
+type CompileResult = Result<compile::CompiledSapModel, String>;
 
 pub struct SapVisualizer {
-    sap: SapVisualizerState<&'static str>,
+    /// The BAML source code (class/enum definitions).
+    baml_source: String,
+    /// The type expression to parse as (e.g. `Resume`, `string | int`).
+    type_expr: String,
+    /// Compilation status.
+    compile_status: CompileStatus,
+    /// The SAP visualizer state (None if compilation failed).
+    sap: Option<SapVisualizerState>,
     text_highlight: Option<(usize, usize)>,
     /// Stack of auto-inserted closers to the right of the cursor (innermost
     /// first).  When the user types a closer matching the top of the stack,
     /// we over-type instead of inserting.  Cleared on unexpected cursor moves.
     overtype_stack: AutoCloseStack,
+    /// Channel for receiving compilation results from the background thread.
+    compile_rx: Option<std::sync::mpsc::Receiver<CompileResult>>,
+    /// Repaint context for waking the UI when compilation finishes.
+    ctx: Option<egui::Context>,
+    /// Timestamp of the last editor change, for debouncing recompilation.
+    last_change: Option<web_time::Instant>,
+}
+
+enum CompileStatus {
+    Ok,
+    Compiling,
+    Error(String),
 }
 
 impl SapVisualizer {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let db = bex_sap::baml_db! {
-            enum Degree {
-                HighSchool,
-                Associate,
-                Bachelor,
-                Master,
-                Doctorate @alias("Doctorate") @alias("PhD"),
-            }
-
-            class Education {
-                school: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                degree: (Degree @in_progress(never) | string | null) @parse_as(Degree | string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                // null if not completed yet
-                year: (int | null) @in_progress(never) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            }
-
-            class Resume {
-                name: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                email: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                phone: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                experience: [int @in_progress(never)] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-                education: [Education] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-                skills: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-            }
-        };
-        let ty = bex_sap::baml_tyannotated!(Resume);
-        let sap = SapVisualizerState::new(String::default(), db, ty);
+        let baml_source = DEFAULT_BAML_SOURCE.to_string();
+        let type_expr = DEFAULT_TYPE_EXPR.to_string();
+        // Initial compile is synchronous so we have something to show immediately.
+        let (sap, compile_status) = Self::try_compile_sync(&baml_source, &type_expr);
         Self {
+            baml_source,
+            type_expr,
+            compile_status,
             sap,
             text_highlight: None,
             overtype_stack: AutoCloseStack::default(),
+            compile_rx: None,
+            ctx: None,
+            last_change: None,
+        }
+    }
+
+    fn try_compile_sync(
+        baml_source: &str,
+        type_expr: &str,
+    ) -> (Option<SapVisualizerState>, CompileStatus) {
+        match compile::compile_baml_to_sap(baml_source, type_expr) {
+            Ok(compiled) => {
+                let sap = SapVisualizerState::new(String::default(), compiled);
+                (Some(sap), CompileStatus::Ok)
+            }
+            Err(e) => (None, CompileStatus::Error(e)),
+        }
+    }
+
+    fn recompile(&mut self) {
+        self.compile_status = CompileStatus::Compiling;
+        let baml_source = self.baml_source.clone();
+        let type_expr = self.type_expr.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.compile_rx = Some(rx);
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let result = compile::compile_baml_to_sap(&baml_source, &type_expr);
+            let _ = tx.send(result);
+            if let Some(ctx) = ctx {
+                ctx.request_repaint();
+            }
+        });
+    }
+
+    /// Poll for a completed background compilation and apply it.
+    fn poll_compile(&mut self) {
+        let Some(ref rx) = self.compile_rx else {
+            return;
+        };
+        let result = match rx.try_recv() {
+            Ok(result) => result,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.compile_rx = None;
+                self.compile_status =
+                    CompileStatus::Error("Background compilation crashed".to_string());
+                return;
+            }
+        };
+        self.compile_rx = None;
+        let old_json = self.sap.as_ref().map(|s| s.json().to_string());
+        match result {
+            Ok(compiled) => {
+                let mut sap = SapVisualizerState::new(String::default(), compiled);
+                if let Some(json) = old_json
+                    && !json.is_empty()
+                {
+                    sap.update_with_json(json);
+                }
+
+                self.sap = Some(sap);
+                self.compile_status = CompileStatus::Ok;
+            }
+            Err(e) => {
+                self.compile_status = CompileStatus::Error(e);
+                // Keep the old sap so the user can still see the previous output.
+            }
         }
     }
 }
@@ -80,123 +175,179 @@ const JSON_INPUT_FORMAT_HIGHLIGHT: egui::TextFormat = egui::TextFormat {
 
 impl eframe::App for SapVisualizer {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        self.ctx = Some(ctx.clone());
+        self.poll_compile();
+
+        // Left panel: BAML source + type expression editors.
+        egui::SidePanel::left("baml_panel")
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    ui.label("BAML Source:");
+                    let baml_response = egui::TextEdit::multiline(&mut self.baml_source)
+                        .code_editor()
+                        .desired_width(f32::INFINITY)
+                        .desired_rows(20)
+                        .hint_text("class Foo { ... }")
+                        .show(ui);
+
+                    ui.add_space(8.0);
+                    ui.label("Parse as type:");
+                    let type_response = egui::TextEdit::singleline(&mut self.type_expr)
+                        .code_editor()
+                        .desired_width(f32::INFINITY)
+                        .hint_text("Resume")
+                        .show(ui);
+
+                    if baml_response.response.changed() || type_response.response.changed() {
+                        self.last_change = Some(web_time::Instant::now());
+                    }
+                    // Debounce: recompile only after 300ms of no changes.
+                    if let Some(last) = self.last_change {
+                        if last.elapsed() >= std::time::Duration::from_millis(300) {
+                            self.last_change = None;
+                            self.recompile();
+                        } else if let Some(ctx) = &self.ctx {
+                            ctx.request_repaint_after(std::time::Duration::from_millis(300));
+                        }
+                    }
+
+                    ui.add_space(8.0);
+                    match &self.compile_status {
+                        CompileStatus::Ok => {
+                            ui.colored_label(Color32::GREEN, "✓ Compiled");
+                        }
+                        CompileStatus::Compiling => {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("Compiling…");
+                            });
+                        }
+                        CompileStatus::Error(err) => {
+                            ui.colored_label(Color32::RED, RichText::new(err).monospace());
+                        }
+                    }
+                });
+            });
+
+        // Top panel: JSON input.
         eframe::egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.take_available_width();
             ui.vertical(|ui| {
                 ui.take_available_width();
                 ui.label("JSON:");
-                let mut layouter = |ui: &egui::Ui, buf: &dyn TextBuffer, _: f32| {
-                    let sections = match self.text_highlight {
-                        Some((start, end)) => {
-                            assert!(start <= end);
-                            let mut sections = Vec::new();
-                            if start > 0 {
-                                sections.push(egui::text::LayoutSection {
-                                    leading_space: 0.0,
-                                    byte_range: 0..start,
-                                    format: JSON_INPUT_FORMAT,
-                                });
+                if let Some(ref mut sap) = self.sap {
+                    let mut layouter = |ui: &egui::Ui, buf: &dyn TextBuffer, _: f32| {
+                        let sections = match self.text_highlight {
+                            Some((start, end)) => {
+                                assert!(start <= end);
+                                let mut sections = Vec::new();
+                                if start > 0 {
+                                    sections.push(egui::text::LayoutSection {
+                                        leading_space: 0.0,
+                                        byte_range: 0..start,
+                                        format: JSON_INPUT_FORMAT,
+                                    });
+                                }
+                                if start < end && start < buf.as_str().len() {
+                                    sections.push(egui::text::LayoutSection {
+                                        leading_space: 0.0,
+                                        byte_range: start..std::cmp::min(end, buf.as_str().len()),
+                                        format: JSON_INPUT_FORMAT_HIGHLIGHT,
+                                    });
+                                }
+                                if end < buf.as_str().len() {
+                                    sections.push(egui::text::LayoutSection {
+                                        leading_space: 0.0,
+                                        byte_range: end..buf.as_str().len(),
+                                        format: JSON_INPUT_FORMAT,
+                                    });
+                                }
+                                sections
                             }
-                            if start < end && start < buf.as_str().len() {
-                                sections.push(egui::text::LayoutSection {
-                                    leading_space: 0.0,
-                                    byte_range: start..std::cmp::min(end, buf.as_str().len()),
-                                    format: JSON_INPUT_FORMAT_HIGHLIGHT,
-                                });
-                            }
-                            if end < buf.as_str().len() {
-                                sections.push(egui::text::LayoutSection {
-                                    leading_space: 0.0,
-                                    byte_range: end..buf.as_str().len(),
-                                    format: JSON_INPUT_FORMAT,
-                                });
-                            }
-                            sections
-                        }
-                        None => vec![LayoutSection {
-                            leading_space: 0.0,
-                            byte_range: 0..buf.as_str().len(),
-                            format: JSON_INPUT_FORMAT,
-                        }],
+                            None => vec![LayoutSection {
+                                leading_space: 0.0,
+                                byte_range: 0..buf.as_str().len(),
+                                format: JSON_INPUT_FORMAT,
+                            }],
+                        };
+                        let layout_job = egui::text::LayoutJob {
+                            text: buf.as_str().to_string(),
+                            sections,
+                            wrap: TextWrapping::no_max_width(),
+                            first_row_min_height: 0.0,
+                            break_on_newline: true,
+                            halign: egui::emath::Align::LEFT,
+                            justify: false,
+                            round_output_to_gui: false,
+                        };
+                        ui.fonts_mut(|f| f.layout_job(layout_job))
                     };
-                    let layout_job = egui::text::LayoutJob {
-                        text: buf.as_str().to_string(),
-                        sections,
-                        wrap: TextWrapping::no_max_width(),
-                        first_row_min_height: 0.0,
-                        break_on_newline: true,
-                        halign: egui::emath::Align::LEFT,
-                        justify: false,
-                        round_output_to_gui: false,
-                    };
-                    ui.fonts_mut(|f| f.layout_job(layout_job))
-                };
-                let text_edit_id = ui.make_persistent_id("json_input");
-                let action = preprocess_json_input(
-                    ui,
-                    text_edit_id,
-                    &mut self.sap,
-                    &mut self.overtype_stack,
-                );
+                    let text_edit_id = ui.make_persistent_id("json_input");
+                    let action =
+                        preprocess_json_input(ui, text_edit_id, sap, &mut self.overtype_stack);
 
-                let output = egui::TextEdit::multiline(&mut self.sap)
-                    .code_editor()
-                    .id(text_edit_id)
-                    .desired_width(f32::INFINITY)
-                    .hint_text("Put some JSON here")
-                    .layouter(&mut layouter)
-                    .show(ui);
+                    let output = egui::TextEdit::multiline(sap)
+                        .code_editor()
+                        .id(text_edit_id)
+                        .desired_width(f32::INFINITY)
+                        .hint_text("Put some JSON here")
+                        .layouter(&mut layouter)
+                        .show(ui);
 
-                // After show(): adjust cursor or shift the stack for edits
-                // that egui processed (normal typing, backspace, etc.).
-                match action {
-                    PostShowAction::AdjustCursor(delta) => {
-                        if let Some(cr) = output.cursor_range {
-                            let new_idx = (cr.primary.index as i32 + delta) as usize;
-                            let mut state = output.state.clone();
-                            state
-                                .cursor
-                                .set_char_range(Some(CCursorRange::one(CCursor::new(new_idx))));
-                            state.store(ui.ctx(), output.response.id);
+                    // After show(): adjust cursor or shift the stack for edits
+                    // that egui processed (normal typing, backspace, etc.).
+                    match action {
+                        PostShowAction::AdjustCursor(delta) => {
+                            if let Some(cr) = output.cursor_range {
+                                let new_idx = (cr.primary.index as i32 + delta) as usize;
+                                let mut state = output.state.clone();
+                                state
+                                    .cursor
+                                    .set_char_range(Some(CCursorRange::one(CCursor::new(new_idx))));
+                                state.store(ui.ctx(), output.response.id);
+                            }
                         }
-                    }
-                    PostShowAction::AlreadyHandled => {
-                        // We handled the edit before show(); nothing more to do.
-                    }
-                    PostShowAction::None(old_cursor) => {
-                        // egui may have processed normal typing or other edits.
-                        // Shift the stack to keep indices in sync.
-                        if output.response.changed()
-                            && let Some(cr) = output.cursor_range
-                        {
-                            let new_cursor = cr.primary.index;
-                            if new_cursor > old_cursor {
-                                let inserted = new_cursor - old_cursor;
-                                self.overtype_stack.shift_for_insert(old_cursor, inserted);
-                            } else if new_cursor < old_cursor {
-                                let deleted = old_cursor - new_cursor;
-                                self.overtype_stack.shift_for_delete(new_cursor, deleted);
-                            } else {
-                                // Text changed but cursor didn't move (e.g. forward-delete).
-                                // We can't infer what was deleted, so clear the stack to
-                                // avoid stale entries causing incorrect over-typing.
-                                self.overtype_stack.clear();
+                        PostShowAction::AlreadyHandled => {
+                            // We handled the edit before show(); nothing more to do.
+                        }
+                        PostShowAction::None(old_cursor) => {
+                            // egui may have processed normal typing or other edits.
+                            // Shift the stack to keep indices in sync.
+                            if output.response.changed()
+                                && let Some(cr) = output.cursor_range
+                            {
+                                let new_cursor = cr.primary.index;
+                                if new_cursor > old_cursor {
+                                    let inserted = new_cursor - old_cursor;
+                                    self.overtype_stack.shift_for_insert(old_cursor, inserted);
+                                } else if new_cursor < old_cursor {
+                                    let deleted = old_cursor - new_cursor;
+                                    self.overtype_stack.shift_for_delete(new_cursor, deleted);
+                                } else {
+                                    self.overtype_stack.clear();
+                                }
                             }
                         }
                     }
+                } else {
+                    ui.colored_label(Color32::GRAY, "Fix compilation errors to enable JSON input");
                 }
             });
         });
+
+        // Central panel: output grid.
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
+            let Some(ref sap) = self.sap else {
+                ui.colored_label(Color32::GRAY, "No output — fix compilation errors above");
+                return;
+            };
             ui.take_available_space();
             ui.vertical(|ui| {
                 ui.take_available_space();
                 egui::ScrollArea::both().show(ui, |ui| {
                     egui::Grid::new("output").show(ui, |ui| {
-                        let first_item =
-                            RowData::make_item(self.sap.iter().next().unwrap_or(&None));
-                        // Track the last real-value string for diffing.
-                        // "Real value" = white-colored items (not errors or NO YIELD).
+                        let first_item = RowData::make_item(sap.iter().next().unwrap_or(&None));
                         let mut last_real_value: Option<String> = if first_item.0 == Color32::WHITE
                         {
                             Some(first_item.1.to_string())
@@ -204,22 +355,21 @@ impl eframe::App for SapVisualizer {
                             None
                         };
                         let mut prev = RowData {
-                            sap: &self.sap,
+                            sap,
                             byte_idx: 0,
                             text: "".to_string(),
                             text_len: 0,
                             item: first_item,
-                            diff: None, // first row has no previous to diff against
+                            diff: None,
                         };
                         let mut pointer = None;
                         ctx.input(|i| pointer = i.pointer.hover_pos());
-                        self.text_highlight = None; // reset highlight, may be updated by `render_row`
+                        self.text_highlight = None;
                         for ((byte_idx, c), item) in std::iter::zip(
-                            self.sap
-                                .json()
+                            sap.json()
                                 .char_indices()
-                                .chain(std::iter::once((self.sap.json().len(), '\0'))),
-                            self.sap.iter().skip(1),
+                                .chain(std::iter::once((sap.json().len(), '\0'))),
+                            sap.iter().skip(1),
                         ) {
                             let item = RowData::make_item(item);
                             if prev.item == item {
@@ -231,7 +381,6 @@ impl eframe::App for SapVisualizer {
                                 if pointer.is_some_and(|pointer| row_rect.contains(pointer)) {
                                     self.text_highlight = Some(would_be_highlight);
                                 }
-                                // Compute diff for the new item if it's a real value.
                                 let diff = if item.0 == Color32::WHITE {
                                     let d = last_real_value
                                         .as_deref()
@@ -242,7 +391,7 @@ impl eframe::App for SapVisualizer {
                                     None
                                 };
                                 prev = RowData {
-                                    sap: &self.sap,
+                                    sap,
                                     byte_idx,
                                     text: c.to_string(),
                                     text_len: c.len_utf8(),
@@ -363,9 +512,14 @@ enum PostShowAction {
 fn preprocess_json_input(
     ui: &mut egui::Ui,
     text_edit_id: egui::Id,
-    sap: &mut SapVisualizerState<&'static str>,
+    sap: &mut SapVisualizerState,
     stack: &mut AutoCloseStack,
 ) -> PostShowAction {
+    // Only process events when the JSON editor has focus.
+    if !ui.ctx().memory(|mem| mem.has_focus(text_edit_id)) {
+        stack.clear();
+        return PostShowAction::None(0);
+    }
     let Some(state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) else {
         return PostShowAction::None(0);
     };
@@ -693,7 +847,7 @@ fn compute_item_diff(prev: &str, current: &str) -> ItemDiff {
 }
 
 struct RowData<'a> {
-    pub sap: &'a SapVisualizerState<&'static str>,
+    pub sap: &'a SapVisualizerState,
     pub byte_idx: usize,
     pub text: String,
     /// May be different from `text.len()` since we may have escaped characters.
@@ -807,7 +961,7 @@ impl RowData<'_> {
                     let highlight_fmt = egui::TextFormat {
                         font_id: mono,
                         color: diff_color,
-                        underline: egui::Stroke::new(1.0, diff_color),
+                        underline: egui::Stroke::new(1.0_f32, diff_color),
                         ..Default::default()
                     };
                     let mut sections = Vec::new();

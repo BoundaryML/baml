@@ -1,0 +1,18 @@
+{
+  "category": "Sliding Window",
+  "difficulty": "Easy",
+  "id": 121,
+  "signature": "function MaxProfit(prices: int[]) -> int",
+  "slug": "best-time-to-buy-and-sell-stock",
+  "solution": "function MaxProfit(prices: int[]) -> int {\n  let n = prices.length();\n  if (n == 0) {\n    return 0;\n  }\n  let min_price = prices[0];\n  let best = 0;\n  let i = 1;\n  while (i < n) {\n    if (prices[i] < min_price) {\n      min_price = prices[i];\n    }\n    let profit = prices[i] - min_price;\n    if (profit > best) {\n      best = profit;\n    }\n    i += 1;\n  }\n  return best;\n}",
+  "starter": "function MaxProfit(prices: int[]) -> int {\n  // Return the maximum achievable profit (0 if none).\n  return 0;\n}",
+  "statement": "You are given an array `prices` where `prices[i]` is the price of a stock on day `i`.\n\nYou want to maximize your profit by choosing a **single day to buy** and a **later day to sell**. Return the maximum profit you can achieve. If no profit is possible, return `0`.\n\n**Example**\n\n```\nprices = [7, 1, 5, 3, 6, 4]\n=> 5   // buy at 1 (day 1), sell at 6 (day 4)\n```",
+  "tests": [
+    { "call": "MaxProfit([7, 1, 5, 3, 6, 4])", "expected": "5" },
+    { "call": "MaxProfit([7, 6, 4, 3, 1])", "expected": "0" },
+    { "call": "MaxProfit([1, 2, 3, 4, 5])", "expected": "4" },
+    { "call": "MaxProfit([2])", "expected": "0", "hidden": true },
+    { "call": "MaxProfit([3, 2, 6, 5, 0, 3])", "expected": "4", "hidden": true }
+  ],
+  "title": "Best Time to Buy and Sell Stock"
+}

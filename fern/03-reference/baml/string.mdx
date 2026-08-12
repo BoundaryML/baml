@@ -2,7 +2,7 @@ BAML treats templatized strings as first-class citizens.
 
 ## Quoted Strings
 
-These is a valid **inline string**, which is surrounded by double quotes. They behave like regular strings in most programming languages, and can be escaped with a backslash.
+This is a valid **inline string**, which is surrounded by double quotes. BAML processes common escape sequences inside quoted strings, including `\n`, `\t`, `\\`, and `\"`.
 
 <Tip>These cannot have template variables or expressions inside them. Use a block string for that.</Tip>
 
@@ -11,6 +11,8 @@ These is a valid **inline string**, which is surrounded by double quotes. They b
 "Hello World"
 
 "\n"
+"a\\b"
+"a\"b"
 ```
 
 ## Unquoted Strings

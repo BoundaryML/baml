@@ -22,15 +22,7 @@ where
         // StreamState cannot have attributes as it is not a user-provided type.
         // It is only created through attributes, so any other attributes would be on the inner type.
         debug_assert!(
-            target.meta.asserts.is_empty(),
-            "StreamState should not have attributes"
-        );
-        debug_assert!(
             target.meta.in_progress.is_none(),
-            "StreamState should not have attributes"
-        );
-        debug_assert!(
-            target.meta.parse_as.is_none(),
             "StreamState should not have attributes"
         );
 
@@ -61,15 +53,7 @@ where
         // StreamState cannot have attributes as it is not a user-provided type.
         // It is only created through attributes, so any other attributes would be on the inner type.
         debug_assert!(
-            target.meta.asserts.is_empty(),
-            "StreamState should not have attributes"
-        );
-        debug_assert!(
             target.meta.in_progress.is_none(),
-            "StreamState should not have attributes"
-        );
-        debug_assert!(
-            target.meta.parse_as.is_none(),
             "StreamState should not have attributes"
         );
 

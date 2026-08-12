@@ -1,0 +1,17 @@
+// Expression names — type errors: non-string expressions as test names.
+
+test "a" + 1 {
+  null
+}
+
+test 42 {
+  null
+}
+
+testset "int_name" {
+  for (let i in [1, 2, 3]) {
+    test (5 + i) {
+      null
+    }
+  }
+}

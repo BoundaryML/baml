@@ -427,6 +427,27 @@ case "$_path" in
     fi
     ;;
 
+  /baml_language/sdks/typescript/bridge_typescript | /baml_language/sdks/typescript/bridge_typescript/* )
+    command="cd ${_repo_root}/baml_language/sdks/typescript/bridge_typescript && pnpm build:debug"
+    if [ "$_test_mode" -eq 1 ]; then
+      command="${command} && cargo test --lib && pnpm test"
+    fi
+    command="${command} && date"
+
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext rs,ts,json,toml,baml \
+        --watch "${_repo_root}/baml_language" \
+        --ignore 'target' \
+        --ignore 'node_modules' \
+        --ignore '*.d.ts' \
+        --ignore '*.js' \
+        --exec "${command}"
+    else
+      eval "${command}"
+    fi
+    ;;
+
   *)
     echo "Nothing to build in repo root"
     ;;

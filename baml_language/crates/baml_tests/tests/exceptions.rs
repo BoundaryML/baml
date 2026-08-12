@@ -1,657 +1,379 @@
-//! Unified tests for catch/throw exception semantics.
+//! Exception handling tests: catch/throw/panic semantics.
+//!
+//! Tests here require Rust-side infrastructure: bytecode patching, insta snapshots of
+//! traceback text, and assertions on host-boundary `EngineError` /
+//! `BexExternalValue` shapes for throws/panics that escape to the host.
 
-use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
+use std::sync::Arc;
+
+use baml_tests::{
+    baml_test,
+    engine::{OptLevel, compile_source_with_opt},
+};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_vm_types::{Instruction, Object, ObjectIndex};
+use sys_native::SysOpsExt;
+
+// ============================================================================
+// §VM — bytecode-level panic regression tests
+// ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn handled_runtime_error_continues_execution() {
-    let output = baml_test!(
-        "
-        function fails() -> string {
-            assert false;
-            \"ok\"
+async fn catch_stale_field_slot_invalid_field_access() {
+    let mut program = compile_source_with_opt(
+        r#"
+        class Short {
+            x int
         }
 
-        function main() -> string {
-            fails() catch (e) {
-                _ => \"recovered\"
-            }
-        }
-    "
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function fails() -> string {
-        load_const false
-        assert
-        load_const "ok"
-        return
-    }
-
-    function main() -> string {
-        push_unwind L0, slot 1
-        call fails
-        pop_unwind
-        jump L1
-
-      L0:
-        load_var _1
-        store_var e
-        load_const "recovered"
-
-      L1:
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("recovered".to_string()))
-    );
-}
-
-// TODO: This throws an error because there is a statement (a bare expresession 0) after the
-// diverging statement `throw 7;`. Do we really want this to be an error, or should it be a
-// warning?
-#[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn handled_throw_from_callee_returns_fallback_value() {
-    let output = baml_test!(
-        "
-        function throws_now() -> int {
-            throw 7;
+        function oob() -> int {
+            let keep = Short { x: 0 };
+            keep.x;
             0
         }
 
         function main() -> int {
-            throws_now() catch (e) {
-                _ => 99
+            oob() catch (e) {
+                let err: baml.panics.InvalidFieldAccess => err.field_index
             }
         }
-    "
+        "#,
+        OptLevel::One,
     );
 
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int {
-        push_unwind L0, slot 1
-        call throws_now
-        pop_unwind
-        jump L1
+    let class_idx = program
+        .objects
+        .iter()
+        .position(|object| {
+            matches!(
+                object,
+                Object::Class(class) if class.name.display_name().as_str() == "Short"
+            )
+        })
+        .expect("Short class should exist");
 
-      L0:
-        load_var _1
-        store_var e
-        load_const 99
+    let oob_idx = program
+        .function_index("user.oob")
+        .expect("user.oob should exist");
+    let Object::Function(func) = program
+        .objects
+        .get_mut(oob_idx)
+        .expect("user.oob object should exist")
+    else {
+        panic!("user.oob should be a function");
+    };
 
-      L1:
-        return
-    }
+    func.bytecode.instructions = vec![
+        Instruction::AllocInstance {
+            class_obj: ObjectIndex::from_raw(class_idx),
+            ntypeargs: 0,
+        },
+        Instruction::LoadField(1),
+        Instruction::Return,
+    ];
+    func.bytecode.compact = None;
 
-    function throws_now() -> int {
-        load_const 7
-        throw
-    }
-    ");
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
+    );
 
-    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_eq!(result, Ok(BexExternalValue::Int(1)));
 }
 
-#[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn panic_only_catch_does_not_swallow_non_panic_error() {
-    let output = baml_test!(
-        "
-        function divide_by_zero() -> string {
-            let _x = 1 / 0;
-            \"ok\"
-        }
+// ============================================================================
+// §N — Stack trace tests
+// ============================================================================
 
-        function main() -> string {
-            divide_by_zero() catch (e) {
-                \"panic: assertion failed\" => \"panic\"
-            } catch (e2) {
-                _ => \"non-panic\"
-            }
-        }
-    "
+#[tokio::test]
+async fn exception_stack_trace_through_closures() {
+    let output = baml_test!(
+        r#"
+function inner() -> int {
+  throw "from_closure"
+}
+
+function outer() -> int {
+  let f = inner
+  f()
+}
+
+function main() -> int {
+  outer()
+}
+"#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function divide_by_zero() -> string {
-        load_const 1
-        load_const 0
-        bin_op /
-        store_var _x
-        load_const "ok"
-        return
-    }
-
-    function main() -> string {
-        push_unwind L0, slot 1
-        call divide_by_zero
-        pop_unwind
-        jump L3
-
-      L0:
-        load_var _1
-        store_var e
-        load_var _1
-        load_const "panic: assertion failed"
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        store_var _2
-        load_var _2
-        store_var e2
-        load_const "non-panic"
-        jump L3
-
-      L2:
-        load_const "panic"
-
-      L3:
-        return
-    }
+    let err = output.result.unwrap_err();
+    insta::assert_snapshot!(err, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 12, in user.main
+      File "test.baml", line 8, in user.outer
+      File "test.baml", line 3, in user.inner
+    uncaught throw: "from_closure"
     "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("non-panic".to_string()))
-    );
 }
 
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn panic_only_catch_handles_panic_error() {
+async fn exception_stack_trace_on_panic() {
     let output = baml_test!(
-        "
-        function panics_now() -> string {
-            assert false;
-            \"ok\"
-        }
+        r#"
+function divider(x: int) -> int {
+  x / 0
+}
 
-        function main() -> string {
-            panics_now() catch (e) {
-                \"panic: assertion failed\" => \"panic\"
-            } catch (e2) {
-                _ => \"non-panic\"
-            }
-        }
-    "
+function caller() -> int {
+  divider(42)
+}
+
+function main() -> int {
+  caller()
+}
+"#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        push_unwind L0, slot 1
-        call panics_now
-        pop_unwind
-        jump L3
-
-      L0:
-        load_var _1
-        store_var e
-        load_var _1
-        load_const "panic: assertion failed"
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_var _1
-        store_var _2
-        load_var _2
-        store_var e2
-        load_const "non-panic"
-        jump L3
-
-      L2:
-        load_const "panic"
-
-      L3:
-        return
-    }
-
-    function panics_now() -> string {
-        load_const false
-        assert
-        load_const "ok"
-        return
-    }
+    let err = output.result.unwrap_err();
+    insta::assert_snapshot!(err, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 11, in user.main
+      File "test.baml", line 7, in user.caller
+      File "test.baml", line 3, in user.divider
+    uncaught throw: baml.panics.DivisionByZero {dividend: 42}
     "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("panic".to_string()))
-    );
 }
 
+/// B-623 regression: an uncaught `throw` of an error instance must surface the
+/// value's readable rendering, not the Rust `Debug` shape (`Instance { class_name,
+/// type_args, fields }`, `QualifiedTypeName`, `TyAttr`).
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn typed_catch_arm_matches_primitive_throw_value() {
+async fn uncaught_throw_renders_readable_error_not_debug() {
     let output = baml_test!(
-        "
-        function throws_now() -> string {
-            throw \"boom\";
-            \"ok\"
-        }
-
-        function main() -> string {
-            throws_now() catch (e) {
-                string => \"typed catch\",
-                _ => \"fallback\"
-            }
-        }
-    "
+        r#"
+function main() -> void {
+  throw baml.errors.Io { message: "boom" }
+}
+"#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        push_unwind L0, slot 1
-        call throws_now
-        pop_unwind
-        jump L3
-
-      L0:
-        load_var _1
-        store_var e
-        load_var _1
-        type_tag
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_const "fallback"
-        jump L3
-
-      L2:
-        load_const "typed catch"
-
-      L3:
-        return
+    let err = output.result.unwrap_err();
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains(r#"uncaught throw: baml.errors.Io {message: "boom"}"#),
+        "expected readable render, got: {rendered}"
+    );
+    // Must not leak Rust `Debug` internals.
+    for leak in [
+        "Instance {",
+        "QualifiedTypeName",
+        "TyAttr",
+        "String(\"boom\")",
+    ] {
+        assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
     }
+}
 
-    function throws_now() -> string {
-        load_const "boom"
-        throw
-    }
+// ============================================================================
+// §N+1 — catch (e, stack_trace) binding
+// ============================================================================
+
+#[tokio::test]
+async fn catch_with_stack_trace_binding() {
+    let output = baml_test!(
+        r#"
+function inner() -> string {
+  throw "boom"
+}
+
+function main() -> string {
+  inner() catch (e, st) {
+    _ => { st.to_string() }
+  }
+}
+"#
+    );
+
+    let BexExternalValue::String(st) = output.result.unwrap() else {
+        panic!("expected String variant");
+    };
+    insta::assert_snapshot!(st, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 7, in user.main
+      File "test.baml", line 3, in user.inner
+    boom
     "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("typed catch".to_string()))
-    );
 }
 
 #[tokio::test]
-async fn catch_binds_to_throw_expression_not_throw_payload() {
+async fn catch_stack_trace_on_panic() {
     let output = baml_test!(
-        "
-        function main() -> int {
-            return throw 1 catch (e) {
-                _ => 2
-            };
-        }
-    "
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int {
-        load_const 2
-        return
-    }
-    ");
-
-    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+        r#"
+function divider() -> int {
+  42 / 0
 }
 
-#[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn match_arm_block_with_throw_is_not_typed_as_void() {
-    let output = baml_test!(
-        "
-        function main() -> string {
-            let a = 1;
-            return match (a) {
-                1 => \"1\",
-                int => {
-                    throw 1
-                },
-            };
-        }
-    "
+function main() -> int | string {
+  divider() catch (e, st) {
+    baml.panics.DivisionByZero => { st.to_string() }
+  }
+}
+"#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 1
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const 1
-        throw
-
-      L1:
-        load_const "1"
-        return
-    }
+    let result = output.result.unwrap();
+    let st = match result {
+        BexExternalValue::String(s) => s,
+        BexExternalValue::Union { value, .. } => match *value {
+            BexExternalValue::String(s) => s,
+            other => panic!("expected String inside Union, got: {other:?}"),
+        },
+        other => panic!("expected String or Union, got: {other:?}"),
+    };
+    insta::assert_snapshot!(st, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 7, in user.main
+      File "test.baml", line 3, in user.divider
+    baml.panics.DivisionByZero { dividend: 42 }
     "#);
-
-    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
 }
 
-#[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn throw_catch_inside_match_arm_returns_catch_value() {
-    let output = baml_test!(
-        "
-        function main() -> string {
-            return match (2) {
-                1 => \"1\",
-                int => throw 1 catch (e) {
-                    _ => \"..\"
-                },
-            };
-        }
-    "
-    );
+// ============================================================================
+// §N+3 — Regression (B-613): a panic escaping to the host must bypass the
+// outer function's declared `throws` contract.
+// ============================================================================
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 2
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const 1
-        store_var _5
-        load_var _5
-        store_var e
-        load_const ".."
-        jump L2
-
-      L1:
-        load_const "1"
-
-      L2:
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("..".to_string()))
-    );
+/// Assert that an uncaught throw surfaced from `main` is a clean panic
+/// `Instance` of `expected_class` (not wrapped in a union and not a leaked
+/// engine error).
+fn assert_clean_panic(output: &baml_tests::engine::TestOutput, expected_class: &str) {
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+    let BexExternalValue::Instance { class_name, .. } = value.as_ref() else {
+        panic!("expected panic Instance, got: {value:?}");
+    };
+    assert_eq!(class_name, expected_class);
 }
 
+/// The canonical B-613 repro: a `StackOverflow` panic unwinds out of a function
+/// whose `throws` clause is a 2+-member union. Before the fix the engine
+/// re-typed the escaping panic against the declared union (via
+/// `find_matching_member`, which never matches a `baml.panics.*` value) and
+/// leaked an internal `EngineError::TypeMismatch` naming `QualifiedTypeName` /
+/// `TyAttr`. It must instead surface the clean `baml.panics.StackOverflow`.
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn throw_followed_by_dead_code_still_diverges_in_match_arm() {
+async fn union_throws_panic_escapes_as_clean_panic() {
     let output = baml_test!(
-        "
-        function main() -> string {
-            let a = 1;
-            return match (a) {
-                1 => \"one\",
-                int => {
-                    throw \"error\";
-                    let dead = 2;
-                },
-            };
-        }
-    "
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 1
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const "error"
-        throw
-
-      L1:
-        load_const "one"
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("one".to_string()))
-    );
+        r#"
+function boom(n: int) -> int throws baml.errors.ParseError | baml.errors.InvalidArgument {
+  boom(n + 1)
 }
 
-#[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn return_followed_by_dead_code_still_diverges_in_block() {
-    let output = baml_test!(
-        "
-        function main() -> string {
-            return \"hello\";
-            let x = 1;
-        }
-    "
+function main() -> int {
+  boom(0)
+}
+"#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "hello"
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("hello".to_string()))
-    );
+    assert_clean_panic(&output, "baml.panics.StackOverflow");
 }
 
+/// Parity: a panic escaping to the host surfaces identically regardless of the
+/// outer function's `throws` shape — no-throws, single-member, 2-member union,
+/// and 3-member union all yield the same clean `baml.panics.DivisionByZero`.
+/// Uses a `DivisionByZero` panic (deterministic and cheap) rather than
+/// recursion. Before the fix only the 2+-member union shapes leaked; this
+/// documents that the asymmetry is gone.
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn if_else_both_throw_followed_by_dead_code_diverges() {
-    let output = baml_test!(
-        "
-        function main() -> string {
-            let a = 1;
-            return match (a) {
-                1 => \"one\",
-                int => {
-                    if (true) {
-                        throw \"a\"
-                    } else {
-                        throw \"b\"
-                    };
-                    let dead = 0;
-                },
-            };
-        }
-    "
-    );
+async fn panic_escapes_all_throws_shapes_identically() {
+    const NO_THROWS: &str = r#"
+function boom() -> int {
+  1 / 0
+}
+function main() -> int { boom() }
+"#;
+    const SINGLE: &str = r#"
+function boom() -> int throws baml.errors.ParseError {
+  1 / 0
+}
+function main() -> int { boom() }
+"#;
+    const UNION2: &str = r#"
+function boom() -> int throws baml.errors.ParseError | baml.errors.InvalidArgument {
+  1 / 0
+}
+function main() -> int { boom() }
+"#;
+    const UNION3: &str = r#"
+function boom() -> int throws baml.errors.ParseError | baml.errors.InvalidArgument | baml.errors.Io {
+  1 / 0
+}
+function main() -> int { boom() }
+"#;
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 1
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L3
-
-      L0:
-        load_const true
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_const "b"
-        throw
-
-      L2:
-        load_const "a"
-        throw
-
-      L3:
-        load_const "one"
-        return
+    for source in [NO_THROWS, SINGLE, UNION2, UNION3] {
+        let output = baml_test!(source);
+        assert_clean_panic(&output, "baml.panics.DivisionByZero");
     }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("one".to_string()))
-    );
 }
 
+/// A `baml.panics.Exit { code }` escaping a 2-member union `throws` must still
+/// funnel through the clean process-exit path (`extract_exit_code`) rather than
+/// tripping the union re-typing — the panic bypass routes it through
+/// `vm_value_to_owned`, so Exit is recognized and surfaces as
+/// `EngineError::Exit { code }`.
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn unhandled_throw_fails_predictably() {
+async fn exit_panic_escapes_union_throws_as_clean_exit() {
     let output = baml_test!(
-        "
-        function main() -> int {
-            throw 42;
-            0
-        }
-    "
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int {
-        load_const 42
-        throw
-    }
-    ");
-
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
-                value: "42".to_string(),
-            })
-        ))
-    );
+        r#"
+function boom() -> int throws baml.errors.ParseError | baml.errors.InvalidArgument {
+  baml.sys.exit(3)
 }
 
-#[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn unhandled_throw_string_shows_value() {
-    let output = baml_test!(
-        "
-        function main() -> string {
-            throw \"something went wrong\";
-            \"\"
-        }
-    "
+function main() -> int {
+  boom()
+}
+"#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "something went wrong"
-        throw
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
-                value: "something went wrong".to_string(),
-            })
-        ))
-    );
+    let Err(bex_engine::EngineError::Exit { code }) = output.result else {
+        panic!("expected Exit, got: {:?}", output.result);
+    };
+    assert_eq!(code, 3);
 }
 
-// TODO: This may break after we update Pattern syntax.
+/// Guard against over-bypassing: a *genuine* in-contract error (a real
+/// `baml.errors.ParseError` thrown and left uncaught) escaping a 2-member union
+/// `throws` must still get its proper union-metadata wrapping — the panic
+/// bypass only fires for `baml.panics.*` values, not for declared throws.
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn unhandled_throw_string_in_match_shows_value() {
+async fn genuine_in_contract_throw_still_wrapped_through_union() {
     let output = baml_test!(
-        "
-        function main() -> string {
-            let a = 1;
-            match (a) {
-                int => {
-                    throw \"string\"
-                }
-            }
-            return \"...\"
-        }
-    "
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "string"
-        throw
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
-                value: "string".to_string(),
-            })
-        ))
-    );
+        r#"
+function boom() -> int throws baml.errors.ParseError | baml.errors.InvalidArgument {
+  throw baml.errors.ParseError { message: "bad json" }
 }
 
-#[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
-async fn throw_with_multiple_dead_stmts_still_diverges() {
-    let output = baml_test!(
-        "
-        function main() -> string {
-            let a = 2;
-            return match (a) {
-                1 => \"one\",
-                int => {
-                    throw \"boom\";
-                    let x = 1;
-                    let y = 2;
-                },
-            };
-        }
-    "
+function main() -> int {
+  boom()
+}
+"#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 2
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        jump L1
-
-      L0:
-        load_const "boom"
-        throw
-
-      L1:
-        load_const "one"
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
-                value: "boom".to_string(),
-            })
-        ))
-    );
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+    // Genuine in-contract throws are wrapped with union metadata for the wire;
+    // panics are not. Confirm the wrapping is preserved.
+    let BexExternalValue::Union { value: inner, .. } = value.as_ref() else {
+        panic!("expected union-wrapped in-contract throw, got: {value:?}");
+    };
+    let BexExternalValue::Instance { class_name, .. } = inner.as_ref() else {
+        panic!("expected Instance inside union, got: {inner:?}");
+    };
+    assert_eq!(class_name, "baml.errors.ParseError");
 }

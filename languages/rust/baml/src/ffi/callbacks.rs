@@ -1,10 +1,15 @@
 use std::{
     collections::HashMap,
     ffi::{c_char, c_int},
-    sync::{mpsc, Mutex, OnceLock},
+    panic::{self, AssertUnwindSafe},
+    sync::{mpsc, Arc, Mutex, OnceLock},
 };
 
-use crate::{error::BamlError, ffi::bindings};
+use crate::{
+    error::BamlError,
+    ffi::bindings,
+    raw_objects::{Collector, FunctionLog},
+};
 
 /// Result sent via callback channel
 pub enum CallbackResult {
@@ -16,14 +21,38 @@ pub enum CallbackResult {
     Error(BamlError),
 }
 
+/// On-tick callback type invoked for each SSE streaming chunk with the current FunctionLog.
+pub type OnTickCallback = Arc<dyn Fn(&FunctionLog) + Send + Sync>;
+
+/// Internal bundle of an on-tick callback with its auto-created collector.
+///
+/// Created by `BamlRuntime::call_function_stream` when an `OnTickCallback` is
+/// present on `FunctionArgs`. On each SSE chunk the collector is queried for the
+/// latest `FunctionLog` and passed to the callback.
+pub(crate) struct OnTickData {
+    pub callback: OnTickCallback,
+    pub collector: Collector,
+}
+
+impl Clone for OnTickData {
+    fn clone(&self) -> Self {
+        Self {
+            callback: self.callback.clone(),
+            collector: self.collector.clone(),
+        }
+    }
+}
+
 /// Sync callback data
 struct SyncCallbackData {
     sender: mpsc::Sender<CallbackResult>,
+    on_tick: Option<OnTickData>,
 }
 
 /// Async callback data
 struct AsyncCallbackData {
     sender: async_channel::Sender<CallbackResult>,
+    on_tick: Option<OnTickData>,
 }
 
 /// Callback data - either sync or async
@@ -50,8 +79,6 @@ fn get_next_id() -> &'static Mutex<u32> {
 ///
 /// Returns an error if the library cannot be loaded.
 pub fn initialize_callbacks() -> Result<(), baml_sys::BamlSysError> {
-    // Track initialization status - store Option<String> for error message
-    // since BamlSysError doesn't implement Clone
     static INIT_ERROR: OnceLock<Option<String>> = OnceLock::new();
 
     let error_msg = INIT_ERROR.get_or_init(|| {
@@ -76,15 +103,12 @@ pub fn initialize_callbacks() -> Result<(), baml_sys::BamlSysError> {
 fn allocate_callback_id(callbacks: &mut HashMap<u32, CallbackData>) -> u32 {
     let mut next_id = get_next_id().lock().unwrap();
 
-    // Find an unused ID, skipping 0 and any IDs still in use
     let mut id = *next_id;
     loop {
         if id != 0 && !callbacks.contains_key(&id) {
             break;
         }
         id = id.wrapping_add(1);
-        // We've wrapped all the way around - this should never happen
-        // as it would require 2^32 simultaneous pending callbacks
         assert!(id != *next_id, "callback ID space exhausted");
     }
     *next_id = id.wrapping_add(1);
@@ -92,16 +116,20 @@ fn allocate_callback_id(callbacks: &mut HashMap<u32, CallbackData>) -> u32 {
 }
 
 /// Create a new sync callback ID and channel.
-///
-/// Uses sequential IDs with collision checking to ensure uniqueness even if
-/// IDs wrap around while old callbacks are still pending.
 pub fn create_callback() -> (u32, mpsc::Receiver<CallbackResult>) {
+    create_callback_with_on_tick(None)
+}
+
+/// Create a new sync callback ID and channel with optional on_tick data.
+pub(crate) fn create_callback_with_on_tick(
+    on_tick: Option<OnTickData>,
+) -> (u32, mpsc::Receiver<CallbackResult>) {
     let (sender, receiver) = mpsc::channel();
 
     let mut callbacks = get_callbacks().lock().unwrap();
     let id = allocate_callback_id(&mut callbacks);
 
-    callbacks.insert(id, CallbackData::Sync(SyncCallbackData { sender }));
+    callbacks.insert(id, CallbackData::Sync(SyncCallbackData { sender, on_tick }));
     drop(callbacks);
 
     (id, receiver)
@@ -109,12 +137,22 @@ pub fn create_callback() -> (u32, mpsc::Receiver<CallbackResult>) {
 
 /// Create a new async callback ID and channel.
 pub fn create_async_callback() -> (u32, async_channel::Receiver<CallbackResult>) {
+    create_async_callback_with_on_tick(None)
+}
+
+/// Create a new async callback ID and channel with optional on_tick data.
+pub(crate) fn create_async_callback_with_on_tick(
+    on_tick: Option<OnTickData>,
+) -> (u32, async_channel::Receiver<CallbackResult>) {
     let (sender, receiver) = async_channel::unbounded();
 
     let mut callbacks = get_callbacks().lock().unwrap();
     let id = allocate_callback_id(&mut callbacks);
 
-    callbacks.insert(id, CallbackData::Async(AsyncCallbackData { sender }));
+    callbacks.insert(
+        id,
+        CallbackData::Async(AsyncCallbackData { sender, on_tick }),
+    );
     drop(callbacks);
 
     (id, receiver)
@@ -146,17 +184,14 @@ extern "C" fn result_callback(call_id: u32, is_done: c_int, content: *const c_ch
     if let Some(cb_data) = callbacks.get(&call_id) {
         match cb_data {
             CallbackData::Sync(sync_data) => {
-                // Ignore send errors - receiver may have been dropped
                 let _ = sync_data.sender.send(result);
             }
             CallbackData::Async(async_data) => {
-                // send_blocking works from sync context!
                 let _ = async_data.sender.send_blocking(result);
             }
         }
     }
 
-    // Clean up on final result
     drop(callbacks);
     if is_done != 0 {
         remove_callback(call_id);
@@ -190,9 +225,28 @@ extern "C" fn error_callback(call_id: u32, _is_done: c_int, content: *const c_ch
     remove_callback(call_id);
 }
 
-/// On-tick callback for streaming updates
-extern "C" fn on_tick_callback(_call_id: u32) {
-    // Currently unused - can be extended for streaming progress
+/// On-tick callback for streaming updates.
+///
+/// Invoked by the CFFI layer on each SSE streaming chunk. Queries the bundled
+/// collector for the latest FunctionLog and passes it to the user's callback.
+/// Panics in user code are caught to prevent unwinding across the FFI boundary.
+extern "C" fn on_tick_callback(call_id: u32) {
+    let callbacks = get_callbacks().lock().unwrap();
+    if let Some(cb_data) = callbacks.get(&call_id) {
+        let on_tick = match cb_data {
+            CallbackData::Sync(d) => d.on_tick.clone(),
+            CallbackData::Async(d) => d.on_tick.clone(),
+        };
+        drop(callbacks);
+
+        if let Some(data) = on_tick {
+            if let Some(log) = data.collector.last() {
+                let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                    (data.callback)(&log);
+                }));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -205,12 +259,10 @@ mod tests {
         let (id2, _rx2) = create_callback();
         let (id3, _rx3) = create_callback();
 
-        // IDs should be unique and sequential
         assert_ne!(id1, id2);
         assert_ne!(id2, id3);
         assert_ne!(id1, id3);
 
-        // Clean up
         remove_callback(id1);
         remove_callback(id2);
         remove_callback(id3);
@@ -220,16 +272,13 @@ mod tests {
     fn test_callback_removal() {
         let (id, _rx) = create_callback();
 
-        // Should exist
         {
             let callbacks = get_callbacks().lock().unwrap();
             assert!(callbacks.contains_key(&id));
         }
 
-        // Remove it
         remove_callback(id);
 
-        // Should not exist
         {
             let callbacks = get_callbacks().lock().unwrap();
             assert!(!callbacks.contains_key(&id));
@@ -242,12 +291,10 @@ mod tests {
         let (id2, _rx2) = create_async_callback();
         let (id3, _rx3) = create_async_callback();
 
-        // IDs should be unique and sequential
         assert_ne!(id1, id2);
         assert_ne!(id2, id3);
         assert_ne!(id1, id3);
 
-        // Clean up
         remove_callback(id1);
         remove_callback(id2);
         remove_callback(id3);
@@ -259,14 +306,19 @@ mod tests {
         let (async_id, _rx_async) = create_async_callback();
         let (sync_id2, _rx_sync2) = create_callback();
 
-        // All IDs should be unique
         assert_ne!(sync_id, async_id);
         assert_ne!(async_id, sync_id2);
         assert_ne!(sync_id, sync_id2);
 
-        // Clean up
         remove_callback(sync_id);
         remove_callback(async_id);
         remove_callback(sync_id2);
+    }
+
+    #[test]
+    fn test_on_tick_callback_none() {
+        let (id, _rx) = create_callback_with_on_tick(None);
+        on_tick_callback(id);
+        remove_callback(id);
     }
 }

@@ -113,3 +113,49 @@ fn fetch_as_with_request_param() -> anyhow::Result<()> {
         )],
     })
 }
+
+#[test]
+fn float_to_fixed_with_digits() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function main() -> string {
+                let n = 3.14159;
+                n.to_fixed(2)
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Float(3.14159)),
+                Instruction::LoadGlobal(Value::function("baml.Float.to_fixed")),
+                Instruction::LoadVar("n".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::Call(2),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn float_to_fixed_defaults_digits_to_zero() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function main() -> string {
+                let n = 3.14159;
+                n.to_fixed()
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Float(3.14159)),
+                Instruction::LoadGlobal(Value::function("baml.Float.to_fixed")),
+                Instruction::LoadVar("n".to_string()),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::Call(2),
+                Instruction::Return,
+            ],
+        )],
+    })
+}

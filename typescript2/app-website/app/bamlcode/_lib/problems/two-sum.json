@@ -1,0 +1,22 @@
+{
+  "category": "Arrays & Hashing",
+  "difficulty": "Easy",
+  "id": 1,
+  "signature": "function TwoSum(nums: int[], target: int) -> int[]",
+  "slug": "two-sum",
+  "solution": "function TwoSum(nums: int[], target: int) -> int[] {\n  let n = nums.length();\n  let i = 0;\n  while (i < n) {\n    let j = i + 1;\n    while (j < n) {\n      if (nums[i] + nums[j] == target) {\n        return [i, j];\n      }\n      j += 1;\n    }\n    i += 1;\n  }\n  return [];\n}",
+  "starter": "function TwoSum(nums: int[], target: int) -> int[] {\n  // Return the indices [i, j] (i < j) whose values sum to target.\n  return [];\n}",
+  "statement": "Given an array of integers `nums` and an integer `target`, return the indices of the two numbers that add up to `target`.\n\nYou may assume that each input has **exactly one solution**, and you may not use the same element twice. Return the answer as `[i, j]` with `i < j`.\n\n**Example**\n\n```\nnums = [2, 7, 11, 15], target = 9\n=> [0, 1]   // nums[0] + nums[1] == 9\n```",
+  "tests": [
+    { "call": "TwoSum([2, 7, 11, 15], 9)", "expected": "[0, 1]" },
+    { "call": "TwoSum([3, 2, 4], 6)", "expected": "[1, 2]" },
+    { "call": "TwoSum([3, 3], 6)", "expected": "[0, 1]" },
+    {
+      "call": "TwoSum([-1, -2, -3, -4, -5], -8)",
+      "expected": "[2, 4]",
+      "hidden": true
+    },
+    { "call": "TwoSum([0, 4, 3, 0], 0)", "expected": "[0, 3]", "hidden": true }
+  ],
+  "title": "Two Sum"
+}

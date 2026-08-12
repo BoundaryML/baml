@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// This file lives in ns_foo/ which creates namespace "foo"
+// that shadows the root-level class "foo"
+class Bar {
+    y: string,
+}

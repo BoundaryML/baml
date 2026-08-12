@@ -1,12 +1,13 @@
 mod builder;
-mod cleanup;
 mod ir;
 mod lower;
+mod optimize;
 pub mod pretty;
 
+pub use baml_type::ResolvedAliases;
 pub use ir::*;
 pub use lower::{
-    convert_tir2_ty, def_to_item_ref, lower_function, lower_let_body, qtn_to_type_name,
+    def_to_item_ref, lower_function, lower_let_body, resolved_aliases_for_package, tir2_to_template,
 };
 
 /// Database trait for compiler2 MIR queries.

@@ -6,12 +6,11 @@ class Person {
 //----
 //- diagnostics
 // (parse error expected - incomplete block attribute)
-// Error: Expected attribute name, found '}'
-//    ╭─[ block_attribute.baml:4:1 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[block_attribute.baml:4:1]
 //  4 │ }
-//    │ ┬  
-//    │ ╰── Expected attribute name, found '}'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+//    · ┬
+//    · ╰── expected `attribute name`, found `'}'`
+//    ╰────

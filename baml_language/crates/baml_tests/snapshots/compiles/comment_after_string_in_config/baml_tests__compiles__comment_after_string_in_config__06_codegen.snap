@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function $init() -> null {
+    call $init_let_0
+    store_global user.OpenRouterMistralSmall3_1_24b
+    load_const null
+    return
+}

@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 25209
+---
+=== PPIR ===
+function user.Calculate() -> int  [expr] {
+  { let a = 1 Add 2; let b = a Mul 3; let c = b Div 2 Sub 1; let d = a Add b Mul c; return d }
+}
+class user.Profile {
+  bio: string
+  settings: user.Settings
+}
+class user.Profile$stream {
+  bio: string | null
+  settings: user.Settings$stream | null
+}
+class user.Settings {
+  theme: string
+}
+class user.Settings$stream {
+  theme: string | null
+}
+class user.User {
+  name: string
+  profile: user.Profile
+  tags: string[]
+}
+class user.User$stream {
+  name: string | null
+  profile: user.Profile$stream | null
+  tags: string[]
+}
+function user.FieldAccess(user: user.User) -> string  [expr] {
+  { let name = user.name; let bio = user.profile.bio; let theme = user.profile.settings.theme; let firstTag = user.tags[0]; return theme }
+}
+class user.IndexUser {
+  name: string
+  age: int
+  tags: string[]
+}
+class user.IndexUser$stream {
+  name: string | null
+  age: int | null
+  tags: string[]
+}
+function user.IndexAccess(users: user.IndexUser[]) -> string  [expr] {
+  { let first = users[0]; let idx = 1; let second = users[idx]; let firstName = users[0].name; let tag = users[0].tags[0]; return firstName }
+}
+function user.TestPrecedence() -> bool  [expr] {
+  { let a = 2 Add 3 Mul 4; let c = 2 Mul 3 Add 4; let b = a Gt 10 Add 2; let d = true Or false And false; return d }
+}

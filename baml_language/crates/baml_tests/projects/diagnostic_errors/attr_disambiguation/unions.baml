@@ -1,0 +1,52 @@
+// Group B: unions — attribute position relative to |.
+// Some cases produce diagnostics (noted in comments).
+
+class UA { x int }
+class UB { x int }
+class UC { x int }
+
+class OrderingUnions {
+  // B1: type attr after full union — baseline
+  b1 UA | UB | UC @stream.done
+
+  // B2: type attr on middle member
+  b2 UA | UB @stream.done | UC
+
+  // B3: type attr on first member
+  b3 UA @stream.done | UB | UC
+
+  // B4: field attr after full union — valid, hoisted to field
+  b4 UA | UB | UC @alias("b4_alias")
+
+  // B5: field attr mid-union — ERROR
+  b5 UA | UB @alias("b5_alias") | UC
+
+  // B6: field attr on first member — ERROR
+  b6 UA @alias("b6_alias") | UB | UC
+
+  // B7: mixed attrs after full union — valid
+  b7 UA | UB | UC @alias("b7_alias") @stream.done
+
+  // B8: type attr mid-union + field attr at end — valid
+  b8 UA | UB @stream.done | UC @alias("b8_alias")
+
+  // B9: parenthesized union + type attr — valid
+  b9 (UA | UB) @stream.done
+
+  // B10: parenthesized union + field before type — valid
+  //      (parens don't affect outermost position here because
+  //       @alias is on the outer TYPE_EXPR, not inside parens)
+  b10 (UA | UB) @alias("b10_alias") @stream.done
+
+  // B11: parenthesized union + field attr — valid
+  b11 (UA | UB) @alias("b11_alias")
+
+  // B12: parenthesized union + type attr + field attr — valid
+  b12 (UA | UB) @stream.done @alias("b12_alias")
+
+  // B13: field attr inside parens on last member — ERROR
+  b13 UA | (UB @alias("b13_alias"))
+
+  // B14: field attr inside parens on non-last member — ERROR
+  b14 (UA | UB @alias("b14_alias"))
+}

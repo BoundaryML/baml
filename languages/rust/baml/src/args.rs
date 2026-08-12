@@ -1,13 +1,16 @@
+use std::sync::Arc;
+
 use prost::Message;
 
 use crate::{
     client_registry::ClientRegistry,
     codec::BamlEncode,
     error::BamlError,
+    ffi::callbacks::OnTickCallback,
     proto::baml_cffi_v1::{
         host_map_entry, BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry,
     },
-    raw_objects::{Collector, RawObjectTrait, TypeBuilder},
+    raw_objects::{Collector, FunctionLog, RawObjectTrait, TypeBuilder},
 };
 
 /// Cancellation system using channels for efficient sync/async support.
@@ -523,7 +526,6 @@ pub use cancellation::CancellationToken;
 pub(crate) use cancellation::{CancellationGuard, CancellationSource};
 
 /// Arguments for a BAML function call
-#[derive(Default, Debug)]
 pub struct FunctionArgs {
     kwargs: Vec<HostMapEntry>,
     env_overrides: Vec<HostEnvVar>,
@@ -532,6 +534,39 @@ pub struct FunctionArgs {
     tags: Vec<HostMapEntry>,
     client_registry: Option<ClientRegistry>,
     pub(crate) cancellation_token: Option<CancellationToken>,
+    /// On-tick callback invoked per SSE chunk with the current FunctionLog.
+    /// The runtime creates a collector and bundles it internally at call time.
+    pub(crate) on_tick: Option<OnTickCallback>,
+}
+
+impl Default for FunctionArgs {
+    fn default() -> Self {
+        Self {
+            kwargs: Vec::new(),
+            env_overrides: Vec::new(),
+            collectors: Vec::new(),
+            type_builder: None,
+            tags: Vec::new(),
+            client_registry: None,
+            cancellation_token: None,
+            on_tick: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for FunctionArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionArgs")
+            .field("kwargs", &self.kwargs)
+            .field("env_overrides", &self.env_overrides)
+            .field("collectors", &self.collectors)
+            .field("type_builder", &self.type_builder)
+            .field("tags", &self.tags)
+            .field("client_registry", &self.client_registry)
+            .field("cancellation_token", &self.cancellation_token)
+            .field("on_tick", &self.on_tick.as_ref().map(|_| "<callback>"))
+            .finish()
+    }
 }
 
 impl FunctionArgs {
@@ -545,6 +580,27 @@ impl FunctionArgs {
         cancellation_token: Option<CancellationToken>,
     ) -> Self {
         self.cancellation_token = cancellation_token;
+        self
+    }
+
+    /// Set an on-tick callback for streaming calls.
+    ///
+    /// The callback is invoked for each SSE streaming chunk received from the LLM,
+    /// with a `FunctionLog` containing SSE chunks, thinking tokens, usage, and timing.
+    /// The runtime automatically creates a collector internally at call time.
+    #[must_use]
+    pub fn with_on_tick<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(&FunctionLog) + Send + Sync + 'static,
+    {
+        self.on_tick = Some(Arc::new(callback));
+        self
+    }
+
+    /// Set an on-tick callback using a pre-wrapped Arc.
+    #[must_use]
+    pub fn with_on_tick_arc(mut self, callback: OnTickCallback) -> Self {
+        self.on_tick = Some(callback);
         self
     }
 
@@ -609,16 +665,30 @@ impl FunctionArgs {
 
     /// Encode to protobuf bytes for FFI
     pub fn encode(&self) -> Result<Vec<u8>, BamlError> {
+        self.encode_with_extra_collector(None)
+    }
+
+    /// Encode to protobuf bytes, optionally injecting an extra collector.
+    /// Used by the runtime to add the on-tick collector without cloning the whole struct.
+    pub(crate) fn encode_with_extra_collector(
+        &self,
+        extra_collector: Option<&Collector>,
+    ) -> Result<Vec<u8>, BamlError> {
         let client_registry = self
             .client_registry
             .as_ref()
             .map(super::client_registry::ClientRegistry::encode);
 
+        let mut collectors = self.collectors.clone();
+        if let Some(c) = extra_collector {
+            collectors.push(c.encode_handle());
+        }
+
         let msg = HostFunctionArguments {
             kwargs: self.kwargs.clone(),
             client_registry,
             env: self.env_overrides.clone(),
-            collectors: self.collectors.clone(),
+            collectors,
             type_builder: self.type_builder,
             tags: self.tags.clone(),
         };
@@ -691,5 +761,32 @@ mod tests {
         let encoded = args.encode();
         assert!(encoded.is_ok());
         assert!(!encoded.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_function_args_with_on_tick() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+
+        let args = FunctionArgs::new()
+            .arg("text", "hello")
+            .with_on_tick(move |_log: &FunctionLog| {
+                counter_clone.fetch_add(1, Ordering::SeqCst);
+            });
+
+        assert!(args.on_tick.is_some());
+    }
+
+    #[test]
+    fn test_function_args_debug_with_on_tick() {
+        let args = FunctionArgs::new()
+            .arg("text", "hello")
+            .with_on_tick(|_log: &FunctionLog| {});
+
+        let debug_str = format!("{args:?}");
+        assert!(debug_str.contains("on_tick"));
+        assert!(debug_str.contains("<callback>"));
     }
 }

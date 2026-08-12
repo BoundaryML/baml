@@ -1,0 +1,210 @@
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "{\n"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " "}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " \""}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "title"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "\":"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " \""}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "Season"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "ed"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Python"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " &"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Rust"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Software"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Engineer"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " ("}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "Berlin"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": ")"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " |"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Distributed"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Systems"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " &"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Dev"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Tool"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "ing"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "\",\n"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " "}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " \""}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "body"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "\":"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " \""}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "Season"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "ed"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " software"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " engineer"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " with"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " "}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "12"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " years"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " of"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " experience"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": ","}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " specializing"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " in"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Python"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " and"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Rust"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "."}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Currently"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " based"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " in"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " Berlin"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": ","}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " with"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " interests"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " in"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " distributed"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " systems"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " and"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " developer"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " tooling"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": ".\",\n"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " "}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " \""}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "word"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "_count"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "\":"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": " "}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "26"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "\n"}
+
+event: response.output_text.delta
+data: {"type": "response.output_text.delta", "delta": "}"}
+
+event: response.completed
+data: {"type": "response.completed", "response": {"status": "completed", "output": [{"type": "message", "content": [{"type": "output_text", "text": "{\n  \"title\": \"Seasoned Python & Rust Software Engineer (Berlin) | Distributed Systems & Dev Tooling\",\n  \"body\": \"Seasoned software engineer with 12 years of experience, specializing in Python and Rust. Currently based in Berlin, with interests in distributed systems and developer tooling.\",\n  \"word_count\": 26\n}"}]}], "usage": {"input_tokens": 0, "output_tokens": 0}}}
+

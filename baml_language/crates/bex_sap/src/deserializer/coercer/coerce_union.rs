@@ -51,28 +51,6 @@ where
             (CompletionState::Complete, _) => {}
         }
 
-        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
-            let parse_as = ctx
-                .db
-                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                .map_err(|ident| ctx.error_type_resolution(ident))?;
-            debug_assert!(
-                parse_as
-                    .meta
-                    .parse_as
-                    .as_ref()
-                    .map(std::convert::AsRef::as_ref)
-                    != Some(parse_as_ty.as_ref()),
-                "If parse_as is the same, it should be `None`."
-            );
-            // recursed coercion should handle all the flags.
-            let Some(value) = TyResolvedRef::coerce(ctx, parse_as.clone(), value)? else {
-                return Ok(None);
-            };
-            target.meta.expect_asserts(&value.value, ctx)?; // already ran inner `parse_as`` asserts, need to run outer `target` asserts
-            return Ok(Some(value));
-        }
-
         // Optimization: If we have a hint from a previous array element, try that variant first.
         // This helps with arrays of unions where elements are typically homogeneous.
         if let Some(hint_idx) = ctx.union_variant_hint
@@ -84,7 +62,6 @@ where
 
             if let Ok(Some(mut val)) = result
                 && val.score() == 0
-                && hinted_option.meta.expect_asserts(&val.value, ctx).is_ok()
             {
                 // If the hinted variant gives a perfect match, return immediately
                 // Add UnionMatch flag so subsequent array elements can use this hint
@@ -98,6 +75,16 @@ where
             Vec::new();
 
         for (i, option) in all_variants.iter().enumerate() {
+            // When parse_without_null is set, skip null variants entirely —
+            // they should not be used as a fallback when other variants fail.
+            if target.meta.parse_without_null {
+                if let Ok(ty) = ctx.db.resolve_with_meta(option.as_ref()) {
+                    if matches!(ty.ty, TyResolvedRef::Null(_)) {
+                        continue;
+                    }
+                }
+            }
+
             let parsed = ctx
                 .db
                 .resolve_with_meta(option.as_ref())
@@ -109,10 +96,6 @@ where
                     variants.push(Ok(None));
                 }
                 Ok(Some(mut val)) => {
-                    if let Err(e) = option.meta.expect_asserts(&val.value, ctx) {
-                        variants.push(Err(e));
-                        continue;
-                    }
                     let score = val.score();
                     // If we find a perfect match (score 0), we can stop immediately
                     if score == 0 {
@@ -141,6 +124,10 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<BamlValueWithFlags<'s, 'v, 't, N>> {
+        if target.meta.parse_without_null && matches!(value, crate::jsonish::Value::Null) {
+            return None;
+        }
+
         let flags = match (value.completion_state(), target.meta.in_progress.as_ref()) {
             (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
             (CompletionState::Incomplete, Some(lit)) => {
@@ -164,27 +151,6 @@ where
             }
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
-
-        if let Some(parse_as_ty) = &target.meta.parse_as {
-            let parse_as = ctx
-                .db
-                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                .ok()?;
-            debug_assert!(
-                parse_as
-                    .meta
-                    .parse_as
-                    .as_ref()
-                    .map(std::convert::AsRef::as_ref)
-                    != Some(parse_as_ty.as_ref()),
-                "If parse_as is the same, it should be `None`."
-            );
-            let value = TyResolvedRef::try_cast(ctx, parse_as.clone(), value)?;
-            let Ok(true) = target.meta.check_asserts(&value.value, ctx) else {
-                return None;
-            };
-            return Some(value);
-        }
 
         if matches!(value, crate::jsonish::Value::Null) && target.ty.is_optional(ctx.db) {
             return Some(BamlValueWithFlags::new(

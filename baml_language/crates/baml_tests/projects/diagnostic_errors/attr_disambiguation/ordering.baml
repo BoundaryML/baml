@@ -1,0 +1,36 @@
+// Group A: attribute ordering on simple types.
+// All cases should compile without errors.
+// The core bug (A4) is field-before-type ordering.
+
+class Fizz {
+  x int
+}
+
+class OrderingSimple {
+  // A1: type attr only — baseline
+  a1 Fizz @stream.done
+
+  // A2: field attr only — baseline
+  a2 Fizz @alias("a2_alias")
+
+  // A3: type before field — works today
+  a3 Fizz @stream.done @alias("a3_alias")
+
+  // A4: field before type — THE BUG
+  a4 Fizz @alias("a4_alias") @stream.done
+
+  // A5: field, type, field
+  a5 Fizz @alias("a5_alias") @stream.done @description("a5 desc")
+
+  // A6: type, field, type
+  a6 Fizz @stream.done @alias("a6_alias") @stream.must_exist
+
+  // A7: multiple type attrs only
+  a7 Fizz @stream.done @stream.must_exist
+
+  // A8: multiple field attrs only
+  a8 Fizz @alias("a8_alias") @description("a8 desc")
+
+  // A9: field before two type attrs
+  a9 Fizz @alias("a9_alias") @stream.done @stream.must_exist
+}

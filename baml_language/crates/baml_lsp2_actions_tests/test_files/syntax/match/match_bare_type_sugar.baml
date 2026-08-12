@@ -25,7 +25,7 @@ function MatchBareClass(r: Ok | Err) -> string {
 // Mixed bare types and explicit typed bindings
 function MatchMixed(r: Ok | Err) -> string {
   match (r) {
-    o: Ok => o.value,
+    let o: Ok => o.value,
     Err => "error"
   }
 }
@@ -40,30 +40,4 @@ function MatchBareWithWildcard(x: int | string | bool) -> string {
 
 //----
 //- diagnostics
-// Error: unresolved type: int
-//     ╭─[ match_match_bare_type_sugar.baml:12:12 ]
-//     │
-//  12 │     int => "is int",
-//     │            ────┬───  
-//     │                ╰───── unresolved type: int
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved type: string
-//     ╭─[ match_match_bare_type_sugar.baml:13:15 ]
-//     │
-//  13 │     string => "is string"
-//     │               ─────┬─────  
-//     │                    ╰─────── unresolved type: string
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved type: int
-//     ╭─[ match_match_bare_type_sugar.baml:36:12 ]
-//     │
-//  36 │     int => "number",
-//     │            ────┬───  
-//     │                ╰───── unresolved type: int
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+// <no-diagnostics-expected>

@@ -12,4 +12,11 @@ class Foo2 {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0015
+//
+//   × unknown attribute `@stream.not_null`
+//    ╭─[streaming_streaming_ok.baml:2:13]
+//  2 │     bar int @stream.not_null
+//    ·             ────────┬───────
+//    ·                     ╰── unknown attribute
+//    ╰────

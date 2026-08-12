@@ -60,46 +60,11 @@ function NestedIfStatements() -> string {
 
 //----
 //- diagnostics
-// Error: Duplicate binding `a` in `NestedIfStatements`
-//     ╭─[ headers_nested_if_statements.baml:20:17 ]
-//     │
-//   9 │             let a = if (true) {
-//     │                 ┬  
-//     │                 ╰── first defined as binding here
-//     │ 
-//  20 │             let a = if (true) {
-//     │                 ┬  
-//     │                 ╰── duplicate binding definition
-//     │ 
-//  35 │             let a = if (true) {
-//     │                 ┬  
-//     │                 ╰── duplicate binding definition
-//     │ 
-//  46 │             let a = if (true) {
-//     │                 ┬  
-//     │                 ╰── duplicate binding definition
-//     │ 
-//     │ Note: Error code: E0012
-// ────╯
-// Error: Duplicate binding `z` in `NestedIfStatements`
-//     ╭─[ headers_nested_if_statements.baml:33:13 ]
-//     │
-//   7 │         let z = if (true) {
-//     │             ┬  
-//     │             ╰── first defined as binding here
-//     │ 
-//  33 │         let z = if (true) {
-//     │             ┬  
-//     │             ╰── duplicate binding definition
-//     │ 
-//     │ Note: Error code: E0012
-// ────╯
-// Error: type mismatch: expected string, got int
-//     ╭─[ headers_nested_if_statements.baml:58:5 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[headers_nested_if_statements.baml:58:5]
 //  58 │     e
-//     │     ┬  
-//     │     ╰── type mismatch: expected string, got int
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·     ┬
+//     ·     ╰── expected `string`, found `int`
+//     ╰────

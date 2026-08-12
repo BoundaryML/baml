@@ -135,6 +135,10 @@ impl BamlRuntime {
     }
 
     /// Call a function with streaming results
+    ///
+    /// If `args` contains an `on_tick` callback (set via `FunctionArgs::with_on_tick`),
+    /// it will be invoked for each SSE streaming chunk received from the LLM.
+    /// A collector is automatically created and injected when on_tick is present.
     pub fn call_function_stream<TPartial, TFinal>(
         &self,
         name: &str,
@@ -144,11 +148,22 @@ impl BamlRuntime {
         TPartial: BamlDecode + Send + 'static,
         TFinal: Clone + BamlDecode + Send + 'static,
     {
-        let encoded = args.encode()?;
+        let on_tick_data = args.on_tick.as_ref().map(|cb| {
+            let collector = self.new_collector("on-tick-collector");
+            let data = callbacks::OnTickData {
+                callback: cb.clone(),
+                collector: collector.clone(),
+            };
+            (data, collector)
+        });
+
+        let extra_collector = on_tick_data.as_ref().map(|(_, c)| c);
+        let encoded = args.encode_with_extra_collector(extra_collector)?;
         let name_cstr =
             CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
 
-        let (id, receiver) = callbacks::create_callback();
+        let (id, receiver) =
+            callbacks::create_callback_with_on_tick(on_tick_data.map(|(d, _)| d));
 
         #[allow(unsafe_code)]
         let buf = unsafe {
@@ -165,13 +180,11 @@ impl BamlRuntime {
             })?
         };
 
-        // Check for immediate error (decode Buffer response)
         ffi::decode_async_response(buf).map_err(|e| {
             callbacks::remove_callback(id);
             BamlError::internal(e)
         })?;
 
-        // Set up cancellation callback if token provided
         let cancel_guard = args.cancellation_token.as_ref().map(|token| {
             token.on_cancel(move || {
                 #[allow(unsafe_code)]
@@ -244,6 +257,10 @@ impl BamlRuntime {
     }
 
     /// Call a function with async streaming results
+    ///
+    /// If `args` contains an `on_tick` callback (set via `FunctionArgs::with_on_tick`),
+    /// it will be invoked for each SSE streaming chunk received from the LLM.
+    /// A collector is automatically created and injected when on_tick is present.
     pub fn call_function_stream_async<TPartial, TFinal>(
         &self,
         name: &str,
@@ -253,11 +270,22 @@ impl BamlRuntime {
         TPartial: BamlDecode + Send + 'static,
         TFinal: Clone + BamlDecode + Send + 'static,
     {
-        let encoded = args.encode()?;
+        let on_tick_data = args.on_tick.as_ref().map(|cb| {
+            let collector = self.new_collector("on-tick-collector");
+            let data = callbacks::OnTickData {
+                callback: cb.clone(),
+                collector: collector.clone(),
+            };
+            (data, collector)
+        });
+
+        let extra_collector = on_tick_data.as_ref().map(|(_, c)| c);
+        let encoded = args.encode_with_extra_collector(extra_collector)?;
         let name_cstr =
             CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
 
-        let (id, receiver) = callbacks::create_async_callback();
+        let (id, receiver) =
+            callbacks::create_async_callback_with_on_tick(on_tick_data.map(|(d, _)| d));
 
         #[allow(unsafe_code)]
         let buf = unsafe {

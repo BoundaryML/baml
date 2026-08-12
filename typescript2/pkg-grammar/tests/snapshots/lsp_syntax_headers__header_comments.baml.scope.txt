@@ -1,0 +1,64 @@
+1:1-9        "function"         source.baml meta.function.baml keyword.declaration.function.baml
+1:10-28      "ForLoopWithHeaders" source.baml meta.function.baml entity.name.function.baml
+1:28-29      "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+1:29-30      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+1:31-33      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+1:34-37      "int"              source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+1:38-39      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+2:5-24       "//# Loop Processing" source.baml meta.function.baml meta.block.function.baml comment.line.double-slash.baml
+3:5-8        "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+3:9-14       "items"            source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+3:15-16      "="                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml keyword.operator.assignment.baml
+3:17-18      "["                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+3:18-19      "1"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+3:19-20      ","                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+3:21-22      "2"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+3:22-23      ","                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+3:24-25      "3"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+3:25-26      ","                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+3:27-28      "4"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+3:28-29      ","                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+3:30-31      "5"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+3:31-32      "]"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+3:32-33      ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
+4:5-8        "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+4:9-15       "result"           source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+4:16-17      "="                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml keyword.operator.assignment.baml
+4:18-19      "0"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml constant.numeric.integer.baml
+4:19-20      ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
+6:5-19       "//## Main Loop"   source.baml meta.function.baml meta.block.function.baml comment.line.double-slash.baml
+7:5-8        "for"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml keyword.control.loop.for.baml
+7:9-10       "("                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
+7:10-13      "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+7:14-18      "item"             source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
+7:19-21      "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+7:22-27      "items"            source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
+7:27-28      ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
+7:29-30      "{"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
+8:9-30       "//### Item Processing" source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml comment.line.double-slash.baml
+9:9-12       "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+9:13-22      "processed"        source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+9:23-24      "="                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
+9:25-29      "item"             source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+9:30-31      "*"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml keyword.operator.arithmetic.baml
+9:32-33      "2"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml constant.numeric.integer.baml
+9:33-34      ";"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.terminator.statement.baml
+11:9-28      "//#### Accumulation" source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml comment.line.double-slash.baml
+12:9-12      "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+12:13-20     "result2"          source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+12:21-22     "="                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
+12:23-29     "result"           source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:30-31     "+"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml keyword.operator.arithmetic.baml
+12:32-41     "processed"        source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:41-42     ";"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.terminator.statement.baml
+14:9-16      "result2"          source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+15:5-6       "}"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.end.baml
+17:5-22      "//## Final Result" source.baml meta.function.baml meta.block.function.baml comment.line.double-slash.baml
+18:5-11      "result"           source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+19:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+21:1-79      "// warning: Workflow functions are experimental, and will break in the future." source.baml comment.line.double-slash.baml
+22:1-47      "//   -->  headers/mdx_headers_for_loops.baml:1" source.baml comment.line.double-slash.baml
+23:1-8       "//    |"          source.baml comment.line.double-slash.baml
+24:1-8       "//    |"          source.baml comment.line.double-slash.baml
+25:1-47      "//  1 | function ForLoopWithHeaders() -> int {" source.baml comment.line.double-slash.baml
+26:1-8       "//    |"          source.baml comment.line.double-slash.baml

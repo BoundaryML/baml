@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-// Same name "Response" in llm namespace — no conflict with http.Response
-class Response {
-    text: string
-    tokens: int
-}

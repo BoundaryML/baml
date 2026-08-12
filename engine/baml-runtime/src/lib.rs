@@ -23,6 +23,7 @@ pub mod async_vm_runtime;
 pub mod control_flow;
 mod redaction;
 mod runtime_methods;
+pub mod sse;
 pub mod tracing;
 pub mod tracingv2;
 pub mod type_builder;
@@ -437,13 +438,13 @@ pub struct BamlRuntime {
 }
 
 pub struct TripWire {
-    trip_wire: Option<stream_cancel::Tripwire>,
+    trip_wire: Option<tokio_util::sync::CancellationToken>,
 
     on_drop: Option<Box<dyn Fn() + 'static + Send + Sync>>,
 }
 
 impl TripWire {
-    pub fn new(trip_wire: Option<stream_cancel::Tripwire>) -> Arc<Self> {
+    pub fn new(trip_wire: Option<tokio_util::sync::CancellationToken>) -> Arc<Self> {
         Arc::new(Self {
             trip_wire,
             on_drop: None,
@@ -451,7 +452,7 @@ impl TripWire {
     }
 
     pub fn new_with_on_drop(
-        trip_wire: Option<stream_cancel::Tripwire>,
+        trip_wire: Option<tokio_util::sync::CancellationToken>,
         on_drop: Box<dyn Fn() + 'static + Send + Sync>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -460,7 +461,7 @@ impl TripWire {
         })
     }
 
-    fn trip_wire(&self) -> Option<stream_cancel::Tripwire> {
+    fn trip_wire(&self) -> Option<tokio_util::sync::CancellationToken> {
         self.trip_wire.clone()
     }
 }
@@ -1536,6 +1537,7 @@ impl BamlRuntime {
 
         let mut request_id = HttpRequestId::new();
 
+        #[cfg(feature = "bedrock")]
         if let RenderedPrompt::Chat(chat) = &prompt {
             if let LLMProvider::Primitive(primitive) = provider.as_ref() {
                 if let internal::llm_client::primitive::LLMPrimitiveProvider::Aws(aws_client) =

@@ -57,6 +57,7 @@ pub use codec::{
     DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes,
 };
 pub use error::BamlError;
+pub use ffi::callbacks::OnTickCallback;
 pub use raw_objects::{
     // Media types
     Audio,
@@ -99,14 +100,15 @@ pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};
 /// Do not use directly - use the derive macros instead.
 #[doc(hidden)]
 pub mod __internal {
+    /// re-export
+    pub use serde;
+
     use crate::{codec::traits::BamlClass, error::BamlError};
     pub use crate::{
         ffi::callbacks,
         proto::baml_cffi_v1::*,
         raw_objects::{BamlMediaRepr, BamlMediaReprContent},
     };
-    /// re-export
-    pub use serde;
 
     /// Decode a class from a `CffiValueHolder`.
     /// Used by derive macros to implement `BamlDecode` for structs.

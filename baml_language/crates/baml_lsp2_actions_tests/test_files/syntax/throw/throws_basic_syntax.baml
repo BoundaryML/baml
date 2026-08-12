@@ -27,12 +27,10 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 
 //----
 //- diagnostics
-// Error: extraneous throws declaration: int
-//     ╭─[ throw_throws_basic_syntax.baml:21:51 ]
-//     │
+// E0097
+//
+//   ⚠ extraneous throws declaration: int
+//     ╭─[throw_throws_basic_syntax.baml:21:52]
 //  21 │ function MayThrowMultiple(x: int) -> string throws string | int {
-//     │                                                   ──────┬──────  
-//     │                                                         ╰──────── extraneous throws declaration: int
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·                                                    ────────────
+//     ╰────

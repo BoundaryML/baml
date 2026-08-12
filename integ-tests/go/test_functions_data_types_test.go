@@ -14,11 +14,11 @@ import (
 // Reference: test_functions.py:186-188
 func TestClassWithLiteralProp(t *testing.T) {
 	ctx := context.Background()
-	
+
 	result, err := b.FnLiteralClassInputOutput(ctx, types.LiteralClassHello{
 		Prop: "hello",
 	})
-	
+
 	require.NoError(t, err)
 	assert.IsType(t, types.LiteralClassHello{}, result)
 }
@@ -27,11 +27,11 @@ func TestClassWithLiteralProp(t *testing.T) {
 // Reference: test_functions.py:191-193
 func TestLiteralClassWithLiteralUnionProp(t *testing.T) {
 	ctx := context.Background()
-	
+
 	input := types.Union2LiteralClassOneOrLiteralClassTwo__NewLiteralClassOne(types.LiteralClassOne{
 		Prop: "one",
 	})
-	
+
 	result, err := b.FnLiteralUnionClassInputOutput(ctx, input)
 	require.NoError(t, err)
 	assert.NotNil(t, result)
@@ -41,12 +41,12 @@ func TestLiteralClassWithLiteralUnionProp(t *testing.T) {
 // Reference: test_functions.py:196-200
 func TestSingleMapStringToString(t *testing.T) {
 	ctx := context.Background()
-	
+
 	inputMap := map[string]string{
 		"lorem": "ipsum",
 		"dolor": "sit",
 	}
-	
+
 	result, err := b.TestFnNamedArgsSingleMapStringToString(ctx, inputMap)
 	require.NoError(t, err)
 	assert.Contains(t, result, "lorem")
@@ -56,11 +56,11 @@ func TestSingleMapStringToString(t *testing.T) {
 // Reference: test_functions.py:203-207
 func TestSingleMapStringToClass(t *testing.T) {
 	ctx := context.Background()
-	
+
 	inputMap := map[string]types.StringToClassEntry{
 		"lorem": {Word: "ipsum"},
 	}
-	
+
 	result, err := b.TestFnNamedArgsSingleMapStringToClass(ctx, inputMap)
 	require.NoError(t, err)
 	assert.Equal(t, "ipsum", result["lorem"].Word)
@@ -70,11 +70,11 @@ func TestSingleMapStringToClass(t *testing.T) {
 // Reference: test_functions.py:210-212
 func TestSingleMapStringToMap(t *testing.T) {
 	ctx := context.Background()
-	
+
 	inputMap := map[string]map[string]string{
 		"lorem": {"word": "ipsum"},
 	}
-	
+
 	result, err := b.TestFnNamedArgsSingleMapStringToMap(ctx, inputMap)
 	require.NoError(t, err)
 	assert.Equal(t, "ipsum", result["lorem"]["word"])
@@ -85,14 +85,14 @@ func TestSingleMapStringToMap(t *testing.T) {
 // Reference: test_functions.py:215-218
 // func TestEnumKeyInMap(t *testing.T) {
 // 	ctx := context.Background()
-	
+
 // 	input1 := map[types.MapKey]string{
 // 		types.MapKeyA: "A",
 // 	}
 // 	input2 := map[types.MapKey]string{
-// 		types.MapKeyB: "B", 
+// 		types.MapKeyB: "B",
 // 	}
-	
+
 // 	result, err := b.InOutEnumMapKey(ctx, input1, input2)
 // 	require.NoError(t, err)
 // 	assert.Equal(t, "A", result[types.MapKeyA])
@@ -104,17 +104,17 @@ func TestSingleMapStringToMap(t *testing.T) {
 // Reference: test_functions.py:221-224
 // func TestLiteralStringUnionKeyInMap(t *testing.T) {
 // 	ctx := context.Background()
-	
+
 // 	input1 := map[types.Union4KfourOrKoneOrKthreeOrKtwo]string{
 // 		types.Union4KfourOrKoneOrKthreeOrKtwo__NewKone(): "1",
 // 	}
 // 	input2 := map[types.Union4KfourOrKoneOrKthreeOrKtwo]string{
 // 		types.Union4KfourOrKoneOrKthreeOrKtwo__NewKtwo(): "2",
 // 	}
-	
+
 // 	result, err := b.InOutLiteralStringUnionMapKey(ctx, input1, input2)
 // 	require.NoError(t, err)
-	
+
 // 	// Verify we get the expected mappings back
 // 	assert.Contains(t, result, types.Union4KfourOrKoneOrKthreeOrKtwo__NewKone())
 // 	assert.Contains(t, result, types.Union4KfourOrKoneOrKthreeOrKtwo__NewKtwo())
@@ -124,11 +124,11 @@ func TestSingleMapStringToMap(t *testing.T) {
 // Reference: test_functions.py:227-229
 func TestSingleLiteralStringKeyInMap(t *testing.T) {
 	ctx := context.Background()
-	
+
 	inputMap := map[string]string{
 		"key": "1",
 	}
-	
+
 	result, err := b.InOutSingleLiteralStringMapKey(ctx, inputMap)
 	require.NoError(t, err)
 	assert.Equal(t, "1", result["key"])
@@ -138,9 +138,9 @@ func TestSingleLiteralStringKeyInMap(t *testing.T) {
 // Reference: test_functions.py:232-234
 func TestPrimitiveUnionAlias(t *testing.T) {
 	ctx := context.Background()
-	
+
 	input := types.Union4BoolOrFloatOrIntOrString__NewString("test")
-	
+
 	result, err := b.PrimitiveAlias(ctx, input)
 	require.NoError(t, err)
 	assert.Equal(t, input, result)
@@ -150,13 +150,13 @@ func TestPrimitiveUnionAlias(t *testing.T) {
 // Reference: test_functions.py:237-239
 func TestMapAlias(t *testing.T) {
 	ctx := context.Background()
-	
+
 	inputMap := map[string][]string{
 		"A": {"B", "C"},
 		"B": {},
 		"C": {},
 	}
-	
+
 	result, err := b.MapAlias(ctx, inputMap)
 	require.NoError(t, err)
 	assert.Equal(t, inputMap, result)
@@ -166,13 +166,13 @@ func TestMapAlias(t *testing.T) {
 // Reference: test_functions.py:242-247
 func TestNestedAlias(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Test with string
 	stringInput := types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewString("test")
 	stringResult, err := b.NestedAlias(ctx, stringInput)
 	require.NoError(t, err)
 	assert.Equal(t, stringInput, stringResult)
-	
+
 	// Test with map
 	mapInput := types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewMapStringKeyListStringValue(map[string][]string{
 		"A": {"B", "C"},
@@ -188,7 +188,7 @@ func TestNestedAlias(t *testing.T) {
 // Reference: test_functions.py:90-95
 func TestOptionalListAndMap(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Test with nil values
 	result, err := b.AllowedOptionals(ctx, types.OptionalListAndMap{
 		P: nil,
@@ -197,7 +197,7 @@ func TestOptionalListAndMap(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, result.P)
 	assert.Nil(t, result.Q)
-	
+
 	// Test with values
 	testList := []string{"example1"}
 	testMap := map[string]string{"example2": "ok"}
@@ -216,17 +216,16 @@ func TestOptionalListAndMap(t *testing.T) {
 // Reference: test_functions.py:85-87
 func TestReturnLiteralUnion(t *testing.T) {
 	ctx := context.Background()
-	
+
 	result, err := b.LiteralUnionsTest(ctx, "a")
 	require.NoError(t, err)
 
-	
 	// Should return one of: 1, true, or "string output"
 	// Check if it matches any of the expected values
 	if result.AsIntK1() != nil {
 		assert.Equal(t, int64(1), *result.AsIntK1())
 	} else if result.AsBoolKTrue() != nil {
-		assert.True(t, *result.AsBoolKTrue()) 
+		assert.True(t, *result.AsBoolKTrue())
 	} else if result.AsKstring_output() != nil {
 		assert.Equal(t, "string output", *result.AsKstring_output())
 	} else {
@@ -238,14 +237,14 @@ func TestReturnLiteralUnion(t *testing.T) {
 // Reference: test_functions.py:308-331
 func TestJsonTypeAliasCycle(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create complex nested JSON structure
 	// Create JsonObject (map[string]JsonValue)
 	nestedObj := types.JsonObject{
 		"number": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(1),
 		"string": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewString("test"),
 		"bool":   types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewBool(true),
-		"list":   types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(
+		"list": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(
 			[]types.JsonValue{
 				types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(1),
 				types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(2),
@@ -253,13 +252,13 @@ func TestJsonTypeAliasCycle(t *testing.T) {
 			},
 		),
 	}
-	
+
 	testData := types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonObject(
 		types.JsonObject{
 			"number": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(1),
 			"string": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewString("test"),
 			"bool":   types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewBool(true),
-			"list":   types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(
+			"list": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(
 				[]types.JsonValue{
 					types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(1),
 					types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(2),
@@ -272,7 +271,7 @@ func TestJsonTypeAliasCycle(t *testing.T) {
 					"number": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(1),
 					"string": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewString("test"),
 					"bool":   types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewBool(true),
-					"list":   types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(
+					"list": types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(
 						[]types.JsonValue{
 							types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(1),
 							types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(2),
@@ -284,16 +283,16 @@ func TestJsonTypeAliasCycle(t *testing.T) {
 			),
 		},
 	)
-	
+
 	result, err := b.JsonTypeAliasCycle(ctx, testData)
 	require.NoError(t, err)
-	
+
 	// Basic structure checks - result is a JsonValue union
 	assert.True(t, result.IsJsonObject(), "Expected result to be JsonObject")
-	
+
 	if result.AsJsonObject() != nil {
 		resultObj := *result.AsJsonObject()
-		
+
 		// Check number field
 		if numberVal, exists := resultObj["number"]; exists {
 			assert.True(t, numberVal.IsInt(), "Expected number to be int")
@@ -301,7 +300,7 @@ func TestJsonTypeAliasCycle(t *testing.T) {
 				assert.Equal(t, int64(1), *numberVal.AsInt())
 			}
 		}
-		
+
 		// Check string field
 		if stringVal, exists := resultObj["string"]; exists {
 			assert.True(t, stringVal.IsString(), "Expected string to be string")
@@ -309,7 +308,7 @@ func TestJsonTypeAliasCycle(t *testing.T) {
 				assert.Equal(t, "test", *stringVal.AsString())
 			}
 		}
-		
+
 		// Check bool field
 		if boolVal, exists := resultObj["bool"]; exists {
 			assert.True(t, boolVal.IsBool(), "Expected bool to be bool")
@@ -318,11 +317,11 @@ func TestJsonTypeAliasCycle(t *testing.T) {
 			}
 		}
 	}
-	
+
 	// Additional verification that the JSON cycle worked
 	if result.AsJsonObject() != nil {
 		resultObj := *result.AsJsonObject()
-		
+
 		// Check nested list if it exists
 		if listVal, exists := resultObj["list"]; exists && listVal.IsJsonArray() {
 			if listVal.AsJsonArray() != nil {
@@ -334,7 +333,7 @@ func TestJsonTypeAliasCycle(t *testing.T) {
 				}
 			}
 		}
-		
+
 		// Check deeply nested structure
 		if jsonField, exists := resultObj["json"]; exists && jsonField.IsJsonObject() {
 			if jsonField.AsJsonObject() != nil {

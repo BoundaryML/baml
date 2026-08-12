@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.2"
-baml-cli.workspace = true
+baml-cli = { path = "../cli", default-features = false }
 baml-ids.workspace = true
 baml-log.workspace = true
 baml-types.workspace = true
@@ -32,7 +32,12 @@ prost = "0.14"
 baml_cffi_macros = { path = "../baml_cffi_macros" }
 indexmap.workspace = true
 dashmap = "6.1"
-stream-cancel = "0.8"
+
+[features]
+# AWS Bedrock provider support, forwarded through the runtime stack. On by
+# default; build with --no-default-features to drop the aws-* dependency tree.
+default = ["bedrock"]
+bedrock = ["baml-runtime/bedrock", "baml-cli/bedrock"]
 
 [build-dependencies]
 cbindgen = "0.28.0"

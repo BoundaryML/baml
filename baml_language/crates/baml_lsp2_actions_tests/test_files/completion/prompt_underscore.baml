@@ -1,15 +1,12 @@
-client<llm> GPT4 {
-    provider openai
-    options {
-        model "gpt-4"
-    }
-}
+// `_.role(...)` and the `_` prompt namespace are gone; in a backtick prompt
+// this text is literal, so no completions are expected here.
+client GPT4 = openai.OpenAiClient.new(model = "gpt-4");
 
 function Chat() -> string {
     client GPT4
-    prompt #"
+    prompt `
         _.<[CURSOR]
-    "#
+    `
 }
 
 //----
@@ -18,4 +15,3 @@ function Chat() -> string {
 //
 //- completions
 // (new pipeline doesn't support prompt template completions)
-// SHOULD_CONTAIN: class, enum, function

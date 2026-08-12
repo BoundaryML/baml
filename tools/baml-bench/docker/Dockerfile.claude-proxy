@@ -1,0 +1,33 @@
+# claude-proxy image: Python API client + Node + the Claude Code CLI.
+# Drops benchmarking2's Go/pytest graders and the baml builder stage —
+# the proxy only *consumes* baml binaries (pulled by sha from the
+# api and cached on a volume).
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl git \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @anthropic-ai/claude-code@2.1.139 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root user; pre-create ~/.claude (Claude Code session/state dir) and the baml cache so
+# the named volumes mount with correct ownership.
+RUN useradd -m -u 1500 cproxy \
+    && mkdir -p /home/cproxy/.claude /var/baml-cache /tmp/staging \
+    && chown -R cproxy:cproxy /home/cproxy /var/baml-cache /tmp/staging
+
+WORKDIR /app
+COPY pyproject.toml ./
+COPY libs ./libs
+COPY services ./services
+RUN pip install --no-cache-dir -e .
+
+ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/libs:/app \
+    STAGING_ROOT=/tmp/staging \
+    BAML_CACHE_DIR=/var/baml-cache \
+    HOME=/home/cproxy
+
+USER cproxy
+EXPOSE 9090
+CMD ["python", "-m", "services.claude_proxy"]

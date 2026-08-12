@@ -16,6 +16,8 @@ type PlaygroundState = {
   files: Record<string, string>;
   /** Replace the full file map and persist to localStorage. */
   setFiles: (files: Record<string, string>) => void;
+  /** Reset files to defaults and clear localStorage. */
+  resetFiles: () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -27,11 +29,20 @@ const MEDIA_STORAGE_KEY = 'baml-playground-media';
 const OLD_STORAGE_KEY = 'baml-playground-code'; // migration from single-file
 
 const DEFAULT_BAML_CODE = `// Configure the LLM client
-client<llm> GPT4o {
+client<llm> Gpt5 {
   provider openai
   options {
-    model "gpt-4o"
+    model "gpt-5.4-mini"
     api_key env.OPENAI_API_KEY
+  }
+}
+
+
+client<llm> Sonnet {
+  provider anthropic
+  options {
+    model "claude-sonnet-4-6"
+    api_key env.ANTHROPIC_API_KEY
   }
 }
 
@@ -44,7 +55,7 @@ class Sentiment {
 
 // Define a function that calls the LLM
 function ClassifySentiment(text: string) -> Sentiment {
-  client GPT4o
+  client Gpt5
   prompt #"
     Classify the sentiment of the following text.
 
@@ -64,6 +75,7 @@ test HappySentiment {
     text "I absolutely love this new feature! It makes everything so much easier."
   }
 }
+
 `;
 
 const DEFAULT_FILES: Record<string, string> = {
@@ -108,7 +120,7 @@ function loadPersistedFiles(): Record<string, string> {
       }
       localStorage.removeItem(MEDIA_STORAGE_KEY);
     }
-  } catch {}
+  } catch { }
 
   if (Object.keys(result).length === 0) {
     return { ...DEFAULT_FILES };
@@ -143,8 +155,18 @@ export const usePlayground = (): PlaygroundState => {
     } catch { /* localStorage full or unavailable */ }
   }, [setFilesRaw]);
 
+  const resetFiles = useCallback(() => {
+    const defaults = { ...DEFAULT_FILES };
+    setFilesRaw(defaults);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(MEDIA_STORAGE_KEY);
+      localStorage.removeItem(OLD_STORAGE_KEY);
+    } catch { /* localStorage unavailable */ }
+  }, [setFilesRaw]);
+
   return useMemo<PlaygroundState>(
-    () => ({ files, setFiles }),
-    [files, setFiles],
+    () => ({ files, setFiles, resetFiles }),
+    [files, setFiles, resetFiles],
   );
 };

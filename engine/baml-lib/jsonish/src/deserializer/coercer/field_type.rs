@@ -245,22 +245,39 @@ pub fn validate_asserts(constraints: &[(Constraint, bool)]) -> Result<(), Parsin
             },
         )
         .collect::<Vec<_>>();
-    let causes = failing_asserts
+    let total = failing_asserts.len();
+    const MAX_CAUSES: usize = 5;
+    const MAX_CAUSE_LEN: usize = 100;
+    let causes: Vec<_> = failing_asserts
         .into_iter()
-        .map(|(label, expr)| ParsingError {
-            causes: vec![],
-            reason: format!(
+        .take(MAX_CAUSES)
+        .map(|(label, expr)| {
+            let mut reason = format!(
                 "Failed: {}{}",
                 label.as_ref().map_or("".to_string(), |l| format!("{l} ")),
                 expr.0
-            ),
-            scope: vec![],
+            );
+            if reason.len() > MAX_CAUSE_LEN {
+                reason.truncate(MAX_CAUSE_LEN);
+                reason.push_str("...");
+            }
+            ParsingError {
+                causes: vec![],
+                reason,
+                scope: vec![],
+            }
         })
-        .collect::<Vec<_>>();
+        .collect();
     if !causes.is_empty() {
+        // IMPORTANT: DO NOT CHANGE THIS MESSAGE. TALK TO GREG.
+        let reason = if total > MAX_CAUSES {
+            format!("Assertions failed. {total} (truncated to first {MAX_CAUSES})")
+        } else {
+            "Assertions failed.".to_string()
+        };
         Err(ParsingError {
-            causes: vec![],
-            reason: "Assertions failed.".to_string(), // IMPORTANT: DO NOT CHANGE THIS MESSAGE. TALK TO GREG.
+            causes,
+            reason,
             scope: vec![],
         })
     } else {
@@ -356,5 +373,111 @@ impl DefaultValue for TypeIR {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_types::JinjaExpression;
+
+    use super::*;
+
+    fn make_assert(label: Option<&str>, expr: &str) -> (Constraint, bool) {
+        (
+            Constraint {
+                level: ConstraintLevel::Assert,
+                expression: JinjaExpression(expr.to_string()),
+                label: label.map(|l| l.to_string()),
+            },
+            false, // failing
+        )
+    }
+
+    fn make_passing_assert(label: Option<&str>, expr: &str) -> (Constraint, bool) {
+        (
+            Constraint {
+                level: ConstraintLevel::Assert,
+                expression: JinjaExpression(expr.to_string()),
+                label: label.map(|l| l.to_string()),
+            },
+            true, // passing
+        )
+    }
+
+    #[test]
+    fn test_validate_asserts_no_failures() {
+        let constraints = vec![make_passing_assert(Some("ok"), "this > 0")];
+        assert!(validate_asserts(&constraints).is_ok());
+    }
+
+    #[test]
+    fn test_validate_asserts_includes_causes() {
+        let constraints = vec![
+            make_assert(Some("nonneg"), "this >= 0"),
+            make_assert(Some("bounded"), "this < 100"),
+        ];
+        let err = validate_asserts(&constraints).unwrap_err();
+        assert_eq!(err.reason, "Assertions failed.");
+        assert_eq!(err.causes.len(), 2);
+        assert_eq!(err.causes[0].reason, "Failed: nonneg this >= 0");
+        assert_eq!(err.causes[1].reason, "Failed: bounded this < 100");
+    }
+
+    #[test]
+    fn test_validate_asserts_truncates_to_5_causes() {
+        let constraints: Vec<_> = (0..7)
+            .map(|i| make_assert(Some(&format!("a{i}")), &format!("this > {i}")))
+            .collect();
+        let err = validate_asserts(&constraints).unwrap_err();
+        assert_eq!(err.reason, "Assertions failed. 7 (truncated to first 5)");
+        assert_eq!(err.causes.len(), 5);
+        // Verify we got the first 5
+        for i in 0..5 {
+            assert!(err.causes[i].reason.contains(&format!("a{i}")));
+        }
+    }
+
+    #[test]
+    fn test_validate_asserts_exactly_5_no_truncation_message() {
+        let constraints: Vec<_> = (0..5)
+            .map(|i| make_assert(Some(&format!("a{i}")), &format!("this > {i}")))
+            .collect();
+        let err = validate_asserts(&constraints).unwrap_err();
+        assert_eq!(err.reason, "Assertions failed.");
+        assert_eq!(err.causes.len(), 5);
+    }
+
+    #[test]
+    fn test_validate_asserts_truncates_long_cause() {
+        let long_expr = "x".repeat(200);
+        let constraints = vec![make_assert(Some("lbl"), &long_expr)];
+        let err = validate_asserts(&constraints).unwrap_err();
+        assert_eq!(err.causes.len(), 1);
+        let cause = &err.causes[0].reason;
+        // "Failed: lbl " is 13 chars, so truncated at 100 + "..."
+        assert!(cause.ends_with("..."), "Expected truncation, got: {cause}");
+        assert_eq!(cause.len(), 103); // 100 truncated + "..."
+    }
+
+    #[test]
+    fn test_validate_asserts_short_cause_not_truncated() {
+        let constraints = vec![make_assert(Some("x"), "this > 0")];
+        let err = validate_asserts(&constraints).unwrap_err();
+        let cause = &err.causes[0].reason;
+        assert!(!cause.ends_with("..."));
+        assert_eq!(cause, "Failed: x this > 0");
+    }
+
+    #[test]
+    fn test_validate_asserts_ignores_checks() {
+        let constraints = vec![(
+            Constraint {
+                level: ConstraintLevel::Check,
+                expression: JinjaExpression("this > 0".to_string()),
+                label: Some("chk".to_string()),
+            },
+            false, // failing check — should be ignored
+        )];
+        assert!(validate_asserts(&constraints).is_ok());
     }
 }

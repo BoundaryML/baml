@@ -1,0 +1,43 @@
+# Build-script-side infrastructure for `sdk_tests/crates/<generator>/`
+# crates. Each per-generator submodule (`python_pydantic2`,
+# `typescript`) exposes a `run_all()` for the generator
+# crate's `build.rs` — it discovers fixtures, runs codegen, runs
+# `uv sync` / `pnpm install`, and emits the per-fixture `#[test]`
+# scaffold to OUT_DIR. The emitted scaffold is just a sequence of
+# `::sdk_test_harness_runner::*` invocations, so the test-side glue
+# (run_test_cmd, build_diagnostics! macro, per-generator
+# test_suite!() macros) lives in the sibling `sdk_test_harness_runner`
+# crate — used as `[dev-dependencies]` by each generator crate
+# while this crate is used as `[build-dependencies]`.
+#
+# Package named `sdk_test_*` so cargo-stow's
+# `ignore_crates = ["sdk_test_*"]` rule (see baml_language/stow.toml)
+# covers it; the folder name stays short.
+[package]
+name = "sdk_test_harness_setup"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+baml_version = { workspace = true }
+sdkgen_cpp = { workspace = true }
+sdkgen_csharp = { workspace = true }
+sdkgen_python_pydantic2 = { workspace = true }
+sdkgen_swift = { workspace = true }
+sdkgen_go = { workspace = true }
+sdkgen_typescript_shared = { workspace = true }
+sdkgen_java = { workspace = true }
+sdkgen_rust = { workspace = true }
+baml_codegen_types = { workspace = true }
+baml_type = { workspace = true }
+baml_base = { workspace = true }
+baml_db = { workspace = true }
+baml_project = { workspace = true }
+baml_workspace = { workspace = true }
+borsh = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

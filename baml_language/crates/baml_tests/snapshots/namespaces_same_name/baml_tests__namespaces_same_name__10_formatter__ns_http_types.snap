@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-// Same name "Response" in http namespace — no conflict with llm.Response
-class Response {
-    status: int
-    body: string
-}

@@ -43,39 +43,71 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 
 //----
 //- diagnostics
-// Error: unresolved member: user.Bar.field
-//     ╭─[ expr_instanceof_narrowing.baml:13:18 ]
-//     │
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:11:11]
+//  11 │     if (x instanceof Foo) {
+//     ·           ─────┬────
+//     ·                ╰── use `match` instead
+//     ╰────
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:22:11]
+//  22 │     if (x instanceof Foo) {
+//     ·           ─────┬────
+//     ·                ╰── use `match` instead
+//     ╰────
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:35:11]
+//  35 │     if (x instanceof Foo) {
+//     ·           ─────┬────
+//     ·                ╰── use `match` instead
+//     ╰────
+// E0098
+//
+//   × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[expr_instanceof_narrowing.baml:37:18]
+//  37 │     } else if (x instanceof Baz) {
+//     ·                  ─────┬────
+//     ·                       ╰── use `match` instead
+//     ╰────
+// E0007
+//
+//   × type `Foo | Bar` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_instanceof_narrowing.baml:13:18]
 //  13 │         return x.field;
-//     │                  ──┬──  
-//     │                    ╰──── unresolved member: user.Bar.field
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved member: null.field
-//     ╭─[ expr_instanceof_narrowing.baml:23:18 ]
-//     │
+//     ·                  ─────
+//     ╰────
+// E0001
+//
+//   × did you mean `x?.field`? `x.field` does not handle the case when `x` is null
+//     ╭─[expr_instanceof_narrowing.baml:23:16]
 //  23 │         return x.field;
-//     │                  ──┬──  
-//     │                    ╰──── unresolved member: null.field
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved member: user.Bar.field
-//     ╭─[ expr_instanceof_narrowing.baml:36:18 ]
-//     │
+//     ·                ───────
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[expr_instanceof_narrowing.baml:23:16]
+//  23 │         return x.field;
+//     ·                ───┬───
+//     ·                   ╰── expected `string`, found `string | null`
+//     ╰────
+// E0007
+//
+//   × type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_instanceof_narrowing.baml:36:18]
 //  36 │         return x.field;
-//     │                  ──┬──  
-//     │                    ╰──── unresolved member: user.Bar.field
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved member: user.Bar.field
-//     ╭─[ expr_instanceof_narrowing.baml:38:18 ]
-//     │
+//     ·                  ─────
+//     ╰────
+// E0007
+//
+//   × type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
+//     ╭─[expr_instanceof_narrowing.baml:38:18]
 //  38 │         return x.field;
-//     │                  ──┬──  
-//     │                    ╰──── unresolved member: user.Bar.field
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·                  ─────
+//     ╰────

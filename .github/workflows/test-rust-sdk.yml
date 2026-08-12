@@ -23,11 +23,11 @@ on:
 jobs:
   test-windows:
     name: Test Windows Rust SDK
-    runs-on: windows-2022
+    runs-on: blacksmith-4vcpu-windows-2025
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Rust (MSRV 1.70)
         uses: dtolnay/rust-toolchain@stable
@@ -99,12 +99,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [blacksmith-4vcpu-ubuntu-2404, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Rust (MSRV 1.70)
         uses: dtolnay/rust-toolchain@stable

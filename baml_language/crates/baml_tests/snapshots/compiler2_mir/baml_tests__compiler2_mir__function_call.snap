@@ -27,10 +27,6 @@ fn user.f(x: int) -> int {
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

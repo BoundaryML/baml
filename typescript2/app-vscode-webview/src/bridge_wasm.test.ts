@@ -6,7 +6,7 @@
  * Body is only read when BAML calls response_text(); bodyPromise is awaited then.
  */
 import { describe, it, expect } from 'vitest';
-import { BamlWasmRuntime } from '@b/bridge_wasm';
+import { BamlWasmRuntime, type WasmFetchCallback } from '@b/bridge_wasm';
 
 const ROOT_PATH = '/project';
 const MINIMAL_BAML = `
@@ -44,6 +44,25 @@ function makeMinimalVfs() {
 
   return {
     readDir,
+    readDirEntries: (path: string) => {
+      const prefix = path.endsWith('/') ? path : path + '/';
+      const out = new Map<string, { file_type: string; is_symlink: boolean }>();
+      for (const p of files.keys()) {
+        if (p.startsWith(prefix)) {
+          const rest = p.slice(prefix.length);
+          const slash = rest.indexOf('/');
+          const name = slash >= 0 ? rest.slice(0, slash) : rest;
+          out.set(name, { file_type: slash >= 0 ? 'directory' : 'file', is_symlink: false });
+        }
+      }
+      for (const d of dirs) {
+        if (d.startsWith(prefix) && d !== path) {
+          const rest = d.slice(prefix.length);
+          if (rest && !rest.includes('/')) out.set(rest, { file_type: 'directory', is_symlink: false });
+        }
+      }
+      return Array.from(out, ([name, meta]) => ({ name, ...meta }));
+    },
     createDir: (path: string) => {
       dirs.add(path);
     },
@@ -69,49 +88,66 @@ function makeMinimalVfs() {
     copyFile: () => {},
     moveFile: () => {},
     moveDir: () => {},
-    readMany: (): [string, Uint8Array][] => Array.from(files.entries()),
+    readMany: (_glob: string): [string, Uint8Array][] => Array.from(files.entries()),
   };
 }
 
 describe('BamlWasmRuntime', () => {
   describe('create with fetch callback (new contract)', () => {
     it('accepts fetch callback returning status, headersJson, url, bodyPromise', () => {
-      const fetchCallback = async (
-        _method: string,
-        _url: string,
-        _headersJson: string,
-        _body: string
-      ): Promise<{ status: number; headersJson: string; url: string; bodyPromise: Promise<string> }> => ({
+      const fetchCallback: WasmFetchCallback = async (
+        _callId,
+        _method,
+        _url,
+        _headersJson,
+        _body
+      ) => ({
         status: 200,
         headersJson: '{}',
         url: 'https://example.com/',
         bodyPromise: Promise.resolve('response body'),
       });
 
+      const stubShellResult = async () => ({
+        stdout: '',
+        stderr: 'shell not supported in browser tests',
+        exit_code: 1,
+        stdout_bytes: new Uint8Array(),
+        stderr_bytes: new Uint8Array(),
+      });
+
       const callbacks = {
         fetch: fetchCallback,
         env: (_var: string) => undefined,
+        input: async () => '',
+        exec: async (
+          _program: string,
+          _args: string[] | undefined,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
+        shell: async (
+          _command: string,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
         lsp_send_notification: () => {},
         lsp_send_response: () => {},
         lsp_make_request: () => {},
         playground_send_notification: () => {},
+        host_dispatch: () => {},
       };
       const runtime = BamlWasmRuntime.create(callbacks, makeMinimalVfs());
 
       expect(runtime).toBeDefined();
       expect(typeof runtime.requestPlaygroundState).toBe('function');
-      expect(typeof runtime.callFunction).toBe('function');
+      expect(typeof runtime.startRun).toBe('function');
+      expect(typeof runtime.cancelRun).toBe('function');
+      expect(typeof runtime.snapshot).toBe('function');
       runtime.requestPlaygroundState();
     });
 
     it('uses bodyPromise (not body) per contract', () => {
       let bodyPromiseResolved = false;
-      const fetchCallback = async (): Promise<{
-        status: number;
-        headersJson: string;
-        url: string;
-        bodyPromise: Promise<string>;
-      }> => ({
+      const fetchCallback: WasmFetchCallback = async () => ({
         status: 200,
         headersJson: '{}',
         url: '',
@@ -123,13 +159,32 @@ describe('BamlWasmRuntime', () => {
         }),
       });
 
+      const stubShellResult = async () => ({
+        stdout: '',
+        stderr: 'shell not supported in browser tests',
+        exit_code: 1,
+        stdout_bytes: new Uint8Array(),
+        stderr_bytes: new Uint8Array(),
+      });
+
       const callbacks = {
         fetch: fetchCallback,
         env: (_var: string) => undefined,
+        input: async () => '',
+        exec: async (
+          _program: string,
+          _args: string[] | undefined,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
+        shell: async (
+          _command: string,
+          _optionsJson: string | undefined,
+        ) => stubShellResult(),
         lsp_send_notification: () => {},
         lsp_send_response: () => {},
         lsp_make_request: () => {},
         playground_send_notification: () => {},
+        host_dispatch: () => {},
       };
       const runtime = BamlWasmRuntime.create(callbacks, makeMinimalVfs());
       expect(runtime).toBeDefined();

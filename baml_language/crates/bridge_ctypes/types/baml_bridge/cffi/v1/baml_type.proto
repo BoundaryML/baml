@@ -1,0 +1,221 @@
+// See crates/bridge_ctypes/README.md for the list of consumers and the
+// commands used to regenerate each language's proto client.
+
+syntax = "proto3";
+package baml_bridge.cffi.v1;
+
+option go_package = "./cffi";
+// C++ generates against the lite runtime (no descriptors/reflection);
+// ignored by every other generator in this repo (prost, protoc-gen-go).
+option optimize_for = LITE_RUNTIME;
+
+// The wire representation of BAML types, 1:1 with RuntimeTy.
+//
+// Matching ConcreteTy or RealizedTy are wrong, because this needs to be able
+// to represent the type of anything that can be inspected in BAML, including
+// the type of a function's arg (which, for a generic function, is a TypeVar).
+message BamlTy {
+  oneof ty {
+    BamlTyPrimitive primitive = 1;
+    // `class_ty` (not `class`) — `class` is a reserved word in Python, where
+    // `msg.class` would be a syntax error in the generated pb2 client.
+    BamlTyClass class_ty = 2;
+    BamlTyEnum enum = 3;
+    BamlTyList list = 4;
+    BamlTyMap map = 5;
+    BamlTyOptional optional = 6;
+    BamlTyUnion union = 7;
+    BamlTyLiteral literal = 8;
+    BamlTyTypeAlias type_alias = 9;
+    // `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
+    BamlTyUnknown unknown = 10;
+    BamlTyMedia media = 11;
+    BamlTyInterface interface = 12;
+    BamlTyEnumVariant enum_variant = 13;
+    BamlTyFunction function = 14;
+    BamlTyFuture future = 15;
+    BamlTyRustType rust_type = 16;
+    // `meta_type` (not `type`) — `type` is a reserved word in TypeScript;
+    // mirrors `RuntimeTy::Type`, the `type` metatype.
+    BamlTyMetaType meta_type = 17;
+    BamlTyResource resource = 18;
+    BamlTyPromptAst prompt_ast = 19;
+    BamlTyVoid void = 20;
+    BamlTyTypeVar type_var = 22;
+    BamlTyAssociatedTypeProjection associated_type_projection = 23;
+    BamlTyNever never = 24;
+  }
+}
+
+// Scalar/leaf types with no parameters.
+enum BamlTyPrimitiveKind {
+  BAML_TY_PRIMITIVE_UNSPECIFIED = 0;
+  BAML_TY_PRIMITIVE_STRING = 1;
+  BAML_TY_PRIMITIVE_INT = 2;
+  BAML_TY_PRIMITIVE_FLOAT = 3;
+  BAML_TY_PRIMITIVE_BOOL = 4;
+  BAML_TY_PRIMITIVE_NULL = 5;
+  BAML_TY_PRIMITIVE_BYTES = 6;
+  BAML_TY_PRIMITIVE_BIGINT = 7;
+}
+
+message BamlTyPrimitive {
+  BamlTyPrimitiveKind kind = 1;
+}
+
+// A named user class plus its concrete generic arguments, in declaration
+// order. `name` is the BAML FQN (e.g. "generic_tests.GBox").
+message BamlTyClass {
+  string name = 1;
+  repeated BamlTy type_args = 2;
+}
+
+// A named type alias plus any concrete generic arguments, in declaration
+// order. `name` is the BAML FQN.
+message BamlTyTypeAlias {
+  string name = 1;
+  repeated BamlTy type_args = 2;
+}
+
+message BamlTyEnum {
+  string name = 1;
+}
+
+message BamlTyList {
+  BamlTy item = 1;
+}
+
+message BamlTyMap {
+  BamlTy key = 1;
+  BamlTy value = 2;
+}
+
+message BamlTyOptional {
+  BamlTy inner = 1;
+}
+
+message BamlTyUnion {
+  repeated BamlTy options = 1;
+}
+
+message BamlTyUnknown {}
+
+// Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
+// strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
+// its source string to preserve formatting). Decoders preserve literal
+// identity so `InboundValue.value_type` remains exact rather than being
+// widened to the corresponding primitive payload shape.
+message BamlTyLiteral {
+  oneof literal {
+    string string_value = 1;
+    int64 int_value = 2;
+    bool bool_value = 3;
+    string bigint_value = 4;
+    string float_value = 5;
+  }
+}
+
+// Media kinds, mirroring `baml_base::MediaKind`.
+enum BamlTyMediaKind {
+  BAML_TY_MEDIA_KIND_UNSPECIFIED = 0;
+  BAML_TY_MEDIA_KIND_IMAGE = 1;
+  BAML_TY_MEDIA_KIND_AUDIO = 2;
+  BAML_TY_MEDIA_KIND_VIDEO = 3;
+  BAML_TY_MEDIA_KIND_PDF = 4;
+  BAML_TY_MEDIA_KIND_GENERIC = 5;
+}
+
+// `image` / `audio` / `video` / `pdf` (`RuntimeTy::Media`).
+message BamlTyMedia {
+  BamlTyMediaKind kind = 1;
+}
+
+// A structural interface (`RuntimeTy::Interface`). `name` is the interface FQN,
+// `type_args` its concrete generic arguments in declaration order, and
+// `bindings` the resolved associated-type bindings in declaration order.
+message BamlTyInterface {
+  string name = 1;
+  repeated BamlTy type_args = 2;
+  repeated BamlTyAssociatedBinding bindings = 3;
+}
+
+// One associated-type binding of a `BamlTyInterface`, e.g. `Item = int`.
+message BamlTyAssociatedBinding {
+  string name = 1;
+  BamlTy ty = 2;
+}
+
+// A specific enum variant such as `Status.HttpError`
+// (`RuntimeTy::EnumVariant`). `name` is the enum's dotted FQN.
+message BamlTyEnumVariant {
+  string name = 1;
+  string variant = 2;
+}
+
+// Param-passing mode, mirroring `baml_type::FunctionParamMode`.
+enum BamlTyFunctionParamMode {
+  BAML_TY_FUNCTION_PARAM_MODE_UNSPECIFIED = 0;
+  BAML_TY_FUNCTION_PARAM_MODE_REQUIRED = 1;
+  BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL = 2;
+}
+
+// A single parameter of a `BamlTyFunction` (`RuntimeFunctionParamTy`). `name` is
+// absent for positional/anonymous params.
+message BamlTyFunctionParam {
+  optional string name = 1;
+  BamlTy ty = 2;
+  BamlTyFunctionParamMode mode = 3;
+}
+
+// A function/arrow type `<G…>(T1, T2, ...) -> R throws E`
+// (`RuntimeTy::Function`).
+message BamlTyFunction {
+  reserved 2; // formerly generic_param_bounds — see ty_encode.rs
+  repeated string generic_params = 1;
+  repeated BamlTyFunctionParam params = 3;
+  BamlTy ret = 4;
+  BamlTy throws = 5;
+}
+
+// A future handle carrying its resolved value type and error type
+// (`RuntimeTy::Future`).
+message BamlTyFuture {
+  BamlTy value = 1;
+  BamlTy error = 2;
+}
+
+// Opaque Rust-managed state (`RuntimeTy::RustType`).
+message BamlTyRustType {}
+
+// The `type` metatype — a runtime value wrapping a `BamlTy` (`RuntimeTy::Type`).
+message BamlTyMetaType {}
+
+// Opaque resource handle: file, socket, or HTTP response body
+// (`RuntimeTy::Resource`).
+message BamlTyResource {}
+
+// Opaque structured prompt tree for LLM calls (`RuntimeTy::PromptAst`).
+message BamlTyPromptAst {}
+
+// The void type — the type of effectful expressions (`RuntimeTy::Void`).
+message BamlTyVoid {}
+
+// A type variable / generic parameter such as `T` in `Array<T>`
+// (`RuntimeTy::TypeVar`).
+message BamlTyTypeVar {
+  string name = 1;
+  uint32 index = 2;
+}
+
+// An associated-type projection such as `P.Output` or `(T as Iterator).Item`
+// (`RuntimeTy::AssociatedTypeProjection`). `interface` is absent when the
+// projection is not qualified by an explicit interface.
+message BamlTyAssociatedTypeProjection {
+  BamlTy base = 1;
+  BamlTy interface = 2;
+  string member = 3;
+}
+
+// The bottom type — an expression that never produces a value
+// (`RuntimeTy::Never`).
+message BamlTyNever {}

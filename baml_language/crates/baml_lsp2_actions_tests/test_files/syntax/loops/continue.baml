@@ -44,25 +44,23 @@ function ContinueNested() -> int {
 
 //----
 //- diagnostics
-// Error: unreachable code: 1 statement(s) after diverging statement
-//     ╭─[ loops_continue.baml:23:40 ]
-//     │
-//  23 │ ╭─▶ function ContinueOutsideLoop() -> int {
-//     ┆ ┆   
-//  25 │ ├─▶     continue;
-//     │ │                   
-//     │ ╰─────────────────── unreachable code: 1 statement(s) after diverging statement
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: missing return: expected `int`
-//     ╭─[ loops_continue.baml:30:33 ]
-//     │
+// E0146
+//
+//   ⚠ unreachable code: 1 statement(s) after diverging statement
+//     ╭─[loops_continue.baml:25:5]
+//  25 │     continue;
+//     ·     ─────────
+//     ╰────
+// E0029
+//
+//   × missing return expression
+//     ╭─[loops_continue.baml:30:34]
 //  30 │ ╭─▶ function ContinueNested() -> int {
-//     ┆ ┆   
+//  31 │ │       while (true) {
+//  32 │ │           while (true) {
+//  33 │ │               continue;
+//  34 │ │           }
+//  35 │ │       }
 //  36 │ ├─▶ }
-//     │ │       
-//     │ ╰─────── missing return: expected `int`
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
+//     · ╰──── expected return value of type `int`
+//     ╰────

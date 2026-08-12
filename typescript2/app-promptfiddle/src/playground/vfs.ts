@@ -1,5 +1,11 @@
 import type { WasmVfsMetadata } from "@b/bridge_wasm";
 
+type WasmVfsDirEntry = {
+  name: string;
+  file_type: string;
+  is_symlink: boolean;
+};
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -111,6 +117,34 @@ export class BamlVfs {
         }
       }
       return Array.from(children);
+    },
+
+    readDirEntries: (path: string): WasmVfsDirEntry[] => {
+      const prefix = path.endsWith("/") ? path : path + "/";
+      const entries = new Map<string, WasmVfsDirEntry>();
+
+      for (const p of this.files.keys()) {
+        if (!p.startsWith(prefix)) continue;
+        const rest = p.slice(prefix.length);
+        const slash = rest.indexOf("/");
+        if (slash >= 0) {
+          const name = rest.slice(0, slash);
+          entries.set(name, { name, file_type: "directory", is_symlink: false });
+        } else {
+          entries.set(rest, { name: rest, file_type: "file", is_symlink: false });
+        }
+      }
+
+      for (const d of this.dirs) {
+        if (!d.startsWith(prefix)) continue;
+        const rest = d.slice(prefix.length);
+        if (rest && !rest.includes("/")) {
+          const name = rest;
+          entries.set(rest, { name, file_type: "directory", is_symlink: false });
+        }
+      }
+
+      return Array.from(entries.values());
     },
 
     createDir: (path: string): void => {

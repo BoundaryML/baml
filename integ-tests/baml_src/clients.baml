@@ -247,6 +247,16 @@ client<llm> VertexClaude {
   }
 }
 
+client<llm> VertexClaudeGlobal {
+  provider vertex-ai
+  options {
+    model "claude-sonnet-4-5@20250929"
+    location global
+    anthropic_version "vertex-2023-10-16"
+    credentials env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT
+  }
+}
+
 
 client<llm> AwsBedrock {
   provider aws-bedrock

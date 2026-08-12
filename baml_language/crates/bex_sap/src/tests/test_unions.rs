@@ -209,9 +209,6 @@ test_deserializer!(
     }
 );
 
-// test_phone_number_regex: skipped (@check/Assertion::evaluate is todo!())
-// test_email_regex: skipped (@check/Assertion::evaluate is todo!())
-
 test_deserializer!(
     test_ignore_float_in_string_if_string_in_union,
     "1 cup unsalted butter, room temperature",
@@ -238,7 +235,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_multi_parse_as,
     r#"42"#,
-    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_tyannotated!((string | int | null) @parse_without_null),
     baml_db! {},
     42
 );
@@ -247,7 +244,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_multi_parse_as_string,
     r#""hello""#,
-    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_tyannotated!((string | int | null) @parse_without_null),
     baml_db! {},
     "hello"
 );
@@ -256,6 +253,6 @@ test_deserializer!(
 test_failing_deserializer!(
     test_union_multi_parse_as_rejects_null,
     r#"null"#,
-    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_tyannotated!((string | int | null) @parse_without_null),
     baml_db! {}
 );

@@ -1,0 +1,90 @@
+/* Shared CTA band, used by the Discord and Early Access CTAs. Light only. */
+
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  background: #fffdf7;
+  border: 1px solid #e7e2d6;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(26, 22, 18, 0.04);
+}
+.head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.ico {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  color: #5865f2;
+}
+.icoAccent {
+  color: #6d28d9;
+}
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1612;
+  letter-spacing: -0.01em;
+}
+.sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #6f6a63;
+}
+.btn,
+.btnPrimary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  margin-top: auto;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  border-radius: 10px;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+.band a.btn {
+  color: #1a1612;
+  background: transparent;
+  border: 1.5px solid #1a1612;
+}
+.btn:hover {
+  color: #fff;
+  background: #1a1612;
+}
+.btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.band a.btnPrimary {
+  color: #fff;
+  background: #6d28d9;
+  border: 1.5px solid #6d28d9;
+}
+.btnPrimary:hover {
+  background: #5b21b6;
+  border-color: #5b21b6;
+}
+.btnPrimary svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btnPrimary {
+    transition: none;
+  }
+}

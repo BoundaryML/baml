@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+class Worker {
+    factor: int,
+
+    function scale(self, value: int) -> int {
+        self.factor * value
+    }
+}
+
+function direct(cb: (value: int) -> int) -> int {
+    cb(1)
+}
+
+function forward(cb: (value: int) -> int) -> int {
+    direct(cb)
+}
+
+function chain(cb: (value: int) -> int) -> int {
+    let h = forward;
+    h(cb)
+}
+
+function builtin_map(cb: (value: int) -> int, values: int[]) -> int[] {
+    values.map(cb)
+}
+
+function member_map(worker: Worker, values: int[]) -> int[] {
+    values.map(worker.scale)
+}

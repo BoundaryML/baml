@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.decode_container(s: string) -> Container<User> {
+    load_type Container<User>
+    load_var s
+    call baml.json.from_string
+    return
+}

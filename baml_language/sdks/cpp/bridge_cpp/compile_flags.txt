@@ -1,0 +1,5 @@
+-std=c++17
+-Iinclude
+-I../../../crates/bridge_cffi/include
+-Wall
+-Wextra

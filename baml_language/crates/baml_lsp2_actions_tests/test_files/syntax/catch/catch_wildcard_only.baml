@@ -1,4 +1,4 @@
-// catch with only wildcard arm — no diagnostics expected
+// catch with only wildcard arm — unreachable because MayFail never throws
 function MayFail(x: int) -> string {
   "ok"
 }
@@ -12,29 +12,23 @@ function CatchWildcardOnly(x: int) -> string {
 // Wildcard with binding name
 function CatchNamedWildcard(x: int) -> string {
   MayFail(x) catch (e) {
-    other => "caught: " + other
+    let other => "caught: " + other
   }
 }
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//    ╭─[ catch_catch_wildcard_only.baml:8:12 ]
-//    │
-//  8 │ ╭─▶     _ => "caught everything"
-//  9 │ ├─▶   }
-//    │ │         
-//    │ ╰───────── unreachable arm
-//    │     
-//    │     Note: Error code: E0001
-// ───╯
-// Error: unreachable arm
-//     ╭─[ catch_catch_wildcard_only.baml:15:15 ]
-//     │
-//  15 │ ╭─▶     other => "caught: " + other
-//  16 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
+// E0063
+//
+//   ⚠ unreachable arm
+//    ╭─[catch_catch_wildcard_only.baml:8:10]
+//  8 │     _ => "caught everything"
+//    ·          ───────────────────
+//    ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_catch_wildcard_only.baml:15:18]
+//  15 │     let other => "caught: " + other
+//     ·                  ──────────────────
+//     ╰────

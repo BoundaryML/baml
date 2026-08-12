@@ -1,7 +1,6 @@
 //! Based on the compiler-internal type system and SAP annotations: [BEP-006: Semantic Streaming (but better)](https://beps.boundaryml.com/beps/6)
 //! These are the interface used to transform JSON-like data into a typed representation.
 
-mod assertions;
 mod convert;
 mod from_literal;
 mod test_macros;
@@ -9,19 +8,15 @@ mod type_name;
 
 use std::{borrow::Cow, fmt::Display};
 
-pub use assertions::*;
 pub use convert::*;
 use derive_more::From;
 pub use from_literal::FromLiteral;
 use indexmap::IndexMap;
 pub use type_name::TypeName;
 
-use crate::{
-    baml_value::{
-        BamlArray, BamlBool, BamlClass, BamlEnum, BamlFloat, BamlInt, BamlMap, BamlMedia, BamlNull,
-        BamlPrimitive, BamlStreamState, BamlString, BamlValue,
-    },
-    deserializer::coercer::{ParsingContext, ParsingError},
+use crate::baml_value::{
+    BamlArray, BamlBigint, BamlBool, BamlClass, BamlEnum, BamlFloat, BamlInt, BamlMap, BamlMedia,
+    BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlValue,
 };
 
 /// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
@@ -35,6 +30,11 @@ impl TypeIdent for usize {}
 
 /// Stores all the "named" types (classes, enums, and type aliases) for lookup.
 pub struct TypeRefDb<'t, N: TypeIdent> {
+    /// Types in the database are stored by name.
+    ///
+    /// They do not have annotations attached to their top-level type.
+    /// If there are annotations, they should be lifted by the conversion process (or earlier)
+    /// onto any place where the name is used.
     types: IndexMap<N, TyResolved<'t, N>>,
 }
 
@@ -46,12 +46,20 @@ impl<N: TypeIdent> Default for TypeRefDb<'_, N> {
     }
 }
 impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Tries to add a type to the database. Returns an error if the identifier is already in use.
+    #[cfg(any(test, feature = "manual_db"))]
+    #[inline]
     pub fn try_add(&mut self, ident: N, ty: TyResolved<'t, N>) -> Result<(), &TyResolved<'t, N>> {
+        self.try_add_inner(ident, ty)
+    }
+
+    /// Private version of [`TypeRefDb::try_add`], not locked behind a feature flag.
+    fn try_add_inner(&mut self, ident: N, ty: TyResolved<'t, N>) -> Result<(), &TyResolved<'t, N>> {
         match self.types.entry(ident) {
             indexmap::map::Entry::Occupied(entry) => Err(entry.into_mut()),
             indexmap::map::Entry::Vacant(entry) => {
@@ -76,7 +84,9 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
         }
     }
 
-    pub fn resolved_from_ident(&'t self, ident: &N) -> Option<TyResolvedRef<'t, N>> {
+    /// Resolve a named SAP type without first constructing a borrowed
+    /// [`Ty::Unresolved`] wrapper.
+    pub fn resolve_name(&'t self, ident: &N) -> Option<TyResolvedRef<'t, N>> {
         self.types.get(ident).map(TyResolved::as_ref)
     }
 
@@ -106,6 +116,7 @@ where
 #[derive(Clone, From, PartialEq)]
 pub enum TyResolved<'t, N: TypeIdent> {
     Int(IntTy),
+    Bigint(BigintTy),
     Float(FloatTy),
     String(StringTy),
     Bool(BoolTy),
@@ -113,11 +124,13 @@ pub enum TyResolved<'t, N: TypeIdent> {
     Media(MediaTy),
     LiteralString(StringLiteralTy<'t>),
     LiteralInt(IntLiteralTy),
+    LiteralBigint(BigintLiteralTy),
     LiteralBool(BoolLiteralTy),
     Array(ArrayTy<'t, N>),
     Map(MapTy<'t, N>),
     Class(ClassTy<'t, N>),
     Enum(EnumTy<'t, N>),
+    EnumVariant(EnumVariantTy<'t, N>),
     Union(UnionTy<'t, N>),
     /// A type that tells you if it is completed or not.
     StreamState(StreamStateTy<'t, N>),
@@ -126,6 +139,7 @@ impl<N: TypeIdent> From<PrimitiveTy> for TyResolved<'_, N> {
     fn from(p: PrimitiveTy) -> Self {
         match p {
             PrimitiveTy::Int(v) => TyResolved::Int(v),
+            PrimitiveTy::Bigint(v) => TyResolved::Bigint(v),
             PrimitiveTy::Float(v) => TyResolved::Float(v),
             PrimitiveTy::String(v) => TyResolved::String(v),
             PrimitiveTy::Bool(v) => TyResolved::Bool(v),
@@ -139,6 +153,7 @@ impl<'t, N: TypeIdent> From<LiteralTy<'t>> for TyResolved<'t, N> {
         match l {
             LiteralTy::String(v) => TyResolved::LiteralString(v),
             LiteralTy::Int(v) => TyResolved::LiteralInt(v),
+            LiteralTy::Bigint(v) => TyResolved::LiteralBigint(v),
             LiteralTy::Bool(v) => TyResolved::LiteralBool(v),
         }
     }
@@ -153,6 +168,7 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
     pub fn as_ref(&'t self) -> TyResolvedRef<'t, N> {
         match self {
             TyResolved::Int(v) => TyResolvedRef::Int(*v),
+            TyResolved::Bigint(v) => TyResolvedRef::Bigint(*v),
             TyResolved::Float(v) => TyResolvedRef::Float(*v),
             TyResolved::String(v) => TyResolvedRef::String(*v),
             TyResolved::Bool(v) => TyResolvedRef::Bool(*v),
@@ -160,11 +176,13 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
             TyResolved::Media(v) => TyResolvedRef::Media(*v),
             TyResolved::LiteralString(v) => TyResolvedRef::LiteralString(v),
             TyResolved::LiteralInt(v) => TyResolvedRef::LiteralInt(v),
+            TyResolved::LiteralBigint(v) => TyResolvedRef::LiteralBigint(v),
             TyResolved::LiteralBool(v) => TyResolvedRef::LiteralBool(v),
             TyResolved::Array(a) => TyResolvedRef::Array(a),
             TyResolved::Map(m) => TyResolvedRef::Map(m),
             TyResolved::Class(c) => TyResolvedRef::Class(c),
             TyResolved::Enum(e) => TyResolvedRef::Enum(e),
+            TyResolved::EnumVariant(e) => TyResolvedRef::EnumVariant(e),
             TyResolved::Union(u) => TyResolvedRef::Union(u),
             TyResolved::StreamState(s) => TyResolvedRef::StreamState(s),
         }
@@ -178,6 +196,7 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
 #[derive(Clone, From, PartialEq)]
 pub enum TyResolvedRef<'t, N: TypeIdent> {
     Int(IntTy),
+    Bigint(BigintTy),
     Float(FloatTy),
     String(StringTy),
     Bool(BoolTy),
@@ -185,11 +204,13 @@ pub enum TyResolvedRef<'t, N: TypeIdent> {
     Media(MediaTy),
     LiteralString(&'t StringLiteralTy<'t>),
     LiteralInt(&'t IntLiteralTy),
+    LiteralBigint(&'t BigintLiteralTy),
     LiteralBool(&'t BoolLiteralTy),
     Array(&'t ArrayTy<'t, N>),
     Map(&'t MapTy<'t, N>),
     Class(&'t ClassTy<'t, N>),
     Enum(&'t EnumTy<'t, N>),
+    EnumVariant(&'t EnumVariantTy<'t, N>),
     Union(&'t UnionTy<'t, N>),
     /// A type that tells you if it is completed or not.
     StreamState(&'t StreamStateTy<'t, N>),
@@ -198,6 +219,7 @@ impl<N: TypeIdent> From<PrimitiveTy> for TyResolvedRef<'_, N> {
     fn from(p: PrimitiveTy) -> Self {
         match p {
             PrimitiveTy::Int(v) => TyResolvedRef::Int(v),
+            PrimitiveTy::Bigint(v) => TyResolvedRef::Bigint(v),
             PrimitiveTy::Float(v) => TyResolvedRef::Float(v),
             PrimitiveTy::String(v) => TyResolvedRef::String(v),
             PrimitiveTy::Bool(v) => TyResolvedRef::Bool(v),
@@ -211,6 +233,7 @@ impl<'t, N: TypeIdent> From<&'t LiteralTy<'t>> for TyResolvedRef<'t, N> {
         match l {
             LiteralTy::String(v) => TyResolvedRef::LiteralString(v),
             LiteralTy::Int(v) => TyResolvedRef::LiteralInt(v),
+            LiteralTy::Bigint(v) => TyResolvedRef::LiteralBigint(v),
             LiteralTy::Bool(v) => TyResolvedRef::LiteralBool(v),
         }
     }
@@ -228,45 +251,6 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
             TyResolvedRef::Null(..) => true,
             TyResolvedRef::Union(u) => u.is_optional(db),
             TyResolvedRef::StreamState(s) => s.value.ty.is_optional(db),
-            _ => false,
-        }
-    }
-    /// Returns true if the two types are equivalent.
-    /// More comprehensive than `==` because it can look up unresolved named types
-    /// to compared with resolved types
-    pub fn ty_equiv(self, other: Self, db: &TypeRefDb<'t, N>) -> bool {
-        match (self, other) {
-            (TyResolvedRef::Null(..), TyResolvedRef::Null(..)) => true,
-            (TyResolvedRef::Int(..), TyResolvedRef::Int(..)) => true,
-            (TyResolvedRef::Float(..), TyResolvedRef::Float(..)) => true,
-            (TyResolvedRef::String(..), TyResolvedRef::String(..)) => true,
-            (TyResolvedRef::Bool(..), TyResolvedRef::Bool(..)) => true,
-            (TyResolvedRef::Media(a), TyResolvedRef::Media(b)) => a == b,
-            (TyResolvedRef::LiteralInt(a), TyResolvedRef::LiteralInt(b)) => a.0 == b.0,
-            (TyResolvedRef::LiteralBool(a), TyResolvedRef::LiteralBool(b)) => a.0 == b.0,
-            (TyResolvedRef::LiteralString(a), TyResolvedRef::LiteralString(b)) => a.0 == b.0,
-            (TyResolvedRef::Array(a), TyResolvedRef::Array(b)) => {
-                a.ty.ty.ty_equiv(&b.ty.ty, db) && a.ty.meta == b.ty.meta
-            }
-            (TyResolvedRef::Map(a), TyResolvedRef::Map(b)) => {
-                a.key.ty.ty_equiv(&b.key.ty, db)
-                    && a.key.meta == b.key.meta
-                    && a.value.ty.ty_equiv(&b.value.ty, db)
-                    && a.value.meta == b.value.meta
-            }
-
-            (TyResolvedRef::Union(a), TyResolvedRef::Union(b)) => {
-                a.variants.len() == b.variants.len()
-                    && a.variants
-                        .iter()
-                        .zip(b.variants.iter())
-                        .all(|(a, b)| a.ty.ty_equiv(&b.ty, db) && a.meta == b.meta)
-            }
-            (TyResolvedRef::StreamState(a), TyResolvedRef::StreamState(b)) => {
-                a.value.ty.ty_equiv(&b.value.ty, db) && a.value.meta == b.value.meta
-            }
-            (TyResolvedRef::Class(a), TyResolvedRef::Class(b)) => a.name == b.name,
-            (TyResolvedRef::Enum(a), TyResolvedRef::Enum(b)) => a.name == b.name,
             _ => false,
         }
     }
@@ -299,30 +283,6 @@ impl<'t, N: TypeIdent> Ty<'t, N> {
     /// Requires `db` in case we need to look up type aliases that may contain optional unions.
     pub fn is_optional(&self, db: &'t TypeRefDb<'t, N>) -> bool {
         db.resolve(self).is_ok_and(|ty| ty.is_optional(db))
-    }
-    /// Similar to [`PartialEq::eq`] except that it is better able to check equivalence
-    /// by looking up unknown types by name.
-    pub fn ty_equiv(&self, other: &Self, db: &'t TypeRefDb<'t, N>) -> bool {
-        match (self, other) {
-            (Ty::Unresolved(a), Ty::Unresolved(b)) => a == b,
-            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Class(b))) => *a == b.name,
-            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Enum(b))) => *a == b.name,
-            (Ty::Resolved(TyResolved::Class(a)), Ty::Unresolved(b)) => a.name == *b,
-            (Ty::Resolved(TyResolved::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
-            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Class(b))) => *a == b.name,
-            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Enum(b))) => *a == b.name,
-            (Ty::ResolvedRef(TyResolvedRef::Class(a)), Ty::Unresolved(b)) => a.name == *b,
-            (Ty::ResolvedRef(TyResolvedRef::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
-            (a, b) => {
-                let Ok(a) = db.resolve(a) else {
-                    return false;
-                };
-                let Ok(b) = db.resolve(b) else {
-                    return false;
-                };
-                a.ty_equiv(b, db)
-            }
-        }
     }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for Ty<'t, N>
@@ -373,12 +333,6 @@ impl<T, M> TyWithMeta<T, M> {
             meta: self.meta,
         }
     }
-    pub fn map_meta<U, F: FnOnce(M) -> U>(self, f: F) -> TyWithMeta<T, U> {
-        TyWithMeta {
-            ty: self.ty,
-            meta: f(self.meta),
-        }
-    }
 }
 impl<T: Clone, M: Clone> Clone for TyWithMeta<T, M> {
     fn clone(&self) -> Self {
@@ -395,11 +349,11 @@ impl<T: PartialEq, M: PartialEq> PartialEq for TyWithMeta<T, M> {
 }
 
 pub type AnnotatedTy<'t, N> = TyWithMeta<Ty<'t, N>, TypeAnnotations<'t, N>>;
-pub type AnnotatedTyRef<'t, N> = TyWithMeta<&'t Ty<'t, N>, &'t TypeAnnotations<'t, N>>;
 
 #[derive(Clone, Copy, PartialEq, Eq, From)]
 pub enum PrimitiveTy {
     Int(IntTy),
+    Bigint(BigintTy),
     Float(FloatTy),
     String(StringTy),
     Bool(BoolTy),
@@ -422,6 +376,7 @@ impl PrimitiveTy {
     pub fn as_static_ref(&self) -> &'static PrimitiveTy {
         match self {
             PrimitiveTy::Int(_) => &PrimitiveTy::Int(IntTy),
+            PrimitiveTy::Bigint(_) => &PrimitiveTy::Bigint(BigintTy),
             PrimitiveTy::Float(_) => &PrimitiveTy::Float(FloatTy),
             PrimitiveTy::String(_) => &PrimitiveTy::String(StringTy),
             PrimitiveTy::Bool(_) => &PrimitiveTy::Bool(BoolTy),
@@ -444,6 +399,16 @@ where
     's: 'v,
 {
     type Value = BamlInt;
+}
+
+/// Corresponds to the BAML `bigint` type — arbitrary-precision integer.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct BigintTy;
+impl<'s, 'v> TypeValue<'s, 'v, '_> for BigintTy
+where
+    's: 'v,
+{
+    type Value = BamlBigint;
 }
 
 /// Corresponds to the BAML `float` type.
@@ -504,6 +469,7 @@ where
 pub enum LiteralTy<'t> {
     String(StringLiteralTy<'t>),
     Int(IntLiteralTy),
+    Bigint(BigintLiteralTy),
     Bool(BoolLiteralTy),
 }
 impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for LiteralTy<'t>
@@ -546,6 +512,16 @@ where
     's: 'v,
 {
     type Value = BamlInt;
+}
+
+/// Corresponds to the BAML bigint literal type — a fixed arbitrary-precision integer value.
+#[derive(Clone, PartialEq, Eq)]
+pub struct BigintLiteralTy(pub num_bigint::BigInt);
+impl<'s, 'v> TypeValue<'s, 'v, '_> for BigintLiteralTy
+where
+    's: 'v,
+{
+    type Value = BamlBigint;
 }
 
 /// Corresponds to the BAML bool literal type.
@@ -630,6 +606,24 @@ impl<N: TypeIdent> PartialEq for EnumTy<'_, N> {
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
+#[derive(Clone)]
+pub struct EnumVariantTy<'t, N: TypeIdent> {
+    pub name: N,
+    pub value: AnnotatedEnumVariant<'t>,
+}
+impl<'s, 'v, 't, N: TypeIdent + 't> TypeValue<'s, 'v, 't> for EnumVariantTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlEnum<'t, N>;
+}
+impl<N: TypeIdent> PartialEq for EnumVariantTy<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.value.name == other.value.name
+    }
+}
+
+/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]
 pub struct UnionTy<'t, N: TypeIdent> {
     pub variants: Vec<AnnotatedTy<'t, N>>,
@@ -675,62 +669,18 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
     pub in_progress: Option<AttrLiteral<'t, N>>,
 
-    /// The "done" type to parse as ("done" to SAP, may still be partial if generated for streaming).
-    /// Must be a subtype of the annotated type.
-    /// The annotated type may or may not be a supertype, as it is the union of this type and all 'default' values
-    /// that could replace it during streaming.
+    /// If true, then `null` values should be rejected even if the annotated type is nullable.
     ///
-    /// Set to `None` if and only if the `parse_as` type is the same as the annotated type.
-    ///
-    /// ## Examples
-    /// ```baml,ignore
-    /// type A = int; // results in
-    /// type stream.A = int | null @parse_as(int) @in_progress(null);
-    ///
-    /// type B = string; // results in
-    /// type stream.B = string; // both `None` because `string` can be partial
-    /// ```
-    pub parse_as: Option<Box<AnnotatedTy<'t, N>>>,
-
-    /// The set of assertions that should be run on the value.
-    /// Note that if the value is filled by some default (such as [`TypeAnnotations::in_progress`]),
-    /// the assertions may or may not be run on the default value (TODO: make this behavior consistent).
-    pub asserts: Vec<Assertion<'t, N>>,
+    /// This is used to indicate that while fill-in values may be `null`,
+    /// a value from the input stream may not be parsed as `null`.
+    pub parse_without_null: bool,
 }
 impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
-            parse_as: None,
-            asserts: Vec::new(),
+            parse_without_null: false,
         }
-    }
-}
-impl<'t, N: TypeIdent> TypeAnnotations<'t, N> {
-    /// Runs [`TypeAnnotations::check_asserts`] but also gives an error if the assertions fail
-    pub fn expect_asserts<'s, 'v>(
-        &self,
-        value: &BamlValue<'s, 'v, 't, N>,
-        ctx: &ParsingContext<'_, '_, 't, N>,
-    ) -> Result<(), ParsingError> {
-        match self.check_asserts(value, ctx) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(ctx.error_assertion_failure()),
-            Err(err) => Err(err),
-        }
-    }
-
-    pub fn check_asserts<'s, 'v>(
-        &self,
-        value: &BamlValue<'s, 'v, 't, N>,
-        ctx: &ParsingContext<'_, '_, 't, N>,
-    ) -> Result<bool, ParsingError> {
-        for assert in &self.asserts {
-            if !assert.evaluate(value, ctx)? {
-                return Ok(false);
-            }
-        }
-        Ok(true)
     }
 }
 
@@ -787,6 +737,7 @@ pub enum AttrLiteral<'t, N: TypeIdent> {
     Null,
     #[from(i64)]
     Int(i64),
+    Bigint(num_bigint::BigInt),
     #[from(f64)]
     Float(f64),
     #[from(&'t str, String, Cow<'t, str>)]

@@ -24,21 +24,19 @@ function Ok() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected int, got 10.0
-//    ╭─[ expr_let_annotations.baml:5:17 ]
-//    │
+// E0001
+//
+//   × mismatched types
+//    ╭─[expr_let_annotations.baml:5:17]
 //  5 │   let y : int = 10.0;
-//    │                 ──┬─  
-//    │                   ╰─── type mismatch: expected int, got 10.0
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: type mismatch: expected int, got "hello"
-//    ╭─[ expr_let_annotations.baml:6:16 ]
-//    │
+//    ·                 ──┬─
+//    ·                   ╰── expected `int`, found `10.0`
+//    ╰────
+// E0001
+//
+//   × mismatched types
+//    ╭─[expr_let_annotations.baml:6:16]
 //  6 │   let c: int = "hello";
-//    │                ───┬───  
-//    │                   ╰───── type mismatch: expected int, got "hello"
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+//    ·                ───┬───
+//    ·                   ╰── expected `int`, found `"hello"`
+//    ╰────

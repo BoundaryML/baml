@@ -8,7 +8,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "BAML CLI for Rust"
+description = "BAML v0 — Rust CLI"
 readme = "README.md"
 keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
 categories = ["command-line-utilities", "development-tools"]

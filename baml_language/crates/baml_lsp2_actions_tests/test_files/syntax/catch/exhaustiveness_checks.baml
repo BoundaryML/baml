@@ -15,8 +15,8 @@ function MayFail(x: int) -> string {
 function UnreachableMatchArmInsideCatch(x: int, pet: Pet) -> string {
   MayFail(x) catch (e) {
     _ => match (pet) {
-      c: Cat => "cat",
-      d: Dog => "dog",
+      let c: Cat => "cat",
+      let d: Dog => "dog",
       _ => "unreachable"
     }
   }
@@ -25,32 +25,43 @@ function UnreachableMatchArmInsideCatch(x: int, pet: Pet) -> string {
 function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
   MayFail(x) catch (e) {
     _ => match (pet) {
-      c: Cat => "cat"
+      let c: Cat => "cat"
     }
   }
 }
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//     ╭─[ catch_exhaustiveness_checks.baml:17:9 ]
-//     │
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_exhaustiveness_checks.baml:17:10]
 //  17 │ ╭─▶     _ => match (pet) {
-//     ┆ ┆   
-//  21 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: unreachable arm
-//     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
-//     │
+//  18 │ │         let c: Cat => "cat",
+//  19 │ │         let d: Dog => "dog",
+//  20 │ │         _ => "unreachable"
+//  21 │ ╰─▶     }
+//     ╰────
+// E0063
+//
+//   × unreachable arm
+//     ╭─[catch_exhaustiveness_checks.baml:20:12]
+//  20 │       _ => "unreachable"
+//     ·            ─────────────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_exhaustiveness_checks.baml:27:10]
 //  27 │ ╭─▶     _ => match (pet) {
-//     ┆ ┆   
-//  29 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
+//  28 │ │         let c: Cat => "cat"
+//  29 │ ╰─▶     }
+//     ╰────
+// E0062
+//
+//   × non-exhaustive match on type Pet; missing: Dog { type: _ }
+//     ╭─[catch_exhaustiveness_checks.baml:27:10]
+//  27 │ ╭─▶     _ => match (pet) {
+//  28 │ │         let c: Cat => "cat"
+//  29 │ ╰─▶     }
+//     ╰────

@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.ifElseAdd() -> int throws never {
+  { : int
+    1 + if (true) { 0 stmts + tail } else { 0 stmts + tail } : int
+  }
+}
+function user.matchAdd(x: int) -> int throws never {
+  { : int
+    match (x) { 1 => 10, 2 => 20, _ => 0 } + 1 : int
+  }
+}
+function user.bothSidesUnion() -> int throws never {
+  { : int
+    if (true) { 0 stmts + tail } else { 0 stmts + tail } + if (false) { 0 stmts + tail } else { 0 stmts + tail } : int
+  }
+}
+function user.subtractUnion() -> int throws never {
+  { : int
+    100 - if (true) { 0 stmts + tail } else { 0 stmts + tail } : int
+  }
+}
+function user.loopMatchAccum() -> int throws never {
+  { : never
+    let sum = 0 : 0 -> int
+    let i = 0 : 0 -> int
+    while i < 3
+      { : void
+        sum = sum + match (i) { 0 => 10, 1 => 20, _ => 30 } : int
+        i = i + 1 : int
+      }
+    return sum : int
+  }
+}

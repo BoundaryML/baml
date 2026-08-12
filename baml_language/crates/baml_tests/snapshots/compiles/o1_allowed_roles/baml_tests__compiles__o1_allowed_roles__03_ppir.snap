@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.AskGpt4o(question: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(AskGpt4o$spec(question)).value
+}
+function user.AskGpt4o$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.AskGpt4o$render_prompt(question: string) -> ai.Prompt  [expr] {
+  AskGpt4o$spec(question).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+}
+function user.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "AskGpt4o", args: map { "question": question }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: Gpt4oClient }
+}
+function user.AskGpt4o$stream(question: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(AskGpt4o$spec(question), client = client)
+}
+function user.AskO1(question: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(AskO1$spec(question)).value
+}
+function user.AskO1$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.AskO1$render_prompt(question: string) -> ai.Prompt  [expr] {
+  AskO1$spec(question).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+}
+function user.AskO1$spec(question: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "AskO1", args: map { "question": question }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: O1Client }
+}
+function user.AskO1$stream(question: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(AskO1$spec(question), client = client)
+}
+
+--- captures ---
+lambda ( __spec_output_format) in AskO1$spec: captures [question]
+lambda ( __spec_output_format) in AskGpt4o$spec: captures [question]

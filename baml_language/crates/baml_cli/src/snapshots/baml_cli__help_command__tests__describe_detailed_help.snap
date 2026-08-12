@@ -1,0 +1,110 @@
+---
+source: crates/baml_cli/src/help_command.rs
+expression: "normalize_snapshot(&render_for_test(&[\"describe\"]))"
+---
+Describe BAML symbols and language concepts.
+
+With no name, lists symbols in the current project. A name can identify a project symbol, builtin
+package, namespace, type, member, or BAML keyword. Builtin documentation works outside a project, so
+`baml describe baml` is the entry point for exploring the complete standard library.
+
+Usage: baml describe [OPTIONS] [NAME]
+
+Examples:
+  List project symbols:
+    baml describe
+
+  Describe the standard library:
+    baml describe baml
+
+  Describe a namespace:
+    baml describe baml.json
+
+  Describe a class:
+    baml describe Array
+
+  Describe a method:
+    baml describe String.split
+
+  Describe a keyword:
+    baml describe match
+
+  Search for something by what it does:
+    baml describe --search 'read a file'
+
+Arguments:
+  [NAME]
+          Symbol, namespace, package, or keyword. Omit to list project symbols
+
+Options:
+      --symbols
+          Deprecated alias for invoking `baml describe` without a name
+
+Compiler options:
+  -F, --features <FEATURES>
+          Enable compiler features; repeatable or comma-separated [possible values: beta,
+          display_all_warnings]
+
+Output options:
+      --budget <BUDGET>
+          Soft maximum number of output lines
+
+          [default: 30]
+
+      --json
+          Output results as JSON
+
+      --search
+          Search names *and* docstrings for NAME, instead of resolving it.
+
+          `describe` answers "what is this called"; `--search` answers "what does this", which is
+          the question you have when you know the job and not the name: `baml describe --search
+          'read a file'`. Matching is on whole words — of names and of docstrings — best first, so
+          it finds a symbol whose documentation uses your words even when its name does not.
+
+      --limit <N>
+          Most results to return from `--search`. At least 1.
+
+          Bounded below because `--limit 0` truncated a full result set to nothing and then reported
+          "no symbol matches", which is a different answer.
+
+          [default: 30]
+
+      --export
+          Export a whole package's surface as one versioned JSON document (NAME must be a package:
+          `baml`, `user`, …). Cross-package references are self-describing ids like
+          `T:baml.time.Duration` — the prefix is the kind (`T:` type, `V:` value, `M:` method, `F:`
+          field, `E:` variant, `A:` associated type; BAML's type and value namespaces are distinct,
+          so bare paths would be ambiguous). Export the referenced package for a foreign id's full
+          record. Filter with jq, e.g. `… --export | jq '.items[] | select(.namespace == ["json"])'`
+
+Global options:
+  -q, --quiet...
+          Suppress nonessential output
+
+  -v, --verbose...
+          Increase diagnostic verbosity. Repeatable
+
+      --color <WHEN>
+          Control ANSI colors [possible values: auto, always, never]
+
+      --no-progress
+          Disable progress output
+
+      --directory <PATH>
+          Change to this directory before running the command
+
+      --project <PATH>
+          Discover the BAML project from this path
+
+      --output-preset <PRESET>
+          Select output defaults [default: auto] [possible values: auto, human, agent]
+
+      --hyperlinks <WHEN>
+          Control terminal hyperlinks [possible values: auto, always, never]
+
+      --diagnostic-format <FORMAT>
+          Select the diagnostic format [possible values: human, agent, concise]
+
+  -h, --help
+          Display concise help for this command

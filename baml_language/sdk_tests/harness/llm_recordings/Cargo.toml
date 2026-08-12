@@ -1,0 +1,38 @@
+# Recorder for the streaming **replay harness**
+# (thoughts/sam-projects/bridge-generics/streaming/02). Owns the checked-in
+# recordings under `sdk_tests/fixtures/llm_functions/recordings/`: a
+# CI-enforced text snapshot of the redacted streaming request (drift detector,
+# keyless) plus an insta binary snapshot of the raw SSE body (`.snap.sse`,
+# served verbatim by the BAML replay server).
+#
+# Neither sibling harness crate can host this: `sdk_test_harness_setup` is
+# `[build-dependencies]`-only codegen and `sdk_test_harness_runner` is
+# deliberately std-only. The recorder needs the engine (to invoke the
+# fixture request helper backed by the native-BAML provider lowering) + insta
+# + the network, so it is its own crate. It is also generator-agnostic
+# (recordings feed both the Python and TS replay tests), so it does not belong
+# inside a per-generator crate.
+#
+# Package named `sdk_test_*` so cargo-stow's `ignore_crates = ["sdk_test_*"]`
+# rule (baml_language/stow.toml) covers it; the folder name stays short.
+[package]
+name = "sdk_test_llm_recordings"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+# `baml_tests::engine` re-exports `compile_multi_file` / `run_compiled` /
+# `IndexMap` (the same deterministic engine path doc 00's pins use).
+baml_tests = { path = "../../../crates/baml_tests" }
+bex_engine = { workspace = true }
+# `filters` adds `Settings::add_filter` (belt-and-braces key redaction); the
+# workspace default features are only `yaml` + `redactions`.
+insta = { workspace = true, features = [ "filters" ] }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net" ] }
+
+[package.metadata.ci]
+wasm_support = false

@@ -472,7 +472,12 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             .map(|(_, v, _)| v.clone());
 
         let role_selection = properties.ensure_roles_selection();
-        let allowed_metadata = properties.ensure_allowed_metadata();
+        let allowed_metadata = match properties.ensure_allowed_metadata() {
+            // Default to All so that cache_control and other metadata flows through
+            // without requiring explicit configuration
+            UnresolvedAllowedRoleMetadata::None => UnresolvedAllowedRoleMetadata::All,
+            other => other,
+        };
         let supported_request_modes = properties.ensure_supported_request_modes();
         let additional_model_request_fields = properties
             .ensure_map("additional_model_request_fields", false)

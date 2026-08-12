@@ -1,0 +1,62 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.SearchService {
+  base: string
+}
+class user.SearchService$stream {
+  base: string | null
+}
+type user.NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
+type user.NarrowSearcher$stream = unknown
+type user.Searcher = (query: string, max_results?: int) -> int throws never
+type user.Searcher$stream = unknown
+function user.AskDocs(query: string, max_results: int, filter: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(AskDocs$spec(query, max_results, filter)).value
+}
+function user.AskDocs$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
+}
+function user.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> ai.Prompt  [expr] {
+  AskDocs$spec(query, max_results, filter).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+}
+function user.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "AskDocs", args: map { "query": query, "max_results": max_results, "filter": filter }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } query);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } max_results);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } filter);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient }
+}
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(AskDocs$spec(query, max_results, filter), client = client)
+}
+function user.DefaultFilter() -> string  [expr] {
+  {  } "none"
+}
+function user.Docs(self: ?, query: string, filter: string? = null) -> string[]  [expr] {
+  {  } SearchDocs(query, filter = filter)
+}
+function user.HostEntry(query: string, max_results: int = 10, filter: string? = null) -> int  [expr] {
+  {  } if (filter Eq null) {  } max_results else {  } max_results Add 100
+}
+function user.Run(self: ?, query: string, limit: int = 20) -> int  [expr] {
+  {  } Search(query = query, max_results = limit, filter = self.base)
+}
+function user.Search(query: string, max_results: int = 10, filter: string = "none") -> int  [expr] {
+  {  } max_results
+}
+function user.SearchDocs(query: string, max_results: int = 10, filter: string? = null, chunk_size: int = query.length()) -> string[]  [expr] {
+  {  } [query]
+}
+function user.UseMixedArgs() -> int  [expr] {
+  {  } Search("dogs", max_results = 3, filter = "all")
+}
+function user.UseNamedDefaults() -> int  [expr] {
+  {  } Search(query = "cats", max_results = 5, filter = "recent")
+}
+function user.UseOptionalDropping() -> string[]  [expr] {
+  { let narrowed: user.NarrowSearcher = SearchDocs } narrowed("cats", filter = "recent")
+}
+function user.UseRequiredByName() -> string[]  [expr] {
+  {  } SearchDocs(query = "birds")
+}
+
+--- captures ---
+lambda ( __spec_output_format) in AskDocs$spec: captures [query, max_results, filter]

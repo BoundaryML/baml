@@ -4,9 +4,10 @@
 
 use std::ffi::c_void;
 
+use serde::{Deserialize, Serialize};
+
 use super::{RawObject, RawObjectTrait};
 use crate::{baml_unreachable, proto::baml_cffi_v1::BamlObjectType};
-use serde::{Deserialize, Serialize};
 
 // =============================================================================
 // Media type macro - generates Image, Audio, Pdf, Video

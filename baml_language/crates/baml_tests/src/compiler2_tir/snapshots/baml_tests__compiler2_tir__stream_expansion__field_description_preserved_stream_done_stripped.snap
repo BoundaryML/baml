@@ -3,10 +3,10 @@ source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
 expression: "render_tir(&db, file)"
 ---
 class user.WithDesc {
-  name: string @description("The name") @stream.done
+  name: string @description("The name")
   age: int @description("Age in years")
 }
 class user.WithDesc$stream {
-  name: null | string @description("The name")
-  age: null | int @description("Age in years")
+  name: string @description("The name")
+  age: int | null @description("Age in years")
 }

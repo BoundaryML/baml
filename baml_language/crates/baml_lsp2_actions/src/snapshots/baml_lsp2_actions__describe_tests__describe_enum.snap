@@ -1,0 +1,12 @@
+---
+source: crates/baml_lsp2_actions/src/describe_tests.rs
+expression: "project.format_description(&descs[0])"
+---
+enum Color  types.baml:12
+shape: enum Color {
+    Red
+    Green
+    Blue
+}
+refs: 1
+  funcs.baml:12  function UseColor(c: Color) -> string {

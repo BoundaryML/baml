@@ -45,4 +45,43 @@ function ClassAssignments() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:25:7]
+//  25 │     p2 = Animal { species: "Bird", legs: 2 };
+//     ·          ─────────────────┬─────────────────
+//     ·                           ╰── expected `Person`, found `Animal`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:29:7]
+//  29 │     a2 = Person { name: "Dave", age: 40 };
+//     ·          ────────────────┬───────────────
+//     ·                          ╰── expected `Animal`, found `Person`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:33:7]
+//  33 │     p3 = "not a person";
+//     ·          ───────┬──────
+//     ·                 ╰── expected `Person`, found `"not a person"`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:37:7]
+//  37 │     p4 = 42;
+//     ·          ─┬
+//     ·           ╰── expected `Person`, found `42`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_classes.baml:41:6]
+//  41 │     n = Person { name: "Grace", age: 32 };
+//     ·         ────────────────┬────────────────
+//     ·                         ╰── expected `int`, found `Person`
+//     ╰────

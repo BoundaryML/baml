@@ -63,7 +63,8 @@ impl ModelFeatures {
             | LlmProvider::AzureOpenAi
             | LlmProvider::Ollama
             | LlmProvider::OpenRouter
-            | LlmProvider::OpenAiResponses => Self {
+            | LlmProvider::OpenAiResponses
+            | LlmProvider::AiGatewayImages => Self {
                 max_one_system_prompt: false,
                 allowed_metadata: AllowedMetadata::All,
             },
@@ -87,10 +88,6 @@ impl ModelFeatures {
 
     /// Override defaults with values from the client options map.
     fn apply_overrides(&mut self, options: &crate::baml_std::PrimitiveClientOptions) {
-        if let Some(v) = options.max_one_system_prompt {
-            self.max_one_system_prompt = v;
-        }
-
         if let Some(val) = &options.allowed_role_metadata {
             match val {
                 BexExternalValue::String(s) if s == "all" => {
@@ -104,7 +101,7 @@ impl ModelFeatures {
                         .iter()
                         .filter_map(|item| {
                             if let BexExternalValue::String(s) = item {
-                                Some(s.clone())
+                                Some(s.to_string())
                             } else {
                                 None
                             }

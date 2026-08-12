@@ -9,8 +9,8 @@ class user.Combined {
   score: float
 }
 class user.Combined$stream {
-  id: null | string
-  name: null | string
-  age: null | int
-  score: null | float
+  id: string
+  name: string
+  age: int | null
+  score: float | null
 }

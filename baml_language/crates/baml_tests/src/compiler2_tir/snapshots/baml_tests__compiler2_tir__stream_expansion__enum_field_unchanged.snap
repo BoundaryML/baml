@@ -6,5 +6,5 @@ class user.WithEnum {
   status: user.Status
 }
 class user.WithEnum$stream {
-  status: null | user.Status
+  status: user.Status | null
 }

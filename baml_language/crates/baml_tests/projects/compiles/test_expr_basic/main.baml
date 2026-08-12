@@ -1,0 +1,9 @@
+test "simple test" {
+  let x = 1 + 2
+  assert.equal(x, 3)
+}
+
+test "with not_null" {
+  let result = "hello"
+  assert.not_null(result)
+}

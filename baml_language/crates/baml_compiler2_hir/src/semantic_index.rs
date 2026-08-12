@@ -4,17 +4,56 @@
 //! with `no_eq` (always re-runs on file change). Projection queries extract
 //! individual fields with `Arc` equality for Salsa early-cutoff.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use baml_base::Name;
-use baml_compiler2_ast::{ExprId, PatId, StmtId};
+use baml_compiler2_ast::{ExprId, LoweringDiagnostic, PatId, StmtId};
 use text_size::{TextRange, TextSize};
+
+// Expression identity and path resolution
+
+/// Namespace for arena-local expression IDs.
+///
+/// A function or lambda body and its parameter-default expressions use
+/// separate `ExprBody` arenas, and every nested lambda starts another pair of
+/// arenas. Pairing the arena owner with `ExprId` makes expression identity
+/// unique within a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ExprMetadataScope {
+    Body(FileScopeId),
+    ParameterDefault(FileScopeId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExprMetadataKey {
+    pub scope: ExprMetadataScope,
+    pub expr: ExprId,
+}
+
+impl ExprMetadataKey {
+    pub fn new(scope: ExprMetadataScope, expr: ExprId) -> Self {
+        Self { scope, expr }
+    }
+}
+
+/// HIR resolution of a value path's root segment.
+///
+/// Local roots are resolved to declaration identity while the lexical scope
+/// stack is active. Non-local roots are completed by TIR because package-item
+/// resolution would introduce a HIR query cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathResolution {
+    Local(BindingId),
+    Unknown,
+}
+
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
     item_tree::{ItemTree, ItemTreeSourceMap},
-    scope::{FileScopeId, Scope, ScopeId},
+    scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
 };
 
 // ── DefinitionSite ───────────────────────────────────────────────────────────
@@ -26,11 +65,65 @@ pub enum DefinitionSite {
     Statement(StmtId),
     /// Defined as a function parameter (with its index).
     Parameter(usize),
-    /// Defined by a pattern binding (match arm, catch arm, catch clause, etc.).
+    /// Defined by a pattern binding (match arm, if-let, etc.).
     PatternBinding(PatId),
+    /// The error (and optional stack-trace) binding of a `catch (e) { … }`
+    /// clause. Like a function parameter — a value bound by the clause and
+    /// scoped to its body — so it is highlighted as a parameter.
+    CatchBinding(PatId),
+}
+
+// ── BindingId ────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BindingKind {
+    /// A local binding row in `scope_bindings[scope].bindings`.
+    Local(u32),
+    /// A parameter index in `scope_bindings[scope].params`.
+    Parameter(usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BindingId {
+    pub scope: FileScopeId,
+    pub kind: BindingKind,
+}
+
+impl BindingId {
+    pub fn local(scope: FileScopeId, binding_index: usize) -> Self {
+        Self {
+            scope,
+            kind: BindingKind::Local(
+                u32::try_from(binding_index).expect("local binding index overflow"),
+            ),
+        }
+    }
+
+    pub fn parameter(scope: FileScopeId, param_idx: usize) -> Self {
+        Self {
+            scope,
+            kind: BindingKind::Parameter(param_idx),
+        }
+    }
+
+    pub fn local_index(self) -> Option<usize> {
+        match self.kind {
+            BindingKind::Local(idx) => Some(idx as usize),
+            BindingKind::Parameter(_) => None,
+        }
+    }
 }
 
 // ── ScopeBindings ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalBinding {
+    pub name: Name,
+    pub site: DefinitionSite,
+    pub pattern: PatId,
+    pub name_range: TextRange,
+    pub visible_from: TextSize,
+}
 
 /// Per-scope local bindings — what names are introduced in this scope.
 ///
@@ -40,9 +133,17 @@ pub enum DefinitionSite {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeBindings {
     /// Let-bindings in this scope, in source order.
-    pub bindings: Vec<(Name, DefinitionSite, TextRange)>,
+    pub bindings: Vec<LocalBinding>,
     /// Parameters (for Function/Lambda scopes).
     pub params: Vec<(Name, usize)>, // (name, param_index)
+    /// Variables captured from ancestor scopes (for Lambda scopes only).
+    /// Each entry is `(name, definition_site)` to uniquely identify the
+    /// captured declaration, even in the presence of shadowing.
+    /// Populated by capture analysis in `SemanticIndexBuilder::walk_expr_body`.
+    pub captures: Vec<(Name, BindingId)>,
+    /// Bindings in this scope that are captured by a descendant lambda.
+    /// Used by MIR lowering to decide which locals need cell wrapping.
+    pub captured_bindings: HashSet<BindingId>,
 }
 
 impl ScopeBindings {
@@ -50,6 +151,8 @@ impl ScopeBindings {
         Self {
             bindings: Vec::new(),
             params: Vec::new(),
+            captures: Vec::new(),
+            captured_bindings: HashSet::new(),
         }
     }
 }
@@ -60,6 +163,42 @@ impl Default for ScopeBindings {
     }
 }
 
+/// Shared local-binding lookup used while building and after indexing.
+///
+/// Keep this as the single source for parent-scope visibility semantics:
+/// skip ancestor class scopes, scan local bindings in reverse source order,
+/// check `visible_from`, then fall back to parameters.
+pub(crate) fn visible_binding_at_in_scopes(
+    scopes: &[Scope],
+    scope_bindings: &[ScopeBindings],
+    scope_id: FileScopeId,
+    at_offset: TextSize,
+    name: &Name,
+) -> Option<BindingId> {
+    let mut current = Some(scope_id);
+    while let Some(ancestor_id) = current {
+        let scope = &scopes[ancestor_id.index() as usize];
+        if matches!(scope.kind, ScopeKind::Class) && ancestor_id != scope_id {
+            current = scope.parent;
+            continue;
+        }
+
+        let bindings = &scope_bindings[ancestor_id.index() as usize];
+        for (binding_idx, binding) in bindings.bindings.iter().enumerate().rev() {
+            if &binding.name == name && binding.visible_from <= at_offset {
+                return Some(BindingId::local(ancestor_id, binding_idx));
+            }
+        }
+        for (param_name, param_idx) in &bindings.params {
+            if param_name == name {
+                return Some(BindingId::parameter(ancestor_id, *param_idx));
+            }
+        }
+        current = scope.parent;
+    }
+    None
+}
+
 // ── SemanticIndexExtra ───────────────────────────────────────────────────────
 
 /// Rare/optional data for `FileSemanticIndex`. Heap-allocated only when
@@ -67,6 +206,9 @@ impl Default for ScopeBindings {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticIndexExtra {
     pub diagnostics: Vec<Hir2Diagnostic>,
+    pub lowering_diagnostics: Vec<LoweringDiagnostic>,
+    pub invalid_pattern_bindings: FxHashMap<(FileScopeId, PatId), FxHashSet<Name>>,
+    pub invalid_pattern_binding_scopes: FxHashMap<(TextRange, PatId), FileScopeId>,
 }
 
 // ── FileSemanticIndex ────────────────────────────────────────────────────────
@@ -80,14 +222,14 @@ pub struct FileSemanticIndex<'db> {
     /// Scope tree — arena of `Scope` nodes indexed by `FileScopeId`.
     pub scopes: Vec<Scope>,
 
-    /// Expression → owning scope mapping.
+    /// Expression to owning lexical scope mapping.
     ///
     /// Every `ExprId` in the file's `ExprBody` arenas is mapped to the
     /// `FileScopeId` of its innermost containing scope. Built during the
     /// `SemanticIndexBuilder` walk.
     ///
-    /// Sorted by `ExprId` for binary search (more compact than `HashMap`).
-    pub expr_scopes: Vec<(ExprId, FileScopeId)>,
+    /// Sorted by arena-safe expression key for binary search.
+    pub expr_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
 
     /// Per-scope local bindings, indexed by `FileScopeId`.
     /// Parallel to `scopes` — `scope_bindings[i]` holds bindings for `scopes[i]`.
@@ -97,7 +239,21 @@ pub struct FileSemanticIndex<'db> {
     /// Avoids repeated Salsa interning at query time.
     pub scope_ids: Vec<ScopeId<'db>>,
 
+    /// Item → the scope it opened. The inverse of `Scope::owner`.
+    ///
+    /// Recorded by the builder, which creates the scope in the same step that
+    /// allocates the item. Replaces the `item.span == scope.range` join that
+    /// consumers used to do, and is what lets item spans move into the source map.
+    pub item_scopes: FxHashMap<ItemScopeOwner, FileScopeId>,
+
     /// Per-file item tree — maps `LocalItemId` to item data.
+    ///
+    /// Reachable only inside HIR and PPIR: the `file_item_tree` doors in both
+    /// crates are `pub(crate)`, and everything downstream uses the PPIR
+    /// `item_data` firewall queries instead. This field stays `pub` solely
+    /// because PPIR (a separate crate) builds and reads the index; do not read
+    /// it from any other crate. (Collapsing HIR+PPIR onto one index would let
+    /// this become `pub(crate)` — see the plan's Fork B follow-up.)
     pub item_tree: Arc<ItemTree>,
 
     /// Source map for item tree — field/variant name spans.
@@ -109,6 +265,13 @@ pub struct FileSemanticIndex<'db> {
     /// Diagnostics and other rare data. Heap-allocated only when non-empty,
     /// following Ty's `Option<Box<Extra>>` pattern.
     pub extra: Option<Box<SemanticIndexExtra>>,
+
+    /// Root resolution for every value `Path` expression, sorted by its
+    /// arena-safe expression key for binary-search lookup.
+    pub path_resolutions: Vec<(ExprMetadataKey, PathResolution)>,
+
+    /// Environment variable references (`env.X`) found in this file's expression bodies.
+    pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
 // ── salsa::Update impl ────────────────────────────────────────────────────────
@@ -140,22 +303,93 @@ unsafe impl salsa::Update for FileSemanticIndex<'_> {
 }
 
 impl FileSemanticIndex<'_> {
+    /// Find the `Lambda` scope whose range exactly matches `span`.
+    ///
+    /// Linear walk over the scope list (which is small in practice —
+    /// bounded by the number of lambda nestings in a file).
+    pub fn lambda_scope_for(&self, span: text_size::TextRange) -> Option<FileScopeId> {
+        self.scopes
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| matches!(scope.kind, ScopeKind::Lambda) && scope.range == span)
+            .map(|(i, _)| {
+                #[allow(clippy::cast_possible_truncation)]
+                FileScopeId::new(i as u32)
+            })
+    }
+
+    /// Find a `Lambda` scope with `span` inside `owner_scope`.
+    ///
+    /// Restricting the search to the owner's DFS subtree disambiguates
+    /// synthesized companion functions that share source ranges.
+    pub fn lambda_scope_for_within(
+        &self,
+        owner_scope: FileScopeId,
+        span: text_size::TextRange,
+    ) -> Option<FileScopeId> {
+        let descendants = self
+            .scopes
+            .get(owner_scope.index() as usize)?
+            .descendants
+            .clone();
+        let start = descendants.start.index() as usize;
+        let end = descendants.end.index() as usize;
+        self.scopes[start..end]
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| matches!(scope.kind, ScopeKind::Lambda) && scope.range == span)
+            .map(|(offset, _)| {
+                #[allow(clippy::cast_possible_truncation)]
+                FileScopeId::new((start + offset) as u32)
+            })
+    }
+
     /// Find the innermost scope containing `offset`.
     ///
     /// Scopes are in DFS pre-order. We walk in reverse (deepest first)
     /// to find the innermost match, preferring deeper (later) scopes.
     ///
-    /// When `name` is `Some`, only return a scope whose `name` field
-    /// matches. This disambiguates companion functions that share the
-    /// same span as their parent.
+    /// When `name` is `Some`, find the named scope first, then return
+    /// the deepest **descendant** of that scope at the offset. This
+    /// disambiguates companion functions that share the same span as
+    /// their parent while still resolving bindings in inner scopes
+    /// (match arms, blocks, catch clauses, etc.).
     pub fn scope_at_offset(&self, offset: TextSize, name: Option<&Name>) -> FileScopeId {
-        for (i, scope) in self.scopes.iter().enumerate().rev() {
-            if scope.range.contains(offset) || scope.range.end() == offset {
-                if let Some(n) = name {
-                    if scope.name.as_ref() != Some(n) {
-                        continue;
+        if let Some(n) = name {
+            // Find the named scope that contains the offset.
+            let named_idx = self.scopes.iter().enumerate().rev().find_map(|(i, scope)| {
+                if (scope.range.contains(offset) || scope.range.end() == offset)
+                    && scope.name.as_ref() == Some(n)
+                {
+                    Some(i)
+                } else {
+                    None
+                }
+            });
+
+            if let Some(idx) = named_idx {
+                let named = &self.scopes[idx];
+                let desc_start = named.descendants.start.index() as usize;
+                let desc_end = named.descendants.end.index() as usize;
+
+                // Search descendants in reverse (deepest first) for one containing offset.
+                for i in (desc_start..desc_end).rev() {
+                    let scope = &self.scopes[i];
+                    if scope.range.contains(offset) || scope.range.end() == offset {
+                        #[allow(clippy::cast_possible_truncation)]
+                        return FileScopeId::new(i as u32);
                     }
                 }
+
+                // No descendant matched — return the named scope itself.
+                #[allow(clippy::cast_possible_truncation)]
+                return FileScopeId::new(idx as u32);
+            }
+        }
+
+        // No name filter — original behavior: find deepest scope at offset.
+        for (i, scope) in self.scopes.iter().enumerate().rev() {
+            if scope.range.contains(offset) || scope.range.end() == offset {
                 #[allow(clippy::cast_possible_truncation)]
                 return FileScopeId::new(i as u32);
             }
@@ -163,12 +397,19 @@ impl FileSemanticIndex<'_> {
         FileScopeId::ROOT
     }
 
-    /// Look up which scope owns an expression.
-    pub fn expression_scope(&self, expr_id: ExprId) -> Option<FileScopeId> {
+    /// Look up which lexical scope owns an expression.
+    pub fn expression_scope(&self, key: ExprMetadataKey) -> Option<FileScopeId> {
         self.expr_scopes
-            .binary_search_by_key(&expr_id, |(id, _)| *id)
+            .binary_search_by_key(&key, |(candidate, _)| *candidate)
             .ok()
             .map(|idx| self.expr_scopes[idx].1)
+    }
+
+    pub fn path_resolution(&self, key: ExprMetadataKey) -> Option<PathResolution> {
+        self.path_resolutions
+            .binary_search_by_key(&key, |(candidate, _)| *candidate)
+            .ok()
+            .map(|idx| self.path_resolutions[idx].1)
     }
 
     /// Walk ancestor scopes from `scope_id` upward to the root.
@@ -180,6 +421,43 @@ impl FileSemanticIndex<'_> {
             current = parent;
         }
         ancestors
+    }
+
+    pub fn binding_visible_at(&self, binding: &LocalBinding, at_offset: TextSize) -> bool {
+        binding.visible_from <= at_offset
+    }
+
+    pub fn visible_binding_at(
+        &self,
+        scope_id: FileScopeId,
+        at_offset: TextSize,
+        name: &Name,
+    ) -> Option<BindingId> {
+        visible_binding_at_in_scopes(
+            &self.scopes,
+            &self.scope_bindings,
+            scope_id,
+            at_offset,
+            name,
+        )
+    }
+
+    pub fn local_binding(&self, binding_id: BindingId) -> Option<&LocalBinding> {
+        let idx = binding_id.local_index()?;
+        self.scope_bindings
+            .get(binding_id.scope.index() as usize)?
+            .bindings
+            .get(idx)
+    }
+
+    /// The scope opened for `owner`, if it opened one.
+    pub fn item_scope(&self, owner: ItemScopeOwner) -> Option<FileScopeId> {
+        self.item_scopes.get(&owner).copied()
+    }
+
+    /// The item `scope` was opened for, if it belongs to one.
+    pub fn scope_owner(&self, scope: FileScopeId) -> Option<ItemScopeOwner> {
+        self.scopes.get(scope.index() as usize)?.owner
     }
 
     pub fn diagnostics(&self) -> &[Hir2Diagnostic] {

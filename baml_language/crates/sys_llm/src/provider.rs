@@ -4,7 +4,7 @@
 /// Unknown provider strings fall through to parse errors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 #[strum(serialize_all = "kebab-case")]
-pub(crate) enum LlmProvider {
+pub enum LlmProvider {
     /// `OpenAI` API (api.openai.com)
     #[strum(serialize = "openai")]
     OpenAi,
@@ -29,6 +29,10 @@ pub(crate) enum LlmProvider {
     #[strum(serialize = "openai-responses")]
     OpenAiResponses,
 
+    /// Vercel AI Gateway image generation endpoint
+    #[strum(serialize = "ai-gateway-images")]
+    AiGatewayImages,
+
     /// Anthropic API (api.anthropic.com)
     #[strum(serialize = "anthropic")]
     Anthropic,
@@ -51,4 +55,15 @@ pub(crate) enum LlmProvider {
     BamlFallback,
     #[strum(serialize = "baml-round-robin")]
     BamlRoundRobin,
+}
+
+impl LlmProvider {
+    /// Conventional API-key environment variable for providers that define one.
+    pub(crate) fn default_api_key_env_var(self) -> Option<&'static str> {
+        match self {
+            Self::OpenAi | Self::OpenAiResponses => Some("OPENAI_API_KEY"),
+            Self::Anthropic => Some("ANTHROPIC_API_KEY"),
+            _ => None,
+        }
+    }
 }

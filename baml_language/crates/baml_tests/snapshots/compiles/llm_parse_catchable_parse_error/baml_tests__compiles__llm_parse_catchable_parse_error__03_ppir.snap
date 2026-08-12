@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Invoice {
+  currency: user.Currency
+  amount: float
+}
+class user.Invoice$stream {
+  currency: user.Currency | null
+  amount: float | null
+}
+enum user.Currency {USD, EUR}
+function user.ExtractInvoice(text: string, client: ai.Client? = null) -> user.Invoice  [llm] {
+  ai.Agent.new(client = client).run(ExtractInvoice$spec(text)).value
+}
+function user.ExtractInvoice$parse(json: string) -> user.Invoice  [expr] {
+  baml.sap.parse(json)
+}
+function user.ExtractInvoice$render_prompt(text: string) -> ai.Prompt  [expr] {
+  ExtractInvoice$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
+}
+function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<user.Invoice>  [expr] {
+  ai.FunctionSpec { spec_name: "ExtractInvoice", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "extract an invoic...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o }
+}
+function user.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<user.Invoice$stream | null, user.Invoice>  [expr] {
+  ai.stream.from_spec(ExtractInvoice$spec(text), client = client)
+}
+function user.TryExtract(json: string) -> user.Invoice?  [expr] {
+  {  } ExtractInvoice$parse(json) catch (_) { baml.errors.ParseError { message: message } => null }
+}
+
+--- captures ---
+lambda ( __spec_output_format) in ExtractInvoice$spec: captures [text]

@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.GetResponse(cfg: Config) -> llm.Response {
+    load_const "hello"
+    load_var cfg
+    load_field .model
+    init_instance user.llm.Response .text, .model
+    return
+}
+
+function user.llm.MakeResponse(cfg: Config) -> llm.Response {
+    load_const "ok"
+    load_var cfg
+    load_field .model
+    init_instance user.llm.Response .text, .model
+    return
+}
