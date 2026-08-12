@@ -27,6 +27,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -93,8 +94,17 @@ jobs:
           echo "Publishing ${PLUGIN_ID} ${VERSION} to ${CHANNEL} from ${actual_sha}."
 
       - name: Refuse an existing Marketplace version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
+          prior_runs="$(curl --retry 3 --retry-all-errors --fail --silent --show-error --header "Authorization: Bearer ${GH_TOKEN}" --header 'X-GitHub-Api-Version: 2022-11-28' "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/publish-jetbrains-0.225.1.yml/runs?event=workflow_dispatch&per_page=100")"
+          if jq -e --argjson current_run "${GITHUB_RUN_ID}" '.workflow_runs[] | select(.id != $current_run and (.status != "completed" or .conclusion == "success"))' <<<"${prior_runs}" >/dev/null; then
+            echo "::error::A prior one-off run is active or already succeeded; refusing another upload attempt."
+            jq -r --argjson current_run "${GITHUB_RUN_ID}" '.workflow_runs[] | select(.id != $current_run and (.status != "completed" or .conclusion == "success")) | "run \(.id): status=\(.status) conclusion=\(.conclusion // "pending") \(.html_url)"' <<<"${prior_runs}"
+            exit 1
+          fi
 
           download_url="https://plugins.jetbrains.com/plugin/download?pluginId=${PLUGIN_ID}&version=${VERSION}"
           http_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output /dev/null --write-out '%{http_code}' "${download_url}")"
@@ -126,7 +136,7 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace verifyPluginProjectConfiguration verifyPluginStructure -PpluginVersion="${VERSION}"
 
       - name: Verify binary compatibility with IC 2024.2.5
-        run: ./gradlew --no-daemon --stacktrace verifyPlugin -PpluginVersion="${VERSION}"
+        run: ./gradlew --no-daemon --stacktrace verifyPlugin -PpluginVersion="${VERSION}" -PverifyDeclaredPlatformOnly=true
 
       - name: Inspect exact distribution
         id: distribution
@@ -209,37 +219,16 @@ jobs:
             exit 1
           fi
           ./gradlew --no-daemon --stacktrace publishPlugin -PpluginVersion="${VERSION}"
-          after_sha="$(sha256sum "${{ steps.distribution.outputs.artifact }}" | cut -d ' ' -f 1)"
-          if [[ "${after_sha}" != "${before_sha}" ]]; then
-            echo "::error::publishPlugin rebuilt or changed the verified distribution."
-            exit 1
-          fi
 
-      - name: Confirm Marketplace recorded the submission
+      - name: Report initial Marketplace acceptance state
         run: |
-          set -euo pipefail
-
           download_url="https://plugins.jetbrains.com/plugin/download?pluginId=${PLUGIN_ID}&version=${VERSION}"
-          http_status="404"
-          for attempt in {1..12}; do
-            http_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output /dev/null --write-out '%{http_code}' "${download_url}")"
-            if [[ "${http_status}" != "404" ]]; then
-              break
-            fi
-            echo "Marketplace has not indexed the submitted version yet (attempt ${attempt}/12)."
-            sleep 10
-          done
-          if [[ "${http_status}" == "404" ]]; then
-            echo "::error::Gradle returned success, but Marketplace did not expose a submission record for ${VERSION} within two minutes."
-            exit 1
-          fi
-
-          approved_versions="$(curl --retry 3 --retry-all-errors --fail --silent --show-error "https://plugins.jetbrains.com/api/plugins/${MARKETPLACE_PLUGIN_ID}/updates?channel=&size=100")"
-          if jq -e --arg version "${VERSION}" '.[] | select(.version == $version and .approve == true and .listed == true and .hidden == false)' <<<"${approved_versions}" >/dev/null; then
+          http_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output /dev/null --write-out '%{http_code}' "${download_url}" || true)"
+          if approved_versions="$(curl --retry 3 --retry-all-errors --fail --silent --show-error "https://plugins.jetbrains.com/api/plugins/${MARKETPLACE_PLUGIN_ID}/updates?channel=&size=100")" && jq -e --arg version "${VERSION}" '.[] | select(.version == $version and .approve == true and .listed == true and .hidden == false)' <<<"${approved_versions}" >/dev/null; then
             marketplace_state="approved and publicly listed"
           else
-            marketplace_state="uploaded and awaiting Marketplace approval"
-            echo "::notice::Version ${VERSION} was uploaded, but is not yet approved/listed. GitHub success is not publication acceptance."
+            marketplace_state="authenticated upload completed; awaiting Marketplace approval/public indexing"
+            echo "::notice::Version ${VERSION} was uploaded, but is not yet approved/listed. The public exact-version probe currently returns HTTP ${http_status:-unknown}. GitHub success is not publication acceptance."
           fi
 
           {

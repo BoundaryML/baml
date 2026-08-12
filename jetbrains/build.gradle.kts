@@ -103,8 +103,11 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            // Keep release verification deterministic and aligned with the plugin's declared build target.
-            ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+            if (providers.gradleProperty("verifyDeclaredPlatformOnly").map(String::toBoolean).getOrElse(false)) {
+                ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+            } else {
+                recommended()
+            }
         }
     }
 }
