@@ -11,12 +11,11 @@
 
 use lsp_types::{
     CodeActionProviderCapability, CodeLens, CodeLensOptions, CompletionOptions,
-    HoverProviderCapability, InlayHintOptions,
-    InlayHintServerCapabilities, SaveOptions, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities,
-    WorkspaceServerCapabilities,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, SaveOptions,
+    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
+    WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 
 use super::{BexMulitProject, LspError, commands, read_for_request, wasm_helpers};
@@ -1237,6 +1236,14 @@ mod tests {
         };
 
         assert_eq!(options.will_save, Some(false));
+    }
+
+    #[test]
+    fn capabilities_advertise_code_actions() {
+        assert!(matches!(
+            server_capabilities(PositionEncoding::UTF16).code_action_provider,
+            Some(CodeActionProviderCapability::Simple(true))
+        ));
     }
 
     #[test]
