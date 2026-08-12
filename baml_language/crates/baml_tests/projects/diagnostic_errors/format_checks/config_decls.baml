@@ -444,7 +444,7 @@ TriviaRetryBlock /* 4 name trailing */
 // ===== Test declaration =====
 function TestTarget() -> string {
     client BasicClient
-    prompt #"Hello"#
+    prompt `Hello`
 }
 
 test BasicTest {

@@ -1657,7 +1657,6 @@ pub enum BuiltinKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    pub prompt: Option<RawPrompt>,
     /// Pre-lowered companion bodies keyed by target name. The single-path
     /// world stashes exactly one: `"spec"` — the `<Fn>$spec` body, built in
     /// `lower_cst` while the CST backtick is still in hand (the AST must stay
@@ -1679,15 +1678,6 @@ pub struct LlmBodyDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawPrompt {
     pub text: std::string::String,
-    /// Interpolation locations within the template.
-    pub interpolations: Vec<Interpolation>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Interpolation {
-    pub content: std::string::String,
-    /// Span of the full interpolation, including delimiters.
     pub span: TextRange,
 }
 

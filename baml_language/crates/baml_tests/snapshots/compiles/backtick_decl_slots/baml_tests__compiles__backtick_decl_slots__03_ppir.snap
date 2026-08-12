@@ -17,6 +17,9 @@ function user.Greet$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
 function user.Greet$stream(name: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(Greet$spec(name), client = client)
 }
+function user.Header(title: string) -> string  [expr] {
+  {  } `...`
+}
 
 --- captures ---
 lambda ( __spec_output_format) in Greet$spec: captures [name]

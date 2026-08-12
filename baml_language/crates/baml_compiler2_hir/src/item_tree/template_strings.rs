@@ -8,7 +8,7 @@ pub struct TemplateString {
     pub name: Name,
     /// Template parameters with optional type annotations and spans.
     pub params: Vec<FunctionParam>,
-    /// Template body text (Jinja template).
+    /// Legacy template body text retained for parser recovery.
     pub body: Option<String>,
     /// Full source span of the template string declaration.
     pub span: TextRange,

@@ -198,10 +198,11 @@ pub enum LoweringDiagnostic {
 
     /// A legacy Jinja `#"..."#` prompt on an LLM function. Removed: prompts
     /// are backtick templates.
-    LlmJinjaPromptRemoved {
-        function_name: String,
-        span: TextRange,
-    },
+    LlmJinjaPromptRemoved { span: TextRange },
+
+    /// A legacy `template_string` declaration. Removed: use a function
+    /// returning a backtick string.
+    TemplateStringRemoved { span: TextRange },
 
     /// The LLM function's `client` value cannot be used: unknown provider
     /// prefix, a string without a `provider/model` shape, or the removed
@@ -589,18 +590,21 @@ impl LoweringDiagnostic {
                 *span,
                 "retry composes at the client boundary now",
             ),
-            LoweringDiagnostic::LlmJinjaPromptRemoved {
-                function_name,
-                span,
-            } => (
+            LoweringDiagnostic::LlmJinjaPromptRemoved { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                format!(
-                    "LLM function `{function_name}` uses a Jinja `#\"...\"#` prompt, which is \
-                     removed; write a backtick template: prompt `... ${{ctx.output_format}}`"
-                ),
+                "Jinja `#\"...\"#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead."
+                    .to_string(),
                 *span,
-                "migrate to a backtick prompt",
+                "use a backtick prompt instead",
+            ),
+            LoweringDiagnostic::TemplateStringRemoved { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`template_string` declarations are no longer supported. Use a function returning a backtick string instead."
+                    .to_string(),
+                *span,
+                "use a function returning a backtick string instead",
             ),
             LoweringDiagnostic::InvalidLlmClient {
                 function_name,

@@ -576,6 +576,24 @@ class user.SemicolonTrivia$stream {
   name: string | null
   age: int | null
 }
+function user.TestTarget(client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(TestTarget$spec()).value : string
+}
+function user.TestTarget$spec() -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "TestTarget", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: BasicClient } : ai.FunctionSpec<string>
+  !! 13601..13612: unresolved name: BasicClient
+}
+lambda user.TestTarget$spec {
+}
+function user.TestTarget$render_prompt() -> ai.Prompt throws never {
+  TestTarget$spec().prompt(output_format = ai.wire.render_output_format(type.of<string>())) : ai.Prompt
+}
+function user.TestTarget$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
+}
+function user.TestTarget$stream(client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(TestTarget$spec(), client = client) : ai.stream.Stream<string | null, string>
+}
 enum user.Minimal
 enum user.TwoVariants
 enum user.MultiVariant
@@ -1750,6 +1768,106 @@ class user.OtherTriple$stream {
   a: user.OtherVec$stream | null
   b: user.OtherVec$stream | null
   c: user.OtherVec$stream | null
+}
+function user.BasicTemplate(name: string) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 173..177: type mismatch: expected T, got string
+  !! 163..180: cannot infer type parameter `T`
+}
+function user.NoParams() -> string throws never {
+  { : "A static template with no parameters."
+    `...` : "A static template with no parameters."
+  }
+}
+function user.MultiParam(first: string, last: string, age: int) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 356..361: type mismatch: expected T, got string
+  !! 338..396: cannot infer type parameter `T`
+  !! 365..369: type mismatch: expected T, got string
+  !! 338..396: cannot infer type parameter `T`
+  !! 338..396: cannot infer type parameter `T`
+}
+function user.ComplexParams(items: string[], config: map<string, int>) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 501..506: type mismatch: expected T, got string[]
+  !! 482..539: cannot infer type parameter `T`
+  !! 526..532: type mismatch: expected T, got map<string, int>
+  !! 482..539: cannot infer type parameter `T`
+}
+function user.SingleLine(x: int) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 583..598: cannot infer type parameter `T`
+}
+function user.ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 738..753: type mismatch: expected T, got string
+  !! 735..814: cannot infer type parameter `T`
+  !! 757..773: type mismatch: expected T, got string
+  !! 735..814: cannot infer type parameter `T`
+  !! 735..814: cannot infer type parameter `T`
+  !! 796..812: type mismatch: expected T, got bool
+  !! 735..814: cannot infer type parameter `T`
+}
+function user.ComplexTypesWrap(items: (int | string | bool)[], config: map<string, int | string>, callback: (x: int, y: int) -> string throws never) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 968..973: type mismatch: expected T, got (int | string | bool)[]
+  !! 965..985: cannot infer type parameter `T`
+  !! 977..983: type mismatch: expected T, got map<string, int | string>
+  !! 965..985: cannot infer type parameter `T`
+}
+function user.OptionalParams(name: string | null, age: int | null, items: string[] | null) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 1076..1080: type mismatch: expected T, got string | null
+  !! 1073..1098: cannot infer type parameter `T`
+  !! 1084..1087: type mismatch: expected T, got int | null
+  !! 1073..1098: cannot infer type parameter `T`
+  !! 1091..1096: type mismatch: expected T, got string[] | null
+  !! 1073..1098: cannot infer type parameter `T`
+  !! 1075..1081: cannot interpolate a value of type `string | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+  !! 1083..1088: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+  !! 1090..1097: cannot interpolate a value of type `string[] | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+}
+function user.FnTypeParams(transform: (x: int) -> int throws never, combine: (a: string, b: string) -> string throws never) -> string throws never {
+  { : "transformed"
+    `...` : "transformed"
+  }
+}
+function user.TriviaTemplate(x: string) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 1463..1464: type mismatch: expected T, got string
+  !! 1454..1466: cannot infer type parameter `T`
+}
+function user.WithControl(items: string[]) -> string throws never {
+  { : string
+    `...` : string
+  }
+  !! 1573..1577: type mismatch: expected T, got string
+  !! 1524..1602: cannot infer type parameter `T`
+  !! 1573..1577: type mismatch: expected T, got string
+  !! 1524..1602: cannot infer type parameter `T`
+}
+function user.WithConditional(show: bool, value: string) -> string throws never {
+  { : string | "hidden"
+    `...` : string | "hidden"
+  }
+  !! 1689..1694: type mismatch: expected T, got string
+  !! 1674..1717: cannot infer type parameter `T`
 }
 type user.SimpleAlias = int
 type user.AliasChain = user.SimpleAlias

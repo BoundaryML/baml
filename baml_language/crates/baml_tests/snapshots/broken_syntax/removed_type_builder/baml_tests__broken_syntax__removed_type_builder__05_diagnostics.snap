@@ -4,13 +4,11 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0010
 
-  × LLM function `Fn` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
-   ╭─[removed_type_builder.baml:6:42]
- 6 │ ╭─▶ function Fn(from_text: string) -> string {
- 7 │ │     client "openai/gpt-4o"
- 8 │ │     prompt #"Hi"#
- 9 │ ├─▶ }
-   · ╰──── migrate to a backtick prompt
+  × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
+   ╭─[removed_type_builder.baml:8:10]
+ 8 │   prompt #"Hi"#
+   ·          ───┬──
+   ·             ╰── use a backtick prompt instead
    ╰────
 
   [parse] E0098
@@ -60,21 +58,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × LLM function `LlmWithTypeBuilder` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
-    ╭─[removed_type_builder.baml:78:58]
- 78 │ ╭─▶ function LlmWithTypeBuilder(from_text: string) -> string {
- 79 │ │     client "openai/gpt-4o-mini"
- 80 │ │     prompt #"Hello"#
- 81 │ │     type_builder {
- 82 │ │       class LlmInner {
- 83 │ │         foo string
- 84 │ │       }
- 85 │ │       dynamic class LlmDynamic {
- 86 │ │         bar int
- 87 │ │       }
- 88 │ │     }
- 89 │ ├─▶ }
-    · ╰──── migrate to a backtick prompt
+  × Jinja `#"..."#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead.
+    ╭─[removed_type_builder.baml:80:10]
+ 80 │   prompt #"Hello"#
+    ·          ────┬────
+    ·              ╰── use a backtick prompt instead
     ╰────
 
   [parse] E0098

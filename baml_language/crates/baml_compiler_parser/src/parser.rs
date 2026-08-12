@@ -2085,14 +2085,14 @@ impl<'a> Parser<'a> {
             }
             p.bump(); // Opening "
 
-            // Parse raw string content with Jinja template support
+            // Parse raw string content as literal text.
             p.parse_raw_string_content(opening_hashes);
         });
 
         true
     }
 
-    /// Parse the content inside a raw string, recognizing Jinja template constructs
+    /// Parse the content inside a raw string.
     fn parse_raw_string_content(&mut self, opening_hashes: usize) {
         let mut loop_counter = 0;
 
@@ -2126,157 +2126,8 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // Check for Jinja constructs
-            if self.at_jinja_expression() {
-                self.parse_jinja_expression(opening_hashes);
-            } else if self.at_jinja_statement() {
-                self.parse_jinja_statement(opening_hashes);
-            } else if self.at_jinja_comment() {
-                self.parse_jinja_comment(opening_hashes);
-            } else {
-                // Plain text content - collect tokens until we hit a Jinja construct or closing delimiter
-                self.parse_prompt_text(opening_hashes);
-            }
+            self.bump_raw();
         }
-    }
-
-    /// Check if we're at the start of a Jinja expression: {{
-    fn at_jinja_expression(&self) -> bool {
-        self.at_raw(TokenKind::LBrace)
-            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::LBrace)
-    }
-
-    /// Check if we're at the start of a Jinja statement: {%
-    fn at_jinja_statement(&self) -> bool {
-        self.at_raw(TokenKind::LBrace)
-            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::Percent)
-    }
-
-    /// Check if we're at the start of a Jinja comment: {#
-    fn at_jinja_comment(&self) -> bool {
-        self.at_raw(TokenKind::LBrace)
-            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::Hash)
-    }
-
-    /// Parse a Jinja expression: {{ ... }}
-    fn parse_jinja_expression(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::TEMPLATE_INTERPOLATION, |p| {
-            p.bump_raw(); // {
-            p.bump_raw(); // {
-
-            // Collect tokens until we find }}
-            let mut depth = 1;
-            while !p.at_end_raw() && depth > 0 {
-                if p.at_raw(TokenKind::Quote)
-                    && p.count_consecutive_hashes_after_quote() == opening_hashes
-                {
-                    p.error_unexpected_token("Unclosed Jinja expression (expected }})".to_string());
-                    return;
-                }
-                if p.at_raw(TokenKind::LBrace)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::LBrace)
-                {
-                    depth += 1;
-                    p.bump_raw();
-                    p.bump_raw();
-                } else if p.at_raw(TokenKind::RBrace)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
-                {
-                    depth -= 1;
-                    if depth == 0 {
-                        p.bump_raw(); // }
-                        p.bump_raw(); // }
-                        break;
-                    }
-                    p.bump_raw();
-                    p.bump_raw();
-                } else {
-                    p.bump_raw();
-                }
-            }
-
-            if depth > 0 {
-                p.error_unexpected_token("Unclosed Jinja expression (expected }})".to_string());
-            }
-        });
-    }
-
-    /// Parse a Jinja statement: {% ... %}
-    fn parse_jinja_statement(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::TEMPLATE_CONTROL, |p| {
-            p.bump_raw(); // {
-            p.bump_raw(); // %
-
-            // Collect tokens until we find %}
-            while !p.at_end_raw() {
-                if p.at_raw(TokenKind::Quote)
-                    && p.count_consecutive_hashes_after_quote() == opening_hashes
-                {
-                    p.error_unexpected_token("Unclosed Jinja statement (expected %})".to_string());
-                    return;
-                }
-                if p.at_raw(TokenKind::Percent)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
-                {
-                    p.bump_raw(); // %
-                    p.bump_raw(); // }
-                    break;
-                }
-                p.bump_raw();
-            }
-        });
-    }
-
-    /// Parse a Jinja comment: {# ... #}
-    fn parse_jinja_comment(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::TEMPLATE_COMMENT, |p| {
-            p.bump_raw(); // {
-            p.bump_raw(); // #
-
-            // Collect tokens until we find #}
-            while !p.at_end_raw() {
-                if p.at_raw(TokenKind::Quote)
-                    && p.count_consecutive_hashes_after_quote() == opening_hashes
-                {
-                    p.error_unexpected_token("Unclosed Jinja comment (expected #})".to_string());
-                    return;
-                }
-                if p.at_raw(TokenKind::Hash)
-                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
-                {
-                    p.bump_raw(); // #
-                    p.bump_raw(); // }
-                    break;
-                }
-                p.bump_raw();
-            }
-        });
-    }
-
-    /// Parse plain text content between Jinja constructs
-    ///
-    /// Will consume trailing whitespace as well.
-    fn parse_prompt_text(&mut self, opening_hashes: usize) {
-        self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
-            // Collect tokens until we hit a Jinja construct or closing delimiter
-            while !p.at_end_raw() {
-                // Check for closing delimiter
-                if p.at_raw(TokenKind::Quote) {
-                    let closing_hashes = p.count_consecutive_hashes_after_quote();
-                    if closing_hashes == opening_hashes {
-                        break;
-                    }
-                }
-
-                // Check for Jinja constructs
-                if p.at_jinja_expression() || p.at_jinja_statement() || p.at_jinja_comment() {
-                    while p.eat_basic_trivia() {} // make it part of the PROMPT_TEXT
-                    break;
-                }
-
-                p.bump_raw();
-            }
-        });
     }
 
     /// Parse a string or raw string (dispatches to correct method)
@@ -8357,7 +8208,6 @@ impl<'a> Parser<'a> {
     /// Parse a template string declaration
     pub(crate) fn parse_template_string(&mut self) {
         self.with_node(SyntaxKind::TEMPLATE_STRING_DEF, |p| {
-            // 'template_string' keyword
             p.expect(TokenKind::TemplateString);
 
             // Template name
@@ -9616,8 +9466,8 @@ client<llm> Foo {
     }
 
     #[test]
-    fn raw_string_keeps_comment_markers_as_text() {
-        for marker in ["//", "*/"] {
+    fn raw_string_keeps_template_markers_as_text() {
+        for marker in ["//", "*/", "{{ name }}", "{% if true %}", "{# note #}"] {
             let source = format!(
                 r##"
 function Demo() -> string {{
@@ -9638,6 +9488,19 @@ function Demo() -> string {{
                 "raw string should retain marker {marker:?}: {raw_string:?}"
             );
         }
+    }
+
+    #[test]
+    fn parses_template_string_for_lowering_diagnostic() {
+        let source = "template_string Greeting(name: string) `Hello ${name}`";
+        let (root, errors) = parse_source(source);
+
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::TEMPLATE_STRING_DEF),
+            "unsupported declaration should remain in the tree for lowering"
+        );
     }
 
     #[test]

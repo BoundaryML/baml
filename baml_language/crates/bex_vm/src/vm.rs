@@ -994,8 +994,6 @@ pub struct BytecodeProgram {
     pub function_global_indices: HashMap<String, usize>,
     /// Maps top-level let names to their global indices.
     pub let_global_indices: HashMap<String, usize>,
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    pub template_strings_macros: String,
     /// Client build metadata, passed through to `SysOpContext`.
     pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
     /// Compiled test cases.
@@ -1047,7 +1045,6 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         resolved_function_names,
         function_global_indices: program.function_global_indices,
         let_global_indices: program.let_global_indices,
-        template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
         packages: program.packages,

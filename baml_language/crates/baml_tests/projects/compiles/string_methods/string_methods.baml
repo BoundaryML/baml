@@ -1,11 +1,9 @@
-// Test: string method calls inside backtick template holes produce no
-// diagnostics. (Jinja template_string bodies went away with the legacy LLM
-// path; templates are backticks with `${...}` holes now.)
+// Test: string method calls inside backtick interpolation produce no diagnostics.
 
-template_string Upper(s: string) `${s.to_upper_case()}`
+function Upper(s: string) -> string { `${s.to_upper_case()}` }
 
-template_string StartsWith(s: string) `${s.starts_with("hello")}`
+function StartsWith(s: string) -> string { `${s.starts_with("hello")}` }
 
-template_string SplitCount(s: string) `${s.split(",").length()}`
+function SplitCount(s: string) -> string { `${s.split(",").length()}` }
 
-template_string Trimmed(s: string) `${s.trim()}`
+function Trimmed(s: string) -> string { `${s.trim()}` }

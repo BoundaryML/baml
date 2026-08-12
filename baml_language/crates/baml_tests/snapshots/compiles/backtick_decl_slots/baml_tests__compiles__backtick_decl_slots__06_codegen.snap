@@ -98,3 +98,14 @@ function user.Greet$stream(name: string, client: ai.stream.StreamingClient | nul
     call ai.stream.from_spec
     return
 }
+
+function user.Header(title: string) -> string {
+    load_type string
+    load_var title
+    call baml.String.from
+    store_var _2
+    load_const "# "
+    load_var _2
+    bin_op +
+    return
+}

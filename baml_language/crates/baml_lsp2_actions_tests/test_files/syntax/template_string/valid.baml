@@ -1,10 +1,10 @@
-template_string SomeString #"
-  ...
-"#
+function SomeString() -> string {
+  `...`
+}
 
-template_string WithParams(a: int) #"
-  ...
-"#
+function WithParams(a: int) -> string {
+  `Value: ${a}`
+}
 
 //----
 //- diagnostics
