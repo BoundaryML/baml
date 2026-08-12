@@ -11814,7 +11814,8 @@ function Demo() -> string {
         .unwrap();
         let segs = lit.segments();
         // After dedent: leading "Hello, ", interp, "!\nWelcome." (the line
-        // break and indent before the closing delimiter belong to it).
+        // delimiter-related line break and indentation before the closing
+        // delimiter are removed).
         let text_parts: Vec<&str> = segs
             .iter()
             .filter_map(|s| match s {
