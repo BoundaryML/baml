@@ -186,21 +186,29 @@ mod tests {
     }
 
     #[test]
-    fn nbsp_indent_does_not_panic() {
+    fn nbsp_indent_is_preserved() {
         // BEP-049 / ultrareview bug_001: when one line is indented with
         // NBSP (U+00A0, 2 UTF-8 bytes) and another with ASCII space,
         // a strip column computed in bytes lands inside the NBSP, and a
         // naive byte-slice `&line[1..]` panics with "byte index 1 is not
         // a char boundary". Realistic trigger: rich-text paste / macOS
         // Option+Space.
-        let _ = dedent_backtick(" hello\n\u{00A0}world");
+        //
+        // Not panicking is the floor. NBSP and space are different characters,
+        // so by Rule 2 they share no prefix and the strip column is zero:
+        // both indents are the author's and come through byte-for-byte.
+        assert_eq!(
+            dedent_backtick(" hello\n\u{00A0}world"),
+            " hello\n\u{00A0}world"
+        );
     }
 
     #[test]
-    fn line_separator_indent_does_not_panic() {
+    fn line_separator_indent_is_preserved() {
         // U+2028 LINE SEPARATOR is a 3-byte Unicode whitespace char.
-        // Mixing with ASCII space exposes the same byte-vs-char bug.
-        let _ = dedent_backtick(" xy\n\u{2028}xy");
+        // Mixing with ASCII space exposes the same byte-vs-char bug, and the
+        // same Rule 2 outcome: nothing common, so nothing stripped.
+        assert_eq!(dedent_backtick(" xy\n\u{2028}xy"), " xy\n\u{2028}xy");
     }
 
     #[test]
