@@ -1,0 +1,20 @@
+function block_does_not_leak(b: bool) -> int {
+  if (b) {
+    let a = 1;
+  };
+  a
+}
+
+function standalone_block_does_not_leak() -> int {
+  {
+    let x = 1;
+  };
+  x
+}
+
+function for_binding_does_not_leak() -> int {
+  for (let x in [1, 2]) {
+    x;
+  };
+  x
+}

@@ -13,6 +13,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["dist", "node_modules"]
+  "include": ["src/**/*", "src/**/*.json"],
+  "exclude": ["dist", "node_modules", "src/components/logs"]
 }

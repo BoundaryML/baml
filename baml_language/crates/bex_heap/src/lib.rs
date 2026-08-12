@@ -59,16 +59,22 @@
 //! ```
 
 mod accessor;
+pub(crate) mod card_table;
 mod chunked_vec;
 mod gc;
 mod heap;
 mod heap_debugger;
+mod heap_guard;
 mod tlab;
 
 // Re-export types from bex_external_types for convenience
-pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle};
-pub use gc::GcStats;
-pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, HeapStats};
+pub use bex_vm_types::PermitProof;
+pub use gc::{CollectionLevel, GcStats};
+pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats, UnhandledSpawnError};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
-pub use tlab::Tlab;
+pub use heap_guard::{
+    ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
+};
+pub use tlab::{Tlab, TlabHolder};

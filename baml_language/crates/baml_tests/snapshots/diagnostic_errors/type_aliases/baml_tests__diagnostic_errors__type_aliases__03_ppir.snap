@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 57931
+---
+=== PPIR ===
+type user.Json = int | float | string | user.Json[] | map<string, user.Json>
+type user.Json$stream = int | float | string | user.Json$stream[] | map<string, user.Json$stream>
+type user.bar = int
+type user.bar$stream = int
+type user.foo = user.bar
+type user.foo$stream = user.bar$stream
+function user.Bar() -> user.foo  [expr] {
+  {  } true
+}
+function user.Baz() -> user.Json  [expr] {
+  {  } "hello"
+}
+function user.Foo() -> user.foo  [expr] {
+  {  } 1
+}
+class user.NotJSON {
+  inner: name
+}
+class user.NotJSON$stream {
+  inner: name | null
+}
+type user.JSON = int | float | string | bool | user.JSON[] | map<string, baml.json.json>
+type user.JSON$stream = int | float | string | bool | user.JSON$stream[] | map<string, baml.json.json$stream>
+function user.EchoJSON(i: user.JSON) -> user.JSON  [expr] {
+  {  } user.NotJSON { inner: "Whoops" }
+}
+function user.MakeJSON(i: user.NotJSON) -> user.JSON  [expr] {
+  {  } i.inner
+}

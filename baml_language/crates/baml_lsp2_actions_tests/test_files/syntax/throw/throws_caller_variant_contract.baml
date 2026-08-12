@@ -23,30 +23,17 @@ function CallerGood(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//     ╭─[ throw_throws_caller_variant_contract.baml:10:42 ]
-//     │
+// E0096
+//
+//   × declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.NotFoundError`
+//     ╭─[throw_throws_caller_variant_contract.baml:10:43]
 //  10 │ function MayFail(x: int) -> string throws Errors {
-//     │                                          ───┬───  
-//     │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Warning: extraneous throws declaration: user.Errors
-//     ╭─[ throw_throws_caller_variant_contract.baml:10:42 ]
-//     │
+//     ·                                           ──────
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[throw_throws_caller_variant_contract.baml:10:43]
 //  10 │ function MayFail(x: int) -> string throws Errors {
-//     │                                          ───┬───  
-//     │                                             ╰───── extraneous throws declaration: user.Errors
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throws_caller_variant_contract.baml:20:29 ]
-//     │
-//  20 │     Errors.NotFoundError => "notfound"
-//     │                             ─────┬────  
-//     │                                  ╰────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·                                           ──────
+//     ╰────

@@ -10,6 +10,10 @@
 //! - `x == null` → then: null, else: remove null
 //! - `x` (truthiness) → then: remove null, else: original
 //! - `!(x == null)` → same as `x != null` (negation flips then/else)
+//! - `x is <pattern>` → then: pattern's matched type, else: scrutinee
+//!   union minus the matched members (TypeScript-style for `typeof` /
+//!   `instanceof`; falls back to the original scrutinee type when the
+//!   subtraction doesn't simplify, e.g. literal patterns on primitives)
 //!
 //! ## Early-return narrowing
 //!
@@ -25,16 +29,21 @@
 //! type-check without errors.
 
 use baml_base::Name;
-use baml_compiler2_ast::{BinaryOp, Expr, ExprBody, ExprId, UnaryOp};
+use baml_compiler2_ast::{BinaryOp, Expr, ExprBody, ExprId, PatId, UnaryOp};
 use rustc_hash::FxHashMap;
 
-use crate::ty::{PrimitiveType, Ty, TyAttr};
+use crate::{
+    builder::LocalBinding,
+    ty::{Ty, TyAttr},
+};
 
 // ── Narrowing descriptor ──────────────────────────────────────────────────────
 
 /// A single narrowing: how a named variable's type is refined in then/else branches.
 #[derive(Debug, Clone)]
 pub struct Narrowing {
+    /// The path expression whose binding is being narrowed.
+    pub subject: ExprId,
     /// The local variable whose type is narrowed.
     pub name: Name,
     /// Refined type in the then-branch (condition is true).
@@ -57,13 +66,24 @@ pub struct Narrowing {
 /// - `body`: the `ExprBody` arena for the current scope
 /// - `expr_types`: the accumulated expression type map (from `self.expressions`
 ///   in the builder — expressions inferred *before* the condition are present)
+/// - `pattern_types`: the per-`PatId` matched-type map (from `self.pattern_types`
+///   in the builder — populated when `<expr> is <pattern>` is inferred). Read
+///   only by the `Expr::Is` branch; null-only conditions ignore it.
 pub fn extract_narrowings(
     condition: ExprId,
     body: &ExprBody,
     expr_types: &FxHashMap<ExprId, Ty>,
+    pattern_types: &FxHashMap<PatId, Ty>,
 ) -> Vec<Narrowing> {
     let mut narrowings = Vec::new();
-    collect_narrowings(condition, body, expr_types, false, &mut narrowings);
+    collect_narrowings(
+        condition,
+        body,
+        expr_types,
+        pattern_types,
+        false,
+        &mut narrowings,
+    );
     narrowings
 }
 
@@ -72,6 +92,7 @@ fn collect_narrowings(
     expr_id: ExprId,
     body: &ExprBody,
     expr_types: &FxHashMap<ExprId, Ty>,
+    pattern_types: &FxHashMap<PatId, Ty>,
     negated: bool,
     out: &mut Vec<Narrowing>,
 ) {
@@ -83,20 +104,27 @@ fn collect_narrowings(
             lhs,
             rhs,
         } => {
-            if let Some((name, original_ty)) = null_check_name(*lhs, *rhs, body, expr_types) {
+            if let Some((subject, name, original_ty)) =
+                null_check_name(*lhs, *rhs, body, expr_types)
+            {
                 let (then_ty, else_ty) = if negated {
                     // !(x != null) == x == null
                     (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                         remove_null(&original_ty),
                     )
                 } else {
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                     )
                 };
                 out.push(Narrowing {
+                    subject,
                     name,
                     then_type: then_ty,
                     else_type: else_ty,
@@ -110,20 +138,27 @@ fn collect_narrowings(
             lhs,
             rhs,
         } => {
-            if let Some((name, original_ty)) = null_check_name(*lhs, *rhs, body, expr_types) {
+            if let Some((subject, name, original_ty)) =
+                null_check_name(*lhs, *rhs, body, expr_types)
+            {
                 let (then_ty, else_ty) = if negated {
                     // !(x == null) == x != null
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                     )
                 } else {
                     (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                         remove_null(&original_ty),
                     )
                 };
                 out.push(Narrowing {
+                    subject,
                     name,
                     then_type: then_ty,
                     else_type: else_ty,
@@ -136,7 +171,41 @@ fn collect_narrowings(
             op: UnaryOp::Not,
             expr: inner,
         } => {
-            collect_narrowings(*inner, body, expr_types, !negated, out);
+            collect_narrowings(*inner, body, expr_types, pattern_types, !negated, out);
+        }
+
+        // `name is <pattern>` — narrow `name` to the pattern's matched type
+        // in the then-branch (or in the else-branch if negated). The
+        // opposite branch tries to subtract the matched members from the
+        // scrutinee union, TypeScript-style; when subtraction can't
+        // simplify (literal pattern over a primitive, single non-union
+        // scrutinee, no overlap, …) it falls back to the original.
+        Expr::Is { scrutinee, pattern } => {
+            let Expr::Path(segments) = &body.exprs[*scrutinee] else {
+                return;
+            };
+            if segments.len() != 1 {
+                return;
+            }
+            let name = &segments[0];
+            let Some(original_ty) = expr_types.get(scrutinee) else {
+                return;
+            };
+            let Some(matched_ty) = pattern_types.get(pattern) else {
+                return;
+            };
+            let complement = subtract_pattern_type(original_ty, matched_ty);
+            let (then_type, else_type) = if negated {
+                (complement, matched_ty.clone())
+            } else {
+                (matched_ty.clone(), complement)
+            };
+            out.push(Narrowing {
+                subject: *scrutinee,
+                name: name.clone(),
+                then_type,
+                else_type,
+            });
         }
 
         // Truthiness: if (x) where x is optional — then-branch removes null
@@ -153,6 +222,7 @@ fn collect_narrowings(
                         (remove_null(ty), ty.clone())
                     };
                     out.push(Narrowing {
+                        subject: expr_id,
                         name: name.clone(),
                         then_type: then_ty,
                         else_type: else_ty,
@@ -178,13 +248,13 @@ fn null_check_name(
     rhs: ExprId,
     body: &ExprBody,
     expr_types: &FxHashMap<ExprId, Ty>,
-) -> Option<(Name, Ty)> {
+) -> Option<(ExprId, Name, Ty)> {
     // lhs is name, rhs is null
     if let Expr::Path(segments) = &body.exprs[lhs] {
         if segments.len() == 1 {
             if let Expr::Null = &body.exprs[rhs] {
                 if let Some(ty) = expr_types.get(&lhs) {
-                    return Some((segments[0].clone(), ty.clone()));
+                    return Some((lhs, segments[0].clone(), ty.clone()));
                 }
             }
         }
@@ -194,7 +264,7 @@ fn null_check_name(
         if segments.len() == 1 {
             if let Expr::Null = &body.exprs[lhs] {
                 if let Some(ty) = expr_types.get(&rhs) {
-                    return Some((segments[0].clone(), ty.clone()));
+                    return Some((rhs, segments[0].clone(), ty.clone()));
                 }
             }
         }
@@ -206,11 +276,104 @@ fn null_check_name(
 /// with null) or is directly `Null`.
 fn is_nullable(ty: &Ty) -> bool {
     match ty {
-        Ty::Optional(_, _) => true,
-        Ty::Primitive(PrimitiveType::Null, _) => true,
-        Ty::Union(members, _) => members
-            .iter()
-            .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))),
+        Ty::Null { .. } => true,
+        Ty::Union(members, _) => members.iter().any(|m| matches!(m, Ty::Null { .. })),
+        _ => false,
+    }
+}
+
+/// Compute the complement of `matched` within `scrutinee` for the
+/// else-branch of a pattern test. Decomposes top-level unions on both
+/// sides and keeps each scrutinee member whose "shape" (ignoring
+/// `TyAttr` and `Freshness`) doesn't appear in `matched`.
+///
+/// Falls back to the original scrutinee when:
+///   - the scrutinee isn't a union (no members to drop)
+///   - no scrutinee member matched (preserve fidelity)
+///   - subtraction would leave an empty union (pattern covered everything;
+///     callers will handle the else side being effectively dead)
+///
+/// We deliberately avoid `Ty`'s derived `PartialEq` because that compares
+/// `TyAttr` exactly — narrowing-derived types frequently carry
+/// `TyAttr::default()` while source-derived members may not. Comparing by
+/// shape only is sound for the membership test we need here.
+pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
+    // Flatten nested unions to leaf members on both sides. `int | string?`
+    // lowers to `Union([int, Union([string, null])])`; without flattening, the
+    // nested `string?` member never aligns with the matched pattern's members
+    // (`string`, `null`) and the else branch fails to narrow. (Pre-union, the
+    // deleted `(Optional, Optional)` arm in `ty_shape_eq` covered this.)
+    fn flat_members(ty: &Ty) -> Vec<&Ty> {
+        match ty {
+            Ty::Union(members, _) => members.iter().flat_map(flat_members).collect(),
+            other => vec![other],
+        }
+    }
+
+    let matched_set: Vec<&Ty> = flat_members(matched);
+
+    let scrut_members: Vec<&Ty> = match scrutinee {
+        Ty::Union(_, _) => flat_members(scrutinee),
+        _ => return scrutinee.clone(),
+    };
+
+    let remaining: Vec<Ty> = scrut_members
+        .iter()
+        .filter(|m| !matched_set.iter().any(|w| ty_shape_eq(m, w)))
+        .map(|m| (*m).clone())
+        .collect();
+
+    if remaining.len() == scrut_members.len() {
+        // No member subtracted — return the original to avoid pretending we
+        // refined when we didn't.
+        return scrutinee.clone();
+    }
+
+    match remaining.len() {
+        0 => Ty::Never {
+            attr: TyAttr::default(),
+        },
+        1 => remaining.into_iter().next().unwrap(),
+        _ => Ty::Union(remaining, TyAttr::default()),
+    }
+}
+
+/// Structural shape-equality for `Ty` that ignores `TyAttr` and literal
+/// `Freshness`. Used only by [`subtract_pattern_type`] to decide whether a
+/// scrutinee union member is "covered" by the pattern's matched set.
+///
+/// Returns `false` for compound shapes we don't bother decomposing
+/// (function types, type variables, error/unknown). Returning `false`
+/// keeps the member in the residual — that's the conservative direction
+/// (less narrowing, never unsound).
+fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
+    match (a, b) {
+        (Ty::Int { .. }, Ty::Int { .. })
+        | (Ty::Bigint { .. }, Ty::Bigint { .. })
+        | (Ty::Float { .. }, Ty::Float { .. })
+        | (Ty::String { .. }, Ty::String { .. })
+        | (Ty::Bool { .. }, Ty::Bool { .. })
+        | (Ty::Null { .. }, Ty::Null { .. })
+        | (Ty::Uint8Array { .. }, Ty::Uint8Array { .. }) => true,
+        (Ty::Media(k1, _), Ty::Media(k2, _)) => k1 == k2,
+        (Ty::Class(n1, args1, _), Ty::Class(n2, args2, _)) => {
+            n1 == n2
+                && args1.len() == args2.len()
+                && args1.iter().zip(args2).all(|(a, b)| ty_shape_eq(a, b))
+        }
+        (Ty::Enum(n1, _), Ty::Enum(n2, _)) => n1 == n2,
+        (Ty::EnumVariant(n1, v1, _), Ty::EnumVariant(n2, v2, _)) => n1 == n2 && v1 == v2,
+        (Ty::TypeAlias(n1, _), Ty::TypeAlias(n2, _)) => n1 == n2,
+        (Ty::List(t1, _), Ty::List(t2, _)) => ty_shape_eq(t1, t2),
+        (
+            Ty::Map {
+                key: k1, value: v1, ..
+            },
+            Ty::Map {
+                key: k2, value: v2, ..
+            },
+        ) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
+        (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
         _ => false,
     }
 }
@@ -225,11 +388,10 @@ fn is_nullable(ty: &Ty) -> bool {
 /// | `T` (not nullable)  | `T` (unchanged)            |
 pub fn remove_null(ty: &Ty) -> Ty {
     match ty {
-        Ty::Optional(inner, _) => inner.as_ref().clone(),
         Ty::Union(members, _) => {
             let filtered: Vec<Ty> = members
                 .iter()
-                .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null, _)))
+                .filter(|m| !matches!(m, Ty::Null { .. }))
                 .cloned()
                 .collect();
             match filtered.len() {
@@ -240,7 +402,7 @@ pub fn remove_null(ty: &Ty) -> Ty {
                 _ => Ty::Union(filtered, TyAttr::default()),
             }
         }
-        Ty::Primitive(PrimitiveType::Null, _) => Ty::Never {
+        Ty::Null { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
         _ => ty.clone(),
@@ -254,31 +416,38 @@ pub fn remove_null(ty: &Ty) -> Ty {
 /// Returns `Vec<(Name, Option<Ty>)>` — the saved originals for later restoration.
 /// `None` means the name was not in `locals` before (e.g. a parameter that
 /// wasn't shadowed as a local yet).
-pub fn apply_then_narrowings(
+pub(crate) fn apply_then_narrowings(
     narrowings: &[Narrowing],
-    locals: &mut FxHashMap<Name, Ty>,
+    locals: &mut FxHashMap<Name, LocalBinding>,
 ) -> Vec<(Name, Option<Ty>)> {
     let saved = narrowings
         .iter()
-        .map(|n| (n.name.clone(), locals.get(&n.name).cloned()))
+        .map(|n| {
+            (
+                n.name.clone(),
+                locals
+                    .get(&n.name)
+                    .map(|binding| binding.current_ty.clone()),
+            )
+        })
         .collect();
     for n in narrowings {
-        locals.insert(n.name.clone(), n.then_type.clone());
+        set_current_type(locals, n.name.clone(), n.then_type.clone());
     }
     saved
 }
 
 /// Restore original types and then apply else-branch narrowings.
-pub fn restore_and_apply_else(
+pub(crate) fn restore_and_apply_else(
     narrowings: &[Narrowing],
     saved: &[(Name, Option<Ty>)],
-    locals: &mut FxHashMap<Name, Ty>,
+    locals: &mut FxHashMap<Name, LocalBinding>,
 ) {
     // Restore originals
     for (name, original) in saved {
         match original {
             Some(ty) => {
-                locals.insert(name.clone(), ty.clone());
+                set_current_type(locals, name.clone(), ty.clone());
             }
             None => {
                 locals.remove(name);
@@ -287,16 +456,19 @@ pub fn restore_and_apply_else(
     }
     // Apply else narrowings
     for n in narrowings {
-        locals.insert(n.name.clone(), n.else_type.clone());
+        set_current_type(locals, n.name.clone(), n.else_type.clone());
     }
 }
 
 /// Restore types to their state before narrowing was applied.
-pub fn restore_narrowings(saved: Vec<(Name, Option<Ty>)>, locals: &mut FxHashMap<Name, Ty>) {
+pub(crate) fn restore_narrowings(
+    saved: Vec<(Name, Option<Ty>)>,
+    locals: &mut FxHashMap<Name, LocalBinding>,
+) {
     for (name, original) in saved {
         match original {
             Some(ty) => {
-                locals.insert(name, ty);
+                set_current_type(locals, name, ty);
             }
             None => {
                 locals.remove(&name);
@@ -311,11 +483,29 @@ pub fn restore_narrowings(saved: Vec<(Name, Option<Ty>)>, locals: &mut FxHashMap
 /// (returns, breaks, etc.), the else-type is what holds for the remainder
 /// of the enclosing block. This is called in `check_stmt` after detecting
 /// that a `Stmt::Expr(Expr::If)` with a diverging then-branch was processed.
-pub fn apply_post_diverge_narrowings(narrowings: &[Narrowing], locals: &mut FxHashMap<Name, Ty>) {
+pub(crate) fn apply_post_diverge_narrowings(
+    narrowings: &[Narrowing],
+    locals: &mut FxHashMap<Name, LocalBinding>,
+) {
     for n in narrowings {
         // Only narrow variables that are already in scope
-        if locals.contains_key(&n.name) {
-            locals.insert(n.name.clone(), n.else_type.clone());
+        if let Some(binding) = locals.get_mut(&n.name) {
+            binding.current_ty = n.else_type.clone();
         }
+    }
+}
+
+fn set_current_type(locals: &mut FxHashMap<Name, LocalBinding>, name: Name, ty: Ty) {
+    if let Some(binding) = locals.get_mut(&name) {
+        binding.current_ty = ty;
+    } else {
+        locals.insert(
+            name,
+            LocalBinding {
+                current_ty: ty,
+                declared_ty: None,
+                pattern: None,
+            },
+        );
     }
 }

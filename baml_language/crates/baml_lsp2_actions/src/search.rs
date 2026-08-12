@@ -7,7 +7,7 @@
 //! ## Usage
 //!
 //! Called by `bex_project` to handle `workspace/symbol` requests.
-//! Pass the user-visible source files (not builtin stubs) and the query string.
+//! Callers choose the visible file set for their feature and the query string.
 
 use baml_base::SourceFile;
 use baml_compiler2_hir::contributions::DefinitionKind;
@@ -49,8 +49,9 @@ pub struct SymbolInfo {
 ///
 /// ## Files
 ///
-/// Pass only user source files, not builtin stubs. The `ProjectDatabase`
-/// provides `get_source_files()` for this purpose.
+/// Callers choose the visible file set for their feature. User-only features
+/// can pass `ProjectDatabase::get_source_files()`, while compiler2-aware
+/// features can pass `baml_compiler2_hir::compiler2_all_files(db)`.
 pub fn search_symbols(db: &dyn Db, files: &[SourceFile], query: &str) -> Vec<SymbolInfo> {
     let query_lower = query.to_lowercase();
     let mut results: Vec<SymbolInfo> = Vec::new();

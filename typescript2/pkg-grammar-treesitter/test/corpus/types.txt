@@ -1,0 +1,341 @@
+==================
+primitive, optional, array, union types
+==================
+
+class TypeVariety {
+  simple string
+  optional string?
+  array int[]
+  nested int[][]
+  union_type: int | string
+  optional_union: (int | string)?
+  union_array (int | string)[]
+  deeply_nested (int | (string | (bool | (float | null))))[]?
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (field_declaration
+        (identifier)
+        (optional_type
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (array_type
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (array_type
+          (array_type
+            (type_path
+              (identifier)))))
+      (field_declaration
+        (identifier)
+        (union_type
+          (type_path
+            (identifier))
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (optional_type
+          (parenthesized_type
+            (union_type
+              (type_path
+                (identifier))
+              (type_path
+                (identifier))))))
+      (field_declaration
+        (identifier)
+        (array_type
+          (parenthesized_type
+            (union_type
+              (type_path
+                (identifier))
+              (type_path
+                (identifier))))))
+      (field_declaration
+        (identifier)
+        (optional_type
+          (array_type
+            (parenthesized_type
+              (union_type
+                (type_path
+                  (identifier))
+                (parenthesized_type
+                  (union_type
+                    (type_path
+                      (identifier))
+                    (parenthesized_type
+                      (union_type
+                        (type_path
+                          (identifier))
+                        (parenthesized_type
+                          (union_type
+                            (type_path
+                              (identifier))
+                            (type_path
+                              (identifier))))))))))))))))
+
+==================
+map and generic types, named type arguments
+==================
+
+class Generics {
+  mapping map<string, int | string | bool>
+  deep map<string, map<string, int[]>>
+  named baml.iter.Iterator<Item = string, Error = never>
+  boxed Box<Box<User>>
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier))
+            (union_type
+              (union_type
+                (type_path
+                  (identifier))
+                (type_path
+                  (identifier)))
+              (type_path
+                (identifier))))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier))
+            (type_path
+              (identifier)
+              (type_arguments
+                (type_path
+                  (identifier))
+                (array_type
+                  (type_path
+                    (identifier))))))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)
+          (identifier)
+          (identifier)
+          (type_arguments
+            (named_type_argument
+              (identifier)
+              (type_path
+                (identifier)))
+            (named_type_argument
+              (identifier)
+              (type_path
+                (identifier))))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier)
+              (type_arguments
+                (type_path
+                  (identifier))))))))))
+
+==================
+function types with throws and currying
+==================
+
+class Callbacks {
+  callback_field: (first: int, second: string) -> map<string, int>
+  plain (x: int, y: int) -> string
+  throwing (T) -> R throws E2
+  curried ((int) -> (int) -> (int) -> int) | ((string) -> (string) -> string)
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (function_type
+          (function_type_parameters
+            (function_type_parameter
+              (identifier)
+              (type_path
+                (identifier)))
+            (function_type_parameter
+              (identifier)
+              (type_path
+                (identifier))))
+          (type_path
+            (identifier)
+            (type_arguments
+              (type_path
+                (identifier))
+              (type_path
+                (identifier))))))
+      (field_declaration
+        (identifier)
+        (function_type
+          (function_type_parameters
+            (function_type_parameter
+              (identifier)
+              (type_path
+                (identifier)))
+            (function_type_parameter
+              (identifier)
+              (type_path
+                (identifier))))
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (function_type
+          (function_type_parameters
+            (function_type_parameter
+              (type_path
+                (identifier))))
+          (type_path
+            (identifier))
+          (throws_clause
+            (type_path
+              (identifier)))))
+      (field_declaration
+        (identifier)
+        (union_type
+          (parenthesized_type
+            (function_type
+              (function_type_parameters
+                (function_type_parameter
+                  (type_path
+                    (identifier))))
+              (function_type
+                (function_type_parameters
+                  (function_type_parameter
+                    (type_path
+                      (identifier))))
+                (function_type
+                  (function_type_parameters
+                    (function_type_parameter
+                      (type_path
+                        (identifier))))
+                  (type_path
+                    (identifier))))))
+          (parenthesized_type
+            (function_type
+              (function_type_parameters
+                (function_type_parameter
+                  (type_path
+                    (identifier))))
+              (function_type
+                (function_type_parameters
+                  (function_type_parameter
+                    (type_path
+                      (identifier))))
+                (type_path
+                  (identifier))))))))))
+
+==================
+literal types
+==================
+
+class TestLiterals {
+  a "SingleLiteral"
+  b "Field" | "With" | "Multiple"
+  d 2 | 3
+  g "boolean" | true | false
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (literal_type
+          (string)))
+      (field_declaration
+        (identifier)
+        (union_type
+          (union_type
+            (literal_type
+              (string))
+            (literal_type
+              (string)))
+          (literal_type
+            (string))))
+      (field_declaration
+        (identifier)
+        (union_type
+          (literal_type
+            (number))
+          (literal_type
+            (number))))
+      (field_declaration
+        (identifier)
+        (union_type
+          (union_type
+            (literal_type
+              (string))
+            (literal_type
+              (boolean)))
+          (literal_type
+            (boolean)))))))
+
+==================
+map with literal-union keys
+==================
+
+class Fields {
+  l2 map<"one" | "two" | ("three" | "four"), string>
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)
+          (type_arguments
+            (union_type
+              (union_type
+                (literal_type
+                  (string))
+                (literal_type
+                  (string)))
+              (parenthesized_type
+                (union_type
+                  (literal_type
+                    (string))
+                  (literal_type
+                    (string)))))
+            (type_path
+              (identifier))))))))

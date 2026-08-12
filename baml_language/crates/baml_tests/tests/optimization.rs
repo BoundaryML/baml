@@ -29,20 +29,20 @@ fn constant_fold_int_addition() {
             2 + 3
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @r#"
+    insta::assert_snapshot!(unoptimized(source), @"
     function main() -> int {
         load_const 2
         load_const 3
-        bin_op +
+        add_int
         return
     }
-    "#);
-    insta::assert_snapshot!(optimized(source), @r#"
+    ");
+    insta::assert_snapshot!(optimized(source), @r"
     function main() -> int {
         load_const 5
         return
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -52,26 +52,26 @@ fn constant_fold_int_arithmetic_chain() {
             (10 * 3) + (100 - 50) - 1
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @r#"
+    insta::assert_snapshot!(unoptimized(source), @"
     function main() -> int {
         load_const 10
         load_const 3
-        bin_op *
+        mul_int
         load_const 100
         load_const 50
-        bin_op -
-        bin_op +
+        sub_int
+        add_int
         load_const 1
-        bin_op -
+        sub_int
         return
     }
-    "#);
-    insta::assert_snapshot!(optimized(source), @r#"
+    ");
+    insta::assert_snapshot!(optimized(source), @r"
     function main() -> int {
         load_const 79
         return
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -81,20 +81,20 @@ fn constant_fold_float_arithmetic() {
             1.5 + 2.5
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @r#"
+    insta::assert_snapshot!(unoptimized(source), @"
     function main() -> float {
         load_const 1.5
         load_const 2.5
-        bin_op +
+        add_float
         return
     }
-    "#);
-    insta::assert_snapshot!(optimized(source), @r#"
+    ");
+    insta::assert_snapshot!(optimized(source), @r"
     function main() -> float {
         load_const 4.0
         return
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -129,20 +129,20 @@ fn constant_fold_int_comparison() {
             10 > 5
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @r#"
+    insta::assert_snapshot!(unoptimized(source), @"
     function main() -> bool {
         load_const 10
         load_const 5
-        cmp_op >
+        cmp_int_op >
         return
     }
-    "#);
-    insta::assert_snapshot!(optimized(source), @r#"
+    ");
+    insta::assert_snapshot!(optimized(source), @r"
     function main() -> bool {
         load_const true
         return
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -154,22 +154,22 @@ fn constant_fold_mixed_not_foldable() {
             x + 1
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @r#"
+    insta::assert_snapshot!(unoptimized(source), @"
     function main(x: int) -> int {
         load_var x
         load_const 1
-        bin_op +
+        add_int
         return
     }
-    "#);
-    insta::assert_snapshot!(optimized(source), @r#"
+    ");
+    insta::assert_snapshot!(optimized(source), @"
     function main(x: int) -> int {
         load_var x
         load_const 1
-        bin_op +
+        add_int
         return
     }
-    "#);
+    ");
 }
 
 // ============================================================================
@@ -183,19 +183,19 @@ fn constant_fold_unary_negation() {
             -42
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @r#"
+    insta::assert_snapshot!(unoptimized(source), @r"
     function main() -> int {
         load_const 42
         unary_op -
         return
     }
-    "#);
-    insta::assert_snapshot!(optimized(source), @r#"
+    ");
+    insta::assert_snapshot!(optimized(source), @r"
     function main() -> int {
         load_const -42
         return
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -205,19 +205,19 @@ fn constant_fold_unary_not() {
             !true
         }
     "#;
-    insta::assert_snapshot!(unoptimized(source), @r#"
+    insta::assert_snapshot!(unoptimized(source), @r"
     function main() -> bool {
         load_const true
         unary_op !
         return
     }
-    "#);
-    insta::assert_snapshot!(optimized(source), @r#"
+    ");
+    insta::assert_snapshot!(optimized(source), @r"
     function main() -> bool {
         load_const false
         return
     }
-    "#);
+    ");
 }
 
 // ============================================================================
@@ -239,23 +239,19 @@ fn combined_constant_fold_and_struct() {
     "#;
     insta::assert_snapshot!(unoptimized(source), @r#"
     function main() -> Result {
-        alloc_instance Result
         load_const 2
         load_const 3
-        bin_op +
-        init_field .value
+        add_int
         load_const "sum"
-        init_field .label
+        init_instance user.Result .value, .label
         return
     }
     "#);
     insta::assert_snapshot!(optimized(source), @r#"
     function main() -> Result {
-        alloc_instance Result
         load_const 5
-        init_field .value
         load_const "sum"
-        init_field .label
+        init_instance user.Result .value, .label
         return
     }
     "#);

@@ -1,0 +1,714 @@
+/* Styles for the /eap early-access schedule. Scoped to the .eap wrapper so the
+   generic-sounding tokens don't leak into the rest of the site. The page ground
+   (cream + dotted grid) comes from body in globals.css, so we don't set it here. */
+.eap {
+  --eap-ink: #1a1612;
+  --eap-body: #2b2520;
+  --eap-muted: #6f6a63;
+  --eap-soft: #8a8580;
+  --eap-rule: #e7e2d6;
+  --eap-rule-strong: #ddd5c4;
+  --eap-card: #fffdf7;
+  --eap-accent: #6d28d9;
+  --eap-accent-ink: #5b21b6;
+  --eap-accent-soft: #a78bfa;
+  --eap-accent-tint: rgba(109, 40, 217, 0.05);
+  --eap-green: #15803d;
+  --eap-green-bg: rgba(22, 163, 74, 0.12);
+  --eap-amber: #b45309;
+  --eap-amber-bg: rgba(217, 119, 6, 0.12);
+  --eap-live: #dc2626;
+  --eap-live-ink: #b91c1c;
+  --eap-live-bg: rgba(220, 38, 38, 0.12);
+  --eap-sans:
+    var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --eap-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  font-family: var(--eap-sans);
+  color: var(--eap-body);
+}
+
+.eap-wrap {
+  max-width: 800px;
+  padding: 120px 24px 96px;
+  margin: 0 auto;
+}
+
+.eap-h1 {
+  margin: 0;
+  font-size: clamp(38px, 6vw, 54px);
+  font-weight: 800;
+  line-height: 1.02;
+  color: var(--eap-ink);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.eap-sub {
+  margin: 16px 0 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--eap-muted);
+}
+.eap-sub-dim {
+  color: var(--eap-soft);
+}
+.eap-sub-link {
+  font-weight: 500;
+  color: var(--eap-accent);
+  text-decoration: none;
+}
+.eap-sub-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- shared card ---- */
+.eap-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 16px 20px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--eap-card);
+  border: 1px solid var(--eap-rule);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(26, 22, 18, 0.04);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
+}
+.eap-card:hover {
+  border-color: var(--eap-rule-strong);
+  box-shadow: 0 10px 28px rgba(26, 22, 18, 0.1);
+  transform: translateY(-2px);
+}
+.eap-card:focus-visible {
+  outline: 2px solid var(--eap-accent);
+  outline-offset: 2px;
+}
+
+/* calendar date tile: the per-row visual anchor */
+.eap-cal {
+  flex: none;
+  width: 56px;
+  overflow: hidden;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--eap-rule-strong);
+  border-radius: 11px;
+}
+.eap-cal-m {
+  padding: 3px 0;
+  font-family: var(--eap-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--eap-accent-ink);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: #f2ecdd;
+}
+.eap-cal-d {
+  padding: 5px 0 7px;
+  font-size: 24px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--eap-ink);
+}
+.eap-cal--accent .eap-cal-m {
+  color: #fff;
+  background: var(--eap-accent);
+}
+.eap-cal--live .eap-cal-m {
+  color: #fff;
+  background: var(--eap-live);
+}
+
+.eap-mid {
+  min-width: 0;
+}
+.eap-when {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--eap-ink);
+  letter-spacing: -0.01em;
+}
+.eap-when--sm {
+  font-size: 17px;
+}
+.eap-tz {
+  margin-top: 3px;
+  font-family: var(--eap-mono);
+  font-size: 12px;
+  color: var(--eap-soft);
+}
+.eap-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 9px;
+}
+
+.eap-badge {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 3px 9px;
+  font-family: var(--eap-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  border-radius: 999px;
+}
+.eap-badge.open {
+  color: var(--eap-green);
+  background: var(--eap-green-bg);
+}
+.eap-badge.open::before {
+  width: 6px;
+  height: 6px;
+  content: "";
+  background: var(--eap-green);
+  border-radius: 50%;
+}
+.eap-badge.wait {
+  color: var(--eap-amber);
+  background: var(--eap-amber-bg);
+}
+.eap-badge.full {
+  color: var(--eap-live-ink);
+  background: var(--eap-live-bg);
+}
+.eap-badge.live {
+  color: var(--eap-live-ink);
+  letter-spacing: 0.06em;
+  background: var(--eap-live-bg);
+}
+.eap-badge.live::before {
+  width: 7px;
+  height: 7px;
+  content: "";
+  background: var(--eap-live);
+  border-radius: 50%;
+  animation: eap-livepulse 1.6s ease-in-out infinite;
+}
+@keyframes eap-livepulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0);
+  }
+}
+
+.eap-going {
+  font-size: 13px;
+  color: var(--eap-muted);
+}
+
+/* the CTA button. The featured session gets the one filled-purple button; row
+   buttons are neutral at rest and only fill purple on hover, to keep the page
+   from drowning in purple. */
+.eap-book {
+  display: inline-flex;
+  flex: none;
+  gap: 7px;
+  align-items: center;
+  padding: 10px 16px;
+  font-family: var(--eap-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--eap-accent);
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(109, 40, 217, 0.25);
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+.eap-featured:hover .eap-book {
+  background: var(--eap-accent-ink);
+}
+.eap-rows .eap-book {
+  color: var(--eap-ink);
+  background: transparent;
+  border: 1.5px solid var(--eap-rule-strong);
+  box-shadow: none;
+}
+.eap-rows .eap-card:hover .eap-book {
+  color: #fff;
+  background: var(--eap-accent);
+  border-color: var(--eap-accent);
+}
+.eap-arw {
+  display: inline-block;
+  transition: transform 140ms ease;
+}
+.eap-card:hover .eap-arw {
+  transform: translateX(3px);
+}
+
+/* ---- featured "next"/"live" session ---- */
+.eap-featured {
+  padding: 22px;
+  margin-top: 40px;
+  background:
+    linear-gradient(var(--eap-accent-tint), var(--eap-accent-tint)),
+    var(--eap-card);
+  border: 1.5px solid var(--eap-accent-soft);
+  box-shadow:
+    0 2px 4px rgba(109, 40, 217, 0.06),
+    0 14px 34px rgba(109, 40, 217, 0.1);
+}
+.eap-featured .eap-cal {
+  width: 62px;
+}
+.eap-featured .eap-cal-d {
+  font-size: 27px;
+}
+.eap-featured .eap-when {
+  font-size: 22px;
+}
+.eap-featured .eap-book {
+  padding: 12px 20px;
+  font-size: 15px;
+}
+
+.eap-featured--live {
+  background:
+    linear-gradient(var(--eap-live-bg), var(--eap-live-bg)), var(--eap-card);
+  border-color: #f0a3a3;
+  box-shadow:
+    0 2px 4px rgba(220, 38, 38, 0.06),
+    0 14px 34px rgba(220, 38, 38, 0.1);
+}
+
+.eap-flag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 9px;
+}
+.eap-flag-lbl {
+  font-family: var(--eap-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--eap-accent-ink);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.eap-flag-soon {
+  padding: 2px 8px;
+  font-family: var(--eap-mono);
+  font-size: 11px;
+  color: var(--eap-muted);
+  background: #fff;
+  border: 1px solid var(--eap-rule-strong);
+  border-radius: 999px;
+}
+
+/* ---- two-column layout: primary (CTA + featured session) beside the other
+   times. Single column until there's room. ---- */
+.eap-layout {
+  margin-top: 40px;
+}
+.eap-layout .eap-featured {
+  margin-top: 0;
+}
+.eap-col-heading {
+  margin: 0;
+  font-family: var(--eap-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--eap-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.eap-col-primary {
+  margin-bottom: 44px;
+}
+/* When there are no "other times", the featured card + CTA shouldn't stretch
+   across the full width. */
+.eap-single {
+  max-width: 440px;
+}
+
+@media (min-width: 900px) {
+  .eap-layout {
+    display: grid;
+    grid-template-columns: minmax(340px, 400px) 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  /* Keep the primary CTA in view while the list of other times scrolls. */
+  .eap-col-primary {
+    position: sticky;
+    top: 100px;
+    margin-bottom: 0;
+  }
+  /* In the narrower primary column the featured card reads better stacked, with
+     a full-width button. */
+  .eap-col-primary .eap-featured {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: stretch;
+  }
+  .eap-col-primary .eap-featured .eap-book {
+    justify-content: center;
+  }
+}
+
+/* ---- time-slot groups: the time lives in the header, once ---- */
+.eap-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  margin-top: 22px;
+}
+.eap-group-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 13px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--eap-rule);
+}
+.eap-gh-time {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--eap-ink);
+  letter-spacing: -0.01em;
+}
+.eap-gh-pt {
+  margin-left: 8px;
+  font-family: var(--eap-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--eap-soft);
+}
+.eap-gh-hint {
+  font-size: 13px;
+  color: var(--eap-soft);
+}
+.eap-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Rows carry little content now (a minimal date, maybe a Full/Waitlist badge,
+   and the CTA), so they can be compact. */
+.eap-rows .eap-card {
+  gap: 16px;
+  padding: 10px 16px;
+}
+.eap-rows .eap-book {
+  padding: 8px 13px;
+  font-size: 13px;
+}
+/* Minimal flat date for rows: no box, just month over day. */
+.eap-date {
+  flex: none;
+  width: 38px;
+  text-align: center;
+}
+.eap-date-m {
+  display: block;
+  font-family: var(--eap-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--eap-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.eap-date-d {
+  display: block;
+  font-size: 21px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--eap-ink);
+}
+/* when the status row is the only content beside the date tile it should sit
+   flush, not offset by the gap that normally follows a date line */
+.eap-meta--lead {
+  margin-top: 0;
+}
+
+/* ---- secondary CTA: Discord / feedback (deliberately quieter than Book).
+   Stacked vertically so the copy gets the full width and the button sits below,
+   which reads better in the narrow primary column. ---- */
+.eap-cta-band {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  margin-top: 20px;
+  background: var(--eap-card);
+  border: 1px solid var(--eap-rule);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(26, 22, 18, 0.04);
+}
+.eap-cta-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.eap-cta-ico {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  color: #5865f2;
+}
+.eap-cta-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--eap-ink);
+  letter-spacing: -0.01em;
+}
+.eap-cta-sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--eap-muted);
+}
+.eap-discord-btn {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  font-family: var(--eap-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--eap-ink);
+  white-space: nowrap;
+  text-decoration: none;
+  background: transparent;
+  border: 1.5px solid var(--eap-ink);
+  border-radius: 10px;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+.eap-discord-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.eap-discord-btn:hover {
+  color: #fff;
+  background: var(--eap-ink);
+}
+
+/* ---- empty + footer ---- */
+.eap-empty {
+  max-width: 640px;
+  padding: 28px 20px;
+  margin-top: 40px;
+  color: var(--eap-muted);
+  text-align: center;
+  border: 1px dashed var(--eap-rule-strong);
+  border-radius: 12px;
+}
+.eap-empty a {
+  font-weight: 500;
+  color: var(--eap-accent);
+  text-decoration: none;
+}
+.eap-footer {
+  margin-top: 28px;
+  font-size: 14px;
+  color: var(--eap-soft);
+  text-align: center;
+}
+.eap-footer a {
+  font-weight: 500;
+  color: var(--eap-accent);
+  text-decoration: none;
+}
+.eap-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ---- registration modal ---- */
+.eap-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.eap-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  cursor: default;
+  background: rgba(26, 22, 18, 0.45);
+  border: none;
+  animation: eap-fade 140ms ease;
+}
+.eap-modal {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 48px);
+  padding: 28px;
+  overflow-y: auto;
+  background: var(--eap-card);
+  border: 1px solid var(--eap-rule);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(26, 22, 18, 0.25);
+}
+.eap-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--eap-soft);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+}
+.eap-modal-close:hover {
+  color: var(--eap-ink);
+  background: rgba(0, 0, 0, 0.05);
+}
+.eap-modal-title {
+  margin: 0 32px 4px 0;
+  font-size: 22px;
+  font-weight: 750;
+  color: var(--eap-ink);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.eap-modal-sub {
+  margin: 0 0 20px;
+  font-family: var(--eap-mono);
+  font-size: 13px;
+  color: var(--eap-soft);
+}
+.eap-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.eap-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eap-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--eap-body);
+}
+.eap-field-label b {
+  color: var(--eap-accent);
+}
+.eap-field input,
+.eap-field select {
+  padding: 10px 12px;
+  font-family: var(--eap-sans);
+  font-size: 15px;
+  color: var(--eap-ink);
+  background: #fff;
+  border: 1px solid var(--eap-rule-strong);
+  border-radius: 9px;
+}
+.eap-field input:focus,
+.eap-field select:focus {
+  outline: 2px solid var(--eap-accent-soft);
+  outline-offset: 1px;
+  border-color: var(--eap-accent);
+}
+.eap-form-error {
+  margin: 0;
+  font-size: 13px;
+  color: #b91c1c;
+}
+.eap-form-submit {
+  justify-content: center;
+  margin-top: 4px;
+  font-size: 15px;
+}
+.eap-form-submit:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.eap-form-alt {
+  font-family: var(--eap-sans);
+  font-size: 13px;
+  color: var(--eap-soft);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.eap-form-alt:hover {
+  color: var(--eap-accent);
+  text-decoration: underline;
+}
+.eap-modal-success {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  text-align: center;
+}
+@keyframes eap-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eap-card,
+  .eap-book,
+  .eap-arw {
+    transition: none;
+  }
+  .eap-card:hover {
+    transform: none;
+  }
+  .eap-badge.live::before {
+    animation: none;
+  }
+  .eap-modal-backdrop {
+    animation: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .eap-card {
+    grid-template-columns: auto 1fr;
+  }
+  .eap-book {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}

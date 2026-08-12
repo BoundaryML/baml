@@ -2,10 +2,10 @@
 source: crates/baml_lsp2_actions/src/describe_tests.rs
 expression: "project.format_description(&descs[0])"
 ---
-── class ── types.baml:2
+class Point  types.baml:2
 shape: class Point {
-    x: int
-    y: int
+    x: int,
+    y: int,
 }
 refs: 2
   funcs.baml:3  function ExtractPoint(text: string) -> Point {

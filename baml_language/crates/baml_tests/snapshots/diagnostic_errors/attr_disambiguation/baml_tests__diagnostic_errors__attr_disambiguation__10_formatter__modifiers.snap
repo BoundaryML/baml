@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Group C: type modifiers — optional, array, generic.
+// All cases should compile without errors.
+
+class MFoo {
+    x: int,
+}
+
+class OrderingModifiers {
+    // C1: optional + type attr
+    c1: MFoo? @stream.done,
+
+    // C2: optional + field before type
+    c2: MFoo? @alias("c2_alias") @stream.done,
+
+    // C3: array + type attr
+    c3: MFoo[] @stream.done,
+
+    // C4: array + field before type
+    c4: MFoo[] @alias("c4_alias") @stream.done,
+
+    // C5: optional array + mixed
+    c5: MFoo[]? @alias("c5_alias") @stream.done,
+
+    // C6: generic + mixed
+    c6: map<string, MFoo> @alias("c6_alias") @stream.done,
+}

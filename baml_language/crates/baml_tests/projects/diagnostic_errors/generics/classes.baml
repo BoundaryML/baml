@@ -1,0 +1,239 @@
+// ============================================================
+// Generic class: basic instance method with type substitution
+// ============================================================
+
+class Box<T> {
+    value T
+
+    function get(self) -> T {
+        self.value
+    }
+}
+
+function use_box() -> int {
+    let b = Box<int> { value: 42 }
+    b.get()
+}
+
+// ============================================================
+// Generic class: static method returning Self with type args
+// ============================================================
+
+class Wrapper<T> {
+    data T
+
+    function of(value: T) -> Wrapper<T> {
+        Wrapper<T> { data: value }
+    }
+}
+
+function use_wrapper() -> Wrapper<string> {
+    Wrapper<string>.of("hello")
+}
+
+// ============================================================
+// Multiple type parameters
+// ============================================================
+
+class Pair<A, B> {
+    first A
+    second B
+
+    function get_first(self) -> A {
+        self.first
+    }
+
+    function get_second(self) -> B {
+        self.second
+    }
+
+    function swap(self) -> Pair<B, A> {
+        Pair<B, A> { first: self.second, second: self.first }
+    }
+}
+
+function use_pair() -> string {
+    let p = Pair<int, string> { first: 1, second: "two" }
+    p.get_second()
+}
+
+function use_pair_swap() -> Pair<string, int> {
+    let p = Pair<int, string> { first: 1, second: "two" }
+    p.swap()
+}
+
+// ============================================================
+// Static method with non-generic param returning generic class
+// (error: inside the method body, `params: string` is assigned
+// to a field of type T — type mismatch at the definition site)
+// ============================================================
+
+class Maker<T> {
+    data T
+
+    function from_string(params: string) -> Maker<T> {
+        Maker<T> { data: params }
+    }
+
+    function from_value(params: T) -> Maker<T> {
+        Maker<T> { data: params }
+    }
+}
+
+function use_maker_static() -> Maker<int> {
+    Maker<int>.from_value(42)
+}
+
+// ============================================================
+// Instance method returning T (basic substitution)
+// ============================================================
+
+class Holder<T> {
+    data string
+
+    function get_data(self) -> T {
+        // error: method body returns string but declared return is T
+        self.data
+    }
+}
+
+function use_holder() -> int {
+    let h = Holder<int> { data: "hello" }
+    h.get_data()
+}
+
+// ============================================================
+// Method-level generic shadowing class-level generic
+// ============================================================
+
+class Shadow<T> {
+    value T
+
+    // Method declares its own T — shadows the class-level T
+    function bad<T>(x: T) -> T {
+        x
+    }
+}
+
+// ============================================================
+// Wrong number of type arguments (error cases)
+// ============================================================
+
+// Too few args (0 when 1 expected)
+function wrong_arity_missing() -> Box {
+    Box { value: 42 }
+}
+
+// Too many args
+function wrong_arity_extra() -> Box<int, string> {
+    Box<int, string> { value: 42 }
+}
+
+// Too few args (1 when 2 expected)
+function wrong_arity_partial() -> Pair<int> {
+    Pair<int> { first: 1, second: "two" }
+}
+
+// ============================================================
+// Non-generic class used with type args (error case)
+// ============================================================
+
+class Plain {
+    name string
+}
+
+function wrong_arity_on_non_generic() -> Plain<int> {
+    Plain<int> { name: "hello" }
+}
+
+// ============================================================
+// Nested generics: generic class containing another generic
+// ============================================================
+
+class Container<T> {
+    inner Box<T>
+
+    function unwrap(self) -> T {
+        self.inner.get()
+    }
+}
+
+function use_nested() -> int {
+    let c = Container<int> { inner: Box<int> { value: 10 } }
+    c.unwrap()
+}
+
+// ============================================================
+// Static method with params: concrete args via explicit type
+// ============================================================
+
+class Factory<T> {
+    data T
+
+    function create(value: T) -> Factory<T> {
+        Factory<T> { data: value }
+    }
+
+    function get(self) -> T {
+        self.data
+    }
+}
+
+function use_factory() -> int {
+    let f = Factory<int>.create(42)
+    f.get()
+}
+
+// ============================================================
+// Generic field type with optional
+// ============================================================
+
+class MaybeBox<T> {
+    value T?
+
+    function get_or_default(self, default: T) -> T {
+        match (self.value) {
+            let v: T => v,
+            null => default,
+        }
+    }
+}
+
+function use_maybe_box() -> int {
+    let b = MaybeBox<int> { value: null }
+    b.get_or_default(0)
+}
+
+// ============================================================
+// Generic class with list field
+// ============================================================
+
+class Stack<T> {
+    items T[]
+
+    function peek(self) -> T {
+        self.items[0]
+    }
+}
+
+function use_stack() -> string {
+    let s = Stack<string> { items: ["a", "b", "c"] }
+    s.peek()
+}
+
+// ============================================================
+// Bare generic class (no type args) in union + match-arm
+// (error: every reference to a generic class must supply its
+// type args at the type-expression level — there is no raw form)
+// ============================================================
+
+class Foo<T> {
+    value T
+}
+
+function bare_in_union_param(f: Foo<int> | Foo) -> string {
+    match (f) {
+        Foo<int> => "specific",
+        Foo      => "bare",
+    }
+}

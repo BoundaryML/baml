@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+type ExplicitAlias = (x: int) -> int throws never;
+
+type OpenAlias = (x: int) -> int throws unknown;
+
+class Callbacks {
+    on_done: (value: int) -> int throws never,
+    on_skip: ((value: int) -> int throws never)?,
+}
+
+function immediate_callback(cb: (value: int) -> int) -> int {
+    cb(1)
+}
+
+function lambda_explicit_callback() -> int {
+    let apply = (f: (value: int) -> int throws never, x: int) -> int {
+        f(x)
+    };
+    apply(
+        (value: int) -> int {
+            value
+        },
+        1,
+    )
+}
+
+function explicit_nested(cb: ((value: int) -> int throws never) -> int) -> int {
+    cb((value: int) -> int {
+        value
+    })
+}
+
+function explicit_let() -> int {
+    let f: (x: int) -> int throws never = (x: int) -> int {
+        x
+    };
+    f(1)
+}
+
+function explicit_return() -> (value: int) -> int throws never {
+    (value: int) -> int {
+        value
+    }
+}

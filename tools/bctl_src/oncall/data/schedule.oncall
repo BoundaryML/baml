@@ -1,0 +1,42 @@
+# BEGIN_ONCALL_METADATA
+# slack_config:
+#   notification_channel: "#oncall"
+#
+# roster_by_rotation:
+#   oncall-founders: [vbv, aaron]
+#   oncall-discord: [antonio, kai, paulo, sam]
+#   none: [anish, avery]
+#
+# roster_by_human:
+#   aaron: [oncall-founders]
+#   anish: [none]
+#   antonio: [oncall-discord]
+#   avery: [none]
+#   kai: [oncall-discord]
+#   paulo: [oncall-discord]
+#   sam: [oncall-discord]
+#   vbv: [oncall-founders]
+# END_ONCALL_METADATA
+
+2026-04-18 oncall-founders=vbv   oncall-discord=sam
+2026-04-20 oncall-founders=vbv   oncall-discord=sam
+2026-04-24 oncall-founders=vbv   oncall-discord=sam
+2026-05-01 oncall-founders=aaron oncall-discord=antonio
+2026-05-08 oncall-founders=vbv   oncall-discord=kai
+2026-05-15 oncall-founders=aaron oncall-discord=paulo
+2026-05-22 oncall-founders=vbv   oncall-discord=sam
+2026-05-29 oncall-founders=aaron oncall-discord=antonio
+2026-06-05 oncall-founders=vbv   oncall-discord=kai
+2026-06-12 oncall-founders=aaron oncall-discord=paulo
+2026-06-19 oncall-founders=vbv   oncall-discord=sam
+2026-06-26 oncall-founders=aaron oncall-discord=antonio
+2026-07-03 oncall-founders=vbv   oncall-discord=kai
+2026-07-10 oncall-founders=aaron oncall-discord=paulo
+2026-07-17 oncall-founders=vbv   oncall-discord=sam
+2026-07-24 oncall-founders=aaron oncall-discord=antonio
+2026-07-31 oncall-founders=vbv   oncall-discord=kai
+2026-08-07 oncall-founders=aaron oncall-discord=paulo
+2026-08-14 oncall-founders=vbv   oncall-discord=sam
+2026-08-21 oncall-founders=aaron oncall-discord=antonio
+2026-08-28 oncall-founders=vbv   oncall-discord=kai
+2026-09-04 oncall-founders=aaron oncall-discord=paulo

@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+class A {
+    field: string,
+}
+
+class A {
+    field: string,
+}
+
+type A = int;

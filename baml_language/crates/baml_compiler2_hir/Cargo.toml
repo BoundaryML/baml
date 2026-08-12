@@ -12,7 +12,11 @@ baml_compiler2_ast = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_workspace = { workspace = true }
+indexmap = { workspace = true }
 la-arena = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
 text-size = { workspace = true }
+
+[dev-dependencies]
+baml_builtins2 = { workspace = true }

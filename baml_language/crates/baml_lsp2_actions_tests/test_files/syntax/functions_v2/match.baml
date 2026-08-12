@@ -21,14 +21,14 @@ class Situation {
   rocks Rock[]
 }
 
-// Should throw two errors:
-//  rock not reachable, _ not reachable.
+// Should throw one error:
+// rock has a type mismatch, so usefulness analysis is skipped.
 function Remand(s: Situation) -> string {
   if (s.pets.length() > 0) {
     match (s.pets[0]) {
-      cat: Cat => "Nice cat you got there.",
-      dog: Dog => "Bowwow",
-      rock: Rock => "...",
+      let cat: Cat => "Nice cat you got there.",
+      let dog: Dog => "Bowwow",
+      let rock: Rock => "...",
       _ => "...",
     }
   }
@@ -37,4 +37,11 @@ function Remand(s: Situation) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0001
+//
+//   × mismatched types
+//     ╭─[functions_v2_match.baml:31:7]
+//  31 │       let rock: Rock => "...",
+//     ·       ───────┬──────
+//     ·              ╰── expected `Pet`, found `Rock`
+//     ╰────

@@ -1,0 +1,1 @@
+{"version":3,"file":"platform.js","sourceRoot":"","sources":["../typescript_src/platform.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,WAAW,EAAE,MAAM,aAAa,CAAC;AAG1C,MAAM,CAAC,MAAM,uBAAuB,GAAG,IAAI,CAAC;AAE5C,MAAM,UAAU,eAAe,CAAC,IAAY,EAAE,cAAyB;IACnE,WAAW,EAAE,CAAC;IACd,OAAO,CAAC,IAAI,CAAC,IAAI,CAAC,CAAC;AACvB,CAAC"}

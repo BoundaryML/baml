@@ -10,7 +10,7 @@ class user.WithMaps {
   complex: map<string, user.Inner>
 }
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.WithMaps$stream {
   simple: map<string, int>

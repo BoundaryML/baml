@@ -1,0 +1,33 @@
+# A slim AWS credential + region resolver.
+#
+# Replaces `aws-config` (and the `aws-sdk-sso`/`aws-sdk-sts`/`aws-smithy-*`
+# dependency tree) for BAML's use case: resolving AWS credentials and region
+# from the standard sources (explicit options, environment, shared config /
+# credentials files, credential_process, SSO cache, ECS/container endpoint, and
+# EC2 IMDS). All IO is abstracted behind the `CredentialIo` trait so the host
+# can route it through its own sandboxed runtime.
+[package]
+name = "forked_aws_config"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "aws_config"
+
+[dependencies]
+async-trait = { workspace = true }
+aws-sigv4 = { workspace = true }
+hex = { workspace = true }
+serde_json = { workspace = true }
+sha1 = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "macros" ] }
+
+[lints]
+workspace = true

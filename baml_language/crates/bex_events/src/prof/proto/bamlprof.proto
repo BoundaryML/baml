@@ -1,0 +1,202 @@
+// The .bamlprof on-disk/wire contract (BEX event-stream design v2 §4).
+//
+// File framing: one length-delimited EventFileHeaderV1, then a stream of
+// length-delimited DiskEventV1 messages. One file per engine per process:
+// <process_id>-<started_at>-<engine>.bamlprof under the profiles directory.
+//
+// Content mirrors the raw ring records (no enrichment), with one
+// transformation: ring records carry raw clock ticks, and the consumer
+// converts them to nanoseconds at transcode — `timestamp_ns` fields here are
+// always nanoseconds. `0 = none` ring conventions become optional fields.
+//
+// Ordering: events appear in per-ring drain order, and one logical thread's
+// events can arrive via several rings (tasks migrate OS threads), so FILE
+// ORDER IS NOT EVENT ORDER. Readers must sort by timestamp_ns within each
+// thread_id before reconstructing call trees. After that sort, every
+// thread's first record is its StartThread.
+//
+// Renderer contract (the reconciliation §7 decisions):
+// - function_id 0 means the call could not be attributed to a function_table
+//   row (synthetic entry trampolines, host-injected callables). Display such
+//   calls under the reserved `baml.<unknown-function>` table row; no record
+//   ever references that row's id directly.
+// - A call's effective $id at a point in time is its most recent
+//   SetFunctionId; for a single display label take the last one (last-wins).
+//   One record is emitted per baml.id.set() call, deliberately undeduplicated.
+syntax = "proto3";
+
+package baml.prof.v1;
+
+message DiskEventV1 {
+  oneof event {
+    StartThread start_thread = 1;
+    EndThread end_thread = 2;
+    CallFunction call_function = 3;
+    SetFunctionId set_function_id = 4;
+    EndFunction end_function = 5;
+    Heartbeat heartbeat = 6;
+  }
+}
+
+message StartThread {
+  uint64 thread_id = 1;
+  // Spawning thread; absent = engine-root thread.
+  optional uint64 parent_thread_id = 2;
+  // Spawning call in the parent thread; absent = none.
+  optional uint64 parent_call_id = 3;
+  // User-defined, runtime value, length-capped at capture (<= 256 bytes).
+  optional string name = 4;
+  uint64 timestamp_ns = 5;
+}
+
+message EndThread {
+  uint64 thread_id = 1;
+  ThreadEndStatus status = 2;
+  uint64 timestamp_ns = 3;
+}
+
+message CallFunction {
+  uint64 thread_id = 1;
+  uint64 call_id = 2;
+  // Intra-thread caller; absent = thread-root call.
+  optional uint64 parent_call_id = 3;
+  // Per-run runtime metadata id (see the header's function_table); the FQN
+  // is the cross-run key.
+  uint32 function_id = 4;
+  uint64 timestamp_ns = 5;
+  // Caller-side source span for the invocation that produced this call.
+  // Derived from VM/compiler source maps when available; absent means graph
+  // overlay projection must leave the call unattached rather than guessing by
+  // callee name or timing.
+  optional uint32 call_site_file_id = 6;
+  optional uint32 call_site_start_offset = 7;
+  optional uint32 call_site_end_offset = 8;
+  optional uint32 call_site_line = 9;
+}
+
+// Reserved at M2-M4; the M1 `$id` language surface emits it. Sets the call's
+// $id - unrelated to function_id (u32 metadata).
+message SetFunctionId {
+  uint64 thread_id = 1;
+  uint64 call_id = 2;
+  // The override UUID bytes (baml.id.new()); absent => $id = CallRef.
+  bytes id = 3;
+  uint64 timestamp_ns = 4;
+}
+
+message EndFunction {
+  uint64 thread_id = 1;
+  uint64 call_id = 2;
+  FunctionEndStatus status = 3;
+  uint64 timestamp_ns = 4;
+}
+
+// Process-level liveness; stamped by the consumer on a timer (MVP
+// simplification of "uploader emits it").
+message Heartbeat {
+  uint64 timestamp_ns = 1;
+}
+
+// How a single call frame ended — a closed taxonomy of the ways a frame can
+// be popped: normal return, exception unwind, cancellation, exit unwind.
+// Statuses describe the FRAME's fate, not the program's outcome (a frame
+// unwound by an exit that is later caught still ended EXITED).
+enum FunctionEndStatus {
+  FUNCTION_END_STATUS_OK = 0;
+  // Unwound by an exception (including a baml.panics.Exit / .Cancelled value
+  // whose class could not be inspected; see EXITED/CANCELLED for the
+  // recognized cases).
+  FUNCTION_END_STATUS_ERRORED = 1;
+  // Closed by cancellation: either unwound by a baml.panics.Cancelled panic,
+  // or drained open by the engine when its thread was cancelled (cancelled
+  // threads never strand open calls).
+  FUNCTION_END_STATUS_CANCELLED = 2;
+  // Unwound by a baml.panics.Exit panic (baml.sys.exit). The exit code is
+  // not recorded at frame level; it surfaces only on the ROOT thread's
+  // EndThread.status (COMPLETED for exit(0), ERRORED otherwise). A spawned
+  // child terminated by an exit settles like any unhandled throw — its
+  // EndThread is ERRORED regardless of code — so EXITED frames are the
+  // reliable exit signal off the root.
+  FUNCTION_END_STATUS_EXITED = 3;
+}
+
+// Minimal by design; protobuf-compatible extension point.
+enum ThreadEndStatus {
+  THREAD_END_STATUS_COMPLETED = 0;
+  THREAD_END_STATUS_CANCELLED = 1;
+  THREAD_END_STATUS_ERRORED = 2;
+}
+
+message EventFileHeaderV1 {
+  // UUID, minted once per process.
+  bytes process_id = 1;
+  uint64 engine_id = 2;
+  // What identifies a Program is still open (M0 coordination); empty for now.
+  string program_id = 3;
+  // Wall anchor as 16 little-endian bytes (u128 nanoseconds since the Unix
+  // epoch): wall(event) = started_at_epoch_ns + event.timestamp_ns.
+  bytes started_at_epoch_ns = 4;
+  // Per-run runtime metadata, not stable across recompiles; the FQN is the
+  // cross-run key.
+  FunctionMetadataTable function_table = 5;
+  // Diagnostics about the tick source behind event timestamps. Purely
+  // informational: ring records carry raw ticks, but the consumer converts
+  // to nanoseconds before writing, so `timestamp_ns` fields are always ns
+  // and nothing needs these to interpret them.
+  ClockKind clock_kind = 6;
+  // ns-per-tick rational (numer/denom) in effect when this header was
+  // written. For CLOCK_KIND_TSC this is the estimate at header time; the
+  // rate is refined ~1 s into the run (see ClockQuality).
+  uint64 tick_ns_numer = 7;
+  uint64 tick_ns_denom = 8;
+  ClockQuality clock_quality = 9;
+  // Durable source/revision metadata when available. These are artifact
+  // metadata, not playground BoundaryId and not hot-path semantic hashes.
+  optional string source_snapshot_id = 10;
+  optional string revision_id = 11;
+}
+
+// Which hardware source produced event timestamps (header diagnostics).
+enum ClockKind {
+  CLOCK_KIND_UNSPECIFIED = 0;
+  // x86_64 invariant TSC (rdtsc), consumer-calibrated rate.
+  CLOCK_KIND_TSC = 1;
+  // aarch64 generic timer (CNTVCT_EL0), exact architectural rate.
+  CLOCK_KIND_CNTVCT = 2;
+  // Monotonic OS-clock fallback; ticks are nanoseconds.
+  CLOCK_KIND_INSTANT = 3;
+  // Test/stub builds.
+  CLOCK_KIND_STUB = 4;
+}
+
+// How trustworthy the tick->ns rate was at header-write time.
+enum ClockQuality {
+  CLOCK_QUALITY_UNSPECIFIED = 0;
+  // Platform-stated exact rational (CNTVCT, INSTANT, STUB).
+  CLOCK_QUALITY_EXACT = 1;
+  // TSC rate refined over a >=1 s window.
+  CLOCK_QUALITY_CALIBRATED = 2;
+  // TSC rate from the initial ~2 ms estimate only (~0.1% rate error,
+  // affecting at most the first ~1 s of events).
+  CLOCK_QUALITY_COARSE = 3;
+}
+
+message FunctionMetadataTable {
+  repeated FunctionMetadata functions = 1;
+}
+
+message FunctionMetadata {
+  uint32 function_id = 1;
+  string fqn = 2;
+  string source_file = 3;
+  uint32 span_start = 4;
+  uint32 span_end = 5;
+  // "bytecode" | "sysop" | "native" (interim provider; M0 finalizes).
+  string kind = 6;
+  optional string definition_key = 7;
+  optional string owner_type = 8;
+  optional string parent_function = 9;
+  optional string lambda_path = 10;
+  optional string package_name = 11;
+  repeated string namespace = 12;
+}

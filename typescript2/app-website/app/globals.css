@@ -1,0 +1,816 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./atb/atb.css";
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&display=swap");
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+
+/* ---- Site-wide scrollbars ----
+ * Slim, rounded, ink-tinted thumb on a transparent track — matches the paper
+ * register instead of the chunky native chrome. Tinting from --foreground
+ * means every theme scope (.dark, .baml-playground-root) gets a matching
+ * thumb for free.
+ * Two mechanisms: scrollbar-{width,color} for Firefox + Chromium 121+,
+ * ::-webkit-scrollbar for Safari/older Chromium (ignored when the standard
+ * properties are supported). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 26%, transparent)
+    transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 26%, transparent);
+  border-radius: 999px;
+  /* Transparent border + padding-box clip = inset pill thumb. */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--foreground) 42%, transparent);
+}
+
+/* Scan pkg-playground TSX sources so its bg-vsc-*, text-vsc-*, etc. utilities
+ * and the shadcn classes it uses (bg-card, text-foreground, …) are emitted. */
+@source "../../pkg-playground/src/**/*.tsx";
+
+@theme inline {
+  /* Pkg-playground "vsc-*" token family — register so Tailwind emits
+   * utilities like bg-vsc-bg, text-vsc-text-faint, font-vsc-mono. Values
+   * are read from CSS vars set inside .baml-playground-root. */
+  --color-vsc-bg: var(--vsc-bg);
+  --color-vsc-surface: var(--vsc-surface);
+  --color-vsc-panel: var(--vsc-panel);
+  --color-vsc-border: var(--vsc-border);
+  --color-vsc-border-subtle: var(--vsc-border-subtle);
+  --color-vsc-text: var(--vsc-text);
+  --color-vsc-text-bright: var(--vsc-text-bright);
+  --color-vsc-text-muted: var(--vsc-text-muted);
+  --color-vsc-text-faint: var(--vsc-text-faint);
+  --color-vsc-accent: var(--vsc-accent);
+  --color-vsc-accent-fg: var(--vsc-accent-fg);
+  --color-vsc-accent-hover: var(--vsc-accent-hover);
+  --color-vsc-list-hover: var(--vsc-list-hover);
+  --color-vsc-list-hoverBg: var(--vsc-list-hover);
+  --color-vsc-hover: var(--vsc-list-hover);
+  --color-vsc-green: var(--vsc-green);
+  --color-vsc-red: var(--vsc-red);
+  --color-vsc-error: var(--vsc-red);
+  --color-vsc-yellow: var(--vsc-yellow);
+  --color-vsc-yellow-subtle: var(--vsc-yellow-subtle);
+  --color-vsc-link: var(--vsc-link);
+  --color-vsc-bg-secondary: var(--vsc-bg-secondary);
+  --color-vsc-input-bg: var(--vsc-input-bg);
+  --color-vsc-input-fg: var(--vsc-input-fg);
+  --color-vsc-input-border: var(--vsc-input-border);
+  --font-vsc: var(--font-vsc-family);
+  --font-vsc-mono: var(--font-vsc-mono-family);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --navigation-height: 3.5rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* War-on-slop palette (scoped to the /fight-slop-with-slop route via the
+     `.war-on-slop` wrapper). Namespaced `wos-` so the campaign's purple accent
+     never collides with the site's shadcn `accent` token. */
+  --color-wos-cream: #fbf7ed;
+  --color-wos-cream-hi: #fffdf6;
+  --color-wos-ink: #1f1e1b;
+  --color-wos-ink-2: #5e5a4f;
+  --color-wos-accent: #7c3aed;
+  --color-wos-accent-deep: #6d28d9;
+  --color-wos-line: #e3dfd3;
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-border-beam: border-beam calc(var(--duration) * 1s) infinite linear;
+  --animate-image-glow: image-glow 4100ms 600ms ease-out forwards;
+  --animate-fade-in: fade-in 1000ms var(--animation-delay, 0ms) ease forwards;
+  --animate-fade-up: fade-up 1000ms var(--animation-delay, 0ms) ease forwards;
+  --animate-shimmer: shimmer 8s infinite;
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  --animate-aurora: aurora 10s linear infinite;
+  --animate-shimmer-slide: shimmer-slide 3s linear infinite;
+  --animate-spin-around: spin-around 1s linear infinite;
+  --animate-ripple: ripple 0.6s ease-out;
+  --animate-orbit: orbit calc(var(--duration) * 1s) linear infinite;
+  --animate-elliptical-orbit: elliptical-orbit 20s linear infinite;
+  --animate-grid: grid 20s linear infinite;
+
+  @keyframes orbit {
+    0% {
+      transform: rotate(calc(var(--angle) * 1deg))
+        translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg));
+    }
+    100% {
+      transform: rotate(calc(var(--angle) * 1deg + 360deg))
+        translateY(calc(var(--radius) * 1px))
+        rotate(calc((var(--angle) * -1deg) - 360deg));
+    }
+  }
+
+  @keyframes slide-down {
+    from {
+      height: 0px;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0px;
+    }
+  }
+
+  /* Add this to your globals.css */
+  @keyframes enterFromRight {
+    from {
+      opacity: 0;
+      transform: translateX(200px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes enterFromTop {
+    from {
+      opacity: 0;
+      transform: translateY(-200px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes enterFromBottom {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes enterFromLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-200px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes exitToRight {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(200px);
+    }
+  }
+
+  @keyframes exitToLeft {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-200px);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: rotateX(-30deg) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: rotateX(0deg) scale(1);
+    }
+  }
+
+  @keyframes scaleOut {
+    from {
+      opacity: 1;
+      transform: rotateX(0deg) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: rotateX(-10deg) scale(0.95);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes border-beam {
+    100% {
+      offset-distance: 100%;
+    }
+  }
+  @keyframes image-glow {
+    0% {
+      opacity: 0;
+      animation-timing-function: cubic-bezier(0.74, 0.25, 0.76, 1);
+    }
+    10% {
+      opacity: 0.7;
+      animation-timing-function: cubic-bezier(0.12, 0.01, 0.08, 0.99);
+    }
+    100% {
+      opacity: 0.4;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes shimmer {
+    0%,
+    90%,
+    100% {
+      background-position: calc(-100% - var(--shimmer-width)) 0;
+    }
+    30%,
+    60% {
+      background-position: calc(100% + var(--shimmer-width)) 0;
+    }
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes marquee-vertical {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes aurora {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  @keyframes shimmer-slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes spin-around {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes ripple {
+    0% {
+      transform: scale(0);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(4);
+      opacity: 0;
+    }
+  }
+  @keyframes grid {
+    0% {
+      transform: translateY(0);
+    }
+    100% {
+      transform: translateY(calc(var(--cell-size) * -1));
+    }
+  }
+
+  @keyframes elliptical-orbit {
+    from {
+      transform: rotate(var(--angle, 0) deg)
+        translate(var(--h-radius, 160px), 0)
+        rotate(calc(var(--angle, 0) deg * -1));
+    }
+    to {
+      transform: rotate(calc(var(--angle, 0) deg + 360deg))
+        translate(var(--h-radius, 160px), 0)
+        rotate(calc((var(--angle, 0) deg + 360deg) * -1));
+    }
+  }
+}
+
+:root {
+  --radius: 0.625rem;
+  /* Variant-inspired light theme */
+  --background: #fbf7ed;
+  --foreground: #141414;
+  --card: #fffdf6;
+  --card-foreground: #141414;
+  --popover: #fffdf6;
+  --popover-foreground: #141414;
+  --primary: #7c3aed;
+  --primary-foreground: #e8e3db;
+  --secondary: #059669;
+  --secondary-foreground: #e8e3db;
+  --muted: #e8e1d2;
+  --muted-foreground: #57534e;
+  --accent: #7c3aed;
+  --accent-foreground: #e8e3db;
+  --destructive: #dc2626;
+  --destructive-foreground: #f9fafb;
+  --border: #d8cfbd;
+  --input: #d8cfbd;
+  --ring: #7c3aed;
+
+  --color-one: oklch(83% 0.12 65); /* #ffbd7a */
+  --color-two: oklch(72% 0.15 340); /* #fe8bbb */
+  --color-three: oklch(65% 0.18 280); /* #9e7aff */
+
+  /* --color-one: oklch(85% 0.15 165); /* #37ecba */
+  /* --color-two: oklch(70% 0.08 240); /* #72afd3 */
+  /* --color-three: oklch(55% 0.25 15); /* #ff2e63 */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: #e8e3db;
+  --sidebar-foreground: #141414;
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #e8e3db;
+  --sidebar-accent: #d8d1c6;
+  --sidebar-accent-foreground: #141414;
+  --sidebar-border: #c8c2b7;
+  --sidebar-ring: #7c3aed;
+}
+
+/* Scoped editor-themed surface for the playground. Wraps the editor
+ * and ExecutionPanel so pkg-playground components (which use bg-card,
+ * text-foreground, vsc-* utilities, etc.) inherit local values without
+ * leaking back into the marketing-site theme. */
+.baml-playground-root {
+  color-scheme: light;
+
+  /* vsc-* token defaults */
+  --vsc-bg: #fffdf6;
+  --vsc-bg-secondary: #f4eee2;
+  --vsc-surface: #f7f0e4;
+  --vsc-panel: #fffdf6;
+  --vsc-border: #d8cfbd;
+  --vsc-border-subtle: #e5dccb;
+  --vsc-text: #2b2520;
+  --vsc-text-bright: #1a1612;
+  --vsc-text-muted: #6f675c;
+  --vsc-text-faint: #9a9083;
+  --vsc-accent: #6d28d9;
+  --vsc-accent-fg: #ffffff;
+  --vsc-accent-hover: #5b21b6;
+  --vsc-list-hover: #eee6d8;
+  --vsc-green: #047857;
+  --vsc-red: #c2410c;
+  --vsc-yellow: #a16207;
+  --vsc-yellow-subtle: rgba(161, 98, 7, 0.12);
+  --vsc-link: #6d28d9;
+  --vsc-input-bg: #fffdf6;
+  --vsc-input-fg: #2b2520;
+  --vsc-input-border: #d8cfbd;
+  --font-vsc-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-vsc-mono-family: "SF Mono", "Fira Code", Consolas, monospace;
+
+  /* Override shadcn tokens for descendants (dialogs, popovers, buttons inside
+   * the playground). Site values stay on the rest of the page since this
+   * scope only cascades into the playground. */
+  --background: #fffdf6;
+  --foreground: #2b2520;
+  --card: #fffdf6;
+  --card-foreground: #2b2520;
+  --popover: #fffdf6;
+  --popover-foreground: #2b2520;
+  --primary: #6d28d9;
+  --primary-foreground: #ffffff;
+  --secondary: #f4eee2;
+  --secondary-foreground: #2b2520;
+  --muted: #f4eee2;
+  --muted-foreground: #6f675c;
+  --accent: #eee6d8;
+  --accent-foreground: #2b2520;
+  --destructive: #c2410c;
+  --destructive-foreground: #ffffff;
+  --border: #d8cfbd;
+  --input: #d8cfbd;
+  --ring: #6d28d9;
+
+  background-color: var(--vsc-bg);
+  color: var(--vsc-text);
+}
+
+/* Dark variant of the playground surface. Activated when the page's code
+ * theme is dark (LivePlayground sets data-theme="dark" on the root). Mirrors
+ * the VS Code Dark+ surfaces the Monaco editor uses, so the ExecutionPanel
+ * chrome and dialogs match the editor instead of staying light. Keeps the
+ * brand purple as the accent, but lightened so it reads on a dark panel
+ * (the old #6d28d9 codelens/link was nearly invisible on dark). */
+.baml-playground-root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --vsc-bg: #1e1e1e;
+  --vsc-bg-secondary: #252526;
+  --vsc-surface: #252526;
+  --vsc-panel: #1e1e1e;
+  --vsc-border: #333333;
+  --vsc-border-subtle: #2a2a2a;
+  --vsc-text: #d4d4d4;
+  --vsc-text-bright: #ffffff;
+  --vsc-text-muted: #9d9d9d;
+  --vsc-text-faint: #6e6e6e;
+  --vsc-accent: #a78bfa;
+  --vsc-accent-fg: #1a1612;
+  --vsc-accent-hover: #c4b5fd;
+  --vsc-list-hover: #2a2d2e;
+  --vsc-green: #4ec9b0;
+  --vsc-red: #f48771;
+  --vsc-yellow: #d7ba7d;
+  --vsc-yellow-subtle: rgba(215, 186, 125, 0.14);
+  --vsc-link: #a78bfa;
+  --vsc-input-bg: #3c3c3c;
+  --vsc-input-fg: #d4d4d4;
+  --vsc-input-border: #3c3c3c;
+
+  --background: #1e1e1e;
+  --foreground: #d4d4d4;
+  --card: #1e1e1e;
+  --card-foreground: #d4d4d4;
+  --popover: #252526;
+  --popover-foreground: #d4d4d4;
+  --primary: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --secondary: #252526;
+  --secondary-foreground: #d4d4d4;
+  --muted: #252526;
+  --muted-foreground: #9d9d9d;
+  --accent: #2a2d2e;
+  --accent-foreground: #ffffff;
+  --destructive: #f48771;
+  --destructive-foreground: #ffffff;
+  --border: #333333;
+  --input: #3c3c3c;
+  --ring: #8b5cf6;
+
+  background-color: var(--vsc-bg);
+  color: var(--vsc-text);
+}
+
+.dark {
+  --background: oklch(0% 0 0);
+  --foreground: oklch(98% 0 0);
+  --card: oklch(15% 0 0);
+  --card-foreground: oklch(98% 0 0);
+  --popover: oklch(15% 0 0);
+  --popover-foreground: oklch(98% 0 0);
+  --primary: oklch(98% 0 0);
+  --primary-foreground: oklch(26% 0 0);
+  --secondary: oklch(35% 0.25 280);
+  --secondary-foreground: oklch(98% 0 0);
+  --muted: oklch(35% 0 0);
+  --muted-foreground: oklch(85% 0 0);
+  --accent: oklch(35% 0 0);
+  --accent-foreground: oklch(98% 0 0);
+  --destructive: oklch(35% 0.15 25);
+  --destructive-foreground: oklch(98% 0 0);
+  --border: oklch(35% 0 0);
+  --input: oklch(35% 0 0);
+  --ring: oklch(85% 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(
+        circle at 1px 1px,
+        rgba(42, 37, 32, 0.035) 1px,
+        transparent 0
+      ),
+      linear-gradient(
+        180deg,
+        rgba(255, 253, 246, 0.82),
+        rgba(251, 247, 237, 0.82)
+      );
+    background-size:
+      18px 18px,
+      100% 100%;
+    font-family:
+      "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}
+
+/* Ensure terminal button stays above content */
+.terminal-header {
+  position: relative;
+  z-index: 10;
+}
+
+.terminal-content {
+  position: relative;
+  z-index: 0;
+}
+
+code[data-line-numbers] {
+  counter-reset: line;
+}
+
+code[data-line-numbers] > [data-line]::before {
+  display: inline-block;
+  width: 0.75rem;
+  margin-right: 2rem;
+  color: gray;
+  text-align: right;
+  content: counter(line);
+  counter-increment: line;
+}
+
+code[data-line-numbers-max-digits="2"] > [data-line]::before {
+  width: 1.25rem;
+}
+
+code[data-line-numbers-max-digits="3"] > [data-line]::before {
+  width: 1.75rem;
+}
+
+code[data-line-numbers-max-digits="4"] > [data-line]::before {
+  width: 2.25rem;
+}
+
+pre > code {
+  counter-reset: line;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dark code[data-theme*=" "],
+  .dark code[data-theme*=" "] span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
+html.dark code[data-theme*=" "],
+html.dark code[data-theme*=" "] span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+
+code[data-line-numbers] {
+  counter-reset: line;
+}
+
+code[data-line-numbers] > [data-line]::before {
+  content: counter(line);
+  counter-increment: line;
+  @apply inline-block w-4 mr-4 text-right text-gray-500;
+}
+
+[data-highlighted-line] {
+  background: rgba(200, 200, 255, 0.1);
+  @apply border-l-blue-400;
+}
+
+[data-highlighted-chars] {
+  box-shadow: 0 0 0 4px rgb(82 82 91 / 0.5);
+  @apply bg-zinc-600/50 rounded;
+}
+
+[data-chars-id] {
+  @apply shadow-none p-1 border-b-2;
+}
+
+[data-chars-id="v"] {
+  @apply !text-pink-300 bg-rose-800/50 border-b-pink-600 font-bold;
+}
+
+[data-chars-id="s"] {
+  @apply !text-yellow-300 bg-yellow-800/50 border-b-yellow-600 font-bold;
+}
+
+[data-chars-id="i"] {
+  @apply !text-purple-200 bg-purple-800/50 border-b-purple-600 font-bold;
+}
+
+[data-rehype-pretty-code-title] {
+  @apply bg-zinc-700 text-zinc-200 rounded-t-lg py-2 px-3 font-semibold text-sm;
+}
+
+/* Playground hint animations */
+@keyframes fade-in-hint {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes bounce-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+.animate-fade-in-hint {
+  animation: fade-in-hint 0.6s ease-out 2s both;
+}
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s ease-in-out infinite;
+}
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* Hide the fundraising site banner on phones and pull the navbar up to the
+   top (the banner normally reserves 41px above the fixed nav). */
+@media (max-width: 640px) {
+  .site-banner,
+  .site-banner-reserved {
+    display: none !important;
+  }
+  .nav-responsive {
+    top: 0 !important;
+  }
+  .nav-spacer {
+    height: 58px !important;
+  }
+}

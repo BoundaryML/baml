@@ -418,7 +418,7 @@ Remember that the client is defined in the BAML function (or you can use the
 
 ```baml BAML {2}
 function ExtractResume(resume: string) -> Resume {
-  client "google-ai/gemini-2.5-flash"
+  client "google-ai/gemini-3.5-flash"
   // Prompt here...
 }
 ```
@@ -440,7 +440,7 @@ async def run():
 
   # Use the gemini library to send the request.
   res = await client.aio.models.generate_content(
-    model="gemini-2.5-flash",
+    model="gemini-3.5-flash",
     contents=body["contents"],
     config={
       "safety_settings": [body["safetySettings"]] # REST API uses camelCase
@@ -461,7 +461,7 @@ import { b } from 'baml_client'
 async function run() {
   // Initialize the Gemini client.
   const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
-  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" })
+  const model = client.getGenerativeModel({ model: "gemini-3.5-flash" })
 
   // Get the HTTP request object.
   const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")

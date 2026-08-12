@@ -1,70 +1,91 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getPlaygroundHtml } from '../getWebviewHtml';
-import * as http from 'http';
 
-// Stub http.get to return fake HTML without hitting a real server.
-vi.mock('http', () => ({
-  get: vi.fn(),
+vi.mock('vscode', () => {
+  const makeUri = (fsPath: string) => ({
+    fsPath,
+    path: fsPath,
+    toString: () => fsPath,
+  });
+
+  return {
+    Uri: {
+      file: makeUri,
+      parse: makeUri,
+      joinPath: (base: { fsPath: string }, ...paths: string[]) => makeUri(
+        [base.fsPath.replace(/\/$/, ''), ...paths].join('/'),
+      ),
+    },
+  };
+});
+
+import { getPlaygroundHtml } from '../getWebviewHtml';
+import { promises as fs } from 'fs';
+import { Uri, type Webview } from 'vscode';
+
+vi.mock('fs', () => ({
+  promises: {
+    readFile: vi.fn(),
+  },
 }));
 
 const FAKE_HTML = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
     <title>Playground</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/assets/index.js"></script>
+    <link rel="stylesheet" href="/assets/index.css">
   </body>
 </html>`;
 
+const webview = {
+  cspSource: 'vscode-webview://test',
+  asWebviewUri: (uri: Uri) => Uri.parse(`vscode-webview://test/${uri.path.split('/dist/playground/')[1]}`),
+} as Webview;
+
+const extensionUri = Uri.file('/extension');
+
 beforeEach(() => {
-  // Simulate a successful HTTP response.
-  (http.get as ReturnType<typeof vi.fn>).mockImplementation((_url: string, cb: (res: any) => void) => {
-    const res = {
-      on(event: string, handler: (data?: string) => void) {
-        if (event === 'data') handler(FAKE_HTML);
-        if (event === 'end') handler();
-        return res;
-      },
-    };
-    cb(res);
-    return { on: () => ({}), setTimeout: () => ({}) };
-  });
+  vi.mocked(fs.readFile).mockResolvedValue(FAKE_HTML);
 });
 
 describe('getPlaygroundHtml', () => {
-  it('injects a base tag pointing at the server', async () => {
-    const html = await getPlaygroundHtml(3700);
+  it('reads the packaged playground HTML', async () => {
+    await getPlaygroundHtml(webview, extensionUri, 4265);
 
-    expect(html).toContain('<base href="http://localhost:3700/"');
+    expect(fs.readFile).toHaveBeenCalledWith('/extension/dist/playground/index.html', 'utf8');
   });
 
   it('injects the WS URL global', async () => {
-    const html = await getPlaygroundHtml(3700);
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(html).toContain('__PLAYGROUND_WS_URL');
-    expect(html).toContain('ws://localhost:3700/api/ws');
+    expect(html).toContain('ws://localhost:4265/api/ws');
   });
 
-  it('injects a CSP allowing localhost scripts', async () => {
-    const html = await getPlaygroundHtml(3700);
+  it('injects a CSP allowing packaged scripts and localhost websocket traffic', async () => {
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
-    expect(html).toContain('script-src http://localhost:*');
+    expect(html).toContain('script-src vscode-webview://test');
     expect(html).toContain('connect-src ws://localhost:*');
+    expect(html).not.toContain(`default-src 'self'`);
   });
 
   it('does not contain an iframe', async () => {
-    const html = await getPlaygroundHtml(3700);
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(html).not.toContain('<iframe');
   });
 
-  it('preserves the original body content', async () => {
-    const html = await getPlaygroundHtml(3700);
+  it('rewrites Vite asset URLs to webview URIs', async () => {
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(html).toContain('<div id="root"></div>');
-    expect(html).toContain('/assets/index.js');
+    expect(html).toContain('src="vscode-webview://test/assets/index.js"');
+    expect(html).toContain('href="vscode-webview://test/assets/index.css"');
   });
 });

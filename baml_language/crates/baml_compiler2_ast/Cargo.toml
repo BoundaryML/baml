@@ -10,11 +10,22 @@ workspace = true
 baml_base = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_syntax = { workspace = true }
+borsh = { workspace = true }
 la-arena = { workspace = true }
+num-bigint = { workspace = true }
 rowan = { workspace = true }
-rustc-hash = { workspace = true }
 smol_str = { workspace = true }
 text-size = { workspace = true }
+
+# `build.rs` reads the client-option field lists out of `llm_types.baml` with the
+# real lexer/parser. These sit strictly below this crate (none of them depend on
+# `baml_compiler2_ast`), so using them from a build script introduces no cycle.
+[build-dependencies]
+baml_base = { workspace = true }
+baml_compiler_lexer = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
+rowan = { workspace = true }
 
 [dev-dependencies]
 baml_compiler_lexer = { workspace = true }

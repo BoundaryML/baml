@@ -1,0 +1,65 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f(xs: int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int[] // xs // param
+    let _2: bool
+    let _3: int
+    let _4: bool
+    let _5: int
+    let _6: int
+    let _7: int
+    let _8: int // a
+    let _9: int[]
+    let _10: int
+    let _11: int[] // r
+    let _12: int
+    let _13: int
+
+    bb0: {
+        _2 = is_type_tag(copy _1, LIST);
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = len(_1);
+        _4 = copy _3 >= const 1_i64;
+        branch copy _4 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb3: {
+        _5 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _6 = const 0_i64;
+        _7 = copy _1[_6];
+        _8 = copy _7;
+        _10 = len(_1);
+        _9 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _10) -> [bb5];
+    }
+
+    bb5: {
+        _11 = copy _9;
+        _12 = len(_11);
+        goto -> bb6;
+    }
+
+    bb6: {
+        _13 = copy _8;
+        _0 = copy _12 + copy _13;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}

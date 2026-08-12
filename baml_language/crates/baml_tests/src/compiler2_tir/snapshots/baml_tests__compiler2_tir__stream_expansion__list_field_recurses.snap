@@ -11,7 +11,7 @@ class user.WithLists {
   classes: user.Inner[]
 }
 class user.Inner$stream {
-  value: null | string
+  value: string | null
 }
 class user.WithLists$stream {
   strings: string[]

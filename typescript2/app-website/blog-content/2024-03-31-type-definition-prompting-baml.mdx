@@ -1,0 +1,533 @@
+---
+title: Your prompts are using 4x more tokens than you need
+description: A deep-dive into how to use type-definitions instead of json schemas in prompt engineering to improve accuracy and reduce costs
+slug: type-definition-prompting-baml
+date: Mar 31, 2024
+tags: ['research']
+author:
+  name: Aaron Villalpando
+  imageUrl: /aaronv.jpg
+  linkedin: https://www.linkedin.com/in/aaron-villalpando-99284576/
+---
+
+{/* ## > Introduction */}
+
+If you're doing extraction / classification tasks with LLMs you're most likely using Pydantic or Zod (or a library that uses them, like [Langchain](https://www.langchain.com/), [Marvin](https://github.com/PrefectHQ/marvin), [Instructor](https://github.com/jxnl/instructor/tree/main)) to generate json schemas and injecting them into the prompt or using function calling.
+
+We propose using **type-definitions, not JSON schemas, in your LLM prompts**. Type-definitions use 60% less tokens than JSON schemas, with no loss of information. Less tokens is a feature, not a bug, that leads to better cost, latency and accuracy.
+
+Before explaining our perspective into the transformer attention mechanism and why type-definitions work better for them, lets look at a few prompts using JSON-schemas vs type-definitions.
+
+__Overview__
+* [What is a type-defintion](#what-is-type)
+  * [Example 1](#example-1-comparing-type-defintions-to-json-schema)
+  * [Example 2](#example-2-a-complex-object-with-descriptions-and-enums)
+* [Better quality with type-definitions](#improving-quality)
+  * [Testing on llama7b](#the-llama-7b-test)
+* [Insights from how a transformer works](#why-type-def-prompting)
+
+
+<a name="what-is-type"></a>
+## > What are type-definitions?
+Type-definitions are closer to typescript interface definitions for representing the data-model rather than a full blown JSON schema. Let's actually do a two extraction tasks to show you what we mean.
+
+### Example 1: Comparing type-defintions to JSON Schema
+We'll write a prompt to extract the following `OrderInfo` from a chunk of text using an LLM.
+
+```python
+class OrderInfo(BaseModel):
+    id: str
+    price: int # in cents
+```
+
+#### Using JSON Schema
+
+Here's the prompt generated using the Instructor Library to do the extraction.
+
+We use `<system>` and `<user>` to denote chat messages for brevity. No additional formatting was added, and the input text has been omitted.
+
+```xml
+<system>As a genius expert, your task is to understand the content and provide the parsed objects in json that match the following json_schema: {'properties': {'id': {'title': 'Id', 'type': 'string'}, 'price': {'title': 'Price', 'type': 'integer'}}, 'required': ['id', 'price'], 'title': 'OrderInfo', 'type': 'object'}
+
+Make sure to return an instance of the JSON, not the schema itself
+<user>{input}
+<user>Return the correct JSON response within a ```json codeblock. not the JSON_SCHEMA'}]
+```
+
+**JSON Schema tokens: 56**
+<img src="/blog/type-definition-prompting/json-schema-tokens.png" alt="JSON Schema tokens" width="100%" />
+
+_Note: we explicitly excluded the remainder of the prompt template in the count, as we are only talking about the actual schema. Most libraries and frameworks add even more boilerplate that actually makes it harder for the model to understand your task - but more on this later._
+
+
+#### Using type definition
+
+This prompt yields the same results, with a 4x smaller schema size.
+
+```xml
+<system>Extract the following information from the text.
+{input}
+---
+Return the information in JSON following this schema:
+{
+  "id": string,
+  "price": int
+}
+JSON:
+```
+
+**Type-definition tokens**: 14 (4x reduction)
+<img src="/blog/type-definition-prompting/type-def-tokens.png" alt="Type-def tokens" width="100%" />
+
+
+First test case results:
+
+<p align="center"> <img src="/blog/type-definition-prompting/extraction-results.png" alt="First test case results" width="100%" /> </p>
+
+### Example 2: A Complex object, with descriptions and enums
+
+Now we'll look at getting this object from the LLM — it's still **OrderInfo**, but with more metadata. Here's the python models:
+
+```python
+class Item(BaseModel):
+    name: str
+    quantity: int
+
+class State(Enum):
+    WASHINGTON = "WASHINGTON"
+    CALIFORNIA = "CALIFORNIA"
+    OREGON = "OREGON"
+
+class Address(BaseModel):
+    street: Optional[str]
+    city: Optional[str] = Field(description="The city name in lowercase")
+    state: Optional[State] = Field(description="The state abbreviation from the predefined states")
+    zip_code: Optional[str]
+
+class OrderInfo(BaseModel):
+    id: str = Field(alias="order_id")
+    price: Optional[int] = Field(alias="total_price", description="The total price. Don't include shipping costs.")
+    items: List[Item] = Field(description="purchased_items")
+    shipping_address: Optional[Address]
+```
+
+The new schema uses a lot more tokens now -- see 2a vs 2b:
+
+### Using JSON Schema (using Instructor)
+
+Raw prompt, no extra formatting added. Note how large this prompt becomes: even if you were to pretty print it, it would take some careful reading to derive the original data models.
+<details>
+<summary className="underline text-primary-baml">Full prompt</summary>
+```xml
+<system>As a genius expert, your task is to understand the content and provide the parsed objects in json that match the following json_schema:
+
+{"$defs": {"Address": {"properties": {"street": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Street"}, "city": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "The city name in lowercase", "title": "City"}, "state": {"anyOf": [{"$ref": "#/$defs/State"}, {"type": "null"}], "description": "The state abbreviation from the predefined states"}, "zip_code": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Zip Code"}}, "required": ["street", "city", "state", "zip_code"], "title": "Address", "type": "object"}, "Item": {"properties": {"name": {"title": "Name", "type": "string"}, "quantity": {"title": "Quantity", "type": "integer"}}, "required": ["name", "quantity"], "title": "Item", "type": "object"}, "State": {"enum": ["WASHINGTON", "CALIFORNIA", "OREGON"], "title": "State", "type": "string"}}, "properties": {"order_id": {"title": "Order Id", "type": "string"}, "total_price": {"anyOf": [{"type": "integer"}, {"type": "null"}], "description": "The total price. Don't include shipping costs.", "title": "Total Price"}, "items": {"description": "purchased_items", "items": {"$ref": "#/$defs/Item"}, "title": "Items", "type": "array"}, "shipping_address": {"anyOf": [{"$ref": "#/$defs/Address"}, {"type": "null"}]}}, "required": ["order_id", "total_price", "items", "shipping_address"], "title": "OrderInfo3", "type": "object"}
+
+<user> {input},
+<user> Return the correct JSON response within a ```json codeblock. not the JSON_SCHEMA'}]
+
+```
+</details>
+
+
+#### Using type-definitions
+
+Anyone could skim this type-definition, and derive the original data models.
+<details>
+<summary className="underline text-primary-baml">Full prompt</summary>
+```
+Extract the following information from the text.
+{input}
+---
+Return the information in JSON following this schema:
+{
+  "order_id": string,
+  // The total price. Don't include shipping costs.
+  "total_price": int | null,
+  "purchased_items": {
+    "name": string,
+    "quantity": int
+  }[],
+  "shipping_address": {
+    "street": string | null,
+    // The city name in lowercase
+    "city": string | null,
+    // The state abbreviation from the predefined states
+    "state": "States as string" | null,
+    "zip_code": string | null
+  } | null
+}
+
+Use these US States only:
+States
+---
+WASHINGTON
+OREGON
+CALIFORNIA
+
+JSON:
+```
+</details>
+
+<p align="center"> <img src="/blog/type-definition-prompting/schema-vs-typedef-tokens.png" alt="The new schema uses way more tokens than the type definition" width="100%" /> </p>
+
+**That's now massive 66% cost savings for that part of your prompt, for the same performance on the extraction task.**
+
+> On GPT4, thats the difference between making 400 API calls with $1, vs making 1600.
+
+**Also note that the prompt is now more readable,** and can be debugged for potential issues (e.g if you made a mistake in one of the descriptions).
+
+
+If you'd like to try out type-definition prompting, we have incorporated it into our DSL — called BAML. BAML helps you get structured data from LLMs using type-definitions and natural language. BAML prompt files have a markdown-like preview of the full-prompt — so you always see the prompt before you send it to the LLM — and comes with an integrated VSCode LLM Playground for testing. BAML works seamlessly with Python and TypeScript.
+
+<p align="center">
+<img src="/blog/type-definition-prompting/prompt_view.gif" alt="BAML prompt preview" width="100%" />
+</p>
+
+<a name="improving-quality"></a>
+## > Improving quality using type-definitions
+
+Now on to measuring accuracy...
+
+Have you ever had the LLM spit out the JSON schema back out to you instead of giving you the actual value?
+
+Instead of
+
+```
+{ "name": "John Doe" }
+```
+
+you get something like (note, this is still valid json, just not the *right* json):
+
+```
+ {
+    "title": "Name",
+    "type": "string",
+    "value": "John Doe"
+  }
+```
+
+GPT4 usually does fine on small JSON schemas, but can suffer from this when your schema gets more complex. On less capable models, this problem occurs more often, even with simple schemas.
+
+
+### The LLama 7B test
+
+We tested Llama2 on these different formats, and observed a **6% failure rate** (out of 100 tests) in generating the  correct output type using json-schemas but **0% failure rate** with type-definitions.
+
+The JSON schema test fails even when we prompt it `Don't return the json schema`<sup>[1]</sup>. We have open-sourced our test results of JSON Schema (using Instructor) vs BAML [here](https://github.com/BoundaryML/baml-pydantic-comparison).
+
+_[1] Funnily enough LLMs are horrile at `what-not-to-do` type instructions, but we'll cover why in the future when we talk about bias._
+
+
+This test uses the same OrderInfo schemas as before. We prompt Llama2 7B with an input text describing a list of items purchased:
+
+```
+Customer recently completed a purchase with order ID "ORD1234567". This transaction, totaling $85 without accounting for shipping costs, included an eclectic mix of items"...
+<omitted for brevity>
+```
+
+The expected JSON output looks like this:
+
+```
+{
+  "order_id": "ORD1234567",
+  "total_price": 85,
+  "purchased_items": [...]
+}
+```
+
+### Llama2 Output - Using JSON Schema definition in the prompt
+
+<details>
+<summary className="underline text-primary-baml">LLM Raw Text Ouput</summary>
+
+```
+{
+  "order_id": "ORD1234567",
+  "total_price": {
+    "type": "integer",
+    "value": 85
+  },
+  "items": [
+    {
+      "name": "Handcrafted ceramic vase",
+      "quantity": 1,
+      "type": "Item"
+    }
+  ],
+  "shipping_address": {
+    "$ref": "#/$defs/Address",
+    "title": "Shipping Address"
+  },
+  "state": "OR",
+  "zip_code": "97205"
+}
+```
+</details>
+
+It's all valid JSON, but it's the incorrect schema. Here's the diff:
+
+<div style={{display: 'flex'}}>
+  <div style={{flex: '1'}}>
+    <p align="center">
+      <img src="/blog/type-definition-prompting/llama2-json-schema-diff.png" alt="Llama2 JSON Schema Output Diff" width="500" />
+    </p>
+  </div>
+  <div style={{flex: '1', marginLeft: '20px'}}>
+    <h3>Fatal Issues</h3>
+    <ul>
+      <li><code>total_price</code> should just be <code>85</code>, not have a type and value.</li>
+      <li><code>shipping_address</code> refers to the JSON schema model definition, instead of adding the actual shipping address.</li>
+      <li>The fields <code>state</code> and <code>zip_code</code> should be part of the <code>shipping_address</code> block.</li>
+    </ul>
+    <h3>Non-fatal issues</h3>
+    <ul>
+      <li>each value in <code>items</code> has an extra field <code>"type": "Item"</code></li>
+    </ul>
+  </div>
+</div>
+
+
+
+
+### Llama2 Output - Using type-definitions in prompt
+
+<details>
+<summary className="underline text-primary-baml">LLM Raw Text Ouput</summary>
+```
+{
+  "id": "ORD1234567",
+  "price": 85,
+  "items": [
+    {
+      "name": "handcrafted ceramic vase",
+      "quantity": 1
+    },
+    {
+      "name": "artisanal kitchen knives",
+      "quantity": 2
+    },
+    {
+      "name": "vintage-inspired wall clock",
+      "quantity": 1
+    }
+  ],
+  "shipping_address": {
+    "street": "456 Artisan Way",
+    "city": "portland",
+    "state": "OR",
+    "zip_code": "97205"
+  }
+}
+```
+</details>
+
+The answer was correct 100% of the time (out of 100 tests).
+
+**All we did was change how we defined the schema.**
+
+Fewer tokens led to a quality improvement, not degradation. Let's figure out why this is the case.
+
+<a name="why-type-def-prompting"></a>
+## > Why type-definition prompting works better (or at least our thoughts)
+
+We must first look into how the Transformer architecture works. If you're not familiar, Transformers - what LLMs are built on - use a mechanism called "attention" that looks at different parts of the input as the text is being generated.
+
+<p align="center"> <img src="/blog/type-definition-prompting/attention-mechanism.gif" alt="Transformer Attention Mechanism" width="500" /> </p>
+
+<details>
+<summary className="underline text-primary-baml">Expand this for the full explanation</summary>
+
+This means the model can decide which words are most relevant to the current word it's considering, allowing it to understand context and relationships within the text. Note we say "word" but really it's "tokens", more on this later. A model has several attention-heads doing this same process, but each sees a different view in the embedding space that affects how strong two tokens are associated. One head may be looking for structural similarity between words, and another may be looking for meanings between words for example. It's much more complicated than this, but it's a 10,000 foot view.
+
+Here is a visualization from the [**Attention Is All You Need Paper**](https://arxiv.org/abs/1706.03762)) of an attention head looking at the structure of a sentence:
+
+ <p align="center"> <img src="/blog/type-definition-prompting/attention-visualization.png" alt="Attention Visualization from 'Attention Is All You Need' Paper" width="500" /> </p>
+</details>
+
+As a general rule of thumb, the more tokens a model needs to understand to generate the each subsequent token, the harder it is for the model to be correct. Here's our 3 insights as to why type-definitions work better, not in spite of, but thanks to fewer tokens.
+
+### 1. A type-definition is a lossless compression of JSON Schema
+
+Lets say you wanted to output an array of strings. With the JSON schema approach you would have:
+<div style={{display: 'flex', alignItems: 'top'}}>
+  <div style={{flex: '1'}}>
+    ```json
+    {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+    ```
+  </div>
+  <div style={{flex: '1', marginLeft: '20px'}}>
+    <p align="center">
+      <img src="/blog/type-definition-prompting/json-schema-array-tokens.png" alt="JSON Schema Array Tokens" width="100%" />
+    </p>
+  </div>
+</div>
+
+In order for the model to understand what you want, it has to process `23` tokens, and then build the appropriate nested relationships between them.
+
+In the type-definition approach:
+
+<div style={{display: 'flex', alignItems: 'top'}}>
+  <div style={{flex: '1'}}>
+    ```json
+    string[]
+    ```
+  </div>
+  <div style={{flex: '1', marginLeft: '20px'}}>
+      <p align="center"> <img src="/blog/type-definition-prompting/type-def-array-tokens.png" alt="Type Definition Array Tokens" width="500" /> </p>
+
+  </div>
+</div>
+
+
+Only, `2` tokens have to be processed.
+
+> Less tokens, means less relationships are required. The model can spend its compute power on performing your task instead of understanding your output format.
+
+## 2. LLM Tokenizers are already optimized for type-definitions
+
+What's really interesting is that the tokenization strategy most LLMs use is actually already optimized for type-definitions. Lets take the type-definition:
+
+<div style={{display: 'flex', alignItems: 'center'}}>
+  <div style={{flex: '1'}}>
+    ```json
+    {
+      "items": {
+        "sku": string,
+        "quantity": int,
+        "date": string
+      }
+    }
+  ```
+  </div>
+  <div style={{flex: '1', marginLeft: '20px'}}>
+     <p align="center"> <img src="/blog/type-definition-prompting/type-def-array-tokens-1.png" alt="Type Definition Array Tokens 1" height="80%" /> </p>
+
+  </div>
+</div>
+
+
+If you wanted `sku`  and `quantity` to both be arrays, you would spend **0 extra tokens**!
+
+<div style={{display: 'flex', alignItems: 'center'}}>
+  <div style={{flex: '1'}}>
+   ```json
+  {
+    "items": {
+      "sku": string[],
+      "quantity": int[],
+      "date": string
+    }
+  }
+  ```
+  </div>
+  <div style={{flex: '1', marginLeft: '20px'}}>
+
+<p align="center"> <img src="/blog/type-definition-prompting/type-def-array-tokens-2.png" alt="Type Definition Array Tokens 2"  /> </p>
+
+  </div>
+</div>
+
+
+
+This is because the token `,\n` (token id `345`) is just replaced with the token `[],\n`  (token id `46749`).
+
+> The token vocabulary of LLMs already has many special tokens to represent complex object (like `[],` or `?,`  or `[]}` ).
+
+## 3. The distance between any two related tokens is shorter
+
+Another key aspect of type-defintions is their ability to naturally keep the average distance between any two related tokens short. Relationships between words that are far apart in a sentence are more complex to understand than relationships between words adjacent to each other.
+
+For example, take the idea of required fields. With JSON schemas you would have:
+
+<div style={{display: 'flex', alignItems: 'center'}}>
+  <div style={{flex: '1'}}>
+  ```json
+  {
+    "type": "object",
+    "properties": {
+      "sku": {
+        "type": "string"
+      },
+      "quantity": {
+        "type": "integer"
+      },
+      "date": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "sku",
+      "quantity",
+    ]
+  }
+  ```
+  </div>
+  <div style={{flex: '1', marginLeft: '20px'}}>
+
+    <p align="center"> <img src="/blog/type-definition-prompting/json-schema-required.png" alt="JSON Schema Required Properties" /> </p>
+
+  </div>
+</div>
+
+
+
+The distance between the property `sku` 's defintion (token range 13-27), and the _concept_ of the property `sku` being required (token range 59 - 67), is `40` tokens.
+
+Further, the only thing that indicates `date` is not required is the absence of the `date` token in token range `59-73`, where the "required" block is. As your data models get more complex, that delta can easily increase from `40` to hundreds of tokens. The model will have to "hop around" between different parts of the schema as it's generating the output to understand the relationships between the tokens.
+
+In the type-definition world, we can represent the exact same concept with fewer tokens, and each token is more closely relevant to its neighbors. In fact, since we saved on the tokens, we can even add in a quick description for the date field, and still well under the token count.
+
+<div style={{display: 'flex', alignItems: 'center'}}>
+  <div style={{flex: '1'}}>
+  ```json
+  {
+    "sku": string,
+    "quantity": int,
+    // in ISO format
+    "date": string?
+  }
+  ```
+  _Note, now we can get the date in a more standardized format by adding a comment above the date._
+  _Coincidentally, this is both more readable for us humans as well!_
+
+  </div>
+  <div style={{flex: '1', marginLeft: '20px'}}>
+
+    <p align="center"> <img src="/blog/type-definition-prompting/type-def-optional.png" alt="Type Definition Optional Properties" /> </p>
+
+  </div>
+</div>
+
+> Keeping the relevant parts of your data model naturally imply a relationship. Inferred relationships that require the LLM to read the entire data model are hard!
+
+
+## Obligatory marketing…
+
+We hope this technique helps you improve your pipelines (and get better cost savings)!
+
+If you're ready to start using type-definitions, [migrate to BAML in less than 5 minutes](https://github.com/BoundaryML/baml?tab=readme-ov-file#installation) today, and [give us a Star](https://github.com/boundaryml/baml)!
+
+BAML comes with:
+- Type-definition prompting built in
+- Live prompt previews (before you call the LLM)
+- A testing playground right in VSCode
+- A parser that transforms the LLMs output into your schema - even if the LLM messes up!
+
+If you have any about your schemas feel free to reach out on [Discord](https://discord.gg/ENtBB6kkXH) or email us ([contact@boundaryml.com](mailto:founders@boundaryml.com)).
+
+Our mission is to build the best developer experience for AI engineers looking to get structured data from LLMs. [Subscribe](https://tally.so/r/nGKVPo) to the newsletter to hear about future posts like this one.
+
+
+
+---
+**Coming soon:**
+
+- **Function calling vs JSON mode** - why they're different, and why they're not
+- **JSONish** - A new JSON spec + parser built specifically for LLMs
+---

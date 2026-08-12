@@ -1,9 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-function user.Foo() -> int {
-    load_const 1
-    load_const "foo"
-    bin_op +
-    return
-}

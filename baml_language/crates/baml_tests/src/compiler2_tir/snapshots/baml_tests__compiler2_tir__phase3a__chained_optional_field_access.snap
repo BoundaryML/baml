@@ -6,16 +6,16 @@ class user.Address {
   street: string
 }
 class user.User {
-  address: user.Address?
+  address: user.Address | null
 }
-function user.f(u: user.User?) -> string? throws never {
-  { : string?
-    u?.address?.street : string?
+function user.f(u: user.User | null) -> string | null throws never {
+  { : string | null
+    u?.address?.street : string | null
   }
 }
 class user.Address$stream {
-  street: null | string
+  street: string | null
 }
 class user.User$stream {
-  address: null | user.Address$stream
+  address: user.Address$stream | null
 }

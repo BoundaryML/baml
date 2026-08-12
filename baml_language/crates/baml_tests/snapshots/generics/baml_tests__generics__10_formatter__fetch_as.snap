@@ -1,5 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== STRONG AST ERROR ===
-An element at fetch_as.baml:8:29 was a token when it should have been a node.

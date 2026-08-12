@@ -1,9 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-function user.llm.UseConfig(cfg: Config) -> void {
-    alloc_instance Response
-    load_const null
-    init_field .text
-    return
-}

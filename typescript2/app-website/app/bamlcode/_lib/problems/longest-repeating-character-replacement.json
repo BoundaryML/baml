@@ -1,0 +1,18 @@
+{
+  "slug": "longest-repeating-character-replacement",
+  "id": 424,
+  "title": "Longest Repeating Character Replacement",
+  "difficulty": "Medium",
+  "category": "Sliding Window",
+  "statement": "You are given a string `s` and an integer `k`. You may replace at most `k` characters so that the string contains the longest possible substring of a **single repeating character**. Return the length of that substring.\n\n**Example**\n\n```\ns = \"ABAB\", k = 2    => 4   // replace both A's or both B's\ns = \"AABABBA\", k = 1 => 4\n```",
+  "signature": "function CharacterReplacement(s: string, k: int) -> int",
+  "starter": "function CharacterReplacement(s: string, k: int) -> int {\n  // Longest substring of one repeated char after at most k replacements.\n  return 0;\n}",
+  "solution": "function CharacterReplacement(s: string, k: int) -> int {\n  let chars = s.chars();\n  let n = chars.length();\n  let counts: map<string, int> = {};\n  let best = 0;\n  let maxCount = 0;\n  let left = 0;\n  let right = 0;\n  while (right < n) {\n    let c = chars[right];\n    let cur = counts.get(c);\n    let nc = 1;\n    if (cur != null) {\n      nc = cur + 1;\n    }\n    counts.set(c, nc);\n    if (nc > maxCount) {\n      maxCount = nc;\n    }\n    let windowLen = right - left + 1;\n    if (windowLen - maxCount > k) {\n      let lc = chars[left];\n      let lcCount = counts.get(lc);\n      if (lcCount != null) {\n        counts.set(lc, lcCount - 1);\n      }\n      left += 1;\n    }\n    let curWindow = right - left + 1;\n    if (curWindow > best) {\n      best = curWindow;\n    }\n    right += 1;\n  }\n  return best;\n}",
+  "tests": [
+    { "call": "CharacterReplacement(\"ABAB\", 2)", "expected": "4" },
+    { "call": "CharacterReplacement(\"AABABBA\", 1)", "expected": "4" },
+    { "call": "CharacterReplacement(\"AAAA\", 0)", "expected": "4" },
+    { "call": "CharacterReplacement(\"ABCDE\", 1)", "expected": "2", "hidden": true },
+    { "call": "CharacterReplacement(\"AABA\", 0)", "expected": "2", "hidden": true }
+  ]
+}

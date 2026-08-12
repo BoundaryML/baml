@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Assemble the public github.com/boundaryml/baml-go module mirror."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import shutil
+from pathlib import Path
+
+
+MODULE_PATH = "github.com/boundaryml/baml-go"
+TOOLCHAIN_VERSION_RE = re.compile(r'^const ToolchainVersion = "([^"]+)"$', re.MULTILINE)
+RUNTIME_VERSION_RE = re.compile(r'^const BridgeRuntimeVersion = "([^"]+)"$', re.MULTILINE)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--go-version", required=True)
+    args = parser.parse_args()
+
+    repository = Path(__file__).resolve().parents[1]
+    source = repository / "baml_language" / "sdks" / "go" / "baml_go"
+    destination = args.out.resolve()
+    if destination == repository or repository in destination.parents:
+        raise SystemExit("--out must be outside the source repository")
+
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(
+        source,
+        destination,
+        symlinks=True,
+        ignore=shutil.ignore_patterns(".DS_Store", "__pycache__", "*.pyc"),
+    )
+    shutil.copy2(repository / "LICENSE", destination / "LICENSE")
+
+    module_line = (destination / "go.mod").read_text(encoding="utf-8").splitlines()[0]
+    if module_line != f"module {MODULE_PATH}":
+        raise SystemExit(f"unexpected Go module declaration: {module_line!r}")
+
+    version_source = (destination / "version.go").read_text(encoding="utf-8")
+    toolchain_matches = TOOLCHAIN_VERSION_RE.findall(version_source)
+    runtime_matches = RUNTIME_VERSION_RE.findall(version_source)
+    if toolchain_matches != [args.version] or runtime_matches != [args.go_version]:
+        raise SystemExit(
+            "unexpected Go runtime version constants: "
+            f"toolchain={toolchain_matches!r}, runtime={runtime_matches!r}; "
+            f"expected {args.version!r} and {args.go_version!r}"
+        )
+
+    for path in destination.rglob("*"):
+        if path.is_symlink():
+            raise SystemExit(f"mirror must not contain symlinks: {path}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.llm.UseConfig(cfg: Config) -> llm.Response {
+    load_var cfg
+    load_field .key
+    init_instance user.llm.Response .text
+    return
+}

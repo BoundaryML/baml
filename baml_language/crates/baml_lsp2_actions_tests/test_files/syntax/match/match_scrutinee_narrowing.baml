@@ -17,8 +17,8 @@ function NarrowScrutinee(r: Ok | Err) -> string {
 // Explicit typed binding + scrutinee narrowing work together
 function NarrowScrutineeWithBinding(r: Ok | Err) -> string {
   match (r) {
-    o: Ok => r.value,
-    e: Err => e.message
+    let o: Ok => r.value,
+    let e: Err => e.message
   }
 }
 

@@ -1,1 +1,1 @@
-BAML python bindings (readme.md)
+# BAML v0 — Python runtime for baml_client

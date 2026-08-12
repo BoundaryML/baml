@@ -9,6 +9,7 @@ import time
 from enum import Enum
 
 from integ_tests import run_all_integ_tests, run_python_integ_tests, run_typescript_integ_tests, run_ruby_integ_tests
+from oncall.cli import app as oncall_app
 
 class TestSuite(str, Enum):
     ALL = "all"
@@ -18,6 +19,7 @@ class TestSuite(str, Enum):
 
 # Initialize Typer app and Rich console
 app = typer.Typer(help="BAML CLI tool for development tasks")
+app.add_typer(oncall_app, name="oncall")
 
 # Global state for CI mode
 class State:

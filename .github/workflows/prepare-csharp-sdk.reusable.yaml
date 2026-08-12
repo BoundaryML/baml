@@ -1,0 +1,115 @@
+name: BAML C# - Prepare platform-neutral product inputs
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit whose product is under test"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Prepare generated C# and ABI inputs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.301
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          enable-cache: false
+          enable-cross: false
+          skip-protoc: true
+
+      - name: Stamp and validate the frozen release contract
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+          scripts/baml-csharp-release-contract validate
+          project_version="$(sed -n \
+            's#^    <Version>\([^<]*\)</Version>$#\1#p' \
+            baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)"
+          test "$project_version" = \
+            "$(jq -r .registry_versions.nuget release-plan.json)"
+
+      - name: Verify Rust-produced callback vectors in the C# schema consumer
+        working-directory: baml_language
+        env:
+          BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS: ${{ runner.temp }}/optional-host-call-vectors.tsv
+          RUSTC_WRAPPER: ""
+        run: |
+          set -euo pipefail
+          cargo run -p sdk_test_csharp --bin emit_optional_host_call_vectors
+          test "$(wc -l < "$BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS")" -eq 5
+          dotnet run --project \
+            sdks/csharp/bridge_csharp/tests/Baml.Bridge.ProtocolProbe/Baml.Bridge.ProtocolProbe.csproj \
+            -- "$BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS"
+
+      - name: Prepare ABI bytecode and generated consumer sources
+        env:
+          BAML_CSHARP_ABI_PROBE_BYTECODE: ${{ runner.temp }}/csharp-neutral/function-calls.bytecode
+          RUSTC_WRAPPER: ""
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/csharp-neutral"
+          generated_output="$output/baml_client"
+          mkdir -p "$generated_output"
+          (
+            cd baml_language
+            cargo test -p sdk_test_harness_setup \
+              csharp_abi_probe_tests::emit_function_calls_bytecode \
+              --lib -- --ignored --exact --nocapture
+            cargo run --quiet -p baml_cli -- \
+              generate --from sdk_tests/crates/csharp/primitive_slice
+          )
+          test -s "$BAML_CSHARP_ABI_PROBE_BYTECODE"
+          fixture=baml_language/sdk_tests/crates/csharp/primitive_slice
+          while IFS= read -r source; do
+            relative="${source#"$fixture/baml_client/"}"
+            destination="$generated_output/$relative"
+            mkdir -p "$(dirname "$destination")"
+            cp "$source" "$destination"
+          done < <(find "$fixture/baml_client" \
+            -type f -name '*.g.cs' | LC_ALL=C sort)
+          scripts/baml-csharp-release-contract write-generated-manifest \
+            --root "$generated_output" \
+            --manifest "$output/generated-sources.sha256"
+          cp release-plan.json "$output/"
+
+      - name: Exercise NuGet payload comparison policy
+        run: |
+          set -euo pipefail
+          dotnet run --project \
+            baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj \
+            -- --self-test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: csharp-neutral-preparation
+          path: ${{ runner.temp }}/csharp-neutral
+          if-no-files-found: error
+          overwrite: true

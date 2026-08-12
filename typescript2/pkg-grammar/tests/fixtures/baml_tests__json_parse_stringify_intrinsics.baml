@@ -1,0 +1,25 @@
+// Phase 2: Verify that baml.json.parse / stringify / stringify_pretty compile
+// and lower correctly through TIR and MIR.
+
+function parse_and_roundtrip(s: string) -> string {
+  let j: json = baml.json.parse(s)
+  baml.json.stringify(j)
+}
+
+function parse_and_roundtrip_pretty(s: string) -> string {
+  let j: json = baml.json.parse(s)
+  baml.json.stringify_pretty(j)
+}
+
+function match_parsed(s: string) -> string {
+  let j: json = baml.json.parse(s)
+  match (j) {
+    let arr: json[] => baml.json.stringify(arr)
+    let m: map<string, json> => baml.json.stringify(m)
+    let n: int => "int"
+    let f: float => "float"
+    let b: bool => "bool"
+    let st: string => st
+    null => "null"
+  }
+}

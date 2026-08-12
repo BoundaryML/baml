@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A generic call whose argument already failed to type must not cascade a
+// `cannot infer type parameter` (E0002) on top of the argument's own error.
+// The same suppression already applied when the *expected* type was the
+// error-recovery sentinel; an `Error`-typed *argument* is the same upstream
+// failure. Only the argument's own diagnostic should appear below.
+
+// `T` occurs only in the parameter list, so the sole inference source is the
+// argument; when that argument's type is `Error`, no E0002 may fire.
+function consume<T>(x: T) -> int {
+    0
+}
+
+function broken_arg() -> int {
+    consume([1, 2, 3].len())
+}
+
+// When `T` is also recoverable from the expected type (tail position of an
+// `-> int` body), inference binds it there and never cascaded to begin with;
+// pin that the argument's own error is still the only diagnostic.
+function identity<T>(x: T) -> T {
+    x
+}
+
+function broken_arg_bound_from_expected() -> int {
+    identity([1, 2, 3].len())
+}
+
+// Control: an uninferable parameter with well-typed arguments still reports
+// E0002 (`f<T>() -> void` style, per the realization contract).
+function phantom<T>() -> int {
+    0
+}
+
+function still_reports() -> int {
+    phantom()
+}

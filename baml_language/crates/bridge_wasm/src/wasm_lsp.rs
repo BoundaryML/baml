@@ -6,6 +6,25 @@ use wasm_bindgen::JsValue;
 
 use crate::send_wrapper::SendWrapper;
 
+/// Serialize a value to a `JsValue` via `serde_json` (NOT serde-wasm-bindgen),
+/// so `arbitrary_precision` numbers come out as plain JSON numbers instead of
+/// the `{ "$serde_json::private::Number": "8" }` struct. Used for outbound LSP
+/// payloads, whose `serde_json::Value` params would otherwise leak that tag and
+/// make every position read as 0 on the JS side.
+pub(crate) fn to_json_jsvalue<T: Serialize>(
+    value: &T,
+    payload_name: &str,
+) -> Result<JsValue, LspError> {
+    let json = serde_json::to_string(value).map_err(|e| {
+        LspError::UnknownErrorCode(format!("failed to serialize {payload_name} payload: {e}"))
+    })?;
+    js_sys::JSON::parse(&json).map_err(|e| {
+        LspError::UnknownErrorCode(format!(
+            "failed to parse serialized {payload_name} payload as JSON: {e:?}"
+        ))
+    })
+}
+
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct LspNotification {
@@ -150,38 +169,53 @@ impl WasmLsp {
         }
     }
 
-    fn send_notification(&self, notification: lsp_server::Notification) {
+    fn send_notification(&self, notification: lsp_server::Notification) -> Result<(), LspError> {
         let send_notification_fn = self.send_notification_fn.inner();
         let notif: LspNotification = notification.into();
-        let _ = send_notification_fn.call1(&JsValue::NULL, &notif.into());
+        let payload = to_json_jsvalue(&notif, "LSP notification")?;
+        send_notification_fn
+            .call1(&JsValue::NULL, &payload)
+            .map(|_| ())
+            .map_err(|e| {
+                LspError::UnknownErrorCode(format!("failed to send LSP notification to JS: {e:?}"))
+            })
     }
 
-    fn send_response(&self, response: lsp_server::Response) {
+    fn send_response(&self, response: lsp_server::Response) -> Result<(), LspError> {
         let send_response_fn = self.send_response_fn.inner();
         let response: LspResponse = response.into();
-        let _ = send_response_fn.call1(&JsValue::NULL, &response.into());
+        let payload = to_json_jsvalue(&response, "LSP response")?;
+        send_response_fn
+            .call1(&JsValue::NULL, &payload)
+            .map(|_| ())
+            .map_err(|e| {
+                LspError::UnknownErrorCode(format!("failed to send LSP response to JS: {e:?}"))
+            })
     }
 
-    fn make_request(&self, request: lsp_server::Request) {
+    fn make_request(&self, request: lsp_server::Request) -> Result<(), LspError> {
         let make_request_fn = self.make_request_fn.inner();
         let request: LspRequest = request.into();
-        let _ = make_request_fn.call1(&JsValue::NULL, &request.into());
+        let payload = to_json_jsvalue(&request, "LSP request")?;
+        make_request_fn
+            .call1(&JsValue::NULL, &payload)
+            .map(|_| ())
+            .map_err(|e| {
+                LspError::UnknownErrorCode(format!("failed to send LSP request to JS: {e:?}"))
+            })
     }
 }
 
 impl bex_project::LspClientSenderTrait for WasmLsp {
     fn send_notification(&self, notif: lsp_server::Notification) -> Result<(), LspError> {
-        self.send_notification(notif);
-        Ok(())
+        self.send_notification(notif)
     }
 
     fn send_response_impl(&self, response: lsp_server::Response) -> Result<(), LspError> {
-        self.send_response(response);
-        Ok(())
+        self.send_response(response)
     }
 
     fn make_request(&self, req: lsp_server::Request) -> Result<(), LspError> {
-        self.make_request(req);
-        Ok(())
+        self.make_request(req)
     }
 }

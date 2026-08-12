@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.MyClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "MyClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "array_key_with_qu...": ["abc", "abc", "ccc"], "key2": "somerandomvalue", "hello": "world", "thing": "hello", "block_string": "#hellotheremyfriend#", "inline_raw_string": "#inlinerawstring,,#", "booleanValue": true, "stringKey": true, "array1": ["one", "two"], "array2": ["one", "two"], "array3Numbers": [null, null, null], "nestedKey": map { "key": "value", "key2": "value2", "nestedArray": ["yes", "queen"], "number": 10 }, "oneMoreValueToTes...": "value", "myInteger": 100, "tools": [], "block_string": "#hellotheremyfrie..." } } }
-}

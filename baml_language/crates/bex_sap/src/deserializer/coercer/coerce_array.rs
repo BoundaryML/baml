@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
-    baml_value::{BamlArray, BamlValue},
+    baml_value::BamlArray,
     deserializer::{
         deserialize_flags::{DeserializerConditions, Flag},
         types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
@@ -185,11 +185,7 @@ where
             }
         }
 
-        let ret = BamlValue::Array(BamlArray { value: items });
-        target.meta.expect_asserts(&ret, ctx)?;
-        let BamlValue::Array(ret) = ret else {
-            unreachable!("we just wrapped it in a BamlValue::Array");
-        };
+        let ret = BamlArray { value: items };
 
         Ok(Some(ValueWithFlags::new(
             ret,

@@ -7,6 +7,6 @@ class user.WithAlias {
   count: int @alias("cnt")
 }
 class user.WithAlias$stream {
-  bar: null | string @alias("baz")
-  count: null | int @alias("cnt")
+  bar: string | null @alias("baz")
+  count: int | null @alias("cnt")
 }

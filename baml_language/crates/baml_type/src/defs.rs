@@ -75,11 +75,8 @@ pub struct ParamDef {
 /// The kind of function body — determines how the runtime dispatches it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionBodyKind {
-    /// Declarative LLM function with prompt template and client reference.
-    Llm {
-        prompt_template: String,
-        client: String,
-    },
+    /// Declarative LLM function with a client reference.
+    Llm { client: String },
     /// Imperative expression function — compiled to bytecode.
     Expr,
     /// Function body is missing (error recovery in HIR).

@@ -1,0 +1,35 @@
+<span class="hljs-comment">// Namespace root.sentiment — a tiny sentiment classifier whose real purpose</span>
+<span class="hljs-comment">// is to teach TESTING in BAML. This file is just the function under test;</span>
+<span class="hljs-comment">// the eval machinery (judge, synthetic data, file/API case loading) lives in</span>
+<span class="hljs-comment">// eval.baml, and the guided tour of testsets in tests.baml.</span>
+
+<span class="hljs-comment">// Cheap + fast model for classification.</span>
+<span class="hljs-keyword">client</span>&lt;<span class="hljs-type">llm</span>&gt; <span class="hljs-title class_">Mini</span> {
+    provider: anthropic,
+    options: {
+        model: <span class="hljs-string">&quot;claude-haiku-4-5&quot;</span>,
+        api_key: <span class="hljs-built_in">env</span>.<span class="hljs-variable constant_">ANTHROPIC_API_KEY</span>,
+        max_tokens: <span class="hljs-number">1024</span>,
+    },
+}
+
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">Label</span> = <span class="hljs-string">&quot;positive&quot;</span> | <span class="hljs-string">&quot;negative&quot;</span> | <span class="hljs-string">&quot;neutral&quot;</span>;
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">Verdict</span> {
+    label: Label,
+    confidence: <span class="hljs-type">float</span>,
+}
+
+<span class="hljs-comment">// The function under test.</span>
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">classify</span>(text: <span class="hljs-type">string</span>) <span class="hljs-operator">-&gt;</span> Verdict {
+    <span class="hljs-keyword">client</span>: Mini
+    prompt: <span class="hljs-string">#&quot;
+        Classify the sentiment of the text below as positive, negative, or
+        neutral. Sarcasm counts as the sentiment actually expressed, not the
+        literal words. Plain statements of fact are neutral.
+
+        Text: <span class="hljs-template-variable">{{ text }}</span>
+
+        <span class="hljs-template-variable">{{ <span class="hljs-built_in">ctx</span>.output_format }}</span>
+    &quot;#</span>
+}

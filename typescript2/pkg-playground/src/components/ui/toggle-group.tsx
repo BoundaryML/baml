@@ -25,12 +25,10 @@ function ToggleGroup<T extends string>({
           onClick={() => onValueChange(option.value)}
           className={cn(
             'rounded font-vsc-mono cursor-pointer transition-colors',
-            size === 'sm'
-              ? 'px-1.5 py-0.5 text-[10px]'
-              : 'px-2 py-1 text-xs',
+            size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs',
             value === option.value
               ? 'bg-vsc-accent text-vsc-accent-fg'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent',
           )}
         >
           {option.label}

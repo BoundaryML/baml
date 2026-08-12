@@ -1,10 +1,12 @@
-import type { InboundValue } from './generated/baml/cffi/v1/baml_inbound';
+import type { InboundValue } from './generated/baml_bridge/cffi/v1/baml_inbound';
 
 export type BamlJsValue<T = unknown> =
   | string
   | number
+  | bigint
   | boolean
   | null
+  | Uint8Array
   | BamlJsValue<T>[]
   | BamlJsMap<T>
   | BamlJsHandle<T>
@@ -46,6 +48,12 @@ export type BamlJsPromptAst = {
   | { content_type: 'message'; value: BamlJsPromptAstMessage }
   | { content_type: 'multiple'; value: BamlJsPromptAst[] }
 );
+
+export type PlainHandleDescriptor = {
+  handle_key: bigint;
+  handle_type: number;
+  type_name: string;
+};
 
 /** Implemented by objects that need custom BAML serialization. */
 export interface BamlSerializable {

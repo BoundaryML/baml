@@ -62,7 +62,6 @@ where
 
             if let Ok(Some(mut val)) = result
                 && val.score() == 0
-                && hinted_option.meta.expect_asserts(&val.value, ctx).is_ok()
             {
                 // If the hinted variant gives a perfect match, return immediately
                 // Add UnionMatch flag so subsequent array elements can use this hint
@@ -97,10 +96,6 @@ where
                     variants.push(Ok(None));
                 }
                 Ok(Some(mut val)) => {
-                    if let Err(e) = option.meta.expect_asserts(&val.value, ctx) {
-                        variants.push(Err(e));
-                        continue;
-                    }
                     let score = val.score();
                     // If we find a perfect match (score 0), we can stop immediately
                     if score == 0 {

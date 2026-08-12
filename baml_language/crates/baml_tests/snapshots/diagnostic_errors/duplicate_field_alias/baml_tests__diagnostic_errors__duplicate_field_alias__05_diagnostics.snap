@@ -1,0 +1,54 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0149
+
+  × duplicate serialized key `x` in class
+   ╭─[duplicate_field_alias.baml:9:3]
+ 8 │   a string @alias("x")
+   ·   ┬
+   ·   ╰── key `x` first serialized here
+ 9 │   b string @alias("x")
+   ·   ┬
+   ·   ╰── also serialized as `x` here
+   ╰────
+
+  [hir] E0149
+
+  × duplicate serialized key `x` in class
+    ╭─[duplicate_field_alias.baml:15:3]
+ 14 │   x string
+    ·   ┬
+    ·   ╰── key `x` first serialized here
+ 15 │   b string @alias("x")
+    ·   ┬
+    ·   ╰── also serialized as `x` here
+    ╰────
+
+  [hir] E0149
+
+  × duplicate serialized key `shared` in class
+    ╭─[duplicate_field_alias.baml:21:3]
+ 20 │   first string @alias("shared")
+    ·   ──┬──
+    ·     ╰── key `shared` first serialized here
+ 21 │   second string @alias("shared")
+    ·   ───┬──
+    ·      ╰── also serialized as `shared` here
+ 22 │   shared string
+    ·   ───┬──
+    ·      ╰── also serialized as `shared` here
+    ╰────
+
+  [hir] E0149
+
+  × duplicate serialized key `q` in class
+    ╭─[duplicate_field_alias.baml:29:3]
+ 28 │   a string @alias("q")
+    ·   ┬
+    ·   ╰── key `q` first serialized here
+ 29 │   b string @alias(#"q"#)
+    ·   ┬
+    ·   ╰── also serialized as `q` here
+    ╰────

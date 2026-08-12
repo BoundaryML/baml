@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Static-method receiver with wrong type-argument arity.
+//
+// `Box<T>` declares one type parameter, so the receiver of a static call
+// (`<Box>.from_json(j)`) is expected to supply at most one type-argument.
+// This fixture exercises the arity-check path for static-method receivers,
+// distinct from the instantiation-site arity check covered by
+// `generics/classes.baml`.
+//
+// Two cases, with intentionally different outcomes documented in the
+// `05_diagnostics` snapshot:
+//
+// * `bad_extra`: 2 type-args on a 1-param class — errors with
+//   E0005 "function `from_json` expects 1 type argument(s), got 2".
+//
+// * `bad_missing`: 0 type-args.  Currently NOT an error — the type-checker
+//   infers `T = int` from the surrounding return type `Box<int>`.  The
+//   snapshot pins this behavior so a future arity-tightening change is
+//   visible in the diff.
+
+class Box<T> {
+    value: T,
+
+    function from_json(
+        j: baml.json.json,
+    ) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+        Box<T> { value: baml.json.from_json<T>(baml.json.field(j, "value")) }
+    }
+}
+
+// Missing type argument: receiver `Box` has 0 args but 1 expected.
+function bad_missing(
+    j: baml.json.json,
+) -> Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+    Box.from_json(j)
+}
+
+// Too many type arguments: receiver `Box<int, string>` has 2 args but 1 expected.
+function bad_extra(
+    j: baml.json.json,
+) -> Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+    Box<int, string>.from_json(j)
+}

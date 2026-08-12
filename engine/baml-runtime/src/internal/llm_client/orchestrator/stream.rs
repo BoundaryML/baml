@@ -8,10 +8,10 @@ use futures::StreamExt as FuturesStreamExt;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
-use stream_cancel::Tripwire;
 use tokio::sync::{watch, Mutex};
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::*;
+use tokio_util::sync::CancellationToken;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 use web_time::Duration;
@@ -158,7 +158,7 @@ pub async fn orchestrate_stream<F, G>(
     partial_parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
     parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
     on_event: Option<F>,
-    cancel_tripwire: Option<Tripwire>,
+    cancel_tripwire: Option<CancellationToken>,
 ) -> (
     Vec<(
         OrchestrationScope,
@@ -176,8 +176,8 @@ where
 
     // Create a future that either waits for cancellation or never completes
     let cancel_future = match cancel_tripwire {
-        Some(tripwire) => Box::pin(async move {
-            tripwire.await;
+        Some(token) => Box::pin(async move {
+            token.cancelled_owned().await;
         })
             as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
         None => Box::pin(futures::future::pending()),

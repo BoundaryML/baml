@@ -1,0 +1,136 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × unresolved type: v
+   ╭─[main.baml:6:23]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                       ─
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:25]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                         ─┬
+   ·                          ╰── expected `')'`, found `is`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:28]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                            ─┬─
+   ·                             ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:31]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                               ┬
+   ·                               ╰── expected `top-level declaration`, found `')'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:33]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                                 ─┬
+   ·                                  ╰── expected `top-level declaration`, found `'->'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:36]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                                    ──┬─
+   ·                                      ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:41]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                                         ┬
+   ·                                         ╰── expected `top-level declaration`, found `'{'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:43]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                                           ──┬─
+   ·                                             ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:6:48]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                                                ┬
+   ·                                                ╰── expected `top-level declaration`, found `'}'`
+   ╰────
+
+  [type] E0002
+
+  × unresolved type: v
+   ╭─[main.baml:9:26]
+ 9 │ function bad_return() -> v is int { true }
+   ·                          ─
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:9:28]
+ 9 │ function bad_return() -> v is int { true }
+   ·                            ─┬
+   ·                             ╰── expected `function body`, found `is`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:9:31]
+ 9 │ function bad_return() -> v is int { true }
+   ·                               ─┬─
+   ·                                ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:9:35]
+ 9 │ function bad_return() -> v is int { true }
+   ·                                   ┬
+   ·                                   ╰── expected `top-level declaration`, found `'{'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:9:37]
+ 9 │ function bad_return() -> v is int { true }
+   ·                                     ──┬─
+   ·                                       ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[main.baml:9:42]
+ 9 │ function bad_return() -> v is int { true }
+   ·                                          ┬
+   ·                                          ╰── expected `top-level declaration`, found `'}'`
+   ╰────

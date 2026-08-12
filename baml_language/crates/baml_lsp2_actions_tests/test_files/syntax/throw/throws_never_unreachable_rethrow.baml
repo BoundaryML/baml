@@ -16,22 +16,17 @@ function server(req: int) -> bool throws never {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//     ╭─[ throw_throws_never_unreachable_rethrow.baml:13:36 ]
-//     │
-//  13 │ ╭─▶     Errors.AuthenticationError => { throw e }
-//  14 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: throws contract violation: `never` is missing unknown
-//     ╭─[ throw_throws_never_unreachable_rethrow.baml:11:43 ]
-//     │
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throws_never_unreachable_rethrow.baml:13:35]
+//  13 │     Errors.AuthenticationError => { throw e }
+//     ·                                   ───────────
+//     ╰────
+// E0096
+//
+//   × declared throws is `never`, but this function may also throw `Errors.AuthenticationError`
+//     ╭─[throw_throws_never_unreachable_rethrow.baml:11:42]
 //  11 │ function server(req: int) -> bool throws never {
-//     │                                           ───┬──  
-//     │                                              ╰──── throws contract violation: `never` is missing unknown
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·                                          ─────
+//     ╰────

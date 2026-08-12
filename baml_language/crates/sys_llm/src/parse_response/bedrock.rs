@@ -126,6 +126,7 @@ pub(super) fn parse_bedrock_response(
         .unwrap_or_default();
 
     Ok(LlmProviderResponse {
+        output: crate::parse_response::LlmOutput::from_text(content.clone()),
         content,
         model: None, // Bedrock Converse responses don't include the model name
         finish_reason,

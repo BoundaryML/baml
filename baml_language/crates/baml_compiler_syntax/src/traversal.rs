@@ -1,6 +1,6 @@
 //! Utilities for traversing syntax trees.
 
-use rowan::{NodeOrToken, TextRange, TextSize, ast::AstNode};
+use rowan::{NodeOrToken, TextRange};
 
 use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 
@@ -23,6 +23,16 @@ pub trait SyntaxNodeExt {
 
     /// Get all non-trivia tokens in this subtree.
     fn non_trivia_tokens(&self) -> impl Iterator<Item = SyntaxToken>;
+
+    /// The text range of this node for use as a diagnostic / editor span,
+    /// excluding leading and trailing trivia (whitespace, newlines, comments).
+    ///
+    /// Rowan attaches trivia as child tokens, so a node's raw `text_range()`
+    /// can start on the inter-token whitespace before its first real token
+    /// (e.g. the space after `->` in a return type). Spans must tightly cover
+    /// the construct, so build them with this instead of `text_range()`.
+    /// See [`trimmed_range`].
+    fn span_range(&self) -> TextRange;
 }
 
 impl SyntaxNodeExt for SyntaxNode {
@@ -57,26 +67,10 @@ impl SyntaxNodeExt for SyntaxNode {
     fn non_trivia_tokens(&self) -> impl Iterator<Item = SyntaxToken> {
         self.tokens().filter(|token| !token.kind().is_trivia())
     }
-}
 
-/// Find a specific node type at a text offset.
-pub fn find_node_at_offset<N: AstNode<Language = crate::BamlLanguage>>(
-    root: &SyntaxNode,
-    offset: TextSize,
-) -> Option<N> {
-    root.token_at_offset(offset)
-        .right_biased()
-        .and_then(|token| token.parent_ancestors().find_map(N::cast))
-}
-
-/// Find all nodes of a specific type in the tree.
-pub fn find_all_nodes<N: AstNode<Language = crate::BamlLanguage>>(root: &SyntaxNode) -> Vec<N> {
-    root.descendants().filter_map(N::cast).collect()
-}
-
-/// Check if a node contains any errors.
-pub fn has_errors(node: &SyntaxNode) -> bool {
-    node.descendants().any(|n| n.kind() == SyntaxKind::ERROR)
+    fn span_range(&self) -> TextRange {
+        trimmed_range(self)
+    }
 }
 
 /// Get the text range of a node, excluding leading/trailing trivia.

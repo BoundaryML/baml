@@ -17,7 +17,9 @@ inputs:
   pnpm-version:
     description: 'pnpm version to install'
     required: false
-    default: '9.12.0'
+    # Keep in sync with typescript2/package.json `packageManager` and the
+    # root mise.toml `npm:pnpm` entry.
+    default: '11.1.3'
 
 runs:
   using: 'composite'
@@ -26,6 +28,10 @@ runs:
       uses: pnpm/action-setup@v4
       with:
         version: ${{ inputs.pnpm-version }}
+        # Point at typescript2/package.json explicitly — otherwise the action
+        # reads the root package.json (which pins a different pnpm version for
+        # the legacy workspace) and aborts on the mismatch.
+        package_json_file: ${{ inputs.working-directory }}/package.json
         run_install: false
 
     - name: Setup Node.js

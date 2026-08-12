@@ -1,4 +1,5 @@
 pub(super) mod chat_completions;
+pub(super) mod images;
 pub(super) mod responses;
 
 use serde::Deserialize;

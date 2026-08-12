@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × type `map<string, map<string, int>>` has no member `a`
+    ╭─[captured_field_chain.baml:32:3]
+ 32 │   data.a.b
+    ·   ────────
+    ╰────
+
+  [type] E0007
+
+  × type `map<string, map<string, map<string, int>>>` has no member `a`
+    ╭─[captured_field_chain.baml:37:3]
+ 37 │   data.a.b.c
+    ·   ──────────
+    ╰────

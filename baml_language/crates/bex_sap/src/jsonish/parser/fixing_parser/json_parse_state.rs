@@ -168,27 +168,6 @@ impl<'s> JsonParseState<'s> {
         Ok(0)
     }
 
-    /// Returns `true` if the current unquoted string on the stack represents a
-    /// complete JSON literal (`true`, `false`, `null`, or a valid number).
-    #[allow(dead_code)]
-    fn is_string_complete(&self) -> bool {
-        let Some((JsonCollection::UnquotedString(v, _), _)) = self.collection_stack.last() else {
-            return false;
-        };
-
-        // Check if the token is a valid json character
-        match &**v {
-            "true" | "false" | "null" => true,
-            _ => {
-                // Check if the token parses as a number
-                if v.parse::<f64>().is_ok() {
-                    return true;
-                }
-                false
-            }
-        }
-    }
-
     /// Determines whether the current unquoted string should be closed based on
     /// upcoming characters. Consumes characters from `next` looking for a
     /// structural delimiter appropriate to the string's context (`:` for object
@@ -445,7 +424,7 @@ impl<'s> JsonParseState<'s> {
                 ',' if in_object_value || in_array => {
                     if closing_char_count % 2 == 0 {
                         // We're ready to close the value
-                        log::debug!("Closing due to: value",);
+                        log::debug!("Closing due to: value");
                         true
                     } else {
                         // We're not ready to close the value
@@ -454,7 +433,7 @@ impl<'s> JsonParseState<'s> {
                 }
                 '}' if in_object_value => {
                     // We're ready to close the value
-                    log::debug!("Closing due to: value",);
+                    log::debug!("Closing due to: value");
                     true
                 }
                 ']' if in_array => {
@@ -495,14 +474,8 @@ impl<'s> JsonParseState<'s> {
                     // We'll close the string the next time around.
                     false
                 }
-                '{' | '"' | '\'' | '[' => {
-                    if !has_some_object {
-                        // We're in a string
-                        true
-                    } else {
-                        false
-                    }
-                }
+                // If there's no object yet, we're in a string.
+                '{' | '"' | '\'' | '[' => !has_some_object,
                 _ => {
                     // Almost every other character should not close the string
                     false

@@ -43,6 +43,71 @@ pnpm dev:wasm
 
 Then in VSCode, press `F5` and select **"Launch VS Code extension (v2)"**.
 
+### Building a Local VSIX
+
+From `typescript2/`, build and package the VS Code extension with:
+
+```bash
+pnpm vscode:package
+```
+
+The VSIX is written to:
+
+```text
+app-vscode-ext/app-vscode-ext-0.1.0.vsix
+```
+
+What `pnpm vscode:package` does:
+
+1. Removes stale packaged outputs:
+
+   ```bash
+   rm -rf app-vscode-webview/dist app-vscode-ext/dist app-vscode-ext/*.vsix
+   ```
+
+2. Builds the browser WASM bridge:
+
+   ```bash
+   pnpm build:wasm
+   ```
+
+   The VSIX is platform-neutral. It does not bundle `baml-cli`; the extension launches `baml lsp` through the configured `baml` wrapper or `baml` on PATH.
+
+3. Generates protobuf TypeScript bindings:
+
+   ```bash
+   pnpm --filter @b/pkg-proto generate
+   ```
+
+4. Builds the packaged React webview:
+
+   ```bash
+   pnpm --filter app-vscode-webview build
+   ```
+
+5. Builds the VS Code extension host bundle:
+
+   ```bash
+   pnpm --filter baml-language build
+   ```
+
+6. Stages runtime assets into the extension package:
+
+   ```bash
+   rm -rf app-vscode-ext/dist/playground
+   mkdir -p app-vscode-ext/dist/playground
+   cp -R app-vscode-webview/dist/. app-vscode-ext/dist/playground/
+   ```
+
+7. Packages the VSIX:
+
+   ```bash
+   cd app-vscode-ext
+   pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license
+   ```
+
+The packaged extension includes `dist/extension.js` and the built webview under `dist/playground`. It launches `baml lsp` through the wrapper, so the same VSIX can work across supported platforms and project toolchain pins.
+
 ### Standalone Web App
 
 ```bash
@@ -78,23 +143,10 @@ pnpm --filter app-vscode-webview test:unit:run
   - Browser tests run against Chromium via Playwright.
 - Use unit tests (`*.test.ts,tsx` excluding the above) if you don't need to depend on WASM or other browser APIs. These use `@testing-library/react` which is backed by `jsdom`, a fake browser implementation.
 
-#### HMR Tests
-
-HMR tests verify that WASM hot reload works:
-
-```bash
-pnpm --filter app-vscode-webview test:hmr      # Watch mode
-pnpm --filter app-vscode-webview test:hmr:run  # Single run
-```
-
-Tests are located in `app-vscode-webview/src/**/*.hmr.test.ts`.
-
-These tests spawn a Vite dev server and verify that changes to Rust source files trigger WASM rebuilds and HMR updates.
-
 ### Running All Tests
 
 ```bash
 # From the typescript2 directory
 pnpm --filter app-vscode-ext test:run
-pnpm --filter app-vscode-webview test:run  # Runs unit, browser, and hmr tests
+pnpm --filter app-vscode-webview test:run  # Runs unit and browser tests
 ```

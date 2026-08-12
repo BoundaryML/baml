@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[syntax_errors.baml:6:10]
+ 6 │ function 123Invalid() {}
+   ·          ─┬─
+   ·           ╰── expected `function name`, found `integer`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[syntax_errors.baml:6:23]
+ 6 │ function 123Invalid() {}
+   ·                       ┬
+   ·                       ╰── expected `return type (->)`, found `'{'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[syntax_errors.baml:6:25]
+ 6 │ function 123Invalid() {}
+   ·                         ▲
+   ·                         ╰── expected `'}'`, found `EOF`
+   ╰────

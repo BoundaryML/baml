@@ -1,0 +1,246 @@
+// See crates/bridge_ctypes/README.md for the list of consumers and the
+// commands used to regenerate each language's proto client.
+syntax = "proto3";
+package baml_bridge.cffi.v1;
+
+import "baml_bridge/cffi/v1/baml_handle.proto";
+import "baml_bridge/cffi/v1/baml_type.proto";
+
+option go_package = "./cffi";
+// C++ generates against the lite runtime (no descriptors/reflection);
+// ignored by every other generator in this repo (prost, protoc-gen-go).
+option optimize_for = LITE_RUNTIME;
+
+// -----------------------------------------------------------------------------
+// Outbound values — engine to host (type-rich)
+// -----------------------------------------------------------------------------
+
+// Result envelope for a top-level function call — engine to host. Wraps
+// the bare `BamlOutboundValue` so a thrown value (error) or panic crosses
+// the boundary as structured data alongside the ok value. Every result
+// decoder parses this (breaking change vs. the old bare `BamlOutboundValue`
+// — see 31c-phase2 / bridge_ctypes/README.md).
+message BamlOutboundResult {
+  oneof result {
+    BamlOutboundValue ok = 1;
+    BamlOutboundError error = 2;
+    BamlOutboundPanic panic = 3;
+  }
+}
+
+// A thrown error value (a `baml.errors.*` or user error type), decoded by
+// the normal value decoder into the codegen'd Python type. Raised host-side
+// as `BamlError` with `.value` = the decoded value.
+message BamlOutboundError {
+  BamlOutboundValue value = 1;
+  // Pre-rendered traceback lines, most-recent-call-last, e.g.
+  //   File "resume.baml", line 12, in user.extract
+  // Produced host-side from bex_vm::errors::StackFrame via
+  // format_traceback_lines (one rendered line per frame; never \n-joined).
+  repeated string trace = 2;
+}
+
+// A panic value (a `baml.panics.*` type). Raised host-side as `BamlPanic`
+// with `.value` = the decoded value — unless `is_exit_panic` is set.
+message BamlOutboundPanic {
+  BamlOutboundValue value = 1;
+  repeated string trace = 2;
+  // Exit discriminator. When `is_exit_panic` is true this panic is a clean
+  // baml.sys.exit: the host should terminate the process with `exit_code`
+  // (os._exit(code) in Python — not SystemExit; see 31f) rather than surface
+  // a catchable BamlPanic. A bool is used — not just `exit_code` — because
+  // proto3 cannot distinguish "exit with code 0" from an absent int64.
+  bool is_exit_panic = 3;
+  int64 exit_code = 4;
+}
+
+message BamlOutboundValue {
+  // we must include this because we might be a "string"
+  // but in a container type like (string | int) and some languages
+  // require we decode this.
+  //
+  // Required for BAML -> CFFI
+  // But not for CFFI -> BAML (BAML always does type validation again at
+  // boundaries)
+  oneof value {
+    BamlValueNull null_value = 2;
+    string string_value = 3;
+    int64 int_value = 4;
+    double float_value = 5;
+    bool bool_value = 6;
+    BamlValueClass class_value = 7;
+    BamlValueEnum enum_value = 8;
+    BamlLiteralValue literal_value = 9;
+    BamlValueList list_value = 11;
+    BamlValueMap map_value = 12;
+    BamlValueUnionVariant union_variant_value = 13;
+    BamlOutboundHandle handle_value = 16;
+    BamlValueMedia media_value = 17;
+    BamlValuePromptAst prompt_ast_value = 18;
+    bytes uint8array_value = 19;
+    string bigint_value = 20;
+    // A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+    // Shares the `BamlTy` representation with the inbound side.
+    BamlTy ty_value = 21;
+  }
+}
+
+// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
+// extra `ty` describing the underlying tagged type as a full `BamlTy` — the
+// faithful wire form, so an interface keeps its associated-type bindings even
+// though readers only consume the class FQN for typed-wrapper dispatch. Only
+// `ADT_TAGGED_HEAP_HANDLE` populates it; other handle types leave it unset.
+message BamlOutboundHandle {
+  uint64 key = 1;
+  BamlHandleType handle_type = 2;
+  BamlTy ty = 3;
+}
+
+message BamlValueNull {}
+
+// Each variant as a message.
+message BamlValueList {
+  BamlTy item_type = 1;
+  repeated BamlOutboundValue items = 2;
+}
+
+// A helper message to represent map entries (used also in Class).
+message BamlOutboundMapEntry {
+  string key = 1;
+  BamlOutboundValue value = 2;
+}
+
+message BamlValueMap {
+  BamlTy key_type = 1;
+  BamlTy value_type = 2;
+  repeated BamlOutboundMapEntry entries = 3;
+}
+
+message BamlValueClass {
+  string name = 1;
+  repeated BamlOutboundMapEntry fields = 2;
+  // Positional concrete generic args (De Bruijn order) so the host can
+  // reconstruct the parameterized type. Empty for non-generic instances.
+  repeated BamlTy type_args = 3;
+}
+
+message BamlValueEnum {
+  // Enums are never generic, so the name is a bare FQN (no type args).
+  string name = 1;
+  string value = 2;
+  bool is_dynamic = 3;
+}
+
+// A union value: the selected variant's value plus its `self_type` (the full
+// union type as a `BamlTy`) and the selected arm's canonical index.
+message BamlValueUnionVariant {
+  // Optional union name; unions carry their full type in `self_type`.
+  string name = 1;
+  bool is_optional = 2;
+  bool is_single_pattern = 3;
+  BamlTy self_type = 4;
+  // Display-only arm name. Consumers must use `selected_option_index` for
+  // canonical selected-arm identity.
+  string value_option_name = 5;
+  BamlOutboundValue value = 6;
+  reserved 7;
+  // Zero-based position of the selected arm in `self_type`'s canonical union
+  // member order. Presence distinguishes the first arm from an absent
+  // discriminator. The selected type is derived from this index.
+  optional uint32 selected_option_index = 8;
+}
+
+// -----------------------------------------------------------------------------
+// BamlMedia definitions
+// -----------------------------------------------------------------------------
+
+// We need to handle BamlMediaType. Since one variant is "Other(String)",
+// we represent it as a message with an enum tag and an optional string.
+enum MediaTypeEnum {
+  MEDIA_TYPE_UNSPECIFIED = 0;
+  IMAGE = 1;
+  AUDIO = 2;
+  PDF = 3;
+  VIDEO = 4;
+  OTHER = 5;
+}
+
+message BamlValueMedia {
+  MediaTypeEnum media = 1;
+  optional string mime_type = 2;
+  oneof value {
+    string url = 3;
+    string base64 = 4;
+    string file = 5;
+  }
+}
+
+message BamlValuePromptAst {
+  oneof value {
+    BamlValuePromptAstSimple simple = 1;
+    BamlValuePromptAstMessage message = 2;
+    BamlValuePromptAstMultiple multiple = 3;
+  }
+}
+
+message BamlValuePromptAstMessage {
+  string role = 1;
+  BamlValuePromptAstSimple content = 2;
+  string metadata_as_json = 3;
+}
+
+message BamlValuePromptAstMultiple {
+  repeated BamlValuePromptAst items = 1;
+}
+
+message BamlValuePromptAstSimple {
+  oneof value {
+    string string = 1;
+    BamlValueMedia media = 2;
+    BamlValuePromptAstSimpleMultiple multiple = 3;
+  }
+}
+
+message BamlValuePromptAstSimpleMultiple {
+  repeated BamlValuePromptAstSimple items = 1;
+}
+
+// Engine→host call of a host-callable. The engine has already resolved the call
+// against the callee's declared parameters and dropped any omitted optionals, so
+// `args` is a flat, declared-order list of the *supplied* args. Each arg carries
+// enough for a bridge to apply its own calling convention without the callee
+// type on the wire — `is_optional_arg` says whether it belongs in the positional
+// run or the host's optional/keyword bucket, and `arg_name` keys that bucket.
+// Omitted optionals are simply absent (the host's own language-level default
+// then applies). TypeScript folds the optional args into the trailing `$opts`
+// object; Python passes them as keyword arguments. Replaces the bare
+// `BamlOutboundValue` list previously passed to the dispatch FFI.
+message BamlToHostCall {
+  repeated BamlToHostArg args = 1;
+}
+
+message BamlToHostArg {
+  BamlOutboundValue value = 1;
+  // The parameter name, used to key the host's optional/keyword bucket. We
+  // leave `arg_name` empty for positional (required) args, which the host takes
+  // by position.
+  string arg_name = 2;
+  // Whether this is a supplied optional arg (→ the host's `$opts`/kwargs
+  // bucket) rather than a required positional arg.
+  bool is_optional_arg = 3;
+}
+
+// The literal value carried by `BamlOutboundValue.literal_value`. Mirrors the
+// shape of `baml_type.proto`'s `BamlTyLiteral` — inline scalars in a oneof, with
+// no separate message per variant. `bigint_value` is a base-sixteen hex string
+// with an optional leading minus sign (matching the value channel's
+// `BamlOutboundValue.bigint_value`); `float_value` is the float's source text.
+message BamlLiteralValue {
+  oneof literal {
+    string string_value = 1;
+    int64 int_value = 2;
+    bool bool_value = 3;
+    string bigint_value = 4;
+    string float_value = 5;
+  }
+}

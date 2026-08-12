@@ -29,7 +29,7 @@ fn type_alias_mutual_recursion() {
     type user.A = user.B
       !! 0..10: recursive type alias cycle: A
     type user.B = user.A
-      !! 10..21: recursive type alias cycle: B
+      !! 11..21: recursive type alias cycle: B
     type user.A$stream = user.B$stream
       !! 0..0: recursive type alias cycle: A$stream
     type user.B$stream = user.A$stream
@@ -46,9 +46,9 @@ fn type_alias_indirect_cycle_three() {
     type user.A = user.B
       !! 0..10: recursive type alias cycle: A
     type user.B = user.C
-      !! 10..21: recursive type alias cycle: B
+      !! 11..21: recursive type alias cycle: B
     type user.C = user.A
-      !! 21..32: recursive type alias cycle: C
+      !! 22..32: recursive type alias cycle: C
     type user.A$stream = user.B$stream
       !! 0..0: recursive type alias cycle: A$stream
     type user.B$stream = user.C$stream
@@ -106,7 +106,7 @@ fn class_field_self_reference() {
     }
       !! 0..24: class cycle: user.Node
     class user.Node$stream {
-      next: null | user.Node$stream
+      next: user.Node$stream | null
     }
     ");
 }
@@ -128,12 +128,12 @@ fn class_field_mutual_reference() {
     class user.Wife {
       husband: user.Husband
     }
-      !! 27..58: class cycle: user.Husband -> user.Wife -> user.Husband
+      !! 28..58: class cycle: user.Husband -> user.Wife -> user.Husband
     class user.Husband$stream {
-      wife: null | user.Wife$stream
+      wife: user.Wife$stream | null
     }
     class user.Wife$stream {
-      husband: null | user.Husband$stream
+      husband: user.Husband$stream | null
     }
     ");
 }
@@ -151,9 +151,9 @@ fn type_alias_optional_self_reference() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A?");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.A = user.A?
+    type user.A = user.A | null
       !! 0..11: recursive type alias cycle: A
-    type user.A$stream = null | user.A$stream
+    type user.A$stream = user.A$stream | null
       !! 0..0: recursive type alias cycle: A$stream
     ");
 }
@@ -191,8 +191,8 @@ fn type_alias_optional_list_self_reference() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = A[]?");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.A = user.A[]?
-    type user.A$stream = null | user.A$stream[]
+    type user.A = user.A[] | null
+    type user.A$stream = user.A$stream[] | null
     ");
 }
 
@@ -215,11 +215,11 @@ fn type_alias_mutual_cycle_through_optional() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type A = B?\ntype B = A");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.A = user.B?
+    type user.A = user.B | null
       !! 0..11: recursive type alias cycle: A
     type user.B = user.A
-      !! 11..22: recursive type alias cycle: B
-    type user.A$stream = null | user.B$stream
+      !! 12..22: recursive type alias cycle: B
+    type user.A$stream = user.B$stream | null
       !! 0..0: recursive type alias cycle: A$stream
     type user.B$stream = user.A$stream
       !! 0..0: recursive type alias cycle: B$stream
@@ -261,12 +261,12 @@ fn class_required_field_mutual_cycle() {
     class user.B {
       a: user.A
     }
-      !! 15..31: class cycle: user.A -> user.B -> user.A
+      !! 16..31: class cycle: user.A -> user.B -> user.A
     class user.A$stream {
-      b: null | user.B$stream
+      b: user.B$stream | null
     }
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -283,7 +283,7 @@ fn class_required_field_self_cycle() {
     }
       !! 0..22: class cycle: user.A
     class user.A$stream {
-      self_ref: null | user.A$stream
+      self_ref: user.A$stream | null
     }
     ");
 }
@@ -304,19 +304,19 @@ fn class_required_field_three_way_cycle() {
     class user.B {
       c: user.C
     }
-      !! 15..31: class cycle: user.A -> user.B -> user.C -> user.A
+      !! 16..31: class cycle: user.A -> user.B -> user.C -> user.A
     class user.C {
       a: user.A
     }
-      !! 31..47: class cycle: user.A -> user.B -> user.C -> user.A
+      !! 32..47: class cycle: user.A -> user.B -> user.C -> user.A
     class user.A$stream {
-      b: null | user.B$stream
+      b: user.B$stream | null
     }
     class user.B$stream {
-      c: null | user.C$stream
+      c: user.C$stream | null
     }
     class user.C$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -330,16 +330,16 @@ fn class_optional_field_breaks_cycle() {
     let file = db.add_file("test.baml", "class A { b B? }\nclass B { a A }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
-      b: user.B?
+      b: user.B | null
     }
     class user.B {
       a: user.A
     }
     class user.A$stream {
-      b: null | user.B$stream
+      b: user.B$stream | null
     }
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -362,7 +362,7 @@ fn class_list_field_breaks_cycle() {
       bs: user.B$stream[]
     }
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -388,7 +388,7 @@ fn class_map_field_breaks_cycle() {
       bm: map<string, user.B$stream>
     }
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -411,13 +411,13 @@ fn class_cycle_through_type_alias() {
     class user.B {
       a: user.A
     }
-      !! 36..52: class cycle: user.A -> user.B -> user.A
+      !! 37..52: class cycle: user.A -> user.B -> user.A
     class user.A$stream {
-      b: null | user.B$stream
+      b: user.B$stream | null
     }
     type user.AliasB$stream = user.B$stream
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -435,16 +435,16 @@ fn class_cycle_broken_by_alias_to_optional() {
     class user.A {
       b: user.AliasB
     }
-    type user.AliasB = user.B?
+    type user.AliasB = user.B | null
     class user.B {
       a: user.A
     }
     class user.A$stream {
-      b: null | user.B$stream
+      b: user.B$stream | null
     }
-    type user.AliasB$stream = null | user.B$stream
+    type user.AliasB$stream = user.B$stream | null
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -463,12 +463,12 @@ fn class_union_field_all_variants_same_class() {
     class user.B {
       a: user.A
     }
-      !! 19..35: class cycle: user.A -> user.B -> user.A
+      !! 20..35: class cycle: user.A -> user.B -> user.A
     class user.A$stream {
-      b: null | user.B$stream | user.B$stream
+      b: user.B$stream | user.B$stream | null
     }
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }
@@ -488,10 +488,10 @@ fn class_union_field_different_variants_breaks_cycle() {
       a: user.A
     }
     class user.A$stream {
-      b: null | user.B$stream | string
+      b: user.B$stream | string | null
     }
     class user.B$stream {
-      a: null | user.A$stream
+      a: user.A$stream | null
     }
     ");
 }

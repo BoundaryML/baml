@@ -1,0 +1,333 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function byte_strings.$init_test_ns_byte_strings_byte_strings(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "literal_basic"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "literal_empty"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "literal_hex_escapes"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "literal_standard_escapes"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "literal_mixed_ascii_and_hex"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "length_basic"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "length_empty"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "at_valid_index"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "at_out_of_bounds"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "at_negative_index"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "at_negative_out_of_bounds"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "zeroes_basic"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_read"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_write"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_write_out_of_range"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_out_of_bounds"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_negative_in_bounds"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_before_start"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "return_uint8array"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "equality_same_content"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "equality_different_content"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "equality_empty"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "equality_different_lengths"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "equality_different_lengths_reversed"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "inequality_same"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "inequality_different"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "b_as_identifier"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "literal_as_call_argument"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.byte_strings"
+    load_const "index_read_direct"
+    make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function byte_strings.byte_strings_b_as_identifier() -> int {
+    load_const 42
+    return
+}
+
+function byte_strings.byte_strings_index_before_start() -> int {
+    load_const b"\x61"
+    call baml.deep_copy
+    load_const 2
+    unary_op -
+    load_array_element
+    return
+}
+
+function byte_strings.byte_strings_index_neg_in_bounds() -> int {
+    load_const b"\x61"
+    call baml.deep_copy
+    load_const 1
+    unary_op -
+    load_array_element
+    return
+}
+
+function byte_strings.byte_strings_index_oob() -> int {
+    load_const b"\x61"
+    call baml.deep_copy
+    load_const 5
+    load_array_element
+    return
+}
+
+function byte_strings.byte_strings_index_read() -> int {
+    load_const b"\x41\x42"
+    call baml.deep_copy
+    load_const 0
+    load_array_element
+    return
+}
+
+function byte_strings.byte_strings_index_read_direct() -> int {
+    load_const b"\x41\x42\x43"
+    call baml.deep_copy
+    load_const 0
+    load_array_element
+    return
+}
+
+function byte_strings.byte_strings_index_write() -> int | null {
+    load_const b"\x00\x00"
+    call baml.deep_copy
+    store_var data
+    load_var data
+    load_const 0
+    load_const 255
+    store_array_element
+    load_var data
+    load_const 0
+    call baml.Uint8Array.at
+    return
+}
+
+function byte_strings.byte_strings_index_write_out_of_range() -> int {
+    load_const b"\x00"
+    call baml.deep_copy
+    store_var data
+    load_var data
+    load_const 0
+    load_const 256
+    store_array_element
+    load_var data
+    load_const 0
+    load_array_element
+    return
+}
+
+function byte_strings.byte_strings_literal_basic() -> uint8array {
+    load_const b"\x68\x65\x6c\x6c\x6f"
+    call baml.deep_copy
+    return
+}
+
+function byte_strings.byte_strings_literal_empty() -> uint8array {
+    load_const b""
+    call baml.deep_copy
+    return
+}
+
+function byte_strings.byte_strings_literal_hex_escapes() -> uint8array {
+    load_const b"\x00\x7f\xff"
+    call baml.deep_copy
+    return
+}
+
+function byte_strings.byte_strings_literal_mixed() -> uint8array {
+    load_const b"\x41\x42\x43"
+    call baml.deep_copy
+    return
+}
+
+function byte_strings.byte_strings_literal_standard_escapes() -> uint8array {
+    load_const b"\x0a\x09\x0d\x00\x5c\x22"
+    call baml.deep_copy
+    return
+}
+
+function byte_strings.byte_strings_return_uint8array() -> uint8array {
+    load_const b"\x61\x62\x63"
+    call baml.deep_copy
+    return
+}
+
+function byte_strings.byte_strings_zeroes_basic() -> uint8array {
+    load_const b"\x00\x00\x00"
+    call baml.deep_copy
+    return
+}
+
+function byte_strings.get_len(data: uint8array) -> int {
+    load_var data
+    container_len
+    return
+}

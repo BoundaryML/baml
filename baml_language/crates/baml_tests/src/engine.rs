@@ -20,58 +20,29 @@
 //! }
 //! ```
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
-pub use baml_compiler2_emit::OptLevel;
-use baml_project::ProjectDatabase;
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+pub use baml_project::testing::{
+    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+};
+use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, Object, Program};
 pub use indexmap::IndexMap;
+#[cfg(test)]
+use insta::{assert_snapshot, with_settings};
 use sys_native::SysOpsExt;
 
-/// Set up a test database from BAML source code.
-fn setup_test_db(source: &str) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
-    db.add_file("test.baml", source);
-    db
-}
+#[cfg(test)]
+const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/engine");
 
-/// Assert that a `ProjectDatabase` has no diagnostic errors in user files.
-///
-/// Builtin stdlib files (paths starting with `<builtin>/`) may have known
-/// pre-existing errors that don't affect user code correctness. Only errors
-/// in user-provided source files are checked here.
-#[track_caller]
-fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
-    use baml_compiler_diagnostics::Severity;
-
-    let project = db.get_project().expect("project must be set");
-    let all_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(db, project, &all_files);
-
-    // Build a set of file IDs that belong to user files (not builtins).
-    let user_file_ids: std::collections::HashSet<_> =
-        all_files.iter().map(|f| f.file_id(db)).collect();
-
-    let errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| matches!(d.severity, Severity::Error))
-        .filter(|d| {
-            // Only include errors from user files; skip builtin stdlib errors.
-            d.primary_span()
-                .map(|span| user_file_ids.contains(&span.file_id))
-                .unwrap_or(false)
-        })
-        .collect();
-    if !errors.is_empty() {
-        let mut msg = String::from("Compilation produced diagnostic errors:\n");
-        for (i, err) in errors.iter().enumerate() {
-            msg.push_str(&format!("  {}. [{}] {}\n", i + 1, err.code(), err.message));
-        }
-        panic!("{msg}");
-    }
+#[cfg(test)]
+macro_rules! engine_snapshot {
+    ($name:expr, $output:expr) => {
+        with_settings!({ snapshot_path => SNAPSHOT_PATH, omit_expression => true }, {
+            assert_snapshot!($name, $output);
+        });
+    };
 }
 
 /// Output of a unified test: bytecode display + execution result.
@@ -82,39 +53,33 @@ pub struct TestOutput {
     pub result: Result<BexExternalValue, bex_engine::EngineError>,
 }
 
-/// Compile BAML source with default optimization (OptLevel::One).
-pub fn compile_source(source: &str) -> Program {
-    compile_source_with_opt(source, OptLevel::One)
-}
-
-/// Compile BAML source with a specific optimization level.
-pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
-    let db = setup_test_db(source);
-    assert_no_diagnostic_errors(&db);
-
-    let opts = baml_compiler2_emit::CompileOptions {
-        emit_test_cases: false,
-    };
-    baml_compiler2_emit::generate_project_bytecode_with_opt(&db, &opts, opt)
-        .expect("generate_project_bytecode should succeed for valid test source")
-}
-
 /// Extract user-defined functions from a program and display them in textual format.
 ///
 /// Strips the `"user."` package prefix from function names so snapshots show
 /// `function main()` rather than `function user.main()`.
+///
+/// Auto-derived methods (e.g. synthesized `to_json` / `from_json` on every user
+/// class) are filtered by default to keep snapshots focused on user-written
+/// source. Pass `show_auto_derive: true` via the `baml_test!` macro to include
+/// them when debugging the synthesizer itself.
 pub fn display_user_functions(program: &Program) -> String {
+    display_user_functions_with_options(program, false)
+}
+
+/// Like [`display_user_functions`], but lets the caller include auto-derived
+/// methods in the bytecode output.
+pub fn display_user_functions_with_options(program: &Program, show_auto_derive: bool) -> String {
     let mut functions: Vec<(String, &Function)> = program
         .function_indices
         .iter()
-        .filter(|(name, _)| {
-            !name.starts_with("baml.")
-                && !name.starts_with("testing.")
-                && !name.starts_with("assert.")
-                && !name.starts_with("env.")
-        })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {
             Some(Object::Function(f)) => {
+                if !f.origin.is_user_callable() {
+                    return None;
+                }
+                if !show_auto_derive && f.origin.is_auto_derived() {
+                    return None;
+                }
                 // Strip leading "user." package prefix for display.
                 let display_name = name
                     .strip_prefix("user.")
@@ -152,7 +117,7 @@ fn resolve_args(
     program: &Program,
     entry: &str,
     args: IndexMap<&str, BexExternalValue>,
-) -> Vec<BexExternalValue> {
+) -> Vec<BexCallArg> {
     let resolved_entry = resolve_entry_name(program, entry);
     let function_idx = program
         .function_index(&resolved_entry)
@@ -172,9 +137,23 @@ fn resolve_args(
         }
     }
 
-    if args.len() != function.param_names.len() {
+    let required_count = function
+        .param_names
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| {
+            !function
+                .param_has_default
+                .get(*idx)
+                .copied()
+                .unwrap_or(false)
+        })
+        .count();
+
+    if args.len() < required_count || args.len() > function.param_names.len() {
         panic!(
-            "argument count mismatch for function '{entry}': expected {}, got {}",
+            "argument count mismatch for function '{entry}': expected between {} and {}, got {}",
+            required_count,
             function.param_names.len(),
             args.len()
         );
@@ -183,10 +162,20 @@ fn resolve_args(
     function
         .param_names
         .iter()
-        .map(|param_name| {
-            args.get(param_name.as_str())
-                .cloned()
-                .unwrap_or_else(|| panic!("missing argument '{param_name}' for function '{entry}'"))
+        .enumerate()
+        .map(|(idx, param_name)| {
+            if let Some(value) = args.get(param_name.as_str()).cloned() {
+                BexCallArg::Provided(Box::new(value))
+            } else if function
+                .param_has_default
+                .get(idx)
+                .copied()
+                .unwrap_or(false)
+            {
+                BexCallArg::OmittedDefault
+            } else {
+                panic!("missing argument '{param_name}' for function '{entry}'")
+            }
         })
         .collect()
 }
@@ -204,10 +193,34 @@ pub async fn run_test(
     args: IndexMap<&str, BexExternalValue>,
     opt: OptLevel,
 ) -> TestOutput {
-    let program = compile_source_with_opt(source, opt);
+    run_test_with_options(source, entry, args, opt, false).await
+}
 
+/// Like [`run_test`] but lets the caller include auto-derived class methods
+/// (`to_json` / `from_json`) in the bytecode display.
+pub async fn run_test_with_options(
+    source: &str,
+    entry: &str,
+    args: IndexMap<&str, BexExternalValue>,
+    opt: OptLevel,
+    show_auto_derive: bool,
+) -> TestOutput {
+    let program = compile_source_with_opt(source, opt);
+    run_compiled(program, entry, args, show_auto_derive).await
+}
+
+/// Run an already-compiled `program`, returning its bytecode display and the
+/// engine result. Split out of [`run_test_with_options`] so timing-sensitive
+/// tests can compile FIRST (compilation grows with the stdlib) and time only
+/// the engine execution — see `cancel_cascade.rs`.
+pub async fn run_compiled(
+    program: Program,
+    entry: &str,
+    args: IndexMap<&str, BexExternalValue>,
+    show_auto_derive: bool,
+) -> TestOutput {
     // Display bytecode before the engine consumes the program.
-    let bytecode = display_user_functions(&program);
+    let bytecode = display_user_functions_with_options(&program, show_auto_derive);
 
     // Resolve the entry name (bare "main" → "user.main" for compiler2 output).
     let resolved_entry = resolve_entry_name(&program, entry);
@@ -216,12 +229,12 @@ pub async fn run_test(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), None)
+    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
         .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
 
     let result = engine
-        .call_function(
+        .call_function_bound_args(
             &resolved_entry,
             positional_args,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -239,4 +252,200 @@ pub async fn run_test_mir_optimized(
     args: IndexMap<&str, BexExternalValue>,
 ) -> TestOutput {
     run_test(source, entry, args, OptLevel::Two).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn source_call_omitted_default_executes_in_callee_scope() {
+        let output = run_test(
+            r#"
+            function add(base: int, amount: int = base + 2) -> int {
+              base + amount
+            }
+
+            function main() -> int {
+              add(5)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+        engine_snapshot!(
+            "source_call_omitted_default_executes_in_callee_scope_bytecode",
+            output.bytecode
+        );
+    }
+
+    #[tokio::test]
+    async fn host_call_omission_is_distinct_from_explicit_null() {
+        let source = r#"
+        function is_null(value: int? = 7) -> bool {
+          value == null
+        }
+        "#;
+
+        let omitted = run_test(source, "is_null", IndexMap::new(), OptLevel::One).await;
+        assert_eq!(omitted.result, Ok(BexExternalValue::Bool(false)));
+
+        let mut args = IndexMap::new();
+        args.insert("value", BexExternalValue::Null);
+        let explicit_null = run_test(source, "is_null", args, OptLevel::One).await;
+        assert_eq!(explicit_null.result, Ok(BexExternalValue::Bool(true)));
+    }
+
+    #[tokio::test]
+    async fn bound_args_reject_argument_count_mismatch() {
+        let program = compile_source_with_opt(
+            "function main(x: int, y: int = 1) -> int { x + y }",
+            OptLevel::One,
+        );
+        let engine = Arc::new(
+            BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+                .expect("engine"),
+        );
+
+        let err = engine
+            .call_function_bound_args(
+                "main",
+                vec![BexCallArg::Provided(Box::new(BexExternalValue::Int(1)))],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect_err("argument count mismatch should be rejected");
+
+        assert!(
+            matches!(&err, bex_engine::EngineError::TypeMismatch { message } if message.contains("expects 2 argument(s), got 1")),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn bound_args_reject_omitted_default_for_required_param() {
+        let program = compile_source_with_opt("function main(x: int) -> int { x }", OptLevel::One);
+        let engine = Arc::new(
+            BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+                .expect("engine"),
+        );
+
+        let err = engine
+            .call_function_bound_args(
+                "main",
+                vec![BexCallArg::OmittedDefault],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect_err("omitted required argument should be rejected");
+
+        assert!(
+            matches!(&err, bex_engine::EngineError::TypeMismatch { message } if message.contains("cannot be omitted")),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn optional_dropping_adapter_preserves_source_defaults() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              x + a + b
+            }
+
+            function main() -> int {
+              let f: (x: int, b?: int) -> int throws never = combine;
+              f(1, b = 5)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
+        engine_snapshot!(
+            "optional_dropping_adapter_preserves_source_defaults_bytecode",
+            output.bytecode
+        );
+    }
+
+    #[tokio::test]
+    async fn optional_adapter_reorders_named_optional_params() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              (x * 100) + (a * 10) + b
+            }
+
+            function main() -> int {
+              let f: (x: int, b?: int, a?: int) -> int throws never = combine;
+              f(1, b = 5, a = 2)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(125)));
+    }
+
+    #[tokio::test]
+    async fn optional_adapter_applies_to_concrete_call_argument() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              x + a + b
+            }
+
+            function apply(f: (x: int, b?: int) -> int) -> int {
+              f(1, b = 5)
+            }
+
+            function main() -> int {
+              apply(combine)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
+    }
+
+    #[tokio::test]
+    async fn optional_adapter_applies_to_generic_call_argument() {
+        let output = run_test(
+            r#"
+            function combine(x: int, a: int = 10, b: int = 100) -> int {
+              x + a + b
+            }
+
+            function apply<T>(f: (x: T, b?: int) -> T, value: T) -> T {
+              f(value, b = 5)
+            }
+
+            function main() -> int {
+              apply(combine, 1)
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
+    }
 }

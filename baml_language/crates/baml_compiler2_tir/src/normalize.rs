@@ -1,26 +1,25 @@
-//! Type normalization and subtyping.
+//! Type-alias recursion detection and declaration cycle diagnostics.
 //!
-//! Converts surface `Ty` types to an internal `StructuralTy` where all type
-//! aliases are resolved. Recursive aliases are represented using Mu types with
-//! equirecursive (co-inductive) subtyping.
+//! Subtyping and equivalence live in the canonical algebra
+//! ([`baml_type::normalize`], driven by a [`crate::type_context`] context); this
+//! module holds the two things that are *not* part of that relation:
+//!
+//! - [`find_recursive_aliases`]: which type aliases are self-referential, so
+//!   runtime lowering ([`baml_type::ResolvedAliases`]) knows which to keep opaque
+//!   rather than expand.
+//! - [`find_invalid_alias_cycles`] / [`find_invalid_class_cycles`]: the
+//!   ill-founded-recursion diagnostics (a type alias or class whose definition
+//!   depends on itself with no indirection through a container).
 
 use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 
-use crate::ty::{LiteralValue, PrimitiveType, QualifiedTypeName, Ty};
+use crate::ty::{QualifiedTypeName, Ty};
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PUBLIC API
+// RECURSIVE ALIAS DETECTION
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// Check if `sub` is a subtype of `sup`, resolving type aliases.
-pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeName, Ty>) -> bool {
-    let recursive = find_recursive_aliases(aliases);
-    let sub_norm = normalize(sub, aliases, &recursive);
-    let sup_norm = normalize(sup, aliases, &recursive);
-    sub_norm.is_subtype_of(&sup_norm, &mut HashSet::new())
-}
 
 /// Find all recursive type aliases via DFS.
 pub fn find_recursive_aliases(
@@ -35,366 +34,6 @@ pub fn find_recursive_aliases(
         }
     }
     recursive
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// STRUCTURAL TYPE (private)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// Normalized structural type. All aliases resolved, recursion explicit.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum StructuralTy {
-    // Primitives
-    Int,
-    Float,
-    String,
-    Bool,
-    Null,
-    Image,
-    Audio,
-    Video,
-    Pdf,
-    Uint8Array,
-    // Literal
-    Literal(baml_base::Literal),
-    // User-defined (resolved by qualified name)
-    Class(QualifiedTypeName),
-    Enum(QualifiedTypeName),
-    EnumVariant(QualifiedTypeName, Name),
-    // Constructors
-    Optional(Box<StructuralTy>),
-    List(Box<StructuralTy>),
-    Map {
-        key: Box<StructuralTy>,
-        value: Box<StructuralTy>,
-    },
-    Union(Vec<StructuralTy>),
-    Function {
-        params: Vec<StructuralTy>,
-        ret: Box<StructuralTy>,
-    },
-    // Recursion
-    Mu {
-        var: QualifiedTypeName,
-        body: Box<StructuralTy>,
-    },
-    TyVar(QualifiedTypeName),
-    /// A generic type parameter — opaque, only subtypes itself and `BuiltinUnknown`.
-    TypeVar(Name),
-    // Special
-    Never,
-    Void,
-    /// The explicit `unknown` keyword — top type (supertype of everything).
-    BuiltinUnknown,
-    Unknown,
-    Error,
-}
-
-impl StructuralTy {
-    /// Equirecursive subtyping with co-inductive assumptions.
-    fn is_subtype_of(
-        &self,
-        other: &StructuralTy,
-        assumptions: &mut HashSet<(StructuralTy, StructuralTy)>,
-    ) -> bool {
-        // Co-inductive: if we've assumed this pair, it holds
-        let pair = (self.clone(), other.clone());
-        if assumptions.contains(&pair) {
-            return true;
-        }
-
-        // Reflexivity
-        if self == other {
-            return true;
-        }
-
-        // Never is the bottom type — subtype of everything
-        if matches!(self, StructuralTy::Never) {
-            return true;
-        }
-
-        // BuiltinUnknown is the top type — everything is a subtype of it.
-        // But BuiltinUnknown itself is NOT a subtype of specific types
-        // (unlike the error-recovery Unknown which is bidirectionally compatible).
-        if matches!(other, StructuralTy::BuiltinUnknown) {
-            return true;
-        }
-        // If self is BuiltinUnknown and other is not BuiltinUnknown (reflexivity
-        // already handled equal case above), it's not a subtype.
-        if matches!(self, StructuralTy::BuiltinUnknown) {
-            return false;
-        }
-
-        // TypeVar (generic parameter) is opaque — only subtypes itself (reflexivity
-        // above) and BuiltinUnknown (above). Never (bottom) is already handled above.
-        // Must come before Unknown/Error check to avoid bidirectional compatibility.
-        if matches!(self, StructuralTy::TypeVar(_)) || matches!(other, StructuralTy::TypeVar(_)) {
-            return false;
-        }
-
-        // Void is only compatible with itself (handled by reflexivity above)
-        if matches!(self, StructuralTy::Void) || matches!(other, StructuralTy::Void) {
-            return false;
-        }
-
-        // Error recovery: Unknown/Error are compatible with anything
-        if matches!(self, StructuralTy::Unknown | StructuralTy::Error)
-            || matches!(other, StructuralTy::Unknown | StructuralTy::Error)
-        {
-            return true;
-        }
-
-        assumptions.insert(pair.clone());
-
-        let result = match (self, other) {
-            // Mu unfolding
-            (StructuralTy::Mu { var, body }, other) => {
-                let unfolded = substitute(body, var, self);
-                unfolded.is_subtype_of(other, assumptions)
-            }
-            (self_ty, StructuralTy::Mu { var, body }) => {
-                let unfolded = substitute(body, var, other);
-                self_ty.is_subtype_of(&unfolded, assumptions)
-            }
-
-            // TyVar (inside Mu bodies)
-            (StructuralTy::TyVar(v1), StructuralTy::TyVar(v2)) => v1 == v2,
-
-            // Null <: Optional<T>
-            (StructuralTy::Null, StructuralTy::Optional(_)) => true,
-
-            // Optional<T> <: Optional<U> iff T <: U (covariance)
-            (StructuralTy::Optional(inner), StructuralTy::Optional(opt_inner)) => {
-                inner.is_subtype_of(opt_inner, assumptions)
-            }
-
-            // Union<T1, ..., Tn> <: Optional<U> iff every Ti is either Null or <: U
-            (StructuralTy::Union(types), StructuralTy::Optional(opt_inner)) => {
-                types.iter().all(|t| {
-                    matches!(t, StructuralTy::Null) || t.is_subtype_of(opt_inner, assumptions)
-                })
-            }
-
-            // Optional<T> <: Union  iff Null <: Union and T <: Union
-            (StructuralTy::Optional(inner), StructuralTy::Union(types)) => {
-                types.iter().any(|t| matches!(t, StructuralTy::Null))
-                    && types.iter().any(|t| inner.is_subtype_of(t, assumptions))
-            }
-
-            // T <: Optional<T>
-            (inner, StructuralTy::Optional(opt_inner)) => {
-                inner.is_subtype_of(opt_inner, assumptions)
-            }
-
-            // T <: T | U
-            (inner, StructuralTy::Union(types)) => {
-                types.iter().any(|t| inner.is_subtype_of(t, assumptions))
-            }
-
-            // Union<T1, T2> <: U iff all Ti <: U
-            (StructuralTy::Union(types), other) => {
-                types.iter().all(|t| t.is_subtype_of(other, assumptions))
-            }
-
-            // List covariance
-            (StructuralTy::List(inner1), StructuralTy::List(inner2)) => {
-                inner1.is_subtype_of(inner2, assumptions)
-            }
-
-            // Map: covariant in both key and value.
-            //
-            // Keys use subtyping (not equality) so that:
-            //   - map<never, T>   <: map<K, V>    (empty map is assignable anywhere)
-            //   - map<"lit", T>   <: map<string, V>  (literal keys widen to string)
-            //   - map<string, T>  <: map<string, V>  (same key type)
-            //
-            // This allows passing `{}` (`map<never, never>`) and `{"foo": "bar"}`
-            // (`map<literal "foo", literal "bar">`) to functions like
-            // baml.llm.build_request(), which takes `map<string, unknown>`.
-            (
-                StructuralTy::Map { key: k1, value: v1 },
-                StructuralTy::Map { key: k2, value: v2 },
-            ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
-
-            // Int <: Float
-            (StructuralTy::Int, StructuralTy::Float) => true,
-
-            // Literal types are subtypes of their base types
-            (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
-            (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Float) => true,
-            (StructuralTy::Literal(LiteralValue::Float(_)), StructuralTy::Float) => true,
-            (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
-            (StructuralTy::Literal(LiteralValue::Bool(_)), StructuralTy::Bool) => true,
-
-            // EnumVariant(E, V) <: Enum(E)
-            (StructuralTy::EnumVariant(e, _), StructuralTy::Enum(sup_e)) => e == sup_e,
-
-            // Function subtyping: contravariant params, covariant return
-            (
-                StructuralTy::Function {
-                    params: params1,
-                    ret: ret1,
-                },
-                StructuralTy::Function {
-                    params: params2,
-                    ret: ret2,
-                },
-            ) => {
-                if !ret1.is_subtype_of(ret2, assumptions) {
-                    return false;
-                }
-                if params2.len() > params1.len() {
-                    return false;
-                }
-                for (p1, p2) in params1.iter().zip(params2.iter()) {
-                    if !p2.is_subtype_of(p1, assumptions) {
-                        return false;
-                    }
-                }
-                true
-            }
-
-            _ => false,
-        };
-
-        assumptions.remove(&pair);
-        result
-    }
-}
-
-/// Substitute `TyVar` with replacement in type.
-fn substitute(
-    ty: &StructuralTy,
-    var: &QualifiedTypeName,
-    replacement: &StructuralTy,
-) -> StructuralTy {
-    match ty {
-        StructuralTy::TyVar(v) if v == var => replacement.clone(),
-        StructuralTy::Optional(inner) => {
-            StructuralTy::Optional(Box::new(substitute(inner, var, replacement)))
-        }
-        StructuralTy::List(inner) => {
-            StructuralTy::List(Box::new(substitute(inner, var, replacement)))
-        }
-        StructuralTy::Map { key, value } => StructuralTy::Map {
-            key: Box::new(substitute(key, var, replacement)),
-            value: Box::new(substitute(value, var, replacement)),
-        },
-        StructuralTy::Union(types) => StructuralTy::Union(
-            types
-                .iter()
-                .map(|t| substitute(t, var, replacement))
-                .collect(),
-        ),
-        StructuralTy::Function { params, ret } => StructuralTy::Function {
-            params: params
-                .iter()
-                .map(|t| substitute(t, var, replacement))
-                .collect(),
-            ret: Box::new(substitute(ret, var, replacement)),
-        },
-        StructuralTy::Mu { var: v, body } if v != var => StructuralTy::Mu {
-            var: v.clone(),
-            body: Box::new(substitute(body, var, replacement)),
-        },
-        _ => ty.clone(),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// NORMALIZATION (private)
-// ═══════════════════════════════════════════════════════════════════════════
-
-fn normalize(
-    ty: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    recursive: &HashSet<QualifiedTypeName>,
-) -> StructuralTy {
-    let mut expanding = HashSet::new();
-    normalize_impl(ty, aliases, recursive, &mut expanding)
-}
-
-fn normalize_impl(
-    ty: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    recursive: &HashSet<QualifiedTypeName>,
-    expanding: &mut HashSet<QualifiedTypeName>,
-) -> StructuralTy {
-    match ty {
-        Ty::Primitive(p, _) => match p {
-            PrimitiveType::Int => StructuralTy::Int,
-            PrimitiveType::Float => StructuralTy::Float,
-            PrimitiveType::String => StructuralTy::String,
-            PrimitiveType::Bool => StructuralTy::Bool,
-            PrimitiveType::Null => StructuralTy::Null,
-            PrimitiveType::Image => StructuralTy::Image,
-            PrimitiveType::Audio => StructuralTy::Audio,
-            PrimitiveType::Video => StructuralTy::Video,
-            PrimitiveType::Pdf => StructuralTy::Pdf,
-            PrimitiveType::Uint8Array => StructuralTy::Uint8Array,
-        },
-        Ty::Never { .. } => StructuralTy::Never,
-        Ty::Void { .. } => StructuralTy::Void,
-        Ty::BuiltinUnknown { .. } => StructuralTy::BuiltinUnknown,
-        Ty::Unknown { .. } => StructuralTy::Unknown,
-        Ty::Error { .. } => StructuralTy::Error,
-        Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
-        Ty::Class(qn, _) => StructuralTy::Class(qn.clone()),
-        Ty::Enum(qn, _) => StructuralTy::Enum(qn.clone()),
-        Ty::EnumVariant(qn, v, _) => StructuralTy::EnumVariant(qn.clone(), v.clone()),
-
-        Ty::TypeAlias(qn, _) => {
-            if expanding.contains(qn) {
-                return StructuralTy::TyVar(qn.clone());
-            }
-
-            if let Some(alias_ty) = aliases.get(qn) {
-                if recursive.contains(qn) {
-                    expanding.insert(qn.clone());
-                    let body = normalize_impl(alias_ty, aliases, recursive, expanding);
-                    expanding.remove(qn);
-                    StructuralTy::Mu {
-                        var: qn.clone(),
-                        body: Box::new(body),
-                    }
-                } else {
-                    normalize_impl(alias_ty, aliases, recursive, expanding)
-                }
-            } else {
-                StructuralTy::Error
-            }
-        }
-
-        Ty::Optional(inner, _) => StructuralTy::Optional(Box::new(normalize_impl(
-            inner, aliases, recursive, expanding,
-        ))),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => StructuralTy::List(Box::new(
-            normalize_impl(inner, aliases, recursive, expanding),
-        )),
-        Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => StructuralTy::Map {
-            key: Box::new(normalize_impl(key, aliases, recursive, expanding)),
-            value: Box::new(normalize_impl(value, aliases, recursive, expanding)),
-        },
-        Ty::Union(types, _) => StructuralTy::Union(
-            types
-                .iter()
-                .map(|t| normalize_impl(t, aliases, recursive, expanding))
-                .collect(),
-        ),
-        Ty::Function { params, ret, .. } => StructuralTy::Function {
-            params: params
-                .iter()
-                .map(|(_, t)| normalize_impl(t, aliases, recursive, expanding))
-                .collect(),
-            ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
-        },
-        Ty::TypeVar(name, _) => StructuralTy::TypeVar(name.clone()),
-        // `$rust_type` — opaque Rust-managed state. Treated as Unknown
-        // in the structural type system (cannot be constructed or destructured
-        // by user code).
-        // `type` — the BAML metatype keyword. Also opaque in the structural system.
-        Ty::RustType { .. } | Ty::Type { .. } => StructuralTy::Unknown,
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -430,21 +69,55 @@ fn ty_has_cycle(
 ) -> bool {
     match ty {
         Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
-        Ty::Optional(inner, _) | Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             ty_has_cycle(inner, aliases, visited, stack)
         }
-        Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
             ty_has_cycle(key, aliases, visited, stack)
                 || ty_has_cycle(value, aliases, visited, stack)
         }
         Ty::Union(types, _) => types
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Function { params, ret, .. } => {
+        Ty::Class(_, type_args, _) => type_args
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        // A `Future`'s value/error positions carry recursion like a nominal
+        // generic's args do — invisible here before this arm existed, which let
+        // a `type F = Future<F, never>[]` alias slip past both the E0068 guard
+        // and the recursive-alias set, sending runtime lowering into unbounded
+        // inline expansion.
+        Ty::Future(value, error, _) => {
+            ty_has_cycle(value, aliases, visited, stack)
+                || ty_has_cycle(error, aliases, visited, stack)
+        }
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args
+                .iter()
+                .any(|t| ty_has_cycle(t, aliases, visited, stack))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| ty_has_cycle(ty, aliases, visited, stack))
+        }
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            ty_has_cycle(base, aliases, visited, stack)
+                || interface
+                    .tys()
+                    .any(|t| ty_has_cycle(t, aliases, visited, stack))
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             params
                 .iter()
-                .any(|(_, t)| ty_has_cycle(t, aliases, visited, stack))
+                .any(|param| ty_has_cycle(&param.ty, aliases, visited, stack))
                 || ty_has_cycle(ret, aliases, visited, stack)
+                || ty_has_cycle(throws, aliases, visited, stack)
         }
         _ => false,
     }
@@ -537,8 +210,8 @@ fn build_alias_graph(aliases: &HashMap<QualifiedTypeName, Ty>) -> GraphResult {
 ///
 /// Returns `(non_structural_deps, structural_deps)` where structural means
 /// the reference goes through `List` or `Map` (which provide a termination
-/// point via empty container). `Optional` and `Union` are pass-through —
-/// they do NOT create structural context.
+/// point via empty container). `Union` (including a nullable `T | null`) is
+/// pass-through — it does NOT create structural context.
 fn extract_type_alias_deps(
     ty: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -558,15 +231,11 @@ fn extract_type_alias_deps(
                     non_structural.insert(qn.clone());
                 }
             }
-            Ty::Optional(inner, _) => {
-                // Optional does NOT create structural context
-                visit(inner, aliases, non_structural, structural, in_structural);
-            }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
                 // List provides structural guard (can be empty)
                 visit(inner, aliases, non_structural, structural, true);
             }
-            Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
                 // Map provides structural guard (can be empty)
                 visit(key, aliases, non_structural, structural, true);
                 visit(value, aliases, non_structural, structural, true);
@@ -577,11 +246,54 @@ fn extract_type_alias_deps(
                     visit(m, aliases, non_structural, structural, in_structural);
                 }
             }
-            Ty::Function { params, ret, .. } => {
-                for (_, t) in params {
+            Ty::Class(_, type_args, _) => {
+                // Nominal type_args are pass-through for cycle classification.
+                // User-defined nominal types are not structural guards like List/Map,
+                // so their generic arguments inherit the surrounding context.
+                for t in type_args {
                     visit(t, aliases, non_structural, structural, in_structural);
                 }
+            }
+            Ty::Future(value, error, _) => {
+                // Pass-through, like a nominal generic: a future has no empty
+                // base case (constructing one requires the recursive value), so
+                // it is not a structural guard.
+                visit(value, aliases, non_structural, structural, in_structural);
+                visit(error, aliases, non_structural, structural, in_structural);
+            }
+            Ty::Interface(_, type_args, associated_bindings, _) => {
+                for t in type_args {
+                    visit(t, aliases, non_structural, structural, in_structural);
+                }
+                for (_, ty) in associated_bindings {
+                    visit(ty, aliases, non_structural, structural, in_structural);
+                }
+            }
+            Ty::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                visit(base, aliases, non_structural, structural, in_structural);
+                for ty in interface.tys() {
+                    visit(ty, aliases, non_structural, structural, in_structural);
+                }
+            }
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                for param in params {
+                    visit(
+                        &param.ty,
+                        aliases,
+                        non_structural,
+                        structural,
+                        in_structural,
+                    );
+                }
                 visit(ret, aliases, non_structural, structural, in_structural);
+                visit(throws, aliases, non_structural, structural, in_structural);
             }
             _ => {}
         }
@@ -814,42 +526,31 @@ fn extract_required_class_deps(
     visiting: &mut HashSet<QualifiedTypeName>,
 ) {
     match ty {
-        Ty::Class(qn, _) => {
-            // Only add if the field is truly required
-            if !optional && !in_list_or_map && class_fields.contains_key(qn) {
-                deps.insert(qn.clone());
+        // Only add if the field is truly required.
+        Ty::Class(qn, _, _) if !optional && !in_list_or_map && class_fields.contains_key(qn) => {
+            deps.insert(qn.clone());
+        }
+        Ty::Class(_, _, _) => {}
+        // Resolve through type aliases (only if still required context).
+        Ty::TypeAlias(qn, _) if !optional && !in_list_or_map && !visiting.contains(qn) => {
+            if let Some(alias_ty) = type_aliases.get(qn) {
+                visiting.insert(qn.clone());
+                extract_required_class_deps(
+                    alias_ty,
+                    class_fields,
+                    type_aliases,
+                    deps,
+                    optional,
+                    in_list_or_map,
+                    visiting,
+                );
+                visiting.remove(qn);
             }
         }
-        Ty::TypeAlias(qn, _) => {
-            // Resolve through type aliases (only if still required context)
-            if !optional && !in_list_or_map && !visiting.contains(qn) {
-                if let Some(alias_ty) = type_aliases.get(qn) {
-                    visiting.insert(qn.clone());
-                    extract_required_class_deps(
-                        alias_ty,
-                        class_fields,
-                        type_aliases,
-                        deps,
-                        optional,
-                        in_list_or_map,
-                        visiting,
-                    );
-                    visiting.remove(qn);
-                }
-            }
-        }
-        Ty::Optional(inner, _) => {
-            // Optional breaks the hard dependency
-            extract_required_class_deps(
-                inner,
-                class_fields,
-                type_aliases,
-                deps,
-                true,
-                in_list_or_map,
-                visiting,
-            );
-        }
+        Ty::TypeAlias(_, _) => {}
+        // `T?` lowers to `Union([T, Null])` (canary removed the `Ty::Optional`
+        // variant), so optionals are handled by the `Ty::Union` arm below —
+        // which already yields no hard dependency (Null breaks it).
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             // List breaks the hard dependency (can be empty)
             extract_required_class_deps(
@@ -862,7 +563,7 @@ fn extract_required_class_deps(
                 visiting,
             );
         }
-        Ty::Map(key, value, _) | Ty::EvolvingMap(key, value, _) => {
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
             // Map breaks the hard dependency (can be empty)
             extract_required_class_deps(
                 key,
@@ -925,8 +626,9 @@ fn format_cycle_path(cycle: &[QualifiedTypeName]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use baml_base::TyAttr;
+
     use super::*;
-    use crate::ty::{Freshness, TyAttr};
 
     fn qn(name: &str) -> QualifiedTypeName {
         QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
@@ -937,679 +639,115 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_alias() {
-        let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("MyInt"),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        );
-
-        assert!(is_subtype_of(
-            &type_alias("MyInt"),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &type_alias("MyInt"),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_transitive_alias() {
-        let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("MyInt"),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        );
-        aliases.insert(qn("AnotherInt"), type_alias("MyInt"));
-
-        assert!(is_subtype_of(
-            &type_alias("AnotherInt"),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &type_alias("AnotherInt"),
-            &type_alias("MyInt"),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_union_alias() {
-        let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("IntOrString"),
-            Ty::Union(
-                vec![
-                    Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-                    Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-                ],
-                TyAttr::default(),
-            ),
-        );
-
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &type_alias("IntOrString"),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &type_alias("IntOrString"),
-            &aliases
-        ));
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
-            &type_alias("IntOrString"),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_recursive_alias_detection() {
+    fn direct_self_reference_is_recursive() {
+        // `type List = null | List`
         let mut aliases = HashMap::new();
         aliases.insert(
             qn("List"),
             Ty::Union(
                 vec![
-                    Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                    Ty::Null {
+                        attr: TyAttr::default(),
+                    },
                     type_alias("List"),
                 ],
                 TyAttr::default(),
             ),
         );
 
-        let recursive = find_recursive_aliases(&aliases);
-        assert!(recursive.contains(&qn("List")));
+        assert!(find_recursive_aliases(&aliases).contains(&qn("List")));
     }
 
     #[test]
-    fn test_non_recursive_not_marked() {
+    fn recursion_through_future_is_detected() {
+        // `type F = Future<F, never>[]` — recursion flows through the Future's
+        // value position. Before the Future arms existed, this alias evaded
+        // both the recursive set (so runtime lowering inlined it forever) and
+        // the E0068 guard.
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("F"),
+            Ty::List(
+                Box::new(Ty::Future(
+                    Box::new(type_alias("F")),
+                    Box::new(Ty::Never {
+                        attr: TyAttr::default(),
+                    }),
+                    TyAttr::default(),
+                )),
+                TyAttr::default(),
+            ),
+        );
+        assert!(find_recursive_aliases(&aliases).contains(&qn("F")));
+        // List-guarded: the cycle is valid.
+        assert!(!find_invalid_alias_cycles(&aliases).contains(&qn("F")));
+
+        // A pure-Future cycle has no empty base case — invalid (E0068), like a
+        // required class-field cycle.
+        let mut pure = HashMap::new();
+        pure.insert(
+            qn("G"),
+            Ty::Future(
+                Box::new(type_alias("G")),
+                Box::new(Ty::Never {
+                    attr: TyAttr::default(),
+                }),
+                TyAttr::default(),
+            ),
+        );
+        assert!(find_recursive_aliases(&pure).contains(&qn("G")));
+        assert!(find_invalid_alias_cycles(&pure).contains(&qn("G")));
+    }
+
+    #[test]
+    fn non_recursive_alias_is_not_marked() {
+        // `type MyInt = int`
         let mut aliases = HashMap::new();
         aliases.insert(
             qn("MyInt"),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        );
-
-        let recursive = find_recursive_aliases(&aliases);
-        assert!(!recursive.contains(&qn("MyInt")));
-    }
-
-    #[test]
-    fn test_never_is_bottom() {
-        let aliases = HashMap::new();
-
-        assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
+            Ty::Int {
+                attr: TyAttr::default(),
             },
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
-            },
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
-            },
-            &Ty::Class(qn("Foo"), TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Never {
-                attr: TyAttr::default()
-            },
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_int_subtype_of_float() {
-        let aliases = HashMap::new();
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-            &aliases
-        ));
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_literal_widens() {
-        let aliases = HashMap::new();
-        // Fresh and Regular should both be subtypes of their base primitive
-        assert!(is_subtype_of(
-            &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-            &aliases
-        ));
-        assert!(is_subtype_of(
-            &Ty::Literal(
-                LiteralValue::String("hi".into()),
-                Freshness::Fresh,
-                TyAttr::default()
-            ),
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &aliases
-        ));
-        assert!(!is_subtype_of(
-            &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &aliases
-        ));
-        // Freshness is ignored for subtyping: Fresh(1) <: Regular(1)
-        assert!(is_subtype_of(
-            &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
-            &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_enum_variant_subtype_of_enum() {
-        let aliases = HashMap::new();
-        assert!(is_subtype_of(
-            &Ty::EnumVariant(qn("Color"), Name::new("Red"), TyAttr::default()),
-            &Ty::Enum(qn("Color"), TyAttr::default()),
-            &aliases
-        ));
-        assert!(!is_subtype_of(
-            &Ty::EnumVariant(qn("Color"), Name::new("Red"), TyAttr::default()),
-            &Ty::Enum(qn("Shape"), TyAttr::default()),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_function_covariant_return() {
-        let aliases = HashMap::new();
-        let f1 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-            attr: TyAttr::default(),
-        };
-        let f2 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
-            attr: TyAttr::default(),
-        };
-        assert!(is_subtype_of(&f1, &f2, &aliases));
-        assert!(!is_subtype_of(&f2, &f1, &aliases));
-    }
-
-    #[test]
-    fn test_function_contravariant_params() {
-        let aliases = HashMap::new();
-        let f1 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Float, TyAttr::default()))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            attr: TyAttr::default(),
-        };
-        let f2 = Ty::Function {
-            params: vec![(None, Ty::Primitive(PrimitiveType::Int, TyAttr::default()))],
-            ret: Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-            attr: TyAttr::default(),
-        };
-        assert!(is_subtype_of(&f1, &f2, &aliases));
-        assert!(!is_subtype_of(&f2, &f1, &aliases));
-    }
-
-    #[test]
-    fn test_optional_subtyping() {
-        let aliases = HashMap::new();
-        // int <: int?
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-        // null <: int?
-        assert!(is_subtype_of(
-            &Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-        // string NOT <: int?
-        assert!(!is_subtype_of(
-            &Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-            &Ty::Optional(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-    }
-
-    // ── Evolving container tests ────────────────────────────────────────────
-
-    #[test]
-    fn test_evolving_list_subtype_of_list() {
-        let aliases = HashMap::new();
-        // EvolvingList(int) <: List(int)
-        assert!(is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-        // List(int) <: EvolvingList(int)
-        assert!(is_subtype_of(
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_evolving_list_covariance() {
-        let aliases = HashMap::new();
-        // EvolvingList(int) <: List(float) (int <: float)
-        assert!(is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-        // EvolvingList(string) NOT <: List(int)
-        assert!(!is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_evolving_list_never_is_bottom() {
-        let aliases = HashMap::new();
-        // EvolvingList(Never) <: List(int) — empty evolving is assignable anywhere
-        assert!(is_subtype_of(
-            &Ty::EvolvingList(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            ),
-            &Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_evolving_map_subtype_of_map() {
-        let aliases = HashMap::new();
-        // EvolvingMap(string, int) <: Map(string, int)
-        assert!(is_subtype_of(
-            &Ty::EvolvingMap(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_map_key_covariance_never() {
-        let aliases = HashMap::new();
-        // map<never, never> <: map<string, unknown> — empty map assignable anywhere
-        assert!(is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::BuiltinUnknown {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-        // map<never, never> <: map<string, int>
-        assert!(is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_map_key_covariance_literal() {
-        let aliases = HashMap::new();
-        // map<"name", "World"> <: map<string, unknown>
-        assert!(is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Literal(
-                    LiteralValue::String("name".into()),
-                    Freshness::Fresh,
-                    TyAttr::default()
-                )),
-                Box::new(Ty::Literal(
-                    LiteralValue::String("World".into()),
-                    Freshness::Fresh,
-                    TyAttr::default()
-                )),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::BuiltinUnknown {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-        // map<"name", "World"> <: map<string, string>
-        assert!(is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Literal(
-                    LiteralValue::String("name".into()),
-                    Freshness::Fresh,
-                    TyAttr::default()
-                )),
-                Box::new(Ty::Literal(
-                    LiteralValue::String("World".into()),
-                    Freshness::Fresh,
-                    TyAttr::default()
-                )),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_map_value_covariance() {
-        let aliases = HashMap::new();
-        // map<string, int> <: map<string, float>
-        assert!(is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_map_key_not_supertype() {
-        let aliases = HashMap::new();
-        // map<string, int> NOT <: map<"name", int> — widening key is not subtyping
-        assert!(!is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Literal(
-                    LiteralValue::String("name".into()),
-                    Freshness::Fresh,
-                    TyAttr::default()
-                )),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-        // map<string, string> NOT <: map<int, string> — incompatible key types
-        assert!(!is_subtype_of(
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &Ty::Map(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                TyAttr::default(),
-            ),
-            &aliases
-        ));
-    }
-
-    #[test]
-    fn test_make_evolving() {
-        // List(Never) → EvolvingList(Never)
-        assert_eq!(
-            Ty::List(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
-            .make_evolving(),
-            Ty::EvolvingList(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
         );
-        // Map(Never, Never) → EvolvingMap(Never, Never)
-        assert_eq!(
-            Ty::Map(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
-            .make_evolving(),
-            Ty::EvolvingMap(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
+
+        assert!(!find_recursive_aliases(&aliases).contains(&qn("MyInt")));
+    }
+
+    #[test]
+    fn recursion_through_class_type_arg_is_detected() {
+        // `type A = Box<A>` — recursion goes through a class generic argument.
+        // Cycle detection must descend into class type_args or it would miss this
+        // and expansion would recurse forever.
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("A"),
+            Ty::Class(qn("Box"), vec![type_alias("A")], TyAttr::default()),
         );
-        // Non-empty List passes through
-        assert_eq!(
-            Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-            .make_evolving(),
-            Ty::List(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-        );
-        // Non-container passes through
-        assert_eq!(
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default()).make_evolving(),
-            Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+
+        assert!(
+            find_recursive_aliases(&aliases).contains(&qn("A")),
+            "expected `type A = Box<A>` to be detected as recursive"
         );
     }
 
     #[test]
-    fn test_evolving_display() {
-        assert_eq!(
-            Ty::EvolvingList(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
-            .to_string(),
-            "_[]"
-        );
-        assert_eq!(
-            Ty::EvolvingList(
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-            .to_string(),
-            "int[] (evolving)"
-        );
-        assert_eq!(
-            Ty::EvolvingMap(
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                Box::new(Ty::Never {
-                    attr: TyAttr::default()
-                }),
-                TyAttr::default()
-            )
-            .to_string(),
-            "map<_, _>"
-        );
-        assert_eq!(
-            Ty::EvolvingMap(
-                Box::new(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
-                Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-                TyAttr::default()
-            )
-            .to_string(),
-            "map<string, int> (evolving)"
-        );
-    }
-
-    // ── Literal-union subtype tests ─────────────────────────────────────────
-
-    #[test]
-    fn test_union_of_int_literals_subtype_of_int() {
-        let aliases = HashMap::new();
-        let sub = Ty::Union(
-            vec![
-                Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
-                Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
-                Ty::Literal(LiteralValue::Int(3), Freshness::Fresh, TyAttr::default()),
-            ],
-            TyAttr::default(),
-        );
-        let sup = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        assert!(is_subtype_of(&sub, &sup, &aliases));
-    }
-
-    #[test]
-    fn test_list_of_literal_union_subtype_of_list_int() {
-        let aliases = HashMap::new();
-        let sub = Ty::List(
-            Box::new(Ty::Union(
-                vec![
-                    Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
-                    Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
-                ],
+    fn recursion_through_interface_type_arg_is_detected() {
+        // `type A = BoxLike<A>` — recursion through an interface generic argument,
+        // detected just like class generic arguments.
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("A"),
+            Ty::Interface(
+                qn("BoxLike"),
+                vec![type_alias("A")],
+                vec![],
                 TyAttr::default(),
-            )),
-            TyAttr::default(),
+            ),
         );
-        let sup = Ty::List(
-            Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
-            TyAttr::default(),
-        );
-        assert!(is_subtype_of(&sub, &sup, &aliases));
-    }
 
-    #[test]
-    fn test_union_of_int_and_float_literals_subtype_of_float() {
-        let aliases = HashMap::new();
-        let sub = Ty::Union(
-            vec![
-                Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
-                Ty::Literal(
-                    LiteralValue::Float("2.0".to_string()),
-                    Freshness::Fresh,
-                    TyAttr::default(),
-                ),
-            ],
-            TyAttr::default(),
+        assert!(
+            find_recursive_aliases(&aliases).contains(&qn("A")),
+            "expected `type A = BoxLike<A>` to be detected as recursive"
         );
-        let sup = Ty::Primitive(PrimitiveType::Float, TyAttr::default());
-        assert!(is_subtype_of(&sub, &sup, &aliases));
     }
 }

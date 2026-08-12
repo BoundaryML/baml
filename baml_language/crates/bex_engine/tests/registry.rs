@@ -8,7 +8,9 @@ mod common;
 
 use std::sync::Arc;
 
+use ::bex_heap::CollectionLevel;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_external_types::WeakHeapRef;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -29,7 +31,7 @@ async fn registry_new_copy_objects_true_returns_instance() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -37,7 +39,7 @@ async fn registry_new_copy_objects_true_returns_instance() {
     let result = engine
         .call_function(
             "testing.TestCollector.new",
-            vec![BexExternalValue::String(String::new())],
+            vec![BexExternalValue::String("".into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true, // copy_objects: deep-extract to BexExternalValue
         )
@@ -45,7 +47,9 @@ async fn registry_new_copy_objects_true_returns_instance() {
         .expect("testing.TestCollector.new should succeed");
 
     match &result {
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             assert_eq!(
                 class_name, "testing.TestCollector",
                 "expected class_name 'testing.TestCollector', got '{class_name}'"
@@ -78,7 +82,7 @@ async fn registry_new_copy_objects_false_returns_handle() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
+            Vec::new(),
         )
         .expect("Failed to create engine"),
     );
@@ -86,22 +90,27 @@ async fn registry_new_copy_objects_false_returns_handle() {
     let result = engine
         .call_function(
             "testing.TestCollector.new",
-            vec![BexExternalValue::String(String::new())],
+            vec![BexExternalValue::String("".into())],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             false, // copy_objects: return Handle instead of deep-extracting
         )
         .await
         .expect("testing.TestCollector.new should succeed");
 
-    assert!(
-        matches!(result, BexExternalValue::Handle(_)),
-        "expected Handle for testing.TestCollector.new with copy_objects=false, got: {result:?}"
-    );
+    let BexExternalValue::Handle(handle) = &result else {
+        panic!(
+            "expected Handle for testing.TestCollector.new with copy_objects=false, got: {result:?}"
+        );
+    };
+    let slab_key = handle.slab_key();
 
-    // The handle should survive a GC cycle (GC-rooted).
-    let _stats = engine.collect_garbage().await;
+    // The handle should survive a GC cycle (GC-rooted). Verify by resolving the
+    // slab key through the heap's handle table after major GC — a simple
+    // variant match can't detect the real failure (invalidated handle) because
+    // the enum variant of `result` doesn't change.
+    let _stats = engine.collect_garbage(CollectionLevel::Major).await;
     assert!(
-        matches!(result, BexExternalValue::Handle(_)),
-        "handle should still be valid after GC"
+        engine.heap().resolve_handle_ptr(slab_key).is_some(),
+        "handle slab key must still resolve to a live HeapPtr after GC"
     );
 }

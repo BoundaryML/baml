@@ -1,0 +1,49 @@
+[project]
+name = "__PYPROJECT_NAME__"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "baml_bridge",
+    "pydantic>=2",
+    # `UNSET` is a `typing_extensions.Sentinel` (PEP 661); recognizing a
+    # sentinel in a type expression needs pyright >= 1.1.410.
+    "typing-extensions>=4.14.0",
+    "pytest>=7",
+    "pytest-asyncio>=0.23",
+    "ruff",
+    "pyright>=1.1.410",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+baml_bridge = { path = "../../../../../sdks/python", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+# Put the generated tree root (where `baml_sdk/` lives) on sys.path so
+# test modules in nested dirs (e.g. `roundtrip_tests/`) can still
+# `import baml_sdk`. Top-level test modules already get this via the
+# default `prepend` import mode; this makes it hold for subdirs too.
+pythonpath = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["*.pyi"]
+
+[tool.ruff.lint]
+ignore = ["F401", "F821", "E402"]
+
+[tool.pyright]
+include = ["baml_sdk", "*_static.py"]
+exclude = [".venv", "test_*.py"]
+reportUnnecessaryTypeIgnoreComment = true

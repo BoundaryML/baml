@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[function_types.baml:25:5]
+ 25 │     1
+    ·     ┬
+    ·     ╰── expected `(x: int) -> int throws never`, found `1`
+    ╰────

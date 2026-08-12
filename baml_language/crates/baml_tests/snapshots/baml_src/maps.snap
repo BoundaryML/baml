@@ -1,0 +1,837 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function maps.$init_test_ns_maps_maps(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.maps"
+    load_const "len"
+    make_closure .<lambda($init_test_ns_maps_maps, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_set_first_insert_returns_null"
+    make_closure .<lambda($init_test_ns_maps_maps, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_set_replace_returns_previous"
+    make_closure .<lambda($init_test_ns_maps_maps, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_set_then_get_reads_latest"
+    make_closure .<lambda($init_test_ns_maps_maps, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_set_grows_length"
+    make_closure .<lambda($init_test_ns_maps_maps, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_set_replace_preserves_length"
+    make_closure .<lambda($init_test_ns_maps_maps, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_delete_returns_previous"
+    make_closure .<lambda($init_test_ns_maps_maps, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_delete_absent_returns_null"
+    make_closure .<lambda($init_test_ns_maps_maps, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_delete_already_deleted_returns_null"
+    make_closure .<lambda($init_test_ns_maps_maps, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_delete_shrinks_length"
+    make_closure .<lambda($init_test_ns_maps_maps, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_delete_does_not_affect_other_keys"
+    make_closure .<lambda($init_test_ns_maps_maps, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_get_or_insert_inserts_when_absent"
+    make_closure .<lambda($init_test_ns_maps_maps, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_get_or_insert_returns_existing_when_present"
+    make_closure .<lambda($init_test_ns_maps_maps, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_get_or_insert_does_not_overwrite"
+    make_closure .<lambda($init_test_ns_maps_maps, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_get_or_insert_persists_inserted_value"
+    make_closure .<lambda($init_test_ns_maps_maps, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_get_or_insert_grows_length_only_when_absent"
+    make_closure .<lambda($init_test_ns_maps_maps, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_clear_removes_all"
+    make_closure .<lambda($init_test_ns_maps_maps, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_clear_already_empty_is_noop"
+    make_closure .<lambda($init_test_ns_maps_maps, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_clear_then_reuse"
+    make_closure .<lambda($init_test_ns_maps_maps, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_clear_makes_get_return_null"
+    make_closure .<lambda($init_test_ns_maps_maps, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_has_after_delete_is_false"
+    make_closure .<lambda($init_test_ns_maps_maps, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "map_has_after_get_or_insert_is_true"
+    make_closure .<lambda($init_test_ns_maps_maps, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "create_and_access"
+    make_closure .<lambda($init_test_ns_maps_maps, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "access_no_key"
+    make_closure .<lambda($init_test_ns_maps_maps, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "contains"
+    make_closure .<lambda($init_test_ns_maps_maps, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.maps"
+    load_const "modify"
+    make_closure .<lambda($init_test_ns_maps_maps, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function maps.create_map_helper() -> map<string, string> {
+    load_const "world"
+    load_const "hello"
+    load_type string
+    load_type string
+    alloc_map 1
+    return
+}
+
+function maps.edit_map_key_helper() -> int {
+    load_const 123
+    load_const "hi"
+    load_type string
+    load_type int
+    alloc_map 1
+    store_var map
+    load_var map
+    load_const "hi"
+    load_const 42
+    load_const 4
+    bin_op -
+    store_map_element
+    load_var map
+    load_const "hi"
+    load_var map
+    load_const "hi"
+    load_map_element
+    load_const 4
+    bin_op +
+    store_map_element
+    load_var map
+    load_const "hi"
+    load_map_element
+    return
+}
+
+function maps.map_clear_already_empty_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    call baml.Map.clear
+    pop 1
+    load_var m
+    container_len
+    return
+}
+
+function maps.map_clear_makes_get_return_null_main() -> int | null {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    call baml.Map.clear
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.get
+    return
+}
+
+function maps.map_clear_removes_all_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "b"
+    load_const 2
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    call baml.Map.clear
+    pop 1
+    load_var m
+    container_len
+    return
+}
+
+function maps.map_clear_then_reuse_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    call baml.Map.clear
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "b"
+    load_const 99
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "b"
+    call baml.Map.get
+    store_var _11
+    load_var _11
+    store_var _0
+    load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 1
+    unary_op -
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function maps.map_delete_absent_main() -> int | null {
+    load_type string
+    load_type int
+    load_type string
+    load_type int
+    alloc_map 0
+    load_const "missing"
+    call baml.Map.delete
+    return
+}
+
+function maps.map_delete_already_deleted_main() -> int | null {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.delete
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.delete
+    return
+}
+
+function maps.map_delete_does_not_affect_other_keys_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "b"
+    load_const 2
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.delete
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "b"
+    call baml.Map.get
+    store_var _11
+    load_var _11
+    store_var _0
+    load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 1
+    unary_op -
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function maps.map_delete_returns_previous_main() -> int | null {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 42
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.delete
+    return
+}
+
+function maps.map_delete_shrinks_length_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "b"
+    load_const 2
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.delete
+    pop 1
+    load_var m
+    container_len
+    return
+}
+
+function maps.map_get_or_insert_does_not_overwrite_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    load_const 99
+    call baml.Map.get_or_insert
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    call baml.Map.get
+    store_var _8
+    load_var _8
+    store_var _0
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 1
+    unary_op -
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function maps.map_get_or_insert_grows_length_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.get_or_insert
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 2
+    call baml.Map.get_or_insert
+    pop 1
+    load_var m
+    container_len
+    return
+}
+
+function maps.map_get_or_insert_inserts_when_absent_main() -> int {
+    load_type string
+    load_type int
+    load_type string
+    load_type int
+    alloc_map 0
+    load_const "k"
+    load_const 10
+    call baml.Map.get_or_insert
+    return
+}
+
+function maps.map_get_or_insert_persists_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    load_const 7
+    call baml.Map.get_or_insert
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    call baml.Map.get
+    store_var _5
+    load_var _5
+    store_var _0
+    load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 1
+    unary_op -
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function maps.map_get_or_insert_returns_existing_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    load_const 99
+    call baml.Map.get_or_insert
+    return
+}
+
+function maps.map_has_after_delete_main() -> bool {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.delete
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.has
+    return
+}
+
+function maps.map_has_after_get_or_insert_main() -> bool {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    load_const 7
+    call baml.Map.get_or_insert
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "k"
+    call baml.Map.has
+    return
+}
+
+function maps.map_len_helper() -> int {
+    load_const 123
+    load_const 456
+    load_const "hi"
+    load_const "it_works"
+    load_type string
+    load_type int
+    alloc_map 2
+    container_len
+    return
+}
+
+function maps.map_set_first_insert_main() -> int | null {
+    load_type string
+    load_type int
+    load_type string
+    load_type int
+    alloc_map 0
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    return
+}
+
+function maps.map_set_grows_length_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "b"
+    load_const 2
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "c"
+    load_const 3
+    call baml.Map.set
+    pop 1
+    load_var m
+    container_len
+    return
+}
+
+function maps.map_set_replace_preserves_length_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 2
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 3
+    call baml.Map.set
+    pop 1
+    load_var m
+    container_len
+    return
+}
+
+function maps.map_set_replace_returns_previous_main() -> int | null {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 2
+    call baml.Map.set
+    return
+}
+
+function maps.map_set_then_get_main() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var m
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    load_const 2
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var m
+    load_const "a"
+    call baml.Map.get
+    store_var _8
+    load_var _8
+    store_var _0
+    load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 1
+    unary_op -
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function maps.use_map_contains_helper() -> string {
+    load_const "world"
+    load_const "hello"
+    load_type string
+    load_type string
+    alloc_map 1
+    store_var map
+    load_type string
+    load_type string
+    load_var map
+    load_const "hello"
+    call baml.Map.has
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "hi"
+    jump L2
+
+  L1:
+    load_var map
+    load_const "hello"
+    load_map_element
+
+  L2:
+    return
+}
+
+function maps.use_map_helper() -> string {
+    call user.maps.create_map_helper
+    load_const "hello"
+    load_map_element
+    return
+}
+
+function maps.use_map_no_key_helper() -> string {
+    call user.maps.create_map_helper
+    load_const "world"
+    load_map_element
+    return
+}

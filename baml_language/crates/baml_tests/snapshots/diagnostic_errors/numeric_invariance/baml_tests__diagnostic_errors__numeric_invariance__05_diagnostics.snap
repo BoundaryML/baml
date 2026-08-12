@@ -1,0 +1,169 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:11:5]
+ 11 │     x
+    ·     ┬
+    ·     ╰── expected `float`, found `int`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:16:5]
+ 16 │     1
+    ·     ┬
+    ·     ╰── expected `float`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:22:5]
+ 22 │     x
+    ·     ┬
+    ·     ╰── expected `bigint`, found `int`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:27:5]
+ 27 │     1
+    ·     ┬
+    ·     ╰── expected `bigint`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:33:5]
+ 33 │     a
+    ·     ┬
+    ·     ╰── expected `bigint[]`, found `int[]`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:39:6]
+ 39 │     [1, 2]
+    ·      ┬
+    ·      ╰── expected `bigint`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:39:9]
+ 39 │     [1, 2]
+    ·         ┬
+    ·         ╰── expected `bigint`, found `2`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:45:5]
+ 45 │     a
+    ·     ┬
+    ·     ╰── expected `float[]`, found `int[]`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:50:7]
+ 50 │     [[1], [2]]
+    ·       ┬
+    ·       ╰── expected `bigint`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:50:12]
+ 50 │     [[1], [2]]
+    ·            ┬
+    ·            ╰── expected `bigint`, found `2`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:56:5]
+ 56 │     m
+    ·     ┬
+    ·     ╰── expected `map<string, bigint>`, found `map<string, int>`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[numeric_invariance.baml:61:11]
+ 61 │     {"a": 1}
+    ·           ┬
+    ·           ╰── expected `bigint`, found `1`
+    ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `int | null` and `int`
+    ╭─[numeric_invariance.baml:67:5]
+ 67 │     x + y
+    ·     ─────
+    ╰────
+
+  [type] E0004
+
+  × operator `&` cannot be applied to `int | null` and `int`
+    ╭─[numeric_invariance.baml:72:5]
+ 72 │     x & y
+    ·     ─────
+    ╰────
+
+  [type] E0004
+
+  × cannot order `int | null` and `int` with `<`: ordering requires both operands to have the same type
+    ╭─[numeric_invariance.baml:79:5]
+ 79 │     x < y
+    ·     ─────
+    ╰────
+
+  [type] E0004
+
+  ⚠ `float | null` and `bigint` share no value, so this comparison is always false
+    ╭─[numeric_invariance.baml:87:5]
+ 87 │     x == y
+    ·     ──────
+    ╰────
+
+  [type] E0004
+
+  × cannot order `float | null` and `bigint` with `<`: ordering requires both operands to have the same type
+    ╭─[numeric_invariance.baml:93:5]
+ 93 │     x < y
+    ·     ─────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[numeric_invariance.baml:101:27]
+ 101 │     BigintHolder { count: 1 }
+     ·                           ┬
+     ·                           ╰── expected `bigint`, found `1`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[numeric_invariance.baml:106:44]
+ 106 │ function BigintParamDefaultInt(x: bigint = 0) -> bigint {
+     ·                                            ┬
+     ·                                            ╰── expected `bigint`, found `0`
+     ╰────

@@ -11,10 +11,10 @@ class user.References {
   educations: user.NotNullEducation[]
 }
 class user.NotNullEducation$stream {
-  school: null | string
-  year: null | int
+  school: string | null
+  year: int | null
 }
 class user.References$stream {
-  education: null | user.NotNullEducation$stream
+  education: user.NotNullEducation$stream | null
   educations: user.NotNullEducation$stream[]
 }

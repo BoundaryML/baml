@@ -1,0 +1,122 @@
+name: oncall
+
+on:
+  pull_request:
+    paths:
+      - 'tools/bctl'
+      - 'tools/bctl_src/**'
+  schedule:
+    - cron: '0 17 * * 5'
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [notify, fill-schedule]
+        default: fill-schedule
+
+env:
+  UV_FROZEN: '1'
+
+jobs:
+  review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v8.1.0
+      - run: ./tools/bctl oncall check
+
+      - name: Scope check - schedule-file-only PR?
+        id: scope
+        run: |
+          files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | tr '\n' ' ' | xargs)
+          if [ "$files" = 'tools/bctl_src/oncall/data/schedule.oncall' ]; then
+            echo "only_schedule=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The intent of auto-merge here is to allow both automated schedule
+      # filling to work and to allow team members to do shift swaps using
+      # just github.dev. Repo-level auto-merge is disabled and the canary
+      # branch uses a merge queue, so `gh pr merge --auto` is rejected;
+      # enqueue directly via the GraphQL `enqueuePullRequest` mutation.
+      - name: Enqueue to merge queue
+        if: steps.scope.outputs.only_schedule == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+        run: |
+          gh api graphql -f query='
+            mutation($prId: ID!) {
+              enqueuePullRequest(input: {pullRequestId: $prId}) {
+                mergeQueueEntry { position }
+              }
+            }' -F prId="$PR_NODE_ID"
+
+  notify:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'notify')
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    env:
+      SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Validate schedule
+        run: ./tools/bctl oncall check
+      - name: Post weekly handoff
+        run: ./tools/bctl oncall notify --post-to-slack
+
+  fill-schedule:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.action == 'fill-schedule')
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - run: ./tools/bctl oncall fill-schedule
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: peter-evans/create-pull-request@v6
+        if: steps.check_changes.outputs.has_changes == 'true'
+        with:
+          token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
+          branch: oncall/fill-schedule
+          title: "oncall: fill schedule horizon"
+          commit-message: "fill schedule to 4mo horizon"
+          body: "Automated: extending oncall schedule to 4-month horizon."
+
+  notify-failure:
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    needs: [review, notify, fill-schedule]
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    env:
+      SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Identify failed jobs
+        id: failed
+        run: |
+          failed=()
+          [ "${{ needs.review.result }}" = "failure" ] && failed+=("review")
+          [ "${{ needs.notify.result }}" = "failure" ] && failed+=("notify")
+          [ "${{ needs.fill-schedule.result }}" = "failure" ] && failed+=("fill-schedule")
+          echo "jobs=${failed[*]}" >> "$GITHUB_OUTPUT"
+      - name: Post failure to #oncall
+        run: |
+          ./tools/bctl oncall notify-failure \
+            --jobs "${{ steps.failed.outputs.jobs }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

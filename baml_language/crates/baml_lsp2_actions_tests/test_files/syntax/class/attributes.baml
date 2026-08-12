@@ -6,8 +6,7 @@ class TestClassAlias {
    "#)
   key2 string @alias("key21") @alias("key22")
   key3 string @alias("key with space")
-  key4 string @alias("key.with.punctuation/123") @check(trivial, {{this == "Homo sapiens"}}) @check(regex_good, {{this|regex_match("Homo")}})
-  key5 int @assert(positive, {{this > 0}}) @assert(small, {{this < 100}})
+  key4 string @alias("key.with.punctuation/123")
 }
 
 class HasTwoBlockAttributes {
@@ -44,4 +43,25 @@ class HasThreeBlockAttributes {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0014
+//
+//   × duplicate attribute `@alias`
+//    ╭─[class_attributes.baml:7:31]
+//  7 │   key2 string @alias("key21") @alias("key22")
+//    ·               ───────┬─────── ───────┬───────
+//    ·                      │               ╰── duplicate `@alias` — only the last takes effect
+//    ·                      ╰── `@alias` first applied here
+//    ╰────
+// E0014
+//
+//   × duplicate attribute `@description`
+//     ╭─[class_attributes.baml:20:3]
+//  20 │   @@description("A test")
+//     ·   ───────────┬───────────
+//     ·              ╰── `@description` first applied here
+//     ╰────
+//     ╭─[class_attributes.baml:22:3]
+//  22 │   @@description("A second description")
+//     ·   ──────────────────┬──────────────────
+//     ·                     ╰── duplicate `@description` — only the last takes effect
+//     ╰────

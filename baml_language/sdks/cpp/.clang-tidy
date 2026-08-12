@@ -1,0 +1,18 @@
+# Naming enforcement for the std-style convention documented in STYLE.md.
+# Layout is clang-format's job (BasedOnStyle: Google); identifiers are
+# checked here. Generated code (generated/, pb/, baml_cffi.h) is excluded
+# by not being run through clang-tidy.
+Checks: 'readability-identifier-naming'
+CheckOptions:
+  readability-identifier-naming.ClassCase: lower_case
+  readability-identifier-naming.StructCase: lower_case
+  readability-identifier-naming.EnumCase: lower_case
+  readability-identifier-naming.EnumConstantCase: lower_case
+  readability-identifier-naming.FunctionCase: lower_case
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case
+  readability-identifier-naming.GlobalConstantCase: lower_case
+  readability-identifier-naming.PrivateMemberSuffix: '_'
+  readability-identifier-naming.TemplateParameterCase: CamelCase
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
+  readability-identifier-naming.MacroDefinitionIgnoredRegexp: '^(WIN32_LEAN_AND_MEAN)$'

@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.Greet(name: string, client: ai.Client? = null) -> string  [llm]

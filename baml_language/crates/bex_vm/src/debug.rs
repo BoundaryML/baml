@@ -28,12 +28,12 @@
 use std::fmt::Write;
 
 use bex_vm_types::{
-    HeapPtr,
-    bytecode::Instruction,
-    indexable::{GlobalIndex, GlobalPool, ObjectPool},
+    ConstValue, HeapPtr,
+    bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u16, read_u32},
+    indexable::{GlobalIndex, ObjectPool},
     types::{Function, Object, Value},
 };
-use colored::{Color, Colorize};
+use console::Style;
 
 /// Display format for bytecode output.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -50,13 +50,13 @@ pub enum BytecodeFormat {
 /// Resolve a global reference (global slot or callee slot) to display metadata.
 fn display_global_ref(
     index: GlobalIndex,
-    globals: &GlobalPool,
+    globals: &[Value],
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
 ) -> String {
     // Prefer runtime globals.
     if index.raw() < globals.len() {
-        return format!("({})", display_value(&globals[index]));
+        return format!("({})", display_value(globals[index.raw()]));
     }
 
     // At compile time, resolve from compile-time globals/object pool.
@@ -82,6 +82,20 @@ fn display_source_line_cell(function: &Function, pc: usize, last_line: &mut usiz
     }
 }
 
+fn sanitize_operand_text(text: &str) -> String {
+    let mut sanitized = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\n' => sanitized.push_str("\\n"),
+            '\r' => sanitized.push_str("\\r"),
+            '\t' => sanitized.push_str("\\t"),
+            '\0' => sanitized.push_str("\\0"),
+            other => sanitized.push(other),
+        }
+    }
+    sanitized
+}
+
 /// Context aware instruction display.
 ///
 /// Instructions themselves are kinda "bare". For example, `LOAD_VAR 1`
@@ -99,7 +113,7 @@ fn display_source_line_cell(function: &Function, pc: usize, last_line: &mut usiz
 pub(crate) fn display_instruction(
     instruction_ptr: usize,
     function: &Function,
-    globals: &GlobalPool,
+    globals: &[Value],
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
 ) -> (String, String) {
@@ -111,17 +125,10 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::NotifyBlock(block_index) => {
-            if let Some(notification) = function.block_notifications.get(*block_index) {
-                format!("({})", &notification.block_name)
-            } else {
-                format!("(invalid block index: {block_index})")
-            }
-        }
         Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
-                format!("({})", display_value(value))
+                format!("({})", display_value(*value))
             } else if let Some(const_value) = function.bytecode.constants.get(*index) {
                 format!("({})", display_const_value(const_value, objects))
             } else {
@@ -131,28 +138,53 @@ pub(crate) fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
-        Instruction::Call(callee) | Instruction::DispatchFuture(callee) => {
+        Instruction::Call { callee, .. }
+        | Instruction::CallWithRuntimeId { callee, .. }
+        | Instruction::SysOp(callee)
+        | Instruction::SysOpWithRuntimeId(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
+        }
+        Instruction::MakeGenericFunction { function, .. } => {
+            display_global_ref(*function, globals, objects, compile_time_globals)
+        }
+        Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
+        Instruction::VirtualCall { nargs, ntypeargs }
+        | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+            format!("nargs={nargs} ntypeargs={ntypeargs}")
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
-        | Instruction::Watch(index)
-        | Instruction::Unwatch(index)
-        | Instruction::Notify(index) => match function.local_names.get(*index) {
+        | Instruction::StoreVarLoadVar(index) => match function.local_names.get(*index) {
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
-        Instruction::LoadField(_) | Instruction::StoreField(_) | Instruction::InitField(_) => {
-            operand_meta
-                .map(|m| format!("({})", m.as_str()))
-                .unwrap_or_default()
+        Instruction::LoadField(_)
+        | Instruction::VirtualLoadField(_)
+        | Instruction::VirtualStoreField(_)
+        | Instruction::StoreField(_)
+        | Instruction::InitField(_)
+        | Instruction::InitSpread(_)
+        | Instruction::InitInstance(_) => operand_meta
+            .map(|m| format!("({})", m.as_str()))
+            .unwrap_or_default(),
+        Instruction::NarrowBind { ty, destination } => {
+            let destination = function
+                .local_names
+                .get(*destination)
+                .map_or("?", String::as_str);
+            let narrowed_type =
+                operand_meta.map_or_else(|| format!("?{ty}"), |meta| meta.as_str().to_owned());
+            format!("(type {narrowed_type}, {destination})")
         }
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
-        Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
+        Instruction::AllocInstance {
+            class_obj: index, ..
+        }
+        | Instruction::AllocVariant(index) => {
             // Look up the class/enum from the compile-time ObjectPool if available
             if let Some(objs) = objects {
                 format!("({})", display_object_from_pool(index.raw(), objs))
@@ -161,15 +193,8 @@ pub(crate) fn display_instruction(
             }
         }
 
-        Instruction::VizEnter(index) | Instruction::VizExit(index) => {
-            if let Some(node) = function.viz_nodes.get(*index) {
-                format!("({})", &node.label)
-            } else {
-                format!("(invalid viz index: {index})")
-            }
-        }
-        Instruction::JumpTable { table_idx, default } => {
-            format!("(table {table_idx}, default {default:+})")
+        Instruction::JumpTable(table_idx) => {
+            format!("(table {table_idx})")
         }
         Instruction::DenseTag(table_idx) => {
             if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
@@ -182,6 +207,30 @@ pub(crate) fn display_instruction(
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::AddBigint
+        | Instruction::SubBigint
+        | Instruction::MulBigint
+        | Instruction::DivBigint
+        | Instruction::ModBigint
+        | Instruction::BitAndBigint
+        | Instruction::BitOrBigint
+        | Instruction::BitXorBigint
+        | Instruction::ShlBigint
+        | Instruction::ShrBigint
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
+        | Instruction::CmpBigintOp(_)
+        | Instruction::LoadVar2(..)
+        | Instruction::StoreVar2(..)
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -190,21 +239,30 @@ pub(crate) fn display_instruction(
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement
         | Instruction::Await
+        | Instruction::AwaitAny
         | Instruction::CallIndirect
+        | Instruction::CallIndirectWithRuntimeId
         | Instruction::Throw
+        | Instruction::Rethrow
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
         | Instruction::ThrowIfPanic
         | Instruction::Unreachable
-        | Instruction::MakeClosure(_, _)
+        | Instruction::MakeClosure { .. }
+        | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeVirtualBoundMethod { .. }
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
         | Instruction::StoreDeref(_)
         | Instruction::LoadCapture(_)
         | Instruction::StoreCapture(_)
         | Instruction::CaptureRef(_)
-        | Instruction::Return => String::new(),
+        | Instruction::Return
+        | Instruction::SendEvent
+        | Instruction::ContainerLen
+        | Instruction::Spawn
+        | Instruction::LoadType(_) => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -215,10 +273,10 @@ pub(crate) fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub(crate) fn display_value(value: &Value) -> String {
-    match value {
-        Value::Object(ptr) => display_object_ptr(*ptr),
-        other => other.to_string(),
+pub(crate) fn display_value(value: Value) -> String {
+    match value.as_object_ptr() {
+        Some(ptr) => display_object_ptr(ptr),
+        None => value.to_string(),
     }
 }
 
@@ -228,9 +286,10 @@ pub(crate) fn display_value(value: &Value) -> String {
 /// If `ObjectPool` is provided, we can resolve object indices to actual values.
 fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&ObjectPool>) -> String {
     match value {
+        bex_vm_types::ConstValue::OmittedArg => "<omitted>".to_string(),
         bex_vm_types::ConstValue::Null => "null".to_string(),
         bex_vm_types::ConstValue::Int(i) => i.to_string(),
-        bex_vm_types::ConstValue::Float(f) => f.to_string(),
+        bex_vm_types::ConstValue::Float(f) => bex_vm_types::format_float(*f),
         bex_vm_types::ConstValue::Bool(b) => b.to_string(),
         bex_vm_types::ConstValue::Object(idx) => {
             if let Some(objs) = objects {
@@ -239,6 +298,16 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
                 format!("<object {}>", idx.raw())
             }
         }
+        bex_vm_types::ConstValue::Type(template) => format!("<type_template {template}>"),
+        bex_vm_types::ConstValue::ClassWithTypeArgs {
+            class_obj,
+            type_args_templates,
+        } => {
+            format!(
+                "<class_with_type_args obj={} args={type_args_templates:?}>",
+                class_obj.raw()
+            )
+        }
     }
 }
 
@@ -246,14 +315,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
 fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
-            Object::String(s) => {
-                let escaped = s
-                    .replace('\\', "\\\\")
-                    .replace('\n', "\\n")
-                    .replace('\r', "\\r")
-                    .replace('\t', "\\t");
-                format!("\"{escaped}\"")
-            }
+            Object::String(s) => format!("{s:?}"),
             Object::Function(f) => format!("<fn {}>", f.name),
             Object::Class(c) => format!("<class {}>", c.name),
             Object::Enum(e) => format!("<enum {}>", e.name),
@@ -268,6 +330,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
     // SAFETY: During debug display, we assume the pointer is valid
     let object = unsafe { ptr.get() };
     match object {
+        Object::String(string) => format!("{string:?}"),
         // This one's a bit tricky to print.
         Object::Instance(instance) => {
             // SAFETY: During debug display, we assume the pointer is valid
@@ -298,75 +361,119 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
 /// See [`display_bytecode`] for more information.
 const COLUMN_MARGIN: usize = 3;
 
-/// Get color for instruction based on its type
-fn instruction_color(instruction: &Instruction) -> Color {
+/// Get color style for an instruction based on its type.
+fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
-        Instruction::NotifyBlock(_) => Color::BrightYellow,
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
+        | Instruction::LoadVar2(..)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
+        | Instruction::VirtualLoadField(_)
         | Instruction::LoadArrayElement
-        | Instruction::LoadMapElement => Color::Blue,
+        | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
+        | Instruction::StoreVarLoadVar(_)
+        | Instruction::StoreVar2(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
+        | Instruction::VirtualStoreField(_)
         | Instruction::InitField(_)
+        | Instruction::InitSpread(_)
         | Instruction::StoreArrayElement
-        | Instruction::StoreMapElement => Color::Green,
-        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
-            Color::BrightBlue
-        }
+        | Instruction::StoreMapElement => Style::new().green(),
+        Instruction::BinOp(_)
+        | Instruction::CmpOp(_)
+        | Instruction::AddInt
+        | Instruction::SubInt
+        | Instruction::MulInt
+        | Instruction::DivInt
+        | Instruction::ModInt
+        | Instruction::AddFloat
+        | Instruction::SubFloat
+        | Instruction::MulFloat
+        | Instruction::DivFloat
+        | Instruction::AddBigint
+        | Instruction::SubBigint
+        | Instruction::MulBigint
+        | Instruction::DivBigint
+        | Instruction::ModBigint
+        | Instruction::BitAndBigint
+        | Instruction::BitOrBigint
+        | Instruction::BitXorBigint
+        | Instruction::ShlBigint
+        | Instruction::ShrBigint
+        | Instruction::CmpIntOp(_)
+        | Instruction::CmpFloatOp(_)
+        | Instruction::CmpBigintOp(_)
+        | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
-        | Instruction::DenseTag(_) => Color::Yellow,
-        Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
-        Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
-            Color::Red
-        }
+        | Instruction::DenseTag(_) => Style::new().yellow(),
+        Instruction::Call { .. }
+        | Instruction::CallWithRuntimeId { .. }
+        | Instruction::CallIndirect
+        | Instruction::CallIndirectWithRuntimeId
+        | Instruction::VirtualCall { .. }
+        | Instruction::VirtualCallWithRuntimeId { .. } => Style::new().magenta(),
+        Instruction::Return
+        | Instruction::Pop(_)
+        | Instruction::Copy(_)
+        | Instruction::Throw
+        | Instruction::Rethrow => Style::new().red(),
         Instruction::AllocMap(_)
-        | Instruction::AllocInstance(_)
+        | Instruction::AllocInstance { .. }
+        | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
-        | Instruction::AllocArray(_) => Color::Cyan,
-        Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
-        Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
-            Color::BrightRed
-        }
-        Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
+        | Instruction::AllocArray(_) => Style::new().cyan(),
+        Instruction::SysOp(_)
+        | Instruction::SysOpWithRuntimeId(_)
+        | Instruction::Spawn
+        | Instruction::Await
+        | Instruction::AwaitAny => Style::new().green().bright(),
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
-        | Instruction::ThrowIfPanic => Color::BrightBlue,
-        Instruction::Unreachable => Color::BrightRed,
-        Instruction::MakeClosure(_, _) | Instruction::MakeCell => Color::Cyan,
+        | Instruction::NarrowBind { .. }
+        | Instruction::LoadType(_)
+        | Instruction::ThrowIfPanic => Style::new().blue().bright(),
+        Instruction::Unreachable => Style::new().red().bright(),
+        Instruction::MakeClosure { .. }
+        | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeVirtualBoundMethod { .. }
+        | Instruction::MakeGenericFunction { .. }
+        | Instruction::MakeGenericFunctionFromValue { .. }
+        | Instruction::MakeCell => Style::new().cyan(),
         Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
-            Color::Blue
+            Style::new().blue()
         }
-        Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
+        Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
+        Instruction::SendEvent => Style::new().green().bright(),
+        Instruction::ContainerLen => Style::new().cyan(),
     }
 }
 
 struct Col {
     text: String,
     char_count: usize,
-    color: Color,
+    style: Style,
 }
 
 impl From<String> for Col {
     fn from(text: String) -> Self {
         Self {
             char_count: text.chars().count(),
-            color: Color::White,
+            style: Style::new(),
             text,
         }
     }
 }
 
 impl Col {
-    fn with_color(mut self, color: Color) -> Self {
-        self.color = color;
+    fn with_style(mut self, style: Style) -> Self {
+        self.style = style;
         self
     }
 }
@@ -396,7 +503,7 @@ impl Col {
 /// symmetric and returns the entire table.
 pub fn display_bytecode(
     function: &Function,
-    globals: &GlobalPool,
+    globals: &[Value],
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
     use_colors: bool,
@@ -428,13 +535,13 @@ pub fn display_bytecode(
         // since a single line could emit multiple instructions
         let source_line = display_source_line_cell(function, instruction_ptr, &mut last_line);
 
-        let instruction_color = instruction_color(&function.bytecode.instructions[instruction_ptr]);
+        let instr_style = instruction_style(&function.bytecode.instructions[instruction_ptr]);
 
         // Table format is [LINE, IP, INSTR, META].
         let row = [
             Col::from(source_line),
             Col::from(instruction_ptr.to_string()),
-            Col::from(instruction).with_color(instruction_color),
+            Col::from(instruction).with_style(instr_style),
             Col::from(metadata),
         ];
 
@@ -470,23 +577,21 @@ pub fn display_bytecode(
                 width = 0;
             }
 
-            let mut colored_text = col.text.normal();
-
-            // Apply color based on column, only if output is to a TTY
+            // Apply color based on column, only if output is to a TTY.
+            // ANSI codes don't change the visual character count, so we
+            // pad based on `col.char_count` after pushing the styled text.
             if use_colors {
-                colored_text = match j {
-                    0 => col.text.bright_black(),   // Line numbers in gray
-                    1 => col.text.white(),          // IP in white
-                    2 => col.text.color(col.color), // Instruction with type-based color
-                    3 => col.text.bright_cyan(),    // Metadata in cyan
-                    _ => col.text.normal(),
-                }
+                let style = match j {
+                    0 => Style::new().black().bright(), // Line numbers in gray
+                    1 => Style::new().white(),          // IP in white
+                    2 => col.style.clone(),             // Instruction with type-based color
+                    3 => Style::new().cyan().bright(),  // Metadata in cyan
+                    _ => Style::new(),
+                };
+                table.push_str(&style.apply_to(&col.text).to_string());
+            } else {
+                table.push_str(&col.text);
             }
-
-            // For colored strings, we need to use the actual character count
-            // not the length with ANSI codes. Also, `to_string` has to be
-            // called here so that ANSI codes are inserted.
-            table.push_str(&colored_text.to_string());
             for _ in col.char_count..width {
                 table.push(' ');
             }
@@ -551,9 +656,10 @@ fn display_bytecode_textual(function: &Function) -> String {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
-            Instruction::JumpTable { table_idx, default } => {
+            Instruction::JumpTable(table_idx) => {
                 // Default target.
-                let default_target = ip.wrapping_add_signed(*default);
+                let default_target =
+                    ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
                 jump_targets.insert(default_target);
                 // Each entry in the jump table.
                 if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
@@ -618,13 +724,14 @@ fn display_instruction_textual(
 ) -> String {
     // Helper: get the operand string from metadata, with a fallback.
     let meta_str = |fallback: &dyn std::fmt::Display| -> String {
-        function
+        let raw = function
             .bytecode
             .meta
             .get(ip)
             .and_then(|m| m.operand.as_ref())
             .map(|o| o.as_str().to_string())
-            .unwrap_or_else(|| format!("?{fallback}"))
+            .unwrap_or_else(|| format!("?{fallback}"));
+        sanitize_operand_text(&raw)
     };
 
     match instruction {
@@ -634,6 +741,9 @@ fn display_instruction_textual(
         // --- Variables ---
         Instruction::LoadVar(idx) => format!("load_var {}", meta_str(idx)),
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
+        Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
+        Instruction::LoadVar2(a, b) => format!("load_var2 {a} {b}"),
+        Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -648,10 +758,21 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("store_field .{name}")
         }
+        // The operand indexes the *interface's* field list, not the receiver's
+        // layout, so show the name and mark it virtual.
+        Instruction::VirtualLoadField(idx) => {
+            let name = meta_str(idx);
+            format!("virtual_load_field .{name}")
+        }
+        Instruction::VirtualStoreField(idx) => {
+            let name = meta_str(idx);
+            format!("virtual_store_field .{name}")
+        }
         Instruction::InitField(idx) => {
             let name = meta_str(idx);
             format!("init_field .{name}")
         }
+        Instruction::InitSpread(idx) => format!("init_spread {}", meta_str(idx)),
 
         // --- Stack ---
         Instruction::Pop(n) => format!("pop {n}"),
@@ -682,8 +803,9 @@ fn display_instruction_textual(
                 .unwrap_or_else(|| format!("?{target}"));
             format!("jump_if_false {label}")
         }
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let default_label = label_map
                 .get(&default_target)
                 .cloned()
@@ -717,16 +839,62 @@ fn display_instruction_textual(
         }
 
         Instruction::Throw => "throw".to_string(),
+        Instruction::Rethrow => "rethrow".to_string(),
 
         // --- Operators ---
         Instruction::BinOp(op) => format!("bin_op {op}"),
         Instruction::CmpOp(op) => format!("cmp_op {op}"),
+        Instruction::AddInt => "add_int".to_string(),
+        Instruction::SubInt => "sub_int".to_string(),
+        Instruction::MulInt => "mul_int".to_string(),
+        Instruction::DivInt => "div_int".to_string(),
+        Instruction::ModInt => "mod_int".to_string(),
+        Instruction::AddFloat => "add_float".to_string(),
+        Instruction::SubFloat => "sub_float".to_string(),
+        Instruction::MulFloat => "mul_float".to_string(),
+        Instruction::DivFloat => "div_float".to_string(),
+        Instruction::AddBigint => "add_bigint".to_string(),
+        Instruction::SubBigint => "sub_bigint".to_string(),
+        Instruction::MulBigint => "mul_bigint".to_string(),
+        Instruction::DivBigint => "div_bigint".to_string(),
+        Instruction::ModBigint => "mod_bigint".to_string(),
+        Instruction::BitAndBigint => "bit_and_bigint".to_string(),
+        Instruction::BitOrBigint => "bit_or_bigint".to_string(),
+        Instruction::BitXorBigint => "bit_xor_bigint".to_string(),
+        Instruction::ShlBigint => "shl_bigint".to_string(),
+        Instruction::ShrBigint => "shr_bigint".to_string(),
+        Instruction::CmpIntOp(op) => format!("cmp_int_op {op}"),
+        Instruction::CmpFloatOp(op) => format!("cmp_float_op {op}"),
+        Instruction::CmpBigintOp(op) => format!("cmp_bigint_op {op}"),
         Instruction::UnaryOp(op) => format!("unary_op {op}"),
 
         // --- Allocation ---
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
-        Instruction::AllocInstance(_) => format!("alloc_instance {}", meta_str(&"")),
+        Instruction::AllocInstance {
+            class_obj: _,
+            ntypeargs,
+        } => {
+            let name = meta_str(&"");
+            if *ntypeargs > 0 {
+                format!("alloc_instance<{ntypeargs}> {name}")
+            } else {
+                format!("alloc_instance {name}")
+            }
+        }
+        Instruction::InitInstance(plan_idx) => {
+            let name = meta_str(&"");
+            let ntypeargs = function
+                .bytecode
+                .class_init_plans
+                .get(*plan_idx)
+                .map_or(0, |plan| plan.ntypeargs);
+            if ntypeargs > 0 {
+                format!("init_instance<{ntypeargs}> {name}")
+            } else {
+                format!("init_instance {name}")
+            }
+        }
         Instruction::AllocVariant(_) => format!("alloc_variant {}", meta_str(&"")),
 
         // --- Array/Map element access ---
@@ -736,42 +904,25 @@ fn display_instruction_textual(
         Instruction::StoreMapElement => "store_map_element".to_string(),
 
         // --- Calls ---
-        Instruction::Call(_) => format!("call {}", meta_str(&"")),
+        Instruction::Call { .. } => format!("call {}", meta_str(&"")),
+        Instruction::CallWithRuntimeId { .. } => format!("call_with_runtime_id {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
-        Instruction::DispatchFuture(_) => format!("dispatch_future {}", meta_str(&"")),
+        Instruction::CallIndirectWithRuntimeId => "call_indirect_with_runtime_id".to_string(),
+        Instruction::VirtualCall { nargs, ntypeargs } => {
+            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
+        }
+        Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+            format!("virtual_call_with_runtime_id nargs={nargs} ntypeargs={ntypeargs}")
+        }
+        Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
+        Instruction::SysOpWithRuntimeId(_) => format!("sys_op_with_runtime_id {}", meta_str(&"")),
+        Instruction::Spawn => "spawn".to_string(),
         Instruction::Await => "await".to_string(),
+        Instruction::AwaitAny => "await_any".to_string(),
 
         // --- Control ---
         Instruction::Return => "return".to_string(),
         Instruction::Unreachable => "unreachable".to_string(),
-
-        // --- Watch/Notify ---
-        Instruction::Watch(idx) => format!("watch {}", meta_str(idx)),
-        Instruction::Unwatch(idx) => format!("unwatch {}", meta_str(idx)),
-        Instruction::Notify(idx) => format!("notify {}", meta_str(idx)),
-        Instruction::NotifyBlock(block_index) => {
-            if let Some(notification) = function.block_notifications.get(*block_index) {
-                format!("notify_block {}", notification.block_name)
-            } else {
-                format!("notify_block {block_index}")
-            }
-        }
-
-        // --- Visualization ---
-        Instruction::VizEnter(index) => {
-            if let Some(node) = function.viz_nodes.get(*index) {
-                format!("viz_enter {}", node.label)
-            } else {
-                format!("viz_enter {index}")
-            }
-        }
-        Instruction::VizExit(index) => {
-            if let Some(node) = function.viz_nodes.get(*index) {
-                format!("viz_exit {}", node.label)
-            } else {
-                format!("viz_exit {index}")
-            }
-        }
 
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
@@ -779,6 +930,14 @@ fn display_instruction_textual(
         Instruction::IsType(const_idx) => {
             let name = meta_str(const_idx);
             format!("is_type {name}")
+        }
+        Instruction::NarrowBind { ty, destination } => {
+            let name = meta_str(ty);
+            format!("narrow_bind {name}, slot={destination}")
+        }
+        Instruction::LoadType(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("load_type {name}")
         }
         Instruction::DenseTag(table_idx) => {
             let names = function
@@ -792,9 +951,31 @@ fn display_instruction_textual(
         Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
-        Instruction::MakeClosure(obj_idx, count) => {
+        Instruction::MakeClosure {
+            obj_idx,
+            capture_count,
+            ntypeargs,
+        } => {
             let name = meta_str(&obj_idx.raw());
-            format!("make_closure {name}, {count}")
+            if *ntypeargs > 0 {
+                format!("make_closure {name}, captures={capture_count}, ntypeargs={ntypeargs}")
+            } else {
+                format!("make_closure {name}, {capture_count}")
+            }
+        }
+        Instruction::MakeBoundMethod(_) => {
+            let name = meta_str(&"");
+            format!("make_bound_method {name}")
+        }
+        Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+            format!("make_virtual_bound_method ntypeargs={ntypeargs}")
+        }
+        Instruction::MakeGenericFunction { ntypeargs, .. } => {
+            let name = meta_str(&"");
+            format!("make_generic_function {name} ntypeargs={ntypeargs}")
+        }
+        Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+            format!("make_generic_function_from_value ntypeargs={ntypeargs}")
         }
         Instruction::MakeCell => "make_cell".to_string(),
         Instruction::LoadDeref(slot) => {
@@ -808,6 +989,8 @@ fn display_instruction_textual(
         Instruction::LoadCapture(idx) => format!("load_capture {idx}"),
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
+        Instruction::SendEvent => "send_event".to_string(),
+        Instruction::ContainerLen => "container_len".to_string(),
     }
 }
 
@@ -870,7 +1053,7 @@ pub fn display_program(functions: &[(String, &Function)], format: BytecodeFormat
 ///        1    load_var 0            (name)
 ///        2    load_const 1          ("name")
 ///        3    alloc_map 1
-///        4    call 5                (baml.llm.call_llm_function)
+///        4    call 5                (ai.Agent.run)
 ///        5    return
 /// ```
 ///
@@ -960,19 +1143,23 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::StoreVar(_)
+        | Instruction::StoreVarLoadVar(_)
         | Instruction::LoadGlobal(_)
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
+        | Instruction::VirtualLoadField(_)
+        | Instruction::VirtualStoreField(_)
         | Instruction::StoreField(_)
         | Instruction::InitField(_)
-        | Instruction::Call(_)
-        | Instruction::DispatchFuture(_)
-        | Instruction::AllocInstance(_)
-        | Instruction::AllocVariant(_)
-        | Instruction::Watch(_)
-        | Instruction::Unwatch(_)
-        | Instruction::Notify(_) => meta
-            .map(|m| format!("({})", m.as_str()))
+        | Instruction::InitSpread(_)
+        | Instruction::Call { .. }
+        | Instruction::CallWithRuntimeId { .. }
+        | Instruction::SysOp(_)
+        | Instruction::SysOpWithRuntimeId(_)
+        | Instruction::AllocInstance { .. }
+        | Instruction::InitInstance(_)
+        | Instruction::AllocVariant(_) => meta
+            .map(|m| format!("({})", sanitize_operand_text(m.as_str())))
             .unwrap_or_default(),
 
         // Jumps: show absolute target address.
@@ -984,8 +1171,9 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         }
 
         // Jump tables: show all target addresses.
-        Instruction::JumpTable { table_idx, default } => {
-            let default_target = ip.wrapping_add_signed(*default);
+        Instruction::JumpTable(table_idx) => {
+            let default_target =
+                ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
             let mut entries = Vec::new();
             if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
                 for entry in &table.offsets {
@@ -1005,21 +1193,237 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
             }
         }
 
-        // Block notifications: show block name.
-        Instruction::NotifyBlock(block_index) => function
-            .block_notifications
-            .get(*block_index)
-            .map(|n| format!("({})", n.block_name))
-            .unwrap_or_default(),
-
-        // Visualization: show node label.
-        Instruction::VizEnter(index) | Instruction::VizExit(index) => function
-            .viz_nodes
-            .get(*index)
-            .map(|n| format!("({})", n.label))
-            .unwrap_or_default(),
-
         // All other instructions: no metadata.
         _ => String::new(),
     }
+}
+
+/// Disassemble compact bytecode into human-readable text.
+///
+/// Produces output in the format:
+/// ```text
+/// 0000  LOAD_INT_SMALL          42
+/// 0002  LOAD_VAR                0
+/// 0007  ADD
+/// 0008  RETURN
+/// ```
+///
+/// Jump offsets are shown as both the raw relative offset and the resolved
+/// absolute byte address target in parentheses.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless
+)]
+pub fn display_compact_bytecode(
+    compact: &CompactCode,
+    constants: &[ConstValue],
+    f: &mut impl std::fmt::Write,
+) -> std::fmt::Result {
+    let code = &compact.code;
+    let mut pc = 0;
+
+    while pc < code.len() {
+        let offset = pc;
+        let op = OpCode::try_from(code[pc]).map_err(|_| std::fmt::Error)?;
+        pc += 1;
+
+        write!(f, "{offset:04}  {op:<24}")?;
+
+        match op {
+            // Unit ops: no operands
+            OpCode::Return
+            | OpCode::Await
+            | OpCode::AwaitAny
+            | OpCode::Throw
+            | OpCode::Rethrow
+            | OpCode::LoadArrayElement
+            | OpCode::LoadMapElement
+            | OpCode::StoreArrayElement
+            | OpCode::StoreMapElement
+            | OpCode::CallIndirect
+            | OpCode::CallIndirectWithRuntimeId
+            | OpCode::Discriminant
+            | OpCode::TypeTag
+            | OpCode::ThrowIfPanic
+            | OpCode::Unreachable
+            | OpCode::MakeCell
+            | OpCode::SendEvent
+            | OpCode::ContainerLen
+            | OpCode::Spawn
+            | OpCode::Add
+            | OpCode::Sub
+            | OpCode::Mul
+            | OpCode::Div
+            | OpCode::Mod
+            | OpCode::BitAnd
+            | OpCode::BitOr
+            | OpCode::BitXor
+            | OpCode::Shl
+            | OpCode::Shr
+            | OpCode::Eq
+            | OpCode::NotEq
+            | OpCode::Lt
+            | OpCode::LtEq
+            | OpCode::Gt
+            | OpCode::GtEq
+            | OpCode::AddInt
+            | OpCode::SubInt
+            | OpCode::MulInt
+            | OpCode::DivInt
+            | OpCode::ModInt
+            | OpCode::AddFloat
+            | OpCode::SubFloat
+            | OpCode::MulFloat
+            | OpCode::DivFloat
+            | OpCode::AddBigint
+            | OpCode::SubBigint
+            | OpCode::MulBigint
+            | OpCode::DivBigint
+            | OpCode::ModBigint
+            | OpCode::BitAndBigint
+            | OpCode::BitOrBigint
+            | OpCode::BitXorBigint
+            | OpCode::ShlBigint
+            | OpCode::ShrBigint
+            | OpCode::CmpIntEq
+            | OpCode::CmpIntNotEq
+            | OpCode::CmpIntLt
+            | OpCode::CmpIntLtEq
+            | OpCode::CmpIntGt
+            | OpCode::CmpIntGtEq
+            | OpCode::CmpFloatEq
+            | OpCode::CmpFloatNotEq
+            | OpCode::CmpFloatLt
+            | OpCode::CmpFloatLtEq
+            | OpCode::CmpFloatGt
+            | OpCode::CmpFloatGtEq
+            | OpCode::CmpBigintEq
+            | OpCode::CmpBigintNotEq
+            | OpCode::CmpBigintLt
+            | OpCode::CmpBigintLtEq
+            | OpCode::CmpBigintGt
+            | OpCode::CmpBigintGtEq
+            | OpCode::Not
+            | OpCode::Neg
+            | OpCode::LoadNull
+            | OpCode::LoadTrue
+            | OpCode::LoadFalse => {
+                writeln!(f)?;
+            }
+
+            OpCode::LoadIntSmall => {
+                let val = read_i8(code, &mut pc);
+                writeln!(f, "{val}")?;
+            }
+
+            // Single u32 operand with constant annotation
+            OpCode::LoadConst => {
+                let idx = read_u32(code, &mut pc);
+                if let Some(c) = constants.get(idx as usize) {
+                    writeln!(f, "{idx}  ; {c:?}")?;
+                } else {
+                    writeln!(f, "{idx}")?;
+                }
+            }
+
+            // Single u32 operand (index/slot)
+            OpCode::LoadVar
+            | OpCode::StoreVar
+            | OpCode::StoreVarLoadVar
+            | OpCode::LoadGlobal
+            | OpCode::StoreGlobal
+            | OpCode::LoadField
+            | OpCode::VirtualLoadField
+            | OpCode::VirtualStoreField
+            | OpCode::StoreField
+            | OpCode::InitField
+            | OpCode::InitSpread
+            | OpCode::Pop
+            | OpCode::Copy
+            | OpCode::AllocArray
+            | OpCode::AllocMap
+            | OpCode::InitInstance
+            | OpCode::AllocVariant
+            | OpCode::SysOp
+            | OpCode::SysOpWithRuntimeId
+            | OpCode::IsType
+            | OpCode::DenseTag
+            | OpCode::LoadType
+            | OpCode::MakeBoundMethod
+            | OpCode::LoadDeref
+            | OpCode::StoreDeref
+            | OpCode::LoadCapture
+            | OpCode::StoreCapture
+            | OpCode::CaptureRef => {
+                let val = read_u32(code, &mut pc);
+                writeln!(f, "{val}")?;
+            }
+
+            // Jump i32 operand: show relative offset and resolved absolute target
+            OpCode::Jump | OpCode::PopJumpIfFalse | OpCode::JumpIfFalse => {
+                let offset_val = read_i32(code, &mut pc);
+                let target = (pc as i64 + offset_val as i64) as usize;
+                writeln!(f, "{offset_val:+}  (-> {target:04})")?;
+            }
+
+            OpCode::JumpTable => {
+                let table_idx = read_u32(code, &mut pc);
+                let default_offset = read_i32(code, &mut pc);
+                let target = (pc as i64 + default_offset as i64) as usize;
+                writeln!(
+                    f,
+                    "table={table_idx}  default={default_offset:+} (-> {target:04})"
+                )?;
+            }
+
+            OpCode::Call | OpCode::CallWithRuntimeId => {
+                let callee = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::AllocInstance => {
+                let class_obj = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "class={class_obj}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeGenericFunction => {
+                let function = read_u32(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "function={function}  ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeGenericFunctionFromValue | OpCode::MakeVirtualBoundMethod => {
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
+                let nargs = read_u16(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::MakeClosure => {
+                let obj_idx = read_u32(code, &mut pc);
+                let capture_count = read_u16(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(
+                    f,
+                    "obj={obj_idx}  captures={capture_count}  ntypeargs={ntypeargs}"
+                )?;
+            }
+
+            // Two u32 operands (operand-movement superinstructions)
+            OpCode::LoadVar2 | OpCode::StoreVar2 | OpCode::NarrowBind => {
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                writeln!(f, "{a} {b}")?;
+            }
+        }
+    }
+    Ok(())
 }

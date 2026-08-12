@@ -48,61 +48,49 @@ function IfThenOnlyHeader2() -> int {
 
 //----
 //- diagnostics
-// Error: `if` without `else` cannot be used as a value; add an `else` branch
-//    ╭─[ headers_if_then_only_header.baml:8:12 ]
-//    │
+// E0001
+//
+//   × `if` without `else` cannot be used as a value; add an `else` branch
+//    ╭─[headers_if_then_only_header.baml:8:13]
 //  8 │     let y = if (false) { 1 };
-//    │            ────────┬────────  
-//    │                    ╰────────── `if` without `else` cannot be used as a value; add an `else` branch
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: `if` without `else` cannot be used as a value; add an `else` branch
-//     ╭─[ headers_if_then_only_header.baml:11:5 ]
-//     │
+//    ·             ────────────────
+//    ╰────
+// E0001
+//
+//   × `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[headers_if_then_only_header.baml:11:5]
 //  11 │     y
-//     │     ┬  
-//     │     ╰── `if` without `else` cannot be used as a value; add an `else` branch
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: `if` without `else` cannot be used as a value; add an `else` branch
-//     ╭─[ headers_if_then_only_header.baml:22:12 ]
-//     │
+//     ·     ─
+//     ╰────
+// E0001
+//
+//   × `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[headers_if_then_only_header.baml:22:13]
 //  22 │ ╭─▶     let y = if (false) {
-//     ┆ ┆   
-//  25 │ ├─▶     };
-//     │ │            
-//     │ ╰──────────── `if` without `else` cannot be used as a value; add an `else` branch
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: `if` without `else` cannot be used as a value; add an `else` branch
-//     ╭─[ headers_if_then_only_header.baml:28:5 ]
-//     │
+//  23 │ │           //## Then
+//  24 │ │           1
+//  25 │ ╰─▶     };
+//     ╰────
+// E0001
+//
+//   × `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[headers_if_then_only_header.baml:28:5]
 //  28 │     y
-//     │     ┬  
-//     │     ╰── `if` without `else` cannot be used as a value; add an `else` branch
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: `if` without `else` cannot be used as a value; add an `else` branch
-//     ╭─[ headers_if_then_only_header.baml:40:12 ]
-//     │
+//     ·     ─
+//     ╰────
+// E0001
+//
+//   × `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[headers_if_then_only_header.baml:40:13]
 //  40 │ ╭─▶     let y = if (false) {
-//     ┆ ┆   
-//  43 │ ├─▶     };
-//     │ │            
-//     │ ╰──────────── `if` without `else` cannot be used as a value; add an `else` branch
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Error: `if` without `else` cannot be used as a value; add an `else` branch
-//     ╭─[ headers_if_then_only_header.baml:46:5 ]
-//     │
+//  41 │ │           //## Then
+//  42 │ │           1
+//  43 │ ╰─▶     };
+//     ╰────
+// E0001
+//
+//   × `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[headers_if_then_only_header.baml:46:5]
 //  46 │     y
-//     │     ┬  
-//     │     ╰── `if` without `else` cannot be used as a value; add an `else` branch
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·     ─
+//     ╰────

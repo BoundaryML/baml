@@ -10,7 +10,6 @@ build = "build.rs"
 doctest = false
 
 [dependencies]
-baml_base = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_lsp2_actions = { workspace = true }
 baml_project = { workspace = true }
@@ -26,3 +25,6 @@ walkdir = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false
+
+[dev-dependencies]
+salsa = { workspace = true }
