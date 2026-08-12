@@ -77,7 +77,7 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
             TextDocumentSyncOptions {
                 open_close: Some(true),
                 change: Some(TextDocumentSyncKind::FULL),
-                will_save: Some(true),
+                will_save: Some(false),
                 save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
                     include_text: Some(false),
                 })),
@@ -1225,6 +1225,17 @@ mod tests {
             server_capabilities(PositionEncoding::UTF16).position_encoding,
             Some(lsp_types::PositionEncodingKind::UTF16)
         );
+    }
+
+    #[test]
+    fn capabilities_do_not_request_will_save_notifications() {
+        let Some(TextDocumentSyncCapability::Options(options)) =
+            server_capabilities(PositionEncoding::UTF16).text_document_sync
+        else {
+            panic!("expected text document sync options");
+        };
+
+        assert_eq!(options.will_save, Some(false));
     }
 
     #[test]
