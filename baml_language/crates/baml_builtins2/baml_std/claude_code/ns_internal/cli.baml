@@ -152,7 +152,7 @@ function _read_result(p: baml.sys.Process) -> json {
 
 function _preview(text: string) -> string {
     if (text.length() > 120) {
-        `${text.substring(0, 120)}...`
+        `${text.slice(0, 120)}...`
     } else {
         text
     }

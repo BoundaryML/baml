@@ -758,10 +758,10 @@ function baml.Sortable$for$T[].sort(self: #0[]) -> #0[] {
     return
 }
 
-function baml.String.byte_length(self: baml.String) -> int {
+function baml.String.at(self: baml.String, index: int) -> string | null {
 }
 
-function baml.String.char_at(self: baml.String, index: int) -> string {
+function baml.String.byte_length(self: baml.String) -> int {
 }
 
 function baml.String.char_count(self: baml.String) -> int {
@@ -770,7 +770,7 @@ function baml.String.char_count(self: baml.String) -> int {
 function baml.String.chars(self: baml.String) -> string[] {
 }
 
-function baml.String.code_point_at(self: baml.String, index: int) -> int {
+function baml.String.code_point_at(self: baml.String, index: int) -> int | null {
 }
 
 function baml.String.ends_with(self: baml.String, suffix: string) -> bool {
@@ -849,13 +849,13 @@ function baml.String.is_uppercase(self: baml.String) -> bool {
 function baml.String.is_whitespace(self: baml.String) -> bool {
 }
 
+function baml.String.last_index_of(self: baml.String, search: string) -> int | null {
+}
+
 function baml.String.length(self: baml.String) -> int {
 }
 
 function baml.String.lines(self: baml.String) -> string[] {
-}
-
-function baml.String.matches(self: baml.String, substring: string) -> bool {
 }
 
 function baml.String.repeat(self: baml.String, count: int) -> string {
@@ -867,13 +867,13 @@ function baml.String.replace(self: baml.String, search: string, replacement: str
 function baml.String.replace_all(self: baml.String, search: string, replacement: string) -> string {
 }
 
+function baml.String.slice(self: baml.String, start: int, end: int) -> string {
+}
+
 function baml.String.split(self: baml.String, delimiter: string) -> string[] {
 }
 
 function baml.String.starts_with(self: baml.String, prefix: string) -> bool {
-}
-
-function baml.String.substring(self: baml.String, start: int, end: int) -> string {
 }
 
 function baml.String.to_code_points(self: baml.String) -> int[] {
@@ -3859,7 +3859,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var marker
     load_var marker
     load_const "."
@@ -3894,7 +3894,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var first
     load_var first
     load_const "\""
@@ -3930,7 +3930,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "]"
     cmp_op !=
 
@@ -3952,7 +3952,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
   L18:
     load_var2 2 28
     load_var i
-    call baml.String.substring
+    call baml.String.slice
     store_var token
     load_var i
     load_const 1
@@ -4024,7 +4024,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var ch
     load_var ch
     load_const "\\"
@@ -4082,7 +4082,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "]"
     cmp_op !=
 
@@ -4129,7 +4129,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 2
     add_int
-    call baml.String.substring
+    call baml.String.slice
     store_var _77
     load_var2 24 25
     bin_op +
@@ -4186,7 +4186,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "."
     cmp_op !=
 
@@ -4197,7 +4197,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     load_const 1
     add_int
-    call baml.String.substring
+    call baml.String.slice
     load_const "["
     cmp_op !=
 
@@ -4213,7 +4213,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     store_var _37
     load_var2 2 8
     load_var i
-    call baml.String.substring
+    call baml.String.slice
     store_var _38
     load_var2 11 12
     load_var selector
@@ -4532,9 +4532,6 @@ function baml.ops.Add<int>$for$float.add(self: float, rhs: int) -> float {
 }
 
 function baml.ops.Add<int>$for$int.add(self: int, rhs: int) -> int {
-}
-
-function baml.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
 }
 
 function baml.ops.BitAnd<bigint>$for$bigint.bit_and(self: bigint, rhs: bigint) -> bigint {
@@ -5038,6 +5035,20 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
   L0:
     load_var seed
     call baml.random.Xoshiro256PlusPlus._new
+    return
+}
+
+function baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
+    load_type string
+    load_var self
+    call baml.String.from
+    store_var _3
+    load_type string
+    load_var rhs
+    call baml.String.from
+    store_var _5
+    load_var2 3 4
+    bin_op +
     return
 }
 

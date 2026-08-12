@@ -88,7 +88,7 @@ function parent_directory(path: string) -> string {
     let last_separator = -1;
     let index = 0;
     while (index < path.length()) {
-        if (path.char_at(index) == "/") {
+        if (path.at(index) == "/") {
             last_separator = index;
         }
         index += 1;
@@ -96,7 +96,7 @@ function parent_directory(path: string) -> string {
     if (last_separator <= 0) {
         "."
     } else {
-        path.substring(0, last_separator)
+        path.slice(0, last_separator)
     }
 }
 

@@ -2326,7 +2326,7 @@ function testing.failure_matches_selected(selected: string, failed_names: string
     load_const 0
     load_var2 4 5
     sub_int
-    call baml.String.substring
+    call baml.String.slice
     store_var _8
     load_var failed_names
     load_type baml.iter.Iterable<Error = never, Item = string>
@@ -2613,7 +2613,7 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     pop_jump_if_false L9
     load_var2 1 11
     load_var end_limit
-    call baml.String.substring
+    call baml.String.slice
     load_var part
     call baml.String.index_of
     store_var _45
@@ -2763,7 +2763,7 @@ function testing.pattern_may_match_descendant(pattern: string, prefix: string) -
     load_var pattern
     load_const 0
     load_var _4
-    call baml.String.substring
+    call baml.String.slice
     store_var literal
     load_var2 3 5
     call baml.String.starts_with

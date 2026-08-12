@@ -593,7 +593,7 @@ function glob_match(subject: string, pattern: string) -> bool {
     for (let i = 1; i < n - 1; i += 1) {
         let part = parts[i];
         if (part != "") {
-            if let idx: int = subject.substring(pos, end_limit).index_of(part) {
+            if let idx: int = subject.slice(pos, end_limit).index_of(part) {
                 pos = pos + idx + part.length()
             } else {
                 return false;
@@ -667,7 +667,7 @@ function pattern_may_match_descendant(pattern: string, prefix: string) -> bool {
     match (pattern.index_of("*")) {
         null => true,
         let star: int => {
-            let literal = pattern.substring(0, star);
+            let literal = pattern.slice(0, star);
             descendant_prefix.starts_with(literal) || literal.starts_with(descendant_prefix)
         },
     }
@@ -974,7 +974,7 @@ function failure_matches_selected(selected: string, failed_names: string[]) -> b
     }
     let sentinel_suffix = "::(failed to expand)";
     if (selected.ends_with(sentinel_suffix)) {
-        let prefix = selected.substring(0, selected.length() - sentinel_suffix.length()) + "::";
+        let prefix = selected.slice(0, selected.length() - sentinel_suffix.length()) + "::";
         for (let failed in failed_names) {
             if (failed.starts_with(prefix)) {
                 return true;

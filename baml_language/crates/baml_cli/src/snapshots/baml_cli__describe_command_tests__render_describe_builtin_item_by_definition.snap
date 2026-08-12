@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class String  (string)  <builtin>/baml/string.baml:5-568
+class String  (string)  <builtin>/baml/string.baml:5-573
 
 /// A UTF-8 encoded string.
 ///
@@ -33,9 +33,9 @@ methods:
   function starts_with(self, prefix: string) -> bool  <builtin>/baml/string.baml:135-137
   /// Returns true if the string ends with `suffix`.
   function ends_with(self, suffix: string) -> bool  <builtin>/baml/string.baml:140-142
-  … 60 more lines (re-run with a higher `--budget` to see more; use `--budget 97` for full output)
+  … 62 more lines (re-run with a higher `--budget` to see more; use `--budget 99` for full output)
 
 static_methods:
-  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 97` for full output)
+  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 99` for full output)
 
 references (0):

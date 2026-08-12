@@ -7,23 +7,30 @@ function array_contains(values: string[], expected: string) -> bool {
         )
 }
 
+/// Whether `value` matches `^[a-z][a-z0-9_]*$`.
 function is_canonical_component(value: string) -> bool {
     if (value.length() == 0) {
         return false;
     }
-    let lowercase = "abcdefghijklmnopqrstuvwxyz";
-    let allowed = "abcdefghijklmnopqrstuvwxyz0123456789_";
-    if (!lowercase.matches(value.char_at(0))) {
+    if (!value.slice(0, 1).is_ascii_lowercase()) {
         return false;
     }
-    let index = 0;
-    while (index < value.length()) {
-        if (!allowed.matches(value.char_at(index))) {
+    for (let character in value.chars()) {
+        if (!(character.is_ascii_lowercase() || character.is_ascii_numeric() || character == "_")) {
             return false;
         }
-        index += 1;
     }
     true
+}
+
+/// The code point of a one-character string. Every caller has already read
+/// `character` out of a bounds-checked position, so it is never empty.
+function code_point_of(character: string) -> int {
+    if let code_point: int = character.code_point_at(0) {
+        code_point
+    } else {
+        baml.sys.panic("unreachable: code_point_at(0) of a one-character string")
+    }
 }
 
 function hex_digit_value(character: string) -> int {
@@ -48,7 +55,7 @@ function parse_hex_digits(raw_name: string, start: int, count: int, location: st
     let value = 0;
     let index = start;
     while (index < start + count) {
-        let digit = hex_digit_value(raw_name.char_at(index));
+        let digit = hex_digit_value(raw_name.slice(index, index + 1));
         if (digit < 0) {
             throw baml.errors.ParseError {
                 message: `invalid hexadecimal escape in TypeScript test title at ${location}`,
@@ -67,8 +74,8 @@ function decode_typescript_id(raw_name: string, source_file: string, source_line
             message: `TypeScript test title at ${location} is not a static quoted string: ${raw_name}`,
         };
     }
-    let first = raw_name.char_at(0);
-    let last = raw_name.char_at(raw_name.length() - 1);
+    let first = raw_name.at(0);
+    let last = raw_name.at(raw_name.length() - 1);
     if (!((first == "\"" && last == "\"") || (first == "'" && last == "'"))) {
         throw baml.errors.ParseError {
             message: `TypeScript test title at ${location} is not a static quoted string: ${raw_name}`,
@@ -77,14 +84,14 @@ function decode_typescript_id(raw_name: string, source_file: string, source_line
     let code_points: int[] = [];
     let index = 1;
     while (index < raw_name.length() - 1) {
-        let character = raw_name.char_at(index);
+        let character = raw_name.slice(index, index + 1);
         if (character != "\\") {
             if (character == "\n" || character == "\r") {
                 throw baml.errors.ParseError {
                     message: `multiline TypeScript test title at ${location}`,
                 };
             }
-            code_points.push(character.code_point_at(0));
+            code_points.push(code_point_of(character));
             index += 1;
         } else {
             index += 1;
@@ -93,10 +100,10 @@ function decode_typescript_id(raw_name: string, source_file: string, source_line
                     message: `unterminated escape in TypeScript test title at ${location}`,
                 };
             }
-            let escape = raw_name.char_at(index);
+            let escape = raw_name.slice(index, index + 1);
             index += 1;
             if (escape == "'" || escape == "\"" || escape == "\\") {
-                code_points.push(escape.code_point_at(0));
+                code_points.push(code_point_of(escape));
             } else if (escape == "b") {
                 code_points.push(8);
             } else if (escape == "f") {
@@ -110,7 +117,7 @@ function decode_typescript_id(raw_name: string, source_file: string, source_line
             } else if (escape == "v") {
                 code_points.push(11);
             } else if (escape == "0") {
-                if (index < raw_name.length() - 1 && raw_name.char_at(index).is_numeric()) {
+                if (index < raw_name.length() - 1 && raw_name.slice(index, index + 1).is_numeric()) {
                     throw baml.errors.ParseError {
                         message: `legacy octal escape in TypeScript test title at ${location}`,
                     };
@@ -120,10 +127,10 @@ function decode_typescript_id(raw_name: string, source_file: string, source_line
                 code_points.push(parse_hex_digits(raw_name, index, 2, location));
                 index += 2;
             } else if (escape == "u") {
-                if (index < raw_name.length() - 1 && raw_name.char_at(index) == "{") {
+                if (index < raw_name.length() - 1 && raw_name.at(index) == "{") {
                     index += 1;
                     let digits_start = index;
-                    while (index < raw_name.length() - 1 && raw_name.char_at(index) != "}") {
+                    while (index < raw_name.length() - 1 && raw_name.at(index) != "}") {
                         index += 1;
                     }
                     let count = index - digits_start;
@@ -147,7 +154,7 @@ function decode_typescript_id(raw_name: string, source_file: string, source_line
                         code_point >= 55296
                             && code_point <= 56319
                             && index + 6 <= raw_name.length() - 1
-                            && raw_name.substring(index, index + 2) == "\\u"
+                            && raw_name.slice(index, index + 2) == "\\u"
                     ) {
                         let low = parse_hex_digits(raw_name, index + 2, 4, location);
                         if (low >= 56320 && low <= 57343) {
@@ -165,11 +172,11 @@ function decode_typescript_id(raw_name: string, source_file: string, source_line
             } else if (escape == "\n") {
                 null
             } else if (escape == "\r") {
-                if (index < raw_name.length() - 1 && raw_name.char_at(index) == "\n") {
+                if (index < raw_name.length() - 1 && raw_name.at(index) == "\n") {
                     index += 1;
                 }
             } else {
-                code_points.push(escape.code_point_at(0));
+                code_points.push(code_point_of(escape));
             }
         }
     }
@@ -187,7 +194,7 @@ function normalize_raw_name(
     } else if (config.prefix.length() == 0) {
         raw_name
     } else if (raw_name.starts_with(config.prefix)) {
-        raw_name.substring(config.prefix.length(), raw_name.length())
+        raw_name.slice(config.prefix.length(), raw_name.length())
     } else {
         throw baml.errors.ParseError {
             message: `${config.language} test declaration at ${source_file}:${source_line} must start with '${config.prefix}', got ${raw_name}`,
@@ -208,7 +215,7 @@ function category_for(config: SourceConfig, source_file: string) -> string {
             message: `${source_file} is outside configured source root ${config.source_root}`,
         };
     }
-    let remainder = source_file.substring(prefix.length(), source_file.length());
+    let remainder = source_file.slice(prefix.length(), source_file.length());
     if (config.source_directory == "csharp") {
         return "integration";
     }
