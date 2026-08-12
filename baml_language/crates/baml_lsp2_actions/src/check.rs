@@ -104,19 +104,59 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // relies on when it resolves a `FileScopeId` in the expanded arena — and we
     // iterate only that prefix, so synthetic `*$stream` scopes are never
     // visited and diagnostics are unchanged.
-    let ppir_index = baml_compiler2_ppir::file_semantic_index(db, file);
-    for (file_scope_idx, scope_id) in ppir_index
-        .scope_ids
-        .iter()
-        .take(index.scopes.len())
-        .enumerate()
-    {
-        if tainted.contains(&file_scope_idx) {
-            continue;
+    // Body-owner granularity (hir_ty infers whole bodies, lambdas in the
+    // owner's arena): an owner is suppressed when ITS scope or any
+    // descendant scope is parse-tainted - the same cascades the per-scope
+    // walk suppressed.
+    //
+    // DARK LAUNCH (S17): hir_ty's diagnostics drive under
+    // BAML_S17_HIR_DIAGS=1 (the parity burn-down's measurement switch);
+    // TIR's renderer stays the default until the 49 diagnostic suites
+    // re-bless clean. The switch and the TIR arm die with TIR.
+    if std::env::var("BAML_S17_HIR_DIAGS").is_ok() {
+        use baml_compiler2_hir::body::BodyOwnerId;
+        let mut owners: Vec<BodyOwnerId> = Vec::new();
+        for owner in baml_compiler2_ppir::file_body_owners(db, file) {
+            owners.push(owner);
+            if let BodyOwnerId::Function(function) = owner {
+                owners.push(BodyOwnerId::ParameterDefaults(function));
+            }
         }
-        // S17 MEASUREMENT SHIM (temporary): skip the TIR inference layer
-        // to measure exactly which diagnostics it alone produces.
-        if std::env::var("BAML_S17_SKIP_TIR_SCOPE_DIAGS").is_err() {
+        for owner in owners {
+            let Some(scope) = baml_compiler2_ppir::body_scope(db, owner) else {
+                continue;
+            };
+            let idx = scope.file_scope_id(db).index() as usize;
+            let owner_tainted = idx < index.scopes.len() && {
+                let descendants = &index.scopes[idx].descendants;
+                tainted.contains(&idx)
+                    || (descendants.start.index()..descendants.end.index())
+                        .any(|i| tainted.contains(&(i as usize)))
+            };
+            if owner_tainted {
+                continue;
+            }
+            let result = baml_compiler2_hir_ty::infer::infer_body(db, owner);
+            if result.diagnostics.is_empty() {
+                continue;
+            }
+            let source_map = baml_compiler2_ppir::body_source_map(db, owner);
+            for diagnostic in &result.diagnostics {
+                let rendered = diagnostic.render(db, file, source_map.as_ref());
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
+    } else {
+        let ppir_index = baml_compiler2_ppir::file_semantic_index(db, file);
+        for (file_scope_idx, scope_id) in ppir_index
+            .scope_ids
+            .iter()
+            .take(index.scopes.len())
+            .enumerate()
+        {
+            if tainted.contains(&file_scope_idx) {
+                continue;
+            }
             let rendered = render_scope_diagnostics(db, *scope_id);
             for r in rendered {
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));

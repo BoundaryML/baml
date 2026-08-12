@@ -119,6 +119,7 @@ impl<'db> InferContext<'db> {
             DiagnosticLocation::ExprSegment(id, seg) => sm.path_segment_span(*id, *seg),
             DiagnosticLocation::Stmt(id) => sm.stmt_span(*id),
             DiagnosticLocation::TypeAnnot(id) => sm.type_annotation_span(*id),
+            DiagnosticLocation::Pat(id) => sm.pattern_span(*id),
             // Already absolute (e.g. a deeper lambda's frozen diagnostic, or a
             // class-field span) — leave it.
             DiagnosticLocation::Span(r) => *r,

@@ -1932,6 +1932,9 @@ pub enum DiagnosticLocation {
     ExprSegment(ExprId, usize),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
+    /// A pattern's span (hir_ty's emissions stay arena-anchored; TIR
+    /// resolved pattern spans eagerly through its held source map).
+    Pat(baml_compiler2_ast::PatId),
     Span(TextRange),
 }
 
@@ -1975,6 +1978,9 @@ impl<'db> TirDiagnostic<'db> {
             }
             DiagnosticLocation::TypeAnnot(id) => source_map
                 .map(|sm| sm.type_annotation_span(*id))
+                .unwrap_or_default(),
+            DiagnosticLocation::Pat(id) => source_map
+                .map(|sm| sm.pattern_span(*id))
                 .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };

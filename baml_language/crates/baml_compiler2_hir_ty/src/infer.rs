@@ -502,6 +502,53 @@ pub enum ParamBinding {
 /// `baml_type::interned` representation (this crate's native vocabulary);
 /// they are materialized to plain `baml_type::Ty` only at consumer
 /// boundaries, after resolve-all guarantees no inference variables remain.
+/// S17 pending diagnostic (engine-internal): arena-anchored, payload
+/// types interned (still var-carrying until finish); finalized into the
+/// shared vocabulary with PLAIN types at writeback.
+#[derive(Debug, Clone, PartialEq)]
+enum PendingDiag {
+    NonExhaustiveMatch {
+        expr: ExprId,
+        scrutinee: Ty,
+        missing: Vec<String>,
+    },
+    UnreachableArm {
+        expr: ExprId,
+    },
+    UnresolvedName {
+        expr: ExprId,
+        name: baml_type::Name,
+    },
+    UnresolvedMember {
+        expr: ExprId,
+        base: Ty,
+        member: baml_type::Name,
+    },
+    NotCallable {
+        expr: ExprId,
+        ty: Ty,
+    },
+    ArgCountMismatch {
+        expr: ExprId,
+        expected: usize,
+        got: usize,
+    },
+    UnknownNamedArg {
+        expr: ExprId,
+        name: baml_type::Name,
+    },
+    RefutableLet {
+        pat: PatId,
+        context: crate::diagnostics::IrrefutableContextKind,
+    },
+    OperatorNotApplicable {
+        expr: ExprId,
+        interface: &'static str,
+        lhs: Ty,
+        rhs: Option<Ty>,
+    },
+}
+
 /// Grows one map per slice; consumers must treat a missing entry as "not
 /// inferred", never as an error.
 #[derive(Debug, Clone, PartialEq)]
@@ -519,6 +566,10 @@ pub struct InferenceResult<'db> {
     /// Match expressions whose unguarded arms do not cover the scrutinee.
     /// The expression types as Error; S17 renders E0062 with witnesses.
     pub non_exhaustive_matches: rustc_hash::FxHashSet<ExprId>,
+    /// USER-FACING diagnostics (S17): the shared vocabulary, payloads
+    /// finalized to plain types at finish. The check layer resolves the
+    /// arena-ID anchors to spans and hands them to the one message stack.
+    pub diagnostics: Vec<crate::diagnostics::TirDiagnostic<'db>>,
     /// Member accesses and callees resolved to their declarations, keyed
     /// by the accessing expression (a call's entry sits on the CALLEE
     /// expr, TIR's keying). S16: MIR consumes this instead of re-running
@@ -552,6 +603,7 @@ impl Default for InferenceResult<'_> {
             throws: Ty::never(),
             type_mismatches: FxHashMap::default(),
             non_exhaustive_matches: rustc_hash::FxHashSet::default(),
+            diagnostics: Vec::new(),
             member_resolutions: FxHashMap::default(),
             path_resolutions: FxHashMap::default(),
             call_plans: FxHashMap::default(),
@@ -927,6 +979,14 @@ struct InferenceContext<'db> {
     /// callee throws accumulate into the top. The bottom entry is the
     /// owner's channel; lambdas and `catch` bases push their own.
     throws_channels: Vec<Vec<Ty>>,
+    /// S17 pending diagnostics: anchored on arena ids, interned payloads;
+    /// finalized into `InferenceResult::diagnostics` (plain types) at
+    /// finish - r-a's InferenceDiagnostic discipline.
+    pending_diags: Vec<PendingDiag>,
+    /// Member-lookup PROBE depth (TIR's suppress_member_lookup_errors
+    /// discipline): a failed lookup reports only when no fallback tier
+    /// remains - probes increment, the committed frame reports.
+    member_probe_depth: u32,
     /// Name-visible parameters of enclosing tagged-template bodies (the
     /// tag's `body` lambda params, e.g. `prompt`'s `role`/`ctx`). A stack
     /// frame per nested template; the semantic index cannot register these
@@ -994,6 +1054,8 @@ impl<'db> InferenceContext<'db> {
             declared_throws: None,
             declared_throws_open: false,
             throws_channels: vec![Vec::new()],
+            pending_diags: Vec::new(),
+            member_probe_depth: 0,
             template_params: Vec::new(),
             table: InferenceTable::new(),
             deferred_subs: Vec::new(),
@@ -1637,7 +1699,13 @@ impl<'db> InferenceContext<'db> {
                     TyKind::List(element, _) => element.clone(),
                     _ => self.iteration_item(&collection_ty, *collection),
                 };
-                self.lower_pattern(body, *binding, &element);
+                let outcome = self.lower_pattern(body, *binding, &element);
+                if !outcome.covers_type && !element.has_error() && !element.has_infer() {
+                    self.pending_diags.push(PendingDiag::RefutableLet {
+                        pat: *binding,
+                        context: crate::diagnostics::IrrefutableContextKind::ForLet,
+                    });
+                }
                 let entry_flow = self.flow.clone();
                 let saved = self.diverges;
                 self.infer_expr(body, *loop_body, &Expectation::None);
@@ -2721,7 +2789,35 @@ impl<'db> InferenceContext<'db> {
             });
             return out;
         }
-        self.dispatch_operator(interface, &lhs_resolved, rhs_resolved.as_ref())
+        let result = self.dispatch_operator(interface, &lhs_resolved, rhs_resolved.as_ref());
+        if result.has_error() {
+            self.report_operator_failure(at, interface, &lhs_resolved, rhs_resolved.as_ref());
+        }
+        result
+    }
+
+    /// A ground operator dispatch found NO impl for clean operands - the
+    /// committed E0004 (an error/unknown/var operand is a cascade and
+    /// stays silent, the same tainted_by_errors rule everywhere).
+    pub(super) fn report_operator_failure(
+        &mut self,
+        at: ExprId,
+        interface: &'static str,
+        lhs: &Ty,
+        rhs: Option<&Ty>,
+    ) {
+        let dirty = |ty: &Ty| {
+            ty.has_error() || ty.has_infer() || matches!(ty.kind(), TyKind::Unknown { .. })
+        };
+        if dirty(lhs) || rhs.is_some_and(dirty) {
+            return;
+        }
+        self.pending_diags.push(PendingDiag::OperatorNotApplicable {
+            expr: at,
+            interface,
+            lhs: lhs.clone(),
+            rhs: rhs.cloned(),
+        });
     }
 
     /// The GROUND dispatch: every (lhs alternative, rhs alternative) pair
@@ -2929,6 +3025,17 @@ impl<'db> InferenceContext<'db> {
         } = callee_fn_ty.kind()
         else {
             // Not callable (or not yet typed): visit the args, sentinel out.
+            // A callee already carrying error/vars is a cascade, not a
+            // second finding.
+            if !callee_fn_ty.has_error()
+                && !callee_fn_ty.has_infer()
+                && !matches!(callee_fn_ty.kind(), TyKind::Unknown { .. })
+            {
+                self.pending_diags.push(PendingDiag::NotCallable {
+                    expr: callee,
+                    ty: callee_fn_ty.clone(),
+                });
+            }
             for arg in args {
                 self.infer_expr(body, arg.expr, &Expectation::None);
             }
@@ -3000,6 +3107,49 @@ impl<'db> InferenceContext<'db> {
                 && slots[param_index].is_none()
             {
                 slots[param_index] = Some(arg.expr);
+            }
+        }
+        // Arity + label diagnostics (S17): counts exclude the `$id`
+        // side channel; an over-supplied call reports against the full
+        // parameter count, an unfilled REQUIRED slot against the
+        // required count.
+        {
+            let provided = args
+                .iter()
+                .filter(|arg| arg.label.as_ref().map(|l| l.as_str()) != Some("$id"))
+                .count();
+            let required = params
+                .iter()
+                .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
+                .count();
+            if provided > params.len() {
+                self.pending_diags.push(PendingDiag::ArgCountMismatch {
+                    expr: call,
+                    expected: params.len(),
+                    got: provided,
+                });
+            } else if (0..params.len()).any(|param_index| {
+                params[param_index].mode == baml_type::FunctionParamMode::Required
+                    && slots[param_index].is_none()
+            }) {
+                self.pending_diags.push(PendingDiag::ArgCountMismatch {
+                    expr: call,
+                    expected: required,
+                    got: provided,
+                });
+            }
+            for arg in args {
+                if let Some(label) = &arg.label
+                    && label.as_str() != "$id"
+                    && !params
+                        .iter()
+                        .any(|param| param.name.as_ref() == Some(label))
+                {
+                    self.pending_diags.push(PendingDiag::UnknownNamedArg {
+                        expr: call,
+                        name: label.clone(),
+                    });
+                }
             }
         }
         let bindings: Vec<ParamBinding> = slots
@@ -3264,7 +3414,9 @@ impl<'db> InferenceContext<'db> {
                 let (ty, bound) = self.interface_member_callee(interface_member, call);
                 return (ty, bound, None, false);
             }
+            self.member_probe_depth += 1;
             let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
+            self.member_probe_depth -= 1;
             // `recv.to_json()` is language sugar for `baml.json.from(recv)`
             // (universal serialization; TIR's builder lowers the call the
             // same way). It is a FALLBACK tier: an `implements baml.ToJson`
@@ -3288,6 +3440,20 @@ impl<'db> InferenceContext<'db> {
                 && let Some(fn_ty) = self.string_from_callee(resolved.clone())
             {
                 return (fn_ty, true, None, true);
+            }
+            // Every tier exhausted: the COMMITTED member failure reports
+            // here (probes above stayed silent).
+            if field.has_error()
+                && self.member_probe_depth == 0
+                && !resolved.has_error()
+                && !resolved.has_infer()
+                && !matches!(resolved.kind(), TyKind::Unknown { .. })
+            {
+                self.pending_diags.push(PendingDiag::UnresolvedMember {
+                    expr: call,
+                    base: resolved.clone(),
+                    member: member.clone(),
+                });
             }
             return (field, false, field_resolution, false);
         };
@@ -3618,6 +3784,16 @@ impl<'db> InferenceContext<'db> {
             self.result.desugared_callees.insert(expr);
             return fn_ty;
         }
+        self.pending_diags.push(PendingDiag::UnresolvedName {
+            expr,
+            name: baml_type::Name::new(
+                segments
+                    .iter()
+                    .map(|segment| segment.as_str())
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ),
+        });
         Ty::error()
     }
 
@@ -4224,8 +4400,22 @@ impl<'db> InferenceContext<'db> {
             let members = members.to_vec();
             let mut tys = Vec::new();
             for member_ty in &members {
+                // Per-member recursion is a PROBE: the union frame owns
+                // the report (one diagnostic, union-typed base).
+                self.member_probe_depth += 1;
                 let (ty, _) = self.field_access_resolved(at, member_ty, member);
+                self.member_probe_depth -= 1;
                 if ty.has_error() {
+                    if self.member_probe_depth == 0
+                        && !resolved.has_error()
+                        && !resolved.has_infer()
+                    {
+                        self.pending_diags.push(PendingDiag::UnresolvedMember {
+                            expr: at,
+                            base: resolved.clone(),
+                            member: member.clone(),
+                        });
+                    }
                     return (Ty::error(), None);
                 }
                 tys.push(ty);
@@ -4279,6 +4469,21 @@ impl<'db> InferenceContext<'db> {
         ) {
             let resolution = self.declarer_resolution(&interface_member.declarer, member);
             return (self.interface_member_value(interface_member), resolution);
+        }
+        // A definitely-missing member on a KNOWN base reports; an
+        // error/unknown/var-carrying base is a cascade of an earlier
+        // failure (rustc's tainted_by_errors discipline), and a PROBE
+        // leaves the report to its committed frame.
+        if self.member_probe_depth == 0
+            && !resolved.has_error()
+            && !resolved.has_infer()
+            && !matches!(resolved.kind(), TyKind::Unknown { .. })
+        {
+            self.pending_diags.push(PendingDiag::UnresolvedMember {
+                expr: at,
+                base: resolved.clone(),
+                member: member.clone(),
+            });
         }
         (Ty::error(), None)
     }
@@ -4966,6 +5171,151 @@ impl<'db> InferenceContext<'db> {
             *expected = self.finalize_ty(expected);
             *actual = self.finalize_ty(actual);
         }
+        // S17: materialize the user-facing diagnostics - the finalized
+        // mismatch table plus the pendings, in the shared vocabulary with
+        // PLAIN payload types. Sorted by anchor for determinism (the
+        // check layer re-sorts globally by span).
+        {
+            use crate::diagnostics::{
+                DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
+            };
+            let mut diags: Vec<TirDiagnostic<'db>> = Vec::new();
+            for (&expr, (expected, actual)) in &result.type_mismatches {
+                // rustc's tainted_by_errors discipline: a mismatch whose
+                // operands already carry an error sentinel is a CASCADE of
+                // a reported failure, not a second finding.
+                if expected.has_error() || actual.has_error() {
+                    continue;
+                }
+                // A check can fail MID-INFERENCE on still-open variables
+                // that later resolution satisfies; only a mismatch that
+                // HOLDS in the finalized world reports.
+                if is_subtype_interned(actual, expected, &self.facts) {
+                    continue;
+                }
+                diags.push(TirDiagnostic {
+                    error: TirTypeError::TypeMismatch {
+                        expected: expected.to_plain(),
+                        got: actual.to_plain(),
+                    },
+                    severity: DiagnosticSeverity::Error,
+                    primary: DiagnosticLocation::Expr(expr),
+                    related: Vec::new(),
+                });
+            }
+            for pending in std::mem::take(&mut self.pending_diags) {
+                let (error, expr) = match pending {
+                    PendingDiag::NonExhaustiveMatch {
+                        expr,
+                        scrutinee,
+                        missing,
+                    } => (
+                        TirTypeError::NonExhaustiveMatch {
+                            scrutinee_type: self.finalize_ty(&scrutinee).to_plain(),
+                            missing_cases: missing,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::UnreachableArm { expr } => (TirTypeError::UnreachableArm, expr),
+                    PendingDiag::UnresolvedName { expr, name } => {
+                        (TirTypeError::UnresolvedName { name }, expr)
+                    }
+                    PendingDiag::UnresolvedMember { expr, base, member } => (
+                        TirTypeError::UnresolvedMember {
+                            base_type: self.finalize_ty(&base).to_plain(),
+                            member,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::NotCallable { expr, ty } => (
+                        TirTypeError::NotCallable {
+                            ty: self.finalize_ty(&ty).to_plain(),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::ArgCountMismatch {
+                        expr,
+                        expected,
+                        got,
+                    } => (TirTypeError::ArgumentCountMismatch { expected, got }, expr),
+                    PendingDiag::UnknownNamedArg { expr, name } => {
+                        (TirTypeError::UnknownNamedArgument { name }, expr)
+                    }
+                    PendingDiag::OperatorNotApplicable {
+                        expr,
+                        interface,
+                        lhs,
+                        rhs,
+                    } => {
+                        use baml_compiler2_ast::{BinaryOp, UnaryOp};
+                        let lhs = self.finalize_ty(&lhs).to_plain();
+                        let rhs = rhs.map(|ty| self.finalize_ty(&ty).to_plain());
+                        let error = match (interface, rhs) {
+                            ("Index", _) => TirTypeError::NotIndexable { ty: lhs },
+                            ("Negate", _) => TirTypeError::InvalidUnaryOp {
+                                op: UnaryOp::Neg,
+                                operand: lhs,
+                            },
+                            (_, Some(rhs)) => {
+                                let op = match interface {
+                                    "Add" => BinaryOp::Add,
+                                    "Subtract" => BinaryOp::Sub,
+                                    "Multiply" => BinaryOp::Mul,
+                                    "Divide" => BinaryOp::Div,
+                                    "Remainder" => BinaryOp::Mod,
+                                    "BitAnd" => BinaryOp::BitAnd,
+                                    "BitOr" => BinaryOp::BitOr,
+                                    "BitXor" => BinaryOp::BitXor,
+                                    "ShiftLeft" => BinaryOp::Shl,
+                                    "ShiftRight" => BinaryOp::Shr,
+                                    _ => BinaryOp::Add,
+                                };
+                                TirTypeError::InvalidBinaryOp { op, lhs, rhs }
+                            }
+                            (_, None) => TirTypeError::InvalidUnaryOp {
+                                op: UnaryOp::Neg,
+                                operand: lhs,
+                            },
+                        };
+                        diags.push(TirDiagnostic {
+                            error,
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::RefutableLet { pat, context } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::RefutablePatternInLet { context },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                };
+                diags.push(TirDiagnostic {
+                    error,
+                    severity: DiagnosticSeverity::Error,
+                    primary: DiagnosticLocation::Expr(expr),
+                    related: Vec::new(),
+                });
+            }
+            // The finish fixpoint may re-attempt a failing obligation
+            // once per round - identical findings collapse to one.
+            diags.sort_by_key(|d| match d.primary {
+                DiagnosticLocation::Expr(id)
+                | DiagnosticLocation::ExprMember(id)
+                | DiagnosticLocation::ExprSegment(id, _) => (0u8, u32::from(id.into_raw())),
+                DiagnosticLocation::Stmt(id) => (1, u32::from(id.into_raw())),
+                DiagnosticLocation::TypeAnnot(id) => (2, u32::from(id.into_raw())),
+                DiagnosticLocation::Pat(id) => (4, u32::from(id.into_raw())),
+                DiagnosticLocation::Span(range) => (3, u32::from(range.start())),
+            });
+            diags.dedup();
+            result.diagnostics = diags;
+        }
         // The writeback pass covers every recorded table (rustc's
         // `resolve_type_vars_in_body`): the virtual-field VIEW and the
         // path ladders' per-segment types carry types.
@@ -5644,6 +5994,24 @@ fn operand_members(ty: &Ty) -> Vec<Ty> {
     fn widen(ty: &Ty) -> Ty {
         match ty.kind() {
             TyKind::Literal(literal, _, attr) => Ty::intern(literal_base(literal, attr.clone())),
+            // A builtin primitive-companion class receiver (`self` inside
+            // `class Float`) IS its primitive for dispatch - the single
+            // collapse rule (`QualifiedTypeName::builtin_primitive`).
+            TyKind::Class(qtn, args, attr) if args.is_empty() => {
+                use baml_type::PrimitiveType;
+                match qtn.builtin_primitive() {
+                    Some(PrimitiveType::Int) => Ty::intern(TyKind::Int { attr: attr.clone() }),
+                    Some(PrimitiveType::Bigint) => {
+                        Ty::intern(TyKind::Bigint { attr: attr.clone() })
+                    }
+                    Some(PrimitiveType::Float) => Ty::intern(TyKind::Float { attr: attr.clone() }),
+                    Some(PrimitiveType::String) => {
+                        Ty::intern(TyKind::String { attr: attr.clone() })
+                    }
+                    Some(PrimitiveType::Bool) => Ty::intern(TyKind::Bool { attr: attr.clone() }),
+                    _ => ty.clone(),
+                }
+            }
             _ => ty.clone(),
         }
     }

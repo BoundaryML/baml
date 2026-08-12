@@ -76,6 +76,7 @@ impl<'db> InferenceContext<'db> {
         let entry_diverges = self.diverges;
         let mut arm_tys = Vec::new();
         let mut matrix_arms: Vec<DPat> = Vec::new();
+        let mut matrix_arm_bodies: Vec<ExprId> = Vec::new();
         let mut all_diverge = super::Diverges::Always;
         // The residual accumulator (B-774): each unguarded arm that is
         // refutable by type alone subtracts what it matched, so a later
@@ -112,6 +113,7 @@ impl<'db> InferenceContext<'db> {
                     residual = self.subtract_narrow(&residual, &outcome.matched_ty);
                 }
                 matrix_arms.push(outcome.dpat);
+                matrix_arm_bodies.push(arm.body);
             }
         }
         self.diverges = entry_diverges.or(all_diverge);
@@ -122,9 +124,26 @@ impl<'db> InferenceContext<'db> {
         let col_ty = scrut_resolved.to_plain();
         let ctx = HirPatCtx { infer: self };
         let report = compute_match_usefulness(&ctx, &matrix_arms, col_ty);
+        for arm in &report.unreachable_arms {
+            if let Some(&arm_body) = matrix_arm_bodies.get(arm.0) {
+                self.pending_diags
+                    .push(super::PendingDiag::UnreachableArm { expr: arm_body });
+            }
+        }
         if !report.missing.is_empty() {
             // Non-exhaustive: the match can fall through, which the type
-            // system rejects. S17 renders the witnesses as E0062.
+            // system rejects; E0062 carries the witnesses.
+            let missing: Vec<String> = report
+                .missing
+                .iter()
+                .map(|w| crate::exhaustiveness::render_witness_pat(self.db, w))
+                .collect();
+            self.pending_diags
+                .push(super::PendingDiag::NonExhaustiveMatch {
+                    expr: match_expr,
+                    scrutinee: scrut_resolved.clone(),
+                    missing,
+                });
             self.result.non_exhaustive_matches.insert(match_expr);
             return Ty::error();
         }
@@ -173,7 +192,15 @@ impl<'db> InferenceContext<'db> {
             None => Ty::error(),
         };
         let resolved = self.scrutinee_demand(&init_ty);
-        self.lower_pattern(body, pattern, &resolved);
+        let outcome = self.lower_pattern(body, pattern, &resolved);
+        // A refutable pattern in an irrefutable position has nowhere to
+        // go when it fails (E0111). Error-typed scrutinees are cascades.
+        if !outcome.covers_type && !resolved.has_error() && !resolved.has_infer() {
+            self.pending_diags.push(super::PendingDiag::RefutableLet {
+                pat: pattern,
+                context: crate::diagnostics::IrrefutableContextKind::Let,
+            });
+        }
     }
 
     /// The canonical scrutinee for pattern analysis (TIR's

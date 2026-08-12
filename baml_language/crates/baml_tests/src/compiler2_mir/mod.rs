@@ -736,7 +736,6 @@ function dp_main(p: Person) -> string throws never {
     );
 }
 
-
 /// S17 measurement probe: dumps every diagnostic_errors project's rendered
 /// diagnostics to `S17_DUMP_PATH` (no-op without it). Paired with check.rs's
 /// `BAML_S17_SKIP_TIR_SCOPE_DIAGS` shim, the two runs' diff is the exact
@@ -747,6 +746,9 @@ fn s17_dump_diagnostics() {
     let Ok(path) = std::env::var("S17_DUMP_PATH") else {
         return;
     };
+    // The dump measures the hir_ty diagnostic driver (dark-launched).
+    // SAFETY: test-only, single-threaded within this test.
+    unsafe { std::env::set_var("BAML_S17_HIR_DIAGS", "1") };
     let root = concat!(env!("CARGO_MANIFEST_DIR"), "/projects/diagnostic_errors");
     let mut out = String::new();
     let mut dirs: Vec<_> = std::fs::read_dir(root)

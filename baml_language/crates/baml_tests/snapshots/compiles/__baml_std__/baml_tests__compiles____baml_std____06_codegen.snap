@@ -620,7 +620,7 @@ function baml.Float.to_degrees(self: baml.Float) -> float {
     load_const 180.0
     bin_op *
     load_var _3
-    call baml.ops.__union_div
+    div_float
     return
 }
 
@@ -630,7 +630,7 @@ function baml.Float.to_radians(self: baml.Float) -> float {
     load_var2 1 2
     bin_op *
     load_const 180.0
-    call baml.ops.__union_div
+    div_float
     return
 }
 

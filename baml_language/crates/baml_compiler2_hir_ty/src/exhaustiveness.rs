@@ -598,6 +598,64 @@ impl WitnessPat {
     }
 }
 
+/// Render a missing-case witness for the E0062 message: class witnesses
+/// carry their field NAMES (declaration order via ppir), union members
+/// cascade so nested classes keep labels, everything else takes the
+/// standard `Display`.
+pub fn render_witness_pat(db: &dyn baml_compiler2_ppir::Db, w: &WitnessPat) -> String {
+    use std::fmt::Write as _;
+    match &w.ctor {
+        Ctor::Class(qtn, args) => {
+            let names: Vec<baml_type::Name> = {
+                let package =
+                    baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
+                match baml_compiler2_ppir::package_items(db, package)
+                    .lookup_type(qtn.namespace(), qtn.name())
+                {
+                    Some(baml_compiler2_hir::contributions::Definition::Class(class_loc)) => {
+                        baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                            .fields
+                            .iter()
+                            .map(|f| f.name.clone())
+                            .collect()
+                    }
+                    _ => Vec::new(),
+                }
+            };
+            let qtn_str = class_witness_head(qtn, args);
+            if w.fields.is_empty() {
+                return format!("{qtn_str} {{}}");
+            }
+            let mut out = format!("{qtn_str} {{ ");
+            for (i, fld) in w.fields.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                let rendered = render_witness_pat(db, fld);
+                if let Some(name) = names.get(i) {
+                    let _ = write!(out, "{name}: {rendered}");
+                } else {
+                    out.push_str(&rendered);
+                }
+            }
+            out.push_str(" }");
+            out
+        }
+        Ctor::UnionMember(_) => match w.fields.first() {
+            Some(inner) => {
+                let s = render_witness_pat(db, inner);
+                if matches!(s.as_str(), "_") {
+                    w.to_string()
+                } else {
+                    s
+                }
+            }
+            None => w.to_string(),
+        },
+        _ => w.to_string(),
+    }
+}
+
 /// The head of a class witness: the class name, plus its type arguments when it
 /// has any.
 ///

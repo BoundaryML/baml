@@ -50,10 +50,7 @@ pub(super) enum Obligation {
         lhs: Ty,
         rhs: Option<Ty>,
         out: Ty,
-        /// The registering expression - S17's anchor for the no-impl and
-        /// still-ambiguous diagnostics (the mismatch is recorded through
-        /// the discharge result today).
-        #[allow(dead_code)]
+        /// The registering expression - the no-impl diagnostic's anchor.
         at: ExprId,
     },
 }
@@ -124,14 +121,18 @@ impl<'db> InferenceContext<'db> {
                 lhs,
                 rhs,
                 out,
-                ..
+                at,
             } => {
+                let at = *at;
                 let lhs = self.table.resolve_completely(lhs);
                 let rhs = rhs.as_ref().map(|rhs| self.table.resolve_completely(rhs));
                 if lhs.has_infer() || rhs.as_ref().is_some_and(Ty::has_infer) {
                     return Attempt::Stalled;
                 }
                 let result = self.dispatch_operator(interface, &lhs, rhs.as_ref());
+                if result.has_error() {
+                    self.report_operator_failure(at, interface, &lhs, rhs.as_ref());
+                }
                 let _ = self.table.unify(out, &result);
                 Attempt::Done
             }
