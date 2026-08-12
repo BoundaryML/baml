@@ -1563,6 +1563,36 @@ mod tests {
     }
 
     #[test]
+    fn stream_return_stub_imports_runtime_type_directly() {
+        let mut pool: SymbolPool = HashMap::new();
+        let stream_name = cg_name("ai", &["stream"], "Stream");
+        pool.insert(stream_name.clone(), class(stream_name.clone()));
+
+        let mut f = bare_func("extract_resume_stream", "x.baml", 0);
+        f.return_type = class_ty(
+            stream_name,
+            vec![
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "extract_resume_stream"),
+            Symbol::Function(f),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let stub = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(stub.contains("from baml_bridge import BamlStream as _BamlStream\n"));
+        assert!(stub.contains("def extract_resume_stream(x: int) -> _BamlStream[int, str]:"));
+        assert!(!stub.contains("ai.stream.Stream"));
+    }
+
+    #[test]
     fn function_with_build_request_companion_uses_double_underscore() {
         let mut pool: SymbolPool = HashMap::new();
         let companion = bare_func("extract_resume", "x.baml", 0);
