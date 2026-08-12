@@ -814,34 +814,34 @@ pub enum MemberResolution<'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeInference<'db> {
     /// Type of every expression within this scope (NOT nested child scopes).
-    expressions: FxHashMap<ExprId, Ty>,
+    pub expressions: FxHashMap<ExprId, Ty>,
     /// Pattern types: the type each pattern is associated with. Used both for
     /// `Pattern::Bind` (the variable's bound type, post widening) and for
     /// `Pattern::Type` / `Pattern::Class` (the type to runtime-test against).
-    pattern_types: FxHashMap<PatId, Ty>,
+    pub pattern_types: FxHashMap<PatId, Ty>,
     /// Member resolutions: for field-access expressions that resolved to a
     /// class field, enum variant, method, or free function — records the
     /// structural path so MIR can emit the correct `QualifiedName` and LSP
     /// can navigate to the definition.
-    resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    pub resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
     /// Residual throw facts for each catch expression after its arms have been
     /// applied. This lets downstream throw-surface queries reuse the same catch
     /// semantics as the main type-checking builder instead of over-approximating.
     catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
-    exhaustive_matches: FxHashSet<ExprId>,
+    pub exhaustive_matches: FxHashSet<ExprId>,
     /// TIR-inferred root segment type for each multi-segment `Path` expression.
     /// Populated in `infer_path` so that MIR can chain field projections even
     /// when the MIR local was declared with a coarser type (e.g. catch variables
     /// are declared as `BuiltinUnknown` by `lower_catch` before `bind_pattern`
     /// has a chance to refine them).
-    path_root_types: FxHashMap<ExprId, Ty>,
+    pub path_root_types: FxHashMap<ExprId, Ty>,
     /// TIR-inferred type of every prefix `segments[..=i]` for multi-segment
     /// local-rooted `Path` expressions. Index `0` mirrors `path_root_types`;
     /// later indices are produced by chaining `resolve_member` over each
     /// segment. MIR uses this to thread receiver-prefix class type-args
     /// through method-call paths of depth ≥ 3 (e.g. `holder.box.describe()`).
-    path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    pub path_segment_types: FxHashMap<(ExprId, usize), Ty>,
     /// Per-segment member resolutions for multi-segment local-rooted `Path` expressions.
     ///
     /// For `obj.a.b` (`Path(["obj", "a", "b"])`), contains resolutions for segments
@@ -849,7 +849,7 @@ pub struct ScopeInference<'db> {
     ///
     /// Used by MIR to emit chained `Place::Field` projections and by LSP to
     /// navigate to field definitions from within multi-segment paths.
-    path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    pub path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
     /// Lambda span → `Ty::Function` for every lambda expression encountered
     /// during inline body inference (including nested lambdas). Allows nested
     /// lambda scopes to look up their contextual param types without calling
@@ -873,7 +873,7 @@ pub struct ScopeInference<'db> {
     /// parameter types (e.g. `items.map((item) -> { item. })`).
     param_types: Vec<(Name, Ty)>,
     /// Full parameter binding plan for checked calls.
-    call_plans: FxHashMap<ExprId, CallPlan>,
+    pub call_plans: FxHashMap<ExprId, CallPlan>,
     /// Generic instantiation for checked calls whose callee declares type
     /// params, in declared De Bruijn order ([class params...] ++ [fn
     /// params...]). Values may contain the *caller's* rigid `TypeVar`s
@@ -886,13 +886,13 @@ pub struct ScopeInference<'db> {
     /// are positional and exact-arity. MIR uses this metadata to synthesize a
     /// wrapper that drops/reorders optional parameters before the VM sees the
     /// call.
-    function_coercions: FxHashMap<ExprId, FunctionCoercion>,
+    pub function_coercions: FxHashMap<ExprId, FunctionCoercion>,
     /// Expression metadata produced while checking parameter defaults.
     ///
     /// Defaults live in a separate AST arena from the function body, so their
     /// `ExprId`s and `PatId`s are not safe to merge into the normal per-scope
     /// maps above.
-    parameter_defaults: DefaultParameterInference<'db>,
+    pub parameter_defaults: DefaultParameterInference<'db>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -925,17 +925,17 @@ pub struct NestedLambdaInference<'db> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefaultParameterInference<'db> {
-    pub(crate) expressions: FxHashMap<ExprId, Ty>,
-    pub(crate) pattern_types: FxHashMap<PatId, Ty>,
-    pub(crate) resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
-    pub(crate) catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
-    pub(crate) exhaustive_matches: FxHashSet<ExprId>,
-    pub(crate) path_root_types: FxHashMap<ExprId, Ty>,
-    pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
-    pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
-    pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
-    pub(crate) call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
-    pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
+    pub expressions: FxHashMap<ExprId, Ty>,
+    pub pattern_types: FxHashMap<PatId, Ty>,
+    pub resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    pub catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    pub exhaustive_matches: FxHashSet<ExprId>,
+    pub path_root_types: FxHashMap<ExprId, Ty>,
+    pub path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    pub path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    pub call_plans: FxHashMap<ExprId, CallPlan>,
+    pub call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    pub function_coercions: FxHashMap<ExprId, FunctionCoercion>,
 }
 
 impl DefaultParameterInference<'_> {

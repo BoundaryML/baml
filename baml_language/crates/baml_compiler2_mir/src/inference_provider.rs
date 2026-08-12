@@ -16,15 +16,112 @@
 //! per-scope dispatch reduces to body-vs-defaults.
 
 use baml_compiler2_hir::body::BodyOwnerId;
+use baml_compiler2_hir::loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc};
 use baml_compiler2_hir_ty::infer as hir_infer;
-use baml_compiler2_tir::inference::{
-    CallPlan, CallSideChannels, FunctionCoercion, MemberResolution, ParamBinding,
-};
-use baml_compiler2_tir::ty::Ty as Tir2Ty;
+use baml_type::{Name, Ty as Tir2Ty};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use baml_compiler2_ast::ExprId as AstExprId;
 use baml_compiler2_ast::PatId as AstPatId;
+
+// --- MIR's consumption vocabulary -------------------------------------------
+//
+// MIR is plain-typed; these are the shapes its lowering reads, owned HERE at
+// the seam (rustc's discipline: codegen consumes its own erased view of the
+// type system, never the inference engine's native tables). hir_ty's interned
+// tables materialize into them once per body below - the permanent boundary.
+// The retiring TIR arm feeds the same shapes through a near-identity bridge
+// that dies with TIR.
+
+/// How a member access resolved - the structural path MIR lowers through.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum MemberResolution<'db> {
+    /// A class field access (e.g. `p.name`).
+    Field {
+        class_loc: ClassLoc<'db>,
+        field_name: Name,
+    },
+    /// An enum variant access (e.g. `Status.Active`).
+    Variant {
+        enum_loc: EnumLoc<'db>,
+        variant_name: Name,
+    },
+    /// A free item accessed via a package/namespace path.
+    Free { func_loc: FunctionLoc<'db> },
+    /// A bound method reference: root is a value; type has `self` stripped.
+    BoundMethod {
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// An unbound method reference: root is a type name; type keeps `self`.
+    UnboundMethod {
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// A VIRTUAL interface-method call: only the slot (interface + member)
+    /// is statically known; dispatch resolves to the receiver's runtime impl.
+    InterfaceVirtualMethod {
+        iface_loc: InterfaceLoc<'db>,
+        method: Name,
+    },
+    /// A CONCRETE interface-method call through a statically-matched impl.
+    InterfaceConcreteMethod {
+        impl_loc: ImplLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// A VIRTUAL interface-field access through the realized declaring view.
+    InterfaceVirtualField {
+        iface_loc: InterfaceLoc<'db>,
+        interface: Tir2Ty,
+        field_index: u32,
+        field: Name,
+    },
+}
+
+/// One call's argument/parameter pairing plus its runtime type arguments.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct CallPlan {
+    pub(crate) bindings: Vec<ParamBinding>,
+    pub(crate) type_args: Vec<Tir2Ty>,
+    /// Hidden call metadata which is not part of the callee's parameter list.
+    pub(crate) side_channels: CallSideChannels,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct CallSideChannels {
+    /// The trailing `boundary.LocalId` expression supplied as `$id = ...`.
+    pub(crate) runtime_id: Option<AstExprId>,
+}
+
+impl CallPlan {
+    pub(crate) fn provided_args(&self) -> impl Iterator<Item = AstExprId> + '_ {
+        self.bindings.iter().filter_map(|binding| match binding {
+            ParamBinding::Provided { arg, .. } => Some(*arg),
+            ParamBinding::OmittedDefault { .. } => None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ParamBinding {
+    Provided {
+        param_index: usize,
+        arg: AstExprId,
+    },
+    OmittedDefault {
+        param_index: usize,
+        param_name: Name,
+    },
+}
+
+/// A function value accepted at a runtime-incompatible parameter shape - the
+/// adapter MIR emits (source shape from the value, target from the slot).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FunctionCoercion {
+    pub(crate) source_params: Vec<baml_type::FunctionParamTy>,
+    pub(crate) target_params: Vec<baml_type::FunctionParamTy>,
+    pub(crate) target_return: Tir2Ty,
+}
 
 /// Which engine backs the `tir_*` accessors for one lowering run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -38,10 +135,71 @@ pub enum InferenceProvider {
     HirTy,
 }
 
-/// One owner's converted tables plus its parameter-default arena's.
-pub(crate) struct HirTables<'db> {
+/// The one table store behind the `tir_*` accessors: converted ONCE at
+/// context construction, whichever engine produced them.
+pub(crate) enum ProviderTables<'db> {
+    /// hir_ty keys lambdas in the owner arena and defaults as their own
+    /// body owner, so every `Body` scope reads the one body table.
+    Hir {
+        body: ConvertedTables<'db>,
+        defaults: ConvertedTables<'db>,
+    },
+    /// TIR's per-scope tables, bridged shape-for-shape (sweep-only since
+    /// the flip; dies with TIR).
+    Tir {
+        scopes: FxHashMap<baml_compiler2_hir::scope::FileScopeId, ScopePair<'db>>,
+    },
+}
+
+/// One scope's body tables plus its parameter-default tables (the same
+/// pairing the metadata scopes encode).
+pub(crate) struct ScopePair<'db> {
     body: ConvertedTables<'db>,
     defaults: ConvertedTables<'db>,
+}
+
+impl<'db> ProviderTables<'db> {
+    pub(crate) fn for_scope(
+        &self,
+        scope: baml_compiler2_hir::semantic_index::ExprMetadataScope,
+    ) -> Option<&ConvertedTables<'db>> {
+        use baml_compiler2_hir::semantic_index::ExprMetadataScope;
+        match self {
+            ProviderTables::Hir { body, defaults } => Some(match scope {
+                ExprMetadataScope::Body(_) => body,
+                ExprMetadataScope::ParameterDefault(_) => defaults,
+            }),
+            ProviderTables::Tir { scopes } => match scope {
+                ExprMetadataScope::Body(fsi) => scopes.get(&fsi).map(|pair| &pair.body),
+                ExprMetadataScope::ParameterDefault(fsi) => {
+                    scopes.get(&fsi).map(|pair| &pair.defaults)
+                }
+            },
+        }
+    }
+}
+
+/// The two engines record match exhaustiveness with opposite polarity:
+/// hir_ty the NON-exhaustive set (absence = proved exhaustive), TIR the
+/// exhaustive set. Only match expressions are ever queried
+/// (`lower_match`), so both answers are total there. Dies to the
+/// hir_ty arm at TIR deletion.
+#[derive(Default)]
+enum MatchExhaustiveness {
+    #[default]
+    Empty,
+    NonExhaustiveSet(FxHashSet<AstExprId>),
+    ExhaustiveSet(FxHashSet<AstExprId>),
+}
+
+impl MatchExhaustiveness {
+    fn is_exhaustive(&self, expr: AstExprId) -> bool {
+        match self {
+            MatchExhaustiveness::Empty => true,
+            MatchExhaustiveness::NonExhaustiveSet(set) => !set.contains(&expr),
+            MatchExhaustiveness::ExhaustiveSet(set) => set.contains(&expr),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -54,18 +212,15 @@ pub(crate) struct ConvertedTables<'db> {
     path_member_resolutions: FxHashMap<AstExprId, Vec<MemberResolution<'db>>>,
     call_plans: FxHashMap<AstExprId, CallPlan>,
     function_coercions: FxHashMap<AstExprId, FunctionCoercion>,
-    /// hir_ty records the NON-exhaustive set; the accessor inverts. Only
-    /// match expressions are ever queried (`lower_match`), so the
-    /// inversion is total there.
-    non_exhaustive_matches: FxHashSet<AstExprId>,
+    exhaustiveness: MatchExhaustiveness,
 }
 
-impl<'db> HirTables<'db> {
+impl<'db> ProviderTables<'db> {
     pub(crate) fn for_function(
         db: &'db dyn crate::Db,
         function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    ) -> HirTables<'db> {
-        HirTables {
+    ) -> ProviderTables<'db> {
+        ProviderTables::Hir {
             body: convert(hir_infer::infer_body(db, BodyOwnerId::Function(function))),
             defaults: convert(hir_infer::infer_body(
                 db,
@@ -77,25 +232,199 @@ impl<'db> HirTables<'db> {
     pub(crate) fn for_let(
         db: &'db dyn crate::Db,
         let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
-    ) -> HirTables<'db> {
-        HirTables {
+    ) -> ProviderTables<'db> {
+        ProviderTables::Hir {
             body: convert(hir_infer::infer_body(db, BodyOwnerId::Let(let_binding))),
             defaults: ConvertedTables::default(),
         }
     }
 
-    /// The table set a metadata scope reads from: hir_ty keys lambdas in
-    /// the owner arena, so every `Body` scope (owner and lambda alike)
-    /// reads the one body table.
-    pub(crate) fn for_scope(
-        &self,
-        scope: baml_compiler2_hir::semantic_index::ExprMetadataScope,
-    ) -> &ConvertedTables<'db> {
-        use baml_compiler2_hir::semantic_index::ExprMetadataScope;
-        match scope {
-            ExprMetadataScope::Body(_) => &self.body,
-            ExprMetadataScope::ParameterDefault(_) => &self.defaults,
+    /// The retiring arm: TIR's salsa-cached per-scope tables, bridged
+    /// shape-for-shape into MIR's vocabulary. Sweep-only since the flip.
+    pub(crate) fn from_tir(
+        scopes: impl IntoIterator<
+            Item = (
+                baml_compiler2_hir::scope::FileScopeId,
+                &'db baml_compiler2_tir::inference::ScopeInference<'db>,
+            ),
+        >,
+    ) -> ProviderTables<'db> {
+        ProviderTables::Tir {
+            scopes: scopes
+                .into_iter()
+                .map(|(fsi, inference)| {
+                    (
+                        fsi,
+                        ScopePair {
+                            body: tir_body_tables(inference),
+                            defaults: tir_default_tables(inference),
+                        },
+                    )
+                })
+                .collect(),
         }
+    }
+}
+
+fn tir_body_tables<'db>(
+    inference: &baml_compiler2_tir::inference::ScopeInference<'db>,
+) -> ConvertedTables<'db> {
+    ConvertedTables {
+        expr_types: inference.expressions.clone(),
+        pat_types: inference.pattern_types.clone(),
+        resolutions: inference
+            .resolutions
+            .iter()
+            .map(|(&expr, resolution)| (expr, tir_resolution(resolution)))
+            .collect(),
+        path_root_types: inference.path_root_types.clone(),
+        path_segment_types: inference.path_segment_types.clone(),
+        path_member_resolutions: inference
+            .path_member_resolutions
+            .iter()
+            .map(|(&expr, resolutions)| (expr, resolutions.iter().map(tir_resolution).collect()))
+            .collect(),
+        call_plans: inference
+            .call_plans
+            .iter()
+            .map(|(&expr, plan)| (expr, tir_call_plan(plan)))
+            .collect(),
+        function_coercions: inference
+            .function_coercions
+            .iter()
+            .map(|(&expr, coercion)| (expr, tir_coercion(coercion)))
+            .collect(),
+        exhaustiveness: MatchExhaustiveness::ExhaustiveSet(inference.exhaustive_matches.clone()),
+    }
+}
+
+fn tir_default_tables<'db>(
+    inference: &baml_compiler2_tir::inference::ScopeInference<'db>,
+) -> ConvertedTables<'db> {
+    let defaults = &inference.parameter_defaults;
+    ConvertedTables {
+        expr_types: defaults.expressions.clone(),
+        pat_types: defaults.pattern_types.clone(),
+        resolutions: defaults
+            .resolutions
+            .iter()
+            .map(|(&expr, resolution)| (expr, tir_resolution(resolution)))
+            .collect(),
+        path_root_types: defaults.path_root_types.clone(),
+        path_segment_types: defaults.path_segment_types.clone(),
+        path_member_resolutions: defaults
+            .path_member_resolutions
+            .iter()
+            .map(|(&expr, resolutions)| (expr, resolutions.iter().map(tir_resolution).collect()))
+            .collect(),
+        call_plans: defaults
+            .call_plans
+            .iter()
+            .map(|(&expr, plan)| (expr, tir_call_plan(plan)))
+            .collect(),
+        function_coercions: defaults
+            .function_coercions
+            .iter()
+            .map(|(&expr, coercion)| (expr, tir_coercion(coercion)))
+            .collect(),
+        exhaustiveness: MatchExhaustiveness::ExhaustiveSet(defaults.exhaustive_matches.clone()),
+    }
+}
+
+fn tir_resolution<'db>(
+    resolution: &baml_compiler2_tir::inference::MemberResolution<'db>,
+) -> MemberResolution<'db> {
+    use baml_compiler2_tir::inference::MemberResolution as Tir;
+    match resolution {
+        Tir::Field {
+            class_loc,
+            field_name,
+        } => MemberResolution::Field {
+            class_loc: *class_loc,
+            field_name: field_name.clone(),
+        },
+        Tir::Variant {
+            enum_loc,
+            variant_name,
+        } => MemberResolution::Variant {
+            enum_loc: *enum_loc,
+            variant_name: variant_name.clone(),
+        },
+        Tir::Free { func_loc } => MemberResolution::Free {
+            func_loc: *func_loc,
+        },
+        Tir::BoundMethod {
+            class_loc,
+            func_loc,
+        } => MemberResolution::BoundMethod {
+            class_loc: *class_loc,
+            func_loc: *func_loc,
+        },
+        Tir::UnboundMethod {
+            class_loc,
+            func_loc,
+        } => MemberResolution::UnboundMethod {
+            class_loc: *class_loc,
+            func_loc: *func_loc,
+        },
+        Tir::InterfaceVirtualMethod { iface_loc, method } => {
+            MemberResolution::InterfaceVirtualMethod {
+                iface_loc: *iface_loc,
+                method: method.clone(),
+            }
+        }
+        Tir::InterfaceConcreteMethod { impl_loc, func_loc } => {
+            MemberResolution::InterfaceConcreteMethod {
+                impl_loc: *impl_loc,
+                func_loc: *func_loc,
+            }
+        }
+        Tir::InterfaceVirtualField {
+            iface_loc,
+            interface,
+            field_index,
+            field,
+        } => MemberResolution::InterfaceVirtualField {
+            iface_loc: *iface_loc,
+            interface: interface.clone(),
+            field_index: *field_index,
+            field: field.clone(),
+        },
+    }
+}
+
+fn tir_call_plan(plan: &baml_compiler2_tir::inference::CallPlan) -> CallPlan {
+    use baml_compiler2_tir::inference::ParamBinding as Tir;
+    CallPlan {
+        bindings: plan
+            .bindings
+            .iter()
+            .map(|binding| match binding {
+                Tir::Provided { param_index, arg } => ParamBinding::Provided {
+                    param_index: *param_index,
+                    arg: *arg,
+                },
+                Tir::OmittedDefault {
+                    param_index,
+                    param_name,
+                } => ParamBinding::OmittedDefault {
+                    param_index: *param_index,
+                    param_name: param_name.clone(),
+                },
+            })
+            .collect(),
+        type_args: plan.type_args.clone(),
+        side_channels: CallSideChannels {
+            runtime_id: plan.side_channels.runtime_id,
+        },
+    }
+}
+
+fn tir_coercion(coercion: &baml_compiler2_tir::inference::FunctionCoercion) -> FunctionCoercion {
+    FunctionCoercion {
+        source_params: coercion.source_params.clone(),
+        target_params: coercion.target_params.clone(),
+        target_return: coercion.target_return.clone(),
     }
 }
 
@@ -128,7 +457,7 @@ impl<'db> ConvertedTables<'db> {
         self.function_coercions.get(&expr)
     }
     pub(crate) fn is_exhaustive_match(&self, expr: AstExprId) -> bool {
-        !self.non_exhaustive_matches.contains(&expr)
+        self.exhaustiveness.is_exhaustive(expr)
     }
 }
 
@@ -216,8 +545,6 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                         .map(|ty| ty.to_plain().widen_fresh())
                         .collect()
                 },
-                // Not consumed by MIR (TIR's throws machinery only).
-                instantiated_throws: None,
                 side_channels: CallSideChannels {
                     runtime_id: plan.runtime_id,
                 },
@@ -254,7 +581,9 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
             );
         }
     }
-    out.non_exhaustive_matches = result.non_exhaustive_matches.iter().copied().collect();
+    out.exhaustiveness = MatchExhaustiveness::NonExhaustiveSet(
+        result.non_exhaustive_matches.iter().copied().collect(),
+    );
     out
 }
 
