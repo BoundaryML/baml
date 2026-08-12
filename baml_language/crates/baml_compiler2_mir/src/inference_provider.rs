@@ -149,10 +149,11 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         if result.desugared_callees.contains(&expr) {
             continue;
         }
-        out.expr_types.insert(expr, ty.to_plain());
+        out.expr_types
+            .insert(expr, widen_fresh_throws(ty).to_plain());
     }
     for (&pat, ty) in &result.type_of_pat {
-        out.pat_types.insert(pat, ty.to_plain());
+        out.pat_types.insert(pat, widen_fresh_throws(ty).to_plain());
     }
     for (&expr, resolution) in &result.member_resolutions {
         out.resolutions.insert(expr, convert_resolution(resolution));
@@ -255,6 +256,53 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
     }
     out.non_exhaustive_matches = result.non_exhaustive_matches.iter().copied().collect();
     out
+}
+
+/// Literals in `throws` position widen to their bases at the runtime
+/// boundary (the same boundary rule `type_args` follows below): hir_ty
+/// keeps literal-grain effect surfaces engine-side (the S13 fixtures'
+/// catch-fact subtraction), but the runtime's error contract is
+/// base-typed - TIR widens every thrown-literal contribution, ratified
+/// by `reflect.signature` reconstructing `string` from a
+/// `throw "negative"` lambda.
+fn widen_fresh_throws(ty: &baml_type::interned::Ty) -> baml_type::interned::Ty {
+    use baml_type::interned::{Ty as HirTy, TyKind};
+    fn widen_member(ty: &HirTy) -> HirTy {
+        let TyKind::Literal(literal, _, attr) = ty.kind() else {
+            return ty.clone();
+        };
+        let attr = attr.clone();
+        HirTy::intern(match literal {
+            baml_type::Literal::Int(_) => TyKind::Int { attr },
+            baml_type::Literal::Bigint(_) => TyKind::Bigint { attr },
+            baml_type::Literal::Float(_) => TyKind::Float { attr },
+            baml_type::Literal::String(_) => TyKind::String { attr },
+            baml_type::Literal::Bool(_) => TyKind::Bool { attr },
+        })
+    }
+    let rebuilt = ty.kind().map_children(|child| widen_fresh_throws(child));
+    let TyKind::Function {
+        params,
+        ret,
+        throws,
+        attr,
+    } = rebuilt
+    else {
+        return HirTy::intern(rebuilt);
+    };
+    let throws = match throws.kind() {
+        TyKind::Union(members, union_attr) => HirTy::intern(TyKind::Union(
+            members.iter().map(widen_member).collect(),
+            union_attr.clone(),
+        )),
+        _ => widen_member(&throws),
+    };
+    HirTy::intern(TyKind::Function {
+        params,
+        ret,
+        throws,
+        attr,
+    })
 }
 
 fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> MemberResolution<'db> {

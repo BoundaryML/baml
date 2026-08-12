@@ -4809,7 +4809,9 @@ impl<'db> InferenceContext<'db> {
         }
         // Thrown literals KEEP their literal types (no widening): catch
         // arms match on literal error codes, and the canonical union at
-        // the channel is the generation site.
+        // the channel is the generation site. The RUNTIME boundary
+        // widens (the provider's conversion): `reflect.signature` on a
+        // `throw "negative"` lambda reconstructs `string`.
         let contribution = ty.clone();
         // An OPEN clause (`throws T | _`) admits every contribution; the
         // remainder joins the surface at finalize instead of erroring.
