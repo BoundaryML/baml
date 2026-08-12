@@ -780,7 +780,20 @@ fn infer_body_impl<'db>(
     };
     let concrete_self = match owner {
         BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
-            crate::lower::owner_self_ty(db, function, &frame)
+            // BODY-position `Self` is a PLAIN-class-method error (the
+            // ratified rule: signatures resolve it, bodies do not);
+            // implements-block bodies (Self substitutes to the subject),
+            // interface default bodies (frame slot 0), and free-impl
+            // bodies keep theirs.
+            match baml_compiler2_ppir::item_data::method_owner(db, function) {
+                Some(baml_compiler2_ppir::item_data::MethodOwner::Class(_))
+                    if baml_compiler2_ppir::item_data::method_interface_target(db, function)
+                        .is_none() =>
+                {
+                    None
+                }
+                _ => crate::lower::owner_self_ty(db, function, &frame),
+            }
         }
         BodyOwnerId::Let(_) => None,
     };
