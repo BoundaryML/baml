@@ -256,15 +256,29 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
                 buckets.insert("receiver-seeding");
             }
             AlignEvent::TirOnly(tl) => {
-                if structural_line(&tl) {
+                let trimmed = tl.trim_start();
+                // proven-coverage (ruled 2026-08-11, "lean hir"): TIR
+                // emits an always-true arm test hir's claiming machinery
+                // proved redundant (interface-implements coverage of a
+                // union scrutinee) - TIR-only TEST lines admit as their
+                // own cause; the runtime suite under the hir provider is
+                // the behavioral gate for the removed test.
+                if trimmed.starts_with("branch copy _ -> ")
+                    || trimmed.starts_with("_ = is_type(")
+                    || trimmed == "let _: bool"
+                {
+                    buckets.insert("proven-coverage");
                     tir_only_structural += 1;
-                } else if tl.trim_start().starts_with("_ = call const fn ")
+                } else if structural_line(&tl) {
+                    tir_only_structural += 1;
+                } else if tl.trim_start().starts_with("_ = ")
                     && hir_stripped_lines(hir).contains(&tl)
                 {
-                    // TIR duplicates the call across dispatch arms its
-                    // unabsorbed union forces; the SAME call exists in
-                    // hir's output - duplication, never disappearance
-                    // (a call with no hir counterpart stays itemized).
+                    // TIR duplicates statements (calls, constructions,
+                    // copies) across the dispatch arms its unabsorbed
+                    // union forces; the SAME line exists in hir's output
+                    // - duplication, never disappearance (a statement
+                    // with no hir counterpart stays itemized).
                     tir_only_structural += 1;
                 } else {
                     return None;
@@ -282,13 +296,17 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
         }
         buckets.insert("canonical-order");
     }
-    if tir_only_structural > 0 && !absorption_pair {
+    if tir_only_structural > 0 && !absorption_pair && !buckets.contains("proven-coverage") {
         return None;
     }
     // A pure-renumbering pair is only admissible as the CONSEQUENCE of
     // an accepted insertion or removal; renumbering with no cause stays
     // itemized.
-    if renumber_only && !buckets.contains("receiver-seeding") && !absorption_pair {
+    if renumber_only
+        && !buckets.contains("receiver-seeding")
+        && !absorption_pair
+        && !buckets.contains("proven-coverage")
+    {
         return None;
     }
     (!buckets.is_empty()).then(|| {
@@ -298,6 +316,71 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
             .collect::<Vec<_>>()
             .join("+")
     })
+}
+
+/// The top-level parameter list of a fn-typed DECL line, when the line
+/// is one (`let _: (a, b) -> ...`).
+fn fn_params(line: &str) -> Option<Vec<String>> {
+    let rest = line.trim_start().strip_prefix("let _: (")?;
+    let mut depth = 0usize;
+    let mut end = None;
+    for (index, c) in rest.char_indices() {
+        match c {
+            '(' | '<' | '[' => depth += 1,
+            ')' if depth == 0 => {
+                end = Some(index);
+                break;
+            }
+            // `->` arrows put a stray `>` at depth 0.
+            ')' | '>' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    let end = end?;
+    if !rest[end..].starts_with(") -> ") {
+        return None;
+    }
+    let mut params = Vec::new();
+    let (mut depth, mut last) = (0usize, 0usize);
+    let list = &rest[..end];
+    for (index, c) in list.char_indices() {
+        match c {
+            '(' | '<' | '[' => depth += 1,
+            ')' | '>' | ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                params.push(list[last..index].trim().to_string());
+                last = index + 1;
+            }
+            _ => {}
+        }
+    }
+    if !list[last..].trim().is_empty() {
+        params.push(list[last..].trim().to_string());
+    }
+    Some(params)
+}
+
+/// Everything after a fn decl's parameter list (return + throws).
+fn after_params(line: &str) -> String {
+    line.split(") -> ").skip(1).collect::<Vec<_>>().join(") -> ")
+}
+
+/// Whether a line carries a bare single-uppercase generic token.
+fn has_generic_token(line: &str) -> bool {
+    let mut prev_alnum = false;
+    let chars: Vec<char> = line.chars().collect();
+    for (index, &c) in chars.iter().enumerate() {
+        if c.is_ascii_uppercase()
+            && !prev_alnum
+            && chars
+                .get(index + 1)
+                .is_none_or(|&next| !(next.is_alphanumeric() || next == '_' || next == '.'))
+        {
+            return true;
+        }
+        prev_alnum = c.is_alphanumeric() || c == '_' || c == '.';
+    }
+    false
 }
 
 /// The arm set of a `switch copy _ [...]` line, when it is one.
@@ -426,6 +509,45 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
         })
     {
         return Some(Some("void-union"));
+    }
+    // self-param-render (S15 ruling: fn renders SHOW the self param;
+    // TIR strips it): tir's param list equals hir's minus its first.
+    if let (Some(t_params), Some(h_params)) = (fn_params(&t_norm), fn_params(&h_norm))
+        && h_params.len() == t_params.len() + 1
+        && h_params[1..] == t_params[..]
+        && after_params(&t_norm) == after_params(&h_norm)
+    {
+        return Some(Some("self-param-render"));
+    }
+    // tir-uninstantiated (S15 ruled family): a decl where TIR shows bare
+    // generic vars and hir the concrete instantiation. Coarse by design
+    // (the census stays the review surface): single-uppercase tokens on
+    // the TIR side only.
+    if t_norm.trim_start().starts_with("let _:")
+        && has_generic_token(&t_norm)
+        && !has_generic_token(&h_norm)
+    {
+        return Some(Some("tir-uninstantiated"));
+    }
+    // effect-arg-precision: load_type error-set pairs in a subset
+    // relation (hir's written both-member set vs TIR's under-join, or
+    // the reverse) - every differing member must be an Error class.
+    if let (Some(t), Some(h)) = (
+        t_norm.trim_start().strip_prefix("_ = load_type("),
+        h_norm.trim_start().strip_prefix("_ = load_type("),
+    ) {
+        let t_set: std::collections::BTreeSet<&str> =
+            t.trim_end().trim_end_matches(");").split(" | ").map(str::trim).collect();
+        let h_set: std::collections::BTreeSet<&str> =
+            h.trim_end().trim_end_matches(");").split(" | ").map(str::trim).collect();
+        if t_set != h_set
+            && (t_set.is_subset(&h_set) || h_set.is_subset(&t_set))
+            && t_set
+                .symmetric_difference(&h_set)
+                .all(|member| member.ends_with("Error"))
+        {
+            return Some(Some("effect-arg-precision"));
+        }
     }
     // bigint-context (ruled 2026-08-11): an int expression in a bigint
     // slot KEEPS int - TS has no int-to-bigint literal adoption (the `n`
@@ -626,7 +748,10 @@ fn normalize_line(line: &str) -> String {
     // (`"json"` -> string) and would break the Debug-blob matcher.
     let out = collapse_json_alias_debug(&out);
     let out = collapse_json_alias(&out);
+    let out = normalize_quoted_spans(&out);
     let out = normalize_type_literals(&out);
+    // Tokenwise literal mapping leaves a sign artifact on negatives.
+    let out = out.replace("-int", "int").replace("-float", "float").replace("-bigint", "bigint");
     let out = dedup_union_members(&out);
     canonicalize_type_regions(&out)
 }
@@ -718,6 +843,23 @@ fn canonicalize_type_regions(line: &str) -> String {
 /// (enum variants into their enum), dedups. Non-union regions pass
 /// through untouched.
 fn canonicalize_union(payload: &str) -> String {
+    // A fn type's union RETURN is unparenthesized: a depth-0 `->` means
+    // depth-0 `|`s may belong to the return type, so the region stays
+    // verbatim (fn-typed decls compare structurally).
+    {
+        let mut depth = 0usize;
+        let bytes = payload.as_bytes();
+        for (index, &b) in bytes.iter().enumerate() {
+            match b {
+                b'<' | b'[' | b'(' => depth += 1,
+                b'>' if index > 0 && bytes[index - 1] == b'-' && depth == 0 => {
+                    return payload.to_string();
+                }
+                b'>' | b']' | b')' => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+        }
+    }
     let mut members: Vec<&str> = Vec::new();
     let (mut depth, mut last) = (0usize, 0usize);
     for (index, c) in payload.char_indices() {
@@ -803,6 +945,27 @@ fn collapse_json_alias_debug(line: &str) -> String {
         }
         if !changed {
             break;
+        }
+    }
+    out
+}
+
+/// Quoted spans (string literals, spaces included) normalize to
+/// `string` in one pre-pass; the tokenwise pass below cannot see a
+/// multi-word literal.
+fn normalize_quoted_spans(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        if c == '"' {
+            for c in chars.by_ref() {
+                if c == '"' {
+                    break;
+                }
+            }
+            out.push_str("string");
+        } else {
+            out.push(c);
         }
     }
     out
@@ -920,12 +1083,23 @@ fn throws_rigid_var_pair(tir: &str, hir: &str) -> bool {
     if tir[..t_split] != hir[..h_split] {
         return false;
     }
-    let t_throws = tir[t_split + " throws ".len()..].trim_end();
-    t_throws.len() <= 2
+    let t_throws = tir[t_split + " throws ".len()..].trim_end().trim_end_matches(';');
+    let h_throws = hir[h_split + " throws ".len()..].trim_end().trim_end_matches(';');
+    // TIR keeps an unresolved rigid effect var where hir_ty inferred.
+    if t_throws.len() <= 2
         && !t_throws.is_empty()
         && t_throws
             .chars()
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+    {
+        return true;
+    }
+    // Effect PRECISION either direction (all ruled): hir's inferred set
+    // inside TIR's declared context, or hir's written set where TIR
+    // under-joined.
+    let t_set: std::collections::BTreeSet<&str> = t_throws.split(" | ").map(str::trim).collect();
+    let h_set: std::collections::BTreeSet<&str> = h_throws.split(" | ").map(str::trim).collect();
+    t_set != h_set && (t_set.is_subset(&h_set) || h_set.is_subset(&t_set))
 }
 
 /// The first differing line pair, with one line of shared context above.
