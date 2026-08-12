@@ -176,3 +176,30 @@ class Instant {
         Instant { _nanoseconds: 0n }
     }
 }
+
+implement root.ops.Add<Duration> for Instant {
+    type Output = Instant
+    function add(self, other: Duration) -> Instant {
+        Instant {
+            _nanoseconds: self._nanoseconds + other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<Duration> for Instant {
+    type Output = Instant
+    function sub(self, other: Duration) -> Instant {
+        Instant {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<Instant> for Instant {
+    type Output = Duration
+    function sub(self, other: Instant) -> Duration {
+        Duration {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
+        }
+    }
+}

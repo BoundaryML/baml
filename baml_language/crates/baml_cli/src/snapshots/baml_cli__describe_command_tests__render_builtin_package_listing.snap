@@ -272,6 +272,7 @@ class            baml.time.Instant                <builtin>/baml/ns_time/instant
 class            baml.time.PlainDate              <builtin>/baml/ns_time/plaindate.baml:5
 class            baml.time.PlainDateTime          <builtin>/baml/ns_time/plaindatetime.baml:7
 class            baml.time.PlainTime              <builtin>/baml/ns_time/plaintime.baml:4
+function         baml.time._wrap_into_day         <builtin>/baml/ns_time/plaintime.baml:141
 type             baml.time.Disambiguation         <builtin>/baml/ns_time/timezone.baml:5
 class            baml.time.UnknownTimezoneError   <builtin>/baml/ns_time/timezone.baml:9
 class            baml.time.AmbiguousTimeError     <builtin>/baml/ns_time/timezone.baml:15

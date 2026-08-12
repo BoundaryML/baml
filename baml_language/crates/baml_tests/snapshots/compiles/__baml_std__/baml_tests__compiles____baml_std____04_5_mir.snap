@@ -7527,6 +7527,171 @@ fn baml.time.Duration.to_hours(self: baml.time.Duration) -> bigint {
     }
 }
 
+fn baml.time.Duration.root.ops.Add<Duration>.add(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 + copy _5;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Duration.root.ops.Subtract<Duration>.sub(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 - copy _5;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Duration.root.ops.Multiply<int>.mul(self: baml.time.Duration, other: int) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: int // other // param
+    let _3: bigint
+    let _4: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _3 = copy _4 * copy _2;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Duration.root.ops.Multiply<bigint>.mul(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: bigint // other // param
+    let _3: bigint
+    let _4: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _3 = copy _4 * copy _2;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Duration.root.ops.Divide<int>.div(self: baml.time.Duration, other: int) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: int // other // param
+    let _3: bigint
+    let _4: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _3 = copy _4 / copy _2;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Duration.root.ops.Divide<bigint>.div(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: bigint // other // param
+    let _3: bigint
+    let _4: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _3 = copy _4 / copy _2;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Duration.root.ops.Remainder<Duration>.rem(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 % copy _5;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Duration.root.ops.Negate.neg(self: baml.time.Duration) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Duration // self // param
+    let _2: bigint
+    let _3: bigint
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = -copy _3;
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.time.Instant.now = builtin(io)
 
 fn baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duration {
@@ -7909,6 +8074,72 @@ fn baml.time.Instant.epoch() -> baml.time.Instant {
 
     bb0: {
         _0 = baml.time.Instant { const 0n };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Instant.root.ops.Add<Duration>.add(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
+    // Locals:
+    let _0: baml.time.Instant // _0 // return
+    let _1: baml.time.Instant // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 + copy _5;
+        _0 = baml.time.Instant { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Instant.root.ops.Subtract<Duration>.sub(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
+    // Locals:
+    let _0: baml.time.Instant // _0 // return
+    let _1: baml.time.Instant // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 - copy _5;
+        _0 = baml.time.Instant { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.Instant.root.ops.Subtract<Instant>.sub(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.Instant // self // param
+    let _2: baml.time.Instant // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 - copy _5;
+        _0 = baml.time.Duration { copy _3 };
         goto -> bb1;
     }
 
@@ -8552,6 +8783,72 @@ fn baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) ->
     }
 }
 
+fn baml.time.PlainDateTime.root.ops.Add<Duration>.add(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.time.PlainDateTime // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 + copy _5;
+        _0 = baml.time.PlainDateTime { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
+    // Locals:
+    let _0: baml.time.PlainDateTime // _0 // return
+    let _1: baml.time.PlainDateTime // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 - copy _5;
+        _0 = baml.time.PlainDateTime { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.PlainDateTime.root.ops.Subtract<PlainDateTime>.sub(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.PlainDateTime // self // param
+    let _2: baml.time.PlainDateTime // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 - copy _5;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.time.PlainTime.from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
     // Locals:
     let _0: baml.time.PlainTime // _0 // return
@@ -8801,6 +9098,127 @@ fn baml.time.PlainTime.baml.ToJson.to_json(self: baml.time.PlainTime) -> int | f
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.root.ops.Add<Duration>.add(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
+    // Locals:
+    let _0: baml.time.PlainTime // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: int
+    let _4: bigint
+    let _5: int
+    let _6: bigint
+
+    bb0: {
+        _5 = copy _1.0;
+        _6 = copy _2.0;
+        _4 = copy _5 + copy _6;
+        _3 = call const fn baml.time._wrap_into_day(copy _4) -> [bb1];
+    }
+
+    bb1: {
+        _0 = baml.time.PlainTime { copy _3 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.root.ops.Subtract<Duration>.sub(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
+    // Locals:
+    let _0: baml.time.PlainTime // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: int
+    let _4: bigint
+    let _5: int
+    let _6: bigint
+
+    bb0: {
+        _5 = copy _1.0;
+        _6 = copy _2.0;
+        _4 = copy _5 - copy _6;
+        _3 = call const fn baml.time._wrap_into_day(copy _4) -> [bb1];
+    }
+
+    bb1: {
+        _0 = baml.time.PlainTime { copy _3 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.time.PlainTime.root.ops.Subtract<PlainTime>.sub(self: baml.time.PlainTime, other: baml.time.PlainTime) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.PlainTime // self // param
+    let _2: baml.time.PlainTime // other // param
+    let _3: bigint
+    let _4: int
+    let _5: int
+    let _6: int
+
+    bb0: {
+        _5 = copy _1.0;
+        _6 = copy _2.0;
+        _4 = copy _5 - copy _6;
+        _3 = const 0n + copy _4;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time._wrap_into_day(total_ns: bigint) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: bigint // total_ns // param
+    let _2: bigint // day_ns
+    let _3: bigint // wrapped
+    let _4: bigint
+    let _5: bigint
+    let _6: bigint
+    let _7: bigint
+    let _8: bigint
+    let _9: unknown // e
+    let _10: bool
+
+    bb0: {
+        _2 = const 86400000000000n;
+        _6 = copy _2;
+        _5 = copy _1 % copy _6;
+        _7 = copy _2;
+        _4 = copy _5 + copy _7;
+        _8 = copy _2;
+        _3 = copy _4 % copy _8;
+        _0 = call const fn baml.Bigint.to_int(copy _3) -> [bb4, unwind: bb1];
+    }
+
+    bb1: {
+        _10 = is_type(copy _9, baml.errors.InvalidArgument);
+        branch copy _10 -> [bb3, bb2];
+    }
+
+    bb2: {
+        rethrow copy _9;
+    }
+
+    bb3: {
+        _0 = call const fn baml.sys.panic(const "unreachable: nanoseconds wrapped into [0, 24h) exceed int range") -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -9826,6 +10244,80 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
 }
 
 fn baml.time._format_zoned = builtin(vm)
+
+fn baml.time.ZonedDateTime.root.ops.Add<Duration>.add(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+    let _6: int | null
+    let _7: string | null
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 + copy _5;
+        _6 = copy _1.1;
+        _7 = copy _1.2;
+        _0 = baml.time.ZonedDateTime { copy _3, copy _6, copy _7 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
+    // Locals:
+    let _0: baml.time.ZonedDateTime // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.Duration // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+    let _6: int | null
+    let _7: string | null
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 - copy _5;
+        _6 = copy _1.1;
+        _7 = copy _1.2;
+        _0 = baml.time.ZonedDateTime { copy _3, copy _6, copy _7 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.time.ZonedDateTime.root.ops.Subtract<ZonedDateTime>.sub(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.Duration {
+    // Locals:
+    let _0: baml.time.Duration // _0 // return
+    let _1: baml.time.ZonedDateTime // self // param
+    let _2: baml.time.ZonedDateTime // other // param
+    let _3: bigint
+    let _4: bigint
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _1.0;
+        _5 = copy _2.0;
+        _3 = copy _4 - copy _5;
+        _0 = baml.time.Duration { copy _3 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
 
 fn baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:

@@ -99,3 +99,75 @@ class Duration {
         self._nanoseconds / 3600000000000
     }
 }
+
+implement root.ops.Add<Duration> for Duration {
+    type Output = Duration
+    function add(self, other: Duration) -> Duration throws never {
+        Duration {
+            _nanoseconds: self._nanoseconds + other._nanoseconds,
+        }
+    }
+}
+
+implement root.ops.Subtract<Duration> for Duration {
+    type Output = Duration
+    function sub(self, other: Duration) -> Duration throws never {
+        Duration {
+            _nanoseconds: self._nanoseconds - other._nanoseconds,
+        }
+    }
+}
+
+implement root.ops.Multiply<int> for Duration {
+    type Output = Duration
+    function mul(self, other: int) -> Duration throws never {
+        Duration {
+            _nanoseconds: self._nanoseconds * other,
+        }
+    }
+}
+
+implement root.ops.Multiply<bigint> for Duration {
+    type Output = Duration
+    function mul(self, other: bigint) -> Duration throws never {
+        Duration {
+            _nanoseconds: self._nanoseconds * other,
+        }
+    }
+}
+
+implement root.ops.Divide<int> for Duration {
+    type Output = Duration
+    function div(self, other: int) -> Duration throws never {
+        Duration {
+            _nanoseconds: self._nanoseconds / other,
+        }
+    }
+}
+
+implement root.ops.Divide<bigint> for Duration {
+    type Output = Duration
+    function div(self, other: bigint) -> Duration throws never {
+        Duration {
+            _nanoseconds: self._nanoseconds / other,
+        }
+    }
+}
+
+implement root.ops.Remainder<Duration> for Duration {
+    type Output = Duration
+    function rem(self, other: Duration) -> Duration throws never {
+        Duration {
+            _nanoseconds: self._nanoseconds % other._nanoseconds,
+        }
+    }
+}
+
+implement root.ops.Negate for Duration {
+    type Output = Duration
+    function neg(self) -> Duration throws never {
+        Duration {
+            _nanoseconds: -self._nanoseconds
+        }
+    }
+}
