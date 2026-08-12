@@ -52,22 +52,6 @@ source: crates/baml_tests/src/generated_tests.rs
    ·     ╰── expected `identifier`, found `'}'`
    ╰────
 
-  [hir] E0010
-
-  × LLM function `FetchDatax` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
-    ╭─[test.baml:12:44]
- 12 │ ╭─▶ function FetchDatax(user_id: string) -> Hi {
- 13 │ │       //# collect source material
- 14 │ │       client VertexGCP
- 15 │ │   
- 16 │ │       prompt #"
- 17 │ │           give short story {{ user_id }}
- 18 │ │           {{ ctx.output_format }}
- 19 │ │       "#
- 20 │ ├─▶ }
-    · ╰──── migrate to a backtick prompt
-    ╰────
-
   [parse] E0010
 
   × invalid syntax
@@ -75,4 +59,12 @@ source: crates/baml_tests/src/generated_tests.rs
  13 │     //# collect source material
     ·     ─────────────┬─────────────
     ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `VertexGCP`
+    ╭─[test.baml:14:12]
+ 14 │     client VertexGCP
+    ·            ─────────
     ╰────

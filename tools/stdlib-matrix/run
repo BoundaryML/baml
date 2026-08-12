@@ -43,7 +43,7 @@ existing data/ files instead.
 developer would do instead, looking the answer up with `baml describe`,
 `baml describe --search`, the repository's own call sites, and the type system
 reference. Nothing else produces a judgement: without --llm every symbol comes
-out unjudged. Requires ANTHROPIC_API_KEY in the environment.
+out unjudged. Requires OPENAI_API_KEY in the environment.
 
 --previous PATH carries judgements forward from an earlier report. A symbol
 keeps its previous answer when it and every type it names are unchanged, so a
@@ -248,8 +248,8 @@ if ((check_only == 1)); then
     target="check_matrix"
     target_args+=(--baseline_file "${baseline_file}")
 elif ((use_llm == 1)); then
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        echo "stdlib-matrix: --llm requires ANTHROPIC_API_KEY in the environment" >&2
+    if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+        echo "stdlib-matrix: --llm requires OPENAI_API_KEY in the environment" >&2
         exit 2
     fi
     target="build_matrix_aligned"

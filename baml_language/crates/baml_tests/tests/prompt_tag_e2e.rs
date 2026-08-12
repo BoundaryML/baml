@@ -5,9 +5,6 @@
 //!     request built by the legacy `call_llm_function` orchestrator; prompt
 //!     rendering is now covered by the `$render_prompt` companion tests in
 //!     `baml_src/ns_prompt_tag_runtime/`.
-//!   - `backtick_and_jinja_prompts_produce_identical_messages` — Jinja
-//!     `#"..."#` prompts are a compile error now, so there is no legacy twin
-//!     to compare against.
 //!
 //! The remaining tests exercise the ai-world `$stream` companion against a
 //! local OpenAI Responses API endpoint.

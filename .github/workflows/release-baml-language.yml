@@ -1676,7 +1676,9 @@ jobs:
       - publish-swift-sdk
       - publish-crates-io
       - publish-homebrew
-      - publish-aur
+      # AUR publishing is temporarily disabled because upstream maintenance
+      # rejects SSH clones and blocks pkg.boundaryml.com manifest promotion.
+      # - publish-aur
     if: ${{ always() && needs.all-builds.result == 'success' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
@@ -1695,7 +1697,7 @@ jobs:
           SWIFTPM: ${{ needs.publish-swift-sdk.result }}
           CRATES_IO: ${{ needs.publish-crates-io.result }}
           HOMEBREW: ${{ needs.publish-homebrew.result }}
-          AUR: ${{ needs.publish-aur.result }}
+          # AUR: ${{ needs.publish-aur.result }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
           WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
         run: |
@@ -1737,11 +1739,11 @@ jobs:
           if [[ "$WRAPPER_CHANGED" == "true" ]]; then
             require_success wrapper-assets "$WRAPPER"
             require_success Homebrew "$HOMEBREW"
-            require_success AUR "$AUR"
+            # require_success AUR "$AUR"
           else
             require_skipped wrapper-assets "$WRAPPER"
             require_skipped Homebrew "$HOMEBREW"
-            require_skipped AUR "$AUR"
+            # require_skipped AUR "$AUR"
           fi
 
   publish-pkg-boundaryml-com:
@@ -2100,60 +2102,63 @@ jobs:
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
 
-  publish-aur:
-    name: Publish AUR wrapper packages
-    needs: [plan, all-builds, publish-wrapper-release]
-    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: wrapper-*
-          path: dist/wrapper
-          merge-multiple: true
-      - name: Configure AUR SSH
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$AUR_SSH_PRIVATE_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
-          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
-      - name: Generate AUR package files
-        env:
-          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
-          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
-        run: |
-          set -euo pipefail
-          scripts/baml-package-manager-artifacts \
-            --wrapper-dir dist/wrapper \
-            --version "$WRAPPER_VERSION" \
-            --source-sha256 "$SOURCE_SHA256" \
-            --out package-manager
-      - name: Push AUR repos
-        env:
-          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
-        run: |
-          set -euo pipefail
-          for pkg in baml baml-bin; do
-            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-${pkg}"
-            cp "package-manager/aur/${pkg}/PKGBUILD" "aur-${pkg}/PKGBUILD"
-            cp "package-manager/aur/${pkg}/.SRCINFO" "aur-${pkg}/.SRCINFO"
-            cd "aur-${pkg}"
-            git config user.name "boundaryml-release-bot"
-            git config user.email "boundaryml-release-bot@users.noreply.github.com"
-            git add PKGBUILD .SRCINFO
-            git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || { cd ..; continue; }
-            git push origin HEAD
-            cd ..
-          done
+  # AUR publishing is temporarily disabled because aur.archlinux.org reports
+  # maintenance and rejects SSH clones. Restore this job and its gate dependency
+  # when AUR is available again.
+  # publish-aur:
+  #   name: Publish AUR wrapper packages
+  #   needs: [plan, all-builds, publish-wrapper-release]
+  #   if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         ref: ${{ needs.plan.outputs.source_sha }}
+  #         persist-credentials: false
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wrapper-*
+  #         path: dist/wrapper
+  #         merge-multiple: true
+  #     - name: Configure AUR SSH
+  #       env:
+  #         AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+  #       run: |
+  #         set -euo pipefail
+  #         test -n "$AUR_SSH_PRIVATE_KEY"
+  #         mkdir -p ~/.ssh
+  #         printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+  #         chmod 600 ~/.ssh/aur
+  #         ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+  #         printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
+  #     - name: Generate AUR package files
+  #       env:
+  #         SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+  #         WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+  #       run: |
+  #         set -euo pipefail
+  #         scripts/baml-package-manager-artifacts \
+  #           --wrapper-dir dist/wrapper \
+  #           --version "$WRAPPER_VERSION" \
+  #           --source-sha256 "$SOURCE_SHA256" \
+  #           --out package-manager
+  #     - name: Push AUR repos
+  #       env:
+  #         WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+  #       run: |
+  #         set -euo pipefail
+  #         for pkg in baml baml-bin; do
+  #           git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-${pkg}"
+  #           cp "package-manager/aur/${pkg}/PKGBUILD" "aur-${pkg}/PKGBUILD"
+  #           cp "package-manager/aur/${pkg}/.SRCINFO" "aur-${pkg}/.SRCINFO"
+  #           cd "aur-${pkg}"
+  #           git config user.name "boundaryml-release-bot"
+  #           git config user.email "boundaryml-release-bot@users.noreply.github.com"
+  #           git add PKGBUILD .SRCINFO
+  #           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || { cd ..; continue; }
+  #           git push origin HEAD
+  #           cd ..
+  #         done
 
   dry-run-artifacts:
     name: Generate dry-run manifests and package files
@@ -2322,7 +2327,8 @@ jobs:
       - publish-pkg-boundaryml-com
       - smoke-go-release
       - publish-homebrew
-      - publish-aur
+      # AUR is temporarily absent from the release graph during maintenance.
+      # - publish-aur
       - dry-run-artifacts
       - dry-run-summary
       - build-swift-sdk

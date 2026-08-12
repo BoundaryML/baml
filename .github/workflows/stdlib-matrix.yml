@@ -55,7 +55,7 @@ jobs:
     # subprocess lookups between them, eight sessions at a time. An incremental
     # run is minutes; this bound is for the cold one.
     timeout-minutes: 120
-    # Holds ANTHROPIC_API_KEY. Pages needs its own environment, which is why
+    # Holds OPENAI_API_KEY. Pages needs its own environment, which is why
     # deploying is a separate job — a job may name only one.
     #
     # -prod rather than -dev: the key in -dev was rejected on every one of 199
@@ -141,14 +141,21 @@ jobs:
           FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
         run: |
           set -euo pipefail
+          # `extracted` is reported separately from `changed`, because the build
+          # below needs to know something different: whether data/ exists yet.
+          # Both paths out of this step set it, and the early ones set it false
+          # — a forced dispatch skips the comparison, and skipping the
+          # comparison means skipping the extraction that comes with it.
           if [[ "${{ steps.previous.outputs.have }}" != "true" || "${FORCED}" == "true" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "extracted=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # This run does the extraction; the build below reuses its data/, so
           # the decision and the report it gates are made from the same bytes.
           if tools/stdlib-matrix/run --check --baseline previous.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "extracted=true" >> "$GITHUB_OUTPUT"
             echo "The deployed report was built from these inputs; nothing to publish."
           else
             status=$?
@@ -158,18 +165,26 @@ jobs:
               exit "${status}"
             fi
             echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "extracted=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: "Build the matrix"
         if: steps.ratchet.outputs.changed == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
+          # Two independent questions, which were one flag until a forced
+          # dispatch told them apart: whether there is a report to carry
+          # forward, and whether data/ has already been built. A forced run has
+          # the first and not the second, and claiming otherwise made the tool
+          # refuse with "--skip-extract passed but data/ is incomplete".
           args=()
           if [[ "${{ steps.previous.outputs.have }}" == "true" ]]; then
-            # The ratchet step already extracted; reuse exactly what it judged.
-            args=(--skip-extract --previous "${GITHUB_WORKSPACE}/previous.json")
+            args+=(--previous "${GITHUB_WORKSPACE}/previous.json")
+          fi
+          if [[ "${{ steps.ratchet.outputs.extracted }}" == "true" ]]; then
+            args+=(--skip-extract)
           fi
           # Written straight into the site's public directory rather than copied
           # there afterwards. `run` creates the destination directory, and that

@@ -14,10 +14,10 @@ client<llm> MyClient {
 
 function TestRemap(input: string) -> string {
   client MyClient
-  prompt #"
-    {{ _.chat("user") }}
-    Test message: {{ input }}
-  "#
+  prompt `
+    ${role("user")}
+    Test message: ${input}
+  `
 }
 
 //----
@@ -42,16 +42,10 @@ function TestRemap(input: string) -> string {
 //  13 │ ├─▶ }
 //     · ╰──── replace with `client Name = <expr>;`
 //     ╰────
-// E0010
+// E0003
 //
-//   × LLM function `TestRemap` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
-//     ╭─[client_remap_role_valid.baml:15:45]
-//  15 │ ╭─▶ function TestRemap(input: string) -> string {
-//  16 │ │     client MyClient
-//  17 │ │     prompt #"
-//  18 │ │       {{ _.chat("user") }}
-//  19 │ │       Test message: {{ input }}
-//  20 │ │     "#
-//  21 │ ├─▶ }
-//     · ╰──── migrate to a backtick prompt
+//   × unresolved name: `MyClient`
+//     ╭─[client_remap_role_valid.baml:16:10]
+//  16 │   client MyClient
+//     ·          ────────
 //     ╰────

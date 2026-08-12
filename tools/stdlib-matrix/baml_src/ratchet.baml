@@ -29,16 +29,14 @@ function short_sha(sha: string) -> string {
 function provenance_changes(before: MatrixProvenance, now: MatrixProvenance) -> string[] {
     let changes: string[] = [];
     if (before.baml_surface_sha256 != now.baml_surface_sha256) {
-        changes
-            .push(
-                `the BAML stdlib surface changed (${short_sha(before.baml_surface_sha256)} → ${short_sha(now.baml_surface_sha256)})`,
-            );
+        changes.push(
+            `the BAML stdlib surface changed (${short_sha(before.baml_surface_sha256)} → ${short_sha(now.baml_surface_sha256)})`,
+        );
     }
     if (before.export_format_version != now.export_format_version) {
-        changes
-            .push(
-                `the export format changed (v${before.export_format_version} → v${now.export_format_version})`,
-            );
+        changes.push(
+            `the export format changed (v${before.export_format_version} → v${now.export_format_version})`,
+        );
     }
     if (before.typescript_version != now.typescript_version) {
         changes.push(`TypeScript ${before.typescript_version} → ${now.typescript_version}`);
@@ -67,13 +65,13 @@ function count_changes(before: MatrixCounts, now: MatrixCounts) -> BaselineCompa
         neutral: [],
     };
     if (now.baml_symbols < before.baml_symbols) {
-        comparison
-            .regressions
-            .push(`the BAML surface shrank, ${before.baml_symbols} → ${now.baml_symbols} symbols`);
+        comparison.regressions.push(
+            `the BAML surface shrank, ${before.baml_symbols} → ${now.baml_symbols} symbols`,
+        );
     } else if (now.baml_symbols > before.baml_symbols) {
-        comparison
-            .improvements
-            .push(`the BAML surface grew, ${before.baml_symbols} → ${now.baml_symbols} symbols`);
+        comparison.improvements.push(
+            `the BAML surface grew, ${before.baml_symbols} → ${now.baml_symbols} symbols`,
+        );
     }
     if (now.matched < before.matched) {
         comparison.regressions.push(`counterparts lost, ${before.matched} → ${now.matched}`);
@@ -84,9 +82,9 @@ function count_changes(before: MatrixCounts, now: MatrixCounts) -> BaselineCompa
         comparison.neutral.push(`symbols awaiting judgement ${before.unjudged} → ${now.unjudged}`);
     }
     if (now.ts_symbols != before.ts_symbols) {
-        comparison
-            .neutral
-            .push(`TypeScript surface ${before.ts_symbols} → ${now.ts_symbols} symbols`);
+        comparison.neutral.push(
+            `TypeScript surface ${before.ts_symbols} → ${now.ts_symbols} symbols`,
+        );
     }
     comparison
 }

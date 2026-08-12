@@ -173,11 +173,12 @@ function generic_param_bound(declared: string) -> string {
 // ── the BAML side ───────────────────────────────────────────────────────────
 
 /// The dotted path an id addresses, or the empty string when it addresses
-/// something no name can reach. An impl entry's id is a block address
-/// (`X:baml.impl[…]::compare`), which is not a path a signature could mention.
+/// something no name can reach. An impl entry is addressed through its block
+/// (`M:(baml.Foo as baml.Comparable).compare`), which is a way to *call* the
+/// method rather than a path a signature could mention.
 function id_path(id: string) -> string {
     let path = strip_kind_prefix(id);
-    if (path.includes("[") || path.includes("::")) {
+    if (path.includes("[") || path.starts_with("(")) {
         ""
     } else {
         path

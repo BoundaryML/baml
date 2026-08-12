@@ -1,22 +1,9 @@
-//! Template-string dedenting.
+//! Backtick-string dedenting.
 //!
-//! Shared with `sys_llm::jinja::render::preprocess_template`; both implement the
-//! same algorithm and should remain in lockstep until that callsite migrates to
-//! this one.
-//!
-//! Algorithm (BEP-049 §12, Kotlin `trimIndent` rule):
-//! 1. Compute the longest common leading-whitespace *prefix* across all non-blank
-//!    lines, compared character-by-character. Tabs and spaces don't mix: a
-//!    tab-indented line and a space-indented line share no common prefix, so the
-//!    strip column drops to zero (§12 Rule 2).
-//! 2. Strip that common prefix from every line that has it; otherwise keep the
-//!    line as-is (its content is whitespace-only).
-//! 3. Trim leading/trailing whitespace from the overall result.
-//!
-//! `preprocess_template` is the legacy Jinja form, kept in lockstep with
-//! `sys_llm::preprocess_template` until that path is removed (M6). BEP-049
-//! backtick literals use [`dedent_backtick`] instead, which strips layout
-//! without the blanket trim.
+//! [`dedent_backtick`] is the whole surface: multi-line auto-dedent for BEP-049
+//! backtick string literals. It removes the layout the author used to lay a
+//! literal out across several lines, and nothing else — see its docs for why
+//! that distinction has to be exact.
 // Walk leading whitespace by *char* so we never split a multi-byte
 // Unicode whitespace codepoint (NBSP U+00A0 = 2 bytes, LINE SEPARATOR
 // U+2028 = 3 bytes, etc.). A naive `line.len() - line.trim_start().len()`
@@ -158,98 +145,62 @@ fn common_indent(lines: &[&str]) -> usize {
     common.map_or(0, str::len)
 }
 
-pub fn preprocess_template(template: &str) -> String {
-    let lines: Vec<&str> = template.lines().collect();
-
-    // Longest common leading-whitespace *prefix* across non-blank lines, compared
-    // char-by-char (§12 Rule 2: tabs and spaces don't mix). The strip column is
-    // its byte length.
-    let mut common: Option<&str> = None;
-    for line in lines.iter().filter(|line| !line.trim().is_empty()) {
-        let ws = &line[..leading_whitespace_bytes(line)];
-        common = Some(match common {
-            None => ws,
-            Some(prev) => common_prefix(prev, ws),
-        });
-    }
-    let strip = common.map_or(0, str::len);
-
-    lines
-        .iter()
-        .map(|line| {
-            if leading_whitespace_bytes(line) >= strip {
-                strip_leading_indent(line, strip)
-            } else {
-                line.trim()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn empty() {
-        assert_eq!(preprocess_template(""), "");
+        assert_eq!(dedent_backtick(""), "");
     }
 
     #[test]
     fn single_line() {
-        assert_eq!(preprocess_template("hello"), "hello");
+        assert_eq!(dedent_backtick("hello"), "hello");
     }
 
     #[test]
     fn uniform_indent_stripped() {
-        let input = "    hello\n    world";
-        assert_eq!(preprocess_template(input), "hello\nworld");
+        assert_eq!(dedent_backtick("    hello\n    world"), "hello\nworld");
     }
 
     #[test]
     fn min_indent_is_smallest() {
-        // After stripping the smallest leading indent (2), the result is
-        // "  hello\nworld"; the final .trim() removes the leading "  ".
-        let input = "    hello\n  world";
-        assert_eq!(preprocess_template(input), "hello\nworld");
+        // The common prefix is the *shortest* of the two indents, so line one
+        // keeps the two spaces that line two doesn't have.
+        assert_eq!(dedent_backtick("    hello\n  world"), "  hello\nworld");
     }
 
     #[test]
     fn blank_lines_ignored_in_min_calc() {
-        let input = "    hello\n\n    world";
-        assert_eq!(preprocess_template(input), "hello\n\nworld");
-    }
-
-    #[test]
-    fn trims_leading_and_trailing() {
-        let input = "\n    hello\n    world\n";
-        assert_eq!(preprocess_template(input), "hello\nworld");
+        assert_eq!(dedent_backtick("    hello\n\n    world"), "hello\n\nworld");
     }
 
     #[test]
     fn tab_and_space_indent_do_not_mix() {
-        // BEP-049 §12 Rule 2: tabs and spaces don't mix — a tab-indented line and
-        // a four-space-indented line share no common leading-whitespace prefix, so
-        // the strip column is zero. (Byte-count-min would wrongly strip 1, eating a
-        // space from the second line.) The leading tab of line 1 is removed by the
-        // final `.trim()`; line 2 keeps all four spaces.
-        let input = "\t- foo\n    - bar";
-        assert_eq!(preprocess_template(input), "- foo\n    - bar");
+        // BEP-049 §12 Rule 2: a tab-indented line and a four-space-indented
+        // line share no common leading-whitespace prefix, so the strip column
+        // is zero. (A byte-count min would wrongly strip 1, eating a space from
+        // the second line.) Both lines keep their own indent.
+        assert_eq!(dedent_backtick("\t- foo\n    - bar"), "\t- foo\n    - bar");
     }
 
     #[test]
     fn nbsp_indent_does_not_panic() {
         // BEP-049 / ultrareview bug_001: when one line is indented with
         // NBSP (U+00A0, 2 UTF-8 bytes) and another with ASCII space,
-        // `min_indent` computed in bytes lands inside the NBSP, and a
+        // a strip column computed in bytes lands inside the NBSP, and a
         // naive byte-slice `&line[1..]` panics with "byte index 1 is not
         // a char boundary". Realistic trigger: rich-text paste / macOS
         // Option+Space.
-        let input = " hello\n\u{00A0}world";
-        let _ = preprocess_template(input);
+        let _ = dedent_backtick(" hello\n\u{00A0}world");
+    }
+
+    #[test]
+    fn line_separator_indent_does_not_panic() {
+        // U+2028 LINE SEPARATOR is a 3-byte Unicode whitespace char.
+        // Mixing with ASCII space exposes the same byte-vs-char bug.
+        let _ = dedent_backtick(" xy\n\u{2028}xy");
     }
 
     #[test]
@@ -306,13 +257,5 @@ mod tests {
     #[test]
     fn backtick_normalizes_crlf() {
         assert_eq!(dedent_backtick("\r\n    a\r\n    b\r\n"), "a\nb");
-    }
-
-    #[test]
-    fn line_separator_indent_does_not_panic() {
-        // U+2028 LINE SEPARATOR is a 3-byte Unicode whitespace char.
-        // Mixing with ASCII space exposes the same byte-vs-char bug.
-        let input = " xy\n\u{2028}xy";
-        let _ = preprocess_template(input);
     }
 }

@@ -422,12 +422,10 @@ fn literal_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
             "An exact `float` literal type.",
         ),
         _ => {
-            if token.parent_ancestors().any(|node| {
-                matches!(
-                    node.kind(),
-                    SyntaxKind::TEMPLATE_INTERPOLATION | SyntaxKind::BACKTICK_INTERPOLATION
-                )
-            }) {
+            if token
+                .parent_ancestors()
+                .any(|node| matches!(node.kind(), SyntaxKind::BACKTICK_INTERPOLATION))
+            {
                 return None;
             }
             let string = token.parent_ancestors().find(|node| {

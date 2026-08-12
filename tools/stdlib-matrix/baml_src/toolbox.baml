@@ -144,18 +144,11 @@ function strip_warnings(text: string) -> string {
 /// would turn the single most useful failure — a near miss with alternatives —
 /// into a bare error.
 function run_baml(box: Toolbox, args: string[]) -> string {
-    let result = baml
-        .sys
-        .exec(
-            box.baml_bin,
-            args,
-            baml.sys.ProcessOptions {
-                cwd: box.repo_root,
-                env: null,
-                timeout_ms: 30000,
-                stdin: null,
-            },
-        ) catch_all (error) {
+    let result = baml.sys.exec(
+        box.baml_bin,
+        args,
+        baml.sys.ProcessOptions { cwd: box.repo_root, env: null, timeout_ms: 30000, stdin: null },
+    ) catch_all (error) {
         _ => {
             return `could not run the compiler: ${error}`;
         },
@@ -203,18 +196,11 @@ function tool_examples(box: Toolbox, query: string) -> string {
     for (let path in examples_paths()) {
         args.push(path);
     }
-    let result = baml
-        .sys
-        .exec(
-            "git",
-            args,
-            baml.sys.ProcessOptions {
-                cwd: box.repo_root,
-                env: null,
-                timeout_ms: 20000,
-                stdin: null,
-            },
-        ) catch_all (error) {
+    let result = baml.sys.exec(
+        "git",
+        args,
+        baml.sys.ProcessOptions { cwd: box.repo_root, env: null, timeout_ms: 20000, stdin: null },
+    ) catch_all (error) {
         _ => {
             return `could not search for examples: ${error}`;
         },
@@ -346,9 +332,30 @@ function skill_url() -> string {
 /// fetch, fall back to the cache and say so, and fail if there is neither.
 /// Failing is the right outcome — the alternative is paying for a whole run to
 /// get answers nobody can tell are degraded.
+/// Whether a fetched body is plausibly the skill rather than something a
+/// network handed back with a 200.
+///
+/// A captive portal, a proxy interstitial or a CDN error page all return 200
+/// with HTML, and `response.ok()` is true for every one of them. Without this
+/// the run told two hundred sessions that BAML *is* that HTML — and, worse,
+/// wrote it over the cached copy, so the next run had no fallback either.
+function looks_like_skill(text: string) -> bool {
+    let body = text.trim();
+    // The real document is 22KB of markdown that opens with front matter and
+    // names the language repeatedly. An interstitial satisfies none of that.
+    body.length() > 2000
+        && !body.to_lower_case().starts_with("<!doctype")
+        && !body.to_lower_case().starts_with("<html")
+        && body.to_lower_case().includes("baml")
+}
+
 function load_skill(cache_file: string) -> string {
     let fetched = fetch_skill();
-    if (fetched.length() > 0) {
+    if (fetched.length() > 0 && !looks_like_skill(fetched)) {
+        // Fetched something, but not the skill. Fall through to the cache
+        // rather than trusting it, and leave the cache alone.
+        report_progress(`the skill URL returned ${fetched.length()} bytes that do not look like the skill`);
+    } else if (fetched.length() > 0) {
         let _ = baml.fs.write(cache_file, fetched) catch_all (_) {
             _ => null,
         };
@@ -437,17 +444,15 @@ function check_snippet_in(
     baml.fs.mkdir(`${directory}/baml_src`, baml.fs.MkdirOptions { recursive: true });
     baml.fs.write(`${directory}/baml.toml`, "[package]\nname = \"snippet\"\n");
     baml.fs.write(`${directory}/baml_src/snippet.baml`, code);
-    let result = baml
-        .sys
-        .exec(
-            box.baml_bin,
-            ["check", "--color", "never", "--directory", directory],
-            // No `cwd`: `--directory` already says what to compile, and setting
-            // one would re-root the compiler's own path. `baml.sys.exec`
-            // resolves the program against the child's working directory, so a
-            // relative `baml_bin` plus a `cwd` is a spawn failure.
-            baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 60000, stdin: null },
-        );
+    let result = baml.sys.exec(
+        box.baml_bin,
+        ["check", "--color", "never", "--directory", directory],
+        // No `cwd`: `--directory` already says what to compile, and setting
+        // one would re-root the compiler's own path. `baml.sys.exec`
+        // resolves the program against the child's working directory, so a
+        // relative `baml_bin` plus a `cwd` is a spawn failure.
+        baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 60000, stdin: null },
+    );
     if (result.ok()) {
         return "";
     }

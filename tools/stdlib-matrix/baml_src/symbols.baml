@@ -246,97 +246,93 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
         let owner_display = type_display_name(qualified);
 
         if (item.kind == "function") {
-            symbols
-                .push(
-                    BamlSymbol {
-                        id: item.id,
-                        declared_by: null,
-                        symbol: owner_path,
-                        display: qualified,
-                        kind: "function",
-                        origin: "free",
-                        generics: [],
-                        ty: null,
-                        resolved: null,
-                        default: null,
-                        signature: symbol_signature(item.signature),
-                        doc: item.docstring,
-                        references: [],
-                    },
-                );
-            continue;
-        }
-
-        symbols
-            .push(
+            symbols.push(
                 BamlSymbol {
                     id: item.id,
                     declared_by: null,
                     symbol: owner_path,
-                    display: owner_display,
-                    // `type_alias` is spelled `type` in source.
-                    kind: if (item.kind == "type_alias") {
-                        "type"
-                    } else {
-                        item.kind
-                    },
-                    origin: "type",
-                    generics: declared_generics(item.generics),
+                    display: qualified,
+                    kind: "function",
+                    origin: "free",
+                    generics: [],
                     ty: null,
-                    // Only an alias names a type; the other kinds declare one.
-                    resolved: normalize_optional_ty(item.resolved),
+                    resolved: null,
                     default: null,
-                    signature: null,
+                    signature: symbol_signature(item.signature),
                     doc: item.docstring,
                     references: [],
                 },
             );
+            continue;
+        }
+
+        symbols.push(
+            BamlSymbol {
+                id: item.id,
+                declared_by: null,
+                symbol: owner_path,
+                display: owner_display,
+                // `type_alias` is spelled `type` in source.
+                kind: if (item.kind == "type_alias") {
+                    "type"
+                } else {
+                    item.kind
+                },
+                origin: "type",
+                generics: declared_generics(item.generics),
+                ty: null,
+                // Only an alias names a type; the other kinds declare one.
+                resolved: normalize_optional_ty(item.resolved),
+                default: null,
+                signature: null,
+                doc: item.docstring,
+                references: [],
+            },
+        );
 
         let fields: ExportField[] = item.fields ?? [];
         for (let field in fields) {
             if (field.name.includes("$")) {
                 continue;
             }
-            symbols
-                .push(
-                    BamlSymbol {
-                        id: field.id,
-                        declared_by: null,
-                        symbol: member_steps(qualified, field.name),
-                        display: `${owner_display}.${field.name}`,
-                        kind: "field",
-                        origin: "field",
-                        generics: [],
-                        ty: normalize_optional_ty(field.ty),
-                        resolved: null,
-                        default: null,
-                        signature: null,
-                        doc: field.docstring,
-                        references: [],
-                    },
-                );
+            symbols.push(
+                BamlSymbol {
+                    id: field.id,
+                    declared_by: null,
+                    symbol: member_steps(qualified, field.name),
+                    display: `${owner_display}.${field.name}`,
+                    kind: "field",
+                    origin: "field",
+                    generics: [],
+                    ty: normalize_optional_ty(field.ty),
+                    resolved: null,
+                    default: null,
+                    signature: null,
+                    doc: field.docstring,
+                    references: [],
+                },
+            );
         }
 
         let variants: ExportVariant[] = item.variants ?? [];
         for (let variant in variants) {
-            symbols
-                .push(
-                    BamlSymbol {
-                        id: variant.id,
-                        declared_by: null,
-                        symbol: member_steps(qualified, variant.name),
-                        display: `${owner_display}.${variant.name}`,
-                        kind: "variant",
-                        origin: "variant",
-                        generics: [],
-                        ty: null,
-                        resolved: null,
-                        default: null,
-                        signature: null,
-                        doc: variant.docstring,
-                        references: [],
-                    },
-                );
+            symbols.push(
+                BamlSymbol {
+                    id: variant.id,
+                    declared_by: null,
+                    symbol: member_steps(qualified, variant.name),
+                    display: `${owner_display}.${variant.name}`,
+                    kind: "variant",
+                    origin: "variant",
+                    generics: [],
+                    ty: null,
+                    resolved: null,
+                    default: null,
+                    signature: null,
+                    doc: variant.docstring,
+                    references: [],
+                },
+            );
         }
 
         // An interface's associated types are members of it: `Sortable` is a
@@ -344,24 +340,23 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
         // looking like it has only the methods.
         let assoc_types: ExportAssocType[] = item.assoc_types ?? [];
         for (let assoc in assoc_types) {
-            symbols
-                .push(
-                    BamlSymbol {
-                        id: assoc.id,
-                        declared_by: null,
-                        symbol: member_steps(qualified, assoc.name),
-                        display: `${owner_display}.${assoc.name}`,
-                        kind: "associated type",
-                        origin: "assoc_type",
-                        generics: [],
-                        ty: null,
-                        resolved: null,
-                        default: normalize_optional_ty(assoc.default),
-                        signature: null,
-                        doc: null,
-                        references: [],
-                    },
-                );
+            symbols.push(
+                BamlSymbol {
+                    id: assoc.id,
+                    declared_by: null,
+                    symbol: member_steps(qualified, assoc.name),
+                    display: `${owner_display}.${assoc.name}`,
+                    kind: "associated type",
+                    origin: "assoc_type",
+                    generics: [],
+                    ty: null,
+                    resolved: null,
+                    default: normalize_optional_ty(assoc.default),
+                    signature: null,
+                    doc: null,
+                    references: [],
+                },
+            );
         }
 
         let methods: ExportMethod[] = item.methods ?? [];
@@ -371,24 +366,23 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
             if (method.name.includes("$")) {
                 continue;
             }
-            symbols
-                .push(
-                    BamlSymbol {
-                        id: method.id,
-                        declared_by: null,
-                        symbol: member_steps(qualified, method.name),
-                        display: `${owner_display}.${method.name}`,
-                        kind: "function",
-                        origin: origin_of_method(method.signature),
-                        generics: [],
-                        ty: null,
-                        resolved: null,
-                        default: null,
-                        signature: symbol_signature(method.signature),
-                        doc: method.docstring,
-                        references: [],
-                    },
-                );
+            symbols.push(
+                BamlSymbol {
+                    id: method.id,
+                    declared_by: null,
+                    symbol: member_steps(qualified, method.name),
+                    display: `${owner_display}.${method.name}`,
+                    kind: "function",
+                    origin: origin_of_method(method.signature),
+                    generics: [],
+                    ty: null,
+                    resolved: null,
+                    default: null,
+                    signature: symbol_signature(method.signature),
+                    doc: method.docstring,
+                    references: [],
+                },
+            );
         }
     }
 
@@ -400,24 +394,23 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
             }
             let impl_path: PathStep[] = [step];
             impl_path.push(method.name);
-            symbols
-                .push(
-                    BamlSymbol {
-                        id: method.id,
-                        declared_by: method.declared_by,
-                        symbol: impl_path,
-                        display: `(${impl_record.for_ty.display} as ${impl_record.interface}).${method.name}`,
-                        kind: "function",
-                        origin: "impl_method",
-                        generics: [],
-                        ty: null,
-                        resolved: null,
-                        default: null,
-                        signature: symbol_signature(method.signature),
-                        doc: method.docstring,
-                        references: [],
-                    },
-                );
+            symbols.push(
+                BamlSymbol {
+                    id: method.id,
+                    declared_by: method.declared_by,
+                    symbol: impl_path,
+                    display: `(${impl_record.for_ty.display} as ${impl_record.interface}).${method.name}`,
+                    kind: "function",
+                    origin: "impl_method",
+                    generics: [],
+                    ty: null,
+                    resolved: null,
+                    default: null,
+                    signature: symbol_signature(method.signature),
+                    doc: method.docstring,
+                    references: [],
+                },
+            );
         }
     }
 

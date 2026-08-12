@@ -1,215 +1,88 @@
 //! Integration tests for LLM prompt rendering.
 //!
-//! Rust-level tests drive `sys_llm` template rendering directly; BAML-level
-//! tests drive the compiler-generated `<Fn>$render_prompt` companion, which
+//! Tests drive the compiler-generated `<Fn>$render_prompt` companion, which
 //! renders the spec's prompt (with the return type's output format) as a
 //! structural `ai.Prompt`.
-//!
-//! Removed with the legacy LLM path (see git history): the
-//! `baml.prompt.render_prompt`/`build_request`/`call_llm_function` builtin flow
-//! over declared `client<llm>` blocks and Jinja prompts, and the
-//! `template_string`-in-prompt expansion tests (`template_string` calls do not
-//! bind inside ai-world backtick prompts).
 
-use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
-use baml_type::TyAttr;
-use bex_engine::{FunctionCallContextBuilder, RuntimeTy};
+use bex_engine::FunctionCallContextBuilder;
 use bex_heap::BexExternalValue;
 
-#[tokio::test]
-async fn test_render_prompt_directly() {
-    use indexmap::IndexMap;
-
-    // Test the Jinja rendering directly
-    let template = "Hello, {{ name }}! You are {{ age }} years old.";
-    let mut args = IndexMap::new();
-    args.insert(
-        "name".to_string(),
-        BexExternalValue::String("Alice".to_string().into()),
-    );
-    args.insert("age".to_string(), BexExternalValue::Int(30));
-
-    let client =
-        sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
-            sys_llm::baml_std::PrimitiveClientOptions {
-                model: Some("gpt-4o".to_string()),
-                default_role: Some("user".to_string()),
-                allowed_roles: Some(vec![
-                    "user".to_string(),
-                    "assistant".to_string(),
-                    "system".to_string(),
-                ]),
-                ..Default::default()
-            }
-        })
-        .unwrap();
-
-    let ctx = sys_llm::RenderContext {
-        client: sys_llm::RenderContextClient {
-            name: client.name.clone(),
-            provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles,
-        },
-        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }),
-        tags: IndexMap::new(),
-        enums: std::collections::HashMap::new(),
-    };
-
-    let result = sys_llm::render_prompt(template, &args, &ctx).unwrap();
-
-    match result {
-        BuiltinPromptAst::Simple(s) => {
-            assert_eq!(
-                s,
-                std::sync::Arc::new("Hello, Alice! You are 30 years old.".to_string().into())
-            );
-        }
-        _ => panic!("Expected string result"),
-    }
-}
-
-#[tokio::test]
-async fn test_render_prompt_with_chat_roles() {
-    use indexmap::IndexMap;
-
-    let template = r#"
-{{ _.role("system") }}
-You are a helpful assistant.
-{{ _.role("user") }}
-{{ question }}
-"#;
-    let mut args = IndexMap::new();
-    args.insert(
-        "question".to_string(),
-        BexExternalValue::String("What is 2+2?".to_string().into()),
-    );
-
-    let client =
-        sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
-            sys_llm::baml_std::PrimitiveClientOptions {
-                model: Some("gpt-4o".to_string()),
-                default_role: Some("user".to_string()),
-                allowed_roles: Some(vec![
-                    "user".to_string(),
-                    "assistant".to_string(),
-                    "system".to_string(),
-                ]),
-                ..Default::default()
-            }
-        })
-        .unwrap();
-
-    let ctx = sys_llm::RenderContext {
-        client: sys_llm::RenderContextClient {
-            name: client.name.clone(),
-            provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles,
-        },
-        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }),
-        tags: IndexMap::new(),
-        enums: std::collections::HashMap::new(),
-    };
-
-    let result = sys_llm::render_prompt(template, &args, &ctx).unwrap();
-
-    // Result should be a Vec of messages
-    match result {
-        BuiltinPromptAst::Vec(messages) => {
-            assert_eq!(messages.len(), 2);
-
-            // Check first message (system)
-            match messages[0].as_ref() {
-                BuiltinPromptAst::Message { role, content, .. } => {
-                    assert_eq!(role, "system");
-                    match content.as_ref() {
-                        PromptAstSimple::String(s) => {
-                            assert!(s.contains("helpful assistant"));
-                        }
-                        _ => panic!("Expected string content"),
-                    }
-                }
-                _ => panic!("Expected message"),
-            }
-
-            // Check second message (user)
-            match messages[1].as_ref() {
-                BuiltinPromptAst::Message { role, content, .. } => {
-                    assert_eq!(role, "user");
-                    match content.as_ref() {
-                        PromptAstSimple::String(s) => {
-                            assert!(s.contains("What is 2+2?"));
-                        }
-                        _ => panic!("Expected string content"),
-                    }
-                }
-                _ => panic!("Expected message"),
-            }
-        }
-        _ => panic!("Expected Vec of messages, got {result:?}"),
-    }
-}
-
-#[tokio::test]
-async fn test_render_prompt_with_enums() {
-    use indexmap::IndexMap;
-    use sys_llm::{RenderEnum, RenderEnumVariant};
-
-    let template = "Category: {{ ctx.enums.Category.SPORTS }}";
-    let args = IndexMap::new();
-
-    let mut enums = std::collections::HashMap::new();
-    enums.insert(
-        "Category".to_string(),
-        RenderEnum {
-            name: "Category".to_string(),
-            variants: vec![
-                RenderEnumVariant {
-                    name: "SPORTS".to_string(),
-                },
-                RenderEnumVariant {
-                    name: "TECH".to_string(),
-                },
-                RenderEnumVariant {
-                    name: "POLITICS".to_string(),
-                },
-            ],
-        },
-    );
-
-    let ctx = sys_llm::RenderContext {
-        client: sys_llm::RenderContextClient {
-            name: "test".to_string(),
-            provider: "openai".to_string(),
-            default_role: "user".to_string(),
-            allowed_roles: vec!["user".to_string()],
-        },
-        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }),
-        tags: IndexMap::new(),
-        enums,
-    };
-
-    let result = sys_llm::render_prompt(template, &args, &ctx).unwrap();
-
-    match result {
-        BuiltinPromptAst::Simple(s) => {
-            let PromptAstSimple::String(s) = s.as_ref() else {
-                panic!("Expected string content");
-            };
-            assert_eq!(s, "Category: SPORTS");
-        }
-        _ => panic!("Expected string result"),
-    }
-}
-
 mod common;
+
+use common::{EngineProgram, assert_engine_executes};
+
+#[tokio::test]
+async fn backtick_prompt_interpolates_arguments() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+function Greet(name: string, age: int) -> string {
+    client "openai/gpt-4o"
+    prompt `Hello, ${name}! You are ${age} years old.`
+}
+
+function main() -> string {
+    Greet$render_prompt("Alice", 30).text()
+}
+"#,
+        entry: "main",
+        expected: Ok(BexExternalValue::from(
+            "Hello, Alice! You are 30 years old.",
+        )),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_prompt_builds_chat_roles() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+function Answer(question: string) -> string {
+    client "openai/gpt-4o"
+    prompt `${role("system")}You are a helpful assistant.${role("user")}${question}`
+}
+
+function main() -> string {
+    let out = ""
+    for (let message in Answer$render_prompt("What is 2+2?").messages()) {
+        out += message.role + "=" + message.content + ";"
+    }
+    out
+}
+"#,
+        entry: "main",
+        expected: Ok(BexExternalValue::from(
+            "system=You are a helpful assistant.;user=What is 2+2?;",
+        )),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_prompt_interpolates_enum_values() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+enum Category {
+    SPORTS
+    TECH
+}
+
+function Categorize(category: Category) -> string {
+    client "openai/gpt-4o"
+    prompt `Category: ${category}`
+}
+
+function main() -> string {
+    Categorize$render_prompt(Category.SPORTS).text()
+}
+"#,
+        entry: "main",
+        expected: Ok(BexExternalValue::from("Category: SPORTS")),
+        ..Default::default()
+    })
+    .await
+}
 
 #[tokio::test]
 async fn test_render_prompt_e2e_includes_output_format_schema() {

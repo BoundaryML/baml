@@ -9,11 +9,10 @@
 // Keep the output deterministic: no timestamps, no environment.
 
 function escape_cell(value: string) -> string {
-    value
-        .replace_all("\\", "\\\\")
-        .replace_all("|", "\\|")
-        .replace_all("\r", "")
-        .replace_all("\n", "<br>")
+    value.replace_all("\\", "\\\\").replace_all("|", "\\|").replace_all("\r", "").replace_all(
+        "\n",
+        "<br>",
+    )
 }
 
 /// Stands in for a version the extractor could not determine. Shared with the
@@ -32,31 +31,7 @@ function render_inputs_section(provenance: MatrixProvenance) -> string {
         `- TypeScript: ${provenance.typescript_version}`,
         `- @types/node: ${provenance.types_node_version ?? provenance_absent()}`,
     ]
-    .join("\n")
-}
-
-/// The group a BAML symbol belongs to: its owner path, or the impl it arrives
-/// through. Mirrors `groupOf` in the web view.
-function baml_group_of(symbol: BamlSymbol) -> string {
-    let names: string[] = [];
-    let impl_group = "";
-    for (let step in symbol.symbol) {
-        match (step) {
-            let plain: string => {
-                names.push(plain);
-            },
-            let node: ImplStep => {
-                impl_group = `${node.base} as ${node.iface.join(".")}`;
-            },
-        }
-    }
-    if (impl_group.length() > 0) {
-        impl_group
-    } else if (names.length() > 1) {
-        names.slice(0, names.length() - 1).join(".")
-    } else {
-        names.at(0) ?? "(root)"
-    }
+        .join("\n")
 }
 
 /// One row: the symbol, what was concluded about it, and on what grounds.
@@ -100,7 +75,7 @@ function render_symbol_row(
         `| ${state} `,
         `| ${escape_cell(counterparts.join(", "))} |`,
     ]
-    .join("")
+        .join("")
 }
 
 function render_matrix_markdown(matrix: SymbolMatrix) -> string {
@@ -114,10 +89,13 @@ function render_matrix_markdown(matrix: SymbolMatrix) -> string {
         let bucket: Judgement[] = by_ts.get(judgement.ts) ?? [];
         bucket.push(judgement);
         let _ = by_ts.set(judgement.ts, bucket);
-        if (judgement_pairs(judgement)) {
-            for (let id in judgement.baml) {
-                let _ = baml_claimed.set(id, true);
-            }
+        // Every verdict claims what it names, matching `recount` — a symbol
+        // offered as the way to do something BAML makes unnecessary has still
+        // been pointed at. Gating on `judgement_pairs` here made the summary
+        // line and the table thirty lines below it disagree by eight rows,
+        // each listed under "no judgement names" while being counted as named.
+        for (let id in judgement.baml) {
+            let _ = baml_claimed.set(id, true);
         }
     }
     let baml_by_id: map<string, BamlSymbol> = {};

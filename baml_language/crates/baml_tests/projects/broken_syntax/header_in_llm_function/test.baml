@@ -13,8 +13,8 @@ function FetchDatax(user_id: string) -> Hi {
     //# collect source material
     client VertexGCP
 
-    prompt #"
-        give short story {{ user_id }}
-        {{ ctx.output_format }}
-    "#
+    prompt `
+        give short story ${user_id}
+        ${ctx.output_format}
+    `
 }

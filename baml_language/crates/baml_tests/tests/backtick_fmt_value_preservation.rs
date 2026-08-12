@@ -56,10 +56,10 @@ fn formatting_preserves_backtick_values() {
             Reindented,
             "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n",
         ),
-        // template_string body
+        // function return value
         (
             Reindented,
-            "template_string Header(title: string) `\n        # ${title}\n`\n",
+            "function Header(title: string) -> string {\n    `\n            # ${title}\n    `\n}\n",
         ),
         // attribute argument
         (

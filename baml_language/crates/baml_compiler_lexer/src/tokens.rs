@@ -754,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn test_raw_string_with_jinja() {
+    fn test_raw_string_with_braces() {
         let source = r##"#"Hello {{ name }}"#"##;
         let tokens = lex_no_whitespace(source);
 

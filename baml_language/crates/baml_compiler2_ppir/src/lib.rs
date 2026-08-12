@@ -467,9 +467,23 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     .filter(|p| p.name.as_str() != "client")
                     .map(|p| p.name.clone())
                     .collect();
+                let spec_type_args = func
+                    .generic_params
+                    .iter()
+                    .map(|param| {
+                        ast::TypeExprKind::Path {
+                            segments: vec![param.name.clone()],
+                            generic_args: vec![],
+                            associated_type_bindings: vec![],
+                            attrs: vec![],
+                        }
+                        .at(span)
+                    })
+                    .collect();
                 let (body, source_map) = ast::synthesize_spec_stream_body(
                     func.name.as_str(),
                     &param_names,
+                    spec_type_args,
                     companion_type_args,
                     span,
                 );

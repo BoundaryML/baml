@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -1030,7 +1030,6 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "serde",
- "sys_jinja_types",
  "text-size",
 ]
 
@@ -4581,24 +4580,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "minijinja"
-version = "2.16.0"
-source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
-dependencies = [
- "indexmap",
- "serde",
-]
-
-[[package]]
-name = "minijinja-contrib"
-version = "2.16.0"
-source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
-dependencies = [
- "minijinja",
- "serde",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7316,26 +7297,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sys_jinja"
-version = "0.0.0-beta"
-dependencies = [
- "minijinja",
- "minijinja-contrib",
- "regex",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "sys_jinja_types"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "indexmap",
- "minijinja",
- "strsim",
-]
-
-[[package]]
 name = "sys_llm"
 version = "0.0.0-beta"
 dependencies = [
@@ -7357,14 +7318,12 @@ dependencies = [
  "getrandom 0.3.4",
  "indexmap",
  "infer",
- "minijinja",
  "num-bigint",
  "rsa",
  "rustls",
  "serde",
  "serde_json",
  "strum",
- "sys_jinja",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
