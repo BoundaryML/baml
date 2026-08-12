@@ -14,7 +14,7 @@
     <AssemblyName>Baml.Bridge</AssemblyName>
     <RootNamespace>Baml</RootNamespace>
     <PackageId>baml-bridge</PackageId>
-    <Version>0.15.0</Version>
+    <Version>0.16.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>BoundaryML</Authors>
     <Description>Managed runtime bridge for generated BAML C# clients.</Description>
