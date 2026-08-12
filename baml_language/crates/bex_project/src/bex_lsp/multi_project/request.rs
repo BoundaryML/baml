@@ -77,7 +77,7 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
             TextDocumentSyncOptions {
                 open_close: Some(true),
                 change: Some(TextDocumentSyncKind::FULL),
-                will_save: Some(true),
+                will_save: Some(false),
                 save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
                     include_text: Some(false),
                 })),
