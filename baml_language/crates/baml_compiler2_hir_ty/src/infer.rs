@@ -573,6 +573,10 @@ enum PendingDiag {
         at: baml_compiler2_ast::StmtId,
         unreachable_count: usize,
     },
+    RuntimeIdMember {
+        expr: ExprId,
+        member: baml_type::Name,
+    },
     UnknownPatternField {
         pat: PatId,
         class_name: baml_type::QualifiedTypeName,
@@ -1624,6 +1628,9 @@ impl<'db> InferenceContext<'db> {
                 ..
             } => self.infer_object(body, expr, type_name, fields, spreads),
             Expr::MemberAccess { base, member } => {
+                if self.check_runtime_id_member(body, expr, *base, member) {
+                    return Ty::error();
+                }
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(expr, &base_ty, member)
             }
@@ -1639,6 +1646,9 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::OptionalMemberAccess { base, member } => {
+                if self.check_runtime_id_member(body, expr, *base, member) {
+                    return Ty::error();
+                }
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.check_needless_chain(body, expr, *base, &base_ty);
                 let nonnull = self.peel_chain_null(&base_ty);
@@ -3390,6 +3400,10 @@ impl<'db> InferenceContext<'db> {
                         return (fn_ty, false);
                     }
                 }
+                if self.check_runtime_id_member(body, callee, *base, &member) {
+                    self.result.type_of_expr.insert(callee, Ty::error());
+                    return (Ty::error(), false);
+                }
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let (ty, bound, resolution, desugar) = self.member_callee(call, &receiver, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
@@ -3405,6 +3419,10 @@ impl<'db> InferenceContext<'db> {
             // chain boundary re-unions it) and dispatches on the rest.
             Expr::OptionalMemberAccess { base, member } => {
                 let member = member.clone();
+                if self.check_runtime_id_member(body, callee, *base, &member) {
+                    self.result.type_of_expr.insert(callee, Ty::error());
+                    return (Ty::error(), false);
+                }
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let nonnull = self.peel_chain_null(&receiver);
                 let (ty, bound, resolution, desugar) = self.member_callee(call, &nonnull, &member);
@@ -3800,6 +3818,15 @@ impl<'db> InferenceContext<'db> {
     /// arguments explicitly, and the expectation's bounds resolve them here.
     /// Constants and enum variants join as later slices land.
     fn resolve_value_path(&mut self, expr: ExprId, segments: &[baml_type::Name]) -> Ty {
+        // `$id` is trailing call metadata, not a value: any dotted use
+        // reports the bind-it-first rewrite.
+        if segments.len() > 1 && segments[0].as_str() == "$id" {
+            self.pending_diags.push(PendingDiag::RuntimeIdMember {
+                expr,
+                member: segments[1].clone(),
+            });
+            return Ty::error();
+        }
         if self.path_resolves_locally(expr) {
             // The root resolves through the semantic index; the remaining
             // segments are member accesses (the AST cannot split `b.v` into
@@ -5105,6 +5132,26 @@ impl<'db> InferenceContext<'db> {
         resolved
     }
 
+    /// `$id` is trailing call metadata, not a value: member access on it
+    /// reports the rewrite hint (bind it to a local first).
+    fn check_runtime_id_member(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        base: ExprId,
+        member: &baml_type::Name,
+    ) -> bool {
+        let is_id = matches!(&body.exprs[base], Expr::Path(segments)
+            if segments.len() == 1 && segments[0].as_str() == "$id");
+        if is_id {
+            self.pending_diags.push(PendingDiag::RuntimeIdMember {
+                expr,
+                member: member.clone(),
+            });
+        }
+        is_id
+    }
+
     /// A `?.` link whose base PROVABLY cannot be null is noise the user
     /// probably didn't intend (E0004's did-you-mean family). Error/var
     /// bases stay silent as cascades; chain-internal nullability (an
@@ -5493,6 +5540,9 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::RuntimeIdMember { expr, member } => {
+                        (TirTypeError::RuntimeIdMemberAccess { member }, expr)
+                    }
                     PendingDiag::DeadCode {
                         at,
                         unreachable_count,
