@@ -331,6 +331,70 @@ when "fork_during_initialization"
   assert(worker_errors.empty?, "parent initialization failed")
   Baml::Bridge.initialize!(VALID_PROGRAM.dup)
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
+when "fork_during_open_failure"
+  unless Process.respond_to?(:fork)
+    exit 0
+  end
+
+  runtime_class = Baml::Bridge.const_get(:ProcessRuntime, false)
+  runtime = runtime_class.new
+  open_failed = Queue.new
+  release_failure = Queue.new
+  runtime.define_singleton_method(:load_api!) do |path|
+    super(path)
+  rescue Baml::Bridge::RuntimeLoadError
+    open_failed << true
+    release_failure.pop
+    raise
+  end
+
+  ENV["BAML_RUNTIME_PATH"] = INVALID_LIBRARY
+  worker_error = Queue.new
+  worker = Thread.new do
+    runtime.initialize!(VALID_PROGRAM)
+  rescue Exception => error
+    worker_error << error
+  end
+  open_failed.pop
+
+  read_pipe, write_pipe = IO.pipe
+  child = fork do
+    read_pipe.close
+    error = assert_raises(Baml::Bridge::ForkSafetyError) do
+      runtime.initialize!(VALID_PROGRAM)
+    end
+    write_pipe.write(error.message)
+    exit! 0
+  end
+  write_pipe.close
+  status = wait_for_child(child)
+  message = read_pipe.read
+  assert(status.success?, message)
+  assert(message.include?("must exec before using BAML"), message)
+
+  release_failure << true
+  worker.join
+  error = worker_error.pop
+  assert(error.is_a?(Baml::Bridge::RuntimeLoadError), error.inspect)
+
+  ENV["BAML_RUNTIME_PATH"] = FIXTURE
+  read_pipe, write_pipe = IO.pipe
+  child = fork do
+    read_pipe.close
+    begin
+      runtime.initialize!(VALID_PROGRAM)
+      write_pipe.write("ok")
+      exit! 0
+    rescue Exception => error
+      write_pipe.write("#{error.class}: #{error.message}")
+      exit! 1
+    end
+  end
+  write_pipe.close
+  status = wait_for_child(child)
+  result = read_pipe.read
+  assert(status.success?, result)
+  assert_equal("ok", result)
 when "registered_callback_retention"
   initialize_fixture
   runtime = Baml::Bridge.instance_variable_get(:@process_runtime)

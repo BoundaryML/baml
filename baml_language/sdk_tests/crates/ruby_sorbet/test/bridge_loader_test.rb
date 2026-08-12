@@ -54,6 +54,7 @@ class BridgeLoaderTest < Minitest::Test
     run_scenario("fork_before_native_use")
     run_scenario("fork_after_native_use")
     run_scenario("fork_during_initialization")
+    run_scenario("fork_during_open_failure")
   end
 
   def test_process_runtime_retains_registered_callback_across_gc
