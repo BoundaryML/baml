@@ -46,16 +46,9 @@
 
         <textmate.bundleProvider implementation="com.boundaryml.jetbrains_ext.BamlTextMateBundleProvider" />
         <!--
-          We have to explicitly register textmate as the highlight provider because of a bug in how jetbrains textmate
-          works (and it's incredibly poorly documented). See jetbrains-plugin-fss for prior art
-          https://github.com/qligier/jetbrains-plugin-fss/blob/905622be4058fda8014f874af4acae46f24cc556/src/main/resources/META-INF/plugin.xml#L51-L53
+          BamlFileType implements TextMateBackedFileType, allowing TextMate's file type detector to select its own
+          highlighter for files recognized by the bundle without referencing TextMate implementation classes here.
         -->
-        <editorHighlighterProvider
-                filetype="BAML"
-                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateEditorHighlighterProvider"/>
-        <lang.syntaxHighlighterFactory
-                language="baml"
-                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateSyntaxHighlighterFactory"/>
 
     </extensions>
 
