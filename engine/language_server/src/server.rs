@@ -570,7 +570,7 @@ impl Server {
                 TextDocumentSyncOptions {
                     open_close: Some(true),
                     change: Some(TextDocumentSyncKind::FULL),
-                    will_save: Some(false),
+                    will_save: Some(true),
                     save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
                         include_text: Some(false),
                     })),
