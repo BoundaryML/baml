@@ -142,7 +142,7 @@ class AlignedMatrixResult {
 /// The full pass: the surfaces, then a session per TypeScript container over
 /// everything a previous revision did not already answer.
 ///
-/// Reads ANTHROPIC_API_KEY from the environment.
+/// Reads OPENAI_API_KEY from the environment.
 function build_matrix_aligned(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
     ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
@@ -194,10 +194,6 @@ function build_matrix_aligned(
         rejected: outcome.rejected,
         failures: outcome.matrix.failures.length(),
     }
-}
-
-function main() -> MatrixResult {
-    build_matrix()
 }
 
 /// What the tools answer, without a model.

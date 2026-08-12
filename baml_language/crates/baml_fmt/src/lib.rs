@@ -191,6 +191,133 @@ mod llm_tools_field_tests {
 }
 
 #[cfg(test)]
+mod object_spread_tests {
+    use super::*;
+
+    /// Struct-update spread (`Type { ...base, field: v }`) compiles, but the
+    /// object printer used to reject it outright: "Expected token/node
+    /// `OBJECT_FIELD` or `R_BRACE`, but found `SPREAD_ELEMENT`".
+    #[test]
+    fn test_spread_formats_and_is_idempotent() {
+        let source = concat!(
+            "class P {\n",
+            "    name: string,\n",
+            "    score: int,\n",
+            "}\n",
+            "\n",
+            "function f(p: P) -> P {\n",
+            "    P { ...p, score: 1 }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("class spread should format");
+        assert!(
+            formatted.contains("P { ...p, score: 1 }"),
+            "spread preserved without a space after `...`: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// Member order is semantic — later members win at runtime, so
+    /// `P { score: 9, ...p }` and `P { ...p, score: 9 }` evaluate differently.
+    /// The formatter must never reorder them, and must keep multiple spreads.
+    #[test]
+    fn test_spread_and_field_order_is_preserved() {
+        let options = FormatOptions::default();
+        for (source_expr, expected) in [
+            ("P { ...p, score: 9 }", "P { ...p, score: 9 }"),
+            ("P { score: 9, ...p }", "P { score: 9, ...p }"),
+            ("P { ...a, ...b }", "P { ...a, ...b }"),
+            ("P { ...a, score: 1, ...b }", "P { ...a, score: 1, ...b }"),
+        ] {
+            let source = format!(
+                concat!(
+                    "class P {{\n",
+                    "    name: string,\n",
+                    "    score: int,\n",
+                    "}}\n",
+                    "\n",
+                    "function f(p: P, a: P, b: P) -> P {{\n",
+                    "    {source_expr}\n",
+                    "}}\n",
+                ),
+                source_expr = source_expr
+            );
+            let formatted = format(&source, &options)
+                .unwrap_or_else(|e| panic!("`{source_expr}` should format: {e:?}"));
+            assert!(
+                formatted.contains(expected),
+                "order preserved for `{source_expr}`, got: {formatted}"
+            );
+            let second = format(&formatted, &options).expect("formatter should be idempotent");
+            assert_eq!(formatted, second, "idempotent for `{source_expr}`");
+        }
+    }
+
+    /// A spread wide enough to break must survive the multi-line path too,
+    /// and comments attached to a spread member must not be dropped.
+    #[test]
+    fn test_spread_multi_line_and_comments() {
+        let source = concat!(
+            "class Config {\n",
+            "    alpha: string,\n",
+            "    beta: string,\n",
+            "    gamma: string,\n",
+            "}\n",
+            "\n",
+            "function f(base: Config) -> Config {\n",
+            "    Config {\n",
+            "        // inherit everything from the base configuration first\n",
+            "        ...base,\n",
+            "        alpha: \"a much longer override value to force the multi-line path\",\n",
+            "        beta: \"another fairly long override value so this cannot fit\",\n",
+            "    }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("multi-line spread should format");
+        assert!(
+            formatted.contains("...base,"),
+            "spread member preserved on its own line: {formatted}"
+        );
+        assert!(
+            formatted.contains("// inherit everything from the base configuration first"),
+            "comment above the spread preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The spread operand is an arbitrary expression, not just a name.
+    #[test]
+    fn test_spread_of_call_expression() {
+        let source = concat!(
+            "class P {\n",
+            "    name: string,\n",
+            "    score: int,\n",
+            "}\n",
+            "\n",
+            "function base() -> P {\n",
+            "    P { name: \"b\", score: 0 }\n",
+            "}\n",
+            "\n",
+            "function f() -> P {\n",
+            "    P { ...base(), score: 1 }\n",
+            "}\n",
+        );
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("spread of a call should format");
+        assert!(
+            formatted.contains("P { ...base(), score: 1 }"),
+            "call operand preserved: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod contextual_keyword_identifier_tests {
     use super::*;
 
