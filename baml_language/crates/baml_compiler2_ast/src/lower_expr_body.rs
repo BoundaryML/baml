@@ -618,6 +618,7 @@ pub(crate) fn synthesize_llm_spec_body(
 pub(crate) fn synthesize_spec_render_prompt_body(
     function_name: &str,
     param_names: &[Name],
+    spec_type_args: Vec<crate::ast::TypeExpr>,
     out_type: Option<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
@@ -636,7 +637,7 @@ pub(crate) fn synthesize_spec_render_prompt_body(
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
-            type_args: vec![],
+            type_args: spec_type_args,
             args: spec_args,
         },
         span,
@@ -733,6 +734,7 @@ pub(crate) fn synthesize_spec_parse_body(
 pub(crate) fn synthesize_spec_agent_run_body(
     function_name: &str,
     param_names: &[Name],
+    spec_type_args: Vec<crate::ast::TypeExpr>,
     out_type: Option<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
@@ -755,7 +757,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
-            type_args: vec![],
+            type_args: spec_type_args,
             args: spec_args,
         },
         span,
@@ -825,6 +827,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
 pub fn synthesize_spec_stream_body(
     function_name: &str,
     param_names: &[Name],
+    spec_type_args: Vec<crate::ast::TypeExpr>,
     type_args: Vec<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
@@ -847,7 +850,7 @@ pub fn synthesize_spec_stream_body(
     let spec_call = ctx.alloc_expr(
         Expr::Call {
             callee: spec_callee,
-            type_args: vec![],
+            type_args: spec_type_args,
             args: spec_args,
         },
         span,

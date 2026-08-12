@@ -62,6 +62,22 @@ fn own_params(parent: &FunctionDef) -> Vec<Param> {
         .collect()
 }
 
+fn generic_type_args(parent: &FunctionDef) -> Vec<crate::ast::TypeExpr> {
+    parent
+        .generic_params
+        .iter()
+        .map(|param| {
+            TypeExprKind::Path {
+                segments: vec![param.name.clone()],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            }
+            .at(parent.span)
+        })
+        .collect()
+}
+
 fn companion_def(
     parent: &FunctionDef,
     name: Name,
@@ -126,6 +142,7 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
     let body = lower_expr_body::synthesize_spec_render_prompt_body(
         parent.name.as_str(),
         &param_names,
+        generic_type_args(parent),
         Some(out),
         parent.span,
     );

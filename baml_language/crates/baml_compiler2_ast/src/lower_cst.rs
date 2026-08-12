@@ -397,9 +397,22 @@ fn lower_function(
             .iter()
             .any(|(t, _)| t == "spec")
         {
+            let spec_type_args = generic_params
+                .iter()
+                .map(|param| {
+                    crate::ast::TypeExprKind::Path {
+                        segments: vec![param.name.clone()],
+                        generic_args: vec![],
+                        associated_type_bindings: vec![],
+                        attrs: vec![],
+                    }
+                    .at(llm_body_def.span)
+                })
+                .collect();
             let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
                 &param_names,
+                spec_type_args,
                 return_type.clone(),
                 llm_body_def.span,
             );
