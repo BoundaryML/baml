@@ -555,6 +555,10 @@ enum PendingDiag {
         expr: ExprId,
         ty: Ty,
     },
+    GenericDestructureNoArgs {
+        pat: PatId,
+        class_name: baml_type::Name,
+    },
 }
 
 /// Grows one map per slice; consumers must treat a missing entry as "not
@@ -5363,6 +5367,17 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::GenericDestructureNoArgs { pat, class_name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::GenericClassDestructureRequiresTypeArgs {
+                                class_name,
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::BodyAnnot { type_ref, kind } => {
                         diags.push(TirDiagnostic {
                             error: crate::lower::lowering_diag_error(&kind),

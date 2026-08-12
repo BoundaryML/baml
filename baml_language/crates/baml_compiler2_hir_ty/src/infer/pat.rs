@@ -729,6 +729,15 @@ impl<'db> InferenceContext<'db> {
         };
         let qtn = crate::lower::class_qualified_name(self.db, class);
         let generic_count = crate::lower::class_generic_frame(self.db, class).len();
+        // A generic class destructure must WRITE its type arguments (the
+        // ratified rule; inference from the scrutinee is not offered).
+        if generic_count > 0 && !self.type_refs.pattern_class_args.contains_key(&pat) {
+            self.pending_diags
+                .push(super::PendingDiag::GenericDestructureNoArgs {
+                    pat,
+                    class_name: qtn.name().clone(),
+                });
+        }
 
         let written: Vec<Ty> = self
             .type_refs
