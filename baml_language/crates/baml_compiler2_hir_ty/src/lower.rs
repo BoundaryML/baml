@@ -58,6 +58,9 @@ pub enum LoweringDiagKind {
         expected: usize,
         got: usize,
     },
+    /// A written function TYPE without a `throws` clause in a position
+    /// elaboration could not legalize (E0151).
+    FnTypeMissingThrows,
 }
 
 pub struct LowerCtx<'db> {
@@ -242,11 +245,21 @@ impl<'db> LowerCtx<'db> {
                     .collect(),
                 ret: self.lower_type_ref(store, *ret),
                 // Elaboration rewrites every legal omitted throws into a
-                // synthetic effect param; a survivor here recovers as
-                // `never`, mirroring TIR.
+                // synthetic effect param; a survivor here is the ILLEGAL
+                // position - it recovers as `never` (mirroring TIR) and
+                // the sink names it (E0151).
                 throws: throws
                     .map(|throws| self.lower_type_ref(store, throws))
-                    .unwrap_or_else(Ty::never),
+                    .unwrap_or_else(|| {
+                        if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get())
+                        {
+                            diags.borrow_mut().push(LoweringDiag {
+                                type_ref,
+                                kind: LoweringDiagKind::FnTypeMissingThrows,
+                            });
+                        }
+                        Ty::never()
+                    }),
                 attr: attr(),
             }),
             TypeRefKind::Path {
@@ -1209,6 +1222,7 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
             expected: *expected,
             got: *got,
         },
+        LoweringDiagKind::FnTypeMissingThrows => TirTypeError::FunctionTypeMissingThrows,
     }
 }
 
