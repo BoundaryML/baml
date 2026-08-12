@@ -62,7 +62,10 @@ fn int_shl(l: i64, r: i64) -> Result<i64, VmRustFnError> {
     let Ok(shift) = u32::try_from(r) else {
         return Err(negative_bit_shift(r));
     };
-    match l.checked_shl(shift).filter(|&v| Value::try_int(v).is_some()) {
+    match l
+        .checked_shl(shift)
+        .filter(|&v| Value::try_int(v).is_some())
+    {
         Some(v) => Ok(v),
         None => Err(VmPanic::IntegerOverflow {
             message: format!("{l} << {r} overflows int"),
@@ -87,7 +90,9 @@ fn bigint_shl_count(rhs: &BigInt) -> Result<usize, VmRustFnError> {
         return Err(negative_bit_shift(rhs));
     }
     usize::try_from(rhs).map_err(|_| {
-        alloc_failure_panic(format!("bigint shl: shift count ({rhs}) does not fit in usize"))
+        alloc_failure_panic(format!(
+            "bigint shl: shift count ({rhs}) does not fit in usize"
+        ))
     })
 }
 

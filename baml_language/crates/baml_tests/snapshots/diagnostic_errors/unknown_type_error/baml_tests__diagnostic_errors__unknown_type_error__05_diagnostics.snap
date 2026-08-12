@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 46239
+assertion_line: 42069
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0002
@@ -33,4 +33,22 @@ assertion_line: 46239
     ╭─[unknown_type_error.baml:26:38]
  26 │ function StatusTypoInTypePosition(s: Status.Typo) -> int {
     ·                                      ───────────
+    ╰────
+
+  [type] E0007
+
+  × type `unknown` has no member `email`
+    ╭─[unknown_type_error.baml:31:3]
+ 31 │   raw.email.to_lower_case()
+    ·   ───────────┬───────────
+    ·              ╰── use `match` to narrow this value before accessing `email`
+    ╰────
+
+  [type] E0007
+
+  × type `unknown` has no member `email`
+    ╭─[unknown_type_error.baml:39:3]
+ 39 │   envelope.payload.email
+    ·   ───────────┬──────────
+    ·              ╰── use `match` to narrow this value before accessing `email`
     ╰────

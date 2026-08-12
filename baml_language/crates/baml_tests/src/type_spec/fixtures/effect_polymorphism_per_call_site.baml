@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR diverges only via thrown-literal widening: `throws string` for
 // risky. The polymorphism itself agrees.)

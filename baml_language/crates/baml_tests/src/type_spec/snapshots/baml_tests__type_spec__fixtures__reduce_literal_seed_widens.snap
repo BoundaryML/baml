@@ -2,19 +2,19 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-443..444 'f': throws never
-454..543 '{\n   ...tal\n}': int
-460..469 'let total': int
-472..481 '[1, 2, 3]': int[]
-472..488 '[1, 2,...reduce': hir_ty=[(self: int[], reducer: (int, int) -> int throws never, initial: int) -> int throws never] tir=[(self: int[], reducer: (A, int) -> A throws E, initial: A) -> A throws E]
-472..512 '[1, 2,... }, 0)': hir_ty=[int] tir=[0]
-473..474 '1': 1
-476..477 '2': 2
-479..480 '3': 3
-489..508 '(a, b)... + b }': hir_ty=[(a: int, b: int) -> int throws never] tir=[(a: 0, b: int) -> 0 throws E]
-499..508 '{ a + b }': int
-501..502 'a': hir_ty=[int] tir=[0]
-501..506 'a + b': int
-505..506 'b': int
-510..511 '0': 0
-536..541 'total': int
+429..430 'f': throws never
+440..529 '{\n   ...tal\n}': int
+446..455 'let total': int
+458..467 '[1, 2, 3]': int[]
+458..474 '[1, 2,...reduce': (self: int[], reducer: (int, int) -> int throws never, initial: int) -> int throws never
+458..498 '[1, 2,... }, 0)': int
+459..460 '1': 1
+462..463 '2': 2
+465..466 '3': 3
+475..494 '(a, b)... + b }': (a: int, b: int) -> int throws never
+485..494 '{ a + b }': int
+487..488 'a': int
+487..492 'a + b': int
+491..492 'b': int
+496..497 '0': 0
+522..527 'total': int

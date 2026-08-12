@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1035 (https://linear.app/boundaryml2/issue/B-1035): a field access
 // on a TYPE (`C.x` where `C` is the class, not a value) is not a value.

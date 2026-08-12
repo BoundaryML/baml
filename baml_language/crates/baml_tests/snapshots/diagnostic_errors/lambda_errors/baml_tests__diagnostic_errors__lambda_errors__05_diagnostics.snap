@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 39440
+assertion_line: 35998
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -19,6 +19,15 @@ assertion_line: 39440
  22 │     items.map((x: string) -> { x })
     ·               ──────────┬─────────
     ·                         ╰── expected `(int) -> int throws never`, found `(x: string) -> int throws never`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[lambda_errors.baml:22:30]
+ 22 │     items.map((x: string) -> { x })
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `string`
     ╰────
 
   [type] E0002

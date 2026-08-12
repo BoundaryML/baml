@@ -2,8 +2,6 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-355..360 'pname': hir_ty=[<missing>] tir=[throws never]
-425..431 'pfirst': hir_ty=[<missing>] tir=[throws never]
 523..529 'pfirst': throws never
 546..618 '{\n   ...n    }': string
 556..561 'let x': T
@@ -12,6 +10,6 @@ expression: outcome.dump
 569..570 '0': 0
 597..601 'self': T[]
 597..604 'self[0]': T
-597..610 'self[0].pname': hir_ty=[(self: T) -> string throws never] tir=[() -> string throws never]
+597..610 'self[0].pname': (self: T) -> string throws never
 597..612 'self[0].pname()': string
 602..603 '0': 0

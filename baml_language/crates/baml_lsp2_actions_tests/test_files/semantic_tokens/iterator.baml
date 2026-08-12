@@ -60,7 +60,6 @@ function DoubleAll() -> baml.iter.Iterator<Item = int, Error = never> throws nev
 // iterator.baml:7:32 (number) len=1 "1"
 // iterator.baml:7:35 (number) len=1 "2"
 // iterator.baml:7:38 (number) len=1 "3"
-// iterator.baml:7:42 (method) len=3 "map"
 // iterator.baml:7:47 (parameter) [declaration] len=1 "x"
 // iterator.baml:7:50 (type) [defaultLibrary] len=3 "int"
 // iterator.baml:7:58 (type) [defaultLibrary] len=3 "int"

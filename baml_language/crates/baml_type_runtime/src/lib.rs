@@ -5,7 +5,7 @@
 //! vocabulary (`baml_type`), neither the compiler frontend nor the BEX engine —
 //! so that:
 //!
-//! - the TIR (`baml_compiler2_tir::generics`) uses them at *compile time* over
+//! - the compiler (`baml_compiler2_hir_ty`) uses them at *compile time* over
 //!   typed expressions, re-exporting them so its callers are unchanged; and
 //! - the runtime engine (`bex_engine`) uses them at the *inbound boundary* over
 //!   types synthesized from argument values, by widening its
@@ -20,7 +20,7 @@
 //!
 //! Only the *pure* helpers belong here. Anything needing the compiler database,
 //! `TypeExpr`, or `TirTypeError` (e.g. `lower_type_expr_with_generics`,
-//! `erase_unresolved_typevars`) stays in `baml_compiler2_tir::generics`.
+//! `erase_unresolved_typevars`) stays compiler-side.
 
 #[cfg(test)]
 use baml_type::Name;
@@ -679,19 +679,7 @@ pub use baml_type::unify::normalize_union_members;
 // S16 TIR retirement: they are pure walks over the shared vocabulary with no
 // compiler-database dependence, exactly this crate's charter.
 
-/// Bind type variables from generic params to concrete type arguments.
-///
-/// Example: `bind_type_vars(&["T"], &[Ty::Int { attr: TyAttr::default() }])` → `{"T" → Int}`
-///
-/// If there are more params than args (or vice versa), the extra entries are
-/// silently ignored — callers are responsible for providing matching lengths.
-pub fn bind_type_vars(generic_params: &[ParamTy], concrete_args: &[Ty]) -> FxHashMap<ParamTy, Ty> {
-    let mut bindings = FxHashMap::default();
-    for (param, arg) in generic_params.iter().zip(concrete_args.iter()) {
-        bindings.insert(param.clone(), arg.clone());
-    }
-    bindings
-}
+pub use baml_type::unify::bind_type_vars;
 
 pub use baml_type::unify::substitute_ty;
 

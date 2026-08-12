@@ -9,7 +9,7 @@ expression: outcome.dump
 114..124 'int | null': int | null
 120..124 'null': null
 127..128 '0': 0
-133..134 'x': hir_ty=[int | null] tir=[<missing>]
+133..134 'x': int | null
 137..161 'if c {...null }': 7 | null
 140..141 'c': bool
 142..147 '{ 7 }': 7

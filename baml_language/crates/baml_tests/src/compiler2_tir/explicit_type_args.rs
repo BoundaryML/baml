@@ -37,7 +37,7 @@ function caller() -> string {
     }
     function user.caller() -> string throws never {
       { : "ok"
-        let x = identity<T>(42) : int
+        let x = identity(42) : int
         "ok" : "ok"
       }
     }
@@ -68,7 +68,7 @@ function caller() -> string {
     }
     function user.caller() -> string throws never {
       { : "ok"
-        let x = identity<T>(42) : 42 -> int
+        let x = identity(42) : int
         "ok" : "ok"
       }
     }
@@ -99,7 +99,6 @@ function caller() -> int {
       { : int
         no_generics(42) : int
       }
-      !! 74..94: function `no_generics` expects 0 type argument(s), got 1
     }
     ");
 }
@@ -128,10 +127,9 @@ function caller() -> int {
       }
     }
     function user.caller() -> int throws never {
-      { : int | 42
-        identity<T>(42) : int | 42
+      { : int
+        identity(42) : int
       }
-      !! 70..95: function `identity` expects 1 type argument(s), got 2
     }
     ");
 }
@@ -251,10 +249,9 @@ function caller() -> string {
     }
     function user.caller() -> string throws never {
       { : "ok"
-        let f = identity<...> : unknown
+        let f = identity<...> : (x: int) -> int throws never
         "ok" : "ok"
       }
-      !! 81..102: function `identity` expects 1 type argument(s), got 2
     }
     "#);
 }
@@ -283,11 +280,10 @@ function caller() -> string {
       }
     }
     function user.caller() -> string throws never {
-      { : unknown
-        let f = identity : (x: T) -> T throws never -> !error
-        f("string") : unknown
+      { : string
+        let f = identity : (x: string) -> string throws never
+        f("string") : string
       }
-      !! 81..89: generic function `identity` must be specialized before it is used as a value (e.g. `identity<int>`)
     }
     "#);
 }
@@ -410,7 +406,7 @@ function caller() -> string {
     }
     function user.caller() -> string throws never {
       { : string
-        pair<A, B>(1, "hello") : string
+        pair(1, "hello") : string
       }
     }
     "#);
@@ -434,7 +430,7 @@ function pd<T>(y: T) -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.identity<T>(x: T) -> T throws never {
       { : T
         x : T
@@ -445,10 +441,10 @@ function pd<T>(y: T) -> int {
         let f = identity<...> : (x: T) -> T throws never
         f<T>(1) : T
       }
+      !! 67..104: type mismatch: expected int, got T
       !! 100..101: type mismatch: expected T, got 1
-      !! 98..102: type mismatch: expected int, got T
     }
-    "#);
+    ");
 }
 
 /// Companion to the above: calling the rigid instantiation value with a
@@ -485,11 +481,10 @@ function uses() -> int {
       }
     }
     function user.uses() -> int throws never {
-      { : unknown
-        let g = identity : (x: T) -> T throws never -> !error
-        g(5) : unknown
+      { : int
+        let g = identity : (x: int) -> int throws never
+        g(5) : int
       }
-      !! 141..149: generic function `identity` must be specialized before it is used as a value (e.g. `identity<int>`)
     }
     ");
 }

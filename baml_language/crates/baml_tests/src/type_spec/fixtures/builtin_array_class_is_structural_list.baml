@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1080: https://linear.app/boundaryml2/issue/B-1080
 // `baml.Array<T>` / `baml.Map<K, V>` written as annotations ARE the

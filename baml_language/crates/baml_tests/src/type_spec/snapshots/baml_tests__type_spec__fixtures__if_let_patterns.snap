@@ -3,8 +3,8 @@ source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
 321..322 'f': throws never
-354..470 '{\n   ...  }\n}': hir_ty=[int] tir=[int | 0]
-360..468 'if let...n    }': hir_ty=[int] tir=[int | 0]
+354..470 '{\n   ...  }\n}': int
+360..468 'if let...n    }': int
 367..383 '[let a...let r]': int[]
 368..373 'let a': int
 377..382 'let r': int[]

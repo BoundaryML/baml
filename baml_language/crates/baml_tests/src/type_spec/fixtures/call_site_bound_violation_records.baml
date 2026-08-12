@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR also rejects this - user-generic bounds are checked there; its
 // B-267.3 gap is stdlib methods specifically. The marker exists

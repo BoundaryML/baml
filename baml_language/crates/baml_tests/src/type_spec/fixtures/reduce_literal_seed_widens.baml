@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1134 / B-742 / B-267.1: https://linear.app/boundaryml2/issue/B-1134
 // The literal seed of `reduce` is a fresh-literal LOWER BOUND on the

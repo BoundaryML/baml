@@ -70,13 +70,3 @@ function Bar(a: string, b: int | bool) -> int {
 //    ·              ┬
 //    ·              ╰── old-style function syntax; use `function Name(params...) -> ReturnType { ... }`
 //    ╰────
-// E0001
-//
-//   × mismatched types
-//    ╭─[functions_v2_duplicate_names.baml:6:47]
-//  6 │ ╭─▶ function Bar(a: string, b: int | bool) -> int {
-//  7 │ │     client Bar
-//  8 │ │     prompt #"fa"#
-//  9 │ ├─▶ }
-//    · ╰──── expected `baml.llm.Client`, found `() -> unknown throws never`
-//    ╰────

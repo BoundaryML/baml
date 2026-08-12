@@ -117,8 +117,8 @@ pub struct SeededCallableThrows {
 /// compile, keyed by package name; each value is `borsh(PackageInterface)`.
 ///
 /// The value is opaque bytes rather than the typed interface because
-/// `PackageInterface` lives in `baml_compiler2_tir`, which depends on this
-/// crate — naming it here would be a dependency cycle. `baml_compiler2_tir`
+/// `PackageInterface` lives in `baml_compiler2_hir_ty`, which depends on this
+/// crate — naming it here would be a dependency cycle. `baml_compiler2_hir_ty`
 /// deserializes the relevant package's bytes on a seed hit. Per-package (not
 /// whole-map) bytes keep the short-circuit's deserialize cost to one package
 /// per query call. This mirrors [`SeededThrowFacts`], which holds a type its

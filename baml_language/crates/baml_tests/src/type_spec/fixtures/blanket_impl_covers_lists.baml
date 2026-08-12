@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (The join lines: TIR joins are dedup-only and keep the member
 // alongside its interface; the canonical algebra absorbs.)

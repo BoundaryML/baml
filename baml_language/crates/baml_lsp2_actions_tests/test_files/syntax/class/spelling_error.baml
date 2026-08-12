@@ -23,10 +23,24 @@ class InterfaceOne {
 //- diagnostics
 // E0002
 //
+//   × unresolved type: InterfaceT
+//    ╭─[class_spelling_error.baml:1:1]
+//  1 │ class InterfaceTwo {
+//    · ▲
+//    ╰────
+// E0002
+//
 //   × unresolved type: strin
 //    ╭─[class_spelling_error.baml:2:13]
 //  2 │   interface strin
 //    ·             ─────
+//    ╰────
+// E0002
+//
+//   × unresolved type: strin
+//    ╭─[class_spelling_error.baml:1:1]
+//  1 │ class InterfaceTwo {
+//    · ▲
 //    ╰────
 // E0002
 //

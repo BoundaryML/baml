@@ -1,4 +1,3 @@
-// tir: fails
 //
 // doc-inference.md ruling 1: a generic-param var resolves Rust-style - all
 // lower bounds must be EQUAL after fresh-literal widening. Both `1` and `2`

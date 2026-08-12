@@ -19,17 +19,3 @@ function InvalidArmSyntax(x: int) -> string {
 //    ·           ┬
 //    ·           ╰── expected `'=>' after catch pattern`, found `'='`
 //    ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//    ╭─[catch_invalid_arm_syntax.baml:7:15]
-//  7 │     string => "ok",
-//    ·               ────
-//    ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//    ╭─[catch_invalid_arm_syntax.baml:8:5]
-//  8 │     let y = "hi";
-//    ·     ─────────────
-//    ╰────

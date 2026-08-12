@@ -2,7 +2,7 @@
 //!
 //! Modeled after ruff's `ty_ide` crate: regular functions (not Salsa queries)
 //! that take `&dyn Db` and return domain types. Internally they call Salsa
-//! queries from `baml_compiler2_hir` and `baml_compiler2_tir` for cached data.
+//! queries from `baml_compiler2_hir` and `baml_compiler2_hir_ty` for cached data.
 //!
 //! ## Phase 1
 //!
@@ -75,12 +75,12 @@ mod usages_at_tests;
 
 /// Database trait for `baml_lsp2_actions` queries.
 ///
-/// Extends `baml_compiler2_tir::Db`, which itself extends
+/// Extends `baml_compiler2_ppir::Db`, which itself extends
 /// `baml_compiler2_hir::Db` and `baml_workspace::Db`. This crate can add
 /// Salsa-tracked queries (e.g. `file_outline` in Phase 2) that require a `Db`
 /// implementor to also satisfy the compiler2 trait chain.
 #[salsa::db]
-pub trait Db: baml_compiler2_tir::Db {}
+pub trait Db: baml_compiler2_ppir::Db {}
 
 // ── Public API re-exports ─────────────────────────────────────────────────────
 

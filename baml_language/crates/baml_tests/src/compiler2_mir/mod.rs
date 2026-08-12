@@ -3,8 +3,6 @@
 //! Each test creates a minimal DB, adds a `.baml` file, lowers all functions
 //! to MIR, and snapshots the pretty-printed output.
 
-mod provider_sweep;
-
 use std::fmt::Write;
 
 use baml_compiler2_mir::{
@@ -685,108 +683,6 @@ fn array_rest_wildcard_skips_slice_projection() {
         !output.contains("baml.Array.slice"),
         "wildcard rest must not pay for a slice copy:\n{output}"
     );
-}
-
-/// S16 smoke test for the dual inference provider: the same function
-/// lowered under the TIR-backed and hir_ty-backed accessors must produce
-/// identical MIR on shapes the recorded tables already cover. The
-/// corpus-scale version of this diff is the differential MIR gate; this
-/// pins the seam itself. Separate DBs per provider so neither engine's
-/// salsa state can leak into the other's run.
-#[test]
-fn dual_provider_agrees_on_simple_bodies() {
-    use baml_compiler2_mir::{InferenceProvider, lower_function_with};
-    let source = r#"
-class Person {
-    name string
-    function get_name(self) -> string throws never {
-        self.name
-    }
-}
-enum Status {
-    Active
-    Done
-}
-function dp_free(x: int) -> int throws never {
-    x
-}
-function dp_main(p: Person) -> string throws never {
-    let n = dp_free(1);
-    let s = Status.Active;
-    p.get_name()
-}
-"#;
-    let render = |provider: InferenceProvider| {
-        let mut db = make_db();
-        let file = db.add_file("test.baml", source);
-        let mut functions = file_functions(&db, file).to_vec();
-        functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
-        let mut output = String::new();
-        for func_loc in functions {
-            let mir = lower_function_with(&db, func_loc, OptLevel::Two, provider);
-            writeln!(output, "{}", display_function(&mir)).unwrap();
-        }
-        output
-    };
-    let tir = render(InferenceProvider::Tir);
-    let hir = render(InferenceProvider::HirTy);
-    assert_eq!(
-        tir, hir,
-        "providers diverge on a body the recorded tables fully cover"
-    );
-}
-
-/// S17 measurement probe: dumps every diagnostic_errors project's rendered
-/// diagnostics to `S17_DUMP_PATH` (no-op without it). Paired with check.rs's
-/// `BAML_S17_SKIP_TIR_SCOPE_DIAGS` shim, the two runs' diff is the exact
-/// inference-layer parity set. Both die with S17's completion.
-#[test]
-fn s17_dump_diagnostics() {
-    use std::fmt::Write as _;
-    let Ok(path) = std::env::var("S17_DUMP_PATH") else {
-        return;
-    };
-
-    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/projects/diagnostic_errors");
-    let mut out = String::new();
-    let mut dirs: Vec<_> = std::fs::read_dir(root)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.path())
-        .collect();
-    dirs.sort();
-    for dir in dirs {
-        let mut db = baml_project::ProjectDatabase::new();
-        let _root = db.set_project_root(std::path::Path::new("."));
-        let mut files: Vec<_> = walkdir_baml(&dir);
-        files.sort();
-        for f in &files {
-            let content = std::fs::read_to_string(f).unwrap().replace("\r\n", "\n");
-            let rel = f.strip_prefix(&dir).unwrap().to_string_lossy().to_string();
-            db.add_file(&rel, &content);
-        }
-        let all_files = baml_compiler2_hir::compiler2_all_files(&db);
-        let diags = baml_project::collect_compiler2_diagnostics(&db);
-        let mut sources = std::collections::HashMap::new();
-        let mut file_paths = std::collections::HashMap::new();
-        for source_file in &all_files {
-            let file_id = source_file.file_id(&db);
-            sources.insert(file_id, source_file.text(&db).to_string());
-            file_paths.insert(
-                file_id,
-                std::path::PathBuf::from(source_file.path(&db).to_string_lossy().to_string()),
-            );
-        }
-        let config = baml_compiler_diagnostics::RenderConfig::test();
-        let name = dir.file_name().unwrap().to_string_lossy();
-        for d in &diags {
-            let rendered =
-                baml_compiler_diagnostics::render_diagnostic(d, &sources, &file_paths, &config);
-            writeln!(out, "{}\t{}", name, rendered).ok();
-        }
-    }
-    std::fs::write(path, out).unwrap();
 }
 
 fn walkdir_baml(dir: &std::path::Path) -> Vec<std::path::PathBuf> {

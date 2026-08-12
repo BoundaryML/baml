@@ -3,8 +3,8 @@ source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
 449..450 'f': throws never
-482..739 '{\n   ...  }\n}': hir_ty=[int] tir=[int | 0]
-488..737 'match ...n    }': hir_ty=[int] tir=[int | 0]
+482..739 '{\n   ...  }\n}': int
+488..737 'match ...n    }': int
 495..497 'xs': int[]
 509..532 '[let a...let z]': int[]
 510..515 'let a': int
@@ -38,8 +38,8 @@ expression: outcome.dump
 846..854 'k.length': (self: int[]) -> int throws never
 846..856 'k.length()': int
 869..870 'h': throws never
-905..1067 '{\n   ...  }\n}': hir_ty=[int] tir=[int | 0]
-911..1065 'match ...n    }': hir_ty=[int] tir=[int | 0]
+905..1067 '{\n   ...  }\n}': int
+911..1065 'match ...n    }': int
 918..921 'xss': int[][]
 933..953 '[[..le..., .._]': int[][]
 934..947 '[..let inner]': int[]

@@ -29,4 +29,24 @@ function assertBool() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0003
+//
+//   × unresolved name: `assert`
+//    ╭─[assert.baml:3:2]
+//  3 │     assert 2 + 2 == 4;
+//    ·     ──────
+//    ╰────
+// E0003
+//
+//   × unresolved name: `assert`
+//    ╭─[assert.baml:9:2]
+//  9 │     assert 3 == 1;
+//    ·     ──────
+//    ╰────
+// E0003
+//
+//   × unresolved name: `assert`
+//     ╭─[assert.baml:17:2]
+//  17 │     assert "string";
+//     ·     ──────
+//     ╰────

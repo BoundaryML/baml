@@ -52,7 +52,7 @@ function Nested() -> int {
 //    ╭─[loops_break.baml:6:14]
 //  6 │     res.push("hi");
 //    ·              ──┬─
-//    ·                ╰── expected `int`, found `string`
+//    ·                ╰── expected `int`, found `"hi"`
 //    ╰────
 // E0146
 //

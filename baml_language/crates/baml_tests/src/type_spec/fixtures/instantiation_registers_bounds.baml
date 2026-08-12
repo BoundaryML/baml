@@ -1,5 +1,4 @@
 // every instantiation registers its declared bounds
-// tir: fails
 interface RbShow {
     function show(self) -> string throws never
 }

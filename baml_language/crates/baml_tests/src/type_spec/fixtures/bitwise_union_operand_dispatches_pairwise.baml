@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1075 (https://linear.app/boundaryml2/issue/B-1075): a union
 // operand dispatches PAIRWISE - (int | bigint) & int is int | bigint.

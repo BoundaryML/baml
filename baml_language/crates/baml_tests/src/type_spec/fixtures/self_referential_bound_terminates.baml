@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR terminates too - the fix is shared - but renders the union in
 // written order, `Foo<T | int>`, vs the canonical sort.)

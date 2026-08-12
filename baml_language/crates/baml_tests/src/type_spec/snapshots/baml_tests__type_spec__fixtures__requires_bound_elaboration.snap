@@ -2,8 +2,6 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-509..512 'key': hir_ty=[<missing>] tir=[throws never]
-557..564 'summary': hir_ty=[<missing>] tir=[throws never]
 708..711 'key': throws never
 730..795 '{\n   ...n    }': never
 747..757 'self.value': T
@@ -16,7 +14,7 @@ expression: outcome.dump
 854..875 'self.v... + ":"': string
 854..888 'self.v....key()': string
 872..875 '":"': ":"
-878..886 'self.key': hir_ty=[(self: user.RbeBox<T>) -> string throws never] tir=[() -> string throws never]
+878..886 'self.key': (self: user.RbeBox<T>) -> string throws never
 878..888 'self.key()': string
 920..923 'tag': string
 941..949 'rbe_main': throws never
@@ -27,6 +25,6 @@ expression: outcome.dump
 1032..1036 '"u1"': "u1"
 1044..1049 '"Ada"': "Ada"
 1058..1063 'let s': string
-1066..1079 'boxed.summary': hir_ty=[(self: user.RbeBox<user.RbeUser>) -> string throws never] tir=[() -> string throws never]
+1066..1079 'boxed.summary': (self: user.RbeBox<user.RbeUser>) -> string throws never
 1066..1081 'boxed.summary()': string
 1103..1104 's': string

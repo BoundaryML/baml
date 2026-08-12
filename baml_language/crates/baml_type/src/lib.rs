@@ -32,6 +32,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
 mod codegen_ty;
+pub mod decl_cycles;
 mod defs;
 mod family;
 pub mod interned;
@@ -47,6 +48,7 @@ pub mod template;
 pub mod throw_facts;
 pub mod typetag;
 pub mod unify;
+pub mod user_facing;
 pub use attr::*;
 pub use defs::*;
 pub use family::*;

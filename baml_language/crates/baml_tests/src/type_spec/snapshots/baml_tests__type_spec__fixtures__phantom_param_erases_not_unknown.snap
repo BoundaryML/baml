@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-499..503 'main': throws never
-529..612 '{\n   ...bel\n}': string
-535..540 'let p': hir_ty=[user.Phantom<!error>] tir=[user.Phantom<unknown>]
-543..566 'Phanto..."hi" }': hir_ty=[user.Phantom<!error>] tir=[user.Phantom<unknown>]
-560..564 '"hi"': "hi"
-603..610 'p.label': string
+485..489 'main': throws never
+515..598 '{\n   ...bel\n}': string
+521..526 'let p': user.Phantom<!error>
+529..552 'Phanto..."hi" }': user.Phantom<!error>
+546..550 '"hi"': "hi"
+589..596 'p.label': string

@@ -8,7 +8,7 @@
 //! impl applies (the caller decides the fallback).
 //!
 //! This mirrors the compiler's selection (`match_ty_pattern` + bound validation
-//! in `baml_compiler2_tir::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
+//! in `baml_compiler2_hir_ty::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
 //! `for_ty_pattern` against the concrete type (binding the impl's generic
 //! params), then discharge each param's declared bound as a nested obligation.
 

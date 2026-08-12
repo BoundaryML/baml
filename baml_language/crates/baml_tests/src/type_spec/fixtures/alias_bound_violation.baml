@@ -1,5 +1,4 @@
 // an alias-typed subject still discharges Implements bounds (regression; negative test)
-// tir: fails
 interface AbvShow {
     function show(self) -> string throws never
 }

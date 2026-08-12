@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 42669
+assertion_line: 38883
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -29,7 +29,7 @@ assertion_line: 42669
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
     ╭─[main.baml:16:14]
  16 │         _ => 0
     ·              ─
@@ -49,12 +49,4 @@ assertion_line: 42669
     ╭─[main.baml:28:9]
  28 │         root.llm.openai.Response { missing } => 1,
     ·         ────────────────────────────────────
-    ╰────
-
-  [type] E0063
-
-  × unreachable arm
-    ╭─[main.baml:29:14]
- 29 │         _ => 0
-    ·              ─
     ╰────

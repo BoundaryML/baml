@@ -3,9 +3,9 @@ source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
 586..587 'f': throws E
-631..778 '{\n   ...b()\n}': hir_ty=[int] tir=[never]
+631..778 '{\n   ...b()\n}': int
 643..660 'Kaboom... "x" }': user.Kaboom
 655..658 '"x"': "x"
-772..774 'cb': hir_ty=[() -> int throws E] tir=[<missing>]
-772..776 'cb()': hir_ty=[int] tir=[<missing>]
+772..774 'cb': () -> int throws E
+772..776 'cb()': int
 643..660 'Kaboom... "x" }': [mismatch] expected E, got user.Kaboom

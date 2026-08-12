@@ -2,14 +2,14 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-469..476 'bad_pop': throws never
-499..645 '{\n   ...  r\n}': hir_ty=[!error] tir=[T]
-505..510 'let r': hir_ty=[!error] tir=[T]
-513..552 'match ...=> x }': hir_ty=[!error] tir=[T]
-520..531 'h.items.pop': (self: T[]) -> T | null throws never
-520..533 'h.items.pop()': T | null
-537..545 'let x: T': T
-544..545 'T': T
-549..550 'x': T
-642..643 'r': hir_ty=[!error] tir=[T]
-513..552 'match ...=> x }': [non-exhaustive]
+455..462 'bad_pop': throws never
+485..631 '{\n   ...  r\n}': !error
+491..496 'let r': !error
+499..538 'match ...=> x }': !error
+506..517 'h.items.pop': (self: T[]) -> T | null throws never
+506..519 'h.items.pop()': T | null
+523..531 'let x: T': T
+530..531 'T': T
+535..536 'x': T
+628..629 'r': !error
+499..538 'match ...=> x }': [non-exhaustive]

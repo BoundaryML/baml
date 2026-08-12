@@ -421,6 +421,28 @@ source: crates/baml_tests/src/generated_tests.rs
      · ╰──── expected `string`, found `map<string, int | bool | map<string, string>>`
      ╰────
 
+  [type] E0007
+
+  × class `baml.llm.RetryPolicy` has no field `backoff_multiplier`. Did you mean `multiplier`?
+     ╭─[config_decls.baml:403:1]
+ 403 │ ╭─▶ retry_policy FullRetry {
+ 404 │ │       max_retries 5
+ 405 │ │       backoff_multiplier 2.0
+ 406 │ │       initial_delay_ms 1000
+ 407 │ ╰─▶ }
+     ╰────
+
+  [type] E0007
+
+  × class `baml.llm.RetryPolicy` has no field `backoff_multiplier`. Did you mean `multiplier`?
+     ╭─[config_decls.baml:410:1]
+ 410 │ ╭─▶ retry_policy ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols {
+ 411 │ │       max_retries 10
+ 412 │ │       backoff_multiplier 3.0
+ 413 │ │       initial_delay_ms 5000
+ 414 │ ╰─▶ }
+     ╰────
+
   [validation] E0011
 
   × name `ExtraWhitespace` defined 5 times as: class, enum, function, template_string, type
@@ -521,6 +543,22 @@ source: crates/baml_tests/src/generated_tests.rs
  494 │ ╰─▶ }
      ╰────
 
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[loop_stmts.baml:403:21]
+ 403 │                     break;
+     ·                     ──────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[loop_stmts.baml:407:21]
+ 407 │                     continue;
+     ·                     ─────────
+     ╰────
+
   [type] E0003
 
   × unresolved name: `assert`
@@ -585,9 +623,18 @@ source: crates/baml_tests/src/generated_tests.rs
      ·     ──────
      ╰────
 
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exprs.baml:161:9]
+ 161 │         "bye" => "farewell",
+     ·         ──┬──
+     ·           ╰── expected `"hello"`, found `"bye"`
+     ╰────
+
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exprs.baml:161:18]
  161 │         "bye" => "farewell",
      ·                  ──────────
@@ -595,7 +642,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exprs.baml:162:14]
  162 │         _ => "other"
      ·              ───────

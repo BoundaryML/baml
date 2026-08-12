@@ -7,16 +7,16 @@ expression: outcome.dump
 578..585 '"thing"': "thing"
 655..661 'iq_ref': throws never
 697..791 '{\n   ...  s\n}': string
-703..715 'let describe': hir_ty=[(self: user.IqThing) -> string throws never] tir=[(self: Self) -> string throws never]
-718..740 'IqDesc...scribe': hir_ty=[(self: user.IqThing) -> string throws never] tir=[(self: Self) -> string throws never]
+703..715 'let describe': (self: user.IqThing) -> string throws never
+718..740 'IqDesc...scribe': (self: user.IqThing) -> string throws never
 746..751 'let s': string
-754..762 'describe': hir_ty=[(self: user.IqThing) -> string throws never] tir=[(self: Self) -> string throws never]
+754..762 'describe': (self: user.IqThing) -> string throws never
 754..765 'describe(t)': string
 763..764 't': user.IqThing
 788..789 's': string
 802..811 'iq_direct': throws never
 847..880 '{\n   ...(t)\n}': string
-853..875 'IqDesc...scribe': hir_ty=[(self: user.IqThing) -> string throws never] tir=[(self: Self) -> string throws never]
+853..875 'IqDesc...scribe': (self: user.IqThing) -> string throws never
 853..878 'IqDesc...ibe(t)': string
 876..877 't': user.IqThing
 993..1007 'iq_destructure': throws never

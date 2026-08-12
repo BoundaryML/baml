@@ -71,19 +71,19 @@ function Go3(x:int) -> int {
 //  2 │     let y = a;
 //    ·             ─
 //    ╰────
-// E0005
-//
-//   × expected 1 argument(s), got 3
-//    ╭─[expr_unknown_name.baml:9:5]
-//  9 │     Go(z,a,b)
-//    ·     ─────────
-//    ╰────
 // E0003
 //
 //   × unresolved name: `b`
 //    ╭─[expr_unknown_name.baml:9:12]
 //  9 │     Go(z,a,b)
 //    ·            ─
+//    ╰────
+// E0005
+//
+//   × expected 1 argument(s), got 3
+//    ╭─[expr_unknown_name.baml:9:5]
+//  9 │     Go(z,a,b)
+//    ·     ─────────
 //    ╰────
 // E0003
 //

@@ -8,7 +8,7 @@ expression: outcome.dump
 139..144 'int[]': int[]
 147..149 '[]': int[]
 159..164 'let x': int
-168..195 'baml.i...or.new': hir_ty=[(arr: int[]) -> baml.iter.ArrayIterator<int> throws never] tir=[(arr: T[]) -> baml.iter.ArrayIterator<T> throws never]
+168..195 'baml.i...or.new': (arr: int[]) -> baml.iter.ArrayIterator<int> throws never
 168..206 'baml.i...4, 6])': baml.iter.ArrayIterator<int>
 196..205 '[2, 4, 6]': int[]
 197..198 '2': 2

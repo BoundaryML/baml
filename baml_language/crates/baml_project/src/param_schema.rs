@@ -19,12 +19,11 @@
 
 use std::collections::BTreeMap;
 
+use baml_base::Literal as LiteralValue;
 use baml_compiler2_hir::{loc::FunctionLoc, package::PackageId};
-use baml_compiler2_tir::{
-    package_interface::{ExportedType, PackageInterface, package_interface},
-    ty::{FunctionParamMode, LiteralValue, QualifiedTypeName, Ty},
-};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
 use baml_db::Name;
+use baml_type::{FunctionParamMode, QualifiedTypeName, Ty};
 use serde::Serialize;
 
 use crate::db::ProjectDatabase;

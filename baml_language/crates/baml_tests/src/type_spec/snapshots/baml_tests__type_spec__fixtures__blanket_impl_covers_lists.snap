@@ -2,19 +2,19 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-372..373 'f': throws never
-404..472 '{\n   ...  e\n}': baml.ops.Equals
-410..432 'let e:...Equals': baml.ops.Equals
-417..432 'baml.ops.Equals': baml.ops.Equals
-435..437 'xs': int[]
-469..470 'e': baml.ops.Equals
-603..615 'join_absorbs': throws never
-675..748 '{\n   ...  u\n}': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]
-681..686 'let u': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]
-689..713 'if (c)... { e }': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]
-693..694 'c': bool
-696..702 '{ xs }': int[]
-698..700 'xs': int[]
-708..713 '{ e }': baml.ops.Equals
-710..711 'e': baml.ops.Equals
-745..746 'u': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]
+358..359 'f': throws never
+390..458 '{\n   ...  e\n}': baml.ops.Equals
+396..418 'let e:...Equals': baml.ops.Equals
+403..418 'baml.ops.Equals': baml.ops.Equals
+421..423 'xs': int[]
+455..456 'e': baml.ops.Equals
+589..601 'join_absorbs': throws never
+661..734 '{\n   ...  u\n}': baml.ops.Equals
+667..672 'let u': baml.ops.Equals
+675..699 'if (c)... { e }': baml.ops.Equals
+679..680 'c': bool
+682..688 '{ xs }': int[]
+684..686 'xs': int[]
+694..699 '{ e }': baml.ops.Equals
+696..697 'e': baml.ops.Equals
+731..732 'u': baml.ops.Equals

@@ -1,5 +1,4 @@
 // Aggregate literals adopt through expected UNIONS (json)
-// tir: fails
 //
 // (TIR renders the annotated binding as the EXPANDED alias union;
 // alias-preserving renders are this engine's deliberate design.)

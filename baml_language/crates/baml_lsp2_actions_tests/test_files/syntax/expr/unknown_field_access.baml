@@ -21,28 +21,16 @@ function load_nested(envelope: Envelope) -> string {
 // E0007
 //
 //   × type `unknown` has no member `email`
-//     ╭─[expr_unknown_field_access.baml:12:7]
+//     ╭─[expr_unknown_field_access.baml:12:3]
 //  12 │   raw.email.to_lower_case()
-//     ·   ─┬─ ──┬──
-//     ·    │    ╰── use `match` to narrow this value before accessing `email`
-//     ·    ╰── this value has type `unknown`
+//     ·   ───────────┬───────────
+//     ·              ╰── use `match` to narrow this value before accessing `email`
 //     ╰────
-//   ╰─▶   ☞ this value has type `unknown`
-//           ╭─[expr_unknown_field_access.baml:12:3]
-//        12 │   raw.email.to_lower_case()
-//           ·   ───
-//           ╰────
 // E0007
 //
 //   × type `unknown` has no member `email`
-//     ╭─[expr_unknown_field_access.baml:16:20]
+//     ╭─[expr_unknown_field_access.baml:16:3]
 //  16 │   envelope.payload.email
-//     ·            ───┬─── ──┬──
-//     ·               │      ╰── use `match` to narrow this value before accessing `email`
-//     ·               ╰── this value has type `unknown`
+//     ·   ───────────┬──────────
+//     ·              ╰── use `match` to narrow this value before accessing `email`
 //     ╰────
-//   ╰─▶   ☞ this value has type `unknown`
-//           ╭─[expr_unknown_field_access.baml:16:12]
-//        16 │   envelope.payload.email
-//           ·            ───────
-//           ╰────

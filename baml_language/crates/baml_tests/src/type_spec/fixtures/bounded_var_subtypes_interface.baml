@@ -1,4 +1,3 @@
-// tir: fails
 //
 // I2: a rigid `T extends I` proves `T <: I` through its CARRIED bound
 // (type_var_bound in the shared algebra), so the join of a bounded var

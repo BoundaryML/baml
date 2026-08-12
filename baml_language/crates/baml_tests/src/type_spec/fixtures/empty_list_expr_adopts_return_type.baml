@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1072 (https://linear.app/boundaryml2/issue/B-1072): the empty
 // literal's OWN expression type must adopt the contextual element type,

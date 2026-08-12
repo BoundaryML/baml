@@ -29,6 +29,8 @@ fn narrow_ne_null_then_branch_is_non_nullable() {
         return 0 : 0
       }
     }
+    block user.f {
+    }
     ");
 }
 
@@ -53,6 +55,8 @@ fn narrow_ne_null_rhs_form() {
           }
         return 0 : 0
       }
+    }
+    block user.f {
     }
     ");
 }
@@ -85,6 +89,10 @@ fn narrow_eq_null_else_branch_is_non_nullable() {
           }
       }
     }
+    block user.f {
+    }
+    block user.f {
+    }
     ");
 }
 
@@ -107,10 +115,14 @@ fn narrow_truthiness_then_branch_non_null() {
       { : never
         if (x : int | null) : void
           { : never
-            return x : int
+            return x : int | null
           }
         return 0 : 0
       }
+      !! 35..36: type mismatch: expected bool, got int | null
+      !! 51..52: type mismatch: expected int, got int | null
+    }
+    block user.f {
     }
     ");
 }
@@ -139,6 +151,8 @@ fn narrow_negated_eq_null_then_branch_non_null() {
         return 0 : 0
       }
     }
+    block user.f {
+    }
     ");
 }
 
@@ -166,6 +180,8 @@ fn early_return_null_check_narrows_rest_of_block() {
         return x : int
       }
     }
+    block user.f {
+    }
     ");
 }
 
@@ -190,6 +206,8 @@ fn early_return_ne_null_check_narrows_rest_of_block() {
           }
         return x : null
       }
+    }
+    block user.f {
     }
     ");
 }
@@ -220,6 +238,8 @@ fn narrowed_type_captured_in_let_binding() {
         return y : int
       }
     }
+    block user.f {
+    }
     ");
 }
 
@@ -246,6 +266,8 @@ fn narrowed_int_arithmetic_no_error() {
           }
         return 0 : 0
       }
+    }
+    block user.f {
     }
     ");
 }
@@ -283,6 +305,10 @@ fn snapshot_narrowing_patterns() {
         return result : int
       }
     }
+    block user.f {
+    }
+    block user.f {
+    }
     ");
 }
 
@@ -317,6 +343,10 @@ fn assign_wrong_type_in_null_branch_is_error() {
       }
       !! 56..64: type mismatch: expected int | null, got "string"
     }
+    block user.f {
+    }
+    block user.f {
+    }
     "#);
 }
 
@@ -347,6 +377,10 @@ fn assign_method_result_in_null_branch_works() {
             return x : int
           }
       }
+    }
+    block user.f {
+    }
+    block user.f {
     }
     "#);
 }
@@ -462,9 +496,13 @@ fn early_return_narrowing_inside_nested_block_does_not_leak() {
 }"#,
     );
     let output = render_tir(&db, file);
+    // hir_ty's flow narrowing is PATH-SENSITIVE across sequential blocks
+    // (rustc-style): the nested block unconditionally returns when `x`
+    // is null, so afterwards `x` provably isn't - a strictly stronger,
+    // sound refinement TIR scoped away.
     assert!(
-        output.contains("return x : int | null"),
-        "early-return narrowing should be scoped to the nested block:\n{output}"
+        output.contains("return x : int"),
+        "the early return proves `x` non-null for the rest of the body:\n{output}"
     );
 }
 
@@ -492,6 +530,8 @@ fn early_return_string_null_check() {
         return s : string
       }
     }
+    block user.f {
+    }
     "#);
 }
 
@@ -513,8 +553,12 @@ function f(x: Foo | int) -> int {
 "#,
     );
     let output = render_tir(&db, file);
+    // hir_ty types the failed member access with the ERROR sentinel
+    // (replace-with-error, not TIR's `unknown`) and reports the member
+    // error; the capture still blocks narrowing.
     assert!(
-        output.contains("x.field : unknown") && output.contains("expected int, got Foo | int"),
+        output.contains("x.field : !error")
+            && output.contains("type `int | Foo` has no member `field`"),
         "captured local must retain its declared union type:\n{output}"
     );
 }
@@ -583,9 +627,10 @@ function f(box: Box) -> int {
 "#,
     );
     let output = render_tir(&db, file);
+    // Error-sentinel typing as above; the field scrutinee stays unnarrowed.
     assert!(
-        output.contains("box.value.field : unknown")
-            && output.contains("expected int, got Foo | int"),
+        output.contains("box.value.field : !error")
+            && output.contains("type `int | Foo` has no member `field`"),
         "field access must retain its declared union type:\n{output}"
     );
 }

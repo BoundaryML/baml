@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 41186
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -134,6 +133,30 @@ assertion_line: 41186
   × operator `&` cannot be applied to `int | null` and `int`
     ╭─[numeric_invariance.baml:72:5]
  72 │     x & y
+    ·     ─────
+    ╰────
+
+  [type] E0004
+
+  × cannot order `int | null` and `int` with `<`: ordering requires both operands to have the same type
+    ╭─[numeric_invariance.baml:79:5]
+ 79 │     x < y
+    ·     ─────
+    ╰────
+
+  [type] E0004
+
+  ⚠ `float | null` and `bigint` share no value, so this comparison is always false
+    ╭─[numeric_invariance.baml:87:5]
+ 87 │     x == y
+    ·     ──────
+    ╰────
+
+  [type] E0004
+
+  × cannot order `float | null` and `bigint` with `<`: ordering requires both operands to have the same type
+    ╭─[numeric_invariance.baml:93:5]
+ 93 │     x < y
     ·     ─────
     ╰────
 

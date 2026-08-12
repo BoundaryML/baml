@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-639..640 'f': throws never
-689..755 '{\n   ...  x\n}': T
-695..714 'let z:...| int>': hir_ty=[user.Foo<int | T>] tir=[user.Foo<T | int>]
-702..714 'Foo<T | int>': hir_ty=[user.Foo<int | T>] tir=[user.Foo<T | int>]
-717..718 'x': T
-752..753 'x': T
+625..626 'f': throws never
+675..741 '{\n   ...  x\n}': T
+681..700 'let z:...| int>': user.Foo<int | T>
+688..700 'Foo<T | int>': user.Foo<int | T>
+703..704 'x': T
+738..739 'x': T

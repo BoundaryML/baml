@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 40970
+assertion_line: 37360
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0007

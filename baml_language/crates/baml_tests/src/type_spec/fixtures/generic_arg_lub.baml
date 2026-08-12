@@ -1,5 +1,4 @@
 // generic instantiation solves to the least upper bound of its lowers
-// tir: fails
 function gal_pair<T>(a: T, b: T) -> T throws never {
     a
 }

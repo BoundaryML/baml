@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR leaves `Self` unrealized for members reached through the
 // requires closure - `io.pull()` types `(Self as Sink).Item` - and

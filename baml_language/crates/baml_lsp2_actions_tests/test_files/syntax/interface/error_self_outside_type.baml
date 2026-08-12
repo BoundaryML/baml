@@ -9,14 +9,14 @@ function bad(x: Self) -> Self {
 // E0002
 //
 //   × unresolved type: Self
-//    ╭─[interface_error_self_outside_type.baml:3:26]
+//    ╭─[interface_error_self_outside_type.baml:3:17]
 //  3 │ function bad(x: Self) -> Self {
-//    ·                          ────
+//    ·                 ────
 //    ╰────
 // E0002
 //
 //   × unresolved type: Self
-//    ╭─[interface_error_self_outside_type.baml:3:17]
+//    ╭─[interface_error_self_outside_type.baml:3:26]
 //  3 │ function bad(x: Self) -> Self {
-//    ·                 ────
+//    ·                          ────
 //    ╰────

@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-919: https://linear.app/boundaryml2/issue/B-919
 // A generic class destructure ADOPTS its type args from the scrutinee

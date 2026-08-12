@@ -62,15 +62,12 @@ use std::{collections::BTreeMap, fmt::Write as _};
 
 use baml_compiler2_ast::AstSourceMap;
 use baml_compiler2_hir::{
-    body::{FunctionBody, OwnerBody},
+    body::OwnerBody,
     scope::{FileScopeId, ScopeKind},
     semantic_index::FileSemanticIndex,
 };
 use baml_compiler2_hir_ty::infer::{InferenceResult, infer_body};
-use baml_compiler2_tir::{
-    infer_context::DiagnosticSeverity,
-    inference::{infer_scope_types, render_scope_diagnostics},
-};
+
 use baml_project::ProjectDatabase;
 use text_size::{TextRange, TextSize};
 
@@ -103,7 +100,6 @@ enum AnnotationKind {
 /// Per-engine annotation-check results plus the merged infer-dump.
 pub(crate) struct DifferentialOutcome {
     pub(crate) hir_ty: Result<(), String>,
-    pub(crate) tir: Result<(), String>,
     pub(crate) dump: String,
 }
 
@@ -121,22 +117,16 @@ pub(crate) fn run_differential(fixture: &str) -> DifferentialOutcome {
     let file = db.add_file("test.baml", fixture);
 
     let hir_ty_nodes = collect_hir_ty_nodes(&db, file, fixture);
-    let tir_nodes = collect_tir_nodes(&db, file, fixture);
     let channel = collect_hir_ty_error_channel(&db, file);
 
     let mut hir_ty_failures = check_annotations(&hir_ty_nodes, fixture, &annotations);
     hir_ty_failures.extend(check_error_channel(&channel, fixture, &annotations));
-    let mut tir_failures = check_annotations(&tir_nodes, fixture, &annotations);
-    for diag in tir_error_diagnostics(&db, file) {
-        tir_failures.push(format!("error diagnostic: {diag}"));
-    }
 
-    let mut dump = render_infer_diff(&hir_ty_nodes, &tir_nodes, fixture);
+    let mut dump = render_infer(&hir_ty_nodes, fixture);
     dump.push_str(&render_error_channel(&channel, fixture));
 
     DifferentialOutcome {
         hir_ty: to_result(hir_ty_failures),
-        tir: to_result(tir_failures),
         dump,
     }
 }
@@ -349,55 +339,30 @@ fn check_annotations(
 /// `start..end 'text': ty` on agreement, `hir_ty=[..] tir=[..]` on
 /// difference. The name-narrowed binding entries used by caret matching are
 /// excluded: the dump reflects real node spans only.
-fn render_infer_diff(hir_ty: &[TypedNode], tir: &[TypedNode], fixture: &str) -> String {
-    let mut merged: BTreeMap<(u32, u32), (Vec<String>, Vec<String>)> = BTreeMap::new();
-    for (nodes, side) in [(hir_ty, 0usize), (tir, 1usize)] {
-        for node in nodes {
-            if node.kind == NodeKind::BindingName {
-                continue;
-            }
-            let entry = merged.entry(range_key(node.range)).or_default();
-            let list = if side == 0 {
-                &mut entry.0
-            } else {
-                &mut entry.1
-            };
-            if !list.contains(&node.ty) {
-                list.push(node.ty.clone());
-            }
+fn render_infer(hir_ty: &[TypedNode], fixture: &str) -> String {
+    let mut merged: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
+    for node in hir_ty {
+        if node.kind == NodeKind::BindingName {
+            continue;
+        }
+        let list = merged.entry(range_key(node.range)).or_default();
+        if !list.contains(&node.ty) {
+            list.push(node.ty.clone());
         }
     }
 
     let mut out = String::new();
-    for (&(start, end), (h, t)) in &mut merged {
-        h.sort();
-        t.sort();
+    for (&(start, end), tys) in &mut merged {
+        tys.sort();
         let text = ellipsize(
             &fixture[TextRange::new(TextSize::new(start), TextSize::new(end))],
             15,
         );
-        if h == t {
-            for ty in h.iter() {
-                let _ = writeln!(out, "{start}..{end} '{text}': {ty}");
-            }
-        } else {
-            let _ = writeln!(
-                out,
-                "{start}..{end} '{text}': hir_ty=[{}] tir=[{}]",
-                render_side(h),
-                render_side(t)
-            );
+        for ty in tys.iter() {
+            let _ = writeln!(out, "{start}..{end} '{text}': {ty}");
         }
     }
     out
-}
-
-fn render_side(tys: &[String]) -> String {
-    if tys.is_empty() {
-        "<missing>".to_owned()
-    } else {
-        tys.join(" / ")
-    }
 }
 
 /// Shortens `text` to at most `max` bytes with a `...` midsection, escaping
@@ -648,142 +613,6 @@ pub(crate) fn collect_hir_ty_nodes(
 
     nodes.retain(|node| !node.range.is_empty());
     nodes
-}
-
-/// Runs TIR's `infer_scope_types` over every inference-owner scope in `file`
-/// (functions and their lambdas, via the same per-scope projections the LSP
-/// uses) and renders each inferred expression and binding with its source
-/// range.
-pub(crate) fn collect_tir_nodes(
-    db: &ProjectDatabase,
-    file: baml_base::SourceFile,
-    fixture: &str,
-) -> Vec<TypedNode> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let mut nodes = Vec::new();
-
-    // TIR's effect per function, at the same name-range key as the
-    // hir_ty side.
-    for owner_id in baml_compiler2_ppir::file_body_owners(db, file) {
-        let baml_compiler2_hir::body::BodyOwnerId::Function(function) = owner_id else {
-            continue;
-        };
-        let name_span = baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
-        if !name_span.is_empty() {
-            let throws = baml_compiler2_tir::callable::callable_throws(db, function);
-            nodes.push(TypedNode {
-                range: name_span,
-                kind: NodeKind::Expr,
-                ty: format!("throws {}", throws.render_canonical()),
-            });
-        }
-    }
-
-    for (idx, scope) in index.scopes.iter().enumerate() {
-        if !matches!(
-            scope.kind,
-            ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda
-        ) {
-            continue;
-        }
-        // Lambdas share the enclosing function's expression arena and source
-        // map; resolve to the scope that owns the arena.
-        let Some(owner) = enclosing_owner_scope(index, FileScopeId::new(idx as u32)) else {
-            continue;
-        };
-        let owner_scope_id = index.scope_ids[owner.index() as usize];
-        let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
-            baml_compiler2_ppir::item_data::scope_owner(db, owner_scope_id)
-        else {
-            continue;
-        };
-        let body_arc = baml_compiler2_ppir::function_body(db, func_loc);
-        let FunctionBody::Expr(body) = body_arc.as_ref() else {
-            continue;
-        };
-        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
-            continue;
-        };
-
-        let inference = infer_scope_types(db, index.scope_ids[idx]);
-        for (&expr_id, ty) in inference.iter_expressions() {
-            if source_map.is_synthetic_expr(expr_id) {
-                continue;
-            }
-            nodes.push(TypedNode {
-                range: source_map.expr_span(expr_id),
-                kind: NodeKind::Expr,
-                ty: ty.render_canonical(),
-            });
-        }
-        for (pat_id, _) in body.patterns.iter() {
-            if source_map.synthetic_patterns.contains(&pat_id) {
-                continue;
-            }
-            if let Some(ty) = inference.binding_type(pat_id) {
-                nodes.push(TypedNode {
-                    range: source_map.pattern_span(pat_id),
-                    kind: NodeKind::Pattern,
-                    ty: ty.render_canonical(),
-                });
-            }
-        }
-        for binding in &index.scope_bindings[idx].bindings {
-            if let Some(ty) = inference.binding_type(binding.pattern) {
-                nodes.push(TypedNode {
-                    range: binding_name_range(fixture, binding),
-                    kind: NodeKind::BindingName,
-                    ty: ty.render_canonical(),
-                });
-            }
-        }
-    }
-
-    // Bindings declared in non-owner scopes (blocks, match arms): resolve
-    // through the nearest enclosing inference owner.
-    for (idx, bindings) in index.scope_bindings.iter().enumerate() {
-        if bindings.bindings.is_empty()
-            || matches!(
-                index.scopes[idx].kind,
-                ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda
-            )
-        {
-            continue;
-        }
-        let Some(owner) = tir_inference_owner(index, FileScopeId::new(idx as u32)) else {
-            continue;
-        };
-        let inference = infer_scope_types(db, index.scope_ids[owner.index() as usize]);
-        for binding in &bindings.bindings {
-            if let Some(ty) = inference.binding_type(binding.pattern) {
-                nodes.push(TypedNode {
-                    range: binding_name_range(fixture, binding),
-                    kind: NodeKind::BindingName,
-                    ty: ty.render_canonical(),
-                });
-            }
-        }
-    }
-
-    nodes.retain(|node| !node.range.is_empty());
-    nodes
-}
-
-/// TIR error-severity diagnostics for `file`, rendered one per line.
-pub(crate) fn tir_error_diagnostics(
-    db: &ProjectDatabase,
-    file: baml_base::SourceFile,
-) -> Vec<String> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let mut out = Vec::new();
-    for scope_id in &index.scope_ids {
-        for diag in render_scope_diagnostics(db, *scope_id) {
-            if diag.severity == DiagnosticSeverity::Error {
-                out.push(format!("{:?}: {}", diag.range, diag.message));
-            }
-        }
-    }
-    out
 }
 
 /// The range of just the introduced identifier. A `let x` / `let x: T` Bind

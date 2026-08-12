@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR renders the frame slot as the projection `(Self as
 // user.Store).Item` rather than the slot's own name.)

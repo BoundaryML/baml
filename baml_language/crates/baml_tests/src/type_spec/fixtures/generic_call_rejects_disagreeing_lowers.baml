@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-932: https://linear.app/boundaryml2/issue/B-932
 // TIR diagnoses arguments against a partial binding (`expected int | 1,

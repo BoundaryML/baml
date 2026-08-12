@@ -1163,7 +1163,6 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_ppir::file_semantic_index;
 use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
-use baml_compiler2_tir::inference::infer_scope_types;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
@@ -1986,7 +1985,6 @@ impl<'db> LoweringContext<'db> {
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
         opt: crate::OptLevel,
-        provider: crate::InferenceProvider,
     ) -> Self {
         let file = func_loc.file(db);
 
@@ -2006,24 +2004,7 @@ impl<'db> LoweringContext<'db> {
         // construction). Lookups dispatch through the `tir_*` accessors.
         // Under the hir_ty provider this map stays EMPTY (TIR unconsulted);
         // the accessors read the converted tables instead.
-        let func_scope = &index.scopes[func_scope_id.index() as usize];
-        let tables = match provider {
-            crate::InferenceProvider::Tir => {
-                let desc_start = func_scope.descendants.start.index();
-                let desc_end = func_scope.descendants.end.index();
-                crate::inference_provider::ProviderTables::from_tir(
-                    std::iter::once(func_scope_id)
-                        .chain((desc_start..desc_end).map(FileScopeId::new))
-                        .map(|fsi| {
-                            let scope_id = index.scope_ids[fsi.index() as usize];
-                            (fsi, infer_scope_types(db, scope_id))
-                        }),
-                )
-            }
-            crate::InferenceProvider::HirTy => {
-                crate::inference_provider::ProviderTables::for_function(db, func_loc)
-            }
-        };
+        let tables = crate::inference_provider::ProviderTables::for_function(db, func_loc);
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
@@ -2132,14 +2113,12 @@ impl<'db> LoweringContext<'db> {
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
         opt: crate::OptLevel,
-        provider: crate::InferenceProvider,
     ) -> Self {
         let file = let_loc.file(db);
 
         let let_name = baml_compiler2_ppir::item_data::let_data(db, let_loc)
             .name
             .clone();
-        let index = file_semantic_index(db, file);
         let let_scope_id = baml_compiler2_ppir::item_data::let_scope(db, let_loc)
             .expect("every item-tree let has a recorded scope")
             .file_scope_id(db);
@@ -2150,24 +2129,7 @@ impl<'db> LoweringContext<'db> {
         // scheme cloned the whole inference output of every let initializer on each
         // construction). Lookups dispatch through the `tir_*` accessors.
         // Under the hir_ty provider this map stays EMPTY (TIR unconsulted).
-        let tables = match provider {
-            crate::InferenceProvider::Tir => {
-                let let_owner_scope = &index.scopes[let_scope_id.index() as usize];
-                let desc_start = let_owner_scope.descendants.start.index();
-                let desc_end = let_owner_scope.descendants.end.index();
-                crate::inference_provider::ProviderTables::from_tir(
-                    std::iter::once(let_scope_id)
-                        .chain((desc_start..desc_end).map(FileScopeId::new))
-                        .map(|fsi| {
-                            let scope_id = index.scope_ids[fsi.index() as usize];
-                            (fsi, infer_scope_types(db, scope_id))
-                        }),
-                )
-            }
-            crate::InferenceProvider::HirTy => {
-                crate::inference_provider::ProviderTables::for_let(db, let_loc)
-            }
-        };
+        let tables = crate::inference_provider::ProviderTables::for_let(db, let_loc);
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_id = PackageId::new(db, file_package(db, file).package);
@@ -2892,27 +2854,6 @@ impl<'db> LoweringContext<'db> {
     /// the canonical L1 substrate, with each impl's generic bounds discharged by
     /// the canonical algebra against this scope's bounds.
     fn l1_impl_views_for_recv(&self, recv: &Tir2Ty) -> Vec<InterfaceTypeView> {
-        // The L1 impl substrate is ENGINE-side: each provider arm probes
-        // its own engine's registry (the retiring branch handles TIR's
-        // internal sentinels natively and dies with TIR).
-        if self.tables.is_tir() {
-            let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
-            let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg);
-            let facts = self.hir_facts();
-            return baml_compiler2_tir::interfaces::impls_for_type(
-                self.db,
-                pkg_id,
-                recv,
-                &self.resolved_aliases.aliases,
-                |a, b| baml_type::normalize::is_subtype(a, b, &facts),
-            )
-            .into_iter()
-            .map(|resolved| {
-                let realized = resolved.implemented_interface(self.db);
-                (realized.name, realized.generics, realized.associated_types)
-            })
-            .collect();
-        }
         // hir_ty's substrate: alias transparency and impl-bound discharge
         // are internal to it (its own facts). Dispatch is by BASE type
         // (hir_ty's operand-dispatch discipline) - a literal-typed
@@ -7358,7 +7299,7 @@ impl<'db> LoweringContext<'db> {
                                 .find(|(n, _)| *n == assoc.name)
                                 .map(|(_, t)| t.clone())
                                 .or_else(|| {
-                                    baml_compiler2_tir::interfaces::
+                                    baml_compiler2_hir_ty::interfaces::
                                         interface_associated_type_default(
                                             self.db,
                                             iface_loc,
@@ -8566,7 +8507,7 @@ impl LoweringContext<'_> {
     /// When the enclosing function is a method on a generic class, the
     /// class-level params come first, followed by the function-level params
     /// — matching TIR's `enclosing_class_generic_params ++ generic_params`
-    /// convention (see `baml_compiler2_tir::callable`).  This keeps MIR's
+    /// convention (see `baml_compiler2_hir_ty::callable`).  This keeps MIR's
     /// view of in-scope generics consistent with how TIR types the body.
     ///
     /// Runtime lowering is responsible for seeding this frame layout: direct
@@ -8939,7 +8880,7 @@ impl<'db> LoweringContext<'db> {
     /// owns its typing and rejects the invalid shapes (compound assignment,
     /// member access, call-site labels, `$id` bindings) — see
     /// `infer_path` / `Stmt::Assign` / `Stmt::AssignOp` in
-    /// `baml_compiler2_tir/src/builder.rs`. Keep the two layers in sync.
+    /// hir_ty's inference. Keep the two layers in sync.
     fn is_runtime_id_path(expr: &AstExpr) -> bool {
         matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
@@ -13834,49 +13775,21 @@ pub fn lower_let_body<'db>(
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
-    lower_let_body_with(db, let_loc, opt, default_provider())
+    lower_let_body_impl(db, let_loc, opt)
 }
 
-/// The S16 migration toggle: `BAML_INFERENCE_PROVIDER=hir` routes the
-/// DEFAULT entry points through hir_ty's `InferenceResult` so the
-/// release suites run unmodified under either engine (rustc's
-/// `-Z borrowck=compare` playbook). Deleted with the flip, when hir_ty
-/// becomes the only provider.
-fn default_provider() -> crate::InferenceProvider {
-    static PROVIDER: std::sync::OnceLock<crate::InferenceProvider> = std::sync::OnceLock::new();
-    // THE FLIP (S16, 2026-08-12): hir_ty is the default engine behind
-    // every MIR lowering. `BAML_INFERENCE_PROVIDER=tir` opts back onto
-    // the retiring engine while it still exists; the toggle and the Tir
-    // arm are deleted with TIR.
-    *PROVIDER.get_or_init(
-        || match std::env::var("BAML_INFERENCE_PROVIDER").as_deref() {
-            Ok("tir") => crate::InferenceProvider::Tir,
-            _ => crate::InferenceProvider::HirTy,
-        },
-    )
-}
-
-/// [`lower_let_body`] with an explicit inference provider (see
-/// [`lower_function_with`]).
-pub fn lower_let_body_with<'db>(
+fn lower_let_body_impl<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
-    provider: crate::InferenceProvider,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new_for_let(
-                db,
-                let_loc,
-                expr_body.clone(),
-                source_map,
-                opt,
-                provider,
-            );
+            let mut ctx =
+                LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
             let mir_body = ctx.lower_let_body_inner();
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
             Some((mir_body, lambdas))
@@ -13890,17 +13803,13 @@ pub fn lower_function<'db>(
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> MirFunction {
-    lower_function_with(db, func_loc, opt, default_provider())
+    lower_function_impl(db, func_loc, opt)
 }
 
-/// [`lower_function`] with an explicit inference provider - the S16
-/// differential gate lowers each function under BOTH providers and diffs
-/// the pretty-printed bodies.
-pub fn lower_function_with<'db>(
+fn lower_function_impl<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
-    provider: crate::InferenceProvider,
 ) -> MirFunction {
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
@@ -13913,8 +13822,7 @@ pub fn lower_function_with<'db>(
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
-            let mut ctx =
-                LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt, provider);
+            let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
             let mut mir = ctx.lower_function_body();
             mir.item_ref = item_ref;
             mir

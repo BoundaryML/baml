@@ -1,5 +1,4 @@
 // Union-target inference (TS's inferToMultipleTypes)
-// tir: fails
 //
 // (TIR leaves `null` in the null-side pick - TS solves R = string; the
 // spec follows TS.)

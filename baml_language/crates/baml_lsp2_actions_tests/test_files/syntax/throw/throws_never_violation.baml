@@ -12,7 +12,7 @@ function ThrowsNeverViolation(x: int) -> string throws never {
 // E0096
 //
 //   × declared throws is `never`, but this function may also throw `string`
-//    ╭─[throw_throws_never_violation.baml:3:56]
-//  3 │ function ThrowsNeverViolation(x: int) -> string throws never {
-//    ·                                                        ─────
+//    ╭─[throw_throws_never_violation.baml:5:11]
+//  5 │     throw "escaped"
+//    ·           ─────────
 //    ╰────

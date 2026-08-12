@@ -45,24 +45,4 @@ function CatchOuter(x: int) -> string {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[throw_throw_with_catch.baml:27:10]
-//  27 │     _ => throw "wrapped"
-//     ·          ───────────────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[throw_throw_with_catch.baml:29:10]
-//  29 │     _ => "ultimately caught"
-//     ·          ───────────────────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[throw_throw_with_catch.baml:42:10]
-//  42 │     _ => "caught outer"
-//     ·          ──────────────
-//     ╰────
+// <no-diagnostics-expected>

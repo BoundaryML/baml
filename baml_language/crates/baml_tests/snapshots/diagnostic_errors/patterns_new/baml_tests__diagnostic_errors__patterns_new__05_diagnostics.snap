@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 42943
+assertion_line: 39133
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0094
@@ -97,7 +97,7 @@ assertion_line: 42943
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[patterns_new.baml:120:34]
  120 │         Bag { contents: int } => 2
      ·                                  ─
@@ -215,7 +215,7 @@ assertion_line: 42943
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[patterns_new.baml:298:23]
  298 │         [true, ..] => 2,
      ·                       ─
@@ -223,7 +223,7 @@ assertion_line: 42943
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[patterns_new.baml:307:23]
  307 │         [.., true] => 2,
      ·                       ─
@@ -231,7 +231,7 @@ assertion_line: 42943
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[patterns_new.baml:317:26]
  317 │         [false, true] => 2,
      ·                          ─

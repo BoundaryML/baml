@@ -1,4 +1,3 @@
-// tir: fails
 //
 // TYPE_SYSTEM.md (Interfaces section, `_` wildcard): a `_` generic arg is an
 // inference hole filled exactly from context, including expression positions

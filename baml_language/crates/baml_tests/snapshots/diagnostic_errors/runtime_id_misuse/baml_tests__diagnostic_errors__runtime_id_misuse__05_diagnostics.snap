@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 43381
+assertion_line: 39523
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -13,6 +13,14 @@ assertion_line: 43381
  10 │ ├─▶ }
     · ╰──── expected `string`, found `() -> int throws never`
     ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `() -> int throws never` and `"-suffix"`
+   ╭─[runtime_id.baml:8:12]
+ 8 │     $id += "-suffix";
+   ·            ─────────
+   ╰────
 
   [type] E0001
 
@@ -48,15 +56,6 @@ assertion_line: 43381
     ╭─[runtime_id.baml:31:5]
  31 │     takes_int($id = boundary.id())
     ·     ──────────────────────────────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[runtime_id.baml:31:21]
- 31 │     takes_int($id = boundary.id())
-    ·                     ──────┬──────
-    ·                           ╰── expected `int`, found `boundary.LocalId`
     ╰────
 
   [hir] E0010

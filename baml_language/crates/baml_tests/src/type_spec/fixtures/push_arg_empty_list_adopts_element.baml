@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-940: https://linear.app/boundaryml2/issue/B-940
 // The receiver's declared element type makes the push argument's

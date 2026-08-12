@@ -1,4 +1,3 @@
-// tir: fails
 //
 // I5 (spec Functions rule 3): `throws AppError | _` declares the named
 // types AND opens the remainder to inference - the body may throw

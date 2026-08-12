@@ -3,7 +3,7 @@ source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
 377..378 'g': throws never
-402..414 '{\n    null\n}': hir_ty=[null] tir=[void]
+402..414 '{\n    null\n}': null
 408..412 'null': null
 425..426 'f': throws never
 449..497 '{\n   ...  0\n}': 0

@@ -1,8 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 31732
+assertion_line: 29138
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: Errors
+    ╭─[catch_return_type_mismatch.baml:10:41]
+ 10 │ ╭─▶ function callee() -> bool throws Errors {
+ 11 │ │     return true
+ 12 │ ╰─▶ }
+    ╰────
+
   [type] E0001
 
   × mismatched types

@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-321..322 'f': throws never
-361..449 '{\n   ...  }\n}': hir_ty=[string] tir=[string | int]
-367..447 'match ...n    }': hir_ty=[string] tir=[string | int]
-374..375 'v': int | string
-387..397 'let n: int': int
-394..397 'int': int
-401..402 'd': string
-412..413 '_': int | string
-417..418 'v': hir_ty=[string] tir=[int | string]
+307..308 'f': throws never
+347..435 '{\n   ...  }\n}': string
+353..433 'match ...n    }': string
+360..361 'v': int | string
+373..383 'let n: int': int
+380..383 'int': int
+387..388 'd': string
+398..399 '_': int | string
+403..404 'v': string

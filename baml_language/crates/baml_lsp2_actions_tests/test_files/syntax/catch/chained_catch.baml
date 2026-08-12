@@ -24,38 +24,4 @@ function TripleChainedCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//    ╭─[catch_chained_catch.baml:8:15]
-//  8 │     string => "string error"
-//    ·               ──────────────
-//    ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_chained_catch.baml:10:12]
-//  10 │     int => "int error"
-//     ·            ───────────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_chained_catch.baml:17:15]
-//  17 │     string => "first"
-//     ·               ───────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_chained_catch.baml:19:12]
-//  19 │     int => "second"
-//     ·            ────────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_chained_catch.baml:21:10]
-//  21 │     _ => "third"
-//     ·          ───────
-//     ╰────
+// <no-diagnostics-expected>

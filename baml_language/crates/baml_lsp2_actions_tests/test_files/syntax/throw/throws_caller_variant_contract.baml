@@ -23,17 +23,14 @@ function CallerGood(x: int) -> string {
 
 //----
 //- diagnostics
-// E0096
-//
-//   × declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.NotFoundError`
-//     ╭─[throw_throws_caller_variant_contract.baml:10:43]
-//  10 │ function MayFail(x: int) -> string throws Errors {
-//     ·                                           ──────
-//     ╰────
 // E0097
 //
 //   ⚠ extraneous throws declaration: Errors
-//     ╭─[throw_throws_caller_variant_contract.baml:10:43]
-//  10 │ function MayFail(x: int) -> string throws Errors {
-//     ·                                           ──────
+//     ╭─[throw_throws_caller_variant_contract.baml:10:50]
+//  10 │ ╭─▶ function MayFail(x: int) -> string throws Errors {
+//  11 │ │     match (x) {
+//  12 │ │       0 => throw Errors.AuthError,
+//  13 │ │       _ => throw Errors.NotFoundError
+//  14 │ │     }
+//  15 │ ╰─▶ }
 //     ╰────

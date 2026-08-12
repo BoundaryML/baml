@@ -2,46 +2,47 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-94..102 'gal_pair': throws never
-136..145 '{\n    a\n}': T
-142..143 'a': T
-155..168 'gal_ret_three': throws never
-189..198 '{\n    3\n}': 3
-195..196 '3': 3
-208..222 'gal_rigid_join': throws never
-245..307 '{\n   ...  x\n}': 3
-251..256 'let x': 3
-259..267 'gal_pair': hir_ty=[(a: 3, b: 3) -> 3 throws never] tir=[(a: T, b: T) -> T throws never]
-259..287 'gal_pa...(), 3)': 3
-268..281 'gal_ret_three': () -> 3 throws never
-268..283 'gal_ret_three()': 3
-285..286 '3': 3
-304..305 'x': 3
-317..331 'gal_union_join': throws never
-375..491 '{\n   ...  w\n}': hir_ty=["x" | int[]] tir=["x" | int[] | string]
-381..399 'let v:... | "x"': "x" | int[]
-388..393 'int[]': int[]
-388..399 'int[] | "x"': "x" | int[]
-396..399 '"x"': "x"
-402..432 'if (fl... "x" }': hir_ty=["x" | int[]] tir=[int[] | "x"]
-406..410 'flag': bool
-412..419 '{ [1] }': int[]
-414..417 '[1]': int[]
-415..416 '1': 1
-425..432 '{ "x" }': "x"
-427..430 '"x"': "x"
-437..442 'let w': hir_ty=["x" | int[]] tir=["x" | int[] | string]
-445..453 'gal_pair': hir_ty=[(a: "x" | int[], b: "x" | int[]) -> "x" | int[] throws never] tir=[(a: T, b: T) -> T throws never]
-445..461 'gal_pa..., "x")': hir_ty=["x" | int[]] tir=["x" | int[] | "x"]
-454..455 'v': "x" | int[]
-457..460 '"x"': "x"
-488..489 'w': hir_ty=["x" | int[]] tir=["x" | int[] | string]
-497..514 '"gal_d...quals"': "gal_deep_equals"
-515..575 '{\n   ...3))\n}': hir_ty=[() -> void throws never / null] tir=[() -> void throws unknown / null]
-521..535 'assert.is_true': (condition: bool) -> null throws never
-521..573 'assert...), 3))': null
-536..552 'baml.d...equals': hir_ty=[(a: 3, b: 3) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
-536..572 'baml.d...(), 3)': bool
-553..566 'gal_ret_three': () -> 3 throws never
-553..568 'gal_ret_three()': 3
-570..571 '3': 3
+80..88 'gal_pair': throws never
+122..131 '{\n    a\n}': T
+128..129 'a': T
+141..154 'gal_ret_three': throws never
+175..184 '{\n    3\n}': 3
+181..182 '3': 3
+194..208 'gal_rigid_join': throws never
+231..293 '{\n   ...  x\n}': 3
+237..242 'let x': 3
+245..253 'gal_pair': (a: 3, b: 3) -> 3 throws never
+245..273 'gal_pa...(), 3)': 3
+254..267 'gal_ret_three': () -> 3 throws never
+254..269 'gal_ret_three()': 3
+271..272 '3': 3
+290..291 'x': 3
+303..317 'gal_union_join': throws never
+361..477 '{\n   ...  w\n}': "x" | int[]
+367..385 'let v:... | "x"': "x" | int[]
+374..379 'int[]': int[]
+374..385 'int[] | "x"': "x" | int[]
+382..385 '"x"': "x"
+388..418 'if (fl... "x" }': "x" | int[]
+392..396 'flag': bool
+398..405 '{ [1] }': int[]
+400..403 '[1]': int[]
+401..402 '1': 1
+411..418 '{ "x" }': "x"
+413..416 '"x"': "x"
+423..428 'let w': "x" | int[]
+431..439 'gal_pair': (a: "x" | int[], b: "x" | int[]) -> "x" | int[] throws never
+431..447 'gal_pa..., "x")': "x" | int[]
+440..441 'v': "x" | int[]
+443..446 '"x"': "x"
+474..475 'w': "x" | int[]
+483..500 '"gal_d...quals"': "gal_deep_equals"
+501..561 '{\n   ...3))\n}': () -> void throws never
+501..561 '{\n   ...3))\n}': null
+507..521 'assert.is_true': (condition: bool) -> null throws never
+507..559 'assert...), 3))': null
+522..538 'baml.d...equals': (a: 3, b: 3) -> bool throws never
+522..558 'baml.d...(), 3)': bool
+539..552 'gal_ret_three': () -> 3 throws never
+539..554 'gal_ret_three()': 3
+556..557 '3': 3

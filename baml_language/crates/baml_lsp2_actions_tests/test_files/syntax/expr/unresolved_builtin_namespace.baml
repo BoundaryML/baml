@@ -20,28 +20,28 @@ function TestBamlEventsTypo() -> void {
 //- diagnostics
 // E0003
 //
-//   × unresolved name: `ev`
+//   × unresolved name: `baml.ev.send`
 //    ╭─[expr_unresolved_builtin_namespace.baml:4:5]
 //  4 │     baml.ev.send("test", {})
 //    ·     ────────────
 //    ╰────
 // E0003
 //
-//   × unresolved name: `lo`
+//   × unresolved name: `baml.lo.info`
 //    ╭─[expr_unresolved_builtin_namespace.baml:8:5]
 //  8 │     baml.lo.info("test")
 //    ·     ────────────
 //    ╰────
 // E0003
 //
-//   × unresolved name: `inf`
+//   × unresolved name: `log.inf`
 //     ╭─[expr_unresolved_builtin_namespace.baml:12:5]
 //  12 │     log.inf("test")
 //     ·     ───────
 //     ╰────
 // E0003
 //
-//   × unresolved name: `event`
+//   × unresolved name: `baml.event.send`
 //     ╭─[expr_unresolved_builtin_namespace.baml:16:5]
 //  16 │     baml.event.send("test", {})
 //     ·     ───────────────

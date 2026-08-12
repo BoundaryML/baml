@@ -1,4 +1,3 @@
-// tir: fails
 //
 // The one-Self rule: `eq(self, other: Self)` is uncallable through an
 // interface EXISTENTIAL - two existentials may hold different concrete

@@ -2,15 +2,15 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-646..651 'first': throws (T as baml.iter.Iterator).Error
-715..873 '{\n   ...ull\n}': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
-721..726 'let r': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
-729..820 'match ...n    }': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
-736..743 'it.next': hir_ty=[(self: T) -> baml.iter.Done | (T as baml.iter.Iterator).Item throws (T as baml.iter.Iterator).Error] tir=[() -> (T as baml.iter.Iterator).Item | baml.iter.Done throws (T as baml.iter.Iterator).Error]
-736..745 'it.next()': hir_ty=[baml.iter.Done | (T as baml.iter.Iterator).Item] tir=[(T as baml.iter.Iterator).Item | baml.iter.Done]
-757..771 'baml.iter.Done': baml.iter.Done
-775..779 'null': null
-789..805 'let it...T.Item': (T as baml.iter.Iterator).Item
-799..805 'T.Item': (T as baml.iter.Iterator).Item
-809..813 'item': (T as baml.iter.Iterator).Item
-826..827 'r': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
+632..637 'first': throws (T as baml.iter.Iterator).Error
+701..859 '{\n   ...ull\n}': (T as baml.iter.Iterator).Item | null
+707..712 'let r': (T as baml.iter.Iterator).Item | null
+715..806 'match ...n    }': (T as baml.iter.Iterator).Item | null
+722..729 'it.next': (self: T) -> baml.iter.Done | (T as baml.iter.Iterator).Item throws (T as baml.iter.Iterator).Error
+722..731 'it.next()': baml.iter.Done | (T as baml.iter.Iterator).Item
+743..757 'baml.iter.Done': baml.iter.Done
+761..765 'null': null
+775..791 'let it...T.Item': (T as baml.iter.Iterator).Item
+785..791 'T.Item': (T as baml.iter.Iterator).Item
+795..799 'item': (T as baml.iter.Iterator).Item
+812..813 'r': (T as baml.iter.Iterator).Item | null

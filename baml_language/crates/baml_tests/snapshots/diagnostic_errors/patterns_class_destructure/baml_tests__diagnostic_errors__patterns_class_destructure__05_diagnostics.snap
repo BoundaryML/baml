@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 42423
+assertion_line: 38669
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0007
@@ -83,20 +83,21 @@ assertion_line: 42423
      ·         ──────────────────
      ╰────
 
-  [type] E0063
-
-  × unreachable arm
-     ╭─[patterns_class_destructure.baml:104:14]
- 104 │         _ => 0
-     ·              ─
-     ╰────
-
   [type] E0003
 
   × unresolved name: `MissingClass`
      ╭─[patterns_class_destructure.baml:109:5]
  109 │     let MissingClass { age } = Person {
      ·     ────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:119:23]
+ 119 │         Person { age: string } => 1,
+     ·                       ───┬──
+     ·                          ╰── expected `int`, found `string`
      ╰────
 
   [type] E0001
@@ -188,6 +189,15 @@ assertion_line: 42423
      ·     ──────────────────────────────
      ╰────
 
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:223:30]
+ 223 │     let Box<string> { value: int } = boxed;
+     ·                              ─┬─
+     ·                               ╰── expected `string`, found `int`
+     ╰────
+
   [hir] E0094
 
   × or-pattern alternatives must bind the same names. Inconsistent across branches: age
@@ -251,6 +261,15 @@ assertion_line: 42423
      ·                                      ╰── `value` first bound here
      ╰────
 
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:271:42]
+ 271 │         Person { address: Address { zip: string } } => 1,
+     ·                                          ───┬──
+     ·                                             ╰── expected `int`, found `string`
+     ╰────
+
   [type] E0007
 
   × class `Person` has no field `missing`
@@ -266,4 +285,13 @@ assertion_line: 42423
      ╭─[patterns_class_destructure.baml:289:9]
  289 │         let Person { age: string } = p;
      ·         ──────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[patterns_class_destructure.baml:289:27]
+ 289 │         let Person { age: string } = p;
+     ·                           ───┬──
+     ·                              ╰── expected `int`, found `string`
      ╰────

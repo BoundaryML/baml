@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1135: https://linear.app/boundaryml2/issue/B-1135
 // The unwrapped left operand of `??` INFORMS the right operand, so an

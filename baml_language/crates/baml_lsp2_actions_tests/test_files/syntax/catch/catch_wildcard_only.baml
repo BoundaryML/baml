@@ -18,17 +18,4 @@ function CatchNamedWildcard(x: int) -> string {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//    ╭─[catch_catch_wildcard_only.baml:8:10]
-//  8 │     _ => "caught everything"
-//    ·          ───────────────────
-//    ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_catch_wildcard_only.baml:15:18]
-//  15 │     let other => "caught: " + other
-//     ·                  ──────────────────
-//     ╰────
+// <no-diagnostics-expected>

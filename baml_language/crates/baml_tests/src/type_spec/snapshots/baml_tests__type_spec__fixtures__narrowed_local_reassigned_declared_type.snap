@@ -2,20 +2,20 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-321..325 'pick': throws never
-344..353 '{\n    5\n}': 5
-350..351 '5': 5
-364..365 'f': throws never
-384..478 '{\n   ...ing\n}': int | string
-390..395 'let v': int | string
-398..402 'pick': () -> int | string throws never
-398..404 'pick()': int | string
-410..451 'if (v ...n    }': void
-414..415 'v': int | string
-414..422 'v is int': bool
-419..422 'int': int
-424..451 '{\n   ...n    }': void
-434..435 'v': hir_ty=[int | string] tir=[int]
-438..442 'pick': () -> int | string throws never
-438..444 'pick()': int | string
-456..457 'v': int | string
+307..311 'pick': throws never
+330..339 '{\n    5\n}': 5
+336..337 '5': 5
+350..351 'f': throws never
+370..464 '{\n   ...ing\n}': int | string
+376..381 'let v': int | string
+384..388 'pick': () -> int | string throws never
+384..390 'pick()': int | string
+396..437 'if (v ...n    }': void
+400..401 'v': int | string
+400..408 'v is int': bool
+405..408 'int': int
+410..437 '{\n   ...n    }': void
+420..421 'v': int | string
+424..428 'pick': () -> int | string throws never
+424..430 'pick()': int | string
+442..443 'v': int | string

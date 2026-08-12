@@ -27,12 +27,12 @@ expression: outcome.dump
 861..881 'net.me...ngth()': int
 893..894 'n': int
 1016..1024 'cf_shout': throws never
-1056..1132 '{\n   ..." }\n}': hir_ty=["non-positive" | "positive"] tir=["positive" | "non-positive"]
+1056..1132 '{\n   ..." }\n}': "non-positive" | "positive"
 1062..1067 'let y': int
 1070..1071 'x': int
 1070..1075 'x + 1': int
 1074..1075 '1': 1
-1081..1130 'if (y ...ive" }': hir_ty=["non-positive" | "positive"] tir=["positive" | "non-positive"]
+1081..1130 'if (y ...ive" }': "non-positive" | "positive"
 1085..1086 'y': int
 1085..1090 'y > 0': bool
 1089..1090 '0': 0

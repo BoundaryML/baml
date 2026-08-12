@@ -25,8 +25,3 @@ function bad() -> string {
 //  16 │   return d.Animal.speak()
 //     ·          ──────────────
 //     ╰────
-//   ╰─▶   ☞ class defined here
-//          ╭─[interface_error_old_qualified_projection.baml:8:7]
-//        8 │ class Dog {
-//          ·       ───
-//          ╰────

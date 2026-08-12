@@ -2,25 +2,25 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-620..622 'ja': throws never
-656..729 '{\n   ...  j\n}': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
-662..683 'let j:...n.json': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
-669..683 'baml.json.json': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
-686..695 '[1, 2, 3]': baml.json.json[]
-687..688 '1': 1
-690..691 '2': 2
-693..694 '3': 3
-726..727 'j': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
-740..742 'jm': throws never
-776..876 '{\n   ...  m\n}': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
-782..803 'let m:...n.json': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
-789..803 'baml.json.json': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
-806..842 '{"key"...ull]}}': map<string, baml.json.json>
-807..812 '"key"': "key"
-814..841 '{"nest...null]}': map<string, baml.json.json>
-815..823 '"nested"': "nested"
-825..840 '[1, true, null]': baml.json.json[]
-826..827 '1': 1
-829..833 'true': true
-835..839 'null': null
-873..874 'm': hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
+606..608 'ja': throws never
+642..715 '{\n   ...  j\n}': baml.json.json
+648..669 'let j:...n.json': baml.json.json
+655..669 'baml.json.json': baml.json.json
+672..681 '[1, 2, 3]': baml.json.json[]
+673..674 '1': 1
+676..677 '2': 2
+679..680 '3': 3
+712..713 'j': baml.json.json
+726..728 'jm': throws never
+762..862 '{\n   ...  m\n}': baml.json.json
+768..789 'let m:...n.json': baml.json.json
+775..789 'baml.json.json': baml.json.json
+792..828 '{"key"...ull]}}': map<string, baml.json.json>
+793..798 '"key"': "key"
+800..827 '{"nest...null]}': map<string, baml.json.json>
+801..809 '"nested"': "nested"
+811..826 '[1, true, null]': baml.json.json[]
+812..813 '1': 1
+815..819 'true': true
+821..825 'null': null
+859..860 'm': baml.json.json

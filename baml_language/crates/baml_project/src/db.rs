@@ -227,9 +227,6 @@ impl baml_compiler2_hir::Db for ProjectDatabase {
 impl baml_compiler2_ppir::Db for ProjectDatabase {}
 
 #[salsa::db]
-impl baml_compiler2_tir::Db for ProjectDatabase {}
-
-#[salsa::db]
 impl baml_compiler2_mir::Db for ProjectDatabase {}
 
 #[salsa::db]
@@ -1236,11 +1233,11 @@ impl ProjectDatabase {
             let name = baml_db::Name::from(token.text().to_string());
 
             let resolved =
-                baml_compiler2_tir::resolve::resolve_name_at(self, source_file, offset, &name);
+                baml_compiler2_ppir::resolve::resolve_name_at(self, source_file, offset, &name);
 
             match resolved {
-                baml_compiler2_tir::resolve::ResolvedName::Item(def)
-                | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
+                baml_compiler2_ppir::resolve::ResolvedName::Item(def)
+                | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => {
                     use baml_compiler2_hir::contributions::Definition;
                     match &def {
                         Definition::Function(_) => {
@@ -1253,10 +1250,10 @@ impl ProjectDatabase {
                         }
                     }
                 }
-                baml_compiler2_tir::resolve::ResolvedName::Local { .. } => {
+                baml_compiler2_ppir::resolve::ResolvedName::Local { .. } => {
                     return self.cursor_context_for_local(source_file, offset);
                 }
-                baml_compiler2_tir::resolve::ResolvedName::Unknown => {
+                baml_compiler2_ppir::resolve::ResolvedName::Unknown => {
                     // Fall through to positional fallback below
                 }
             }

@@ -7,10 +7,10 @@ expression: outcome.dump
 364..379 'Boom { m: "x" }': user.Boom
 374..377 '"x"': "x"
 392..393 'f': throws never
-419..574 '{\n   ...  }\n}': hir_ty=[string] tir=[string | "kapow"]
+419..574 '{\n   ...  }\n}': string
 425..430 'risky': () -> string throws user.Boom | user.Kapow
 425..432 'risky()': string
-425..572 'risky(...n    }': hir_ty=[string] tir=[string | "kapow"]
+425..572 'risky(...n    }': string
 440..441 'e': user.Boom | user.Kapow
 453..457 'Boom': user.Boom
 461..539 '{\n   ...     }': string

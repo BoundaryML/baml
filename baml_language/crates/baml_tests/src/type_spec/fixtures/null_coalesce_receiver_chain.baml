@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1135 (receiver position): https://linear.app/boundaryml2/issue/B-1135
 // `(m.at(u) ?? []).at(v)` on an int[][]: the ?? result is a clean int[]

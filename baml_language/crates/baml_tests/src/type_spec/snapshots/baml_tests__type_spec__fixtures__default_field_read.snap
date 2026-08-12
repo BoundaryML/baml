@@ -14,5 +14,5 @@ expression: outcome.dump
 615..624 'self.name': string
 653..665 'df_field_use': throws never
 697..717 '{\n   ...e()\n}': string
-703..713 'p.describe': hir_ty=[(self: user.DfP) -> string throws never] tir=[() -> string throws never]
+703..713 'p.describe': (self: user.DfP) -> string throws never
 703..715 'p.describe()': string

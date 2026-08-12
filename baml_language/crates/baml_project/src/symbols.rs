@@ -7,8 +7,8 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageId, package_items},
 };
+use baml_compiler2_hir_ty::package_interface::package_interface;
 use baml_compiler2_ppir::item_data::{function_data, function_llm_meta, test_data};
-use baml_compiler2_tir::package_interface::package_interface;
 use baml_db::Name;
 
 use crate::{

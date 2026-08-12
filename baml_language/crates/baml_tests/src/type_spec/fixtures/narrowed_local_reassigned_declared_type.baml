@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-618: https://linear.app/boundaryml2/issue/B-618
 // Assignment checks against the DECLARED (widened) binding type, never

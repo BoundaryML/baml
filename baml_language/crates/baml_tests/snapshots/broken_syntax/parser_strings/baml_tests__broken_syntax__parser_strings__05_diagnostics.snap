@@ -2,6 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × unresolved type: said
+   ╭─[nested_quotes.baml:1:1]
+ 1 │ // Test nested quote handling in strings
+   · ▲
+   ╰────
+
   [hir] E0037
 
   × `@alias` expects exactly one string argument

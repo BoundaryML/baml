@@ -541,6 +541,123 @@ enum PendingDiag {
         pat: PatId,
         context: crate::diagnostics::IrrefutableContextKind,
     },
+    /// A NAMED call leaving a required parameter unfilled - reported by
+    /// name, not count.
+    MissingNamedArg {
+        expr: ExprId,
+        name: baml_type::Name,
+    },
+    /// A positional argument landing on a DEFAULTED (by-name-only)
+    /// parameter.
+    PositionalDefaultedArg {
+        expr: ExprId,
+        name: baml_type::Name,
+    },
+    /// A constructor head naming no class (with near-matches).
+    UnresolvedCtor {
+        expr: ExprId,
+        name: baml_type::Name,
+        suggestions: Box<[baml_type::Name]>,
+    },
+    /// A positional argument after a named one.
+    PositionalAfterNamed {
+        expr: ExprId,
+    },
+    /// The same argument name supplied twice.
+    DuplicateNamedArg {
+        expr: ExprId,
+        name: baml_type::Name,
+    },
+    /// A generic construction whose parameter no field determined: the
+    /// fresh instantiation slot survives to finalize unsolved (E-code:
+    /// cannot infer type parameter).
+    UninferredCtorParam {
+        expr: ExprId,
+        var: Ty,
+        name: baml_type::Name,
+    },
+    /// A `spawn ... with` link that is not a middleware transformer
+    /// (TIR's SpawnWithNotATransformer: names the contract and the link's
+    /// concrete input).
+    SpawnWithBad {
+        at: ExprId,
+        expected_input: Ty,
+        got: Ty,
+    },
+    /// E0097: declared throws members the body can never throw (warning).
+    ExtraneousThrows {
+        at: ExprId,
+        extra_types: Vec<String>,
+    },
+    /// Control flow that would escape a `defer` body (BEP-042): `return`
+    /// always; `break`/`continue` unless a loop opened INSIDE the defer.
+    DeferEscape {
+        stmt: Option<StmtId>,
+        expr: Option<ExprId>,
+        keyword: &'static str,
+    },
+    /// An untyped-object property shorthand naming no in-scope value -
+    /// the specialized spelling of unresolved-name, with near-matches.
+    UnresolvedShorthand {
+        expr: ExprId,
+        name: baml_type::Name,
+        suggestions: Vec<baml_type::Name>,
+    },
+    /// The comparison rules (TIR's family): a provably-disjoint `==`/`!=`
+    /// pair warns (the comparison is a constant), and the ordering
+    /// operators demand SAME-typed, `baml.ops.Compare`-implementing
+    /// operands.
+    ComparisonAlwaysDisjoint {
+        at: ExprId,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: Ty,
+        rhs: Ty,
+    },
+    OrderingDifferentTypes {
+        at: ExprId,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: Ty,
+        rhs: Ty,
+    },
+    OrderingRequiresCompare {
+        at: ExprId,
+        op: baml_compiler2_ast::BinaryOp,
+        ty: Ty,
+    },
+    /// An object-literal entry naming no declared field of the constructed
+    /// class - the plain spelling and the property-shorthand spelling get
+    /// their own messages (TIR's pair). Shorthand is detected structurally
+    /// (the value is a bare path spelling the field name), keeping
+    /// inference span-free.
+    UnknownObjectField {
+        object: ExprId,
+        value: ExprId,
+        class_name: baml_type::QualifiedTypeName,
+        declared: Vec<baml_type::Name>,
+        name: baml_type::Name,
+        shorthand: bool,
+    },
+    /// The call-site `$id` side channel's three rules: the value must be
+    /// `boundary.LocalId`, at most one `$id` per call, and it must be the
+    /// last argument (TIR's family, verbatim).
+    RuntimeIdArgMismatch {
+        at: ExprId,
+        got: Ty,
+    },
+    DuplicateRuntimeIdArg {
+        at: ExprId,
+    },
+    RuntimeIdArgNotLast {
+        at: ExprId,
+    },
+    /// A throw site (or a callee's propagated effect) whose contribution
+    /// escapes the CLOSED declared clause: TIR's throws-contract family,
+    /// rendered as the dedicated E-code rather than a generic mismatch.
+    ThrowsViolation {
+        at: ExprId,
+        declared: Ty,
+        extra: Ty,
+    },
     /// A `match`/`is` type pattern PROVABLY dead against its scrutinee - no
     /// realization of the in-scope rigid type variables gives them a common
     /// value (the overlap oracle's `No`). Reported like any concrete
@@ -590,6 +707,7 @@ enum PendingDiag {
         pat: PatId,
         class_name: baml_type::QualifiedTypeName,
         field_name: baml_type::Name,
+        declared: Vec<baml_type::Name>,
     },
     UnnecessaryOptionalChain {
         expr: ExprId,
@@ -753,10 +871,22 @@ pub fn infer_body<'db>(
     }
 }
 
+/// Count of body inferences run this process - the bytecode cache's
+/// warm-run evidence counter (a warm compile with full seeds should keep
+/// this near zero for clean files).
+static BODY_INFERENCES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Number of body inferences executed (not served from salsa memos or
+/// seeds) since process start.
+pub fn body_inferences() -> usize {
+    BODY_INFERENCES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 fn infer_body_impl<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     owner: BodyOwnerId<'db>,
 ) -> InferenceResult<'db> {
+    BODY_INFERENCES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let body = baml_compiler2_ppir::body(db, owner);
     let index = baml_compiler2_ppir::file_semantic_index(db, owner.file(db));
     let owner_scope = baml_compiler2_ppir::body_scope(db, owner).map(|s| s.file_scope_id(db));
@@ -1055,7 +1185,7 @@ struct InferenceContext<'db> {
     /// The effect-channel stack: contributions from `throw` sites and
     /// callee throws accumulate into the top. The bottom entry is the
     /// owner's channel; lambdas and `catch` bases push their own.
-    throws_channels: Vec<Vec<Ty>>,
+    throws_channels: Vec<Vec<(ExprId, Ty)>>,
     /// S17 pending diagnostics: anchored on arena ids, interned payloads;
     /// finalized into `InferenceResult::diagnostics` (plain types) at
     /// finish - r-a's InferenceDiagnostic discipline.
@@ -1064,6 +1194,18 @@ struct InferenceContext<'db> {
     /// discipline): a failed lookup reports only when no fallback tier
     /// remains - probes increment, the committed frame reports.
     member_probe_depth: u32,
+    /// Depth of pattern lowering where the dead-pattern overlap check
+    /// probes SILENTLY: or-pattern alternatives (one alt that can't
+    /// match is fine - rustc's rule - only the whole `|` chain failing
+    /// to overlap reports, from the chain's own frame) and `is` tests
+    /// (a disjoint runtime type test is legal and answers `false`).
+    pub(crate) or_probe_depth: u32,
+    /// Nonzero while lowering the subtree of an already-REJECTED rest
+    /// sub-pattern. The subtree still lowers (bindings must record, no
+    /// unresolved-name cascades) but further rest-shape reports and
+    /// dead-pattern mismatches inside it are noise after the one
+    /// rejection at the outermost structural link.
+    pub(crate) rest_reject_depth: u32,
     /// Name-visible parameters of enclosing tagged-template bodies (the
     /// tag's `body` lambda params, e.g. `prompt`'s `role`/`ctx`). A stack
     /// frame per nested template; the semantic index cannot register these
@@ -1100,6 +1242,20 @@ struct InferenceContext<'db> {
     /// result - TS short-circuit semantics, where intermediate links
     /// see the non-null type.
     chain_nullable: Vec<bool>,
+    /// Value exprs whose unresolved-name diagnostic was superseded by a
+    /// more specific one (object property shorthand).
+    suppressed_unresolved: rustc_hash::FxHashSet<ExprId>,
+    /// BEP-042: loop depth at each active `defer` entry - a
+    /// `break`/`continue` at the SAME depth (or any `return`) would
+    /// escape the defer body and is rejected.
+    defer_loop_floors: Vec<usize>,
+    loop_depth: usize,
+    /// The body's root expression, kept for finish-time anchors (the
+    /// extraneous-throws warning has no arena node of its own).
+    body_root: Option<ExprId>,
+    /// Ground values that checked against then-open expectations by
+    /// depositing bounds; re-judged once the vars solve.
+    provisional_checks: Vec<(ExprId, Ty, Ty)>,
     diverges: Diverges,
     /// The body's file, for package-scoped lookups (the overlap oracle's
     /// alias map enumerates the owning package plus its dependency closure).
@@ -1140,6 +1296,8 @@ impl<'db> InferenceContext<'db> {
             throws_channels: vec![Vec::new()],
             pending_diags: Vec::new(),
             member_probe_depth: 0,
+            or_probe_depth: 0,
+            rest_reject_depth: 0,
             template_params: Vec::new(),
             table: InferenceTable::new(),
             deferred_subs: Vec::new(),
@@ -1148,6 +1306,11 @@ impl<'db> InferenceContext<'db> {
             body_owner: None,
             defaults_owner: false,
             chain_nullable: Vec::new(),
+            suppressed_unresolved: rustc_hash::FxHashSet::default(),
+            defer_loop_floors: Vec::new(),
+            loop_depth: 0,
+            body_root: None,
+            provisional_checks: Vec::new(),
             diverges: Diverges::Maybe,
             owner_file: None,
             overlap_aliases: std::cell::OnceCell::new(),
@@ -1170,6 +1333,7 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn infer_expr_body(&mut self, body: &ExprBody) {
+        self.body_root = body.root_expr;
         if let Some(root) = body.root_expr {
             match self.return_ty.clone() {
                 // A void function DISCARDS its body's tail value (TIR's
@@ -1223,6 +1387,15 @@ impl<'db> InferenceContext<'db> {
                 .type_mismatches
                 .insert(expr, (expected.clone(), ty.clone()));
         } else {
+            // A GROUND value checked against a still-open expectation
+            // passed by DEPOSITING a bound; whether it actually fits is
+            // only known once the var solves. Stash for the finalize
+            // re-check (the establishment-order road: a later push's
+            // incompatible element reports here).
+            if (expected.has_infer() || ty.has_infer()) && !ty.has_error() {
+                self.provisional_checks
+                    .push((expr, expected.clone(), ty.clone()));
+            }
             self.record_function_adapter(expr, &ty, expected);
         }
         ty
@@ -1299,22 +1472,46 @@ impl<'db> InferenceContext<'db> {
                         && entry_diverges == Diverges::Maybe
                         && self.diverges == Diverges::Always
                         && index > 0
-                        && matches!(
+                        && (matches!(
                             body.stmts[stmts[index - 1]],
                             Stmt::Return { .. }
                                 | Stmt::Throw { .. }
                                 | Stmt::Break { .. }
                                 | Stmt::Continue { .. }
-                        )
+                        ) || matches!(
+                            &body.stmts[stmts[index - 1]],
+                            Stmt::Let {
+                                initializer: Some(init),
+                                ..
+                            } if matches!(body.exprs[*init], Expr::Throw { .. })
+                        ))
                     {
                         first_unreachable = Some(index);
                     }
                     self.infer_stmt(body, *stmt);
                 }
+                // The block TAIL counts too: `throw "x"` followed by a
+                // tail `0` leaves the tail unreachable even with no
+                // trailing statements.
+                let tail_after_diverge = first_unreachable.is_none()
+                    && tail_expr.is_some()
+                    && !stmts.is_empty()
+                    && matches!(
+                        &body.stmts[*stmts.last().expect("nonempty")],
+                        Stmt::Return { .. }
+                            | Stmt::Throw { .. }
+                            | Stmt::Break { .. }
+                            | Stmt::Continue { .. }
+                    );
                 if let Some(index) = first_unreachable {
                     self.pending_diags.push(PendingDiag::DeadCode {
                         at: stmts[index],
-                        unreachable_count: stmts.len() - index,
+                        unreachable_count: stmts.len() - index + usize::from(tail_expr.is_some()),
+                    });
+                } else if tail_after_diverge {
+                    self.pending_diags.push(PendingDiag::DeadCode {
+                        at: *stmts.last().expect("nonempty"),
+                        unreachable_count: 1,
                     });
                 }
                 match tail_expr {
@@ -1552,7 +1749,7 @@ impl<'db> InferenceContext<'db> {
                     None if elements.is_empty() => {
                         // `[]`: a list over a fresh element variable - the
                         // honest replacement for the EvolvingList sentinel.
-                        Ty::list(self.table.new_var_ty())
+                        Ty::list(self.table.new_establishment_var_ty())
                     }
                     None => {
                         let joined: Vec<Ty> = elements
@@ -1586,6 +1783,36 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::Map { entries } => {
+                // Property shorthand in an UNTYPED object (`{ options }`):
+                // an entry whose key literal spells its own single-segment
+                // value path. When that name resolves nowhere, the
+                // specialized diagnostic (with in-scope near-matches)
+                // supersedes the generic unresolved-name one.
+                for (key, value) in entries {
+                    let Expr::Literal(Literal::String(key_name)) = &body.exprs[*key] else {
+                        continue;
+                    };
+                    let Expr::Path(segments) = &body.exprs[*value] else {
+                        continue;
+                    };
+                    if segments.len() != 1 || segments[0].as_str() != key_name.as_str() {
+                        continue;
+                    }
+                    let locals = self.local_binding_names();
+                    if self.lower.resolve_value(segments).is_some()
+                        || locals.iter().any(|name| name == &segments[0])
+                    {
+                        continue;
+                    }
+                    let suggestions =
+                        crate::diagnostics::similar_name_suggestions(&segments[0], locals.iter());
+                    self.suppressed_unresolved.insert(*value);
+                    self.pending_diags.push(PendingDiag::UnresolvedShorthand {
+                        expr: *value,
+                        name: segments[0].clone(),
+                        suggestions,
+                    });
+                }
                 // With an expected map type, entries are CHECKED against
                 // its key/value (the Array arm's rule; r-a's
                 // expectation-driven literal typing) - `{"input": s}` in
@@ -1610,7 +1837,7 @@ impl<'db> InferenceContext<'db> {
                     // silently solve `?K := int`.
                     Ty::intern(TyKind::Map {
                         key: Ty::string(),
-                        value: self.table.new_var_ty(),
+                        value: self.table.new_establishment_var_ty(),
                         attr: TyAttr::default(),
                     })
                 } else {
@@ -1630,6 +1857,13 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::Return { value } => {
+                if !self.defer_loop_floors.is_empty() {
+                    self.pending_diags.push(PendingDiag::DeferEscape {
+                        stmt: None,
+                        expr: Some(expr),
+                        keyword: "return",
+                    });
+                }
                 if let Some(value) = value {
                     match self.return_ty.clone() {
                         Some(return_ty) if !return_ty.has_error() => {
@@ -1654,10 +1888,50 @@ impl<'db> InferenceContext<'db> {
             Expr::Call { callee, args, .. } => self.infer_call(body, expr, *callee, args),
             Expr::Object {
                 type_name,
+                type_args,
                 fields,
                 spreads,
-                ..
-            } => self.infer_object(body, expr, type_name, fields, spreads),
+            } => {
+                // `map { .. }` is a map literal in constructor clothing
+                // (identifier keys are string keys), never a class named
+                // `map` - same routing guard as the parser's object form.
+                if type_args.is_empty()
+                    && spreads.is_empty()
+                    && matches!(type_name.0.as_slice(), [seg] if seg.as_str() == "map")
+                {
+                    if let Some((key_ty, value_ty)) = self.expected_map_entry(expected) {
+                        for (_, value) in fields {
+                            self.check_expr(body, *value, &value_ty);
+                        }
+                        Ty::intern(TyKind::Map {
+                            key: key_ty,
+                            value: value_ty,
+                            attr: TyAttr::default(),
+                        })
+                    } else if fields.is_empty() {
+                        Ty::intern(TyKind::Map {
+                            key: Ty::string(),
+                            value: self.table.new_establishment_var_ty(),
+                            attr: TyAttr::default(),
+                        })
+                    } else {
+                        let values: Vec<Ty> = fields
+                            .iter()
+                            .map(|(_, value)| {
+                                let value_ty = self.infer_expr(body, *value, &Expectation::None);
+                                self.widen_fresh(&value_ty)
+                            })
+                            .collect();
+                        Ty::intern(TyKind::Map {
+                            key: Ty::string(),
+                            value: self.union_of(&values),
+                            attr: TyAttr::default(),
+                        })
+                    }
+                } else {
+                    self.infer_object(body, expr, type_name, fields, spreads)
+                }
+            }
             Expr::MemberAccess { base, member } => {
                 if self.check_runtime_id_member(body, expr, *base, member) {
                     return Ty::error();
@@ -1738,6 +2012,13 @@ impl<'db> InferenceContext<'db> {
                 self.infer_let(body, *pattern, *initializer, *else_branch);
             }
             Stmt::Return(value) => {
+                if !self.defer_loop_floors.is_empty() {
+                    self.pending_diags.push(PendingDiag::DeferEscape {
+                        stmt: Some(stmt),
+                        expr: None,
+                        keyword: "return",
+                    });
+                }
                 if let Some(value) = value {
                     match self.return_ty.clone() {
                         Some(return_ty) if !return_ty.has_error() => {
@@ -1758,7 +2039,30 @@ impl<'db> InferenceContext<'db> {
             // Loop-local terminators: the path past them is dead; the loop
             // discipline restores divergence and flow at the loop boundary.
             Stmt::Break | Stmt::Continue => {
+                if self
+                    .defer_loop_floors
+                    .last()
+                    .is_some_and(|&floor| self.loop_depth == floor)
+                {
+                    self.pending_diags.push(PendingDiag::DeferEscape {
+                        stmt: Some(stmt),
+                        expr: None,
+                        keyword: if matches!(body.stmts[stmt], Stmt::Break) {
+                            "break"
+                        } else {
+                            "continue"
+                        },
+                    });
+                }
                 self.diverges = Diverges::Always;
+            }
+            Stmt::Defer { body: defer_body } => {
+                // BEP-042: the defer body runs at scope exit; escaping
+                // control flow is rejected (loop-aware - a loop opened
+                // inside the defer may break/continue freely).
+                self.defer_loop_floors.push(self.loop_depth);
+                self.infer_expr(body, *defer_body, &Expectation::None);
+                self.defer_loop_floors.pop();
             }
             Stmt::Assign { target, value } => {
                 self.infer_assign(body, *target, *value, None);
@@ -1785,7 +2089,9 @@ impl<'db> InferenceContext<'db> {
                 let entry_flow = self.flow.clone();
                 self.apply_facts(&facts.when_true);
                 let saved = self.diverges;
+                self.loop_depth += 1;
                 self.infer_expr(body, *loop_body, &Expectation::None);
+                self.loop_depth -= 1;
                 if let Some(after) = after {
                     self.infer_stmt(body, *after);
                 }
@@ -1809,7 +2115,9 @@ impl<'db> InferenceContext<'db> {
                     self.flow.insert(binding, outcome.matched_ty);
                 }
                 let saved = self.diverges;
+                self.loop_depth += 1;
                 self.infer_expr(body, *loop_body, &Expectation::None);
+                self.loop_depth -= 1;
                 self.diverges = saved;
                 self.flow = entry_flow;
             }
@@ -1843,7 +2151,9 @@ impl<'db> InferenceContext<'db> {
                 }
                 let entry_flow = self.flow.clone();
                 let saved = self.diverges;
+                self.loop_depth += 1;
                 self.infer_expr(body, *loop_body, &Expectation::None);
+                self.loop_depth -= 1;
                 self.diverges = saved;
                 self.flow = entry_flow;
             }
@@ -1962,7 +2272,7 @@ impl<'db> InferenceContext<'db> {
                 }
                 Some(op) => {
                     let rhs = self.infer_expr(body, value, &Expectation::None);
-                    let result = self.compound_op_result(op, &element, &rhs);
+                    let result = self.compound_op_result(value, op, &element, &rhs);
                     if !element.has_error() && !self.sub(&result, &element) {
                         self.result.type_mismatches.insert(value, (element, result));
                     }
@@ -1997,8 +2307,17 @@ impl<'db> InferenceContext<'db> {
                 let lhs = binding
                     .map(|binding| self.binding_flow_ty(binding))
                     .unwrap_or_else(|| self.infer_expr(body, target, &Expectation::None));
+                // An optional-chain place (`user?.id += 1`) SKIPS on
+                // null - the op only runs when the chain produces a
+                // value, so it dispatches on the peeled type (the
+                // corpus pins the skip semantics).
+                let lhs = if matches!(body.exprs[target], Expr::OptionalChain { .. }) {
+                    self.peel_chain_null(&lhs)
+                } else {
+                    lhs
+                };
                 let rhs = self.infer_expr(body, value, &Expectation::None);
-                let result = self.compound_op_result(op, &lhs, &rhs);
+                let result = self.compound_op_result(value, op, &lhs, &rhs);
                 if let Some(declared) = &declared
                     && !declared.has_error()
                     && !self.sub(&result, declared)
@@ -2523,6 +2842,16 @@ impl<'db> InferenceContext<'db> {
                         &rhs_ty.to_plain(),
                     )
                 {
+                    if !equal {
+                        // Disjoint operands: the comparison is pointless.
+                        self.pending_diags
+                            .push(PendingDiag::ComparisonAlwaysDisjoint {
+                                at: expr,
+                                op,
+                                lhs: lhs_ty.clone(),
+                                rhs: rhs_ty.clone(),
+                            });
+                    }
                     let value = if matches!(op, BinaryOp::Eq) {
                         equal
                     } else {
@@ -2541,6 +2870,88 @@ impl<'db> InferenceContext<'db> {
                 let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
                 let lhs_ty = self.table.resolve_completely(&lhs_ty);
                 let rhs_ty = self.table.resolve_completely(&rhs_ty);
+                // Exact-type ordering (TIR's rule): both operands widen
+                // (literal -> base, variant -> enum) and must be the SAME
+                // type - subtyping is not enough - and that type must
+                // implement `baml.ops.Compare`. Open/error operands skip
+                // (cascades; a var may still solve either way).
+                if !lhs_ty.has_infer()
+                    && !rhs_ty.has_infer()
+                    && !lhs_ty.has_error()
+                    && !rhs_ty.has_error()
+                    && !matches!(lhs_ty.kind(), TyKind::Unknown { .. })
+                    && !matches!(rhs_ty.kind(), TyKind::Unknown { .. })
+                {
+                    let widen = |this: &mut Self, ty: &Ty| -> baml_type::Ty {
+                        use baml_base::Literal as Lit;
+                        let plain = this.expand_alias_ty(ty).to_plain();
+                        match plain {
+                            baml_type::Ty::Literal(Lit::Int(_), _, attr) => {
+                                baml_type::Ty::Int { attr }
+                            }
+                            baml_type::Ty::Literal(Lit::Bigint(_), _, attr) => {
+                                baml_type::Ty::Bigint { attr }
+                            }
+                            baml_type::Ty::Literal(Lit::Float(_), _, attr) => {
+                                baml_type::Ty::Float { attr }
+                            }
+                            baml_type::Ty::Literal(Lit::String(_), _, attr) => {
+                                baml_type::Ty::String { attr }
+                            }
+                            baml_type::Ty::Literal(Lit::Bool(_), _, attr) => {
+                                baml_type::Ty::Bool { attr }
+                            }
+                            baml_type::Ty::EnumVariant(name, _, attr) => {
+                                baml_type::Ty::Enum(name, attr)
+                            }
+                            other => other,
+                        }
+                    };
+                    let lhs_base = widen(self, &lhs_ty);
+                    let rhs_base = widen(self, &rhs_ty);
+                    if !baml_type::normalize::equivalent(&lhs_base, &rhs_base, &self.facts) {
+                        self.pending_diags
+                            .push(PendingDiag::OrderingDifferentTypes {
+                                at: expr,
+                                op,
+                                lhs: lhs_ty.clone(),
+                                rhs: rhs_ty.clone(),
+                            });
+                    } else {
+                        // Ordering needs a SINGLE concrete type (or a
+                        // bounded rigid realizing to one) implementing
+                        // `baml.ops.Compare`; unions and existentials are
+                        // not orderable even member-wise (TIR's rule).
+                        let compare_existential = baml_type::Ty::Interface(
+                            baml_type::QualifiedTypeName::new(
+                                baml_base::Name::new("baml"),
+                                vec![baml_base::Name::new("ops")],
+                                baml_base::Name::new("Compare"),
+                            ),
+                            Vec::new(),
+                            Vec::new(),
+                            baml_type::TyAttr::default(),
+                        );
+                        let comparable = !matches!(
+                            lhs_base,
+                            baml_type::Ty::Union(..)
+                                | baml_type::Ty::Interface(..)
+                                | baml_type::Ty::Unknown { .. }
+                        ) && baml_type::normalize::is_subtype(
+                            &lhs_base,
+                            &compare_existential,
+                            &self.facts,
+                        );
+                        if !comparable {
+                            self.pending_diags
+                                .push(PendingDiag::OrderingRequiresCompare {
+                                    at: expr,
+                                    op,
+                                    ty: Ty::from_plain(&lhs_base),
+                                });
+                        }
+                    }
+                }
                 const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
             }
             BinaryOp::NullCoalesce => {
@@ -2670,9 +3081,13 @@ impl<'db> InferenceContext<'db> {
                                 let chain = spawn_params_ty(cur_value.clone(), cur_error.clone());
                                 let param_ty = param.ty.clone();
                                 if !self.sub(&chain, &param_ty) {
+                                    // Full transformer types on both sides:
+                                    // the render then shows the chain's
+                                    // concrete input against the
+                                    // transformer's (TIR's shape).
                                     self.result
                                         .type_mismatches
-                                        .insert(with_id, (param_ty, chain));
+                                        .insert(with_id, (expected.clone(), got.clone()));
                                 }
                             }
                             let ret = self.table.resolve_completely(&ret);
@@ -2694,9 +3109,27 @@ impl<'db> InferenceContext<'db> {
                     cur_error = self.table.resolve_completely(&error);
                 }
                 None => {
-                    // Not a transformer at all: the readable mismatch
-                    // against the expected shape.
-                    self.result.type_mismatches.insert(with_id, (expected, got));
+                    // Not a transformer at all. A fn-shaped or value-ref
+                    // link gets the middleware-contract wording (TIR's
+                    // SpawnWithNotATransformer); a direct non-fn value
+                    // keeps the readable shape mismatch.
+                    let is_value_ref = matches!(
+                        &body.exprs[with_id],
+                        Expr::Path(_) | Expr::MemberAccess { .. }
+                    );
+                    let got_resolved = self.table.resolve_completely(&got);
+                    if (is_value_ref || matches!(got_resolved.kind(), TyKind::Function { .. }))
+                        && !got_resolved.has_error()
+                        && !matches!(got_resolved.kind(), TyKind::Unknown { .. })
+                    {
+                        self.pending_diags.push(PendingDiag::SpawnWithBad {
+                            at: with_id,
+                            expected_input: spawn_params_ty(cur_value.clone(), cur_error.clone()),
+                            got: got_resolved,
+                        });
+                    } else {
+                        self.result.type_mismatches.insert(with_id, (expected, got));
+                    }
                 }
             }
         }
@@ -2767,20 +3200,29 @@ impl<'db> InferenceContext<'db> {
 
     /// One compound-assignment step: `lhs op rhs` through the operator
     /// machinery, shared by binding and index targets.
-    fn compound_op_result(&mut self, op: baml_compiler2_ast::AssignOp, lhs: &Ty, rhs: &Ty) -> Ty {
+    fn compound_op_result(
+        &mut self,
+        at: ExprId,
+        op: baml_compiler2_ast::AssignOp,
+        lhs: &Ty,
+        rhs: &Ty,
+    ) -> Ty {
         use baml_compiler2_ast::AssignOp;
-        match op {
-            AssignOp::Add => self.dispatch_operator("Add", lhs, Some(rhs)),
-            AssignOp::Sub => self.dispatch_operator("Subtract", lhs, Some(rhs)),
-            AssignOp::Mul => self.dispatch_operator("Multiply", lhs, Some(rhs)),
-            AssignOp::Div => self.dispatch_operator("Divide", lhs, Some(rhs)),
-            AssignOp::Mod => self.dispatch_operator("Remainder", lhs, Some(rhs)),
-            AssignOp::BitAnd => self.dispatch_operator("BitAnd", lhs, Some(rhs)),
-            AssignOp::BitOr => self.dispatch_operator("BitOr", lhs, Some(rhs)),
-            AssignOp::BitXor => self.dispatch_operator("BitXor", lhs, Some(rhs)),
-            AssignOp::Shl => self.dispatch_operator("ShiftLeft", lhs, Some(rhs)),
-            AssignOp::Shr => self.dispatch_operator("ShiftRight", lhs, Some(rhs)),
-        }
+        let interface = match op {
+            AssignOp::Add => "Add",
+            AssignOp::Sub => "Subtract",
+            AssignOp::Mul => "Multiply",
+            AssignOp::Div => "Divide",
+            AssignOp::Mod => "Remainder",
+            AssignOp::BitAnd => "BitAnd",
+            AssignOp::BitOr => "BitOr",
+            AssignOp::BitXor => "BitXor",
+            AssignOp::Shl => "ShiftLeft",
+            AssignOp::Shr => "ShiftRight",
+        };
+        // The reporting road (an inapplicable compound operator is the
+        // same E0004 the binary spelling gets), anchored at the value.
+        self.operator_or_obligation(at, interface, lhs, Some(rhs))
     }
 
     /// `base[idx]` dispatches through `baml.ops.Index` (the ruling:
@@ -3203,18 +3645,33 @@ impl<'db> InferenceContext<'db> {
         // whatever sits at its position); unlabeled arguments fill
         // positionally; an unmatched label falls back to position. The
         // label/arity diagnostics are S17's. `$id = ...` is the runtime-id
-        // side channel (TIR's rule: not a parameter binding) - it still
-        // TYPES through the positional fallback today; aligning its check
-        // with the side-channel contract rides with the S17 diagnostics.
+        // side channel (TIR's rule: not a parameter binding) - it never
+        // matches a parameter; its own LocalId check lives at the capture.
         let matched: Vec<Option<usize>> = args
             .iter()
             .enumerate()
             .map(|(index, arg)| match &arg.label {
+                Some(label) if label.as_str() == "$id" => None,
                 Some(label) => params
                     .iter()
                     .position(|param| param.name.as_ref() == Some(label))
                     .or_else(|| params.get(index).map(|_| index)),
                 None => params.get(index).map(|_| index),
+            })
+            .collect();
+        // An UNKNOWN label's positional fallback types the value but
+        // never FILLS the parameter: `search(q = "cats")` still owes
+        // `query`, so both the unknown-label and missing-required
+        // diagnostics report.
+        let label_fallback: Vec<bool> = args
+            .iter()
+            .map(|arg| {
+                arg.label.as_ref().is_some_and(|label| {
+                    label.as_str() != "$id"
+                        && !params
+                            .iter()
+                            .any(|param| param.name.as_ref() == Some(label))
+                })
             })
             .collect();
         let is_lambda_arg =
@@ -3246,11 +3703,41 @@ impl<'db> InferenceContext<'db> {
                 .as_ref()
                 .is_some_and(|label| label.as_str() == "$id")
             {
+                if runtime_id.is_some() {
+                    self.pending_diags
+                        .push(PendingDiag::DuplicateRuntimeIdArg { at: arg.expr });
+                } else {
+                    // The side channel accepts exactly `boundary.LocalId`.
+                    let got = self
+                        .result
+                        .type_of_expr
+                        .get(&arg.expr)
+                        .cloned()
+                        .unwrap_or_else(|| self.infer_expr(body, arg.expr, &Expectation::None));
+                    let local_id = Ty::intern(TyKind::Class(
+                        baml_type::QualifiedTypeName::new(
+                            baml_type::Name::new(baml_builtins2::PACKAGE_BOUNDARY),
+                            vec![],
+                            baml_type::Name::new("LocalId"),
+                        ),
+                        Vec::new().into(),
+                        TyAttr::default(),
+                    ));
+                    if !self.sub(&got, &local_id) {
+                        self.pending_diags
+                            .push(PendingDiag::RuntimeIdArgMismatch { at: arg.expr, got });
+                    }
+                }
                 runtime_id = Some(arg.expr);
                 continue;
             }
+            if runtime_id.is_some() {
+                self.pending_diags
+                    .push(PendingDiag::RuntimeIdArgNotLast { at: arg.expr });
+            }
             if let Some(param_index) = matched[index]
                 && slots[param_index].is_none()
+                && !label_fallback[index]
             {
                 slots[param_index] = Some(arg.expr);
             }
@@ -3274,15 +3761,77 @@ impl<'db> InferenceContext<'db> {
                     expected: params.len(),
                     got: provided,
                 });
-            } else if (0..params.len()).any(|param_index| {
-                params[param_index].mode == baml_type::FunctionParamMode::Required
-                    && slots[param_index].is_none()
-            }) {
-                self.pending_diags.push(PendingDiag::ArgCountMismatch {
-                    expr: call,
-                    expected: required,
-                    got: provided,
-                });
+            } else {
+                let saw_named = args
+                    .iter()
+                    .any(|arg| arg.label.as_ref().is_some_and(|l| l.as_str() != "$id"));
+                let unfilled: Vec<usize> = (0..params.len())
+                    .filter(|&param_index| {
+                        params[param_index].mode == baml_type::FunctionParamMode::Required
+                            && slots[param_index].is_none()
+                    })
+                    .collect();
+                if !unfilled.is_empty() {
+                    if saw_named {
+                        // A named call reports each missing parameter BY
+                        // NAME (the count would misread as positional).
+                        for param_index in unfilled {
+                            if let Some(name) = params[param_index].name.clone() {
+                                self.pending_diags
+                                    .push(PendingDiag::MissingNamedArg { expr: call, name });
+                            } else {
+                                self.pending_diags.push(PendingDiag::ArgCountMismatch {
+                                    expr: call,
+                                    expected: required,
+                                    got: provided,
+                                });
+                                break;
+                            }
+                        }
+                    } else {
+                        self.pending_diags.push(PendingDiag::ArgCountMismatch {
+                            expr: call,
+                            expected: required,
+                            got: provided,
+                        });
+                    }
+                }
+            }
+            // Argument-form rules (TIR's family): a positional
+            // argument after a named one; a DEFAULTED parameter
+            // supplied positionally (by-name only); a repeated name.
+            let mut seen_named = false;
+            let mut seen_labels: Vec<&baml_type::Name> = Vec::new();
+            for (index, arg) in args.iter().enumerate() {
+                match &arg.label {
+                    Some(label) if label.as_str() == "$id" => {}
+                    Some(label) => {
+                        if seen_labels.contains(&label) {
+                            self.pending_diags.push(PendingDiag::DuplicateNamedArg {
+                                expr: arg.expr,
+                                name: label.clone(),
+                            });
+                        }
+                        seen_labels.push(label);
+                        seen_named = true;
+                    }
+                    None if seen_named => {
+                        self.pending_diags
+                            .push(PendingDiag::PositionalAfterNamed { expr: arg.expr });
+                    }
+                    None => {
+                        if let Some(param_index) = matched[index]
+                            && params[param_index].mode == baml_type::FunctionParamMode::Optional
+                            && let Some(name) = params[param_index].name.clone()
+                        {
+                            self.pending_diags
+                                .push(PendingDiag::PositionalDefaultedArg {
+                                    expr: arg.expr,
+                                    name,
+                                });
+                        }
+                    }
+                }
             }
             for arg in args {
                 if let Some(label) = &arg.label
@@ -3950,17 +4499,31 @@ impl<'db> InferenceContext<'db> {
         // A name that RESOLVES to a definition kind this road doesn't
         // type (clients, top-level lets outside their tier) is not
         // unresolved - it stays the silent sentinel it always was.
-        if self.lower.resolve_value(segments).is_none() {
-            self.pending_diags.push(PendingDiag::UnresolvedName {
-                expr,
-                name: baml_type::Name::new(
+        if self.lower.resolve_value(segments).is_none()
+            && !self.suppressed_unresolved.contains(&expr)
+        {
+            // When a proper prefix resolves (`baml.media.Image.missing`
+            // has the valid type `baml.media.Image`), the segment AFTER
+            // the longest valid prefix is what failed - report it alone,
+            // not the whole dotted path (TIR's first-invalid-segment
+            // rule). A path with no valid prefix reports in full.
+            let failed = (1..segments.len()).rev().find_map(|cut| {
+                let prefix = &segments[..cut];
+                (self.lower.resolve_type_definition(prefix).is_some()
+                    || self.lower.resolve_value(prefix).is_some())
+                .then(|| segments[cut].clone())
+            });
+            let name = failed.unwrap_or_else(|| {
+                baml_type::Name::new(
                     segments
                         .iter()
                         .map(|segment| segment.as_str())
                         .collect::<Vec<_>>()
                         .join("."),
-                ),
+                )
             });
+            self.pending_diags
+                .push(PendingDiag::UnresolvedName { expr, name });
         }
         Ty::error()
     }
@@ -4273,8 +4836,14 @@ impl<'db> InferenceContext<'db> {
             .only_has_type()
             .cloned()
             .map(|ty| self.structurally_resolve(&ty))
+            .map(|ty| self.expand_alias_ty(&ty))
             .and_then(|ty| match ty.kind() {
-                TyKind::Function { params, ret, .. } => Some((params.clone(), ret.clone())),
+                TyKind::Function {
+                    params,
+                    ret,
+                    throws,
+                    ..
+                } => Some((params.clone(), ret.clone(), throws.clone())),
                 _ => None,
             });
 
@@ -4290,7 +4859,7 @@ impl<'db> InferenceContext<'db> {
                     Some(type_ref) => self.lower_body_annotation(type_ref),
                     None => expected_fn
                         .as_ref()
-                        .and_then(|(params, _)| params.get(index))
+                        .and_then(|(params, _, _)| params.get(index))
                         .map(|param| param.ty.clone())
                         .unwrap_or_else(Ty::error),
                 }
@@ -4302,7 +4871,7 @@ impl<'db> InferenceContext<'db> {
             .and_then(|sig| sig.return_type)
             .map(|type_ref| self.lower_body_annotation(type_ref));
         let ret_expectation =
-            annotated_ret.or_else(|| expected_fn.as_ref().map(|(_, ret)| ret.clone()));
+            annotated_ret.or_else(|| expected_fn.as_ref().map(|(_, ret, _)| ret.clone()));
 
         let written_throws = signature
             .as_ref()
@@ -4358,11 +4927,55 @@ impl<'db> InferenceContext<'db> {
             None => ret_expectation.unwrap_or_else(Ty::error),
         };
         let channel = self.throws_channels.pop().expect("pushed above");
+        // An OMITTED clause in a GROUND typed context inherits the
+        // context's throws as its contract (TIR's rule: the lambda adopts
+        // the expected surface, and its body checks against it - the
+        // "local violation" road). Effect-param and open contexts skip:
+        // there the channel BINDS the context instead.
+        let contextual_throws = if written_throws.is_none() {
+            expected_fn
+                .as_ref()
+                .map(|(_, _, throws)| self.structurally_resolve(throws))
+                .filter(|throws| {
+                    !throws.has_infer()
+                        && !throws.has_error()
+                        && !throws.has_typevar()
+                        && !matches!(throws.kind(), TyKind::Unknown { .. })
+                })
+        } else {
+            None
+        };
+        let written_throws = written_throws.or(contextual_throws);
+        // A WRITTEN closed clause is the lambda's contract: its body's
+        // contributions check against it exactly as a function's do
+        // (open contributions judge at finalize).
+        if let Some(declared) = &written_throws {
+            let (_, open) = crate::lower::throws_clause_parts(declared);
+            if !open && !declared.has_error() {
+                for (at, contribution) in &channel {
+                    if contribution.has_infer() || !self.sub(contribution, declared) {
+                        self.pending_diags.push(PendingDiag::ThrowsViolation {
+                            at: *at,
+                            declared: declared.clone(),
+                            extra: contribution.clone(),
+                        });
+                    }
+                }
+            }
+        }
         let throws_ty = written_throws.unwrap_or_else(|| {
             if channel.is_empty() {
                 Ty::never()
             } else {
-                self.union_of(&channel)
+                // The INFERRED surface keeps literal grain (spec rule;
+                // TIR diverged by widening thrown literals here) - a
+                // body-inferred `throw "neg"` surfaces as `throws
+                // "neg"`, and the grain flows into effect params.
+                let tys: Vec<Ty> = channel
+                    .iter()
+                    .map(|(_, ty)| self.table.resolve_completely(ty))
+                    .collect();
+                self.union_of(&tys)
             }
         });
 
@@ -4484,8 +5097,32 @@ impl<'db> InferenceContext<'db> {
         let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
             self.lower.resolve_type_definition(&type_name.0)
         else {
+            // A WRITTEN constructor head that resolves nowhere reports
+            // as an unresolved type with near-match suggestions
+            // (`ValidationIssu { .. }` suggests the class).
+            let segments: Vec<baml_type::Name> = type_name
+                .0
+                .iter()
+                .map(|segment| baml_type::Name::new(segment.as_str()))
+                .collect();
+            if !segments.is_empty() {
+                self.pending_diags.push(PendingDiag::UnresolvedCtor {
+                    expr: object,
+                    name: baml_type::Name::new(
+                        segments
+                            .iter()
+                            .map(|segment| segment.as_str())
+                            .collect::<Vec<_>>()
+                            .join("."),
+                    ),
+                    suggestions: self.lower.type_suggestions(&segments),
+                });
+            }
             for (_, value) in fields {
                 self.infer_expr(body, *value, &Expectation::None);
+            }
+            for spread in spreads {
+                self.infer_expr(body, spread.expr, &Expectation::None);
             }
             return Ty::error();
         };
@@ -4501,6 +5138,39 @@ impl<'db> InferenceContext<'db> {
             instantiation.push(self.table.new_var_ty());
         }
         let field_types = crate::lower::class_field_types(db, class);
+        // Fresh (unwritten) instantiation slots that survive to finalize
+        // unsolved are uninferrable - report instead of letting the bare
+        // sentinel reach lowering. A PHANTOM param (no field mentions it)
+        // stays silent: nothing could ever determine it.
+        for (slot, arg) in instantiation.iter().enumerate() {
+            let Some(param) = generic_names.get(slot) else {
+                continue;
+            };
+            let mentioned = field_types.iter().any(|(_, field_ty)| {
+                let mut found = false;
+                fn walk(ty: &Ty, param: &baml_type::ParamTy, found: &mut bool) {
+                    if *found {
+                        return;
+                    }
+                    if matches!(ty.kind(), TyKind::TypeVar(p, _) if p == param) {
+                        *found = true;
+                        return;
+                    }
+                    baml_type::interned::for_each_child(ty.kind(), |child| {
+                        walk(child, param, found)
+                    });
+                }
+                walk(field_ty, param, &mut found);
+                found
+            });
+            if mentioned && arg.has_infer() {
+                self.pending_diags.push(PendingDiag::UninferredCtorParam {
+                    expr: object,
+                    var: arg.clone(),
+                    name: baml_type::Name::new(param.name().as_str()),
+                });
+            }
+        }
         for (name, value) in fields {
             match field_types.iter().find(|(field, _)| field == name) {
                 Some((_, field_ty)) => {
@@ -4508,23 +5178,44 @@ impl<'db> InferenceContext<'db> {
                     self.check_expr(body, *value, &field_ty);
                 }
                 None => {
-                    // Unknown field: S17's diagnostic.
                     self.infer_expr(body, *value, &Expectation::None);
+                    let shorthand = matches!(
+                        &body.exprs[*value],
+                        Expr::Path(segments) if segments.len() == 1 && &segments[0] == name
+                    );
+                    let class_name = crate::lower::qualify_def(
+                        db,
+                        baml_compiler2_hir::contributions::Definition::Class(class),
+                        &baml_compiler2_ppir::item_data::class_data(db, class).name,
+                    );
+                    self.pending_diags.push(PendingDiag::UnknownObjectField {
+                        object,
+                        value: *value,
+                        class_name,
+                        declared: field_types.iter().map(|(field, _)| field.clone()).collect(),
+                        name: name.clone(),
+                        shorthand,
+                    });
                 }
             }
         }
-        for spread in spreads {
-            self.infer_expr(body, spread.expr, &Expectation::None);
-        }
         let short = type_name.0.last().expect("type paths are never empty");
-        Ty::intern(TyKind::Class(
+        let object_ty = Ty::intern(TyKind::Class(
             self.lower.qualify_definition(
                 baml_compiler2_hir::contributions::Definition::Class(class),
                 short,
             ),
             instantiation.into(),
             TyAttr::default(),
-        ))
+        ));
+        // A spread source must BE the constructed class at the same
+        // arguments (fields are invariant slots): checking against the
+        // object's own type both enforces that and lets `Left {
+        // ...source }` solve open instantiation slots from the source.
+        for spread in spreads {
+            self.check_expr(body, spread.expr, &object_ty);
+        }
+        object_ty
     }
 
     /// Member access in value position. Inspection site: the receiver must
@@ -4639,14 +5330,12 @@ impl<'db> InferenceContext<'db> {
             return (self.interface_member_value(interface_member), resolution);
         }
         // A definitely-missing member on a KNOWN base reports; an
-        // error/unknown/var-carrying base is a cascade of an earlier
-        // failure (rustc's tainted_by_errors discipline), and a PROBE
-        // leaves the report to its committed frame.
-        if self.member_probe_depth == 0
-            && !resolved.has_error()
-            && !resolved.has_infer()
-            && !matches!(resolved.kind(), TyKind::Unknown { .. })
-        {
+        // error/var-carrying base is a cascade of an earlier failure
+        // (rustc's tainted_by_errors discipline), and a PROBE leaves
+        // the report to its committed frame. `unknown` reports too:
+        // it is a first-class user type that must be narrowed before
+        // member access, not an error sentinel.
+        if self.member_probe_depth == 0 && !resolved.has_error() && !resolved.has_infer() {
             self.pending_diags.push(PendingDiag::UnresolvedMember {
                 expr: at,
                 base: resolved.clone(),
@@ -5003,7 +5692,7 @@ impl<'db> InferenceContext<'db> {
         // their member facts, so per-arm matching and subtraction work
         // at fact grain - which is what "rethrow the rest" means.
         let mut facts: Vec<Ty> = Vec::new();
-        for contribution in &channel {
+        for (_, contribution) in &channel {
             let finalized = self.finalize_incoming_effect(contribution);
             if matches!(finalized.kind(), TyKind::Never { .. }) {
                 continue;
@@ -5026,6 +5715,7 @@ impl<'db> InferenceContext<'db> {
             }
         }
 
+        let had_facts = !facts.is_empty();
         let mut arm_tys = vec![base_ty];
         for clause in clauses {
             let clause_binding_ty = if facts.is_empty() {
@@ -5096,6 +5786,13 @@ impl<'db> InferenceContext<'db> {
                 // beside the facts without consulting them.
                 if let Some(panic) = self.panic_subset(&claim) {
                     may.push(panic);
+                } else if had_facts && may.is_empty() && !claim.has_error() {
+                    // Earlier arms drained every fact this arm could
+                    // receive (and it claims no panic): unreachable. An
+                    // ERRORED claim (unresolved class pattern) judges
+                    // nothing - its own report stands alone.
+                    self.pending_diags
+                        .push(PendingDiag::UnreachableArm { expr: arm.body });
                 }
                 // The arm's scrutinee: its may-set; else the WRITTEN
                 // claim (ruling 3's fallback - an arm no fact reaches
@@ -5293,16 +5990,24 @@ impl<'db> InferenceContext<'db> {
             && !self.declared_throws_open
             && !declared.has_error()
             && self.throws_channels.len() == 1
-            && !self.sub(&contribution, &declared)
         {
-            self.result
-                .type_mismatches
-                .insert(at, (declared, contribution.clone()));
+            // An OPEN contribution (a callee's still-unsolved effect param)
+            // is judged at finalize only - running `sub` on it here would
+            // DEPOSIT `?effect <= declared` as a bound and wedge the var
+            // against the callback's actual surface. Ground contributions
+            // judge (and stash for finalize re-judgment) immediately.
+            if contribution.has_infer() || !self.sub(&contribution, &declared) {
+                self.pending_diags.push(PendingDiag::ThrowsViolation {
+                    at,
+                    declared,
+                    extra: contribution.clone(),
+                });
+            }
         }
         self.throws_channels
             .last_mut()
             .expect("channel stack never empty")
-            .push(contribution);
+            .push((at, contribution));
     }
 
     /// The endgame (S13 finalize): resolve bounded variables to fixpoint,
@@ -5444,7 +6149,7 @@ impl<'db> InferenceContext<'db> {
                 let contributions = self.throws_channels[0].clone();
                 let mut resolved: Vec<Ty> = contributions
                     .iter()
-                    .map(|ty| self.finalize_ty(ty))
+                    .map(|(_, ty)| self.finalize_ty(ty))
                     .filter(|ty| !ty.has_error())
                     .collect();
                 if let Some(named) = declared {
@@ -5457,6 +6162,52 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         };
+        // E0097: with a CLOSED declared clause, a declared fact nothing
+        // thrown matches exactly (interface-implementor coverage aside)
+        // is extraneous - a warning, anchored at the body root (the
+        // clause itself lives in the signature store).
+        if let Some(declared) = self.declared_throws.clone()
+            && !self.declared_throws_open
+            && !declared.has_error()
+            && let Some(root) = self.body_root
+        {
+            // Coverage compares WIDENED facts (TIR's fact grain: a thrown
+            // `"boom"` covers a declared `string`) while the report keeps
+            // the declared spelling.
+            let declared_facts = crate::package_interface::flatten_ty_to_facts(
+                &self.finalize_ty(&declared).to_plain(),
+            );
+            let effective: std::collections::BTreeSet<baml_type::Ty> = self.throws_channels[0]
+                .clone()
+                .iter()
+                .flat_map(|(_, ty)| {
+                    crate::throw_facts::flatten_declared_ty_to_facts(
+                        &self.finalize_ty(ty).to_plain(),
+                    )
+                })
+                .collect();
+            let mut extraneous: Vec<String> = declared_facts
+                .iter()
+                .filter(|decl| {
+                    let widened_decl: std::collections::BTreeSet<baml_type::Ty> =
+                        crate::throw_facts::flatten_declared_ty_to_facts(decl);
+                    let covered = widened_decl.iter().all(|w| effective.contains(w));
+                    !(covered
+                        || matches!(decl, baml_type::Ty::Interface(..))
+                            && effective.iter().any(|eff| {
+                                baml_type::normalize::is_subtype(eff, decl, &self.facts)
+                            }))
+                })
+                .map(baml_type::Ty::render_user_facing)
+                .collect();
+            extraneous.sort();
+            if !extraneous.is_empty() {
+                self.pending_diags.push(PendingDiag::ExtraneousThrows {
+                    at: root,
+                    extra_types: extraneous,
+                });
+            }
+        }
         let mut result = std::mem::take(&mut self.result);
         result.throws = throws;
         for ty in result
@@ -5465,6 +6216,23 @@ impl<'db> InferenceContext<'db> {
             .chain(result.type_of_pat.values_mut())
         {
             *ty = self.finalize_ty(ty);
+        }
+        // Provisional checks re-judge now that their expectations solved:
+        // a definite failure joins the mismatch table (first writer per
+        // expr wins - a direct mismatch is the better message).
+        for (expr, expected, actual) in std::mem::take(&mut self.provisional_checks) {
+            let expected = self.finalize_ty(&expected);
+            let actual = self.finalize_ty(&actual);
+            if expected.has_error()
+                || actual.has_error()
+                || is_subtype_interned(&actual, &expected, &self.facts)
+            {
+                continue;
+            }
+            result
+                .type_mismatches
+                .entry(expr)
+                .or_insert((expected, actual));
         }
         for (expected, actual) in result.type_mismatches.values_mut() {
             *expected = self.finalize_ty(expected);
@@ -5499,11 +6267,26 @@ impl<'db> InferenceContext<'db> {
                 if is_subtype_interned(actual, expected, &self.facts) {
                     continue;
                 }
-                diags.push(TirDiagnostic {
-                    error: TirTypeError::TypeMismatch {
+                // The for-desugar's iterability failure reads as its own
+                // message (TIR's NotIterable), not a raw interface mismatch.
+                let error = match expected.kind() {
+                    TyKind::Interface(qtn, _, _, _)
+                        if qtn.package().as_str() == "baml"
+                            && qtn.namespace().len() == 1
+                            && qtn.namespace()[0].as_str() == "iter"
+                            && qtn.name().as_str() == "Iterable" =>
+                    {
+                        TirTypeError::NotIterable {
+                            ty: actual.to_plain(),
+                        }
+                    }
+                    _ => TirTypeError::TypeMismatch {
                         expected: expected.to_plain(),
                         got: actual.to_plain(),
                     },
+                };
+                diags.push(TirDiagnostic {
+                    error,
                     severity: DiagnosticSeverity::Error,
                     primary: DiagnosticLocation::Expr(expr),
                     related: Vec::new(),
@@ -5531,6 +6314,24 @@ impl<'db> InferenceContext<'db> {
                         expr,
                     ),
                     PendingDiag::UnreachableArm { expr } => (TirTypeError::UnreachableArm, expr),
+                    PendingDiag::MissingNamedArg { expr, name } => {
+                        (TirTypeError::MissingRequiredArgument { name }, expr)
+                    }
+                    PendingDiag::PositionalDefaultedArg { expr, name } => (
+                        TirTypeError::DefaultedParamPassedPositionally { name },
+                        expr,
+                    ),
+                    PendingDiag::UnresolvedCtor {
+                        expr,
+                        name,
+                        suggestions,
+                    } => (TirTypeError::UnresolvedType { name, suggestions }, expr),
+                    PendingDiag::PositionalAfterNamed { expr } => {
+                        (TirTypeError::PositionalArgumentAfterNamed, expr)
+                    }
+                    PendingDiag::DuplicateNamedArg { expr, name } => {
+                        (TirTypeError::DuplicateNamedArgument { name }, expr)
+                    }
                     PendingDiag::UnresolvedName { expr, name } => {
                         (TirTypeError::UnresolvedName { name }, expr)
                     }
@@ -5638,12 +6439,17 @@ impl<'db> InferenceContext<'db> {
                         pat,
                         class_name,
                         field_name,
+                        declared,
                     } => {
+                        let suggestions = crate::diagnostics::similar_name_suggestions(
+                            &field_name,
+                            declared.iter(),
+                        );
                         diags.push(TirDiagnostic {
                             error: TirTypeError::UnknownClassPatternField {
                                 class_name,
                                 field_name,
-                                suggestions: Vec::new(),
+                                suggestions,
                             },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Pat(pat),
@@ -5653,6 +6459,242 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::VoidResultUsed { expr } => {
                         (TirTypeError::VoidFunctionResultUsed, expr)
+                    }
+                    PendingDiag::UninferredCtorParam { expr, var, name } => {
+                        if !self.finalize_ty(&var).has_error() {
+                            continue;
+                        }
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::CannotInferTypeParameter { name },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::SpawnWithBad {
+                        at,
+                        expected_input,
+                        got,
+                    } => {
+                        let got = self.finalize_ty(&got).to_plain();
+                        // A flow-narrowed literal reads as its base in the
+                        // contract wording (`got int`, not `got 7`).
+                        let got = match got {
+                            baml_type::Ty::Literal(lit, _, attr) => {
+                                use baml_base::Literal as Lit;
+                                match lit {
+                                    Lit::Int(_) => baml_type::Ty::Int { attr },
+                                    Lit::Bigint(_) => baml_type::Ty::Bigint { attr },
+                                    Lit::Float(_) => baml_type::Ty::Float { attr },
+                                    Lit::String(_) => baml_type::Ty::String { attr },
+                                    Lit::Bool(_) => baml_type::Ty::Bool { attr },
+                                }
+                            }
+                            other => other,
+                        };
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::SpawnWithNotATransformer {
+                                expected_input: self.finalize_ty(&expected_input).to_plain(),
+                                got,
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::ExtraneousThrows { at, extra_types } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ExtraneousThrowsDeclaration { extra_types },
+                            severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::DeferEscape {
+                        stmt,
+                        expr,
+                        keyword,
+                    } => {
+                        let primary = match (stmt, expr) {
+                            (Some(stmt), _) => DiagnosticLocation::Stmt(stmt),
+                            (None, Some(expr)) => DiagnosticLocation::Expr(expr),
+                            (None, None) => unreachable!("one anchor is always set"),
+                        };
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::DeferControlFlowEscape { keyword },
+                            severity: DiagnosticSeverity::Error,
+                            primary,
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::UnresolvedShorthand {
+                        expr,
+                        name,
+                        suggestions,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::UnresolvedPropertyShorthand { name, suggestions },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::ComparisonAlwaysDisjoint { at, op, lhs, rhs } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ComparisonAlwaysDisjoint {
+                                op,
+                                lhs: self.finalize_ty(&lhs).to_plain(),
+                                rhs: self.finalize_ty(&rhs).to_plain(),
+                            },
+                            severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::OrderingDifferentTypes { at, op, lhs, rhs } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::OrderingDifferentTypes {
+                                op,
+                                lhs: self.finalize_ty(&lhs).to_plain(),
+                                rhs: self.finalize_ty(&rhs).to_plain(),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::OrderingRequiresCompare { at, op, ty } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::OrderingRequiresCompare {
+                                op,
+                                ty: self.finalize_ty(&ty).to_plain(),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::UnknownObjectField {
+                        object,
+                        value,
+                        class_name,
+                        declared,
+                        name,
+                        shorthand,
+                    } => {
+                        let suggestions =
+                            crate::diagnostics::similar_name_suggestions(&name, declared.iter());
+                        let error = if shorthand {
+                            TirTypeError::UnknownClassPropertyShorthand {
+                                class_name,
+                                name,
+                                suggestions,
+                            }
+                        } else {
+                            TirTypeError::UnknownClassField {
+                                class_name,
+                                field_name: name,
+                                suggestions,
+                            }
+                        };
+                        diags.push(TirDiagnostic {
+                            error,
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::ObjectFieldName(object, value),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::RuntimeIdArgMismatch { at, got } => {
+                        let got = self.finalize_ty(&got);
+                        if got.has_error() {
+                            continue;
+                        }
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::RuntimeIdArgumentTypeMismatch {
+                                got: got.to_plain(),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::DuplicateRuntimeIdArg { at } => {
+                        (TirTypeError::DuplicateRuntimeIdArgument, at)
+                    }
+                    PendingDiag::RuntimeIdArgNotLast { at } => {
+                        (TirTypeError::RuntimeIdArgumentMustBeLast, at)
+                    }
+                    PendingDiag::ThrowsViolation {
+                        at,
+                        declared,
+                        extra,
+                    } => {
+                        let declared = self.finalize_ty(&declared);
+                        let extra = self.finalize_ty(&extra);
+                        // A check can fail MID-INFERENCE on open variables
+                        // later resolution satisfies; cascades suppress.
+                        if declared.has_error()
+                            || extra.has_error()
+                            || is_subtype_interned(&extra, &declared, &self.facts)
+                        {
+                            continue;
+                        }
+                        // A synthetic-effect-param extra traces to a
+                        // CALLBACK parameter: the humanized wording names
+                        // it (TIR's CallbackThrowsContractViolation).
+                        if let TyKind::TypeVar(param, _) = extra.kind()
+                            && baml_type::is_synthetic_effect_param(param.name())
+                            && let Some(callback) = self.callback_param_for_effect(param)
+                        {
+                            diags.push(TirDiagnostic {
+                                error: TirTypeError::CallbackThrowsContractViolation {
+                                    callback_name: callback,
+                                    declared: declared.to_plain(),
+                                    concrete_throws: None,
+                                },
+                                severity: DiagnosticSeverity::Error,
+                                primary: DiagnosticLocation::Expr(at),
+                                related: Vec::new(),
+                            });
+                            continue;
+                        }
+                        let extra_types: Vec<String> =
+                            crate::throw_facts::flatten_declared_ty_to_facts(&extra.to_plain())
+                                .into_iter()
+                                .map(|fact| fact.render_user_facing())
+                                .collect();
+                        if extra_types.is_empty() {
+                            continue;
+                        }
+                        // The error-CHANNEL pin (B-1082): a surviving
+                        // violation also records on the mismatch channel
+                        // at the thrown value. This runs AFTER the
+                        // mismatch render loop above, so E0096 stays the
+                        // one user-facing diagnostic for it.
+                        result
+                            .type_mismatches
+                            .entry(at)
+                            .or_insert((declared.clone(), extra.clone()));
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ThrowsContractViolation {
+                                declared: declared.to_plain(),
+                                extra_types,
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
                     }
                     PendingDiag::PatternScrutMismatch {
                         pat,
@@ -5736,9 +6778,14 @@ impl<'db> InferenceContext<'db> {
                         continue;
                     }
                 };
+                let severity = if matches!(error, TirTypeError::UnreachableArm) {
+                    DiagnosticSeverity::Warning
+                } else {
+                    DiagnosticSeverity::Error
+                };
                 diags.push(TirDiagnostic {
                     error,
-                    severity: DiagnosticSeverity::Error,
+                    severity,
                     primary: DiagnosticLocation::Expr(expr),
                     related: Vec::new(),
                 });
@@ -5748,7 +6795,8 @@ impl<'db> InferenceContext<'db> {
             diags.sort_by_key(|d| match d.primary {
                 DiagnosticLocation::Expr(id)
                 | DiagnosticLocation::ExprMember(id)
-                | DiagnosticLocation::ExprSegment(id, _) => (0u8, u32::from(id.into_raw())),
+                | DiagnosticLocation::ExprSegment(id, _)
+                | DiagnosticLocation::ObjectFieldName(_, id) => (0u8, u32::from(id.into_raw())),
                 DiagnosticLocation::Stmt(id) => (1, u32::from(id.into_raw())),
                 DiagnosticLocation::TypeAnnot(id) => (2, u32::from(id.into_raw())),
                 DiagnosticLocation::Pat(id) => (4, u32::from(id.into_raw())),
@@ -6162,7 +7210,21 @@ impl<'db> InferenceContext<'db> {
                 {
                     maximum
                 }
-                _ => Ty::error(),
+                _ => {
+                    // No join: genuinely incompatible demands. An empty
+                    // CONTAINER's slot follows TIR's establishment-order
+                    // rule - the FIRST ground demand wins so the binding
+                    // stays usable and every later incompatible demand
+                    // (and any violated upper) reports through the
+                    // provisional re-check at finalize. Any other var (a
+                    // call instantiation) fails resolution instead
+                    // (ruling 1: disagreeing lowers reject, not join).
+                    if self.table.is_establishment_var(var) {
+                        widened.first().cloned().unwrap_or_else(Ty::error)
+                    } else {
+                        return false;
+                    }
+                }
             }
         };
         self.table.solve(var, solution);
@@ -6257,6 +7319,48 @@ impl<'db> InferenceContext<'db> {
             }
         }
         resolved
+    }
+
+    /// The name of the parameter whose function type carries `effect` in
+    /// throws position - the callback a synthetic effect param belongs to.
+    fn callback_param_for_effect(
+        &mut self,
+        effect: &baml_type::ParamTy,
+    ) -> Option<baml_type::Name> {
+        let function = self.body_owner?;
+        let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
+        for (index, param_ty) in self.param_tys.iter().enumerate() {
+            let resolved = self.table.resolve_completely(param_ty);
+            let TyKind::Function { throws, .. } = resolved.kind() else {
+                continue;
+            };
+            if matches!(throws.kind(), TyKind::TypeVar(p, _) if p == effect) {
+                return data.params.get(index).map(|param| param.name.clone());
+            }
+        }
+        None
+    }
+
+    /// Every value name visible at the CURRENT scope (params and let
+    /// bindings through the ancestor chain) - the near-match candidate
+    /// pool for shorthand suggestions.
+    fn local_binding_names(&self) -> Vec<baml_type::Name> {
+        let mut names = Vec::new();
+        let Some(scope) = self.current_scope else {
+            return names;
+        };
+        let index = self.index;
+        for ancestor in index.ancestor_scopes(scope) {
+            let bindings = &index.scope_bindings[ancestor.index() as usize];
+            names.extend(bindings.bindings.iter().map(|b| b.name.clone()));
+            names.extend(
+                bindings
+                    .params
+                    .iter()
+                    .map(|(name, _)| baml_type::Name::new(name.as_str())),
+            );
+        }
+        names
     }
 
     /// The pattern-reachability oracle over this scope (TIR's

@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1085: https://linear.app/boundaryml2/issue/B-1085
 // An empty literal in generic argument position adopts the parameter's

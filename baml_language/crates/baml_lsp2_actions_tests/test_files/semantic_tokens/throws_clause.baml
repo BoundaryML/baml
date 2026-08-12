@@ -30,9 +30,13 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 // E0097
 //
 //   ⚠ extraneous throws declaration: int
-//     ╭─[throws_clause.baml:21:52]
-//  21 │ function MayThrowMultiple(x: int) -> string throws string | int {
-//     ·                                                    ────────────
+//     ╭─[throws_clause.baml:21:65]
+//  21 │ ╭─▶ function MayThrowMultiple(x: int) -> string throws string | int {
+//  22 │ │     if (x < 0) {
+//  23 │ │       throw "negative"
+//  24 │ │     }
+//  25 │ │     "ok"
+//  26 │ ╰─▶ }
 //     ╰────
 //
 //- semantic_tokens

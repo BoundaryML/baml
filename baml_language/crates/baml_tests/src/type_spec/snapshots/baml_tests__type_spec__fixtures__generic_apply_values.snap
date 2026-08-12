@@ -14,14 +14,14 @@ expression: outcome.dump
 650..660 'giv_direct': throws never
 683..759 '{\n   ...(5)\n}': int
 689..694 'let f': (x: int) -> int throws never
-697..708 'giv_id<int>': hir_ty=[(x: int) -> int throws never] tir=[(x: T) -> T throws never / (x: int) -> int throws never]
+697..708 'giv_id<int>': (x: int) -> int throws never
 753..754 'f': (x: int) -> int throws never
 753..757 'f(5)': int
 755..756 '5': 5
 770..779 'giv_multi': throws never
 805..914 '{\n   ...o")\n}': string
 811..816 'let f': (a: int, b: string) -> string throws never
-819..840 'giv_pa...tring>': hir_ty=[(a: int, b: string) -> string throws never] tir=[(a: A, b: B) -> B throws never / (a: int, b: string) -> string throws never]
+819..840 'giv_pa...tring>': (a: int, b: string) -> string throws never
 899..900 'f': (a: int, b: string) -> string throws never
 899..912 'f(1, "hello")': string
 901..902 '1': 1
@@ -39,7 +39,7 @@ expression: outcome.dump
 1093..1108 'GivBox { v: 1 }': user.GivBox
 1105..1106 '1': 1
 1114..1119 'let f': (x: int) -> int throws never
-1122..1128 'p.pick': hir_ty=[(self: user.GivBox, x: int) -> int throws never] tir=[(x: T) -> T throws never]
+1122..1128 'p.pick': (self: user.GivBox, x: int) -> int throws never
 1122..1133 'p.pick<int>': (x: int) -> int throws never
 1178..1179 'f': (x: int) -> int throws never
 1178..1182 'f(7)': int

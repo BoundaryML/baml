@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-369..372 'add': throws never
-444..505 '{\n   ...put\n}': hir_ty=[(T as baml.ops.Add<O>).Output] tir=[unknown]
-450..453 'lhs': T
-450..459 'lhs + rhs': hir_ty=[(T as baml.ops.Add<O>).Output] tir=[unknown]
-456..459 'rhs': O
+355..358 'add': throws never
+430..491 '{\n   ...put\n}': (T as baml.ops.Add<O>).Output
+436..439 'lhs': T
+436..445 'lhs + rhs': (T as baml.ops.Add<O>).Output
+442..445 'rhs': O

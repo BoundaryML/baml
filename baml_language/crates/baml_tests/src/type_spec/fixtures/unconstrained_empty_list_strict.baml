@@ -3,7 +3,6 @@
 // element variable unsolved, and it erases to the Error sentinel (S17
 // renders "type annotations needed"). TIR is TS-lenient (`never[]` /
 // `_[]`), so this fixture is intentionally ahead of TIR.
-// tir: fails
 function uel_bare() -> int throws never {
     let e = []
      // ^ !error[]

@@ -2,13 +2,13 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-382..383 'f': throws never
-401..498 '{\n   ...  v\n}': bool
-407..412 'let v': bool
-415..443 'if c {...alse }': hir_ty=[bool] tir=[true | false]
-418..419 'c': bool
-420..428 '{ true }': true
-422..426 'true': true
-434..443 '{ false }': false
-436..441 'false': false
-495..496 'v': bool
+368..369 'f': throws never
+387..484 '{\n   ...  v\n}': bool
+393..398 'let v': bool
+401..429 'if c {...alse }': bool
+404..405 'c': bool
+406..414 '{ true }': true
+408..412 'true': true
+420..429 '{ false }': false
+422..427 'false': false
+481..482 'v': bool

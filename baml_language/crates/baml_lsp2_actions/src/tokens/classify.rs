@@ -10,7 +10,8 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     semantic_index::DefinitionSite,
 };
-use baml_compiler2_tir::{inference::MemberResolution, resolve::ResolvedName};
+use baml_compiler2_hir_ty::infer::MemberResolution;
+use baml_compiler2_ppir::resolve::ResolvedName;
 
 use super::{ModifierSet, SemanticTokenType};
 

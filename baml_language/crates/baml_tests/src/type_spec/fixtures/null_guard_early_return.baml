@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-688: https://linear.app/boundaryml2/issue/B-688
 // The false branch of `a == null || b == null` implies BOTH non-null

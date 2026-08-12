@@ -29,10 +29,4 @@ function ThrowExpressionInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[throw_throw_expression.baml:26:10]
-//  26 │     _ => throw "re-throw as expression"
-//     ·          ──────────────────────────────
-//     ╰────
+// <no-diagnostics-expected>

@@ -1,9 +1,7 @@
 ---
 source: crates/baml_tests/src/type_spec/fixtures.rs
-assertion_line: 93
 expression: outcome.dump
 ---
-116..120 'next': hir_ty=[<missing>] tir=[throws E]
 164..172 'peekable': throws never
 212..297 '{\n   ...n    }': user.IvPeekable<T, E>
 222..291 'IvPeek...alse }': user.IvPeekable<T, E>
@@ -11,33 +9,33 @@ expression: outcome.dump
 261..270 'IvDone {}': user.IvDone
 284..289 'false': false
 410..414 'peek': throws E
-444..621 '{\n   ...n    }': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
+444..621 '{\n   ...n    }': user.IvDone | T
 454..517 'if (se...     }': void
 458..473 'self.has_buffer': bool
 475..517 '{\n   ...     }': never
-496..507 'self.buffer': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-526..531 'let v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-534..548 'self.iter.next': hir_ty=[(self: user.IvIterator<T, E>) -> user.IvDone | T throws E] tir=[() -> T | user.IvDone throws E]
-534..550 'self.i...next()': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-559..570 'self.buffer': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-573..574 'v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
+496..507 'self.buffer': user.IvDone | T
+526..531 'let v': user.IvDone | T
+534..548 'self.iter.next': (self: user.IvIterator<T, E>) -> user.IvDone | T throws E
+534..550 'self.i...next()': user.IvDone | T
+559..570 'self.buffer': user.IvDone | T
+573..574 'v': user.IvDone | T
 583..598 'self.has_buffer': bool
 601..605 'true': true
-614..615 'v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
+614..615 'v': user.IvDone | T
 674..678 'next': throws E
-708..938 '{\n   ...     }': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
+708..938 '{\n   ...     }': user.IvDone | T
 722..899 'if (se...     }': void
 726..741 'self.has_buffer': bool
 743..899 '{\n   ...     }': never
-761..766 'let v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-769..780 'self.buffer': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-797..808 'self.buffer': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
+761..766 'let v': user.IvDone | T
+769..780 'self.buffer': user.IvDone | T
+797..808 'self.buffer': user.IvDone | T
 811..820 'IvDone {}': user.IvDone
 837..852 'self.has_buffer': bool
 855..860 'false': false
-884..885 'v': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
-912..926 'self.iter.next': hir_ty=[(self: user.IvIterator<T, E>) -> user.IvDone | T throws E] tir=[() -> T | user.IvDone throws E]
-912..928 'self.i...next()': hir_ty=[user.IvDone | T] tir=[T | user.IvDone]
+884..885 'v': user.IvDone | T
+912..926 'self.iter.next': (self: user.IvIterator<T, E>) -> user.IvDone | T throws E
+912..928 'self.i...next()': user.IvDone | T
 1014..1017 'new': throws never
 1063..1118 '{\n   ...n    }': user.IvArrayIterator<T>
 1073..1112 'IvArra...x: 0 }': user.IvArrayIterator<T>
@@ -57,22 +55,22 @@ expression: outcome.dump
 1334..1352 'self.a...f.idx]': T
 1343..1351 'self.idx': int
 1365..1373 'self.idx': int
-1377..1378 '1': hir_ty=[1] tir=[int]
+1377..1378 '1': 1
 1391..1395 'item': T
 1423..1430 'iv_main': throws never
-1453..1613 '{\n   ...  }\n}': hir_ty=[int] tir=[int | 0]
+1453..1613 '{\n   ...  }\n}': int
 1459..1464 'let p': user.IvPeekable<int, never>
-1467..1486 'IvArra...or.new': hir_ty=[(arr: int[]) -> user.IvArrayIterator<int> throws never] tir=[(arr: T[]) -> user.IvArrayIterator<T> throws never]
+1467..1486 'IvArra...or.new': (arr: int[]) -> user.IvArrayIterator<int> throws never
 1467..1494 'IvArra...4, 5])': user.IvArrayIterator<int>
-1467..1503 'IvArra...ekable': hir_ty=[(self: user.IvArrayIterator<int>) -> user.IvPeekable<int, never> throws never] tir=[() -> user.IvPeekable<int, never> throws never]
+1467..1503 'IvArra...ekable': (self: user.IvArrayIterator<int>) -> user.IvPeekable<int, never> throws never
 1467..1505 'IvArra...able()': user.IvPeekable<int, never>
 1487..1493 '[4, 5]': int[]
 1488..1489 '4': 4
 1491..1492 '5': 5
-1510..1611 'if let...n    }': hir_ty=[int] tir=[int | 0]
+1510..1611 'if let...n    }': int
 1513..1523 'let x: int': int
 1520..1523 'int': int
-1526..1532 'p.peek': hir_ty=[(self: user.IvPeekable<int, never>) -> int | user.IvDone throws never] tir=[() -> int | user.IvDone throws never]
+1526..1532 'p.peek': (self: user.IvPeekable<int, never>) -> int | user.IvDone throws never
 1526..1534 'p.peek()': int | user.IvDone
 1535..1588 '{\n   ...n    }': int
 1545..1550 'let r': int

@@ -2,18 +2,18 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-394..395 'f': throws never
-421..506 '{\n   ...int\n}': hir_ty=[int] tir=[unknown]
-427..480 'if (a ...n    }': void
-431..432 'a': int | null
-431..440 'a == null': bool
-431..453 'a == n...= null': bool
-436..440 'null': null
-444..445 'b': int | null
-444..453 'b == null': bool
-449..453 'null': null
-455..480 '{\n   ...n    }': never
-472..473 '0': 0
-485..486 'a': hir_ty=[int] tir=[int | null]
-485..490 'a + b': hir_ty=[int] tir=[unknown]
-489..490 'b': hir_ty=[int] tir=[int | null]
+380..381 'f': throws never
+407..492 '{\n   ...int\n}': int
+413..466 'if (a ...n    }': void
+417..418 'a': int | null
+417..426 'a == null': bool
+417..439 'a == n...= null': bool
+422..426 'null': null
+430..431 'b': int | null
+430..439 'b == null': bool
+435..439 'null': null
+441..466 '{\n   ...n    }': never
+458..459 '0': 0
+471..472 'a': int
+471..476 'a + b': int
+475..476 'b': int

@@ -2,18 +2,18 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-287..288 'g': hir_ty=[throws "neg"] tir=[throws string]
-304..403 '{\n   ...(v)\n}': int
-334..339 'let f': hir_ty=[(x: int) -> int throws "neg"] tir=[(x: int) -> int throws string]
-342..391 '(x: in... } x }': hir_ty=[(x: int) -> int throws "neg"] tir=[(x: int) -> int throws string]
-358..391 '{ if (... } x }': int
-360..387 'if (x ...eg"; }': void
-364..365 'x': int
-364..369 'x < 0': bool
-368..369 '0': 0
-371..387 '{ thro...eg"; }': never
-379..384 '"neg"': "neg"
-388..389 'x': int
-397..398 'f': hir_ty=[(x: int) -> int throws "neg"] tir=[(x: int) -> int throws string]
-397..401 'f(v)': int
-399..400 'v': int
+273..274 'g': throws "neg"
+290..389 '{\n   ...(v)\n}': int
+320..325 'let f': (x: int) -> int throws "neg"
+328..377 '(x: in... } x }': (x: int) -> int throws "neg"
+344..377 '{ if (... } x }': int
+346..373 'if (x ...eg"; }': void
+350..351 'x': int
+350..355 'x < 0': bool
+354..355 '0': 0
+357..373 '{ thro...eg"; }': never
+365..370 '"neg"': "neg"
+374..375 'x': int
+383..384 'f': (x: int) -> int throws "neg"
+383..387 'f(v)': int
+385..386 'v': int

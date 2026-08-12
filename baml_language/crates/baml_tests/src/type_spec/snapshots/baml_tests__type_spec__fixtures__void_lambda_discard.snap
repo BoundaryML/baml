@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/type_spec/fixtures.rs
-assertion_line: 93
 expression: outcome.dump
 ---
 223..229 'ptc_id': throws never
@@ -9,7 +8,8 @@ expression: outcome.dump
 272..273 'x': int
 293..294 'y': int
 303..314 '"ptc_probe"': "ptc_probe"
-315..487 '{\n   ...  }\n}': hir_ty=["one" | null / () -> void throws never] tir=["one" | null / () -> void throws unknown]
+315..487 '{\n   ...  }\n}': "one" | null
+315..487 '{\n   ...  }\n}': () -> void throws never
 321..444 '{\n   ...n    }': "one"
 321..485 '{\n   ...n    }': "one" | null
 331..336 'let x': int
@@ -23,6 +23,6 @@ expression: outcome.dump
 406..407 '_': int
 411..427 '{ thro...oom" }': never
 419..425 '"boom"': "boom"
-452..453 'e': hir_ty=["boom"] tir=[string]
+452..453 'e': "boom"
 465..471 'string': string
 475..479 'null': null

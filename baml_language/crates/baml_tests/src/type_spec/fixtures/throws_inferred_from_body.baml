@@ -1,4 +1,3 @@
-// tir: fails
 //
 // S12: an omitted `throws` clause infers from the body - throw sites
 // keep their literal types and union with callee effects (fixpoint over

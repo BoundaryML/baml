@@ -1,4 +1,3 @@
-// tir: fails
 //
 // TYPE_SYSTEM.md (BAML Subtyping Cases): `(true | false) == bool`, and type
 // algebra may simplify while maintaining equivalence. An unconstrained

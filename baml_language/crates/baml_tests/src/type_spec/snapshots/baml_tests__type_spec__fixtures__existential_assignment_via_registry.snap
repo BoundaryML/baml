@@ -2,23 +2,22 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-439..444 'hello': hir_ty=[<missing>] tir=[throws never]
-545..550 'hello': throws never
-580..608 '{\n   ...     }': "hi"
-594..598 '"hi"': "hi"
-627..628 'f': throws never
-646..698 '{\n   ...  e\n}': user.Greet
-652..664 'let e: Greet': user.Greet
-659..664 'Greet': user.Greet
-667..668 'g': user.Guy
-695..696 'e': user.Greet
-879..891 'join_absorbs': throws never
-928..995 '{\n   ...  u\n}': hir_ty=[user.Greet] tir=[user.Guy | user.Greet]
-934..939 'let u': hir_ty=[user.Greet] tir=[user.Guy | user.Greet]
-942..965 'if (c)... { e }': hir_ty=[user.Greet] tir=[user.Guy | user.Greet]
-946..947 'c': bool
-949..954 '{ g }': user.Guy
-951..952 'g': user.Guy
-960..965 '{ e }': user.Greet
-962..963 'e': user.Greet
-992..993 'u': hir_ty=[user.Greet] tir=[user.Guy | user.Greet]
+531..536 'hello': throws never
+566..594 '{\n   ...     }': "hi"
+580..584 '"hi"': "hi"
+613..614 'f': throws never
+632..684 '{\n   ...  e\n}': user.Greet
+638..650 'let e: Greet': user.Greet
+645..650 'Greet': user.Greet
+653..654 'g': user.Guy
+681..682 'e': user.Greet
+865..877 'join_absorbs': throws never
+914..981 '{\n   ...  u\n}': user.Greet
+920..925 'let u': user.Greet
+928..951 'if (c)... { e }': user.Greet
+932..933 'c': bool
+935..940 '{ g }': user.Guy
+937..938 'g': user.Guy
+946..951 '{ e }': user.Greet
+948..949 'e': user.Greet
+978..979 'u': user.Greet

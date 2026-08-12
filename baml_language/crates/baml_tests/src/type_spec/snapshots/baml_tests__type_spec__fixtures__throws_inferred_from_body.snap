@@ -2,15 +2,15 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-241..242 'f': hir_ty=[throws "bad"] tir=[throws string]
-259..308 '{\n   ...  1\n}': 1
-265..300 'if (c)...n    }': void
-269..270 'c': bool
-272..300 '{\n   ...n    }': never
-288..293 '"bad"': "bad"
-305..306 '1': 1
-319..320 'g': hir_ty=[throws "bad"] tir=[throws string]
-337..385 '{\n   ...ad"\n}': int
-343..344 'f': hir_ty=[(c: bool) -> int throws "bad"] tir=[(c: bool) -> int throws string]
-343..347 'f(c)': int
-345..346 'c': bool
+227..228 'f': throws "bad"
+245..294 '{\n   ...  1\n}': 1
+251..286 'if (c)...n    }': void
+255..256 'c': bool
+258..286 '{\n   ...n    }': never
+274..279 '"bad"': "bad"
+291..292 '1': 1
+305..306 'g': throws "bad"
+323..371 '{\n   ...ad"\n}': int
+329..330 'f': (c: bool) -> int throws "bad"
+329..333 'f(c)': int
+331..332 'c': bool

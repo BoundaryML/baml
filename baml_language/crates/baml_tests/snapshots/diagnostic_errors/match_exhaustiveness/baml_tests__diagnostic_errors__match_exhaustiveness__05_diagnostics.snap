@@ -1,11 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 39878
+assertion_line: 36388
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
     ╭─[match_exhaustiveness.baml:19:23]
  19 │         let n: int => "never reached"
     ·                       ───────────────
@@ -13,7 +13,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
     ╭─[match_exhaustiveness.baml:27:23]
  27 │         let n: int => "unreachable 1",
     ·                       ───────────────
@@ -21,7 +21,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
     ╭─[match_exhaustiveness.baml:28:23]
  28 │         let m: int => "unreachable 2"
     ·                       ───────────────
@@ -62,6 +62,15 @@ assertion_line: 39878
  296 │ ╭─▶     match (t) {
  297 │ │           false => "wrong!"
  298 │ ╰─▶     }
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exhaustiveness.baml:297:9]
+ 297 │         false => "wrong!"
+     ·         ──┬──
+     ·           ╰── expected `true`, found `false`
      ╰────
 
   [type] E0062
@@ -114,7 +123,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:479:26]
  479 │         Status.Active => "second",
      ·                          ────────
@@ -122,7 +131,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:489:14]
  489 │         1 => "second one",
      ·              ────────────
@@ -130,7 +139,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:498:17]
  498 │         true => "second true",
      ·                 ─────────────
@@ -138,7 +147,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:507:19]
  507 │         "user" => "second user",
      ·                   ─────────────
@@ -221,7 +230,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:672:20]
  672 │         "hello" => "unreachable"
      ·                    ─────────────
@@ -269,7 +278,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:762:26]
  762 │         Status.Active => "unreachable"
      ·                          ─────────────
@@ -284,6 +293,15 @@ assertion_line: 39878
  776 │ ╰─▶     }
      ╰────
 
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exhaustiveness.baml:775:9]
+ 775 │         42 => "wrong type"
+     ·         ─┬
+     ·          ╰── expected `bool`, found `42`
+     ╰────
+
   [type] E0062
 
   × non-exhaustive match on type int; missing: _
@@ -291,6 +309,15 @@ assertion_line: 39878
  781 │ ╭─▶     match (x) {
  782 │ │           "hello" => "wrong type"
  783 │ ╰─▶     }
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exhaustiveness.baml:782:9]
+ 782 │         "hello" => "wrong type"
+     ·         ───┬───
+     ·            ╰── expected `int`, found `"hello"`
      ╰────
 
   [type] E0062
@@ -304,7 +331,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:814:15]
  814 │         42 => "unreachable"
      ·               ─────────────
@@ -312,7 +339,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:822:17]
  822 │         true => "unreachable"
      ·                 ─────────────
@@ -320,7 +347,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:836:27]
  836 │         let f: Failure => 1
      ·                           ─
@@ -328,7 +355,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:884:21]
  884 │             true => "unreachable nested"
      ·                     ────────────────────
@@ -336,7 +363,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:895:26]
  895 │         Status.Active => "duplicate 1",
      ·                          ─────────────
@@ -344,7 +371,7 @@ assertion_line: 39878
 
   [type] E0063
 
-  × unreachable arm
+  ⚠ unreachable arm
      ╭─[match_exhaustiveness.baml:897:26]
  897 │         Status.Active => "duplicate 2",
      ·                          ─────────────

@@ -1,5 +1,4 @@
 // Union-receiver members + optional chains
-// tir: fails
 //
 // (TIR types the bare param-union access and the two-step chain
 // `unknown` - the spec is ahead on both.)

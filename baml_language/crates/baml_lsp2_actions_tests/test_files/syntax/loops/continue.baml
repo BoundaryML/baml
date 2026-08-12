@@ -51,9 +51,9 @@ function ContinueNested() -> int {
 //  25 │     continue;
 //     ·     ─────────
 //     ╰────
-// E0029
+// E0001
 //
-//   × missing return expression
+//   × mismatched types
 //     ╭─[loops_continue.baml:30:34]
 //  30 │ ╭─▶ function ContinueNested() -> int {
 //  31 │ │       while (true) {
@@ -62,5 +62,5 @@ function ContinueNested() -> int {
 //  34 │ │           }
 //  35 │ │       }
 //  36 │ ├─▶ }
-//     · ╰──── expected return value of type `int`
+//     · ╰──── expected `int`, found `void`
 //     ╰────

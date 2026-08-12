@@ -112,16 +112,72 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 // E0067
 //
 //   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types2.baml:23:6]
-//  23 │   c2 string | map<int, string>
-//     ·      ─────────────────────────
+//    ╭─[class_map_types2.baml:1:1]
+//  1 │ // Tests for validating map types
+//    · ▲
+//    ╰────
+// E0067
+//
+//   × map keys must be `string`; got `string | null`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    ╭─[class_map_types2.baml:1:1]
+//  1 │ // Tests for validating map types
+//    · ▲
+//    ╰────
+// E0002
+//
+//   × unresolved type: map
+//    ╭─[class_map_types2.baml:1:1]
+//  1 │ // Tests for validating map types
+//    · ▲
+//    ╰────
+// E0067
+//
+//   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types2.baml:16:6]
+//  16 │   b1 map<int, string>
+//     ·      ────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `float`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types2.baml:17:6]
+//  17 │   b2 map<float, string>
+//     ·      ──────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapDummy`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types2.baml:18:6]
+//  18 │   b3 map<MapDummy, string>
+//     ·      ─────────────────────
 //     ╰────
 // E0067
 //
 //   × map keys must be `string`; got `string | null`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[class_map_types2.baml:24:6]
+//     ╭─[class_map_types2.baml:19:6]
+//  19 │   b4 map<string?, string>
+//     ·      ────────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `string | int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types2.baml:20:6]
+//  20 │   b5 map<string | int, string>
+//     ·      ─────────────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types2.baml:23:15]
+//  23 │   c2 string | map<int, string>
+//     ·               ───
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `string | null`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_types2.baml:24:15]
 //  24 │   c3 string | map<string?, string>
-//     ·      ─────────────────────────────
+//     ·               ───
 //     ╰────
 // E0002
 //

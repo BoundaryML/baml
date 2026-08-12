@@ -80,8 +80,8 @@ function ClassArrayAssignments() -> int {
 // E0001
 //
 //   × mismatched types
-//     ╭─[invalid_assignment_class_arrays.baml:41:9]
+//     ╭─[invalid_assignment_class_arrays.baml:41:10]
 //  41 │     nums = [Person { name: "I", age: 9 }];
-//     ·            ───────────────┬──────────────
-//     ·                           ╰── expected `int[]`, found `Person[]`
+//     ·             ──────────────┬─────────────
+//     ·                           ╰── expected `int`, found `Person`
 //     ╰────

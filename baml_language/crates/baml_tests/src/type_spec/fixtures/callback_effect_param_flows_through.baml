@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR diverges via thrown-literal widening: it infers `throws
 // string` where the spec-ahead behavior keeps `"neg"`.)

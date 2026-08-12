@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-633 (the live half): https://linear.app/boundaryml2/issue/B-633
 // A rigid `T` arm does not cover the `null` member of a `T | null`

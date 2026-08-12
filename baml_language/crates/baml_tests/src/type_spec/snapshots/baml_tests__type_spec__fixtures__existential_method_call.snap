@@ -4,5 +4,5 @@ expression: outcome.dump
 ---
 205..206 'f': throws never
 235..281 '{\n   ...ing\n}': string
-241..252 't.to_string': hir_ty=[(self: baml.ToString) -> string throws never] tir=[() -> string throws never]
+241..252 't.to_string': (self: baml.ToString) -> string throws never
 241..254 't.to_string()': string

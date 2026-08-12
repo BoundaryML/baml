@@ -38,35 +38,35 @@ function CompoundAssignments() -> int {
 // E0004
 //
 //   × operator `+` cannot be applied to `int` and `"five"`
-//     ╭─[invalid_assignment_compound_ops.baml:15:2]
+//     ╭─[invalid_assignment_compound_ops.baml:15:7]
 //  15 │     c += "five";
-//     ·     ─
+//     ·          ──────
 //     ╰────
 // E0004
 //
 //   × operator `+` cannot be applied to `string` and `100`
-//     ╭─[invalid_assignment_compound_ops.baml:19:2]
+//     ╭─[invalid_assignment_compound_ops.baml:19:7]
 //  19 │     d += 100;
-//     ·     ─
+//     ·          ───
 //     ╰────
 // E0004
 //
 //   × operator `+` cannot be applied to `int` and `true`
-//     ╭─[invalid_assignment_compound_ops.baml:23:2]
+//     ╭─[invalid_assignment_compound_ops.baml:23:7]
 //  23 │     e += true;
-//     ·     ─
+//     ·          ────
 //     ╰────
 // E0004
 //
 //   × operator `+` cannot be applied to `bool` and `1`
-//     ╭─[invalid_assignment_compound_ops.baml:27:2]
+//     ╭─[invalid_assignment_compound_ops.baml:27:7]
 //  27 │     f += 1;
-//     ·     ─
+//     ·          ─
 //     ╰────
 // E0004
 //
 //   × operator `+` cannot be applied to `float` and `"add"`
-//     ╭─[invalid_assignment_compound_ops.baml:31:2]
+//     ╭─[invalid_assignment_compound_ops.baml:31:7]
 //  31 │     g += "add";
-//     ·     ─
+//     ·          ─────
 //     ╰────

@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-1084 (https://linear.app/boundaryml2/issue/B-1084): a class generic
 // param appearing in no field type cannot be determined by

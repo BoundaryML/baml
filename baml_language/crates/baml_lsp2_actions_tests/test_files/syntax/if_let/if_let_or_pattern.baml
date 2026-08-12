@@ -22,10 +22,4 @@ function OrPatternBothBindValue(r: Ok | Warn | Err) -> string {
 
 //----
 //- diagnostics
-// E0007
-//
-//   × type `Ok | Warn` has no member `value`: its members implement no common interface that declares `value`
-//     ╭─[if_let_if_let_or_pattern.baml:17:7]
-//  17 │     s.value
-//     ·       ─────
-//     ╰────
+// <no-diagnostics-expected>

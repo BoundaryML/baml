@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 37800
+assertion_line: 34534
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -78,6 +78,16 @@ assertion_line: 37800
  9 │     baml.fetch_as<Todo>(baml.HttpRequest {
    ·     ─────────────
    ╰────
+
+  [type] E0002
+
+  × unresolved type: baml.HttpRequest
+    ╭─[fetch_as.baml:9:25]
+  9 │ ╭─▶     baml.fetch_as<Todo>(baml.HttpRequest {
+ 10 │ │           method: baml.HttpMethod.Get,
+ 11 │ │           url: "dummyjson.com/todos/1",
+ 12 │ ╰─▶     })
+    ╰────
 
   [type] E0003
 

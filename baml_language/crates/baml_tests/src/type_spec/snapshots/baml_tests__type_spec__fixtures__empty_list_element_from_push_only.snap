@@ -4,8 +4,8 @@ expression: outcome.dump
 ---
 206..207 'f': throws never
 218..296 '{\n   ...ys;\n}': void
-224..230 'let xs': hir_ty=[int[]] tir=[int[] (evolving)]
-233..235 '[]': hir_ty=[int[]] tir=[_[]]
+224..230 'let xs': int[]
+233..235 '[]': int[]
 241..248 'xs.push': (self: int[], item: int) -> int throws never
 241..251 'xs.push(1)': int
 249..250 '1': 1

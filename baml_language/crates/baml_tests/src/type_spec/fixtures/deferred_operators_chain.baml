@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR freezes the accumulator to the literal seed - the frozen-
 // first-binding family - and errors on the chain.)

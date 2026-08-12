@@ -185,4 +185,29 @@ test vaibhav_resume {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0007
+//
+//   × class `baml.llm.RetryPolicy` has no field `strategy`
+//      ╭─[baml_cli_init.baml:126:1]
+//  126 │ ╭─▶ retry_policy Constant {
+//  127 │ │     max_retries 3
+//  128 │ │     strategy {
+//  129 │ │       type constant_delay
+//  130 │ │       delay_ms 200
+//  131 │ │     }
+//  132 │ ╰─▶ }
+//      ╰────
+// E0007
+//
+//   × class `baml.llm.RetryPolicy` has no field `strategy`
+//      ╭─[baml_cli_init.baml:134:1]
+//  134 │ ╭─▶ retry_policy Exponential {
+//  135 │ │     max_retries 2
+//  136 │ │     strategy {
+//  137 │ │       type exponential_backoff
+//  138 │ │       delay_ms 300
+//  139 │ │       multiplier 1.5
+//  140 │ │       max_delay_ms 10000
+//  141 │ │     }
+//  142 │ ╰─▶ }
+//      ╰────

@@ -43,7 +43,7 @@ fn tir_pairs(source: &str) -> Vec<(TextRange, TextRange, bool)> {
     let file = db.add_file("test.baml", source);
     let pkg = user_package(&db, file);
     let mut pairs: Vec<(TextRange, TextRange, bool)> =
-        baml_compiler2_tir::interfaces::package_coherence_diagnostics(&db, pkg)
+        baml_compiler2_hir_ty::interfaces::package_coherence_diagnostics(&db, pkg)
             .iter()
             .map(|violation| {
                 (

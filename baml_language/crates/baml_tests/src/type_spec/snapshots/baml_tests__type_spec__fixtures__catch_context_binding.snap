@@ -14,5 +14,5 @@ expression: outcome.dump
 346..347 'e': user.Boom
 349..352 'ctx': baml.errors.ErrorContext
 364..368 'Boom': user.Boom
-372..385 'ctx.to_string': hir_ty=[(self: baml.errors.ErrorContext) -> string throws never] tir=[() -> string throws never]
+372..385 'ctx.to_string': (self: baml.errors.ErrorContext) -> string throws never
 372..387 'ctx.to_string()': string

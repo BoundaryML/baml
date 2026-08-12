@@ -50,7 +50,14 @@ pub struct LoweringDiag {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoweringDiagKind {
     /// The written path resolved nowhere (E0002).
-    Unresolved { name: Name },
+    Unresolved {
+        name: Name,
+        /// "Did you mean" candidates, each a fully qualified `root...` path.
+        suggestions: Box<[Name]>,
+    },
+    /// A map key type provably outside the string domain (B-267's
+    /// contract; `checked_map_key` lowers it to the Error sentinel).
+    InvalidMapKey { key: baml_type::Ty },
     /// Written type-argument count disagrees with the declaration
     /// (E0001's type-arity spelling).
     WrongArgCount {
@@ -442,11 +449,20 @@ impl<'db> LowerCtx<'db> {
         let string = Ty::intern(TyKind::String {
             attr: TyAttr::default(),
         });
-        if baml_type::normalize::is_subtype_interned(&key, &string, &facts) {
-            key
-        } else {
-            Ty::error()
+        if !baml_type::normalize::is_subtype_interned(&key, &string, &facts) {
+            // Diagnose but keep the WRITTEN key (TIR's shape): the
+            // diagnostic is the enforcement, and downstream surfaces
+            // (codegen schemas, renders) still see what the user wrote.
+            if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
+                diags.borrow_mut().push(LoweringDiag {
+                    type_ref,
+                    kind: LoweringDiagKind::InvalidMapKey {
+                        key: key.to_plain(),
+                    },
+                });
+            }
         }
+        key
     }
 
     // -- Path resolution -------------------------------------------------------
@@ -548,6 +564,7 @@ impl<'db> LowerCtx<'db> {
                                         .collect::<Vec<_>>()
                                         .join("."),
                                 ),
+                                suggestions: Box::new([]),
                             },
                         });
                     }
@@ -574,10 +591,42 @@ impl<'db> LowerCtx<'db> {
                             .collect::<Vec<_>>()
                             .join("."),
                     ),
+                    suggestions: self.type_suggestions(segments),
                 },
             });
         }
         Ty::error()
+    }
+
+    /// "Did you mean" candidates for an unresolved SINGLE-SEGMENT type
+    /// name: every namespace that declares the bare name, spelled as its
+    /// fully qualified `root...` path (TIR's `type_suggestions`).
+    pub(crate) fn type_suggestions(&self, segments: &[Name]) -> Box<[Name]> {
+        if segments.len() != 1 {
+            return Box::new([]);
+        }
+        let item = &segments[0];
+        let mut suggestions: Vec<String> = Vec::new();
+        for (ns_path, ns_items) in &self.package_items.namespaces {
+            if ns_items.types.contains_key(item) {
+                if ns_path.is_empty() {
+                    suggestions.push(format!("root.{item}"));
+                } else {
+                    let ns_str = ns_path
+                        .iter()
+                        .map(|segment| segment.as_str())
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    suggestions.push(format!("root.{ns_str}.{item}"));
+                }
+            }
+        }
+        suggestions.sort();
+        suggestions
+            .iter()
+            .map(String::as_str)
+            .map(Name::new)
+            .collect()
     }
 
     fn lower_definition(
@@ -916,6 +965,79 @@ pub fn interface_declared_params<'db>(
     interface_frame(db, interface)[1..1 + data.generic_params.len()].to_vec()
 }
 
+/// The root generic frame for an impl block: the enclosing class's frame
+/// for an in-class `implements`, the block's own declared generics for a
+/// free `implements ... for T`.
+pub fn impl_frame<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    block: baml_compiler2_hir::loc::ImplLoc<'db>,
+) -> Vec<ParamTy> {
+    let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+    match &data.subject {
+        baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+            class_generic_frame(db, *class)
+        }
+        baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => {
+            let mut frame = Vec::new();
+            ParamTy::extend_frame(
+                &mut frame,
+                &generics
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect::<Vec<_>>(),
+            );
+            frame
+        }
+    }
+}
+
+/// A free impl block's declared generic bounds (`implements<T extends I>
+/// ... for T`), conjunctive per param - the impl-scope param env. In-class
+/// impls carry the CLASS's bounds instead (`class_generic_bounds`).
+pub fn impl_generic_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    block: baml_compiler2_hir::loc::ImplLoc<'db>,
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+    match &data.subject {
+        baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+            class_generic_bounds(db, *class)
+        }
+        baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => {
+            let frame = impl_frame(db, block);
+            let ctx = lower_ctx_for_file(db, block.file(db)).with_frame(frame.clone());
+            let mut out = FxHashMap::default();
+            for (param, param_data) in frame.iter().zip(generics.iter()) {
+                let bounds: Vec<_> = param_data
+                    .bounds
+                    .iter()
+                    .filter_map(|&type_ref| {
+                        baml_type::interned::InterfaceRef::of_ty(
+                            &ctx.lower_type_ref(&data.type_refs, type_ref),
+                        )
+                    })
+                    .collect();
+                if !bounds.is_empty() {
+                    out.insert(param.clone(), bounds);
+                }
+            }
+            out
+        }
+    }
+}
+
+/// The qualified name of a definition as its own file's package and
+/// namespace spell it - the one shared constructor for turning an item
+/// resolution back into the type vocabulary's name.
+pub fn qualify_def<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    def: baml_compiler2_hir::contributions::Definition<'db>,
+    name: &Name,
+) -> baml_type::QualifiedTypeName {
+    let info = baml_compiler2_hir::file_package::file_package(db, def.file(db));
+    baml_type::QualifiedTypeName::new(info.package, info.namespace_path, name.clone())
+}
+
 /// The root generic frame for a class.
 pub fn class_generic_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -1249,7 +1371,11 @@ pub fn owner_impl_target<'db>(
     frame: &[baml_type::ParamTy],
 ) -> Option<baml_type::interned::InterfaceRef> {
     let target = baml_compiler2_ppir::item_data::method_interface_target(db, function).as_ref()?;
-    let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.to_vec());
+    // The impl's bounds ride along: a written `type Member = T.Item`
+    // binding must find `Item`'s declaring interface through `T`'s bound.
+    let ctx = lower_ctx_for_file(db, function.file(db))
+        .with_frame(frame.to_vec())
+        .with_bounds(function_generic_bounds(db, function));
     let interface = baml_type::interned::InterfaceRef::of_ty(
         &ctx.lower_type_ref(&target.type_refs, target.target),
     )?;
@@ -1288,9 +1414,9 @@ pub fn owner_impl_target<'db>(
 pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTypeError {
     use crate::diagnostics::TirTypeError;
     match kind {
-        LoweringDiagKind::Unresolved { name } => TirTypeError::UnresolvedType {
+        LoweringDiagKind::Unresolved { name, suggestions } => TirTypeError::UnresolvedType {
             name: name.clone(),
-            suggestions: Box::default(),
+            suggestions: suggestions.clone(),
         },
         LoweringDiagKind::WrongArgCount {
             name,
@@ -1301,6 +1427,9 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
             expected: *expected,
             got: *got,
         },
+        LoweringDiagKind::InvalidMapKey { key } => {
+            TirTypeError::InvalidMapKeyType { key: key.clone() }
+        }
         LoweringDiagKind::FnTypeMissingThrows => TirTypeError::FunctionTypeMissingThrows,
     }
 }
@@ -1415,9 +1544,15 @@ pub fn class_lowering_diagnostics<'db>(
     let frame = class_generic_frame(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db))
         .with_frame(frame)
+        .with_bounds(class_generic_bounds(db, class))
         .with_diagnostics();
     let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
     let mut out = Vec::new();
+    // Field annotations: every written field type re-lowers with the sink
+    // (unresolved names, wrong arg counts - the pre-S17 structural walk).
+    for field in &data.fields {
+        ctx.lower_type_ref(&data.type_refs, field.type_ref);
+    }
     for bound in data.generic_param_bounds.iter().flatten() {
         let lowered = ctx.lower_type_ref(&data.type_refs, *bound);
         match lowered.kind() {
@@ -1511,6 +1646,59 @@ pub fn interface_lowering_diagnostics<'db>(
         )
     }));
     out
+}
+
+/// A class's fields resolved to plain types (the IDE surface's shape:
+/// hover, completions, schema derivation). Field-annotation DIAGNOSTICS
+/// ride `class_lowering_diagnostics`; this query is the typed view.
+#[salsa::tracked(returns(ref))]
+pub fn resolve_class_fields<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ClassLoc<'db>,
+) -> Vec<(
+    Name,
+    baml_type::Ty,
+    Vec<baml_compiler2_hir::item_tree::Attribute>,
+)> {
+    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let ctx = lower_ctx_for_file(db, class.file(db))
+        .with_frame(class_generic_frame(db, class))
+        .with_bounds(class_generic_bounds(db, class));
+    data.fields
+        .iter()
+        .map(|field| {
+            (
+                field.name.clone(),
+                ctx.lower_type_ref(&data.type_refs, field.type_ref)
+                    .to_plain(),
+                field.attributes.clone(),
+            )
+        })
+        .collect()
+}
+
+/// The check layer's TYPE-ALIAS diagnostic walk: the alias body re-lowered
+/// with the sink (unresolved names, wrong arg counts).
+pub fn type_alias_lowering_diagnostics<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    alias: baml_compiler2_hir::loc::TypeAliasLoc<'db>,
+) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
+    let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
+    let Some(value) = data.value else {
+        return Vec::new();
+    };
+    let ctx = lower_ctx_for_file(db, alias.file(db)).with_diagnostics();
+    ctx.lower_type_ref(&data.type_refs, value);
+    let source_map = baml_compiler2_ppir::item_data::type_alias_source_map(db, alias);
+    ctx.take_diagnostics()
+        .into_iter()
+        .map(|diag| {
+            (
+                source_map.type_refs.span(diag.type_ref),
+                lowering_diag_error(&diag.kind),
+            )
+        })
+        .collect()
 }
 
 #[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]

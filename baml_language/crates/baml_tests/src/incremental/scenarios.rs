@@ -6,7 +6,6 @@
 //! NOTE: These scenarios were ported from the legacy HIR (baml_compiler_hir)
 //! to compiler2 HIR (baml_compiler2_hir) as part of the compiler2 migration.
 
-use baml_compiler2_tir::inference::infer_scope_types;
 use baml_db::{SourceFile, baml_compiler2_hir};
 use salsa::Setter;
 
@@ -954,50 +953,6 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
     assert_eq!(
         before, after,
         "a prompt-only edit must not change is_llm/client — the projection exists to exclude the prompt"
-    );
-}
-
-/// The whole refactor exists so that a cosmetic edit does not re-run type
-/// inference. That does not hold yet: `infer_scope_types` reads the `no_eq`
-/// `file_semantic_index` directly, so any edit to its file re-executes it.
-/// Un-ignore once inference consumes the per-item firewall queries instead of the
-/// coarse index.
-#[test]
-#[ignore = "infer_scope_types still reads the no_eq file_semantic_index directly; un-ignore once it consumes the firewall queries"]
-fn comment_edit_does_not_reexecute_type_inference() {
-    let mut test_db = IncrementalTestDb::new();
-
-    let file = test_db.db_mut().add_file(
-        "test.baml",
-        "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
-    );
-
-    // Prime inference for `Add`'s body scope.
-    let scope_id = {
-        let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_scope(db, function_loc(db, file, "Add"))
-            .expect("Add has a scope")
-    };
-    let _ = test_db.log_executed(|db| {
-        let _ = infer_scope_types(db, scope_id);
-    });
-
-    // Add a comment: semantically a no-op for the function body.
-    file.set_text(test_db.db_mut())
-        .to("// a comment\nfunction Add(x: int, y: int) -> int {\n  x + y\n}\n".to_string());
-
-    // Re-fetch the scope (its tracked-struct id may have been re-minted by the
-    // no_eq index) and assert inference is served from cache.
-    let scope_id = {
-        let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_scope(db, function_loc(db, file, "Add"))
-            .expect("Add has a scope")
-    };
-    test_db.assert_not_executed(
-        |db| {
-            let _ = infer_scope_types(db, scope_id);
-        },
-        &["infer_scope_types"],
     );
 }
 

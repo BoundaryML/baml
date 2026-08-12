@@ -101,6 +101,13 @@ pub struct InferenceTable {
     /// BAML's only defaulting rule (S12) - where an unconstrained value
     /// variable is an error (ruling 2).
     effect_vars: FxHashSet<u32>,
+    /// Element/key/value variables of EMPTY container literals (the
+    /// honest replacement for TIR's Evolving sentinels). These follow
+    /// TIR's establishment-order rule when demands disagree: the first
+    /// ground demand commits and later incompatible ones report at
+    /// their own sites, where an ordinary var (a call instantiation)
+    /// fails resolution instead (ruling 1).
+    establishment_vars: FxHashSet<u32>,
 }
 
 impl InferenceTable {
@@ -116,6 +123,24 @@ impl InferenceTable {
     /// [`InferenceTable::new_var`] wrapped as a type.
     pub fn new_var_ty(&mut self) -> Ty {
         Ty::infer_var(self.new_var())
+    }
+
+    /// [`InferenceTable::new_var`] for an empty container literal's
+    /// element/key/value slot: solves establishment-order on
+    /// disagreeing demands (see `establishment_vars`).
+    pub fn new_establishment_var_ty(&mut self) -> Ty {
+        let var = self.new_var();
+        self.establishment_vars.insert(var.index());
+        Ty::infer_var(var)
+    }
+
+    /// Whether `var`'s equivalence class contains an establishment var.
+    pub fn is_establishment_var(&mut self, var: InferVar) -> bool {
+        let root = self.vars.find(VarKey(var));
+        let indices: Vec<u32> = self.establishment_vars.iter().copied().collect();
+        indices
+            .into_iter()
+            .any(|index| self.vars.find(VarKey(InferVar::new(index))) == root)
     }
 
     /// An EFFECT variable: identical to a value variable except at

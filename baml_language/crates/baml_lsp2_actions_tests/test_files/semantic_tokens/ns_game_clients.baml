@@ -155,7 +155,32 @@ function double() -> void {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0007
+//
+//   × class `baml.llm.RetryPolicy` has no field `strategy`
+//      ╭─[ns_game_clients.baml:129:1]
+//  129 │ ╭─▶ retry_policy Constant {
+//  130 │ │       max_retries: 3,
+//  131 │ │       strategy: {
+//  132 │ │           type: constant_delay,
+//  133 │ │           delay_ms: 200,
+//  134 │ │       },
+//  135 │ ╰─▶ }
+//      ╰────
+// E0007
+//
+//   × class `baml.llm.RetryPolicy` has no field `strategy`
+//      ╭─[ns_game_clients.baml:137:1]
+//  137 │ ╭─▶ retry_policy Exponential {
+//  138 │ │       max_retries: 2,
+//  139 │ │       strategy: {
+//  140 │ │           type: exponential_backoff,
+//  141 │ │           delay_ms: 300,
+//  142 │ │           multiplier: 1.5,
+//  143 │ │           max_delay_ms: 10000,
+//  144 │ │       },
+//  145 │ ╰─▶ }
+//      ╰────
 //
 //- semantic_tokens
 // ns_game_clients.baml:1:1 (comment) len=89 "// Learn more about clients at https://docs.boundaryml.com/docs/snippets/clients/overview"

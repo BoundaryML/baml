@@ -36,7 +36,6 @@ pub struct Interface {
     pub span: TextRange,
 }
 
-
 /// What an `implements` block applies to. Unifying the owner with the for-target
 /// makes "in-body with an explicit for-target" and "out-of-body without one"
 /// both unrepresentable.

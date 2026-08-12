@@ -4,9 +4,9 @@ expression: outcome.dump
 ---
 467..476 'aggregate': throws never
 503..546 '{\n   ... })\n}': string[]
-509..515 'xs.map': hir_ty=[(self: string[], f: (string) -> string throws never) -> string[] throws never] tir=[(self: string[], f: (string) -> U throws E) -> U[] throws E]
+509..515 'xs.map': (self: string[], f: (string) -> string throws never) -> string[] throws never
 509..544 'xs.map...{ r })': string[]
-516..543 '(r: st... { r }': hir_ty=[(r: string) -> string throws never] tir=[(r: string) -> string throws E]
+516..543 '(r: st... { r }': (r: string) -> string throws never
 538..543 '{ r }': string
 540..541 'r': string
 557..563 'caller': throws never

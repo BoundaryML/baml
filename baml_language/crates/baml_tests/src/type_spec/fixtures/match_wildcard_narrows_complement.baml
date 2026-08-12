@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-774: https://linear.app/boundaryml2/issue/B-774
 // Each unguarded arm refutable by type alone subtracts what it matched,

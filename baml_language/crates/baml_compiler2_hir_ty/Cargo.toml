@@ -13,7 +13,11 @@ baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
 baml_type = { workspace = true }
+baml_type_runtime = { workspace = true }
 text-size = { workspace = true }
 num-bigint = { workspace = true }
 ena = { workspace = true }
 rustc-hash = { workspace = true }
+borsh = { workspace = true }
+strsim = { workspace = true }
+baml_builtins2 = { workspace = true }

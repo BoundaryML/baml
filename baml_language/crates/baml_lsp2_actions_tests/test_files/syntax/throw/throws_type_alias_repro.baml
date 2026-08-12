@@ -30,17 +30,11 @@ function getProfile(req: Request) -> bool throws Errors {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[throw_throws_type_alias_repro.baml:22:28]
-//  22 │     AuthenticationError => { throw e }
-//     ·                            ───────────
-//     ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: AuthenticationError, AuthorizationError, InternalServerError, NotFoundError
-//     ╭─[throw_throws_type_alias_repro.baml:27:50]
-//  27 │ function getProfile(req: Request) -> bool throws Errors {
-//     ·                                                  ──────
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[throw_throws_type_alias_repro.baml:27:57]
+//  27 │ ╭─▶ function getProfile(req: Request) -> bool throws Errors {
+//  28 │ │     return true
+//  29 │ ╰─▶ }
 //     ╰────

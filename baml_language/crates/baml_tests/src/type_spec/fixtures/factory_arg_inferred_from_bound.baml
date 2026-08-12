@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-898 (https://linear.app/boundaryml2/issue/B-898): a zero-argument
 // generic factory passed to a generic method is constrained

@@ -13,17 +13,4 @@ function CatchOnVariable(x: int) -> string {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//    ╭─[catch_catch_on_non_call.baml:4:10]
-//  4 │     _ => "caught"
-//    ·          ────────
-//    ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_catch_on_non_call.baml:10:10]
-//  10 │     _ => "caught"
-//     ·          ────────
-//     ╰────
+// <no-diagnostics-expected>

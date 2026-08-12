@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-616 (https://linear.app/boundaryml2/issue/B-616): an empty `[]` in
 // a `catch_all` arm unifies with the try-block's element type instead

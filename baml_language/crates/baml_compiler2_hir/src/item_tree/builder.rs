@@ -21,8 +21,8 @@ use crate::{
     item_tree::{
         Attribute, Class, ClassField, Client, DefaultExprRef, Enum, EnumVariant, Function,
         FunctionParam, ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink,
-        ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy,
-        TemplateString, Test, TypeAlias,
+        ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy, TemplateString, Test,
+        TypeAlias,
     },
 };
 

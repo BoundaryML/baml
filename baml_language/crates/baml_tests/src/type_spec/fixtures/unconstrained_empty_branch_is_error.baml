@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-236 (unchecked half): https://linear.app/boundaryml2/issue/B-236
 // A let-bound if/else with an empty-literal branch has no context to

@@ -1,4 +1,3 @@
-// tir: fails
 //
 // (TIR's null-first union render: `null | (T as
 // baml.iter.Iterator).Item`.)

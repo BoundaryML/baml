@@ -5,7 +5,7 @@ expression: outcome.dump
 76..88 'apc_ascribed': throws never
 130..232 '{\n   ...  r\n}': int
 136..141 'let r': int
-144..224 'match ...n    }': hir_ty=[int] tir=[int | 0]
+144..224 'match ...n    }': int
 151..152 'v': int[] | string[]
 178..190 '[let x: int]': int[]
 179..189 'let x: int': int
@@ -21,14 +21,14 @@ expression: outcome.dump
 242..252 'apc_nested': throws never
 293..401 '{\n   ...  r\n}': int
 299..304 'let r': int
-307..393 'match ...n    }': hir_ty=[int] tir=[int | 0]
-314..315 'p': hir_ty=[int[] | int[][]] tir=[int[][] | int[]]
+307..393 'match ...n    }': int
+314..315 'p': int[] | int[][]
 341..366 '[_, [....], ..]': int[][]
 342..343 '_': int[]
 345..361 '[.., l...: int]': int[]
 350..360 'let v: int': int
 357..360 'int': int
 370..371 'v': int
-381..382 '_': hir_ty=[int[] | int[][]] tir=[int[][] | int[]]
+381..382 '_': int[] | int[][]
 386..387 '0': 0
 398..399 'r': int

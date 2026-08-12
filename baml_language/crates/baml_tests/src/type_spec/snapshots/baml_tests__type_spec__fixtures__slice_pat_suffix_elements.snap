@@ -5,7 +5,7 @@ expression: outcome.dump
 114..124 'srp_suffix': throws never
 165..308 '{\n   ...  r\n}': int
 171..176 'let r': int
-179..300 'match ...n    }': hir_ty=[int] tir=[int | 0]
+179..300 'match ...n    }': int
 186..187 'p': user.SrpWrap | int[]
 213..251 'SrpWra..., _] }': user.SrpWrap
 213..273 'SrpWra...t, ..]': user.SrpWrap | int[]
@@ -24,7 +24,7 @@ expression: outcome.dump
 318..328 'srp_nested': throws never
 361..464 '{\n   ...  r\n}': int
 367..372 'let r': int
-375..456 'match ...n    }': hir_ty=[int] tir=[int | 0]
+375..456 'match ...n    }': int
 382..383 'v': int[][]
 409..429 '[.., [..., ..]]': int[][]
 414..428 '[_, let x, ..]': int[]

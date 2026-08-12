@@ -934,6 +934,20 @@ pub fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAt
     }
 }
 
+/// Bind type variables from generic params to concrete type arguments.
+///
+/// Example: `bind_type_vars(&["T"], &[Ty::Int { attr: TyAttr::default() }])` → `{"T" → Int}`
+///
+/// If there are more params than args (or vice versa), the extra entries are
+/// silently ignored — callers are responsible for providing matching lengths.
+pub fn bind_type_vars(generic_params: &[ParamTy], concrete_args: &[Ty]) -> FxHashMap<ParamTy, Ty> {
+    let mut bindings = FxHashMap::default();
+    for (param, arg) in generic_params.iter().zip(concrete_args.iter()) {
+        bindings.insert(param.clone(), arg.clone());
+    }
+    bindings
+}
+
 /// Substitute type variables in a `Ty` using the provided bindings.
 ///
 /// Recursively walks the type, replacing any `Ty::TypeVar` present in

@@ -2,19 +2,19 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-267..278 'anl_checked': throws never
-299..332 '{\n   ...  x\n}': hir_ty=[3] tir=[int]
-305..310 'let x': int
-313..314 '1': 1
-319..320 'x': int
-323..324 '3': 3
-329..330 'x': hir_ty=[3] tir=[int]
-342..352 'anl_widens': throws never
-375..436 '{\n   ...  y\n}': int
-381..386 'let x': int
-389..390 '1': 1
-395..396 'x': int
-399..400 '3': 3
-405..410 'let y': int
-413..414 'x': hir_ty=[3] tir=[int]
-433..434 'y': int
+253..264 'anl_checked': throws never
+285..318 '{\n   ...  x\n}': 3
+291..296 'let x': int
+299..300 '1': 1
+305..306 'x': int
+309..310 '3': 3
+315..316 'x': 3
+328..338 'anl_widens': throws never
+361..422 '{\n   ...  y\n}': int
+367..372 'let x': int
+375..376 '1': 1
+381..382 'x': int
+385..386 '3': 3
+391..396 'let y': int
+399..400 'x': 3
+419..420 'y': int

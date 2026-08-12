@@ -2,46 +2,49 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-594..602 'uc_field': throws never
-644..691 '{\n   ...  v\n}': hir_ty=[string] tir=[unknown]
-650..655 'let v': hir_ty=[string] tir=[unknown]
-658..665 'r.value': hir_ty=[string] tir=[unknown]
-688..689 'v': hir_ty=[string] tir=[unknown]
-702..710 'uc_iflet': throws never
-758..845 '{\n   ...  }\n}': hir_ty=[string] tir=[unknown | "none"]
-764..843 'if let...n    }': hir_ty=[string] tir=[unknown | "none"]
-767..787 'let s:...UcWarn': user.UcOk | user.UcWarn
-774..778 'UcOk': user.UcOk
-774..787 'UcOk | UcWarn': user.UcOk | user.UcWarn
-781..787 'UcWarn': user.UcWarn
-790..791 'r': hir_ty=[int | user.UcOk | user.UcWarn] tir=[user.UcOk | user.UcWarn | int]
-792..815 '{\n   ...n    }': hir_ty=[string] tir=[unknown]
-802..809 's.value': hir_ty=[string] tir=[unknown]
-821..843 '{\n   ...n    }': "none"
-831..837 '"none"': "none"
-856..865 'oc_member': throws never
-912..967 '{\n   ...  n\n}': string | null
-918..923 'let n': string | null
-926..927 'x': user.UcOk | null
-926..934 'x?.value': hir_ty=[string / string | null] tir=[string | null]
-964..965 'n': string | null
-978..985 'oc_call': throws never
-1024..1079 '{\n   ...  n\n}': int
-1030..1035 'let n': int
-1038..1040 'xs': int[] | null
-1038..1048 'xs?.length': hir_ty=[(self: int[]) -> int throws never] tir=[((self: int[]) -> int throws never) | null]
-1038..1050 'xs?.length()': hir_ty=[int / int | null] tir=[int | null]
-1038..1056 'xs?.le... ?? -1': int
-1054..1056 '-1': -1
-1055..1056 '1': 1
-1076..1077 'n': int
-1090..1101 'oc_two_step': throws never
-1138..1197 '{\n   ...  n\n}': hir_ty=[int] tir=[unknown]
-1144..1149 'let n': hir_ty=[int] tir=[unknown]
-1152..1153 'x': user.UcOk | null
-1152..1160 'x?.value': hir_ty=[string] tir=[string | null]
-1152..1167 'x?.value.length': hir_ty=[(self: baml.String) -> int throws never] tir=[((self: baml.String) -> int throws never) | null]
-1152..1169 'x?.val...ngth()': hir_ty=[int / int | null] tir=[unknown]
-1152..1174 'x?.val...) ?? 0': hir_ty=[int] tir=[unknown]
-1173..1174 '0': 0
-1194..1195 'n': hir_ty=[int] tir=[unknown]
+580..588 'uc_field': throws never
+630..677 '{\n   ...  v\n}': string
+636..641 'let v': string
+644..651 'r.value': string
+674..675 'v': string
+688..696 'uc_iflet': throws never
+744..831 '{\n   ...  }\n}': string
+750..829 'if let...n    }': string
+753..773 'let s:...UcWarn': user.UcOk | user.UcWarn
+760..764 'UcOk': user.UcOk
+760..773 'UcOk | UcWarn': user.UcOk | user.UcWarn
+767..773 'UcWarn': user.UcWarn
+776..777 'r': int | user.UcOk | user.UcWarn
+778..801 '{\n   ...n    }': string
+788..795 's.value': string
+807..829 '{\n   ...n    }': "none"
+817..823 '"none"': "none"
+842..851 'oc_member': throws never
+898..953 '{\n   ...  n\n}': string | null
+904..909 'let n': string | null
+912..913 'x': user.UcOk | null
+912..920 'x?.value': string
+912..920 'x?.value': string | null
+950..951 'n': string | null
+964..971 'oc_call': throws never
+1010..1065 '{\n   ...  n\n}': int
+1016..1021 'let n': int
+1024..1026 'xs': int[] | null
+1024..1034 'xs?.length': (self: int[]) -> int throws never
+1024..1036 'xs?.length()': int
+1024..1036 'xs?.length()': int | null
+1024..1042 'xs?.le... ?? -1': int
+1040..1042 '-1': -1
+1041..1042 '1': 1
+1062..1063 'n': int
+1076..1087 'oc_two_step': throws never
+1124..1183 '{\n   ...  n\n}': int
+1130..1135 'let n': int
+1138..1139 'x': user.UcOk | null
+1138..1146 'x?.value': string
+1138..1153 'x?.value.length': (self: baml.String) -> int throws never
+1138..1155 'x?.val...ngth()': int
+1138..1155 'x?.val...ngth()': int | null
+1138..1160 'x?.val...) ?? 0': int
+1159..1160 '0': 0
+1180..1181 'n': int

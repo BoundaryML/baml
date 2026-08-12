@@ -5,7 +5,7 @@ expression: outcome.dump
 401..408 'csv_get': throws baml.csv.CsvError
 466..527 '{\n   ...  0\n}': 0
 472..477 'let v': int | null
-480..487 'rec.get': hir_ty=[(self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError] tir=[(column: string) -> T | null throws baml.csv.CsvError]
+480..487 'rec.get': (self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError
 480..497 'rec.ge...>("n")': int | null
 493..496 '"n"': "n"
 524..525 '0': 0
@@ -24,7 +24,7 @@ expression: outcome.dump
 734..737 'rec': baml.csv.CsvRecord
 780..785 'total': int
 789..878 'match ...     }': int
-796..803 'rec.get': hir_ty=[(self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError] tir=[(column: string) -> T | null throws baml.csv.CsvError]
+796..803 'rec.get': (self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError
 796..813 'rec.ge...>("n")': int | null
 809..812 '"n"': "n"
 829..833 'null': null

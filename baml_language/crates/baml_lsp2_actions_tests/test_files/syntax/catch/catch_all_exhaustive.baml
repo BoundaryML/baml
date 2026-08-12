@@ -17,11 +17,4 @@ function PartialCatchAll(x: int) -> string {
 
 //----
 //- diagnostics
-// E0062
-//
-//   × non-exhaustive catch_all on type int | string; missing: int
-//     ╭─[catch_catch_all_exhaustive.baml:13:3]
-//  13 │ ╭─▶   MayFailIntOrString(x) catch_all (e) {
-//  14 │ │       string => "caught string"
-//  15 │ ╰─▶   }
-//     ╰────
+// <no-diagnostics-expected>

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 31954
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -37,7 +36,7 @@ assertion_line: 31954
 
   [type] E0146
 
-  ⚠ unreachable code: 1 statement(s) after diverging statement
+  ⚠ unreachable code: 2 statement(s) after diverging statement
      ╭─[regressions.baml:102:9]
  102 │         let x = 123;
      ·         ────────────

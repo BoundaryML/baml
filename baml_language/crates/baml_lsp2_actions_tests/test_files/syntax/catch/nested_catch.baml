@@ -25,25 +25,4 @@ function CatchInLet(x: int) -> string {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_nested_catch.baml:12:10]
-//  12 │ ╭─▶     _ => AlsoMayFail(x) catch (e2) {
-//  13 │ │         _ => "double caught"
-//  14 │ ╰─▶     }
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_nested_catch.baml:13:12]
-//  13 │       _ => "double caught"
-//     ·            ───────────────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_nested_catch.baml:21:10]
-//  21 │     _ => "fallback"
-//     ·          ──────────
-//     ╰────
+// <no-diagnostics-expected>

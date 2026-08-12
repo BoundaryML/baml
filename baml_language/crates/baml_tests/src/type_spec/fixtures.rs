@@ -23,7 +23,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::harness::{DifferentialOutcome, run_differential};
+use super::harness::run_differential;
 
 fn fixtures_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/type_spec/fixtures")
@@ -57,27 +57,6 @@ fn fixture_name(path: &Path) -> String {
         .to_owned()
 }
 
-/// Applies the TIR marker policy: TIR must pass unless the fixture carries a
-/// `// tir: fails` line, and the marker must be dropped once stale.
-fn check_tir_expectation(
-    name: &str,
-    fixture: &str,
-    outcome: &DifferentialOutcome,
-    failures: &mut Vec<String>,
-) {
-    let marked_failing = fixture.lines().any(|line| line.trim() == "// tir: fails");
-    match (&outcome.tir, marked_failing) {
-        (Ok(()), false) | (Err(_), true) => {}
-        (Err(report), false) => failures.push(format!(
-            "{name}: TIR fails this fixture; if the spec is intentionally ahead of TIR here, \
-             add a `// tir: fails` line:\n  {report}"
-        )),
-        (Ok(()), true) => failures.push(format!(
-            "{name}: marked `// tir: fails` but TIR passes; drop the marker"
-        )),
-    }
-}
-
 #[test]
 fn conforming_fixtures() {
     // Empty until the first engine slice turns a pending fixture green.
@@ -89,7 +68,6 @@ fn conforming_fixtures() {
         if let Err(report) = &outcome.hir_ty {
             failures.push(format!("{name}:\n  {report}"));
         }
-        check_tir_expectation(&name, &fixture, &outcome, &mut failures);
         insta::assert_snapshot!(name, outcome.dump);
     }
     assert!(
@@ -123,7 +101,6 @@ fn pending_fixtures() {
                  Promote it to fixtures/ and drop the `// pending:` directive."
             ));
         }
-        check_tir_expectation(&name, &fixture, &outcome, &mut failures);
         insta::assert_snapshot!(format!("pending__{name}"), outcome.dump);
     }
     assert!(

@@ -1,4 +1,3 @@
-// tir: fails
 //
 // S12: mutually recursive functions with omitted throws iterate to
 // fixpoint from `never` (callable_throws' cycle_initial) - the effect

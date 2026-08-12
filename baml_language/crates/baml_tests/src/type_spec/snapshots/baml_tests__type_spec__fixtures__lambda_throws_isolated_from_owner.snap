@@ -4,8 +4,8 @@ expression: outcome.dump
 ---
 186..187 'g': throws never
 197..293 '{\n   ...  1\n}': 1
-227..232 'let f': hir_ty=[(x: int) -> int throws "neg"] tir=[(x: int) -> int throws string]
-235..284 '(x: in... } x }': hir_ty=[(x: int) -> int throws "neg"] tir=[(x: int) -> int throws string]
+227..232 'let f': (x: int) -> int throws "neg"
+235..284 '(x: in... } x }': (x: int) -> int throws "neg"
 251..284 '{ if (... } x }': int
 253..280 'if (x ...eg"; }': void
 257..258 'x': int

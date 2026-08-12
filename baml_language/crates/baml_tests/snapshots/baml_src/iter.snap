@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
     load_var registry
@@ -329,7 +330,7 @@ function iter.iter_array_as_iterable_param() -> int[] {
     return
 }
 
-function iter.iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Item = int, Error = never>) -> int[] {
+function iter.iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Error = never, Item = int>) -> int[] {
     load_var xs
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
@@ -1839,7 +1840,7 @@ function iter.iter_repeat() -> int[] {
     return
 }
 
-function iter.iter_shadowed_param_for_in(source: baml.iter.Iterable<Item = int, Error = never>) -> string[] {
+function iter.iter_shadowed_param_for_in(source: baml.iter.Iterable<Error = never, Item = int>) -> string[] {
     load_type string
     alloc_array 0
     store_var out
@@ -1875,7 +1876,7 @@ function iter.iter_shadowed_param_for_in(source: baml.iter.Iterable<Item = int, 
     return
 }
 
-function iter.iter_shadowed_param_method(source: baml.iter.Iterable<Item = int, Error = never>) -> string {
+function iter.iter_shadowed_param_method(source: baml.iter.Iterable<Error = never, Item = int>) -> string {
     alloc_instance user.iter.IterShadow
     call user.iter.IterShadow.iter
     return

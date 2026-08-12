@@ -1,5 +1,4 @@
 // An empty-list element adopts from ground siblings
-// tir: fails
 // An empty-list element adopts from its ground siblings (TS
 // best common type; rustc unifies vec elements - E0282 fires only with
 // NO evidence); the rustc-strict erasure is for genuinely unconstrained

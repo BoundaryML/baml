@@ -43,10 +43,4 @@ function IfLetChainNoElse(r: Ok | Err) -> string {
 
 //----
 //- diagnostics
-// E0112
-//
-//   ⚠ irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     ╭─[if_let_if_let_chained.baml:38:13]
-//  38 │   } else if let e: Err = r {
-//     ·             ──────────
-//     ╰────
+// <no-diagnostics-expected>

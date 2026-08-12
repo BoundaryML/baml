@@ -1,4 +1,3 @@
-// tir: fails
 //
 // B-735: https://linear.app/boundaryml2/issue/B-735
 // A binding assigned only inside a loop body must NOT stay narrowed

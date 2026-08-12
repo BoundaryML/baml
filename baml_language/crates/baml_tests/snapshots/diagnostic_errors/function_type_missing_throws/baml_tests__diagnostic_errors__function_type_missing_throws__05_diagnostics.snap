@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35855
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0151
@@ -22,9 +21,9 @@ assertion_line: 35855
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-   ╭─[negative.baml:5:10]
+   ╭─[negative.baml:5:11]
  5 │   opt_cb ((value: int) -> int)?
-   ·          ──────────────────────
+   ·           ───────────────────
    ╰────
 
   [type] E0151

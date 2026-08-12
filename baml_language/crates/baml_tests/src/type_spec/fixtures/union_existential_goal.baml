@@ -1,5 +1,4 @@
 // Union values against a VAR-carrying interface expectation
-// tir: fails
 //
 // (TIR types the call `unknown` - the spec is ahead here.)
 //

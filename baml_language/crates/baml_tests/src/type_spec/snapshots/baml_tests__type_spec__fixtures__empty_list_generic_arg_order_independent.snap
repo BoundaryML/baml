@@ -2,21 +2,21 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-354..358 'both': throws never
-385..394 '{\n    a\n}': T[]
-391..392 'a': T[]
-405..406 'f': throws never
-418..513 '{\n   ...  x\n}': int[]
-424..429 'let x': int[]
-432..436 'both': hir_ty=[(a: int[], b: int[]) -> int[] throws never] tir=[(a: T[], b: T[]) -> T[] throws never]
-432..445 'both([], [1])': int[]
-437..439 '[]': hir_ty=[int[]] tir=[_[]]
-441..444 '[1]': int[]
-442..443 '1': 1
-467..472 'let y': int[]
-475..479 'both': hir_ty=[(a: int[], b: int[]) -> int[] throws never] tir=[(a: T[], b: T[]) -> T[] throws never]
-475..488 'both([1], [])': int[]
-480..483 '[1]': int[]
-481..482 '1': 1
-485..487 '[]': int[]
-510..511 'x': int[]
+340..344 'both': throws never
+371..380 '{\n    a\n}': T[]
+377..378 'a': T[]
+391..392 'f': throws never
+404..499 '{\n   ...  x\n}': int[]
+410..415 'let x': int[]
+418..422 'both': (a: int[], b: int[]) -> int[] throws never
+418..431 'both([], [1])': int[]
+423..425 '[]': int[]
+427..430 '[1]': int[]
+428..429 '1': 1
+453..458 'let y': int[]
+461..465 'both': (a: int[], b: int[]) -> int[] throws never
+461..474 'both([1], [])': int[]
+466..469 '[1]': int[]
+467..468 '1': 1
+471..473 '[]': int[]
+496..497 'x': int[]

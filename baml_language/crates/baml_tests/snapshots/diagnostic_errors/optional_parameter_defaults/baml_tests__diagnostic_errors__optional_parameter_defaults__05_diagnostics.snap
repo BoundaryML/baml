@@ -1,14 +1,62 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 41429
+assertion_line: 37763
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0005
+
+  × defaulted parameter `max_results` must be passed by name
+    ╭─[call_binding.baml:22:18]
+ 22 │   Search("cats", 5)
+    ·                  ─
+    ╰────
+
+  [type] E0005
+
+  × positional arguments cannot appear after named arguments
+    ╭─[call_binding.baml:26:26]
+ 26 │   Search(query = "cats", 5)
+    ·                          ─
+    ╰────
+
+  [type] E0005
+
+  × duplicate named argument `max_results`
+    ╭─[call_binding.baml:30:57]
+ 30 │   Search(query = "cats", max_results = 1, max_results = 2)
+    ·                                                         ─
+    ╰────
+
+  [type] E0005
+
+  × missing required argument `query`
+    ╭─[call_binding.baml:34:3]
+ 34 │   Search(q = "cats")
+    ·   ──────────────────
+    ╰────
+
   [type] E0005
 
   × unknown named argument `q`
     ╭─[call_binding.baml:34:3]
  34 │   Search(q = "cats")
     ·   ──────────────────
+    ╰────
+
+  [type] E0001
+
+  × default for parameter `a` cannot reference later parameter `b`
+    ╭─[call_binding.baml:37:33]
+ 37 │ function BadForwardRef(a: int = b, b: int = 1) -> int {
+    ·                                 ─
+    ╰────
+
+  [type] E0001
+
+  × required parameter `b` cannot appear after a defaulted parameter
+    ╭─[call_binding.baml:41:46]
+ 41 │ function BadRequiredAfterDefault(a: int = 1, b: int) -> int {
+    ·                                              ──────
     ╰────
 
   [hir] E0010
@@ -18,6 +66,14 @@ assertion_line: 41429
  1 │ template_string Greeting(name: string = "world") #"hello {{ name }}"#
    ·                                         ───┬───
    ·                                            ╰── default value is not allowed here
+   ╰────
+
+  [type] E0001
+
+  × `self` cannot have a default value
+   ╭─[unsupported_contexts.baml:9:27]
+ 9 │   function Current(self = null) -> int {
+   ·                           ────
    ╰────
 
   [type] E0001
@@ -36,6 +92,14 @@ assertion_line: 41429
  15 │   let f = (x: int = 1) -> int { x }
     ·                     ┬
     ·                     ╰── default value is not allowed here
+    ╰────
+
+  [type] E0005
+
+  × defaulted parameter `x` must be passed by name
+    ╭─[unsupported_contexts.baml:16:5]
+ 16 │   f(2)
+    ·     ─
     ╰────
 
   [type] E0001

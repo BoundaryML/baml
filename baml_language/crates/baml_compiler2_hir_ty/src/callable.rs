@@ -54,6 +54,23 @@ pub fn callable_throws<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
 ) -> CallableThrows {
+    // A seeded value from a previous compile short-circuits body inference
+    // for a clean function (the bytecode cache seeds only functions its
+    // reuse plan proved unchanged). `by_path(db)` is a tracked read of the
+    // `SeededCallableThrows` input, so a later seed invalidates this memo;
+    // the lookup is skipped when no seeds were injected (LSP, cold CLI).
+    if let Some(seeds) = db.seeded_callable_throws() {
+        let by_path = seeds.by_path(db);
+        if !by_path.is_empty() {
+            let path = function.file(db).path(db).display().to_string();
+            if let Some(ty) = by_path
+                .get(&path)
+                .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
+            {
+                return CallableThrows(ty.clone());
+            }
+        }
+    }
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     if let Some(throws_ref) = data.throws {
         let frame = crate::lower::function_generic_frame(db, function);

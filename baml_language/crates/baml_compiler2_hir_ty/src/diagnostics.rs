@@ -1922,6 +1922,39 @@ impl<'db> RelatedNote<'db> {
 
 /// Primary location for a diagnostic — either an expression, a statement,
 /// or a raw source span (for type annotations that lack an `ExprId`).
+/// "Did you mean" candidates for an unknown member/field name: fuzzy-scored
+/// against the declared names (TIR's `similar_name_suggestions`, verbatim).
+pub fn similar_name_suggestions<'a>(
+    unknown_name: &Name,
+    candidates: impl IntoIterator<Item = &'a Name>,
+) -> Vec<Name> {
+    let needle = unknown_name.as_str().to_ascii_lowercase();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let mut scored: Vec<(f64, Name)> = candidates
+        .into_iter()
+        .map(|candidate| {
+            let candidate_lower = candidate.as_str().to_ascii_lowercase();
+            let mut score = strsim::jaro_winkler(&needle, &candidate_lower);
+            if candidate_lower.starts_with(&needle) || needle.starts_with(&candidate_lower) {
+                score += 0.15;
+            }
+            if candidate_lower.contains(&needle) || needle.contains(&candidate_lower) {
+                score += 0.10;
+            }
+            (score.min(1.0), candidate.clone())
+        })
+        .filter(|(score, _)| *score >= 0.80)
+        .collect();
+    scored.sort_by(|(sa, na), (sb, nb)| {
+        sb.partial_cmp(sa)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| na.as_str().cmp(nb.as_str()))
+    });
+    scored.into_iter().map(|(_, name)| name).take(3).collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
@@ -1938,6 +1971,10 @@ pub enum DiagnosticLocation {
     /// A written type reference (body annotation), resolved through the
     /// body's `TypeRefSourceMap` at render time.
     TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
+    /// The field-NAME portion of an object-literal entry:
+    /// `(object_expr, field_value_expr)` resolves through
+    /// `object_field_name_span` at render time.
+    ObjectFieldName(ExprId, ExprId),
     Span(TextRange),
 }
 
@@ -1982,6 +2019,9 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::Expr(id) => {
                 source_map.map(|sm| sm.expr_span(*id)).unwrap_or_default()
             }
+            DiagnosticLocation::ObjectFieldName(object, value) => source_map
+                .map(|sm| sm.object_field_name_span(*object, *value))
+                .unwrap_or_default(),
             DiagnosticLocation::ExprMember(id) => source_map
                 .map(|sm| sm.member_access_member_span(*id))
                 .unwrap_or_default(),

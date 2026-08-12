@@ -69,7 +69,7 @@ fn relink_seeded(
     prev_units: &[CompilationUnit],
     clean: &[&str],
 ) -> Program {
-    use baml_compiler2_tir::throw_inference::file_throw_facts;
+    use baml_compiler2_hir_ty::throw_facts::file_throw_facts;
     let prev_db = build_db(ROOT, prev_files);
     let mut seeds = std::collections::BTreeMap::new();
     for sf in prev_db.get_source_files() {

@@ -29,38 +29,4 @@ function MultipleNarrowedArms(x: int) -> string {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_catch_binding_narrowing.baml:16:21]
-//  16 │     TimeoutError => "retry",
-//     ·                     ───────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_catch_binding_narrowing.baml:17:10]
-//  17 │     _ => "other"
-//     ·          ───────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_catch_binding_narrowing.baml:24:21]
-//  24 │     TimeoutError => "timeout",
-//     ·                     ─────────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_catch_binding_narrowing.baml:25:19]
-//  25 │     ParseError => "parse error",
-//     ·                   ─────────────
-//     ╰────
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[catch_catch_binding_narrowing.baml:26:10]
-//  26 │     _ => "unknown"
-//     ·          ─────────
-//     ╰────
+// <no-diagnostics-expected>

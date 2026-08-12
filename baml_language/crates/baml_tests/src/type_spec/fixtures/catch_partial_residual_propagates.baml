@@ -1,4 +1,3 @@
-// tir: fails
 //
 // S12: a `catch` that handles only part of the error channel rethrows
 // the residual - the enclosing function's inferred effect is what the

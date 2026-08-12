@@ -5,7 +5,6 @@
 // spec's `let a = foo` case; `let c: (int) -> int = foo` stays the
 // legal inferred spelling (function_value_outside_call_position).
 //
-// tir: fails
 //
 // (TIR collapses the whole binding to its recovery sentinel and emits
 // the not-a-valid-function-reference diagnostic; the local-erasure

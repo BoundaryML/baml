@@ -1,4 +1,3 @@
-// tir: fails
 //
 // The spec's Interfaces example verbatim: `T extends baml.ops.Add<O>`
 // lets `lhs + rhs` dispatch through the CARRIED bound (I2's param

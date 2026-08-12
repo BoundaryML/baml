@@ -25,7 +25,7 @@ function ThrowsContractViolationInElse(v: int | string) -> int throws never {
 // E0096
 //
 //   × declared throws is `never`, but this function may also throw `string`
-//     ╭─[let_else_let_else_throws.baml:18:71]
-//  18 │ function ThrowsContractViolationInElse(v: int | string) -> int throws never {
-//     ·                                                                       ─────
+//     ╭─[let_else_let_else_throws.baml:19:31]
+//  19 │   let n: int = v else { throw "from else"; };
+//     ·                               ───────────
 //     ╰────

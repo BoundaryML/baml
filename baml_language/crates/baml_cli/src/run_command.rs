@@ -820,14 +820,14 @@ impl RunArgs {
         // files, this counts only the dirty files' scopes; a cold compile walks
         // every scope.
         crate::bytecode_cache::cache_debug(format_args!(
-            "scope inferences: {} this process",
-            baml_db::baml_compiler2_tir::inference::scope_inferences()
+            "body inferences: {} this process",
+            baml_db::baml_compiler2_hir_ty::infer::body_inferences()
         ));
         // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
         // seed served every stdlib package); a cold run reports up to 6.
         crate::bytecode_cache::cache_debug(format_args!(
             "stdlib interface: {} honest derivation(s) this process",
-            baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+            baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
         ));
         let program = compiled.program;
         let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
