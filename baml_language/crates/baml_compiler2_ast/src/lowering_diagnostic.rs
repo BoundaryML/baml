@@ -196,6 +196,10 @@ pub enum LoweringDiagnostic {
     /// are backtick templates.
     LlmJinjaPromptRemoved { span: TextRange },
 
+    /// A legacy `template_string` declaration. Removed: use a function
+    /// returning a backtick string.
+    TemplateStringRemoved { span: TextRange },
+
     /// The LLM function's `client` value cannot be used: unknown provider
     /// prefix, a string without a `provider/model` shape, or the removed
     /// unquoted shorthand.
@@ -582,6 +586,14 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "use a backtick prompt instead",
+            ),
+            LoweringDiagnostic::TemplateStringRemoved { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`template_string` declarations are no longer supported. Use a function returning a backtick string instead."
+                    .to_string(),
+                *span,
+                "use a function returning a backtick string instead",
             ),
             LoweringDiagnostic::InvalidLlmClient {
                 function_name,

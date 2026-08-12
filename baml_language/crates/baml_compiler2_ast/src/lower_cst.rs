@@ -156,6 +156,9 @@ pub fn lower_file_with_path_and_test_owner(
                 diags.push(lower_generator_deprecation(&child));
             }
             baml_compiler_syntax::SyntaxKind::TEMPLATE_STRING_DEF => {
+                diags.push(LoweringDiagnostic::TemplateStringRemoved {
+                    span: child.span_range(),
+                });
                 if let Some(ts) = lower_template_string(&child, &mut diags) {
                     items.push(Item::TemplateString(ts));
                 }

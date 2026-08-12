@@ -8017,13 +8017,6 @@ impl<'a> Parser<'a> {
     /// Parse a template string declaration
     pub(crate) fn parse_template_string(&mut self) {
         self.with_node(SyntaxKind::TEMPLATE_STRING_DEF, |p| {
-            p.error_here(
-                "`template_string` is no longer supported. Use a function returning a backtick string instead."
-                    .to_string(),
-            );
-
-            // Keep parsing the declaration for lossless recovery and to avoid
-            // cascading diagnostics after the unsupported keyword.
             p.expect(TokenKind::TemplateString);
 
             // Template name
@@ -9159,24 +9152,15 @@ function Demo() -> string {{
     }
 
     #[test]
-    fn template_string_reports_targeted_unsupported_error() {
+    fn parses_template_string_for_lowering_diagnostic() {
         let source = "template_string Greeting(name: string) `Hello ${name}`";
         let (root, errors) = parse_source(source);
 
-        assert_eq!(errors.len(), 1);
-        assert!(
-            matches!(
-                &errors[0],
-                ParseError::InvalidSyntax { message, .. }
-                    if message.contains("`template_string` is no longer supported")
-                        && message.contains("function returning a backtick string")
-            ),
-            "unexpected diagnostic: {errors:#?}"
-        );
+        assert_no_errors(&errors);
         assert!(
             root.descendants()
                 .any(|node| node.kind() == SyntaxKind::TEMPLATE_STRING_DEF),
-            "unsupported declaration should remain in the tree for recovery"
+            "unsupported declaration should remain in the tree for lowering"
         );
     }
 
