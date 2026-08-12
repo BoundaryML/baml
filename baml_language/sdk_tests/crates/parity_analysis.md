@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 696. IDs with complete required parity: 38. Required gaps: 4565.
+Distinct exact test IDs: 683. IDs with complete required parity: 38. Required gaps: 4457.
 
-Baseline ratchet: UNCHANGED. Required gaps: 4565 (baseline: 4565). Present declarations: 2090 (baseline: 2090). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 4457 (baseline: 4457). Present declarations: 2068 (baseline: 2068). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 306 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 303 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 306 / 306 | 100.0% |
-| typescript_node | 124 / 306 | 40.5% |
-| typescript_web_chromium | 117 / 306 | 38.2% |
-| typescript_web_cloudflare_workers | 117 / 306 | 38.2% |
-| cpp | 128 / 306 | 41.8% |
-| csharp | 0 / 306 | 0.0% |
-| rust | 227 / 306 | 74.2% |
-| go | 13 / 306 | 4.2% |
-| java | 296 / 306 | 96.7% |
-| swift | 188 / 306 | 61.4% |
+| python_pydantic2 | 303 / 303 | 100.0% |
+| typescript_node | 124 / 303 | 40.9% |
+| typescript_web_chromium | 117 / 303 | 38.6% |
+| typescript_web_cloudflare_workers | 117 / 303 | 38.6% |
+| cpp | 128 / 303 | 42.2% |
+| csharp | 0 / 303 | 0.0% |
+| rust | 224 / 303 | 73.9% |
+| go | 13 / 303 | 4.3% |
+| java | 293 / 303 | 96.7% |
+| swift | 185 / 303 | 61.1% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -395,18 +395,8 @@ Parity is the share of the 306 test IDs declared in `python_pydantic2` that are 
 | integration/phase7_executes_typed_failures_cancellation_and_exit | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/phase9_executes_media_in_both_directions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/primitive_slice_executes_sync_and_async | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| llm_functions/build_request_accepts_explicit_client_option | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_honors_cancellation | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_accepts_explicit_client_option | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_honors_cancellation | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_returns_runtime_error_for_invalid_client | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_sets_streaming_flag | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/classify_sentiment_build_request_includes_anthropic_api_key | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/extract_resume_build_request_includes_open_aiapi_key | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/main_baml_sdk_lorem_and_baml_sdk_ipsum_are_reachable | - | y | y | y | - | - | - | - | - | - | all |  |
-| llm_functions/main_classify_sentiment_build_request_includes_anthropic_api_key | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/main_classify_sentiment_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
-| llm_functions/main_extract_resume_build_request_includes_openai_api_key | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/main_extract_resume_companion_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_extract_resume_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_ipsum_classify_sentiment_sync_plus_async_factories_are_callable | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -425,11 +415,9 @@ Parity is the share of the 306 test IDs declared in `python_pydantic2` that are 
 | llm_functions/main_replay_server_namespace_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | all |  |
 | llm_functions/main_stream_types_lorem_leaf_present | y | - | - | - | - | - | y | - | y | - | all |  |
-| llm_functions/main_streaming_extract_build_request_includes_openai_api_key | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/main_streaming_extract_companion_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_streaming_extract_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_types_and_bindings_reachable | - | - | - | - | - | - | - | - | - | y | all |  |
-| llm_functions/parse_companion_accepts_explicit_client_option | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/parse_companion_honors_cancellation | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/parse_companion_returns_closed_enum | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/parse_companion_returns_runtime_error_for_invalid_output | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -446,7 +434,6 @@ Parity is the share of the 306 test IDs declared in `python_pydantic2` that are 
 | llm_functions/streaming_e2e_stream_doc | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_async | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_collect_in_baml | y | - | - | - | - | - | y | - | y | y | all |  |
-| llm_functions/streaming_extract_build_request_includes_open_aiapi_key | - | - | - | - | - | - | - | y | - | - | all |  |
 | package_edges/compile_cross_package_types_compile | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/alias_container_composition_and_defaults | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/alias_package_scope_collisions_compile_and_run | - | - | - | - | - | - | - | y | - | - | all |  |
