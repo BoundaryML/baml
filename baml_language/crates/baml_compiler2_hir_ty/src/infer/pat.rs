@@ -29,9 +29,7 @@ use baml_type::{
 };
 
 use super::{Expectation, InferenceContext};
-use crate::exhaustiveness::{
-    Ctor, DPat, PatCtx, compute_match_usefulness,
-};
+use crate::exhaustiveness::{Ctor, DPat, PatCtx, compute_match_usefulness};
 
 /// One lowered pattern: the matrix row piece, the refined scrutinee type
 /// the arm body sees, and two type-only verdicts:
@@ -242,12 +240,7 @@ impl<'db> InferenceContext<'db> {
         outcome
     }
 
-    fn lower_pattern_inner(
-        &mut self,
-        body: &ExprBody,
-        pat: PatId,
-        scrut: &Ty,
-    ) -> PatternOutcome {
+    fn lower_pattern_inner(&mut self, body: &ExprBody, pat: PatId, scrut: &Ty) -> PatternOutcome {
         match &body.patterns[pat] {
             Pattern::Wildcard => PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),
@@ -370,17 +363,19 @@ impl<'db> InferenceContext<'db> {
         let (args, pins): (Vec<Ty>, Vec<(baml_type::Name, Ty)>) = if !written.is_empty() {
             (written, Vec::new())
         } else {
-            let adopted = scrut_members(scrut).into_iter().find_map(|member| {
-                match member.kind() {
+            let adopted = scrut_members(scrut)
+                .into_iter()
+                .find_map(|member| match member.kind() {
                     TyKind::Interface(member_qtn, args, pins, _) if *member_qtn == qtn => {
                         Some((args.to_vec(), pins.to_vec()))
                     }
                     _ => None,
-                }
-            });
+                });
             adopted.unwrap_or_else(|| {
                 (
-                    (0..data.generic_params.len()).map(|_| Ty::error()).collect(),
+                    (0..data.generic_params.len())
+                        .map(|_| Ty::error())
+                        .collect(),
                     Vec::new(),
                 )
             })
@@ -393,11 +388,8 @@ impl<'db> InferenceContext<'db> {
         ));
         let target = InterfaceRef::new(qtn.clone(), args.into_boxed_slice(), pins);
 
-        let declared: Vec<baml_type::Name> = data
-            .fields
-            .iter()
-            .map(|field| field.name.clone())
-            .collect();
+        let declared: Vec<baml_type::Name> =
+            data.fields.iter().map(|field| field.name.clone()).collect();
         let mut field_covers = true;
         let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
         for (name, field_pat) in field_pats {
@@ -464,11 +456,9 @@ impl<'db> InferenceContext<'db> {
                         })
                         .collect();
                     match claimed.as_slice() {
-                        [member] => DPat::union_member(
-                            member.to_plain(),
-                            iface_dpat,
-                            scrut.to_plain(),
-                        ),
+                        [member] => {
+                            DPat::union_member(member.to_plain(), iface_dpat, scrut.to_plain())
+                        }
                         _ => iface_dpat,
                     }
                 }
@@ -478,7 +468,7 @@ impl<'db> InferenceContext<'db> {
         PatternOutcome {
             dpat,
             matched_ty: if head_covers { scrut.clone() } else { head },
-                recorded_ty: None,
+            recorded_ty: None,
             covers_type: head_covers && field_covers,
             consumes_matched: field_covers,
         }
@@ -629,11 +619,7 @@ impl<'db> InferenceContext<'db> {
                         .into_iter()
                         .map(|variant| {
                             DPat::single(
-                                baml_type::Ty::EnumVariant(
-                                    qtn.clone(),
-                                    variant,
-                                    TyAttr::default(),
-                                ),
+                                baml_type::Ty::EnumVariant(qtn.clone(), variant, TyAttr::default()),
                                 col_plain.clone(),
                             )
                         })
@@ -699,10 +685,10 @@ impl<'db> InferenceContext<'db> {
         if let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
             definition
         {
-            return self.lower_interface_pattern(body, pat, interface, class_path, field_pats, scrut);
+            return self
+                .lower_interface_pattern(body, pat, interface, class_path, field_pats, scrut);
         }
-        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition
-        else {
+        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
             for &(_, field_pat) in field_pats {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }
@@ -754,8 +740,7 @@ impl<'db> InferenceContext<'db> {
             let index = declared.iter().position(|(field, _)| field == name);
             match index {
                 Some(index) => {
-                    let field_ty =
-                        crate::lower::substitute_params(&declared[index].1, &args);
+                    let field_ty = crate::lower::substitute_params(&declared[index].1, &args);
                     let outcome = self.lower_pattern(body, *field_pat, &field_ty);
                     field_covers &= outcome.covers_type;
                     sub_dpats[index] = Some(outcome.dpat);
@@ -772,9 +757,7 @@ impl<'db> InferenceContext<'db> {
             .zip(sub_dpats)
             .map(|((_, field_ty), sub)| {
                 sub.unwrap_or_else(|| {
-                    DPat::wildcard(
-                        crate::lower::substitute_params(field_ty, &args).to_plain(),
-                    )
+                    DPat::wildcard(crate::lower::substitute_params(field_ty, &args).to_plain())
                 })
             })
             .collect();
@@ -819,11 +802,9 @@ impl<'db> InferenceContext<'db> {
                         })
                         .collect();
                     match claimed.as_slice() {
-                        [member] => DPat::union_member(
-                            member.to_plain(),
-                            class_dpat,
-                            scrut.to_plain(),
-                        ),
+                        [member] => {
+                            DPat::union_member(member.to_plain(), class_dpat, scrut.to_plain())
+                        }
                         _ => class_dpat,
                     }
                 }
@@ -952,7 +933,7 @@ impl<'db> InferenceContext<'db> {
         PatternOutcome {
             dpat,
             matched_ty: effective,
-                recorded_ty: None,
+            recorded_ty: None,
             // A member-claiming pattern narrows; it never covers the
             // whole union.
             covers_type: covers && ascribed.is_none() && claimed_union.is_none(),
@@ -995,15 +976,14 @@ impl<'db> InferenceContext<'db> {
                 let rest_pat = rest.as_ref().and_then(|rest| rest.pat);
                 subs.into_iter()
                     .all(|sub| self.pattern_fits(body, sub, &element))
-                    && rest_pat
-                        .is_none_or(|rest| self.pattern_fits(body, rest, &Ty::list(element.clone())))
+                    && rest_pat.is_none_or(|rest| {
+                        self.pattern_fits(body, rest, &Ty::list(element.clone()))
+                    })
             }
             Pattern::Class { class, .. } => match expanded.kind() {
                 // A class head demands the same class; interfaces and
                 // rigid vars could still adopt or implement - true.
-                TyKind::Class(qtn, ..) => {
-                    class.last().is_none_or(|name| name == qtn.name())
-                }
+                TyKind::Class(qtn, ..) => class.last().is_none_or(|name| name == qtn.name()),
                 TyKind::Interface(..) | TyKind::TypeVar(..) => true,
                 _ => false,
             },
@@ -1116,9 +1096,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
         let baml_type::Ty::Interface(qtn, args, pins, _) = iface_ty else {
             return Vec::new();
         };
-        let Some(Definition::Interface(interface)) =
-            self.infer.facts.definition_of(qtn)
-        else {
+        let Some(Definition::Interface(interface)) = self.infer.facts.definition_of(qtn) else {
             return Vec::new();
         };
         let head = Ty::from_plain(iface_ty);
@@ -1158,9 +1136,10 @@ impl PatCtx for HirPatCtx<'_, '_> {
         ty: &baml_type::Ty,
     ) -> Vec<baml_type::Ty> {
         let args: Vec<Ty> = match ty {
-            baml_type::Ty::Class(_, args, _) => {
-                args.iter().map(baml_type::interned::Ty::from_plain).collect()
-            }
+            baml_type::Ty::Class(_, args, _) => args
+                .iter()
+                .map(baml_type::interned::Ty::from_plain)
+                .collect(),
             _ => Vec::new(),
         };
         self.infer

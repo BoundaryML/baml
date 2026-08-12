@@ -78,7 +78,9 @@ fn corpus_verdicts(relative_path: &str) -> String {
 fn match_exhaustiveness_corpus() {
     insta::assert_snapshot!(
         "corpus__match_exhaustiveness",
-        corpus_verdicts("projects/diagnostic_errors/match_exhaustiveness/match_exhaustiveness.baml")
+        corpus_verdicts(
+            "projects/diagnostic_errors/match_exhaustiveness/match_exhaustiveness.baml"
+        )
     );
 }
 
@@ -107,4 +109,3 @@ fn generic_match_typevar_arm_corpus() {
         )
     );
 }
-

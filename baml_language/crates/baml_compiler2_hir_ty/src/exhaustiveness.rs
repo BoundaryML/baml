@@ -53,9 +53,14 @@ fn contains_error_recovery(ty: &Ty) -> bool {
             contains_error_recovery(value) || contains_error_recovery(error)
         }
         Ty::Function {
-            params, ret, throws, ..
+            params,
+            ret,
+            throws,
+            ..
         } => {
-            params.iter().any(|param| contains_error_recovery(&param.ty))
+            params
+                .iter()
+                .any(|param| contains_error_recovery(&param.ty))
                 || contains_error_recovery(ret)
                 || contains_error_recovery(throws)
         }

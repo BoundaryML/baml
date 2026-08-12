@@ -29,9 +29,7 @@
 //! table's existing snapshot/rollback when a consumer arrives.
 
 use baml_compiler2_ast::ExprId;
-use baml_type::{
-    interned::{InterfaceRef, Ty, TyKind},
-};
+use baml_type::interned::{InterfaceRef, Ty, TyKind};
 
 use super::InferenceContext;
 
@@ -188,11 +186,7 @@ impl<'db> InferenceContext<'db> {
         let TyKind::Interface(name, args, pins, _) = subject.kind() else {
             return Attempt::Stalled;
         };
-        let subject_target = InterfaceRef::new(
-                name.clone(),
-                (args.to_vec()).into(),
-                pins.to_vec(),
-            );
+        let subject_target = InterfaceRef::new(name.clone(), (args.to_vec()).into(), pins.to_vec());
         let heads = crate::impls::requires_heads(self.db, &subject_target, subject, 8);
         let goal_target = goal.clone();
         let mut applicable = None;
@@ -233,7 +227,10 @@ impl<'db> InferenceContext<'db> {
             }
         }
         for (name, want_pin) in &goal.associated_types {
-            let Some((_, have_pin)) = head.associated_types.iter().find(|(have_name, _)| have_name == name)
+            let Some((_, have_pin)) = head
+                .associated_types
+                .iter()
+                .find(|(have_name, _)| have_name == name)
             else {
                 return false;
             };
@@ -304,7 +301,12 @@ impl<'db> InferenceContext<'db> {
             return None;
         }
         let instantiation = self.confirm_impl_subject(goal, facts)?;
-        for (pattern, requested) in facts.interface.generics.iter().zip(interface.generics.iter()) {
+        for (pattern, requested) in facts
+            .interface
+            .generics
+            .iter()
+            .zip(interface.generics.iter())
+        {
             let pattern = crate::impls::substitute_bindings(pattern, &instantiation);
             self.table.unify(requested, &pattern).ok()?;
         }
@@ -316,15 +318,15 @@ impl<'db> InferenceContext<'db> {
                 .map(|(_, ty)| crate::impls::substitute_bindings(ty, &instantiation))
                 .or_else(|| {
                     let implemented = InterfaceRef::new(
-                facts.interface.name.clone(),
-                facts
-                    .interface
-                    .generics
-                    .iter()
-                    .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-                facts
+                        facts.interface.name.clone(),
+                        facts
+                            .interface
+                            .generics
+                            .iter()
+                            .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                        facts
                             .interface
                             .associated_types
                             .iter()
@@ -335,7 +337,7 @@ impl<'db> InferenceContext<'db> {
                                 )
                             })
                             .collect(),
-            );
+                    );
                     crate::impls::realized_assoc_default(self.db, &implemented, goal, name)
                 })?;
             // Normalize-then-unify (the `sub` entry's discipline): a
@@ -496,8 +498,7 @@ impl<'db> InferenceContext<'db> {
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {
             TyKind::TypeVar(param, _) => {
-                let carried =
-                    baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
+                let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
                 carried.iter().any(|have| {
                     let have = InterfaceRef::from_constraint(have);
                     carried_satisfies(&have, &target, &eq)
@@ -505,11 +506,7 @@ impl<'db> InferenceContext<'db> {
                 })
             }
             TyKind::Interface(name, args, pins, _) => {
-                let have = InterfaceRef::new(
-                name.clone(),
-                (args.to_vec()).into(),
-                pins.to_vec(),
-            );
+                let have = InterfaceRef::new(name.clone(), (args.to_vec()).into(), pins.to_vec());
                 carried_satisfies(&have, &target, &eq)
                     || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
             }
@@ -550,7 +547,6 @@ fn interface_has_infer(interface: &InterfaceRef) -> bool {
             .iter()
             .any(|(_, ty)| ty.has_infer())
 }
-
 
 /// `have` satisfies `want` when heads and args agree and `have` pins
 /// everything `want` pins to the same type (it may pin MORE; a bare

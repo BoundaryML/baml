@@ -95,7 +95,9 @@ fn classify_divergence(hir: &str, tir: &str) -> Option<&'static str> {
         if token.ends_with('n') && token[..token.len() - 1].parse::<i128>().is_ok() {
             return Some("bigint");
         }
-        if token.parse::<i64>().is_ok() || token.starts_with('-') && token[1..].parse::<i64>().is_ok() {
+        if token.parse::<i64>().is_ok()
+            || token.starts_with('-') && token[1..].parse::<i64>().is_ok()
+        {
             return Some("int");
         }
         if token.parse::<f64>().is_ok() && token.contains('.') {
@@ -160,7 +162,9 @@ fn classify_divergence(hir: &str, tir: &str) -> Option<&'static str> {
         }
     }
     // 4. Rustc-strict unconstrained empty containers (ruled 2026-08-07).
-    if hir.contains("!error") && (tir.contains("never[") || tir.contains("_[") || !tir.contains("!error")) {
+    if hir.contains("!error")
+        && (tir.contains("never[") || tir.contains("_[") || !tir.contains("!error"))
+    {
         return Some("rustc-strict-empty-literal");
     }
     // 4b. TIR fails to type where we succeed (`!error`/`never` on the
@@ -243,9 +247,11 @@ fn classify_divergence(hir: &str, tir: &str) -> Option<&'static str> {
     //     canonical algebra's complete-set rule).
     {
         let hir_single = !hir.contains(' ');
-        let variants_of_hir = tir
-            .split(" | ")
-            .all(|member| member.strip_prefix(hir).is_some_and(|rest| rest.starts_with('.')));
+        let variants_of_hir = tir.split(" | ").all(|member| {
+            member
+                .strip_prefix(hir)
+                .is_some_and(|rest| rest.starts_with('.'))
+        });
         if hir_single && tir.contains(" | ") && variants_of_hir {
             return Some("enum-complete-collapse");
         }
@@ -272,7 +278,8 @@ fn classify_divergence(hir: &str, tir: &str) -> Option<&'static str> {
             !s.is_empty()
                 && !s.contains(' ')
                 && !s.contains(['(', '<', '['])
-                && s.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '_')
+                && s.chars()
+                    .all(|c| c.is_alphanumeric() || c == '.' || c == '_')
         };
         if bare_name(hir) && tir.contains(" | ") {
             return Some("written-ascription");
@@ -321,7 +328,8 @@ fn classify_divergence(hir: &str, tir: &str) -> Option<&'static str> {
     if sorted_tokens(&unqualified(hir)) == sorted_tokens(&unqualified(tir)) {
         return Some("qualification-render");
     }
-    if sorted_tokens(&unqualified(&widen_all(hir))) == sorted_tokens(&unqualified(&widen_all(tir))) {
+    if sorted_tokens(&unqualified(&widen_all(hir))) == sorted_tokens(&unqualified(&widen_all(tir)))
+    {
         return Some("literal-collapse-render");
     }
     None
@@ -410,7 +418,11 @@ fn s15_sweep_baml_src() {
                 let entry = merged
                     .entry((u32::from(node.range.start()), u32::from(node.range.end())))
                     .or_default();
-                let list = if side == 0 { &mut entry.0 } else { &mut entry.1 };
+                let list = if side == 0 {
+                    &mut entry.0
+                } else {
+                    &mut entry.1
+                };
                 if !list.contains(&node.ty) {
                     list.push(node.ty.clone());
                 }
@@ -425,14 +437,13 @@ fn s15_sweep_baml_src() {
             } else if h.is_empty() || t.is_empty() {
                 one_sided += 1;
             } else {
-                let group = conflicts
-                    .entry((h.join(" / "), t.join(" / ")))
-                    .or_default();
+                let group = conflicts.entry((h.join(" / "), t.join(" / "))).or_default();
                 group.count += 1;
                 if group.examples.len() < 2 {
-                    group
-                        .examples
-                        .push(format!("{rel}:{start}..{end} `{}`", snippet(content, start, end)));
+                    group.examples.push(format!(
+                        "{rel}:{start}..{end} `{}`",
+                        snippet(content, start, end)
+                    ));
                 }
             }
         }
@@ -450,7 +461,11 @@ fn s15_sweep_baml_src() {
         "conflicts: {conflict_total} across {} distinct pairs",
         conflicts.len()
     );
-    let _ = writeln!(report, "hir_ty error-channel entries: {}", channel_entries.len());
+    let _ = writeln!(
+        report,
+        "hir_ty error-channel entries: {}",
+        channel_entries.len()
+    );
     let _ = writeln!(report, "tir diagnostics: {}", tir_diagnostics.len());
     let _ = writeln!(report, "panics: {}", panics.len());
 

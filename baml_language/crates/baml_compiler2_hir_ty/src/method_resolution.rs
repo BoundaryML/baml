@@ -52,10 +52,12 @@ pub fn lookup_method<'db>(
         .methods
         .iter()
         .copied()
-        .find(|&method| {
-            baml_compiler2_ppir::item_data::function_data(db, method).name == *name
-        })?;
-    Some(MethodCandidate { method, class, class_args })
+        .find(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)?;
+    Some(MethodCandidate {
+        method,
+        class,
+        class_args,
+    })
 }
 
 /// The class whose declaration owns `receiver`'s methods, with the generic
@@ -282,7 +284,8 @@ fn lookup_impl_member<'db>(
             continue;
         }
         let implemented = resolved.implemented();
-        if let Some(mut member) = member_on_interface(db, facts, &implemented, receiver, name, false)
+        if let Some(mut member) =
+            member_on_interface(db, facts, &implemented, receiver, name, false)
             && !providers.iter().any(|(seen, _)| *seen == implemented)
         {
             // Concrete dispatch: the impl block is the declarer. A
@@ -345,7 +348,11 @@ fn assoc_bound_roots<'db>(
         return Vec::new();
     };
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    let Some(assoc) = data.associated_types.iter().find(|assoc| assoc.name == *member) else {
+    let Some(assoc) = data
+        .associated_types
+        .iter()
+        .find(|assoc| assoc.name == *member)
+    else {
         return Vec::new();
     };
     let Some(bound) = assoc.bound else {
@@ -356,17 +363,17 @@ fn assoc_bound_roots<'db>(
         .with_bounds(crate::lower::interface_scope_bounds(db, interface));
     let bound_ty = ctx.lower_type_ref(&data.type_refs, bound);
     let target = InterfaceRef::new(
-                interface_ref.name.clone(),
-                (interface_ref.generics.to_vec()).into(),
-                interface_ref.associated_types.to_vec(),
-            );
+        interface_ref.name.clone(),
+        (interface_ref.generics.to_vec()).into(),
+        interface_ref.associated_types.to_vec(),
+    );
     let instantiation = interface_instantiation(base, &target, data);
     match crate::lower::substitute_params(&bound_ty, &instantiation).kind() {
         TyKind::Interface(name, args, pins, _) => vec![InterfaceRef::new(
-                name.clone(),
-                (args.to_vec()).into(),
-                pins.to_vec(),
-            )],
+            name.clone(),
+            (args.to_vec()).into(),
+            pins.to_vec(),
+        )],
         _ => Vec::new(),
     }
 }
@@ -477,9 +484,11 @@ pub(crate) fn member_on_interface<'db>(
     // Methods - default and required alike: ONE item kind, one
     // signature road (r-a's shape; `body: None` is body lowering's
     // business, never resolution's).
-    if let Some(&method) = data.methods.iter().find(|&&method| {
-        baml_compiler2_ppir::item_data::function_data(db, method).name == *name
-    }) {
+    if let Some(&method) = data
+        .methods
+        .iter()
+        .find(|&&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
+    {
         let signature = crate::lower::function_signature(db, method);
         if existential && signature_breaks_one_self(signature) {
             return None;
@@ -487,8 +496,8 @@ pub(crate) fn member_on_interface<'db>(
         // The interface frame is the receiver's business; the method's
         // OWN generics (frame suffix, `map<R, E2>`, `seen<U>`) are the
         // call site's - hand them back for turbofish/fresh-var filling.
-        let pending_own = (signature.generic_params.len() > instantiation.len())
-            .then(|| PendingOwnGenerics {
+        let pending_own =
+            (signature.generic_params.len() > instantiation.len()).then(|| PendingOwnGenerics {
                 method,
                 prefix: instantiation.clone(),
             });
@@ -515,7 +524,13 @@ pub(crate) fn interface_instantiation(
 ) -> Vec<Ty> {
     let mut out = vec![receiver.clone()];
     for (index, _) in data.generic_params.iter().enumerate() {
-        out.push(target.generics.get(index).cloned().unwrap_or_else(Ty::error));
+        out.push(
+            target
+                .generics
+                .get(index)
+                .cloned()
+                .unwrap_or_else(Ty::error),
+        );
     }
     let interface_ref = target.clone();
     for assoc in &data.associated_types {
@@ -544,10 +559,7 @@ fn interface_frame<'db>(
     crate::lower::interface_frame(db, interface)
 }
 
-fn instantiate_signature(
-    signature: &crate::lower::FunctionSignature,
-    instantiation: &[Ty],
-) -> Ty {
+fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiation: &[Ty]) -> Ty {
     let params: Box<[baml_type::interned::FunctionParam]> = signature
         .params
         .iter()

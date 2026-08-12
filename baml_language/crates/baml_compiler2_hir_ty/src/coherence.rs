@@ -970,10 +970,7 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
 /// Substitute `bindings` into a plain type by param identity.
 fn substitute_plain(ty: &Ty, bindings: &TypeBindings) -> Ty {
     match ty {
-        Ty::TypeVar(param, _) => bindings
-            .get(param)
-            .cloned()
-            .unwrap_or_else(|| ty.clone()),
+        Ty::TypeVar(param, _) => bindings.get(param).cloned().unwrap_or_else(|| ty.clone()),
         Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()
@@ -995,7 +992,9 @@ fn substitute_plain(ty: &Ty, bindings: &TypeBindings) -> Ty {
                 .collect(),
             attr.clone(),
         ),
-        Ty::List(inner, attr) => Ty::List(Box::new(substitute_plain(inner, bindings)), attr.clone()),
+        Ty::List(inner, attr) => {
+            Ty::List(Box::new(substitute_plain(inner, bindings)), attr.clone())
+        }
         Ty::EvolvingList(inner, attr) => {
             Ty::EvolvingList(Box::new(substitute_plain(inner, bindings)), attr.clone())
         }
@@ -1107,11 +1106,10 @@ pub fn package_coherence_violations<'db>(
     own.sort_by_key(|&(loc, _)| impl_sort_key(db, loc));
 
     let aliases = normalized_alias_map(db, pkg);
-    let dep_impls: Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> =
-        package_dependency_closure(db, pkg)
-            .iter()
-            .flat_map(|dep| package_impls(db, *dep))
-            .collect();
+    let dep_impls: Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> = package_dependency_closure(db, pkg)
+        .iter()
+        .flat_map(|dep| package_impls(db, *dep))
+        .collect();
 
     let mut violations = Vec::new();
     for (i, &(own_loc, own_facts)) in own.iter().enumerate() {
@@ -1307,7 +1305,11 @@ fn bounds_hold_at_common_instance(
 fn plain_bound(target: &InterfaceRef) -> Interface {
     Interface::new(
         target.name.clone(),
-        target.generics.iter().map(baml_type::interned::Ty::to_plain).collect(),
+        target
+            .generics
+            .iter()
+            .map(baml_type::interned::Ty::to_plain)
+            .collect(),
         target
             .associated_types
             .iter()
@@ -1405,7 +1407,12 @@ pub fn package_orphan_violations<'db>(
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
         let for_ty = facts.for_ty_pattern.to_plain();
-        let args: Vec<Ty> = facts.interface.generics.iter().map(baml_type::interned::Ty::to_plain).collect();
+        let args: Vec<Ty> = facts
+            .interface
+            .generics
+            .iter()
+            .map(baml_type::interned::Ty::to_plain)
+            .collect();
         match orphan_check(&current_package, &facts.interface.name, &for_ty, &args) {
             OrphanOutcome::Ok => {}
             OrphanOutcome::UncoveredParam(name) => violations.push(OrphanViolation {
@@ -2107,7 +2114,12 @@ mod tests {
     #[test]
     fn orphan_foreign_interface_local_for_type_is_ok() {
         assert!(matches!(
-            orphan_check(&Name::new("me"), &foreign("I"), &local_class("me", "C"), &[]),
+            orphan_check(
+                &Name::new("me"),
+                &foreign("I"),
+                &local_class("me", "C"),
+                &[]
+            ),
             OrphanOutcome::Ok
         ));
     }
@@ -2115,7 +2127,12 @@ mod tests {
     #[test]
     fn orphan_foreign_interface_no_local_type_is_violation() {
         assert!(matches!(
-            orphan_check(&Name::new("me"), &foreign("I"), &local_class("dep", "C"), &[]),
+            orphan_check(
+                &Name::new("me"),
+                &foreign("I"),
+                &local_class("dep", "C"),
+                &[]
+            ),
             OrphanOutcome::NoLocalType
         ));
     }

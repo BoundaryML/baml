@@ -6,7 +6,10 @@
 //! every other interface fact. Rewriting primitive cases to single
 //! instructions is MIR's job at lowering, invisible to inference.
 
-use baml_type::{Name, TypeName, interned::{InterfaceRef, Ty}};
+use baml_type::{
+    Name, TypeName,
+    interned::{InterfaceRef, Ty},
+};
 
 use crate::impls::{resolve_impl, resolved_pin};
 
@@ -25,7 +28,10 @@ pub fn operator_output(
             vec![Name::new("ops")],
             Name::new(interface),
         ),
-        rhs.cloned().into_iter().collect::<Vec<_>>().into_boxed_slice(),
+        rhs.cloned()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
         Vec::new(),
     );
     let resolved = resolve_impl(db, lhs, &target)?;

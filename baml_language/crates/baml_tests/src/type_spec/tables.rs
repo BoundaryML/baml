@@ -269,7 +269,9 @@ function cp_use() -> int throws never {
                 .bindings
                 .iter()
                 .map(|binding| match binding {
-                    baml_compiler2_hir_ty::infer::ParamBinding::Provided { param_index, .. } => {
+                    baml_compiler2_hir_ty::infer::ParamBinding::Provided {
+                        param_index, ..
+                    } => {
                         format!("provided:{param_index}")
                     }
                     baml_compiler2_hir_ty::infer::ParamBinding::OmittedDefault {
@@ -427,8 +429,6 @@ function de_probe() -> bool throws never {
     );
 }
 
-
-
 #[test]
 fn call_plan_effect_solves_from_deferred_lambda() {
     // Goals before solving (rustc's fulfillment-before-defaults, round
@@ -552,7 +552,9 @@ function pa_probe() -> int {
         };
         let result = infer_body(&db, owner);
         let body = baml_compiler2_ppir::body(&db, owner);
-        let Some(arena) = body.expr_body() else { continue };
+        let Some(arena) = body.expr_body() else {
+            continue;
+        };
         for (pat_id, _) in arena.patterns.iter() {
             let snippet = &source[source_map.pattern_span(pat_id)];
             if snippet.starts_with("let arr") {
@@ -568,5 +570,3 @@ function pa_probe() -> int {
         "the ascribed binding records the written nominal type"
     );
 }
-
-

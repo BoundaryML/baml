@@ -196,12 +196,9 @@ impl TypeContext for Facts<'_> {
                     .collect(),
             );
             let base_interned = crate::impls::interned_ty(base);
-            if let Some(default) = crate::impls::realized_assoc_default(
-                self.db,
-                &base_target,
-                &base_interned,
-                member,
-            ) {
+            if let Some(default) =
+                crate::impls::realized_assoc_default(self.db, &base_target, &base_interned, member)
+            {
                 return ProjectionStep::Reduced(default.to_plain());
             }
             return ProjectionStep::Opaque;

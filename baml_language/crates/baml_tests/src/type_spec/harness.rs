@@ -149,7 +149,10 @@ pub(crate) struct ErrorChannel {
     pub(crate) non_exhaustive: Vec<TextRange>,
 }
 
-pub(crate) fn collect_hir_ty_error_channel(db: &ProjectDatabase, file: baml_base::SourceFile) -> ErrorChannel {
+pub(crate) fn collect_hir_ty_error_channel(
+    db: &ProjectDatabase,
+    file: baml_base::SourceFile,
+) -> ErrorChannel {
     let mut mismatches: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
     let mut non_exhaustive = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(db, file) {
@@ -579,13 +582,15 @@ pub(crate) fn collect_hir_ty_nodes(
         let Some(owner) = owners.get(&scope_id.file_scope_id(db).index()) else {
             continue;
         };
-        let name_span =
-            baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
+        let name_span = baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
         if !name_span.is_empty() {
             nodes.push(TypedNode {
                 range: name_span,
                 kind: NodeKind::Expr,
-                ty: format!("throws {}", owner.result.throws.to_plain().render_canonical()),
+                ty: format!(
+                    "throws {}",
+                    owner.result.throws.to_plain().render_canonical()
+                ),
             });
         }
     }
@@ -663,8 +668,7 @@ pub(crate) fn collect_tir_nodes(
         let baml_compiler2_hir::body::BodyOwnerId::Function(function) = owner_id else {
             continue;
         };
-        let name_span =
-            baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
+        let name_span = baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
         if !name_span.is_empty() {
             let throws = baml_compiler2_tir::callable::callable_throws(db, function);
             nodes.push(TypedNode {
@@ -766,7 +770,10 @@ pub(crate) fn collect_tir_nodes(
 }
 
 /// TIR error-severity diagnostics for `file`, rendered one per line.
-pub(crate) fn tir_error_diagnostics(db: &ProjectDatabase, file: baml_base::SourceFile) -> Vec<String> {
+pub(crate) fn tir_error_diagnostics(
+    db: &ProjectDatabase,
+    file: baml_base::SourceFile,
+) -> Vec<String> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let mut out = Vec::new();
     for scope_id in &index.scope_ids {

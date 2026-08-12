@@ -66,7 +66,9 @@ pub fn callable_throws<'db>(
             return CallableThrows(crate::lower::reject_holes(&lowered).to_plain());
         }
     }
-    let result =
-        crate::infer::infer_body(db, baml_compiler2_hir::body::BodyOwnerId::Function(function));
+    let result = crate::infer::infer_body(
+        db,
+        baml_compiler2_hir::body::BodyOwnerId::Function(function),
+    );
     CallableThrows(result.throws.to_plain())
 }

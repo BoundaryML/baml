@@ -14,7 +14,9 @@
 
 use std::fmt::Write;
 
-use baml_compiler2_mir::{InferenceProvider, OptLevel, lower_function_with, pretty::display_function};
+use baml_compiler2_mir::{
+    InferenceProvider, OptLevel, lower_function_with, pretty::display_function,
+};
 use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
 
 use crate::type_spec::sweep::{baml_src_dir, read_corpus_files};
@@ -32,9 +34,16 @@ enum Verdict {
     Agree,
     /// Every differing line fits a documented ruling's bucket; the label
     /// joins the buckets the diff used.
-    Ruled { buckets: String },
-    Differ { excerpt: String },
-    Panic { side: &'static str, message: String },
+    Ruled {
+        buckets: String,
+    },
+    Differ {
+        excerpt: String,
+    },
+    Panic {
+        side: &'static str,
+        message: String,
+    },
 }
 
 fn lower_pretty(
@@ -166,29 +175,30 @@ fn aligned_events(tir: &str, hir: &str) -> Vec<AlignEvent> {
     let mut deletes: Vec<String> = Vec::new();
     let mut inserts: Vec<String> = Vec::new();
     let mut events = Vec::new();
-    let mut flush = |deletes: &mut Vec<String>, inserts: &mut Vec<String>, events: &mut Vec<AlignEvent>| {
-        // Seeding-shaped inserts peel off FIRST: a replace run holding
-        // both an accepted insertion and renumbered lines must not let
-        // the insertion shift the positional pairing of the rest.
-        if inserts.len() > deletes.len() {
-            let mut surplus = inserts.len() - deletes.len();
-            inserts.retain(|line| {
-                if surplus > 0 && seeding_insertion(line) {
-                    surplus -= 1;
-                    events.push(AlignEvent::HirOnly(line.clone()));
-                    false
-                } else {
-                    true
-                }
-            });
-        }
-        let paired = deletes.len().min(inserts.len());
-        for (tl, hl) in deletes.drain(..paired).zip(inserts.drain(..paired)) {
-            events.push(AlignEvent::Pair(tl, hl));
-        }
-        events.extend(deletes.drain(..).map(AlignEvent::TirOnly));
-        events.extend(inserts.drain(..).map(AlignEvent::HirOnly));
-    };
+    let mut flush =
+        |deletes: &mut Vec<String>, inserts: &mut Vec<String>, events: &mut Vec<AlignEvent>| {
+            // Seeding-shaped inserts peel off FIRST: a replace run holding
+            // both an accepted insertion and renumbered lines must not let
+            // the insertion shift the positional pairing of the rest.
+            if inserts.len() > deletes.len() {
+                let mut surplus = inserts.len() - deletes.len();
+                inserts.retain(|line| {
+                    if surplus > 0 && seeding_insertion(line) {
+                        surplus -= 1;
+                        events.push(AlignEvent::HirOnly(line.clone()));
+                        false
+                    } else {
+                        true
+                    }
+                });
+            }
+            let paired = deletes.len().min(inserts.len());
+            for (tl, hl) in deletes.drain(..paired).zip(inserts.drain(..paired)) {
+                events.push(AlignEvent::Pair(tl, hl));
+            }
+            events.extend(deletes.drain(..).map(AlignEvent::TirOnly));
+            events.extend(inserts.drain(..).map(AlignEvent::HirOnly));
+        };
     for change in diff.iter_all_changes() {
         let line = change.value().trim_end_matches('\n').to_string();
         match change.tag() {
@@ -221,7 +231,18 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
     // union never emits.
     let mut tir_only_structural = 0usize;
     let mut absorption_pair = false;
-    for event in aligned_events(tir, hir) {
+    let events = aligned_events(tir, hir);
+    // virtual-dispatch (the proper-dyn ruling, "keep hir obviously"):
+    // TIR devirtualizes an interface call into an is_type ladder over
+    // the implementing classes; hir_ty dispatches through the interface
+    // slot. The ladder's lines admit ONLY when the diff shows the
+    // anchor pair (TIR's arm test against hir's virtual_call), and the
+    // TIR-only calls must name the anchor's member.
+    let dispatch_member: Option<String> = events.iter().find_map(|event| match event {
+        AlignEvent::Pair(tl, hl) => virtual_call_anchor(tl, hl),
+        _ => None,
+    });
+    for event in events {
         match event {
             AlignEvent::Pair(tl, hl) => {
                 let swappable = |s: &str| {
@@ -240,7 +261,11 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
                         swapped_hir.push(normalize_line(&hl));
                     }
                     None => {
-                        if let Some(true) = load_type_superset_pair(&tl, &hl) {
+                        if virtual_call_anchor(&tl, &hl).is_some()
+                            || (dispatch_member.is_some() && dispatch_narrow_pair(&tl, &hl))
+                        {
+                            buckets.insert("virtual-dispatch");
+                        } else if let Some(true) = load_type_superset_pair(&tl, &hl) {
                             absorption_pair = true;
                             buckets.insert("canonical-absorption");
                         } else {
@@ -271,6 +296,16 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
                     tir_only_structural += 1;
                 } else if structural_line(&tl) {
                     tir_only_structural += 1;
+                } else if let Some(member) = &dispatch_member
+                    && (trimmed.starts_with("_ = narrow_bind copy _ as Class(")
+                        || (trimmed.starts_with("_ = call const fn ")
+                            && trimmed.contains(&format!(".{member}(copy _"))))
+                {
+                    // The devirt ladder's per-class arms: the Class
+                    // narrow and the concrete call to the SAME member
+                    // the anchor dispatches virtually.
+                    buckets.insert("virtual-dispatch");
+                    tir_only_structural += 1;
                 } else if tl.trim_start().starts_with("_ = ")
                     && hir_stripped_lines(hir).contains(&tl)
                 {
@@ -296,7 +331,11 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
         }
         buckets.insert("canonical-order");
     }
-    if tir_only_structural > 0 && !absorption_pair && !buckets.contains("proven-coverage") {
+    if tir_only_structural > 0
+        && !absorption_pair
+        && !buckets.contains("proven-coverage")
+        && !buckets.contains("virtual-dispatch")
+    {
         return None;
     }
     // A pure-renumbering pair is only admissible as the CONSEQUENCE of
@@ -306,16 +345,11 @@ fn classify_diff(tir: &str, hir: &str) -> Option<String> {
         && !buckets.contains("receiver-seeding")
         && !absorption_pair
         && !buckets.contains("proven-coverage")
+        && !buckets.contains("virtual-dispatch")
     {
         return None;
     }
-    (!buckets.is_empty()).then(|| {
-        buckets
-            .iter()
-            .copied()
-            .collect::<Vec<_>>()
-            .join("+")
-    })
+    (!buckets.is_empty()).then(|| buckets.iter().copied().collect::<Vec<_>>().join("+"))
 }
 
 /// The top-level parameter list of a fn-typed DECL line, when the line
@@ -362,25 +396,10 @@ fn fn_params(line: &str) -> Option<Vec<String>> {
 
 /// Everything after a fn decl's parameter list (return + throws).
 fn after_params(line: &str) -> String {
-    line.split(") -> ").skip(1).collect::<Vec<_>>().join(") -> ")
-}
-
-/// Whether a line carries a bare single-uppercase generic token.
-fn has_generic_token(line: &str) -> bool {
-    let mut prev_alnum = false;
-    let chars: Vec<char> = line.chars().collect();
-    for (index, &c) in chars.iter().enumerate() {
-        if c.is_ascii_uppercase()
-            && !prev_alnum
-            && chars
-                .get(index + 1)
-                .is_none_or(|&next| !(next.is_alphanumeric() || next == '_' || next == '.'))
-        {
-            return true;
-        }
-        prev_alnum = c.is_alphanumeric() || c == '_' || c == '.';
-    }
-    false
+    line.split(") -> ")
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join(") -> ")
 }
 
 /// The arm set of a `switch copy _ [...]` line, when it is one.
@@ -446,10 +465,16 @@ fn strip_one_paren_layer(line: &str) -> Option<String> {
 fn load_type_superset_pair(tir: &str, hir: &str) -> Option<bool> {
     let t = tir.trim_start().strip_prefix("_ = load_type(")?;
     let h = hir.trim_start().strip_prefix("_ = load_type(")?;
-    let t_members: std::collections::BTreeSet<&str> =
-        t.trim_end_matches(");").split(" | ").map(str::trim).collect();
-    let h_members: std::collections::BTreeSet<&str> =
-        h.trim_end_matches(");").split(" | ").map(str::trim).collect();
+    let t_members: std::collections::BTreeSet<&str> = t
+        .trim_end_matches(");")
+        .split(" | ")
+        .map(str::trim)
+        .collect();
+    let h_members: std::collections::BTreeSet<&str> = h
+        .trim_end_matches(");")
+        .split(" | ")
+        .map(str::trim)
+        .collect();
     Some(h_members.is_subset(&t_members) && h_members.len() < t_members.len())
 }
 
@@ -513,9 +538,14 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     // self-param-render (S15 ruling: fn renders SHOW the self param;
     // TIR strips it): tir's param list equals hir's minus its first.
     if let (Some(t_params), Some(h_params)) = (fn_params(&t_norm), fn_params(&h_norm))
-        && h_params.len() == t_params.len() + 1
-        && h_params[1..] == t_params[..]
         && after_params(&t_norm) == after_params(&h_norm)
+        && ((h_params.len() == t_params.len() + 1 && h_params[1..] == t_params[..])
+            || (t_params.len() == h_params.len()
+                && t_params != h_params
+                && t_params
+                    .iter()
+                    .zip(&h_params)
+                    .all(|(t, h)| t == h || t == "Self")))
     {
         return Some(Some("self-param-render"));
     }
@@ -523,9 +553,24 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     // generic vars and hir the concrete instantiation. Coarse by design
     // (the census stays the review surface): single-uppercase tokens on
     // the TIR side only.
-    if t_norm.trim_start().starts_with("let _:")
-        && has_generic_token(&t_norm)
-        && !has_generic_token(&h_norm)
+    if t_norm.trim_start().starts_with("let _:") {
+        let t_tokens = generic_tokens(&t_norm);
+        let h_tokens = generic_tokens(&h_norm);
+        if h_tokens.is_subset(&t_tokens) && h_tokens.len() < t_tokens.len() {
+            return Some(Some("tir-uninstantiated"));
+        }
+    }
+    // The is_type spelling of the same family: TIR renders an
+    // unresolved projection placeholder (`#1`, `(#0 as I).Label`) where
+    // hir_ty resolved the projection to its concrete type.
+    // On the UN-normalized forms: literal normalization rewrites the
+    // placeholder's digit (`#1` -> `#int`) and would hide it.
+    if let (Some(t_at), Some(h_at)) = (
+        t_ids.find("is_type(copy _, "),
+        h_ids.find("is_type(copy _, "),
+    ) && t_ids[..t_at] == h_ids[..h_at]
+        && has_projection_var(&t_ids[t_at..])
+        && !has_projection_var(&h_ids[h_at..])
     {
         return Some(Some("tir-uninstantiated"));
     }
@@ -536,10 +581,18 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
         t_norm.trim_start().strip_prefix("_ = load_type("),
         h_norm.trim_start().strip_prefix("_ = load_type("),
     ) {
-        let t_set: std::collections::BTreeSet<&str> =
-            t.trim_end().trim_end_matches(");").split(" | ").map(str::trim).collect();
-        let h_set: std::collections::BTreeSet<&str> =
-            h.trim_end().trim_end_matches(");").split(" | ").map(str::trim).collect();
+        let t_set: std::collections::BTreeSet<&str> = t
+            .trim_end()
+            .trim_end_matches(");")
+            .split(" | ")
+            .map(str::trim)
+            .collect();
+        let h_set: std::collections::BTreeSet<&str> = h
+            .trim_end()
+            .trim_end_matches(");")
+            .split(" | ")
+            .map(str::trim)
+            .collect();
         if t_set != h_set
             && (t_set.is_subset(&h_set) || h_set.is_subset(&t_set))
             && t_set
@@ -572,8 +625,10 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     // these arms through tag switches, which is why the dead test never
     // shipped. Scoped to the is_type spelling with `never` on the TIR
     // side only.
-    if let (Some(t_at), Some(h_at)) = (t_norm.find("is_type(copy _, "), h_norm.find("is_type(copy _, "))
-        && t_norm[..t_at] == h_norm[..h_at]
+    if let (Some(t_at), Some(h_at)) = (
+        t_norm.find("is_type(copy _, "),
+        h_norm.find("is_type(copy _, "),
+    ) && t_norm[..t_at] == h_norm[..h_at]
         && t_norm[t_at..].trim_end() == "is_type(copy _, never);"
         && h_norm[h_at..].trim_end().ends_with(");")
     {
@@ -581,6 +636,15 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     }
     if throws_rigid_var_pair(&t_norm, &h_norm) {
         return Some(Some("throws-precision"));
+    }
+    // written-throws (the written-ascription ruling, is_type spelling):
+    // the source writes `throws unknown` in an `is` pattern; hir_ty
+    // records the written form where TIR rewrote it to `never`.
+    if t_norm.contains("is_type(copy _, ")
+        && h_norm.contains("throws unknown")
+        && h_norm.replace("throws unknown", "throws never") == t_norm
+    {
+        return Some(Some("written-throws"));
     }
     // Switch ARM order (canonical-order ruling, switch spelling): an
     // exhaustive tag switch's arms are order-independent; equal arm
@@ -594,27 +658,180 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
     // rulings): TIR types an empty list's element as `never` where
     // hir_ty adopted the context's element.
     if t_norm.contains(": never[]")
-        && t_norm.replacen(": never[]", ": _ELEM_", 1)
-            == regex_free_elem_placeholder(&h_norm)
+        && t_norm.replacen(": never[]", ": _ELEM_", 1) == regex_free_elem_placeholder(&h_norm)
     {
         return Some(Some("empty-list-adoption"));
     }
-    if t_norm.contains(" | never[]") && t_norm.replace(" | never[]", "") == h_norm {
-        return Some(Some("empty-list-adoption"));
+    if t_norm.contains(" | never[]") {
+        let stripped = t_norm.replace(" | never[]", "");
+        if stripped == h_norm || drop_redundant_array_parens(&stripped) == h_norm {
+            return Some(Some("empty-list-adoption"));
+        }
     }
     // chain-callee-peel (ruled 2026-08-11, "do what TS does"): an
     // optional-chain link's callee temp types as the PEELED function
     // (TS short-circuit semantics - intermediate links see the
     // non-null type); TIR includes the link's null. Scoped to fn-typed
     // decls where stripping one `null | ` from the TIR side matches.
-    if t_norm.contains("->") && t_norm.contains("null | ") {
-        let stripped = t_norm.replacen("null | ", "", 1);
-        let unparen = strip_one_paren_layer(&stripped);
-        if stripped == h_norm || unparen.as_deref() == Some(h_norm.as_str()) {
-            return Some(Some("chain-callee-peel"));
+    if t_norm.contains("->") && (t_norm.contains("null | ") || t_norm.contains(" | null")) {
+        let head = t_norm.replacen("null | ", "", 1);
+        // BTreeSet canonical order sorts `(` before `n`, so the peeled
+        // null can land at the TAIL of the canonicalized union.
+        let tail = match t_norm.rfind(" | null") {
+            Some(at) => format!("{}{}", &t_norm[..at], &t_norm[at + " | null".len()..]),
+            None => t_norm.clone(),
+        };
+        for stripped in [head, tail] {
+            let unparen = strip_one_paren_layer(&stripped);
+            if stripped == h_norm || unparen.as_deref() == Some(h_norm.as_str()) {
+                return Some(Some("chain-callee-peel"));
+            }
         }
     }
+    // virtual-field-index (the proper-dyn ruling): TIR reads a virtual
+    // field by NAME through an upcast; hir_ty reads by index through
+    // the declaring interface's realized view - same slot, the render
+    // MIR's runtime resolver actually keys on.
+    if virtual_field_index_pair(&t_ids, &h_ids) {
+        return Some(Some("virtual-field-index"));
+    }
+    // static-dispatch (the proper-dyn ruling's converse): where the
+    // receiver's concrete type is statically known, hir_ty resolves the
+    // interface member to the impl's method (InterfaceConcreteMethod)
+    // and MIR emits the direct call TIR dispatched virtually.
+    if static_dispatch_pair(&t_ids, &h_ids) {
+        return Some(Some("static-dispatch"));
+    }
     None
+}
+
+/// The devirt-ladder ANCHOR pair: TIR tests an arm's class where hir
+/// dispatches through the interface slot. Returns the dispatched
+/// member's name.
+fn virtual_call_anchor(tir: &str, hir: &str) -> Option<String> {
+    tir.trim_start().strip_prefix("_ = is_type(copy _, ")?;
+    let h = hir.trim_start().strip_prefix("_ = virtual_call ")?;
+    let member = h.split(" as ").next()?;
+    (!member.is_empty()).then(|| member.to_string())
+}
+
+/// The ladder's narrow pair: TIR narrows to the arm's CLASS where hir
+/// narrows to the dispatch INTERFACE (same place, same successor shape).
+fn dispatch_narrow_pair(tir: &str, hir: &str) -> bool {
+    let (Some(t), Some(h)) = (
+        tir.trim_start().strip_prefix("_ = narrow_bind copy _ as "),
+        hir.trim_start().strip_prefix("_ = narrow_bind copy _ as "),
+    ) else {
+        return false;
+    };
+    t.starts_with("Class(") && h.starts_with("Interface(")
+}
+
+/// TIR `_ = copy _.name#K as Type;` vs hir `_ = copy _.K;` - the two
+/// renders of the same virtual-field slot read.
+fn virtual_field_index_pair(tir: &str, hir: &str) -> bool {
+    let (Some(t_at), Some(h_at)) = (tir.find("= copy _."), hir.find("= copy _.")) else {
+        return false;
+    };
+    if tir[..t_at] != hir[..h_at] {
+        return false;
+    }
+    let t_rest = &tir[t_at + "= copy _.".len()..];
+    let h_rest = &hir[h_at + "= copy _.".len()..];
+    let Some(hash) = t_rest.find('#') else {
+        return false;
+    };
+    let t_index: &str = t_rest[hash + 1..]
+        .split(|c: char| !c.is_ascii_digit())
+        .next()
+        .unwrap_or("");
+    !t_index.is_empty()
+        && t_rest[hash + 1 + t_index.len()..].starts_with(" as ")
+        && h_rest.trim_end() == format!("{t_index};")
+}
+
+/// TIR `_ = virtual_call M as I(ARGS` vs hir `_ = call const fn P(ARGS`
+/// where the concrete path P routes through I to the SAME member M.
+fn static_dispatch_pair(tir: &str, hir: &str) -> bool {
+    let (Some(t), Some(h)) = (
+        tir.trim_start().strip_prefix("_ = virtual_call "),
+        hir.trim_start().strip_prefix("_ = call const fn "),
+    ) else {
+        return false;
+    };
+    let Some((member, t_rest)) = t.split_once(" as ") else {
+        return false;
+    };
+    let Some((iface, t_args)) = t_rest.split_once('(') else {
+        return false;
+    };
+    let Some((path, h_args)) = h.split_once('(') else {
+        return false;
+    };
+    t_args == h_args && path.ends_with(&format!(".{member}")) && path.contains(iface)
+}
+
+/// Drops parens around an array's parenthesized element when the
+/// element needs none (`(int[])[]` -> `int[][]`): no union, no fn
+/// arrow, no tuple comma inside.
+fn drop_redundant_array_parens(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'(' {
+            let mut depth = 1usize;
+            let mut j = i + 1;
+            while j < bytes.len() && depth > 0 {
+                match bytes[j] {
+                    b'(' => depth += 1,
+                    b')' => depth -= 1,
+                    _ => {}
+                }
+                j += 1;
+            }
+            let inner = &line[i + 1..j - 1];
+            if depth == 0
+                && line[j..].starts_with('[')
+                && !inner.contains('|')
+                && !inner.contains("->")
+                && !inner.contains(',')
+            {
+                out.push_str(inner);
+                i = j;
+                continue;
+            }
+        }
+        out.push(line.as_bytes()[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// Bare single-uppercase generic tokens on a line (`T`, `U`, `E`).
+fn generic_tokens(line: &str) -> std::collections::BTreeSet<char> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut prev_alnum = false;
+    let chars: Vec<char> = line.chars().collect();
+    for (index, &c) in chars.iter().enumerate() {
+        if c.is_ascii_uppercase()
+            && !prev_alnum
+            && chars
+                .get(index + 1)
+                .is_none_or(|&next| !(next.is_alphanumeric() || next == '_' || next == '.'))
+        {
+            out.insert(c);
+        }
+        prev_alnum = c.is_alphanumeric() || c == '_' || c == '.';
+    }
+    out
+}
+
+/// Whether a rendered type carries a TIR projection placeholder (`#0`).
+fn has_projection_var(text: &str) -> bool {
+    text.as_bytes()
+        .windows(2)
+        .any(|w| w[0] == b'#' && w[1].is_ascii_digit())
 }
 
 /// The narrow_bind spelling of the ratified thrown-literal rule: both
@@ -751,7 +968,10 @@ fn normalize_line(line: &str) -> String {
     let out = normalize_quoted_spans(&out);
     let out = normalize_type_literals(&out);
     // Tokenwise literal mapping leaves a sign artifact on negatives.
-    let out = out.replace("-int", "int").replace("-float", "float").replace("-bigint", "bigint");
+    let out = out
+        .replace("-int", "int")
+        .replace("-float", "float")
+        .replace("-bigint", "bigint");
     let out = dedup_union_members(&out);
     canonicalize_type_regions(&out)
 }
@@ -780,7 +1000,9 @@ enum RegionEnd {
 fn canonicalize_type_regions(line: &str) -> String {
     let mut out = line.to_string();
     for &(opener, end) in TYPE_REGIONS {
-        let Some(start) = out.find(opener) else { continue };
+        let Some(start) = out.find(opener) else {
+            continue;
+        };
         let region_start = start + opener.len();
         let region_len = match end {
             RegionEnd::MatchingParen => {
@@ -884,8 +1106,11 @@ fn canonicalize_union(payload: &str) -> String {
     set.iter()
         .copied()
         .filter(|member| {
-            !set.iter()
-                .any(|other| member.strip_prefix(other).is_some_and(|rest| rest.starts_with('.')))
+            !set.iter().any(|other| {
+                member
+                    .strip_prefix(other)
+                    .is_some_and(|rest| rest.starts_with('.'))
+            })
         })
         .collect::<Vec<_>>()
         .join(" | ")
@@ -895,8 +1120,7 @@ fn canonicalize_union(payload: &str) -> String {
 /// templates print `TyTemplate` Debug). The attr blob is uniform, so it
 /// compresses first; both observed member orders collapse.
 fn collapse_json_alias_debug(line: &str) -> String {
-    const ATTR: &str =
-        "TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }";
+    const ATTR: &str = "TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }";
     if !line.contains(ATTR) {
         return line.to_string();
     }
@@ -1083,8 +1307,12 @@ fn throws_rigid_var_pair(tir: &str, hir: &str) -> bool {
     if tir[..t_split] != hir[..h_split] {
         return false;
     }
-    let t_throws = tir[t_split + " throws ".len()..].trim_end().trim_end_matches(';');
-    let h_throws = hir[h_split + " throws ".len()..].trim_end().trim_end_matches(';');
+    let t_throws = tir[t_split + " throws ".len()..]
+        .trim_end()
+        .trim_end_matches(';');
+    let h_throws = hir[h_split + " throws ".len()..]
+        .trim_end()
+        .trim_end_matches(';');
     // TIR keeps an unresolved rigid effect var where hir_ty inferred.
     if t_throws.len() <= 2
         && !t_throws.is_empty()
@@ -1235,7 +1463,11 @@ fn s16_provider_sweep_baml_src() {
         }
     }
     if !census.is_empty() {
-        writeln!(report, "\n== residual pair census (all shapes, by count) ==").unwrap();
+        writeln!(
+            report,
+            "\n== residual pair census (all shapes, by count) =="
+        )
+        .unwrap();
         let mut ranked: Vec<(&(String, String), &(usize, String))> = census.iter().collect();
         ranked.sort_by(|a, b| b.1.0.cmp(&a.1.0).then(a.0.cmp(b.0)));
         for ((tir_line, hir_line), (count, example)) in ranked {

@@ -45,12 +45,10 @@ use rustc_hash::FxHashMap;
 /// the resolver.
 const BLANKET_IMPL_BOUND_DEPTH: u32 = 16;
 
-
 /// The plain-to-interned conversion at the `TypeContext` boundary.
 pub(crate) fn interned_ty(ty: &baml_type::Ty) -> Ty {
     Ty::from_plain(ty)
 }
-
 
 /// One impl's resolution-relevant facts, normalized to the free shape.
 #[derive(Debug, Clone, PartialEq)]
@@ -153,27 +151,23 @@ pub fn impl_facts<'db>(
         .iter()
         .cloned()
         .zip(param_bounds.iter())
-        .map(|(param, bounds)| {
-            (
-                param,
-                bounds
-                    .iter()
-                    .map(|target| target.clone())
-                    .collect(),
-            )
-        })
+        .map(|(param, bounds)| (param, bounds.iter().map(|target| target.clone()).collect()))
         .collect();
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map);
-    let interface = InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, data.interface_target))?;
+    let interface =
+        InterfaceRef::of_ty(&ctx.lower_type_ref(&data.type_refs, data.interface_target))?;
     let associated_types = data
         .associated_type_bindings
         .iter()
         .filter_map(|binding| {
-            binding
-                .type_ref
-                .map(|type_ref| (binding.name.clone(), ctx.lower_type_ref(&data.type_refs, type_ref)))
+            binding.type_ref.map(|type_ref| {
+                (
+                    binding.name.clone(),
+                    ctx.lower_type_ref(&data.type_refs, type_ref),
+                )
+            })
         })
         .collect();
 
@@ -243,7 +237,11 @@ impl TypeContext for AliasOnlyFacts<'_> {
     fn interface_requires(&self, _: &baml_type::Interface, _: &baml_type::Interface) -> bool {
         false
     }
-    fn associated_type_bound(&self, _: &baml_type::Interface, _: Name) -> Vec<baml_type::Interface> {
+    fn associated_type_bound(
+        &self,
+        _: &baml_type::Interface,
+        _: Name,
+    ) -> Vec<baml_type::Interface> {
         Vec::new()
     }
     fn project(
@@ -428,7 +426,13 @@ pub fn impls_for_type<'db>(
             if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, &eq) {
                 continue;
             }
-            if !bounds_hold(db, facts, &bindings, BLANKET_IMPL_BOUND_DEPTH, &mut Vec::new()) {
+            if !bounds_hold(
+                db,
+                facts,
+                &bindings,
+                BLANKET_IMPL_BOUND_DEPTH,
+                &mut Vec::new(),
+            ) {
                 continue;
             }
             // The skip the doc comment describes: an implemented
@@ -886,10 +890,9 @@ fn match_pattern(
             },
         ) => {
             pp.len() == tp.len()
-                && pp
-                    .iter()
-                    .zip(tp.iter())
-                    .all(|(p, t)| p.mode == t.mode && match_pattern(&p.ty, &t.ty, params, bindings, eq))
+                && pp.iter().zip(tp.iter()).all(|(p, t)| {
+                    p.mode == t.mode && match_pattern(&p.ty, &t.ty, params, bindings, eq)
+                })
                 && match_pattern(pr, tr, params, bindings, eq)
                 && match_pattern(pt, tt, params, bindings, eq)
         }
@@ -1013,7 +1016,10 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     {
         return bound.clone();
     }
-    Ty::intern(ty.kind().map_children(|child| substitute_bindings(child, bindings)))
+    Ty::intern(
+        ty.kind()
+            .map_children(|child| substitute_bindings(child, bindings)),
+    )
 }
 
 /// Verifies a matched impl's declared bounds at the realized bindings.
@@ -1149,7 +1155,10 @@ fn direct_requires(
                     .associated_types
                     .iter()
                     .map(|(name, ty)| {
-                        (name.clone(), crate::lower::substitute_params(ty, &instantiation))
+                        (
+                            name.clone(),
+                            crate::lower::substitute_params(ty, &instantiation),
+                        )
                     })
                     .collect(),
             ))
@@ -1191,8 +1200,7 @@ fn interface_requires_inner(
     let eq = AliasOnlyFacts::new(db);
     let mut holds = false;
     for required in direct_requires(db, sub, self_ty) {
-        if head_matches(&required, sup, &eq)
-        {
+        if head_matches(&required, sup, &eq) {
             holds = true;
             break;
         }
@@ -1204,4 +1212,3 @@ fn interface_requires_inner(
     visited.pop();
     holds
 }
-

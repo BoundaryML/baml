@@ -137,8 +137,7 @@ fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
 /// same catchable error the through-a-variable path gets.
 fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Option<Ty> {
     use baml_compiler2_ast::BinaryOp;
-    let (TyKind::Literal(a, a_fresh, _), TyKind::Literal(b, b_fresh, _)) =
-        (lhs.kind(), rhs.kind())
+    let (TyKind::Literal(a, a_fresh, _), TyKind::Literal(b, b_fresh, _)) = (lhs.kind(), rhs.kind())
     else {
         return None;
     };
@@ -181,8 +180,7 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
         (Literal::Bigint(a), Literal::Bigint(b)) => {
             use num_bigint::{BigInt, Sign};
             let capped = |value: BigInt| {
-                (value.bits() <= baml_type::MAX_BIGINT_BITS)
-                    .then(|| lit(Literal::Bigint(value)))
+                (value.bits() <= baml_type::MAX_BIGINT_BITS).then(|| lit(Literal::Bigint(value)))
             };
             match op {
                 BinaryOp::Add => capped(a + b),
@@ -489,8 +487,14 @@ pub struct CallPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParamBinding {
-    Provided { param_index: usize, arg: ExprId },
-    OmittedDefault { param_index: usize, param_name: baml_type::Name },
+    Provided {
+        param_index: usize,
+        arg: ExprId,
+    },
+    OmittedDefault {
+        param_index: usize,
+        param_name: baml_type::Name,
+    },
 }
 
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
@@ -658,7 +662,11 @@ fn infer_body_impl<'db>(
             let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
             (
                 function_generic_frame(db, function),
-                signature.params.iter().map(|param| param.ty.clone()).collect(),
+                signature
+                    .params
+                    .iter()
+                    .map(|param| param.ty.clone())
+                    .collect(),
                 Some(signature.ret.clone()),
                 // The owner checks its throw sites against the RAW written
                 // clause (holes preserved - a partial clause opens the
@@ -675,7 +683,11 @@ fn infer_body_impl<'db>(
             let signature = function_signature(db, function);
             (
                 function_generic_frame(db, function),
-                signature.params.iter().map(|param| param.ty.clone()).collect(),
+                signature
+                    .params
+                    .iter()
+                    .map(|param| param.ty.clone())
+                    .collect(),
                 None,
                 None,
             )
@@ -724,15 +736,14 @@ fn infer_body_impl<'db>(
     // Split the declared clause into its named part and openness (spec
     // rule 3: `throws T | _` names T and opens the remainder to
     // inference); nested holes in named members stay ruling-4 errors.
-    let (declared_throws, declared_throws_open) = match declared_throws_ref
-        .map(|(store, throws)| lower.lower_type_ref(store, throws))
-    {
-        Some(raw) => {
-            let (named, open) = crate::lower::throws_clause_parts(&raw);
-            (Some(named), open)
-        }
-        None => (None, false),
-    };
+    let (declared_throws, declared_throws_open) =
+        match declared_throws_ref.map(|(store, throws)| lower.lower_type_ref(store, throws)) {
+            Some(raw) => {
+                let (named, open) = crate::lower::throws_clause_parts(&raw);
+                (Some(named), open)
+            }
+            None => (None, false),
+        };
     let mut ctx = InferenceContext::new(
         db,
         index,
@@ -966,7 +977,7 @@ impl<'db> InferenceContext<'db> {
         param_tys: Vec<Ty>,
         return_ty: Option<Ty>,
         type_refs: Arc<BodyTypeRefs>,
-            bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
+        bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
     ) -> InferenceContext<'db> {
         InferenceContext {
             db,
@@ -1335,8 +1346,7 @@ impl<'db> InferenceContext<'db> {
                     // namespace nothing was registered under.
                     self.template_params.push(frame);
                     self.throws_channels.push(Vec::new());
-                    let saved_diverges =
-                        std::mem::replace(&mut self.diverges, Diverges::Maybe);
+                    let saved_diverges = std::mem::replace(&mut self.diverges, Diverges::Maybe);
                     self.infer_expr(body, *flatten, &Expectation::None);
                     self.diverges = saved_diverges;
                     // The tag's `body` param declares the flatten block's
@@ -1743,9 +1753,7 @@ impl<'db> InferenceContext<'db> {
                     let rhs = self.infer_expr(body, value, &Expectation::None);
                     let result = self.compound_op_result(op, &element, &rhs);
                     if !element.has_error() && !self.sub(&result, &element) {
-                        self.result
-                            .type_mismatches
-                            .insert(value, (element, result));
+                        self.result.type_mismatches.insert(value, (element, result));
                     }
                 }
             }
@@ -1768,15 +1776,13 @@ impl<'db> InferenceContext<'db> {
                 (Some(declared), _) if !declared.has_error() => {
                     self.check_expr(body, value, declared)
                 }
-                (_, Some(place)) if !place.has_error() => {
-                    self.check_expr(body, value, place)
-                }
+                (_, Some(place)) if !place.has_error() => self.check_expr(body, value, place),
                 _ => self.infer_expr(body, value, &Expectation::None),
             },
             Some(op) => {
                 // Compound assignment: `target op value` through the same
                 // operator machinery, the result checked against declared.
-                
+
                 let lhs = binding
                     .map(|binding| self.binding_flow_ty(binding))
                     .unwrap_or_else(|| self.infer_expr(body, target, &Expectation::None));
@@ -1949,9 +1955,8 @@ impl<'db> InferenceContext<'db> {
                     TyKind::Union(actual_members, _) => actual_members.to_vec(),
                     _ => vec![actual.clone()],
                 };
-                let (naked, targets): (Vec<Ty>, Vec<Ty>) = members
-                    .into_iter()
-                    .partition(|member| {
+                let (naked, targets): (Vec<Ty>, Vec<Ty>) =
+                    members.into_iter().partition(|member| {
                         matches!(member.kind(), TyKind::Infer { var: Some(_), .. })
                     });
                 let remainder: Vec<Ty> = actual_members
@@ -2078,15 +2083,12 @@ impl<'db> InferenceContext<'db> {
                     ) = (actual.kind(), expected.kind())
                         && a_name == b_name
                         && a_args.len() == b_args.len()
-                        && b_pins.iter().all(|(pin, _)| {
-                            a_pins.iter().any(|(a_pin, _)| a_pin == pin)
-                        })
-                    {
-                        let arg_pairs: Vec<(Ty, Ty)> = a_args
+                        && b_pins
                             .iter()
-                            .cloned()
-                            .zip(b_args.iter().cloned())
-                            .collect();
+                            .all(|(pin, _)| a_pins.iter().any(|(a_pin, _)| a_pin == pin))
+                    {
+                        let arg_pairs: Vec<(Ty, Ty)> =
+                            a_args.iter().cloned().zip(b_args.iter().cloned()).collect();
                         let pin_pairs: Vec<(Ty, Ty)> = b_pins
                             .iter()
                             .filter_map(|(pin, b_ty)| {
@@ -2307,7 +2309,11 @@ impl<'db> InferenceContext<'db> {
                         &rhs_ty.to_plain(),
                     )
                 {
-                    let value = if matches!(op, BinaryOp::Eq) { equal } else { !equal };
+                    let value = if matches!(op, BinaryOp::Eq) {
+                        equal
+                    } else {
+                        !equal
+                    };
                     return Ty::intern(TyKind::Literal(
                         Literal::Bool(value),
                         Freshness::Fresh,
@@ -2331,8 +2337,7 @@ impl<'db> InferenceContext<'db> {
                 // a mismatch - which is exactly Expectation's inform/
                 // constrain split (same as if-branches).
                 let inner = self.remove_null(&lhs_ty);
-                let rhs_ty =
-                    self.infer_expr(body, rhs, &Expectation::has_type(inner.clone()));
+                let rhs_ty = self.infer_expr(body, rhs, &Expectation::has_type(inner.clone()));
                 self.null_coalesce(inner, &rhs_ty)
             }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
@@ -2412,9 +2417,11 @@ impl<'db> InferenceContext<'db> {
         let mut cur_value = self.widen_fresh(&value);
         let mut cur_error = self.widen_fresh(&error);
         for &with_id in with_exprs {
-            let unknown = || Ty::intern(TyKind::Unknown {
-                attr: TyAttr::default(),
-            });
+            let unknown = || {
+                Ty::intern(TyKind::Unknown {
+                    attr: TyAttr::default(),
+                })
+            };
             // A with-modifier is DEMANDED structurally (the infer_await
             // discipline for language constructs): the expectation below
             // flows into lambdas and generic calls (`options(group = g)`
@@ -2432,7 +2439,7 @@ impl<'db> InferenceContext<'db> {
                 throws: unknown(),
                 attr: TyAttr::default(),
             });
-                let got = self.infer_expr(body, with_id, &Expectation::has_type(expected.clone()));
+            let got = self.infer_expr(body, with_id, &Expectation::has_type(expected.clone()));
             let got = self.structurally_resolve(&got);
             let link = match got.kind() {
                 TyKind::Function { params, ret, .. } => {
@@ -2446,8 +2453,7 @@ impl<'db> InferenceContext<'db> {
                             // current link (solving its generics when
                             // still open).
                             if let Some(param) = params.first() {
-                                let chain =
-                                    spawn_params_ty(cur_value.clone(), cur_error.clone());
+                                let chain = spawn_params_ty(cur_value.clone(), cur_error.clone());
                                 let param_ty = param.ty.clone();
                                 if !self.sub(&chain, &param_ty) {
                                     self.result
@@ -2520,19 +2526,23 @@ impl<'db> InferenceContext<'db> {
             TyKind::Infer { .. } => {
                 let value = self.table.new_var_ty();
                 let error = self.table.new_effect_var_ty();
-                let demanded =
-                    Ty::intern(TyKind::Future(value.clone(), error.clone(), TyAttr::default()));
+                let demanded = Ty::intern(TyKind::Future(
+                    value.clone(),
+                    error.clone(),
+                    TyAttr::default(),
+                ));
                 let _ = self.table.unify(&resolved, &demanded);
                 self.record_throw(expr, &error);
                 value
             }
             _ if resolved.has_error() => resolved,
             _ => {
-                let unknown = || Ty::intern(TyKind::Unknown {
-                    attr: TyAttr::default(),
-                });
-                let expected =
-                    Ty::intern(TyKind::Future(unknown(), unknown(), TyAttr::default()));
+                let unknown = || {
+                    Ty::intern(TyKind::Unknown {
+                        attr: TyAttr::default(),
+                    })
+                };
+                let expected = Ty::intern(TyKind::Future(unknown(), unknown(), TyAttr::default()));
                 self.result
                     .type_mismatches
                     .insert(expr, (expected, resolved));
@@ -2543,12 +2553,7 @@ impl<'db> InferenceContext<'db> {
 
     /// One compound-assignment step: `lhs op rhs` through the operator
     /// machinery, shared by binding and index targets.
-    fn compound_op_result(
-        &mut self,
-        op: baml_compiler2_ast::AssignOp,
-        lhs: &Ty,
-        rhs: &Ty,
-    ) -> Ty {
+    fn compound_op_result(&mut self, op: baml_compiler2_ast::AssignOp, lhs: &Ty, rhs: &Ty) -> Ty {
         use baml_compiler2_ast::AssignOp;
         match op {
             AssignOp::Add => self.dispatch_operator("Add", lhs, Some(rhs)),
@@ -2641,9 +2646,7 @@ impl<'db> InferenceContext<'db> {
             let index_nullable = index_ty
                 .map(|ty| self.remove_null(&ty) != ty)
                 .unwrap_or(false);
-            if index_nullable
-                && let Some(top) = self.chain_nullable.last_mut()
-            {
+            if index_nullable && let Some(top) = self.chain_nullable.last_mut() {
                 *top = true;
             }
         }
@@ -2778,10 +2781,14 @@ impl<'db> InferenceContext<'db> {
     /// through its CARRIED bound (I2 - the spec's `T extends
     /// baml.ops.Add<O>` example), yielding the bound's `Output` pin or
     /// the symbolic projection; everything else asks the impl registry.
-    fn member_operator_output(&mut self, interface: &str, lhs: &Ty, rhs: Option<&Ty>) -> Option<Ty> {
+    fn member_operator_output(
+        &mut self,
+        interface: &str,
+        lhs: &Ty,
+        rhs: Option<&Ty>,
+    ) -> Option<Ty> {
         if let TyKind::TypeVar(param, _) = lhs.kind() {
-            let bounds =
-                baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
+            let bounds = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
             let bound = bounds.iter().find(|bound| {
                 !bound.name.is_local()
                     && bound.name.package().as_str() == "baml"
@@ -2790,8 +2797,7 @@ impl<'db> InferenceContext<'db> {
                     && bound.name.name().as_str() == interface
                     && match rhs {
                         Some(rhs) => {
-                            bound.generics.len() == 1
-                                && Ty::from_plain(&bound.generics[0]) == *rhs
+                            bound.generics.len() == 1 && Ty::from_plain(&bound.generics[0]) == *rhs
                         }
                         None => bound.generics.is_empty(),
                     }
@@ -2865,8 +2871,9 @@ impl<'db> InferenceContext<'db> {
     /// <: rhs` keeps rhs - else the freshness-preserving join.
     fn null_coalesce(&mut self, inner: Ty, rhs: &Ty) -> Ty {
         let rhs = self.table.resolve_completely(rhs);
-        let ground =
-            |ty: &Ty| !ty.has_infer() && !ty.has_error() && !matches!(ty.kind(), TyKind::Never { .. });
+        let ground = |ty: &Ty| {
+            !ty.has_infer() && !ty.has_error() && !matches!(ty.kind(), TyKind::Never { .. })
+        };
         if ground(&inner) && ground(&rhs) {
             if is_subtype_interned(&rhs, &inner, &self.facts) {
                 return inner;
@@ -2981,7 +2988,11 @@ impl<'db> InferenceContext<'db> {
         let mut slots: Vec<Option<ExprId>> = vec![None; params.len()];
         let mut runtime_id = None;
         for (index, arg) in args.iter().enumerate() {
-            if arg.label.as_ref().is_some_and(|label| label.as_str() == "$id") {
+            if arg
+                .label
+                .as_ref()
+                .is_some_and(|label| label.as_str() == "$id")
+            {
                 runtime_id = Some(arg.expr);
                 continue;
             }
@@ -3000,14 +3011,13 @@ impl<'db> InferenceContext<'db> {
                     arg: *arg,
                 }),
                 None => match &params[param_index] {
-                    param if param.mode == baml_type::FunctionParamMode::Optional => {
-                        param.name.clone().map(|param_name| {
-                            ParamBinding::OmittedDefault {
-                                param_index,
-                                param_name,
-                            }
-                        })
-                    }
+                    param if param.mode == baml_type::FunctionParamMode::Optional => param
+                        .name
+                        .clone()
+                        .map(|param_name| ParamBinding::OmittedDefault {
+                            param_index,
+                            param_name,
+                        }),
                     _ => None,
                 },
             })
@@ -3037,9 +3047,13 @@ impl<'db> InferenceContext<'db> {
         {
             let segments = segments.clone();
             let (prefix, member) = segments.split_at(segments.len() - 1);
-            if let Some(fn_ty) =
-                self.interface_static_value(prefix, &member[0], OwnArgs::Call(call), call)
-            {
+            if let Some(fn_ty) = self.interface_static_value(
+                prefix,
+                &member[0],
+                OwnArgs::Call(call),
+                call,
+                Some(callee),
+            ) {
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
                 return (fn_ty, false);
             }
@@ -3117,13 +3131,9 @@ impl<'db> InferenceContext<'db> {
                 {
                     let base_expr = *base;
                     let segments = segments.clone();
-                    if let Some(fn_ty) = self.type_qualified_member_callee(
-                        call,
-                        base_expr,
-                        &segments,
-                        &member,
-                        callee,
-                    ) {
+                    if let Some(fn_ty) = self
+                        .type_qualified_member_callee(call, base_expr, &segments, &member, callee)
+                    {
                         self.result.type_of_expr.insert(callee, fn_ty.clone());
                         return (fn_ty, false);
                     }
@@ -3337,7 +3347,13 @@ impl<'db> InferenceContext<'db> {
         let mut rets = Vec::new();
         let mut throws_parts = Vec::new();
         for (fn_ty, bound) in &resolved_fns {
-            let TyKind::Function { params, ret, throws, .. } = fn_ty.kind() else {
+            let TyKind::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } = fn_ty.kind()
+            else {
                 return None;
             };
             if *bound != first_bound || params != first_params {
@@ -3366,11 +3382,8 @@ impl<'db> InferenceContext<'db> {
     fn default_receiver_target(&mut self) -> Option<(InterfaceRef, Ty)> {
         let function = self.body_owner?;
         let target =
-            baml_compiler2_ppir::item_data::method_interface_target(self.db, function)
-                .as_ref()?;
-        let target_ty = self
-            .lower
-            .lower_type_ref(&target.type_refs, target.target);
+            baml_compiler2_ppir::item_data::method_interface_target(self.db, function).as_ref()?;
+        let target_ty = self.lower.lower_type_ref(&target.type_refs, target.target);
         let TyKind::Interface(name, args, pins, _) = target_ty.kind() else {
             return None;
         };
@@ -3384,19 +3397,15 @@ impl<'db> InferenceContext<'db> {
                     baml_compiler2_ppir::item_data::ImplSubjectData::Free {
                         for_target, ..
                     } => self.lower.lower_type_ref(&data.type_refs, *for_target),
-                    baml_compiler2_ppir::item_data::ImplSubjectData::InClass {
-                        class, ..
-                    } => crate::lower::class_self_ty(self.db, *class),
+                    baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+                        crate::lower::class_self_ty(self.db, *class)
+                    }
                 }
             }
             _ => return None,
         };
         Some((
-            InterfaceRef::new(
-                name.clone(),
-                (args.to_vec()).into(),
-                pins.to_vec(),
-            ),
+            InterfaceRef::new(name.clone(), (args.to_vec()).into(), pins.to_vec()),
             self_ty,
         ))
     }
@@ -3581,7 +3590,7 @@ impl<'db> InferenceContext<'db> {
         if segments.len() >= 2 {
             let (prefix, member) = segments.split_at(segments.len() - 1);
             if let Some(fn_ty) =
-                self.interface_static_value(prefix, &member[0], OwnArgs::Fresh, expr)
+                self.interface_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
             {
                 return fn_ty;
             }
@@ -3603,11 +3612,8 @@ impl<'db> InferenceContext<'db> {
             && segments
                 .last()
                 .is_some_and(|segment| segment.as_str() == "from_json")
-            && let Some(fn_ty) = self.from_json_desugar_value(
-                &segments[..segments.len() - 1],
-                OwnArgs::Fresh,
-                None,
-            )
+            && let Some(fn_ty) =
+                self.from_json_desugar_value(&segments[..segments.len() - 1], OwnArgs::Fresh, None)
         {
             self.result.desugared_callees.insert(expr);
             return fn_ty;
@@ -3633,13 +3639,26 @@ impl<'db> InferenceContext<'db> {
         member: &baml_type::Name,
         own: OwnArgs,
         anchor: ExprId,
+        record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        let method = self.interface_static_method(prefix, member)?;
+        let (interface, method) = self.interface_static_method(prefix, member)?;
         let signature = function_signature(self.db, method);
         let instantiation = self.own_instantiation(own, &signature.generic_params);
         self.register_call_bounds(method, &instantiation, anchor);
         if let OwnArgs::Call(call) = own {
             self.write_call_type_args(call, &instantiation, 0);
+        }
+        if let Some(record_at) = record_at {
+            // The slot is what's statically known - interface plus member,
+            // recorded uniformly for default and required methods (TIR's
+            // contract; MIR keys the fn constant / virtual dispatch on it).
+            self.write_member_resolution(
+                record_at,
+                MemberResolution::InterfaceVirtualMethod {
+                    interface,
+                    method: member.clone(),
+                },
+            );
         }
         Some(function_value_ty(signature, &instantiation))
     }
@@ -3739,8 +3758,7 @@ impl<'db> InferenceContext<'db> {
         let written = self.lower.lower_type_path(prefix);
         let target = if !written.has_error() {
             written
-        } else if let (OwnArgs::Call(call), Some((class, _))) =
-            (own, self.static_class_for(prefix))
+        } else if let (OwnArgs::Call(call), Some((class, _))) = (own, self.static_class_for(prefix))
         {
             let frame = crate::lower::class_generic_frame(self.db, class);
             let args = self.instantiation_args(call, &frame);
@@ -3771,7 +3789,7 @@ impl<'db> InferenceContext<'db> {
         record_at: ExprId,
     ) -> Option<Ty> {
         let own = OwnArgs::Call(call);
-        self.interface_static_value(prefix, member, own, call)
+        self.interface_static_value(prefix, member, own, call, Some(record_at))
             .or_else(|| self.class_static_value(prefix, member, own, call, Some(record_at)))
             .or_else(|| {
                 let mut full = prefix.to_vec();
@@ -3818,14 +3836,24 @@ impl<'db> InferenceContext<'db> {
         // and this is the static demand point.
         let ty = match prefix {
             [single] => match single.as_str() {
-                "int" => Ty::intern(TyKind::Int { attr: baml_type::TyAttr::default() }),
-                "bigint" => Ty::intern(TyKind::Bigint { attr: baml_type::TyAttr::default() }),
-                "float" => Ty::intern(TyKind::Float { attr: baml_type::TyAttr::default() }),
-                "string" => Ty::intern(TyKind::String { attr: baml_type::TyAttr::default() }),
-                "bool" => Ty::intern(TyKind::Bool { attr: baml_type::TyAttr::default() }),
-                "uint8array" => {
-                    Ty::intern(TyKind::Uint8Array { attr: baml_type::TyAttr::default() })
-                }
+                "int" => Ty::intern(TyKind::Int {
+                    attr: baml_type::TyAttr::default(),
+                }),
+                "bigint" => Ty::intern(TyKind::Bigint {
+                    attr: baml_type::TyAttr::default(),
+                }),
+                "float" => Ty::intern(TyKind::Float {
+                    attr: baml_type::TyAttr::default(),
+                }),
+                "string" => Ty::intern(TyKind::String {
+                    attr: baml_type::TyAttr::default(),
+                }),
+                "bool" => Ty::intern(TyKind::Bool {
+                    attr: baml_type::TyAttr::default(),
+                }),
+                "uint8array" => Ty::intern(TyKind::Uint8Array {
+                    attr: baml_type::TyAttr::default(),
+                }),
                 "image" => Ty::intern(TyKind::Media(
                     baml_type::MediaKind::Image,
                     baml_type::TyAttr::default(),
@@ -3864,7 +3892,10 @@ impl<'db> InferenceContext<'db> {
         &self,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
-    ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+    ) -> Option<(
+        baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        baml_compiler2_hir::loc::FunctionLoc<'db>,
+    )> {
         use baml_compiler2_hir::contributions::Definition;
         let Some(Definition::Interface(interface)) = self.lower.resolve_type_definition(prefix)
         else {
@@ -3877,6 +3908,7 @@ impl<'db> InferenceContext<'db> {
             .find(|&method| {
                 baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
             })
+            .map(|method| (interface, method))
     }
 
     /// Lambda typing (rust-analyzer's `deduce_closure_signature` shape).
@@ -4239,9 +4271,12 @@ impl<'db> InferenceContext<'db> {
                 }),
             );
         }
-        if let Some(interface_member) =
-            crate::method_resolution::lookup_interface_member(self.db, &self.facts, &resolved, member)
-        {
+        if let Some(interface_member) = crate::method_resolution::lookup_interface_member(
+            self.db,
+            &self.facts,
+            &resolved,
+            member,
+        ) {
             let resolution = self.declarer_resolution(&interface_member.declarer, member);
             return (self.interface_member_value(interface_member), resolution);
         }
@@ -4304,7 +4339,8 @@ impl<'db> InferenceContext<'db> {
         )> = None;
         for resolved in crate::impls::impls_for_type(self.db, receiver) {
             let implemented = resolved.implemented();
-            let Some(Definition::Interface(interface)) = self.facts.definition_of(&implemented.name)
+            let Some(Definition::Interface(interface)) =
+                self.facts.definition_of(&implemented.name)
             else {
                 continue;
             };
@@ -5120,7 +5156,10 @@ impl<'db> InferenceContext<'db> {
                     _ => joined,
                 }
             }
-            _ => Ty::intern(ty.kind().map_children(|child| self.canonicalize_unions(child))),
+            _ => Ty::intern(
+                ty.kind()
+                    .map_children(|child| self.canonicalize_unions(child)),
+            ),
         }
     }
 
@@ -5513,9 +5552,12 @@ fn bind_receiver(fn_ty: Ty) -> Ty {
     else {
         return fn_ty;
     };
-    let binds = params
-        .first()
-        .is_some_and(|param| param.name.as_ref().is_some_and(|name| name.as_str() == "self"));
+    let binds = params.first().is_some_and(|param| {
+        param
+            .name
+            .as_ref()
+            .is_some_and(|name| name.as_str() == "self")
+    });
     if !binds {
         return fn_ty;
     }

@@ -30,11 +30,11 @@ use baml_compiler2_hir::{
     type_ref::{TypeRefId, TypeRefKind, TypeRefStore},
 };
 use baml_compiler2_ppir::item_data::MethodOwner;
-use rustc_hash::FxHashMap;
 use baml_type::{
     Freshness, Name, ParamTy, TyAttr, TypeName,
     interned::{FunctionParam, Ty, TyKind},
 };
+use rustc_hash::FxHashMap;
 
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
@@ -87,7 +87,6 @@ impl<'db> LowerCtx<'db> {
         self.self_ty = self_ty;
         self
     }
-
 
     #[must_use]
     pub fn with_bounds(
@@ -265,13 +264,11 @@ impl<'db> LowerCtx<'db> {
                     _ => None,
                 }
             }
-            TyKind::Interface(name, args, pins, _) => Some(
-                baml_type::interned::InterfaceRef::new(
-                    name.clone(),
-                    args.to_vec().into_boxed_slice(),
-                    pins.to_vec(),
-                ),
-            ),
+            TyKind::Interface(name, args, pins, _) => Some(baml_type::interned::InterfaceRef::new(
+                name.clone(),
+                args.to_vec().into_boxed_slice(),
+                pins.to_vec(),
+            )),
             // A chained step (`T.Item.Sub`): the previous member's
             // declared bound (`type Item extends J`), realized at its
             // qualifier, is what declares the next member.
@@ -693,7 +690,9 @@ pub fn class_qualified_name<'db>(
     TypeName::new(
         package.package.clone(),
         package.namespace_path,
-        baml_compiler2_ppir::item_data::class_data(db, class).name.clone(),
+        baml_compiler2_ppir::item_data::class_data(db, class)
+            .name
+            .clone(),
     )
 }
 
@@ -842,7 +841,9 @@ pub fn function_generic_bounds<'db>(
                 &impl_data.subject
             {
                 for param_data in generics {
-                    let Some(param) = frame_iter.next() else { break };
+                    let Some(param) = frame_iter.next() else {
+                        break;
+                    };
                     let bounds: Vec<_> = param_data
                         .bounds
                         .iter()
@@ -996,8 +997,7 @@ pub fn owner_self_ty<'db>(
             let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
             match &data.subject {
                 baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
-                    let ctx = lower_ctx_for_file(db, impl_loc.file(db))
-                        .with_frame(frame.to_vec());
+                    let ctx = lower_ctx_for_file(db, impl_loc.file(db)).with_frame(frame.to_vec());
                     Some(ctx.lower_type_ref(&data.type_refs, *for_target))
                 }
                 baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
@@ -1039,7 +1039,10 @@ pub fn function_signature<'db>(
         }
         match owner {
             Some(MethodOwner::Interface(_)) => Some(Ty::intern(TyKind::TypeVar(
-                frame.first().cloned().expect("interface frame starts with Self"),
+                frame
+                    .first()
+                    .cloned()
+                    .expect("interface frame starts with Self"),
                 TyAttr::default(),
             ))),
             _ => concrete_self.clone(),
@@ -1050,8 +1053,9 @@ pub fn function_signature<'db>(
         .iter()
         .map(|param| SignatureParam {
             name: param.name.clone(),
-            ty: self_ty(param)
-                .unwrap_or_else(|| reject_holes(&ctx.lower_type_ref(&data.type_refs, param.type_ref))),
+            ty: self_ty(param).unwrap_or_else(|| {
+                reject_holes(&ctx.lower_type_ref(&data.type_refs, param.type_ref))
+            }),
             has_default: param.has_default,
         })
         .collect();
@@ -1151,7 +1155,9 @@ pub fn interface_assoc_default<'db>(
     interface: InterfaceLoc<'db>,
     member: Name,
 ) -> AssocTypeLowering {
-    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| assoc.default))
+    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| {
+        assoc.default
+    }))
 }
 
 /// The declared BOUND of associated type `member` on `interface` (`type
@@ -1166,7 +1172,9 @@ pub fn interface_assoc_bound<'db>(
     interface: InterfaceLoc<'db>,
     member: Name,
 ) -> AssocTypeLowering {
-    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| assoc.bound))
+    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| {
+        assoc.bound
+    }))
 }
 
 fn lower_assoc_type_ref<'db>(
@@ -1176,7 +1184,10 @@ fn lower_assoc_type_ref<'db>(
     select: impl Fn(&baml_compiler2_ppir::item_data::AssociatedTypeData) -> Option<TypeRefId>,
 ) -> Option<Ty> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    let assoc = data.associated_types.iter().find(|assoc| assoc.name == *member)?;
+    let assoc = data
+        .associated_types
+        .iter()
+        .find(|assoc| assoc.name == *member)?;
     let type_ref = select(assoc)?;
     let ctx = lower_ctx_for_file(db, interface.file(db))
         .with_frame(interface_frame(db, interface))

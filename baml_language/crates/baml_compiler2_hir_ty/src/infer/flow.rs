@@ -61,9 +61,7 @@ impl InferenceContext<'_> {
                 use baml_compiler2_ast::BinaryOp;
                 match op {
                     BinaryOp::Eq | BinaryOp::Ne => {
-                        let facts = self
-                            .null_test_facts(body, *lhs, *rhs)
-                            .unwrap_or_default();
+                        let facts = self.null_test_facts(body, *lhs, *rhs).unwrap_or_default();
                         if matches!(op, BinaryOp::Eq) {
                             facts
                         } else {
@@ -253,11 +251,8 @@ impl InferenceContext<'_> {
             (Some(live), None) | (None, Some(live)) => live,
             (Some(then_flow), Some(else_flow)) => {
                 let mut merged = base;
-                let keys: FxHashSet<BindingId> = then_flow
-                    .keys()
-                    .chain(else_flow.keys())
-                    .copied()
-                    .collect();
+                let keys: FxHashSet<BindingId> =
+                    then_flow.keys().chain(else_flow.keys()).copied().collect();
                 for binding in keys {
                     match (then_flow.get(&binding), else_flow.get(&binding)) {
                         (Some(a), Some(b)) if a == b => {

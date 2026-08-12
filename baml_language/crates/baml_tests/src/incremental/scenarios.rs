@@ -1026,7 +1026,11 @@ fn hir_ty_inference_cached_on_repeat() {
     );
     test_db.assert_not_executed(
         |db| query_hir_ty_inference(db, file),
-        &["infer_function_body", "function_signature", "callable_throws"],
+        &[
+            "infer_function_body",
+            "function_signature",
+            "callable_throws",
+        ],
     );
 }
 
