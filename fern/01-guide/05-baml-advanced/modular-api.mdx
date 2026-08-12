@@ -657,7 +657,7 @@ Similar to OpenAI's Batch API, you can use the modular API with [AWS Bedrock's b
 <Steps>
 ### Build a JSONL file from modular requests
 
-Use `b.request` to build one JSON object per line. Each line needs a `recordId` and a `modelInput` shaped for your Bedrock model (here, chat `messages`).
+Use `b.request` with an `aws-bedrock` client to build one JSON object per line. Each line needs a unique `recordId`; its `modelInput` is the complete Converse request body that BAML generated.
 
 <CodeBlocks>
 ```python Python
@@ -667,14 +667,20 @@ from baml_client.sync_client import b
 def to_jsonl(req):
     return json.dumps({
         'recordId': req.id,
-        'modelInput': {'messages': req.body.json().get('messages')}
+        'modelInput': req.body.json()
     })
 
-# 50 × 2 resumes = 100 requests (Bedrock batch minimum)
-jsonl = '\n'.join([
-    to_jsonl(b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")),
-    to_jsonl(b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics")),
-] * 50)
+resumes = [
+    "John Doe | Software Engineer | BSc in CS",
+    "Jane Smith | Data Scientist | PhD in Statistics",
+]
+
+# Build 100 separate requests so every record ID is unique.
+jsonl = '\n'.join(
+    to_jsonl(b.request.ExtractResume(resume))
+    for _ in range(50)
+    for resume in resumes
+)
 
 bucket = '<YOUR_S3_BUCKET>'
 key = '<YOUR_INPUT_KEY_PREFIX>/batch.jsonl'
@@ -683,14 +689,14 @@ region = '<YOUR_REGION>'
 ```
 ```typescript TypeScript
 import { b } from './baml_client/sync_client';
-import type { HttpRequest } from '@boundaryml/baml/native';
+import type { HTTPRequest } from '@boundaryml/baml';
 
-const toJsonl = (req: HttpRequest) => JSON.stringify({
+const toJsonl = (req: HTTPRequest) => JSON.stringify({
   recordId: req.id,
-  modelInput: { messages: req.body.json().messages }
+  modelInput: req.body.json()
 });
 
-// 50 × 2 resumes = 100 requests (Bedrock batch minimum)
+// Build 100 separate requests so every record ID is unique.
 const jsonl = [...Array(50)].flatMap(() => [
   toJsonl(b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")),
   toJsonl(b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics")),
@@ -718,6 +724,7 @@ try:
         jobName=f'baml-batch-{int(time.time() * 1000)}',
         modelId='<YOUR_MODEL_ID>',
         roleArn='arn:aws:iam::<YOUR_ACCOUNT_ID>:role/<YOUR_BEDROCK_ROLE>',
+        modelInvocationType='Converse',
         inputDataConfig={'s3InputDataConfig': {'s3Uri': f's3://{bucket}/{key}', 's3InputFormat': 'JSONL'}},
         outputDataConfig={'s3OutputDataConfig': {'s3Uri': f's3://{bucket}/{output_prefix}'}}
     ))
@@ -738,6 +745,7 @@ void (async () => {
       jobName: `baml-batch-${Date.now()}`,
       modelId: '<YOUR_MODEL_ID>',
       roleArn: 'arn:aws:iam::<YOUR_ACCOUNT_ID>:role/<YOUR_BEDROCK_ROLE>',
+      modelInvocationType: 'Converse',
       inputDataConfig: { s3InputDataConfig: { s3Uri: `s3://${bucket}/${key}`, s3InputFormat: 'JSONL' } },
       outputDataConfig: { s3OutputDataConfig: { s3Uri: `s3://${bucket}/${outputPrefix}` } }
     }));
@@ -755,9 +763,10 @@ void (async () => {
 <Note>
   **Limitations**:
 
-  - Bedrock batch requires a minimum of 100 requests
-  - Jobs are asynchronous—poll. You must use `get_model_invocation_job` for completion results
-  - Errors are only visible after the batch job completes
+  - Record-count quotas vary by model. This example creates 100 records; check the `Minimum number of records per batch inference job` quota for your model.
+  - Jobs are asynchronous. Poll with `get_model_invocation_job` or monitor state changes with Amazon EventBridge before reading the output.
+  - Per-record inference errors appear in the output JSONL after the job completes.
+  - Bedrock batch inference does not support tool calling or structured output (`response_format`).
 </Note>
 
 ## Type Checking
