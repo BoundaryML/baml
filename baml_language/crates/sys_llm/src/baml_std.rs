@@ -143,7 +143,7 @@ impl PrimitiveClient {
 }
 
 // Provider option structs are generated from llm_types.baml via sys_types.
-pub use sys_types::generated::owned::llm::{
+pub use sys_types::generated::owned::prompt::{
     AnthropicOptions, AzureOpenAiOptions, BedrockOptions, GoogleAiOptions, VertexAiOptions,
 };
 
@@ -183,19 +183,19 @@ pub fn resolve_provider_options(val: &bex_heap::BexExternalValue) -> Option<Prov
         return None;
     };
     match class_name.as_str() {
-        "baml.llm.AnthropicOptions" => AnthropicOptions::from_external(val.clone())
+        "baml.prompt.AnthropicOptions" => AnthropicOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::Anthropic),
-        "baml.llm.AzureOpenAiOptions" => AzureOpenAiOptions::from_external(val.clone())
+        "baml.prompt.AzureOpenAiOptions" => AzureOpenAiOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::AzureOpenAi),
-        "baml.llm.BedrockOptions" => BedrockOptions::from_external(val.clone())
+        "baml.prompt.BedrockOptions" => BedrockOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::Bedrock),
-        "baml.llm.GoogleAiOptions" => GoogleAiOptions::from_external(val.clone())
+        "baml.prompt.GoogleAiOptions" => GoogleAiOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::GoogleAi),
-        "baml.llm.VertexAiOptions" => VertexAiOptions::from_external(val.clone())
+        "baml.prompt.VertexAiOptions" => VertexAiOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::VertexAi),
         other => unreachable!(
@@ -205,7 +205,7 @@ pub fn resolve_provider_options(val: &bex_heap::BexExternalValue) -> Option<Prov
 }
 
 /// Generated from `llm_types.baml`. Fields come from the BAML class definition.
-pub use sys_types::generated::owned::llm::PrimitiveClientOptions;
+pub use sys_types::generated::owned::prompt::PrimitiveClientOptions;
 
 /// Apply provider-specific defaults to options for any fields the user didn't set.
 ///
@@ -294,19 +294,21 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             | LlmProvider::Ollama
             | LlmProvider::OpenRouter
             | LlmProvider::OpenAiResponses
-            | LlmProvider::AiGatewayImages => sys_types::generated::owned::llm::MediaUrlHandler {
-                image: Some("send_url".into()),
-                audio: Some("send_base64".into()),
-                video: Some("send_url".into()),
-                pdf: Some("send_url".into()),
-            },
-            LlmProvider::Anthropic => sys_types::generated::owned::llm::MediaUrlHandler {
+            | LlmProvider::AiGatewayImages => {
+                sys_types::generated::owned::prompt::MediaUrlHandler {
+                    image: Some("send_url".into()),
+                    audio: Some("send_base64".into()),
+                    video: Some("send_url".into()),
+                    pdf: Some("send_url".into()),
+                }
+            }
+            LlmProvider::Anthropic => sys_types::generated::owned::prompt::MediaUrlHandler {
                 image: Some("send_url".into()),
                 audio: Some("send_url".into()),
                 video: Some("send_url".into()),
                 pdf: Some("send_url".into()),
             },
-            LlmProvider::GoogleAi => sys_types::generated::owned::llm::MediaUrlHandler {
+            LlmProvider::GoogleAi => sys_types::generated::owned::prompt::MediaUrlHandler {
                 image: Some("send_base64_unless_google_url".into()),
                 audio: Some("send_base64".into()),
                 video: Some("send_base64".into()),
@@ -320,14 +322,14 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
                 if is_anthropic_model {
                     // Claude on Vertex uses the Anthropic rawPredict path,
                     // so media handling should match the Anthropic provider.
-                    sys_types::generated::owned::llm::MediaUrlHandler {
+                    sys_types::generated::owned::prompt::MediaUrlHandler {
                         image: Some("send_url".into()),
                         audio: Some("send_url".into()),
                         video: Some("send_url".into()),
                         pdf: Some("send_url".into()),
                     }
                 } else {
-                    sys_types::generated::owned::llm::MediaUrlHandler {
+                    sys_types::generated::owned::prompt::MediaUrlHandler {
                         image: Some("send_url_add_mime_type".into()),
                         audio: Some("send_url_add_mime_type".into()),
                         video: Some("send_url".into()),
@@ -335,14 +337,14 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
                     }
                 }
             }
-            LlmProvider::AwsBedrock => sys_types::generated::owned::llm::MediaUrlHandler {
+            LlmProvider::AwsBedrock => sys_types::generated::owned::prompt::MediaUrlHandler {
                 image: Some("send_base64".into()),
                 audio: Some("send_base64".into()),
                 video: Some("send_url".into()),
                 pdf: Some("send_base64".into()),
             },
             LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {
-                sys_types::generated::owned::llm::MediaUrlHandler {
+                sys_types::generated::owned::prompt::MediaUrlHandler {
                     image: Some("send_base64".into()),
                     audio: Some("send_base64".into()),
                     video: Some("send_base64".into()),

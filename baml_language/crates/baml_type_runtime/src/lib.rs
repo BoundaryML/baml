@@ -666,7 +666,7 @@ pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<P
 /// Combine two types into a union, deduplicating members.
 ///
 /// Used when the same type variable is inferred from multiple arguments
-/// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
+/// (e.g., `pair<T>(myInt, myString)` → `T` gets `int` then `string`).
 pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
     normalize_union_members([a.clone(), b.clone()], TyAttr::default())
 }

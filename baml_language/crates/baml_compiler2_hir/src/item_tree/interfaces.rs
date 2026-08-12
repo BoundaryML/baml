@@ -79,6 +79,9 @@ pub struct ImplBlock {
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub span: TextRange,
+    /// Leading `///` docstring — populated for free `implements … for …`
+    /// blocks; in-body `implements I { … }` blocks do not carry one today.
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

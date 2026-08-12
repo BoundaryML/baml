@@ -858,16 +858,10 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
 
         function ClassifySentiment(text: string) -> Sentiment {
             client GPT4o
-            prompt #"classify {{ text }}"#
+            prompt `classify ${text}`
         }
 
-        client<llm> GPT4o {
-            provider openai
-            options {
-                model "gpt-4o"
-                api_key env.OPENAI_API_KEY
-            }
-        }
+        client GPT4o = openai.OpenAiClient.new(model = "gpt-4o");
 
         testset "vibes" {
             let topics: string[] = ["happy", "sad"];
@@ -900,13 +894,7 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
     // NOTE: "vibes" is INSIDE "test" — the closing brace of "test" comes
     // AFTER "vibes". This is the exact structure from the user's file.
     let source = r##"
-        client<llm> GPT4o {
-            provider openai
-            options {
-                model "gpt-4o"
-                api_key env.OPENAI_API_KEY
-            }
-        }
+        client GPT4o = openai.OpenAiClient.new(model = "gpt-4o");
 
         class Sentiment {
             feeling string @description("The detected sentiment")
@@ -916,13 +904,11 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
 
         function ClassifySentiment(text: string) -> Sentiment {
             client GPT4o
-            prompt #"
-                {{ _.role('system') }}
+            prompt `
                 Classify the sentiment of the following text.
-                {{ ctx.output_format }}
-                {{ _.role('assistant') }}
-                Text: {{ text }}
-            "#
+                ${ctx.output_format}
+                Text: ${text}
+            `
         }
 
         testset "test" {
@@ -968,12 +954,12 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
 
         function ClassifySentiment2(text: string) -> string {
             client GPT4o
-            prompt #"classify {{ text }}"#
+            prompt `classify ${text}`
         }
 
         function GenerateTests(count: int, topic: string) -> string[] {
             client GPT4o
-            prompt #"generate {{ count }} tests about {{ topic }}"#
+            prompt `generate ${count} tests about ${topic}`
         }
     "##;
 

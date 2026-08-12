@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.225.0](https://github.com/boundaryml/baml/compare/0.224.0..0.225.0) - 2026-07-31
+
+### Docs
+
+- brand legacy releases as BAML v0 (#4297) - ([5dbd250](https://github.com/boundaryml/baml/commit/5dbd25084b39523854a8967da5f5363b7368f3a6)) - Sam Lijin
+
 ## [0.224.0](https://github.com/boundaryml/baml/compare/0.223.0..0.224.0) - 2026-07-30
 
 ### Bug Fixes

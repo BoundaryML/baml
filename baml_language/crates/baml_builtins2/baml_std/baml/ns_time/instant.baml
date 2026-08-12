@@ -1,7 +1,7 @@
 /// Represents an absolute point in time.
 class Instant {
     /// Internal representation: the number of nanoseconds since the UNIX epoch.
-    _nanoseconds: bigint;
+    _nanoseconds: bigint,
 
     /// Creates a new `Instant` representing the current point in time.
     ///
@@ -22,6 +22,9 @@ class Instant {
     /// due to measurement overhead, it is not recommended to use this
     /// for high-precision measurements.
     ///
+    /// ## Panics
+    /// If the system clock is not available, this function will panic.
+    ///
     /// ## Examples
     /// ```baml
     /// let start = Instant.now();
@@ -29,9 +32,7 @@ class Instant {
     /// let duration = start.elapsed();
     /// ```
     function elapsed(self) -> Duration throws never {
-        Duration {
-            _nanoseconds: Instant.now()._nanoseconds - self._nanoseconds
-        }
+        Duration { _nanoseconds: Instant.now()._nanoseconds - self._nanoseconds }
     }
 
     /// Parses a timestamp string into an `Instant`.
@@ -44,34 +45,37 @@ class Instant {
     /// Every accepted format carries a UTC offset, which is applied to produce
     /// the absolute instant.
     ///
+    /// Throws `root.errors.ParseError` if `s` matches none of the formats above.
+    ///
     /// ## Examples
     /// ```baml
     /// let t = baml.time.Instant.parse("2026-05-27T12:00:00Z");
     /// ```
-    ///
-    /// Throws `root.errors.ParseError` if `s` matches none of the formats above.
     //baml:mut_vm
     function parse(s: string) -> Instant throws root.errors.ParseError {
         $rust_function
     }
-    /// Serializes `self` to a standard [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
-    /// and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)-compatible timestamp string.
-    /// Will always be in UTC.
-    ///
-    /// Sub-second precision is supported, but trailing subsecond zeros may be truncated.
-    ///
-    /// ## Examples
-    /// ```baml
-    /// let t = baml.time.Instant.epoch();
-    /// assert.equal(t.to_string(), "1970-01-01T00:00:00Z")
-    /// ```
-    ///
-    /// ## Panics
-    /// - If the year would be more than 4 digits (outside the RFC 3339 range).
+
     implements baml.ToString {
+        /// Serializes `self` to a standard [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
+        /// and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)-compatible timestamp string.
+        /// Will always be in UTC.
+        ///
+        /// Sub-second precision is supported, but trailing subsecond zeros may be truncated.
+        ///
+        /// ## Panics
+        /// - If the year would be more than 4 digits (outside the RFC 3339 range).
+        ///
+        /// ## Examples
+        /// ```baml
+        /// let t = baml.time.Instant.epoch();
+        /// assert.equal(t.to_string(), "1970-01-01T00:00:00Z")
+        /// ```
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => root.sys.panic("Instant.to_string: " + message),
+                root.errors.InvalidArgument { message } => {
+                    root.sys.panic("Instant.to_string: " + message)
+                },
             }
         }
     }
@@ -85,17 +89,25 @@ class Instant {
     implements baml.FromJson {
         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
             match (j) {
-                string => Instant.parse(j) catch (_) {
-                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                string => {
+                    Instant.parse(j) catch (_) {
+                        root.errors.ParseError { message } => {
+                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                        },
+                    }
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected timestamp string", path: "" }
+                _ => {
+                    throw baml.json.JsonDecodeError { message: "Expected timestamp string", path: "" }
+                },
             }
         }
     }
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+                root.errors.InvalidArgument { message } => {
+                    throw baml.json.JsonSerializationError { message: message, path: "" }
+                },
             }
         }
     }
@@ -119,9 +131,7 @@ class Instant {
     /// Returns the absolute value of the difference between `self` and `other`.
     /// This operation is commutative: swapping `self` and `other` does not change the result.
     function abs_diff(self, other: Instant) -> Duration throws never {
-        Duration {
-            _nanoseconds: (self._nanoseconds - other._nanoseconds).abs()
-        }
+        Duration { _nanoseconds: (self._nanoseconds - other._nanoseconds).abs() }
     }
 
     /// Creates a new `Instant` from a number of nanoseconds since the UNIX epoch.
@@ -164,5 +174,32 @@ class Instant {
     /// Returns the Unix epoch (1970-01-01T00:00:00Z).
     function epoch() -> Instant throws never {
         Instant { _nanoseconds: 0n }
+    }
+}
+
+implement root.ops.Add<Duration> for Instant {
+    type Output = Instant
+    function add(self, other: Duration) -> Instant {
+        Instant {
+            _nanoseconds: self._nanoseconds + other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<Duration> for Instant {
+    type Output = Instant
+    function sub(self, other: Duration) -> Instant {
+        Instant {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<Instant> for Instant {
+    type Output = Duration
+    function sub(self, other: Instant) -> Duration {
+        Duration {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
+        }
     }
 }

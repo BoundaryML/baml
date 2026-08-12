@@ -105,8 +105,6 @@ bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
-sys_jinja = { path = "crates/sys_jinja" }
-sys_jinja_types = { path = "crates/sys_jinja_types" }
 sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
@@ -118,6 +116,7 @@ baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
+baml_surface = { path = "crates/baml_surface" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
@@ -134,16 +133,6 @@ bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
 
-# External dependency for sys_llm jinja module
-minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
-  "macros",
-  "builtins",
-  "debug",
-  "preserve_order",
-  "serde",
-  "unstable_machinery",
-] }
-minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = [ "pycompat" ] }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
@@ -250,6 +239,7 @@ salsa = { version = "0.26", default-features = false, features = [
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+semver = { version = "1" }
 # The maintained fork of the archived serde_yaml, published by the YAML org;
 # package-renamed so `use serde_yaml::` imports stay unchanged.
 serde_yaml = { package = "yaml_serde", version = "0.10" }

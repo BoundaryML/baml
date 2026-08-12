@@ -4,7 +4,7 @@
 //
 // The Rust tests assert on BexExternalValue::union(...) which captures the full
 // union wrapper metadata (union variant types + selected branch type). BAML's
-// assert.equal and deep_equals see the concrete unwrapped value, not the union
+// assert.equal sees the concrete unwrapped value, not the union
 // wrapper metadata. Tests are converted to verify the concrete result is correct.
 // Tests that exist SOLELY to verify the union wrapper metadata structure are
 // SKIPPED + FLAGGED below.
@@ -33,7 +33,7 @@ function union_int_or_string_int_main() -> int | string {
 }
 
 test "union_int_or_string_returns_int" {
-    assert.is_true(baml.deep_equals(union_int_or_string_int_main(), 42))
+    assert.equal(union_int_or_string_int_main(), 42)
 }
 
 function union_int_or_string_string_main() -> int | string {
@@ -71,7 +71,7 @@ function class_with_union_field_main() -> Response {
 }
 
 test "class_with_union_field" {
-    assert.is_true(baml.deep_equals(class_with_union_field_main(), Response { data: 42 }))
+    assert.equal(class_with_union_field_main(), Response { data: 42 })
 }
 
 class Success {
@@ -87,7 +87,7 @@ function union_classes_success_main() -> Success | Failure {
 }
 
 test "union_of_classes_returns_success" {
-    assert.is_true(baml.deep_equals(union_classes_success_main(), Success { value: 42 }))
+    assert.equal(union_classes_success_main(), Success { value: 42 })
 }
 
 function union_classes_failure_main() -> Success | Failure {
@@ -95,7 +95,7 @@ function union_classes_failure_main() -> Success | Failure {
 }
 
 test "union_of_classes_returns_failure" {
-    assert.is_true(baml.deep_equals(union_classes_failure_main(), Failure { error: "something went wrong" }))
+    assert.equal(union_classes_failure_main(), Failure { error: "something went wrong" })
 }
 
 // ─── array results ────────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ function union_of_arrays_main() -> int[] | string[] {
 }
 
 test "union_of_arrays" {
-    assert.is_true(baml.deep_equals(union_of_arrays_main(), [1, 2, 3]))
+    assert.equal(union_of_arrays_main(), [1, 2, 3])
 }
 
 // array_of_unions: (int | string)[] — each element is a union-wrapped value.
@@ -115,7 +115,7 @@ function array_of_unions_main() -> (int | string)[] {
 }
 
 test "array_of_unions" {
-    assert.is_true(baml.deep_equals(array_of_unions_main(), [1, "two", 3]))
+    assert.equal(array_of_unions_main(), [1, "two", 3])
 }
 
 // ─── optional class results ───────────────────────────────────────────────────
@@ -128,9 +128,8 @@ function optional_class_main() -> OutputData? {
     OutputData { value: 42 }
 }
 
-// optional_class: OutputData? result — deep_equals can't unify T? with a bare
-// instance literal, and `!` unwrap is not a BAML operator. Access a field via
-// a helper to produce a non-optional int for comparison.
+// optional_class: OutputData? result — `!` unwrap is not a BAML operator, so
+// access a field via a helper to produce a non-optional int for comparison.
 function optional_class_value() -> int {
     let result = optional_class_main();
     match (result) {
@@ -140,7 +139,7 @@ function optional_class_value() -> int {
 }
 
 test "optional_class" {
-    assert.is_true(baml.deep_equals(optional_class_value(), 42))
+    assert.equal(optional_class_value(), 42)
 }
 
 function optional_class_null_main() -> OutputData? {
@@ -161,7 +160,7 @@ function class_with_optional_field_main() -> Person {
 }
 
 test "class_with_optional_field" {
-    assert.is_true(baml.deep_equals(class_with_optional_field_main(), Person { name: "Alice", age: null }))
+    assert.equal(class_with_optional_field_main(), Person { name: "Alice", age: null })
 }
 
 // ─── optional union ───────────────────────────────────────────────────────────
@@ -193,10 +192,7 @@ function map_with_union_values_main() -> map<string, int | string> {
 // map_with_union_values: the per-value union-wrapper metadata (which branch was
 // selected) isn't observable from BAML, so we compare the concrete entries.
 test "map_with_union_values" {
-    assert.is_true(baml.deep_equals(
-        map_with_union_values_main(),
-        {"count": 42, "name": "test"}
-    ))
+    assert.equal(map_with_union_values_main(), {"count": 42, "name": "test"})
 }
 
 // ─── union of array with union elements or string ─────────────────────────────
@@ -208,5 +204,5 @@ function union_of_array_with_union_elements_main() -> (int | bool)[] | string {
 test "union_of_array_with_union_elements_or_string" {
     // The Rust test checks that selected_option uses declared type (internal
     // metadata). Here we verify the concrete array value is correct.
-    assert.is_true(baml.deep_equals(union_of_array_with_union_elements_main(), [1, true, 2]))
+    assert.equal(union_of_array_with_union_elements_main(), [1, true, 2])
 }

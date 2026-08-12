@@ -27,7 +27,7 @@ pub mod io {
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::SysOp;
     // Owned structs are generated once in sys_types and re-exported here
-    // so that `io::owned::llm::*` paths continue to work.
+    // so that `io::owned::prompt::*` paths continue to work.
     pub use sys_types::generated::owned;
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, SysOpContext, SysOpFn,
@@ -89,282 +89,6 @@ pub use io_adapter::build_runtime_io;
 // Blanket IO LLM implementation (delegates to sys_llm)
 // ============================================================================
 
-impl<T> io::IoClassLlmClient for T {
-    fn get_constructor(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::Client,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        // `client.name` is the bare BAML identifier (`StubClient`); the
-        // synthesized `$new` function picks up the file's pkg + ns prefix
-        // later, landing as e.g. `user.lorem.StubClient$new`. Try the
-        // unqualified and `user.`-prefixed forms first, then fall back to
-        // a suffix scan over `.{name}$new` for clients declared inside a
-        // user namespace (`ns_<x>/`). Ambiguity surfaces as a hard error
-        // — clients are required to be unique within a package, so two
-        // matches mean a synthesis bug.
-        let resolve_fn_name = format!("{}$new", client.name);
-        let global_index = match sys_types::resolve_name(
-            &ctx.function_global_indices,
-            &resolve_fn_name,
-        ) {
-            sys_types::ResolveOutcome::Found(_, idx) => idx,
-            sys_types::ResolveOutcome::Ambiguous => {
-                return SysOpOutput::err(VmBamlError::DevOther {
-                    message: format!(
-                        "Client resolve function {resolve_fn_name} matches multiple namespaced entries"
-                    ),
-                });
-            }
-            sys_types::ResolveOutcome::NotFound => {
-                return SysOpOutput::err(VmBamlError::DevOther {
-                    message: format!("Client resolve function not found: {resolve_fn_name}"),
-                });
-            }
-        };
-        SysOpOutput::ok(
-            FunctionRef::<io::owned::llm::PrimitiveClient>::new(*global_index).into_external(),
-        )
-    }
-}
-
-fn shorthand_to_primitive_client(
-    shorthand: &str,
-) -> Result<io::owned::llm::PrimitiveClient, VmRustFnError> {
-    let shorthand = shorthand.trim();
-    let Some((provider, model)) = shorthand.split_once('/') else {
-        return Err(VmBamlError::InvalidArgument {
-            message: format!("Invalid short hand name: {shorthand}"),
-        }
-        .into());
-    };
-    if provider.is_empty() || model.is_empty() {
-        return Err(VmBamlError::InvalidArgument {
-            message: format!("Invalid short hand name: {shorthand}"),
-        }
-        .into());
-    }
-
-    Ok(io::owned::llm::PrimitiveClient {
-        name: shorthand.to_string(),
-        provider: provider.to_string(),
-        options: io::owned::llm::PrimitiveClientOptions {
-            model: Some(model.to_string()),
-            provider_options: BexExternalValue::Null,
-            ..Default::default()
-        },
-    })
-}
-
-/// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
-/// Uses new IO traits from the `io` module.
-impl<T> io::IoClassLlmPrimitiveClient for T {
-    fn render_prompt(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        template: String,
-        args: indexmap::IndexMap<String, BexExternalValue>,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        let args_ext = BexExternalValue::Map {
-            key_type: baml_type::RuntimeTy::string(),
-            value_type: baml_type::RuntimeTy::unknown(),
-            entries: args,
-        };
-        SysOpOutput::Ready(
-            sys_llm::execute_render_prompt_from_owned(
-                &old_client,
-                &template,
-                &args_ext,
-                &return_type,
-                ctx,
-            )
-            .map(wrap_prompt_ast)
-            .map_err(VmRustFnError::from),
-        )
-    }
-
-    fn specialize_prompt(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        prompt: io::owned::llm::PromptAst,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        let prompt_ast = unwrap_prompt_ast(&prompt);
-        SysOpOutput::Ready(
-            sys_llm::execute_specialize_prompt_from_owned(&old_client, prompt_ast)
-                .map(wrap_prompt_ast)
-                .map_err(VmRustFnError::from),
-        )
-    }
-
-    fn build_request(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        let prompt_ast = unwrap_prompt_ast(&prompt);
-        let io = ctx.runtime_io.clone();
-        SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_from_owned(
-                &old_client,
-                prompt_ast,
-                &return_type,
-                io.clone(),
-            )
-            .await
-            .map(|req| {
-                io::owned::http::Request {
-                    method: req.method,
-                    url: req.url,
-                    headers: req.headers,
-                    body: req.body,
-                }
-                .into_bex_external_value()
-            })
-            .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn parse(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        response: String,
-        type_arg_0: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        SysOpOutput::Ready(
-            sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_arg_0, ctx)
-                .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
-                .map_err(VmRustFnError::from),
-        )
-    }
-
-    fn build_request_stream(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        let prompt_ast = unwrap_prompt_ast(&prompt);
-        let io = ctx.runtime_io.clone();
-        SysOpOutput::async_op(async move {
-            sys_llm::execute_build_request_stream_from_owned(
-                &old_client,
-                prompt_ast,
-                &return_type,
-                io,
-            )
-            .await
-            .map(|req| {
-                io::owned::http::Request {
-                    method: req.method,
-                    url: req.url,
-                    headers: req.headers,
-                    body: req.body,
-                }
-                .into_bex_external_value()
-            })
-            .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn new_stream_accumulator(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::StreamAccumulator> {
-        match sys_llm::stream_accumulator::new_accumulator(&client.provider) {
-            Ok(handle) => {
-                let handle: std::sync::Arc<dyn std::any::Any + Send + Sync> =
-                    std::sync::Arc::new(handle);
-                SysOpOutput::ok(io::owned::llm::StreamAccumulator { _handle: handle })
-            }
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-
-    fn validate_finish_reason(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        finish_reason: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        SysOpOutput::Ready(
-            sys_llm::execute_validate_finish_reason(&old_client, &finish_reason)
-                .map_err(VmRustFnError::from),
-        )
-    }
-}
-
 /// Look up an LLM function by name via the canonical
 /// [`sys_types::resolve_name`] rule. The suffix-scan step handles
 /// functions declared inside a user namespace (e.g. `ns_lorem/`) — the
@@ -412,161 +136,10 @@ fn llm_function_lookup_error(
     }
 }
 
-/// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.
-impl<T> io::IoClassLlmStreamAccumulator for T {
-    fn add_events(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        accumulator: io::owned::llm::StreamAccumulator,
-        events: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        let Ok(handle) = accumulator
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid stream accumulator handle".into(),
-            });
-        };
-        match sys_llm::stream_accumulator::add_events(&handle, &events) {
-            Ok(()) => SysOpOutput::ok(()),
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-
-    fn content(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        accumulator: io::owned::llm::StreamAccumulator,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        let Ok(handle) = accumulator
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid stream accumulator handle".into(),
-            });
-        };
-        match sys_llm::stream_accumulator::get_content(&handle) {
-            Ok(content) => SysOpOutput::ok(content),
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-
-    fn is_done(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        accumulator: io::owned::llm::StreamAccumulator,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<bool> {
-        let Ok(handle) = accumulator
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid stream accumulator handle".into(),
-            });
-        };
-        match sys_llm::stream_accumulator::is_done(&handle) {
-            Ok(done) => SysOpOutput::ok(done),
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-
-    fn model(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        accumulator: io::owned::llm::StreamAccumulator,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        let Ok(handle) = accumulator
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid stream accumulator handle".into(),
-            });
-        };
-        match sys_llm::stream_accumulator::get_model(&handle) {
-            Ok(model) => SysOpOutput::ok(model),
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-
-    fn finish_reason(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        accumulator: io::owned::llm::StreamAccumulator,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        let Ok(handle) = accumulator
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid stream accumulator handle".into(),
-            });
-        };
-        match sys_llm::stream_accumulator::get_finish_reason(&handle) {
-            Ok(reason) => SysOpOutput::ok(reason),
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-
-    fn input_tokens(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        accumulator: io::owned::llm::StreamAccumulator,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<i64>> {
-        let Ok(handle) = accumulator
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid stream accumulator handle".into(),
-            });
-        };
-        match sys_llm::stream_accumulator::get_input_tokens(&handle) {
-            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-
-    fn output_tokens(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        accumulator: io::owned::llm::StreamAccumulator,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<i64>> {
-        let Ok(handle) = accumulator
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid stream accumulator handle".into(),
-            });
-        };
-        match sys_llm::stream_accumulator::get_output_tokens(&handle) {
-            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
-            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
-        }
-    }
-}
-
-/// Blanket impl — `StreamCache.new()` creates a SAP cache from a type descriptor.
+/// Blanket impl — `ParseCache.new()` creates a SAP cache from a type descriptor.
 /// Parameter order follows the BAML decl (`new(streaming, target)` — stream
-/// type first, mirroring `StreamCache<TStream, TFinal>`).
-impl<T> io::IoClassLlmStreamCache for T {
+/// type first, mirroring `ParseCache<TStream, TFinal>`).
+impl<T> io::IoClassSapParseCache for T {
     fn new(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -574,7 +147,7 @@ impl<T> io::IoClassLlmStreamCache for T {
         stream_target: baml_type::RuntimeTy,
         target: baml_type::RuntimeTy,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::StreamCache> {
+    ) -> SysOpOutput<io::owned::sap::ParseCache> {
         let compiled =
             match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
                 Ok(compiled) => compiled,
@@ -584,22 +157,22 @@ impl<T> io::IoClassLlmStreamCache for T {
                     });
                 }
             };
-        let sap = ::sys_llm::SapStreamCache::new(compiled);
+        let sap = ::sys_llm::SapParseCache::new(compiled);
         let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
-        SysOpOutput::ok(io::owned::llm::StreamCache { _data: data })
+        SysOpOutput::ok(io::owned::sap::ParseCache { _data: data })
     }
 }
 
 /// Blanket impl — `Context.output_format_with(...)` re-renders the return
 /// type's schema with caller options (BEP-049 §10 / M5b.2). `Context._output_format`
 /// carries the prebuilt schema as an opaque handle, so this only re-renders it.
-impl<T> io::IoClassLlmContext for T {
+impl<T> io::IoClassPromptContext for T {
     #[allow(clippy::too_many_arguments)]
     fn output_format_with(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        context: io::owned::llm::Context,
+        context: io::owned::prompt::Context,
         prefix: Option<String>,
         or_splitter: Option<String>,
         enum_value_prefix: Option<String>,
@@ -630,43 +203,12 @@ impl<T> io::IoClassLlmContext for T {
     }
 }
 
-/// Blanket impl — `PromptAst` accessors read the wrapped `bex_vm_types::PromptAst`
-/// and render it readably (B-627). `text()` is the single-string rendering (role
-/// headers + content) that also backs `string.from` / `to_string`; `messages()`
-/// is the structured role/content list.
-impl<T> io::IoClassLlmPromptAst for T {
-    fn text(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        prompt_ast: io::owned::llm::PromptAst,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::ok(unwrap_prompt_ast(&prompt_ast).render_text())
-    }
-
-    fn messages(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        prompt_ast: io::owned::llm::PromptAst,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<io::owned::llm::PromptMessage>> {
-        let messages = unwrap_prompt_ast(&prompt_ast)
-            .to_messages()
-            .into_iter()
-            .map(|(role, content)| io::owned::llm::PromptMessage { role, content })
-            .collect();
-        SysOpOutput::ok(messages)
-    }
-}
-
 // ============================================================================
-// `baml.schema` — provider-neutral JSON Schema lowering
+// `baml.json.schema` — provider-neutral JSON Schema lowering
 // ============================================================================
 
-impl<T> io::IoNamespaceSchema for T {
-    fn json_schema(
+impl<T> io::IoNamespaceJson for T {
+    fn schema(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
@@ -1161,46 +703,7 @@ mod schema {
     }
 }
 
-impl<T> io::IoNamespaceLlm for T {
-    fn get_jinja_template(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        // Aligned with `get_constructor`: the function name passed here is
-        // synthesised by the compiler from the call site, so a missing entry
-        // indicates a build artifact mismatch (a synthesis bug), not a
-        // user-recoverable argument error. Ambiguity is surfaced separately
-        // (rather than collapsed to "not found") so debuggers see the
-        // actual failure mode.
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        let dedented = sys_llm::preprocess_template(&info.prompt_template);
-        let template = if ctx.template_strings_macros.is_empty() {
-            dedented
-        } else {
-            format!("{}\n{}", ctx.template_strings_macros, dedented)
-        };
-        SysOpOutput::ok(template)
-    }
-
-    fn assemble_prompt_ast(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        parts: Vec<String>,
-        values: Vec<BexExternalValue>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        // BEP-049 §10 (M5d): structural PromptAst assembly — no magic delimiters.
-        let ast = std::sync::Arc::new(assemble_prompt_ast_impl(&parts, &values)).merge_adjacent();
-        SysOpOutput::ok(wrap_prompt_ast(ast))
-    }
-
+impl<T> io::IoNamespacePrompt for T {
     fn render_output_format(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -1218,7 +721,7 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::OutputFormat> {
+    ) -> SysOpOutput<io::owned::prompt::OutputFormat> {
         // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
         // carries; `output_format_with(...)` renders it with caller options.
         let content = sys_llm::build_output_format_content(&return_type, ctx);
@@ -1238,33 +741,24 @@ impl<T> io::IoNamespaceLlm for T {
         };
         SysOpOutput::ok(info.return_type.clone())
     }
+}
 
-    fn from_shorthand(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        shorthand: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PrimitiveClient> {
-        match shorthand_to_primitive_client(&shorthand) {
-            Ok(client) => SysOpOutput::ok(client),
-            Err(error) => SysOpOutput::err(error),
-        }
-    }
-
-    fn __sap_parse_final(
+/// Schema-aligned parsing operations back both public `baml.sap.parse` and
+/// incremental `ai.stream.Stream` parsing.
+impl<T> io::IoNamespaceSap for T {
+    fn __parse_final(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         json: String,
-        cache: io::owned::llm::StreamCache,
+        cache: io::owned::sap::ParseCache,
         _type_arg_0: baml_type::RuntimeTy,
         _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
             return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid StreamCache: expected SapStreamCache".into(),
+                message: "Invalid ParseCache: expected SapParseCache".into(),
             });
         };
         SysOpOutput::Ready(
@@ -1272,25 +766,25 @@ impl<T> io::IoNamespaceLlm for T {
         )
     }
 
-    fn __sap_parse_partial(
+    fn __parse_partial(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         json: String,
-        cache: io::owned::llm::StreamCache,
+        cache: io::owned::sap::ParseCache,
         _type_arg_0: baml_type::RuntimeTy,
         _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
             return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid StreamCache: expected SapStreamCache".into(),
+                message: "Invalid ParseCache: expected SapParseCache".into(),
             });
         };
         let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
             Ok(Some(value)) => Ok(value),
             Ok(None) => Ok(BexExternalValue::instance(
-                "baml.stream.StreamNoYield",
+                "baml.sap.NoYield",
                 ::indexmap::IndexMap::new(),
             )),
             Err(e) => Err(VmRustFnError::from(e)),
@@ -1299,117 +793,19 @@ impl<T> io::IoNamespaceLlm for T {
     }
 }
 
-/// Role name of an interpolated value if it is a `baml.llm.Role` instance (set
-/// by the in-template `role(...)` constructor), else `None`.
-fn prompt_role_name(v: &BexExternalValue) -> Option<String> {
-    if let BexExternalValue::Instance {
-        class_name, fields, ..
-    } = v
-        && (class_name == "baml.llm.Role" || class_name.ends_with(".Role"))
-        && let Some(BexExternalValue::String(name)) = fields.get("name")
-    {
-        return Some(name.to_string());
-    }
-    None
-}
-
-/// Best-effort text form of a non-`Role` interpolated value (M5d slice: scalars;
-/// media / complex values are deferred).
-fn prompt_value_text(v: &BexExternalValue) -> String {
-    match v {
-        BexExternalValue::String(s) => s.to_string(),
-        BexExternalValue::Int(i) => i.to_string(),
-        BexExternalValue::Float(f) => f.to_string(),
-        BexExternalValue::Bool(b) => b.to_string(),
-        _ => String::new(),
-    }
-}
-
-/// BEP-049 §10 (M5d): fold a tagged template's `parts`/`values` into a
-/// `PromptAst`. Walks them interleaved — a `Role` value starts a new chat
-/// message; strings (and scalar values) accumulate into the current message's
-/// content. With no `Role` values the whole template is a single
-/// `PromptAst::Simple`. Mirrors the message-folding of `parse_chat_prompt` but
-/// off the structured arrays instead of magic-delimiter string parsing.
-fn assemble_prompt_ast_impl(
-    parts: &[String],
-    values: &[BexExternalValue],
-) -> baml_builtins2::PromptAst {
-    use baml_builtins2::{PromptAst, PromptAstSimple};
-    let mk_msg = |role: String, content: String| -> std::sync::Arc<PromptAst> {
-        std::sync::Arc::new(PromptAst::Message {
-            role,
-            content: std::sync::Arc::new(PromptAstSimple::String(content)),
-            // `metadata` is `serde_json::Value`, not a direct dep here, so it
-            // can't be named for `Value::default()`; its `Default` is
-            // `Value::Null`. Role metadata threading lands later.
-            #[allow(clippy::default_trait_access)]
-            metadata: Default::default(),
-        })
-    };
-    let mut messages: Vec<std::sync::Arc<PromptAst>> = Vec::new();
-    let mut current_role: Option<String> = None;
-    let mut content = String::new();
-    for (i, value) in values.iter().enumerate() {
-        if let Some(p) = parts.get(i) {
-            content.push_str(p);
-        }
-        if let Some(role) = prompt_role_name(value) {
-            if let Some(prev) = current_role.take() {
-                messages.push(mk_msg(prev, std::mem::take(&mut content)));
-            }
-            current_role = Some(role);
-        } else {
-            content.push_str(&prompt_value_text(value));
-        }
-    }
-    if let Some(p) = parts.get(values.len()) {
-        content.push_str(p);
-    }
-    match current_role {
-        Some(role) => {
-            messages.push(mk_msg(role, content));
-            if messages.len() == 1 {
-                std::sync::Arc::try_unwrap(messages.pop().unwrap())
-                    .unwrap_or_else(|arc| (*arc).clone())
-            } else {
-                PromptAst::Vec(messages)
-            }
-        }
-        None => PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(content))),
-    }
-}
-
-/// Wrap a `bex_vm_types::PromptAst` (Arc) into the generated `owned::llm::PromptAst`.
-fn wrap_prompt_ast(ast: bex_vm_types::PromptAst) -> io::owned::llm::PromptAst {
-    io::owned::llm::PromptAst {
-        _data: ast as std::sync::Arc<dyn std::any::Any + Send + Sync>,
-    }
-}
-
-/// Unwrap the `_data` field of a generated `owned::llm::PromptAst` back to `bex_vm_types::PromptAst`.
-#[allow(clippy::used_underscore_binding)]
-fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptAst {
-    owned
-        ._data
-        .clone()
-        .downcast::<baml_builtins2::PromptAst>()
-        .expect("PromptAst._data downcast failed: expected Arc<baml_builtins2::PromptAst>. This indicates a bug in wrap_prompt_ast or a type mismatch.")
-}
-
-/// Wrap an `OutputFormatContent` into the generated `owned::llm::OutputFormat` handle.
+/// Wrap an `OutputFormatContent` into the generated `owned::prompt::OutputFormat` handle.
 fn wrap_output_format(
     content: std::sync::Arc<sys_llm::OutputFormatContent>,
-) -> io::owned::llm::OutputFormat {
-    io::owned::llm::OutputFormat {
+) -> io::owned::prompt::OutputFormat {
+    io::owned::prompt::OutputFormat {
         _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
     }
 }
 
-/// Unwrap a generated `owned::llm::OutputFormat` handle back to its `OutputFormatContent`.
+/// Unwrap a generated `owned::prompt::OutputFormat` handle back to its `OutputFormatContent`.
 #[allow(clippy::used_underscore_binding)]
 fn unwrap_output_format(
-    owned: &io::owned::llm::OutputFormat,
+    owned: &io::owned::prompt::OutputFormat,
 ) -> std::sync::Arc<sys_llm::OutputFormatContent> {
     owned
         ._data
@@ -1418,46 +814,13 @@ fn unwrap_output_format(
         .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 
-/// Convert the generated IO `PrimitiveClient` to the `sys_llm::baml_std::PrimitiveClient`.
-///
-/// With typed owned fields, both structs have the same field types so this is
-/// a direct field-by-field clone.
-fn convert_io_primitive_client(
-    io::owned::llm::PrimitiveClient {
-        name,
-        provider,
-        options,
-    }: &io::owned::llm::PrimitiveClient,
-) -> Result<sys_llm::baml_std::PrimitiveClient, sys_llm::baml_std::ClientError> {
-    sys_llm::baml_std::PrimitiveClient::new(
-        name.clone(),
-        provider.clone(),
-        sys_llm::baml_std::PrimitiveClientOptions {
-            model: options.model.clone(),
-            supports_streaming: options.supports_streaming,
-            allowed_role_metadata: options.allowed_role_metadata.clone(),
-            finish_reason_allow_list: options.finish_reason_allow_list.clone(),
-            finish_reason_deny_list: options.finish_reason_deny_list.clone(),
-            base_url: options.base_url.clone(),
-            default_role: options.default_role.clone(),
-            allowed_roles: options.allowed_roles.clone(),
-            remap_roles: options.remap_roles.clone(),
-            api_key: options.api_key.clone(),
-            provider_options: options.provider_options.clone(),
-            media_url_handler: options.media_url_handler.clone(),
-            headers: options.headers.clone(),
-            query_params: options.query_params.clone(),
-            request_body: options.request_body.clone(),
-        },
-    )
-}
-
 // ============================================================================
 // IoSysOpsBuilder — Compose an io::SysOps table by overriding namespaces
 // ============================================================================
 
-/// Default provider for the IO pipeline — non-LLM ops return `Unsupported`,
-/// LLM ops use the blanket `impl<T> IoClassLlmPrimitiveClient/IoNamespaceLlm for T`.
+/// Default provider for the IO pipeline. Prompt AST, output-format, and SAP
+/// operations use the implementations above; unsupported platform operations
+/// retain the generated defaults.
 struct DefaultIoOps;
 
 impl io::IoClassFsFile for DefaultIoOps {
@@ -2148,6 +1511,91 @@ impl io::IoNamespaceIo for DefaultIoOps {
     }
 }
 
+impl io::IoClassSysProcess for DefaultIoOps {
+    fn write_stdin(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _process: io::owned::sys::Process,
+        _data: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close_stdin(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn wait(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn kill(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _process: io::owned::sys::Process,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
+    }
+}
+
+impl io::IoClassSysProcessLineStream for DefaultIoOps {
+    fn _next(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _processlinestream: io::owned::sys::ProcessLineStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _processlinestream: io::owned::sys::ProcessLineStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
+    }
+}
+
 impl io::IoNamespaceSys for DefaultIoOps {
     fn collect_garbage(
         &self,
@@ -2169,6 +1617,20 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn start_process(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::ProcessOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::Process> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -2895,15 +2357,14 @@ use ::bex_heap::{BexExternalValue, BexHeap};
 use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
-    AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, SysOpContext, SysOpOutput,
-    VmBamlError, VmPanic, VmRustFnError,
+    CallId, LlmFunctionInfo, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError,
 };
 pub use io::SysOps;
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
 ///
-/// Starts with all operations returning `Unsupported` (except LLM, which uses
-/// the blanket implementation), and allows selectively overriding namespaces.
+/// Starts with the built-in prompt/SAP implementations and otherwise returns
+/// `Unsupported`, then allows selectively overriding namespaces.
 pub type SysOpsBuilder = IoSysOpsBuilder;
 
 #[cfg(test)]
@@ -3001,28 +2462,5 @@ mod tests {
         let fn_ptr = ops.get(SysOp::BamlFsOpen);
         let result = fn_ptr(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
-    }
-
-    #[test]
-    fn test_shorthand_to_primitive_client_uses_first_slash_only() {
-        let client = shorthand_to_primitive_client("openrouter/meta-llama/llama-3.1").unwrap();
-
-        assert_eq!(client.name, "openrouter/meta-llama/llama-3.1");
-        assert_eq!(client.provider, "openrouter");
-        assert_eq!(
-            client.options.model.as_deref(),
-            Some("meta-llama/llama-3.1")
-        );
-    }
-
-    #[test]
-    fn test_shorthand_to_primitive_client_rejects_invalid_values() {
-        let err = shorthand_to_primitive_client("openai").unwrap_err();
-        assert_eq!(
-            err,
-            VmRustFnError::from(VmBamlError::InvalidArgument {
-                message: "Invalid short hand name: openai".to_string()
-            })
-        );
     }
 }

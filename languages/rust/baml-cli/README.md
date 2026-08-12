@@ -1,6 +1,6 @@
-# baml-cli
+# BAML v0 — Rust CLI
 
-BAML CLI for Rust - Command-line interface for the BAML (Boundary AI Markup Language) runtime.
+BAML v0 CLI for Rust — a command-line interface for the BAML v0 runtime.
 
 ## Installation
 
@@ -40,4 +40,3 @@ For more information, see the [BAML documentation](https://docs.boundaryml.com).
 ## License
 
 MIT License - see the [LICENSE](../../LICENSE) file for details.
-

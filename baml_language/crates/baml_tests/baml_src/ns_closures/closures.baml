@@ -22,7 +22,7 @@ function closures_bound_formatter_mapper() -> string[] {
 }
 
 test "bound_formatter_mapper" {
-    assert.is_true(baml.deep_equals(closures_bound_formatter_mapper(), [">> a", ">> b"]))
+    assert.equal(closures_bound_formatter_mapper(), [">> a", ">> b"])
 }
 
 // ─── unbound_in_map ───────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ function closures_unbound_in_map() -> string[] {
 }
 
 test "unbound_in_map" {
-    assert.is_true(baml.deep_equals(closures_unbound_in_map(), ["Alice Smith", "Bob Jones"]))
+    assert.equal(closures_unbound_in_map(), ["Alice Smith", "Bob Jones"])
 }
 
 // ─── bound_validator_mapped ───────────────────────────────────────────────────
@@ -60,7 +60,7 @@ function closures_bound_validator_mapped() -> bool[] {
 }
 
 test "bound_validator_mapped" {
-    assert.is_true(baml.deep_equals(closures_bound_validator_mapped(), [false, true, true, false]))
+    assert.equal(closures_bound_validator_mapped(), [false, true, true, false])
 }
 
 // ─── mutation_after_bind ──────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ function closures_mutation_after_bind() -> int {
 }
 
 test "mutation_after_bind" {
-    assert.is_true(baml.deep_equals(closures_mutation_after_bind(), 101))
+    assert.equal(closures_mutation_after_bind(), 101)
 }
 
 // ─── repeated_bound_calls ─────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ function closures_repeated_bound_calls() -> int {
 }
 
 test "repeated_bound_calls" {
-    assert.is_true(baml.deep_equals(closures_repeated_bound_calls(), 3))
+    assert.equal(closures_repeated_bound_calls(), 3)
 }
 
 // ─── field_chain_bind ─────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ function closures_field_chain_bind() -> string {
 }
 
 test "field_chain_bind" {
-    assert.is_true(baml.deep_equals(closures_field_chain_bind(), "[utf8]hi"))
+    assert.equal(closures_field_chain_bind(), "[utf8]hi")
 }
 
 // ─── strategy_swap ────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ function closures_strategy_swap() -> int[] {
 }
 
 test "strategy_swap" {
-    assert.is_true(baml.deep_equals(closures_strategy_swap(), [7, 12]))
+    assert.equal(closures_strategy_swap(), [7, 12])
 }
 
 // ─── generic_unwrap ───────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ function closures_generic_unwrap() -> int {
 }
 
 test "generic_unwrap" {
-    assert.is_true(baml.deep_equals(closures_generic_unwrap(), 42))
+    assert.equal(closures_generic_unwrap(), 42)
 }
 
 // ─── bound_in_lambda ──────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ function closures_bound_in_lambda() -> string {
 }
 
 test "bound_in_lambda" {
-    assert.is_true(baml.deep_equals(closures_bound_in_lambda(), "Hello, Alice"))
+    assert.equal(closures_bound_in_lambda(), "Hello, Alice")
 }
 
 // ─── bound_throwing_method_reference_catches_error ───────────────────────────
@@ -197,5 +197,5 @@ function closures_bound_throwing_method_reference_catches_error() -> int {
 }
 
 test "bound_throwing_method_reference_catches_error" {
-    assert.is_true(baml.deep_equals(closures_bound_throwing_method_reference_catches_error(), -1))
+    assert.equal(closures_bound_throwing_method_reference_catches_error(), -1)
 }

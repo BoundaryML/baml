@@ -29,6 +29,8 @@ from .baml_py import (
     cancel_function_call,
     flush_events,
     get_runtime as _rust_get_runtime,
+    get_bridge_runtime_version,
+    get_toolchain_version,
     get_version,
     new_function_call,
     register_unhandled_spawn_error_callback,
@@ -76,7 +78,7 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
 
-__version__ = "0.15.0"
+__version__ = "0.16.0"
 
 
 # ---------------------------------------------------------------------------

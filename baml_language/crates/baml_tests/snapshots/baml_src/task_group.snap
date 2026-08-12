@@ -141,20 +141,20 @@ function task_group.caps_active_and_queues_rest() -> int {
     pop 1
     load_var g
     call baml.spawn.TaskGroup.active_count
-    store_var _36
+    load_const 100
+    mul_int
+    store_var _35
     load_var g
     call baml.spawn.TaskGroup.queued_count
-    store_var _37
+    load_var _35
+    add_int
+    store_var snapshot
     load_var g
     load_const <omitted>
     load_const <omitted>
     call baml.spawn.TaskGroup.cancel
     pop 1
-    load_var _36
-    load_const 100
-    mul_int
-    load_var _37
-    add_int
+    load_var snapshot
     return
 }
 
@@ -347,23 +347,22 @@ function task_group.queues_excess_and_all_complete() -> int {
     store_var _50
     load_var _19
     await
-    store_var _52
+    load_var _50
+    add_int
+    store_var _49
     load_var _28
     await
-    store_var _54
+    load_var _49
+    add_int
+    store_var _48
     load_var _37
     await
-    store_var _56
+    load_var _48
+    add_int
+    store_var _47
     load_var _46
     await
-    store_var _58
-    load_var2 22 23
-    add_int
-    load_var _54
-    add_int
-    load_var _56
-    add_int
-    load_var _58
+    load_var _47
     add_int
     return
 }
@@ -382,8 +381,7 @@ function task_group.set_limit_updates_limit() -> int {
     pop 1
     load_var g
     call baml.spawn.TaskGroup.limit
-    store_var _5
-    load_var2 2 3
+    load_var before
     add_int
     return
 }

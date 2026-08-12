@@ -65,7 +65,7 @@ function server_response_headers() -> string? {
 }
 
 test "server_response_headers" {
-    assert.is_true(baml.deep_equals(server_response_headers(), "from-handler"))
+    assert.equal(server_response_headers(), "from-handler")
 }
 
 // Framing / hop-by-hop headers a handler sets (here a bogus `Content-Length` far

@@ -108,6 +108,7 @@ public final class ProtoReader {
     // BamlOutboundHandle (key = 1, handle_type = 2, ty = 3).
     private static final int HANDLE_KEY = 1;
     private static final int HANDLE_TYPE = 2;
+    private static final int HANDLE_TY = 3;
 
     // BamlToHostCall (engine→host callable dispatch): args = 1.
     // BamlToHostArg: value = 1 (BamlOutboundValue), arg_name = 2, is_optional_arg = 3.
@@ -305,12 +306,33 @@ public final class ProtoReader {
 
     /**
      * Decode a {@code BamlToHostCall} (engine→host callable dispatch) into its
-     * positional + optional argument buckets. Each arg's {@code value} is a
-     * {@code BamlOutboundValue} decoded wire-driven (the callable carries no
-     * host return descriptor); {@code is_optional_arg} routes it into the
-     * optional bucket keyed by {@code arg_name}, everything else is positional.
+     * positional + optional argument buckets, wire-driven (no descriptors — the
+     * pre-carrier behavior, kept for a callable registered without a
+     * {@code BamlTypedCallable} wrapper). {@code is_optional_arg} routes an arg
+     * into the optional bucket keyed by {@code arg_name}, everything else is
+     * positional.
      */
     public static HostCallArgs decodeBamlToHostCall(byte[] bytes) {
+        return decodeBamlToHostCall(bytes, null, null, null);
+    }
+
+    /**
+     * Type-directed sibling of {@link #decodeBamlToHostCall(byte[])}: each
+     * positional arg decodes against its declared parameter descriptor
+     * ({@code positionalDescs}, declared order) and each supplied optional
+     * against the descriptor keyed by its BAML wire name
+     * ({@code optionalNames} / {@code optionalDescs}, parallel arrays), through
+     * the same {@link #decodeWithDesc} the outbound result path uses — so a
+     * callable parameter declared as e.g. {@code baml.json.json} materializes
+     * as the generated sealed-union type, exactly like a declared return type.
+     * A {@code null} array or a {@code null} entry decodes that slot
+     * wire-driven (byte-identical to the descriptor-less overload).
+     */
+    public static HostCallArgs decodeBamlToHostCall(
+            byte[] bytes,
+            BamlType[] positionalDescs,
+            String[] optionalNames,
+            BamlType[] optionalDescs) {
         WireReader r = new WireReader(bytes);
         List<Object> positional = new ArrayList<>();
         Map<String, Object> optional = new LinkedHashMap<>();
@@ -319,7 +341,13 @@ public final class ProtoReader {
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
             if (field == TO_HOST_ARGS) {
-                decodeToHostArg(r.readMessage(), positional, optional);
+                decodeToHostArg(
+                        r.readMessage(),
+                        positional,
+                        optional,
+                        positionalDescs,
+                        optionalNames,
+                        optionalDescs);
             } else {
                 r.skipField(wire);
             }
@@ -328,7 +356,12 @@ public final class ProtoReader {
     }
 
     private static void decodeToHostArg(
-            WireReader r, List<Object> positional, Map<String, Object> optional) {
+            WireReader r,
+            List<Object> positional,
+            Map<String, Object> optional,
+            BamlType[] positionalDescs,
+            String[] optionalNames,
+            BamlType[] optionalDescs) {
         byte[] valueBytes = null;
         String argName = "";
         boolean isOptional = false;
@@ -343,12 +376,33 @@ public final class ProtoReader {
                 default -> r.skipField(wire);
             }
         }
-        Object value = valueBytes == null ? null : decodeValue(new WireReader(valueBytes), false);
+        // The engine emits required args in declared order, so the next
+        // positional slot's descriptor is at the bucket's current size.
+        BamlType desc = isOptional
+                ? optionalDescByName(argName, optionalNames, optionalDescs)
+                : positionalDescs != null && positional.size() < positionalDescs.length
+                        ? positionalDescs[positional.size()]
+                        : null;
+        Object value = valueBytes == null ? null : decodeWithDesc(valueBytes, desc, false);
         if (isOptional) {
             optional.put(argName, value);
         } else {
             positional.add(value);
         }
+    }
+
+    /** The descriptor registered for optional arg {@code argName}, or {@code null}. */
+    private static BamlType optionalDescByName(
+            String argName, String[] optionalNames, BamlType[] optionalDescs) {
+        if (optionalNames == null || optionalDescs == null) {
+            return null;
+        }
+        for (int i = 0; i < optionalNames.length && i < optionalDescs.length; i++) {
+            if (optionalNames[i].equals(argName)) {
+                return optionalDescs[i];
+            }
+        }
+        return null;
     }
 
     /**
@@ -930,6 +984,7 @@ public final class ProtoReader {
     private static Object decodeHandle(WireReader r) {
         long key = 0;
         int handleType = 0;
+        String classFqn = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -937,20 +992,20 @@ public final class ProtoReader {
             switch (field) {
                 case HANDLE_KEY -> key = r.readVarint();
                 case HANDLE_TYPE -> handleType = (int) r.readVarint();
-                default -> r.skipField(wire); // ty (field 3)
+                case HANDLE_TY -> classFqn = selfTypeFqn(r.readMessage());
+                default -> r.skipField(wire);
             }
         }
-        BamlHandle handle = new BamlHandle(key, handleType);
+        BamlHandle handle = new BamlHandle(key, handleType, classFqn);
         return switch (handleType) {
             case ADT_MEDIA_IMAGE -> Image.fromHandle(handle);
             case ADT_MEDIA_AUDIO -> Audio.fromHandle(handle);
             case ADT_MEDIA_VIDEO -> Video.fromHandle(handle);
             case ADT_MEDIA_PDF -> Pdf.fromHandle(handle);
             // A tagged heap handle reifies the runtime-owned BamlStream wrapper.
-            // Python dispatches on `handle.ty.class_ty.name` (== "baml.llm.Stream")
-            // via its typemap; BamlStream is the only tagged-heap-handle wrapper, so
-            // the handle_type tag alone picks it (the ty carries the erased
-            // TPartial/TFinal, which Java also erases). Mirrors _decode_handle.
+            // The wrapper retains handle.ty.class_ty.name and derives `.next`
+            // and `.final` from that identity. Java erases the generic args but
+            // must not erase the receiver class FQN.
             case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle);
             default -> handle;
         };

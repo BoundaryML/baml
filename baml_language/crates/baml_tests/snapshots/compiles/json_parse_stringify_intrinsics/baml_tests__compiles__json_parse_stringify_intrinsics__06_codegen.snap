@@ -1,21 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
-}
-
-function boundary.id() -> boundary.LocalId {
-}
-
-function boundary.id.current() -> string {
-}
-
-function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
-}
-
 function user.match_parsed(s: string) -> string {
     load_var s
     call baml.json.parse
@@ -23,7 +8,7 @@ function user.match_parsed(s: string) -> string {
     load_var j
     store_var _3
     load_var _3
-    narrow_bind (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[], slot=3
+    narrow_bind baml.json.json[], slot=3
     pop_jump_if_false L0
     jump L11
 
@@ -31,7 +16,7 @@ function user.match_parsed(s: string) -> string {
     load_var j
     store_var _6
     load_var _6
-    narrow_bind map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>, slot=4
+    narrow_bind map<string, baml.json.json>, slot=4
     pop_jump_if_false L1
     jump L10
 

@@ -1,19 +1,15 @@
-// BEP-049 backtick string literals in the declarative slots that the formatter
-// used to reject (it only knew the quoted and raw string tokens there). Both
-// slots below compile cleanly and format without error.
+// BEP-049 backtick string literals in prompt and expression positions compile
+// cleanly and format without error.
 //
 // `baml fmt` re-indents a multi-line backtick interior to sit one level past the
 // surrounding block (like a raw string), but only when that preserves the
 // string's auto-dedented (BEP-049 §12) runtime value. This file is already in
 // canonical form, so `baml fmt` leaves it unchanged.
 
-client<llm> Fast {
-    provider: openai,
-    options: {
-        model: "gpt-4o-mini",
-        api_key: env.OPENAI_API_KEY,
-    },
-}
+client Fast = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+);
 
 // Backtick value in `prompt:` position (the originally reported crash).
 function Greet(name: string) -> string {
@@ -23,7 +19,9 @@ function Greet(name: string) -> string {
     `
 }
 
-// Backtick body in a `template_string`.
-template_string Header(title: string) `
-    # ${title}
-`
+// Backtick value in expression position.
+function Header(title: string) -> string {
+    `
+        # ${title}
+    `
+}

@@ -2,33 +2,24 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === PPIR ===
-function user.Fast$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "Fast", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.Greet(name: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(Greet$spec(name)).value
 }
-function user.Greet(name: string, client: baml.llm.Client = Fast) -> string  [llm] {
-  baml.llm.call_llm_function(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
+function user.Greet$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.Greet$build_request(name: string, client: baml.llm.Client = Fast) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
+function user.Greet$render_prompt(name: string) -> ai.Prompt  [expr] {
+  Greet$spec(name).prompt(output_format = ai.wire.render_output_format(reflect.type_of()))
 }
-function user.Greet$build_request_stream(name: string, client: baml.llm.Client = Fast) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
+function user.Greet$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "Greet", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_cur =  __tt_cur Add ".";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: Fast }
 }
-function user.Greet$parse(json: string, client: baml.llm.Client = Fast) -> string  [expr] {
-  baml.llm.parse(json)
+function user.Greet$stream(name: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(Greet$spec(name), client = client)
 }
-function user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = Fast) -> baml.llm.Stream<string | null, string>  [expr] {
-  client.__make_stream(sse)
-}
-function user.Greet$render_prompt(name: string, client: baml.llm.Client = Fast) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
-}
-function user.Greet$stream(name: string, client: baml.llm.Client = Fast) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
+function user.Header(title: string) -> string  [expr] {
+  {  } `...`
 }
 
 --- captures ---
-lambda () in Greet: captures [name]
-lambda () in Greet$render_prompt: captures [name]
-lambda () in Greet$build_request: captures [name]
-lambda () in Greet$build_request_stream: captures [name]
+lambda ( __spec_output_format) in Greet$spec: captures [name]

@@ -9,10 +9,27 @@ using Google.Protobuf;
 
 namespace Baml.Proto;
 
+internal sealed class BamlStreamNativeHandle : IDisposable
+{
+    internal BamlStreamNativeHandle(BamlSafeHandle handle, string classIdentity)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(classIdentity);
+        Handle = handle;
+        ClassIdentity = classIdentity;
+    }
+
+    internal BamlSafeHandle Handle { get; }
+
+    internal string ClassIdentity { get; }
+
+    public void Dispose() => Handle.Dispose();
+}
+
 internal static class PrimitiveProtocol
 {
-    private const string StreamClassIdentity = "baml.llm.Stream";
-    private const string StreamFinishedIdentity = "baml.stream.StreamFinished";
+    private const string StreamClassIdentity = "ai.stream.Stream";
+    private const string StreamDoneIdentity = "ai.stream.Done";
 
     internal static EncodedCallArguments EncodeOwnedValue(
         BamlGeneratedValue value,
@@ -176,7 +193,7 @@ internal static class PrimitiveProtocol
                 StringKey = "self",
                 Value = new InboundValue
                 {
-                    Handle = new BamlBridge.Cffi.V1.BamlHandle
+                    Handle = new global::BamlBridge.Cffi.V1.BamlHandle
                     {
                         Key = transferred.Key,
                         HandleType = BamlHandleType.AdtTaggedHeapHandle,
@@ -256,7 +273,7 @@ internal static class PrimitiveProtocol
         };
     }
 
-    internal static BamlSafeHandle DecodeStreamHandle(
+    internal static BamlStreamNativeHandle DecodeStreamHandle(
         ReadOnlySpan<byte> bytes,
         ReadOnlySpan<byte> expectedPartialType,
         ReadOnlySpan<byte> expectedFinalType,
@@ -311,7 +328,9 @@ internal static class PrimitiveProtocol
             expectedFinalType,
             wire.Ty.ClassTy.TypeArgs[1],
             "stream final");
-        return ownership.Claim(wire);
+        return new BamlStreamNativeHandle(
+            ownership.Claim(wire),
+            wire.Ty.ClassTy.Name);
     }
 
     internal static BamlStreamPull<BamlGeneratedValue> DecodeStreamPull(
@@ -339,7 +358,7 @@ internal static class PrimitiveProtocol
             default:
                 throw new BamlProtocolException(
                     "The native bridge returned an empty BAML stream pull result.",
-                    "BamlOutboundResult.result was absent for baml.llm.Stream.next.");
+                    "BamlOutboundResult.result was absent for ai.stream.Stream.next.");
         }
 
         BamlOutboundValue value = envelope.Ok;
@@ -359,7 +378,7 @@ internal static class PrimitiveProtocol
         {
             throw new BamlProtocolException(
                 "The native bridge returned an invalid BAML stream pull descriptor.",
-                "Stream.next must return the exact unnamed two-arm partial-or-StreamFinished union.");
+                "Stream.next must return the exact unnamed two-arm partial-or-Done union.");
         }
 
         int partialArmCount = 0;
@@ -379,7 +398,7 @@ internal static class PrimitiveProtocol
         {
             throw new BamlProtocolException(
                 "The native bridge returned contradictory stream pull type metadata.",
-                $"Expected one {Convert.ToHexString(expectedPartialType)} arm and one non-generic {StreamFinishedIdentity} arm; received {partialArmCount} and {finishedArmCount} matches.");
+                $"Expected one {Convert.ToHexString(expectedPartialType)} arm and one non-generic {StreamDoneIdentity} arm; received {partialArmCount} and {finishedArmCount} matches.");
         }
         if (union.Value is null)
         {
@@ -400,23 +419,23 @@ internal static class PrimitiveProtocol
                     depth: 1));
         }
 
-        if (!StringComparer.Ordinal.Equals(union.ValueOptionName, StreamFinishedIdentity))
+        if (!StringComparer.Ordinal.Equals(union.ValueOptionName, StreamDoneIdentity))
         {
             throw new BamlProtocolException(
                 "The native bridge selected an unknown BAML stream pull arm.",
-                $"Expected {expectedPartialOption} or {StreamFinishedIdentity}, received {union.ValueOptionName}.");
+                $"Expected {expectedPartialOption} or {StreamDoneIdentity}, received {union.ValueOptionName}.");
         }
 
         if (union.Value.ValueCase != BamlOutboundValue.ValueOneofCase.ClassValue
             || !StringComparer.Ordinal.Equals(
                 union.Value.ClassValue.Name,
-                StreamFinishedIdentity)
+                StreamDoneIdentity)
             || union.Value.ClassValue.Fields.Count != 0
             || union.Value.ClassValue.TypeArgs.Count != 0)
         {
             throw new BamlProtocolException(
                 "The native bridge returned an invalid BAML stream-finished payload.",
-                $"The {StreamFinishedIdentity} arm must contain its empty nominal class value.");
+                $"The {StreamDoneIdentity} arm must contain its empty nominal class value.");
         }
 
         return BamlStreamPull<BamlGeneratedValue>.Finished;
@@ -473,7 +492,7 @@ internal static class PrimitiveProtocol
 
     private static bool IsFinishedType(BamlTy actual) =>
         actual.TyCase == BamlTy.TyOneofCase.ClassTy
-        && StringComparer.Ordinal.Equals(actual.ClassTy.Name, StreamFinishedIdentity)
+        && StringComparer.Ordinal.Equals(actual.ClassTy.Name, StreamDoneIdentity)
         && actual.ClassTy.TypeArgs.Count == 0;
 
     private static BamlExecutionException DecodeError(
@@ -797,7 +816,7 @@ internal static class PrimitiveProtocol
         ownership.AddTransfer(transferred);
         return new InboundValue
         {
-            Handle = new BamlBridge.Cffi.V1.BamlHandle
+            Handle = new global::BamlBridge.Cffi.V1.BamlHandle
             {
                 Key = transferred.Key,
                 HandleType = value.HandleType,

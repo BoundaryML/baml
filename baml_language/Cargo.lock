@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "baml_release",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -737,6 +737,7 @@ dependencies = [
  "baml_lsp_server",
  "baml_project",
  "baml_release",
+ "baml_surface",
  "baml_tests",
  "baml_type",
  "baml_version",
@@ -1029,7 +1030,6 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "serde",
- "sys_jinja_types",
  "text-size",
 ]
 
@@ -1120,6 +1120,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_lsp2_actions",
+ "baml_surface",
  "baml_type",
  "baml_workspace",
  "bex_vm_types",
@@ -1150,10 +1151,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_surface"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_ppir",
+ "baml_compiler2_tir",
+ "baml_project",
+ "baml_type",
+ "insta",
+ "salsa",
+ "serde",
+ "serde_json",
+ "text-size",
+]
+
+[[package]]
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
@@ -1473,7 +1494,6 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "wasm-bindgen-futures",
- "web-time",
  "yaml_serde",
 ]
 
@@ -1613,12 +1633,14 @@ dependencies = [
  "libc",
  "once_cell",
  "prost",
+ "semver",
  "serde_json",
  "sys_native",
  "sys_ops",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
+ "toml 0.8.23",
  "vfs",
  "wasm-bindgen-futures",
 ]
@@ -1643,7 +1665,6 @@ dependencies = [
 name = "bridge_java"
 version = "0.0.0-beta"
 dependencies = [
- "baml_version",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
@@ -4559,24 +4580,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "minijinja"
-version = "2.16.0"
-source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
-dependencies = [
- "indexmap",
- "serde",
-]
-
-[[package]]
-name = "minijinja-contrib"
-version = "2.16.0"
-source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
-dependencies = [
- "minijinja",
- "serde",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6789,6 +6792,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "base64",
 ]
 
 [[package]]
@@ -7293,26 +7297,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sys_jinja"
-version = "0.0.0-beta"
-dependencies = [
- "minijinja",
- "minijinja-contrib",
- "regex",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "sys_jinja_types"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "indexmap",
- "minijinja",
- "strsim",
-]
-
-[[package]]
 name = "sys_llm"
 version = "0.0.0-beta"
 dependencies = [
@@ -7334,14 +7318,12 @@ dependencies = [
  "getrandom 0.3.4",
  "indexmap",
  "infer",
- "minijinja",
  "num-bigint",
  "rsa",
  "rustls",
  "serde",
  "serde_json",
  "strum",
- "sys_jinja",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",

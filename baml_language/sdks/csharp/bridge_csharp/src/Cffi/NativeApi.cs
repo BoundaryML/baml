@@ -54,23 +54,29 @@ internal sealed unsafe partial class NativeApi
         return identifier;
     }
 
-    internal void InitializeRuntime(ReadOnlySpan<byte> bytecode)
+    internal void InitializeRuntime(ReadOnlySpan<byte> bytecode, string? embeddedBamlToml)
     {
-        if (bytecode.IsEmpty)
-        {
-            throw new BamlProgramIntegrityException(
-                "Generated BAML bytecode must not be empty.");
-        }
-
         fixed (byte* pointer = bytecode)
         {
+            byte[]? manifest = embeddedBamlToml is null
+                ? null
+                : Encoding.UTF8.GetBytes(embeddedBamlToml + "\0");
+            BamlBuffer status;
+            fixed (byte* manifestPointer = manifest)
+            {
+                status = embeddedBamlToml is null
+                    ? table->InitializeRuntimeFromBytecode(pointer, (nuint)bytecode.Length)
+                    : table->InitializeRuntimeFromBytecodeWithMetadata(
+                        pointer,
+                        (nuint)bytecode.Length,
+                        manifestPointer);
+            }
             string diagnostic = NativeBuffer.ReadUtf8AndFree(
                 table,
-                table->InitializeRuntimeFromBytecode(pointer, (nuint)bytecode.Length));
+                status);
             if (diagnostic.Length != 0)
             {
-                throw new BamlProgramIntegrityException(
-                    $"Native BAML program initialization failed: {diagnostic}");
+                throw new BamlProgramIntegrityException(diagnostic);
             }
         }
     }
@@ -258,6 +264,7 @@ internal sealed unsafe partial class NativeApi
 
         Require(api->Version is not null, "version");
         Require(api->InitializeRuntimeFromBytecode is not null, "initialize_runtime_from_bytecode");
+        Require(api->InitializeRuntimeFromBytecodeWithMetadata is not null, "initialize_runtime_from_bytecode_with_metadata");
         Require(api->FreeBuffer is not null, "free_buffer");
         Require(api->RegisterCallback is not null, "register_callback");
         Require(api->CallFunction is not null, "call_function");
@@ -315,21 +322,28 @@ internal sealed unsafe partial class NativeApi
 
     internal static void RegisterBridge(BamlApiV1* api)
     {
-        byte[] version = Encoding.UTF8.GetBytes(RuntimeIdentity.PackageVersion);
-        fixed (byte* versionPointer = version)
+        byte[] toolchainVersion = Encoding.UTF8.GetBytes(RuntimeIdentity.ToolchainVersion);
+        byte[] runtimeName = Encoding.UTF8.GetBytes(RuntimeIdentity.RuntimeName);
+        byte[] runtimeVersion = Encoding.UTF8.GetBytes(RuntimeIdentity.BridgeRuntimeVersion);
+        fixed (byte* toolchainVersionPointer = toolchainVersion)
+        fixed (byte* runtimeNamePointer = runtimeName)
+        fixed (byte* runtimeVersionPointer = runtimeVersion)
         {
             BamlBridgeInfoV1 info = new()
             {
                 StructSize = (nuint)sizeof(BamlBridgeInfoV1),
                 Language = CSharpBridgeLanguage,
-                SdkVersion = versionPointer,
-                SdkVersionLength = (nuint)version.Length,
+                SdkVersion = toolchainVersionPointer,
+                SdkVersionLength = (nuint)toolchainVersion.Length,
+                BridgeRuntimeName = runtimeNamePointer,
+                BridgeRuntimeNameLength = (nuint)runtimeName.Length,
+                BridgeRuntimeVersion = runtimeVersionPointer,
+                BridgeRuntimeVersionLength = (nuint)runtimeVersion.Length,
             };
             string diagnostic = NativeBuffer.ReadUtf8AndFree(api, api->RegisterBridge(&info));
             if (diagnostic.Length != 0)
             {
-                throw new BamlVersionMismatchException(
-                    $"Native bridge registration rejected Baml.Bridge {RuntimeIdentity.PackageVersion}: {diagnostic}");
+                throw new BamlVersionMismatchException(diagnostic);
             }
         }
     }

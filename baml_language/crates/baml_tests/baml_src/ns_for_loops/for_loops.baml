@@ -23,7 +23,7 @@ function for_loops_sum(xs: int[]) -> int {
 }
 
 test "for_loop_sum" {
-    assert.is_true(baml.deep_equals(for_loops_sum([1, 2, 3, 4]), 10))
+    assert.equal(for_loops_sum([1, 2, 3, 4]), 10)
 }
 
 // ── for_loop_with_break ───────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ function for_loops_for_with_break(xs: int[]) -> int {
 }
 
 test "for_loop_with_break" {
-    assert.is_true(baml.deep_equals(for_loops_for_with_break([3, 4, 11, 100]), 7))
+    assert.equal(for_loops_for_with_break([3, 4, 11, 100]), 7)
 }
 
 // ── for_loop_with_continue ────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function for_loops_for_with_continue(xs: int[]) -> int {
 }
 
 test "for_loop_with_continue" {
-    assert.is_true(baml.deep_equals(for_loops_for_with_continue([5, 20, 6]), 11))
+    assert.equal(for_loops_for_with_continue([5, 20, 6]), 11)
 }
 
 // ── for_loop_nested ───────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ function for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
 }
 
 test "for_loop_nested" {
-    assert.is_true(baml.deep_equals(for_loops_nested_for([1, 2], [3, 4]), 21))
+    assert.equal(for_loops_nested_for([1, 2], [3, 4]), 21)
 }
 
 // ── c_for_sum_to_ten ──────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ function for_loops_c_for_sum_to_ten() -> int {
 }
 
 test "c_for_sum_to_ten" {
-    assert.is_true(baml.deep_equals(for_loops_c_for_sum_to_ten(), 55))
+    assert.equal(for_loops_c_for_sum_to_ten(), 55)
 }
 
 // ── c_for_with_break_continue ────────────────────────────────────────────────
@@ -122,7 +122,7 @@ test "c_for_sum_to_ten" {
 // }
 //
 // test "c_for_with_break_continue" {
-//     assert.is_true(baml.deep_equals(c_for_with_break_continue(), 55))
+//     assert.equal(c_for_with_break_continue(), 55)
 // }
 
 // ── c_for_only_condition ──────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ test "c_for_sum_to_ten" {
 // }
 //
 // test "c_for_only_condition" {
-//     assert.is_true(baml.deep_equals(c_for_only_condition(), 0))
+//     assert.equal(c_for_only_condition(), 0)
 // }
 
 // ── c_for_endless_break ───────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ test "c_for_sum_to_ten" {
 // }
 //
 // test "c_for_endless_break" {
-//     assert.is_true(baml.deep_equals(c_for_endless_break(), 0))
+//     assert.equal(c_for_endless_break(), 0)
 // }
 
 // ── for_loop_over_let_variable ────────────────────────────────────────────────
@@ -176,7 +176,7 @@ function for_loops_sum_let_var() -> int {
 }
 
 test "for_loop_over_let_variable" {
-    assert.is_true(baml.deep_equals(for_loops_sum_let_var(), 6))
+    assert.equal(for_loops_sum_let_var(), 6)
 }
 
 // ── for_loop_over_let_variable_no_parens ──────────────────────────────────────
@@ -193,7 +193,7 @@ function for_loops_sum_let_var_no_parens() -> int {
 }
 
 test "for_loop_over_let_variable_no_parens" {
-    assert.is_true(baml.deep_equals(for_loops_sum_let_var_no_parens(), 60))
+    assert.equal(for_loops_sum_let_var_no_parens(), 60)
 }
 
 // ── for_loop_final_if_without_semicolon_can_return ────────────────────────────
@@ -209,7 +209,7 @@ function for_loops_first_even(xs: int[]) -> int {
 }
 
 test "for_loop_final_if_without_semicolon_can_return" {
-    assert.is_true(baml.deep_equals(for_loops_first_even([1, 3, 4, 7]), 4))
+    assert.equal(for_loops_first_even([1, 3, 4, 7]), 4)
 }
 
 // ── for_loop_final_if_else_without_semicolon_can_mutate ──────────────────────
@@ -229,7 +229,7 @@ function for_loops_render(xs: string[]) -> string {
 }
 
 test "for_loop_final_if_else_without_semicolon_can_mutate" {
-    assert.is_true(baml.deep_equals(for_loops_render(["x", "", "o"]), "x.o"))
+    assert.equal(for_loops_render(["x", "", "o"]), "x.o")
 }
 
 // ── nested_for_loop_final_if_without_semicolon_can_return ────────────────────
@@ -247,5 +247,5 @@ function for_loops_has_empty_cell(grid: string[][]) -> bool {
 }
 
 test "nested_for_loop_final_if_without_semicolon_can_return" {
-    assert.is_true(baml.deep_equals(for_loops_has_empty_cell([["x", "o"], ["", "x"]]), true))
+    assert.is_true(for_loops_has_empty_cell([["x", "o"], ["", "x"]]))
 }

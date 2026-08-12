@@ -1,7 +1,7 @@
 import Foundation
 
 /// One `next()` poll result: a partial value, or the engine's
-/// end-of-stream sentinel (`baml.stream.StreamFinished`). Distinct from
+/// end-of-stream sentinel (`ai.stream.Done`). Distinct from
 /// `Partial?` because a legitimate partial can itself be null.
 public enum BamlStreamNext<Partial: BamlDecodable> {
     case value(Partial)
@@ -11,7 +11,7 @@ public enum BamlStreamNext<Partial: BamlDecodable> {
 extension BamlStreamNext: Sendable where Partial: Sendable {}
 extension BamlStreamNext: Equatable where Partial: Equatable {}
 
-/// A live BAML stream (`baml.llm.Stream<Partial, Final>`), handle-backed.
+/// A live BAML stream (`ai.stream.Stream<Partial, Final>`), handle-backed.
 ///
 /// The engine holds the stream state; the wire carries an
 /// `ADT_TAGGED_HEAP_HANDLE` whose table row remembers the receiver's
@@ -21,38 +21,45 @@ extension BamlStreamNext: Equatable where Partial: Equatable {}
 /// consuming `next()` advances shared engine-side state, like `File`'s
 /// cursor.
 public final class BamlStream<Partial: BamlDecodable, Final: BamlDecodable>: @unchecked Sendable {
-    private static var nextFQN: String { "baml.llm.Stream.next" }
-    private static var finalFQN: String { "baml.llm.Stream.final" }
-    private static var finishedFQN: String { "baml.stream.StreamFinished" }
+    private static var doneFQN: String { "ai.stream.Done" }
 
     public let handle: BamlHandle
+    /// Exact root class identity carried by the outbound tagged handle.
+    public let bamlClassFQN: String
 
     public init(handle: BamlHandle) {
+        guard let classFQN = handle.classFQN, !classFQN.isEmpty else {
+            preconditionFailure("tagged stream handle is missing its carried BAML class identity")
+        }
         self.handle = handle
+        self.bamlClassFQN = classFQN
     }
+
+    var nextFQN: String { "\(bamlClassFQN).next" }
+    var finalFQN: String { "\(bamlClassFQN).final" }
 
     public func next() throws -> BamlStreamNext<Partial> {
         try Self.interpretNext(
-            BamlRuntime.shared.callRawSync(Self.nextFQN, args: [("self", handle)])
+            BamlRuntime.shared.callRawSync(nextFQN, args: [("self", handle)])
         )
     }
 
     public func nextAsync() async throws -> BamlStreamNext<Partial> {
         try Self.interpretNext(
-            await BamlRuntime.shared.callRaw(Self.nextFQN, args: [("self", handle)])
+            await BamlRuntime.shared.callRaw(nextFQN, args: [("self", handle)])
         )
     }
 
     public func final() throws -> Final {
-        try BamlRuntime.shared.callSync(Self.finalFQN, args: [("self", handle)])
+        try BamlRuntime.shared.callSync(finalFQN, args: [("self", handle)])
     }
 
     public func finalAsync() async throws -> Final {
-        try await BamlRuntime.shared.call(Self.finalFQN, args: [("self", handle)])
+        try await BamlRuntime.shared.call(finalFQN, args: [("self", handle)])
     }
 
     private static func interpretNext(_ raw: BamlOutboundValue) throws -> BamlStreamNext<Partial> {
-        if raw.wireClassFQN() == finishedFQN {
+        if raw.wireClassFQN() == doneFQN {
             return .finished
         }
         return .value(try Partial._bamlDecode(raw))
@@ -75,6 +82,12 @@ extension BamlStream: BamlDecodable {
             throw BamlDecodeError.typeMismatch(
                 expected: "stream (tagged heap handle)",
                 got: "handle type \(handle.handleType)"
+            )
+        }
+        guard handle.classFQN?.isEmpty == false else {
+            throw BamlDecodeError.typeMismatch(
+                expected: "stream handle carrying its BAML class identity",
+                got: "tagged handle without a class type"
             )
         }
         return BamlStream(handle: handle)

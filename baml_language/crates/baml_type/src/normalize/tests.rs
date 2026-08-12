@@ -135,6 +135,12 @@ fn lit_int(n: i64) -> Ty {
 fn union(v: Vec<Ty>) -> Ty {
     Ty::Union(v, TyAttr::default())
 }
+fn list(t: Ty) -> Ty {
+    Ty::List(Box::new(t), TyAttr::default())
+}
+fn alias(s: &str) -> Ty {
+    Ty::TypeAlias(qtn(s), TyAttr::default())
+}
 fn param(index: u32, name: &str) -> ParamTy {
     ParamTy::new(index, Name::new(name))
 }
@@ -819,6 +825,208 @@ fn recursive_alias_terminates() {
     assert!(!equivalent(&alias, &Ty::int(), &ctx));
 }
 
+// ── bool completeness ────────────────────────────────────────────────────--
+
+#[test]
+fn complete_bool_literals_collapse_to_bool() {
+    // `(true | false) == bool` (TYPE_SYSTEM.md §Subtyping Cases) — the bool
+    // analogue of enum completeness, context-free.
+    let ctx = Ctx::default();
+    let both = union(vec![lit_bool(true), lit_bool(false)]);
+    assert!(equivalent(&both, &Ty::bool(), &ctx));
+    assert!(is_subtype(&Ty::bool(), &both, &ctx));
+    assert!(is_subtype(&both, &Ty::bool(), &ctx));
+    assert!(equivalent(
+        &union(vec![lit_bool(true), lit_bool(false), Ty::int()]),
+        &union(vec![Ty::bool(), Ty::int()]),
+        &ctx,
+    ));
+    // A single literal does not collapse (absorption into a present base still
+    // applies).
+    assert!(!equivalent(&lit_bool(true), &Ty::bool(), &ctx));
+    assert!(equivalent(
+        &union(vec![Ty::bool(), lit_bool(true)]),
+        &Ty::bool(),
+        &ctx
+    ));
+    // Through recursion: the collapse applies inside μ-bodies too.
+    let mut ctx = Ctx::default();
+    ctx.aliases.insert(
+        qtn("A"),
+        union(vec![lit_bool(true), lit_bool(false), list(alias("A"))]),
+    );
+    ctx.aliases
+        .insert(qtn("B"), union(vec![Ty::bool(), list(alias("B"))]));
+    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
+}
+
+// ── equirecursive canonical forms ────────────────────────────────────────--
+
+/// `type A = int | A[]` registered under the given name.
+fn int_list_alias(ctx: &mut Ctx, name: &str) {
+    ctx.aliases
+        .insert(qtn(name), union(vec![Ty::int(), list(alias(name))]));
+}
+
+#[test]
+fn alpha_equivalent_recursive_aliases() {
+    // Recursive aliases are equirecursive: the alias name carries no identity,
+    // so two aliases with the same definition denote the same type.
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    int_list_alias(&mut ctx, "B");
+    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
+    assert!(is_subtype(&alias("A"), &alias("B"), &ctx));
+    assert!(is_subtype(&alias("B"), &alias("A"), &ctx));
+
+    ctx.aliases.insert(qtn("R"), class1("Box", alias("R")));
+    ctx.aliases.insert(qtn("S"), class1("Box", alias("S")));
+    assert!(equivalent(&alias("R"), &alias("S"), &ctx));
+}
+
+#[test]
+fn recursive_alias_spelling_invariance() {
+    // Every finite unfolding of a recursive alias spells the same regular tree.
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    let body = union(vec![Ty::int(), list(alias("A"))]);
+    let twice = union(vec![Ty::int(), list(body.clone())]);
+    assert!(equivalent(&alias("A"), &body, &ctx));
+    assert!(equivalent(&alias("A"), &twice, &ctx));
+    assert!(equivalent(&list(alias("A")), &list(body.clone()), &ctx));
+    assert!(equivalent(
+        &class1("Box", alias("A")),
+        &class1("Box", body),
+        &ctx
+    ));
+}
+
+#[test]
+fn mutually_recursive_aliases_are_equivalent() {
+    // `type A = int | B[]` and `type B = int | A[]` unfold to one tree.
+    let mut ctx = Ctx::default();
+    ctx.aliases
+        .insert(qtn("A"), union(vec![Ty::int(), list(alias("B"))]));
+    ctx.aliases
+        .insert(qtn("B"), union(vec![Ty::int(), list(alias("A"))]));
+    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
+    assert!(equivalent(
+        &alias("A"),
+        &union(vec![Ty::int(), list(alias("A"))]),
+        &ctx
+    ));
+}
+
+#[test]
+fn unguarded_members_are_vacuous() {
+    // Productivity: an unguarded recursive union member admits only vacuous
+    // circular derivations, so it contributes nothing — `type A = A | A[]` is
+    // `type B = B[]`, and a fully unguarded `type C = C` is uninhabited.
+    let mut ctx = Ctx::default();
+    ctx.aliases
+        .insert(qtn("A"), union(vec![alias("A"), list(alias("A"))]));
+    ctx.aliases.insert(qtn("B"), list(alias("B")));
+    ctx.aliases.insert(qtn("C"), alias("C"));
+    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
+    assert!(equivalent(
+        &alias("C"),
+        &Ty::Never {
+            attr: TyAttr::default()
+        },
+        &ctx
+    ));
+    // The soundness regression: before ε-closure, the assumption-set probe
+    // fired on `string ≤ A` through the unguarded member without crossing a
+    // constructor, wrongly answering `true`.
+    assert!(!is_subtype(&Ty::string(), &alias("A"), &ctx));
+    assert!(!is_subtype(&class("Dog"), &alias("A"), &ctx));
+    // The guarded content is still there.
+    assert!(is_subtype(&list(alias("A")), &alias("A"), &ctx));
+}
+
+#[test]
+fn normalize_is_idempotent_on_recursive_aliases() {
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    ctx.aliases
+        .insert(qtn("M"), union(vec![Ty::int(), list(alias("B"))]));
+    ctx.aliases
+        .insert(qtn("B"), union(vec![Ty::int(), list(alias("M"))]));
+    ctx.aliases.insert(qtn("R"), class1("Box", alias("R")));
+    let corpus = [
+        alias("A"),
+        list(alias("A")),
+        class1("Box", alias("A")),
+        alias("M"),
+        alias("R"),
+        union(vec![Ty::string(), alias("A")]),
+    ];
+    for t in corpus {
+        let once = ctx.normalize(&t);
+        let twice = ctx.normalize(&once);
+        assert_eq!(once, twice, "normalize must be idempotent for {t:?}");
+        assert!(
+            equivalent(&t, &once, &ctx),
+            "normalize must preserve identity for {t:?}"
+        );
+    }
+}
+
+#[test]
+fn normalize_folds_nested_recursion_and_unfolds_the_root() {
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    // Root-unfold-once: a recursive alias at the root exposes its head
+    // constructor, with the recursive occurrence folded back to the name.
+    assert_eq!(
+        ctx.normalize(&alias("A")),
+        union(vec![Ty::int(), list(alias("A"))])
+    );
+    // Nested recursion stays folded: `A[]` renders as `A[]`, not the unfolding.
+    assert_eq!(ctx.normalize(&list(alias("A"))), list(alias("A")));
+    assert_eq!(
+        ctx.normalize(&class1("Box", alias("A"))),
+        class1("Box", alias("A"))
+    );
+    // The inline spelling converges to the same rendering as the alias.
+    assert_eq!(
+        ctx.normalize(&union(vec![Ty::int(), list(alias("A"))])),
+        union(vec![Ty::int(), list(alias("A"))])
+    );
+    // An unguarded member vanishes from the rendering too.
+    ctx.aliases
+        .insert(qtn("U"), union(vec![alias("U"), list(alias("U"))]));
+    assert_eq!(ctx.normalize(&alias("U")), list(alias("U")));
+}
+
+#[test]
+fn absorption_completes_across_recursion() {
+    // `type A = I | Box<A>` with `Box implements I`: the recursive member is
+    // absorbed into the interface, and the μ-binder disappears with it.
+    let mut ctx = Ctx::default();
+    ctx.impls.push((qtn("Box"), qtn("I")));
+    ctx.aliases
+        .insert(qtn("A"), union(vec![iface("I"), class1("Box", alias("A"))]));
+    assert!(equivalent(&alias("A"), &iface("I"), &ctx));
+    assert_eq!(ctx.normalize(&alias("A")), iface("I"));
+}
+
+#[test]
+fn recursive_disjointness_is_sound() {
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    ctx.aliases.insert(qtn("R"), class1("Box", alias("R")));
+    // Two spellings of one recursive type are NOT disjoint invariant arguments
+    // (unsound constant-folding of `==` before canonicalization was complete).
+    let spelled = class1("Box", alias("A"));
+    let unfolded = class1("Box", union(vec![Ty::int(), list(alias("A"))]));
+    assert!(!ctx.definitely_disjoint(&spelled, &unfolded));
+    assert_eq!(ctx.constant_equality(&spelled, &unfolded), None);
+    // Genuinely different types keep their provable disjointness through μ.
+    assert!(ctx.definitely_disjoint(&alias("R"), &class("Dog")));
+    assert!(ctx.definitely_disjoint(&class1("Box", alias("R")), &class("Dog")));
+}
+
 // ── compare-style exact-type use (the motivating case) ───────────────────--
 
 #[test]
@@ -1256,4 +1464,177 @@ fn any_function_existentials_are_covariant_in_their_pins() {
         TyAttr::default(),
     );
     assert!(!is_subtype(&other, &any_function(vec![]), &ctx));
+}
+
+// ── review regressions: renderer totality, unguarded members, qualifiers ──--
+//
+// Reproducers from the pre-merge adversarial review: each hung, panicked, or
+// over-equated before the corresponding fix.
+#[test]
+fn nested_union_member_recursion_renders_totally() {
+    // type A = string | (A | int)[]
+    let mut ctx = Ctx::default();
+    ctx.aliases.insert(
+        qtn("A"),
+        union(vec![Ty::string(), list(union(vec![alias("A"), Ty::int()]))]),
+    );
+    let n = ctx.normalize(&alias("A"));
+    assert!(equivalent(&alias("A"), &n, &ctx));
+    assert_eq!(ctx.normalize(&n), n, "idempotent");
+    assert!(!equivalent(&alias("A"), &Ty::int(), &ctx));
+}
+
+#[test]
+fn unguarded_mu_member_is_not_vacuously_absorbing() {
+    // type A = A | A[]  (== mu X. X[])
+    let mut ctx = Ctx::default();
+    ctx.aliases
+        .insert(qtn("A"), union(vec![alias("A"), list(alias("A"))]));
+    // string | A must NOT be equivalent to A.
+    assert!(
+        !equivalent(&union(vec![Ty::string(), alias("A")]), &alias("A"), &ctx),
+        "string was unsoundly absorbed into the non-contractive mu"
+    );
+}
+
+#[test]
+fn projection_qualifier_on_cycle_terminates() {
+    // type A = I<A> | (int as I<A>).M | J
+    // The standalone `I<A>` member state and the projection's qualifier state
+    // are bisimilar, so minimization merges them; materializing the interface
+    // member then places the recursion cut at the qualifier position.
+    let mut ctx = Ctx::default();
+    let i_of_a = Ty::Interface(qtn("I"), vec![alias("A")], vec![], TyAttr::default());
+    ctx.aliases.insert(
+        qtn("A"),
+        union(vec![
+            i_of_a,
+            Ty::AssociatedTypeProjection {
+                base: Box::new(Ty::int()),
+                interface: Box::new(Interface::new(qtn("I"), vec![alias("A")], vec![])),
+                member: Name::new("M"),
+                attr: TyAttr::default(),
+            },
+            iface("J"),
+        ]),
+    );
+    let n = ctx.normalize(&alias("A"));
+    assert!(equivalent(&alias("A"), &n, &ctx));
+}
+
+#[test]
+fn map_value_union_recursion_renders_totally() {
+    // type J = int | map<string, J | null>
+    let mut ctx = Ctx::default();
+    ctx.aliases.insert(
+        qtn("J"),
+        union(vec![
+            Ty::int(),
+            map_ty(Ty::string(), union(vec![alias("J"), Ty::null()])),
+        ]),
+    );
+    let n = ctx.normalize(&alias("J"));
+    assert!(equivalent(&alias("J"), &n, &ctx));
+    assert_eq!(ctx.normalize(&n), n, "idempotent");
+    assert!(!equivalent(&alias("J"), &Ty::int(), &ctx));
+}
+
+// ── review regressions: unguarded members, disjointness, rendering ───────--
+
+#[test]
+fn unguarded_mu_member_does_not_absorb_siblings() {
+    // `type A = A | A[]` is non-contractive until ε-closure; before the fix the
+    // bottom-up absorption's assumption probe proved `string <: A` vacuously
+    // (a self-supporting derivation that never crosses a constructor) and
+    // silently dropped the sibling.
+    let mut ctx = Ctx::default();
+    ctx.aliases
+        .insert(qtn("A"), union(vec![alias("A"), list(alias("A"))]));
+    let u = union(vec![Ty::string(), alias("A")]);
+    assert!(is_subtype(&Ty::string(), &u, &ctx));
+    assert!(!equivalent(&u, &alias("A"), &ctx));
+    assert!(equivalent(
+        &u,
+        &union(vec![Ty::string(), list(alias("A"))]),
+        &ctx
+    ));
+}
+
+#[test]
+fn overlapping_recursive_types_are_not_disjoint() {
+    // `A[] ⊆ A` for `type A = int | A[]`: claiming disjointness would let `==`
+    // constant-fold to `false` between operands that can hold the same value.
+    // (The μ-unfold arms of `is_disjoint_from` produce non-canonical spellings,
+    // so structural `!=` on invariant args must not fire across a μ.)
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    assert!(is_subtype(&list(alias("A")), &alias("A"), &ctx));
+    assert!(!ctx.definitely_disjoint(&alias("A"), &list(alias("A"))));
+    let d = union(vec![Ty::bool(), list(alias("A"))]);
+    assert!(!ctx.definitely_disjoint(&alias("A"), &d));
+    assert_eq!(ctx.constant_equality(&alias("A"), &d), None);
+}
+
+#[test]
+fn unguarded_mu_disjointness_terminates_conservatively() {
+    // The read-back bail keeps the pre-automaton spelling, whose μ spine can be
+    // unguarded (`type A = A | A[]`); unfolding it re-injects the μ into its
+    // own union spine forever, so the guard must answer first.
+    let unguarded = NormalTy::Mu {
+        binder: MuDisplay {
+            name: None,
+            rendered: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+        },
+        body: Box::new(NormalTy::Union(vec![
+            NormalTy::RecVar(0),
+            NormalTy::List(Box::new(NormalTy::RecVar(0))),
+        ])),
+    };
+    assert!(!unguarded.is_disjoint_from(&NormalTy::String));
+    assert!(!NormalTy::String.is_disjoint_from(&unguarded));
+}
+
+#[test]
+fn union_nested_recursion_renders_via_subset_cover() {
+    // `type A = int | (A | null)[]` — the recursion variable sits inside a
+    // nested union under the list, so ε-closure splices the named union through
+    // and the surviving cycle is nameless. The renderer must cut it with the
+    // subset cover (`A | null`), not panic or loop.
+    let mut ctx = Ctx::default();
+    let null = || Ty::Null {
+        attr: TyAttr::default(),
+    };
+    ctx.aliases.insert(
+        qtn("A"),
+        union(vec![Ty::int(), list(union(vec![alias("A"), null()]))]),
+    );
+    let a = alias("A");
+    assert!(equivalent(&a, &a, &ctx));
+    let rendered = ctx.normalize(&a);
+    assert!(equivalent(&a, &rendered, &ctx));
+    assert_eq!(ctx.normalize(&rendered), rendered, "idempotent");
+}
+
+#[test]
+fn single_variant_enum_union_is_idempotent() {
+    // Collapsing a one-variant enum would split one value set into two
+    // canonical spellings (the union spelling collapses, the bare variant
+    // cannot); the collapse now requires at least two variants.
+    let mut ctx = Ctx::default();
+    ctx.enums.insert(qtn("E"), vec![Name::new("A")]);
+    let v = variant("E", "A");
+    let vv = union(vec![v.clone(), v.clone()]);
+    assert!(equivalent(&vv, &v, &ctx));
+    assert!(is_subtype(&vv, &v, &ctx));
+    assert!(is_subtype(&v, &vv, &ctx));
+    // The two-variant collapse is unaffected.
+    ctx.enums
+        .insert(qtn("F"), vec![Name::new("X"), Name::new("Y")]);
+    assert!(equivalent(
+        &union(vec![variant("F", "X"), variant("F", "Y")]),
+        &enum_ty("F"),
+        &ctx
+    ));
 }

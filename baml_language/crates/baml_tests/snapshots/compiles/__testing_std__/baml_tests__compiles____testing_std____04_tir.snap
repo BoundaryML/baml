@@ -299,10 +299,16 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
         existing : testing.TestRegistry
       null =>
         { : testing.TestRegistry
-          let start = baml.sys.now_ms() : int
+          let start = baml.time.Instant.now() : baml.time.Instant
           let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] } : testing.TestCollector
           ts.collector(sub_collector) : void
-          let elapsed = baml.sys.now_ms() - start : int
+          let elapsed = : int
+            catch (start.elapsed().to_milliseconds().to_int() : int) : int
+              catch (_)
+                baml.errors.InvalidArgument { message: message } =>
+                  { : never
+                    baml.sys.panic("testing: expansio..." + message) : never
+                  }
           let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
           self.expansions.set(ts.name, sub_registry) : testing.TestRegistry | null
           sub_registry : testing.TestRegistry
@@ -436,14 +442,16 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
                 report: TestReport =>
                   [named_result.name] : string[]
                 report: TestSetReport =>
-                  if (report.failed_names.length() > 0 : bool) : string[]
-                    { : string[]
-                      report.failed_names : string[]
-                    }
-                  else
-                    { : string[]
-                      [named_result.name] : string[]
-                    }
+                  { : string[]
+                    if (report.failed_names.length() > 0 : bool) : string[]
+                      { : string[]
+                        report.failed_names : string[]
+                      }
+                    else
+                      { : string[]
+                        [named_result.name] : string[]
+                      }
+                  }
             for name in child_failed_names
               { : int
                 failed_names.push(name) : int
@@ -493,10 +501,12 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
     let base_run: TestReportThunk = : () -> testing.TestReport throws never
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
-          let start = baml.sys.now_ms()
+          let start = baml.time.Instant.now()
           let result = ...
             { 1 stmts + tail } catch_all (e) { p: baml.panics.UserPanic => { 0 stmts + tail }, p: baml.panics.AssertionFailed => { 0 stmts + tail }, baml.panics.Panic => { 0 stmts + tail }, _ => { 0 stmts + tail } }
-          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start, message: result.message }] }
+          let duration = ...
+            start.elapsed().to_milliseconds().to_int() catch (_) { baml.errors.InvalidArgument { message: message } => { 0 stmts + tail } }
+          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: duration, message: result.message }] }
         }
     match (runner : testing.TestRunner | null) : testing.TestReport
       null =>

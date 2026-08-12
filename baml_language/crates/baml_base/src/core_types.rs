@@ -180,7 +180,7 @@ impl TypePath {
         Self(vec![name])
     }
 
-    /// Build a `TypePath` from a compile-time dotted literal like `"baml.llm.Client"`.
+    /// Build a `TypePath` from a compile-time dotted literal like `"ai.Prompt"`.
     /// Use only at synthetic construction sites; runtime input should come from
     /// already-segmented data (e.g., parser tokens).
     pub fn from_dotted(s: &str) -> Self {
@@ -238,6 +238,57 @@ impl MediaKind {
             MediaKind::Pdf => "pdf",
             MediaKind::Generic => "media",
         }
+    }
+
+    /// The stdlib wrapper class (`baml.media.*`) that carries this media kind
+    /// as a nominal value; `None` for `Generic`, which has no wrapper class.
+    ///
+    /// Single source of truth for the kind ↔ wrapper-class mapping, together
+    /// with [`MediaKind::from_wrapper_class_name`]. Consumers must resolve
+    /// wrapper class names through these instead of local string matches.
+    pub const fn wrapper_class_name(self) -> Option<&'static str> {
+        match self {
+            MediaKind::Image => Some("baml.media.Image"),
+            MediaKind::Audio => Some("baml.media.Audio"),
+            MediaKind::Video => Some("baml.media.Video"),
+            MediaKind::Pdf => Some("baml.media.Pdf"),
+            MediaKind::Generic => None,
+        }
+    }
+
+    /// Inverse of [`MediaKind::wrapper_class_name`]: the media kind carried by
+    /// a stdlib media wrapper class, or `None` for any other class name.
+    pub fn from_wrapper_class_name(name: &str) -> Option<Self> {
+        match name {
+            "baml.media.Image" => Some(MediaKind::Image),
+            "baml.media.Audio" => Some(MediaKind::Audio),
+            "baml.media.Video" => Some(MediaKind::Video),
+            "baml.media.Pdf" => Some(MediaKind::Pdf),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod media_kind_wrapper_tests {
+    use super::MediaKind;
+
+    #[test]
+    fn wrapper_class_name_round_trips() {
+        for kind in [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+        ] {
+            let name = kind
+                .wrapper_class_name()
+                .expect("concrete kind has a wrapper");
+            assert_eq!(MediaKind::from_wrapper_class_name(name), Some(kind));
+        }
+        assert_eq!(MediaKind::Generic.wrapper_class_name(), None);
+        assert_eq!(MediaKind::from_wrapper_class_name("baml.media.File"), None);
+        assert_eq!(MediaKind::from_wrapper_class_name("user.Image"), None);
     }
 }
 

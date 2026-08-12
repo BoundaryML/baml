@@ -8,7 +8,7 @@ class PlainDateTime {
     /// Internal representation: the wall-clock reading encoded as nanoseconds
     /// since 1970-01-01T00:00:00, interpreting the reading as if it were UTC.
     /// This is a civil quantity, not an absolute time.
-    _nanoseconds: bigint;
+    _nanoseconds: bigint,
 
     /// Creates a `PlainDateTime` from calendar/clock components. `month` and
     /// `day` are 1-based. Defaulted clock components are passed by name:
@@ -27,7 +27,17 @@ class PlainDateTime {
         microsecond: int = 0,
         nanosecond: int = 0,
     ) -> PlainDateTime throws root.errors.InvalidArgument {
-        PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
+        PlainDateTime._from_components(
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            millisecond,
+            microsecond,
+            nanosecond,
+        )
     }
     /// Internal: all-required native behind `from_components` (native
     /// functions have no BAML prologue to fill defaulted parameters).
@@ -61,7 +71,9 @@ class PlainDateTime {
     implements baml.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => root.sys.panic("PlainDateTime.to_string: " + message),
+                root.errors.InvalidArgument { message } => {
+                    root.sys.panic("PlainDateTime.to_string: " + message)
+                },
             }
         }
     }
@@ -83,31 +95,49 @@ class PlainDateTime {
         disambiguation: Disambiguation = "compatible",
     ) -> ZonedDateTime throws UnknownTimezoneError | AmbiguousTimeError | root.errors.Io {
         match (timezone) {
-            TimeZoneOffset => ZonedDateTime {
-                _nanoseconds: self._nanoseconds - timezone._nanoseconds,
-                _offset_ns: timezone._nanoseconds,
-                _iana: null,
-            },
-            string => if (disambiguation == "reject") {
-                // "reject" is implemented as: resolve both sides of any DST
-                // gap/overlap and require them to agree.
-                match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) {
-                    null => throw UnknownTimezoneError { timezone: timezone },
-                    let earlier => match (_tz_to_instant(timezone, self._nanoseconds, "later")) {
-                        null => throw UnknownTimezoneError { timezone: timezone },
-                        let later => if (earlier == later) {
-                            // `?? 0n` is unreachable: the null arm already matched.
-                            ZonedDateTime { _nanoseconds: earlier ?? 0n, _offset_ns: null, _iana: timezone }
-                        } else {
-                            throw AmbiguousTimeError { message: "wall-clock time is ambiguous or skipped in timezone " + timezone }
-                        },
-                    },
+            TimeZoneOffset => {
+                ZonedDateTime {
+                    _nanoseconds: self._nanoseconds - timezone._nanoseconds,
+                    _offset_ns: timezone._nanoseconds,
+                    _iana: null,
                 }
-            } else {
-                match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) {
-                    null => throw UnknownTimezoneError { timezone: timezone },
-                    // `?? 0n` is unreachable: the null arm already matched.
-                    let resolved => ZonedDateTime { _nanoseconds: resolved ?? 0n, _offset_ns: null, _iana: timezone },
+            },
+            string => {
+                if (disambiguation == "reject") {
+                    // "reject" is implemented as: resolve both sides of any DST
+                    // gap/overlap and require them to agree.
+                    match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) {
+                        null => throw UnknownTimezoneError { timezone: timezone },
+                        let earlier => {
+                            match (_tz_to_instant(timezone, self._nanoseconds, "later")) {
+                                null => throw UnknownTimezoneError { timezone: timezone },
+                                let later => {
+                                    if (earlier == later) {
+                                        // `?? 0n` is unreachable: the null arm already matched.
+                                        ZonedDateTime {
+                                            _nanoseconds: earlier ?? 0n,
+                                            _offset_ns: null,
+                                            _iana: timezone,
+                                        }
+                                    } else {
+                                        throw AmbiguousTimeError { message: "wall-clock time is ambiguous or skipped in timezone " + timezone }
+                                    }
+                                },
+                            }
+                        },
+                    }
+                } else {
+                    match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) {
+                        null => throw UnknownTimezoneError { timezone: timezone },
+                        // `?? 0n` is unreachable: the null arm already matched.
+                        let resolved => {
+                            ZonedDateTime {
+                                _nanoseconds: resolved ?? 0n,
+                                _offset_ns: null,
+                                _iana: timezone,
+                            }
+                        },
+                    }
                 }
             },
         }
@@ -175,18 +205,53 @@ class PlainDateTime {
     implements baml.FromJson {
         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
             match (j) {
-                string => PlainDateTime.parse(j) catch (_) {
-                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                string => {
+                    PlainDateTime.parse(j) catch (_) {
+                        root.errors.ParseError { message } => {
+                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                        },
+                    }
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
+                _ => {
+                    throw baml.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
+                },
             }
         }
     }
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
             self._to_string_impl() catch (_) {
-                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+                root.errors.InvalidArgument { message } => {
+                    throw baml.json.JsonSerializationError { message: message, path: "" }
+                },
             }
+        }
+    }
+}
+
+implement root.ops.Add<Duration> for PlainDateTime {
+    type Output = PlainDateTime
+    function add(self, other: Duration) -> PlainDateTime {
+        PlainDateTime {
+            _nanoseconds: self._nanoseconds + other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<Duration> for PlainDateTime {
+    type Output = PlainDateTime
+    function sub(self, other: Duration) -> PlainDateTime {
+        PlainDateTime {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
+        }
+    }
+}
+
+implement root.ops.Subtract<PlainDateTime> for PlainDateTime {
+    type Output = Duration
+    function sub(self, other: PlainDateTime) -> Duration {
+        Duration {
+            _nanoseconds: self._nanoseconds - other._nanoseconds
         }
     }
 }

@@ -119,10 +119,15 @@ fn generate_fixture(
     )
     .expect("C# fixture bytecode serialization failed");
     let output_directory = fixture.join("baml_client");
+    let embedded_baml_toml = format!(
+        "[__baml_codegen]\nmetadata_version = 1\n\n[__baml_codegen.toolchain]\nversion = {:?}\n",
+        baml_version::CANONICAL_VERSION
+    );
     let generate = || {
         sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
             symbols: &symbols,
             program_bytes: &bytecode,
+            embedded_baml_toml: &embedded_baml_toml,
             cli_version: baml_version::CANONICAL_VERSION,
             required_bridge_version: baml_version::CANONICAL_VERSION,
             program_identity,
@@ -443,10 +448,6 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
         (
             "Csv/CsvReader.g.cs",
             vec![
-                " Iter(",
-                " IterAsync(",
-                " Next(",
-                " NextAsync(",
                 " Headers(",
                 " HeadersAsync(",
                 " Rows<T>(",
@@ -462,14 +463,11 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
             ],
         ),
         (
+            // `iter` / `next` come from `implements root.iter.Iterable` /
+            // `Iterator`; interface-impl methods are not generated, so the
+            // reader handle is the whole surface here.
             "Csv/CsvRows.g.cs",
-            vec![
-                " Reader { get; }",
-                " Iter(",
-                " IterAsync(",
-                " Next(",
-                " NextAsync(",
-            ],
+            vec![" Reader { get; }"],
         ),
         (
             "Csv/CsvWriter.g.cs",

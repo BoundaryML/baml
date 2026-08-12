@@ -7,7 +7,7 @@ use std::{
     fmt::Write as _,
 };
 
-use baml_base::Literal;
+use baml_base::{Literal, qualified_name::AI_STREAM_STREAM};
 use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Ty};
 use indexmap::IndexMap;
 
@@ -865,7 +865,7 @@ fn render_class_bases(generic_params: &[String]) -> String {
 /// of `PyO3` types holding `Arc<MediaValue>` directly — live in
 /// `baml_bridge.baml_py` (the `PyO3` extension module).
 ///
-/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_bridge`
+/// `ai.stream.Stream`: pure-Python wrapper re-exported from `baml_bridge`
 /// (`sdks/python/src/baml_bridge/_stream.py`). Lives outside the `PyO3`
 /// module because nothing on the call path needed Rust — the args
 /// encoder, runtime accessor, and result decoder are all already
@@ -878,7 +878,7 @@ fn media_reexport_rust_name(
         "baml.media.Video" => Some(("baml_bridge.baml_py", "BamlVideo")),
         "baml.media.Audio" => Some(("baml_bridge.baml_py", "BamlAudio")),
         "baml.media.Pdf" => Some(("baml_bridge.baml_py", "BamlPdf")),
-        "baml.llm.Stream" => Some(("baml_bridge", "BamlStream")),
+        AI_STREAM_STREAM => Some(("baml_bridge", "BamlStream")),
         _ => None,
     }
 }

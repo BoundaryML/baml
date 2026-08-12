@@ -37,6 +37,10 @@ fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     }
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
+    // Pin the human output preset: under a coding agent the inherited
+    // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
+    // `agent`, which disables the progress lines some assertions read.
+    cmd.env("BAML_OUTPUT_PRESET", "human");
     cmd.env("BAML_HOME", &home);
     // Share the bytecode cache across the suite so only the first invocation
     // pays the stdlib compile; see `common::shared_cache_dir`.
@@ -703,9 +707,16 @@ test "fails" {
     let stdout = String::from_utf8_lossy(&info.stdout);
     assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
     assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
-    assert!(stdout.contains("user"), "stdout: {stdout}");
-    assert!(stdout.contains("ada"), "stdout: {stdout}");
-    assert!(stdout.contains("attempts"), "stdout: {stdout}");
+    assert!(
+        stdout.contains(r#"[WARN] {"user": "ada", "attempts": [1, 2]}"#),
+        "stdout: {stdout}"
+    );
+    for implementation_detail in ["BamlOutboundValue", "MapValue", "ListValue", "Some("] {
+        assert!(
+            !stdout.contains(implementation_detail),
+            "stdout leaked `{implementation_detail}`: {stdout}"
+        );
+    }
     assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
     assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
     assert!(
@@ -764,6 +775,9 @@ test "streams" {
         .args(["test", "--from", ".", "--logs", "INFO"])
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
+        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
+        .env("BAML_OUTPUT_PRESET", "human")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .stdout(Stdio::piped())
@@ -842,6 +856,67 @@ test "assert-equal-failure" {
     assert!(
         !stderr.contains("FileId("),
         "User-facing test output should not include internal FileId debug data: {stderr}",
+    );
+}
+
+/// Non-assertion errors should retain their type, fields, and BAML stack
+/// context instead of producing a bare `FAIL` line.
+#[test]
+fn test_thrown_error_prints_rendered_error_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+class ProviderFailure {
+  message string
+  status int
+}
+
+function fail_request() -> void {
+  throw ProviderFailure {
+    message: "provider rejected request",
+    status: 429,
+  }
+}
+
+test "provider-failure" {
+  fail_request()
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected test failure exit code for thrown error, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("user.ProviderFailure"),
+        "Expected the thrown error type in stderr, got: {stderr}",
+    );
+    assert!(
+        stderr.contains(r#"message: "provider rejected request""#),
+        "Expected the thrown error message in stderr, got: {stderr}",
+    );
+    assert!(
+        stderr.contains("status: 429"),
+        "Expected the thrown error fields in stderr, got: {stderr}",
+    );
+    assert!(
+        stderr.contains("main.baml"),
+        "Expected BAML source context in stderr, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("Span {") && !stderr.contains("FileId("),
+        "User-facing test output should not include internal source debug data: {stderr}",
     );
 }
 
@@ -1284,14 +1359,14 @@ fn describe_walks_up_to_ancestor_project() {
     );
 }
 
-/// `baml fmt` in a directory with no project is a no-op success, not an
-/// error — nothing to format is not a failure.
+/// `baml fmt` with no explicit source and no discoverable project is a no-op
+/// success. An explicit `--from` is different: it opts into that source tree.
 #[test]
-fn fmt_without_project_is_noop_success() {
+fn fmt_without_from_or_project_is_noop_success() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["fmt", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["fmt"]);
 
     assert!(
         output.status.success(),
@@ -1359,14 +1434,13 @@ fn run_list_without_baml_toml_using_baml_src_succeeds() {
     );
 }
 
-/// A directory with neither a `baml.toml` nor a `baml_src/` is still
-/// rejected — but the error points at `baml_src/`, `baml init`, and
-/// `--file`, not just "missing baml.toml".
+/// An explicit source directory needs neither `baml.toml` nor a `baml_src/`
+/// wrapper: `--from` itself is the opt-in to load that tree.
 #[test]
-fn run_without_any_project_marker_errors_with_hint() {
+fn run_list_accepts_explicit_unmarked_source_root() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
-    // A loose .baml at the root, but no baml.toml and no baml_src/.
+    // A loose .baml at the root, with no baml.toml and no baml_src/.
     std::fs::write(
         tmp.path().join("loose.baml"),
         "function f() -> int {\n  1\n}\n",
@@ -1376,17 +1450,17 @@ fn run_without_any_project_marker_errors_with_hint() {
     let output = run_baml_cli(built, tmp.path(), &["run", "--list", "--from", "."]);
 
     assert!(
-        !output.status.success(),
-        "Expected non-zero exit when neither project marker is present",
+        output.status.success(),
+        "Expected explicit unmarked source root to load, got {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
     );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    // The hint names all three escape hatches.
-    for needle in ["baml_src/", "baml init", "--file"] {
-        assert!(
-            stderr.contains(needle),
-            "Expected the error to mention `{needle}`, got:\n{stderr}",
-        );
-    }
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains('f'),
+        "Expected function list to contain `f`, got:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+    );
 }
 
 /// `baml run <fn>` actually *executes* a function in a manifest-less
@@ -1937,4 +2011,45 @@ fn generate_without_baml_toml_reports_no_generators() {
         stderr.contains("[generator"),
         "Expected a missing-generator hint, got: {stderr}",
     );
+}
+
+/// `describe X --json` emits the typed drill-in document whose ids match
+/// `--export` — the contract the stdlib-matrix tooling keys on.
+#[test]
+fn describe_json_drill_carries_surface_ids() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    common::write_project(
+        tmp.path(),
+        "function greet(name: string) -> string { name }\n",
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "baml.time.Duration", "--json"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(doc["id"], "T:baml.time.Duration");
+    assert_eq!(doc["kind"], "class");
+    assert!(
+        doc["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "M:baml.time.Duration.abs"),
+        "method ids present"
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "baml.time.Duration.abs", "--json"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(doc["member_kind"], "method");
+    assert_eq!(doc["id"], "M:baml.time.Duration.abs");
+    assert_eq!(doc["signature"]["returns"]["display"], "baml.time.Duration");
 }

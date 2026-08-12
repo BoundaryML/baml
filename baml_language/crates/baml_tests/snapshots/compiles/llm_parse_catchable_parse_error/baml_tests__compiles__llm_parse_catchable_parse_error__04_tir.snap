@@ -2,25 +2,24 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.GPT4o$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "GPT4o", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-}
 enum user.Currency
 class user.Invoice {
   currency: user.Currency
   amount: float
 }
-function user.ExtractInvoice(text: string, client: baml.llm.Client = GPT4o) -> user.Invoice throws never {
-  baml.llm.call_llm_function<T>(client, "ExtractInvoice", map { "text": text }) : user.Invoice
+function user.ExtractInvoice(text: string, client: ai.Client | null = null) -> user.Invoice throws never {
+  ai.Agent.new<Invoice>(client = client).run(ExtractInvoice$spec(text)).value : user.Invoice
 }
-function user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "ExtractInvoice", map { "text": text }) : baml.llm.PromptAst
+function user.ExtractInvoice$spec(text: string) -> ai.FunctionSpec<user.Invoice> throws never {
+  ai.FunctionSpec { spec_name: "ExtractInvoice", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: GPT4o } : ai.FunctionSpec<user.Invoice>
 }
-function user.ExtractInvoice$build_request(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "ExtractInvoice", map { "text": text }) : baml.http.Request
+lambda user.ExtractInvoice$spec {
 }
-function user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "ExtractInvoice", map { "text": text }) : baml.http.Request
+function user.ExtractInvoice$render_prompt(text: string) -> ai.Prompt throws never {
+  ExtractInvoice$spec(text).prompt(output_format = ai.wire.render_output_format(reflect.type_of<Invoice>())) : ai.Prompt
+}
+function user.ExtractInvoice$parse(json: string) -> user.Invoice throws never {
+  baml.sap.parse<T>(json) : user.Invoice
 }
 function user.TryExtract(json: string) -> user.Invoice | null throws never {
   { : user.Invoice | null
@@ -29,17 +28,12 @@ function user.TryExtract(json: string) -> user.Invoice | null throws never {
         baml.errors.ParseError { message: message } =>
           null : null
   }
+  ?? 1607..1611: unreachable arm
 }
 class user.Invoice$stream {
   currency: user.Currency | null
   amount: float | null
 }
-function user.ExtractInvoice$stream(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice> throws never {
-  baml.llm.stream_llm_function(client, "ExtractInvoice", map { "text": text }) : baml.llm.Stream<user.Invoice$stream | null, user.Invoice>
-}
-function user.ExtractInvoice$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4o) -> baml.llm.Stream<user.Invoice$stream | null, user.Invoice> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<user.Invoice$stream | null, user.Invoice>
-}
-function user.ExtractInvoice$parse(json: string, client: baml.llm.Client = GPT4o) -> user.Invoice throws never {
-  baml.llm.parse<TFinal>(json) : user.Invoice
+function user.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<user.Invoice$stream | null, user.Invoice> throws never {
+  ai.stream.from_spec(ExtractInvoice$spec(text), client = client) : ai.stream.Stream<user.Invoice$stream | null, user.Invoice>
 }

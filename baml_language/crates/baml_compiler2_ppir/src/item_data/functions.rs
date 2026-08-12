@@ -97,43 +97,6 @@ pub fn function_llm_meta<'db>(
         })
 }
 
-/// The span-carrying Jinja prompt of an LLM (`{ client …; prompt … }`) function,
-/// for prompt-template validation.
-///
-/// This is the body-ish sibling of [`function_llm_meta`]: because its value
-/// carries the prompt's source span, it re-runs whenever the prompt text *or its
-/// position* changes — it does not offer the span-free early cutoff
-/// `function_llm_meta` does. It mirrors [`function_body`](crate::function_body)'s
-/// span-carrying tracked shape and exists so prompt validation can front the item
-/// tree without reading it directly.
-///
-/// `None` for a non-LLM function or an LLM function without a `prompt`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LlmPromptBody {
-    pub text: String,
-    pub span: TextRange,
-}
-
-/// The [`LlmPromptBody`] for one function, or `None` when it has no LLM prompt.
-#[salsa::tracked]
-pub fn function_llm_prompt<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> Option<std::sync::Arc<LlmPromptBody>> {
-    let item_tree = crate::file_item_tree(db, function.file(db));
-    item_tree[function.id(db)]
-        .declarative_meta
-        .as_ref()
-        .and_then(|ast::DeclarativeMeta::Llm(llm)| {
-            llm.prompt.as_ref().map(|prompt| {
-                std::sync::Arc::new(LlmPromptBody {
-                    text: prompt.text.clone(),
-                    span: prompt.span,
-                })
-            })
-        })
-}
-
 /// Span-free semantic data for a function's *elaborated* signature — the
 /// canonical callable view TIR consumes.
 ///

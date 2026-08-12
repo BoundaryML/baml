@@ -429,12 +429,12 @@ fn render_builtin_namespace_env() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.llm` — list items in the `llm` sub-namespace.
+/// `baml describe baml.prompt` — list items in the `prompt` sub-namespace.
 #[test]
-fn render_builtin_namespace_llm() {
+fn render_builtin_namespace_prompt() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("llm")];
+    let ns_path = vec![baml_db::Name::new("prompt")];
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);

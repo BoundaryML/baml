@@ -20,7 +20,7 @@ private const val PLACEHOLDER_HTML = """
     <html lang="en">
       <head>
         <meta charset="UTF-8" />
-        <title>Loading BAML Playground…</title>
+        <title>Loading BAML v0 Playground…</title>
         <style>
           body {
             margin: 0;
@@ -48,7 +48,7 @@ private const val PLACEHOLDER_HTML = """
       </head>
       <body>
         <div class="spinner"></div>
-        <h1>Starting BAML Playground…</h1>
+        <h1>Starting BAML v0 Playground…</h1>
         <p>You may need to open a BAML file if this does not load.</p>
       </body>
     </html>
@@ -61,7 +61,7 @@ private const val VITE_HOT_RELOAD_HTML = """
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BAML Playground</title>
+  <title>BAML v0 Playground</title>
   <script type="module">
     import RefreshRuntime from "http://localhost:3030/@react-refresh"
     RefreshRuntime.injectIntoGlobalHook(window)

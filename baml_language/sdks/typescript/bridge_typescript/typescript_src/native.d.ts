@@ -101,7 +101,7 @@ export declare class BamlRuntime {
    */
   static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
   /** Initialize the process-global runtime from precompiled BAML bytecode. */
-  static initializeRuntimeFromBytecode(bytecode: Buffer): BamlRuntime
+  static initializeRuntimeFromBytecode(bytecode: Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
@@ -207,6 +207,8 @@ export declare function completeHostCall(callId: number, isError: number, conten
 /** No-op: tracing has been removed. Kept as a live symbol for ABI stability. */
 export declare function flushEvents(): void
 
+export declare function getBridgeRuntimeVersion(): string
+
 /**
  * Return the process-global `BamlRuntime`, or a `BamlError`-shaped
  * `napi::Error` if `initializeRuntime` has not run yet. The handle is
@@ -214,6 +216,8 @@ export declare function flushEvents(): void
  * `bridge_python`'s module-level `get_runtime()`.
  */
 export declare function getRuntime(): BamlRuntime
+
+export declare function getToolchainVersion(): string
 
 export declare function getVersion(): string
 

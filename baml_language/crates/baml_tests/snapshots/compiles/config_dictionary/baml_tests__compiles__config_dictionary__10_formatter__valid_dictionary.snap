@@ -1,56 +1,60 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-client<llm> MyClient {
-    provider: openai,
-    // dictionary test
-    options: {
-        // no commas
-        max_tokens: 100,
-        array_key_with_quoted_unquoted: ["abc", "abc", "ccc"],
-        // separate by commas
-        key2: "some random value",
-        hello: "world",
-        thing: "hello",
-        block_string: #"
+// The legacy `client<llm>` options dictionary is removed. This fixture keeps
+// exercising the same value shapes — nested maps, arrays, raw strings, quoted
+// keys, comments between entries — as ordinary map literals in expression
+// position.
+
+client MyClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+function StringConfig() -> map<string, string> {
+    {
+        // comments between entries
+        "key2": "some random value",
+        "hello": "world",
+        "thing": "hello",
+        "block_string": #"
             hello there my frien
             d
         "#,
-        inline_raw_string: #"inline "raw" string,,"#,
+        "inline_raw_string": #"inline "raw" string,,"#,
         "string key": "value with spaces",
-        booleanValue: true,
-        stringKey: "true",
-        array1: ["one", "two"],
+        "stringKey": "true",
+
         // a comment and new empty_lines
 
-        array2: ["one", "two"],
-        array3Numbers: [1, 2, 3],
-        nestedKey: {
-            key: "value",
-            key2: "value2",
-            nestedArray: ["yes", "queen"],
-            number: 10,
-        },
-        oneMoreValueToTestBrokenness: "value",
-        myInteger: 100,
-        // array of objects with nested config blocks (no colons)
-        tools: [
-            {
-                server_label: "parallel_web_search",
-                server_url: "https://example.com",
-                headers: {
-                    "x-api-key": myapikey,
-                    authorization: "Bearer token",
-                },
-                type: "mcp",
-            },
-            {
-                another_tool: "value",
-            },
-        ],
-        block_string: #"
-            hello there my friend
-            {# a comment in a prompt #}
-        "#,
-    },
+        "oneMoreValueToTestBrokenness": "value",
+    }
+}
+
+function NumberConfig() -> map<string, int> {
+    { "max_tokens": 100, "myInteger": 100 }
+}
+
+function BoolConfig() -> map<string, bool> {
+    { "booleanValue": true }
+}
+
+function ArrayConfig() -> map<string, string[]> {
+    {
+        "array_key_with_quoted_unquoted": ["abc", "abc", "ccc"],
+        "array1": ["one", "two"],
+        "array2": ["one", "two"],
+    }
+}
+
+function NumberArrayConfig() -> map<string, int[]> {
+    { "array3Numbers": [1, 2, 3] }
+}
+
+function NestedConfig() -> map<string, map<string, string>> {
+    {
+        "nestedKey": { "key": "value", "key2": "value2" },
+        "headers": { "x-api-key": "myapikey", "authorization": "Bearer token" },
+    }
 }

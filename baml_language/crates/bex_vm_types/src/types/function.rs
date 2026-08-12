@@ -93,10 +93,7 @@ impl BorshDeserialize for FunctionKind {
 /// LLM-specific metadata for a function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm {
-        prompt_template: String,
-        client: String,
-    },
+    Llm { client: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

@@ -18,7 +18,7 @@ function simple_class_to_json_roundtrip_name() -> string {
 }
 
 test "simple_class_to_json_roundtrip" {
-    assert.is_true(baml.deep_equals(simple_class_to_json_roundtrip_name(), "Ada"))
+    assert.equal(simple_class_to_json_roundtrip_name(), "Ada")
 }
 
 // ─── user_to_json_override_suppresses_auto_derive ────────────────────────────
@@ -39,7 +39,7 @@ function user_to_json_override_result() -> baml.json.json throws baml.json.JsonS
 }
 
 test "user_to_json_override_suppresses_auto_derive" {
-    assert.is_true(baml.deep_equals(user_to_json_override_result(), "[redacted]"))
+    assert.equal(user_to_json_override_result(), "[redacted]")
 }
 
 // ─── Phase 5b.2: primitive companion bridging ─────────────────────────────────
@@ -51,7 +51,7 @@ function int_to_json_result() -> baml.json.json {
 }
 
 test "int_to_json_resolves_and_executes" {
-    assert.is_true(baml.deep_equals(int_to_json_result(), 42))
+    assert.equal(int_to_json_result(), 42)
 }
 
 // float.to_json() resolves to baml.Float.to_json and returns the float.
@@ -61,7 +61,7 @@ function float_to_json_result() -> baml.json.json {
 }
 
 test "float_to_json_resolves_and_executes" {
-    assert.is_true(baml.deep_equals(float_to_json_result(), 2.5))
+    assert.equal(float_to_json_result(), 2.5)
 }
 
 // bool.to_json() resolves to baml.Bool.to_json and returns the bool.
@@ -71,7 +71,8 @@ function bool_to_json_result() -> baml.json.json {
 }
 
 test "bool_to_json_resolves_and_executes" {
-    assert.is_true(baml.deep_equals(bool_to_json_result(), true))
+    // Not `assert.is_true`: the result is a `baml.json.json`, not a `bool`.
+    assert.equal(bool_to_json_result(), true)
 }
 
 // null.to_json() resolves to baml.Null.to_json and returns null.
@@ -94,7 +95,7 @@ function array_of_int_to_json_str() -> string throws baml.json.JsonSerialization
 }
 
 test "array_of_int_to_json_returns_json_array" {
-    assert.is_true(baml.deep_equals(array_of_int_to_json_str(), "[1,2,3]"))
+    assert.equal(array_of_int_to_json_str(), "[1,2,3]")
 }
 
 // B[] with to_json override: each element maps to 99, result is [99,99].
@@ -114,7 +115,7 @@ function array_of_class_to_json_str() -> string throws baml.json.JsonSerializati
 }
 
 test "array_of_class_to_json_honors_override" {
-    assert.is_true(baml.deep_equals(array_of_class_to_json_str(), "[99,99]"))
+    assert.equal(array_of_class_to_json_str(), "[99,99]")
 }
 
 // map<string,int>.to_json() must return a json map. Structural check via stringify.
@@ -125,7 +126,7 @@ function map_of_int_to_json_str() -> string throws baml.json.JsonSerializationEr
 
 test "map_of_int_to_json_returns_json_map" {
     // Map key insertion order is deterministic (a, b).
-    assert.is_true(baml.deep_equals(map_of_int_to_json_str(), "{\"a\":1,\"b\":2}"))
+    assert.equal(map_of_int_to_json_str(), "{\"a\":1,\"b\":2}")
 }
 
 // ─── Phase 5b.2.3: universal TypeVar to_json / from_json ─────────────────────
@@ -139,7 +140,7 @@ class G<T> {
 
 test "typevar_to_json_compiles_in_generic_class" {
     // Only compilation and basic execution is verified; G.f is not called.
-    assert.is_true(baml.deep_equals(1, 1))
+    assert.equal(1, 1)
 }
 
 // ─── Phase 5b.6: per-field auto-derive, override-honoring, recursive, generic ─
@@ -153,7 +154,7 @@ function primitive_field_to_json_str() -> string throws baml.json.JsonSerializat
 }
 
 test "primitive_field_to_json" {
-    assert.is_true(baml.deep_equals(primitive_field_to_json_str(), "{\"x\":42}"))
+    assert.equal(primitive_field_to_json_str(), "{\"x\":42}")
 }
 
 class C2 { xs int[] }
@@ -165,7 +166,7 @@ function array_of_primitive_to_json_str() -> string throws baml.json.JsonSeriali
 }
 
 test "array_of_primitive_to_json" {
-    assert.is_true(baml.deep_equals(array_of_primitive_to_json_str(), "{\"xs\":[1,2,3]}"))
+    assert.equal(array_of_primitive_to_json_str(), "{\"xs\":[1,2,3]}")
 }
 
 // nested_class_override_honored_direct: A{b: B{y:7}}.to_json() → {"b":"[secret]"}
@@ -188,7 +189,7 @@ function nested_class_override_direct_str() -> string throws baml.json.JsonSeria
 }
 
 test "nested_class_override_honored_direct" {
-    assert.is_true(baml.deep_equals(nested_class_override_direct_str(), "{\"b\":\"[secret]\"}"))
+    assert.equal(nested_class_override_direct_str(), "{\"b\":\"[secret]\"}")
 }
 
 // nested_class_override_honored_in_array: A{items:[B{y:1},B{y:2}]}.to_json() → {"items":[0,0]}
@@ -211,7 +212,7 @@ function nested_class_override_in_array_str() -> string throws baml.json.JsonSer
 }
 
 test "nested_class_override_honored_in_array" {
-    assert.is_true(baml.deep_equals(nested_class_override_in_array_str(), "{\"items\":[0,0]}"))
+    assert.equal(nested_class_override_in_array_str(), "{\"items\":[0,0]}")
 }
 
 // nested_class_override_honored_in_map: A{lookup:{k1:B{v:1},k2:B{v:2}}}.to_json() → both values "B"
@@ -236,10 +237,7 @@ function nested_class_override_in_map_str() -> string throws baml.json.JsonSeria
 test "nested_class_override_honored_in_map" {
     // Verify both map values serialize to "B" via the override.
     // Map key insertion order is deterministic (k1, k2).
-    assert.is_true(baml.deep_equals(
-        nested_class_override_in_map_str(),
-        "{\"lookup\":{\"k1\":\"B\",\"k2\":\"B\"}}"
-    ))
+    assert.equal(nested_class_override_in_map_str(), "{\"lookup\":{\"k1\":\"B\",\"k2\":\"B\"}}")
 }
 
 // recursive_class_to_json: Tree{value:1, children:[Tree{value:2, children:[]}]}.to_json()
@@ -256,10 +254,10 @@ function recursive_class_to_json_str() -> string throws baml.json.JsonSerializat
 }
 
 test "recursive_class_to_json" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         recursive_class_to_json_str(),
-        "{\"value\":1,\"children\":[{\"value\":2,\"children\":[]}]}"
-    ))
+        "{\"value\":1,\"children\":[{\"value\":2,\"children\":[]}]}",
+    )
 }
 
 // generic_class_to_json_concrete: Box<int>{value:42}.to_json() → {"value":42}
@@ -272,7 +270,7 @@ function generic_class_to_json_concrete_str() -> string throws baml.json.JsonSer
 }
 
 test "generic_class_to_json_concrete" {
-    assert.is_true(baml.deep_equals(generic_class_to_json_concrete_str(), "{\"value\":42}"))
+    assert.equal(generic_class_to_json_concrete_str(), "{\"value\":42}")
 }
 
 // generic_class_to_json_array_typearg: Box<int[]>{value:[1,2,3]}.to_json() → {"value":[1,2,3]}
@@ -285,7 +283,7 @@ function generic_class_to_json_array_typearg_str() -> string throws baml.json.Js
 }
 
 test "generic_class_to_json_array_typearg" {
-    assert.is_true(baml.deep_equals(generic_class_to_json_array_typearg_str(), "{\"value\":[1,2,3]}"))
+    assert.equal(generic_class_to_json_array_typearg_str(), "{\"value\":[1,2,3]}")
 }
 
 // generic_class_honors_override_through_typevar: Box<Secret>{value:Secret{...}}.to_json()
@@ -308,7 +306,7 @@ function generic_class_honors_override_str() -> string throws baml.json.JsonSeri
 }
 
 test "generic_class_honors_override_through_typevar" {
-    assert.is_true(baml.deep_equals(generic_class_honors_override_str(), "{\"value\":\"[redacted]\"}"))
+    assert.equal(generic_class_honors_override_str(), "{\"value\":\"[redacted]\"}")
 }
 
 // generic_class_with_optional_typevar_field: Box<int>{value:42}.to_json() → {"value":42}
@@ -321,7 +319,7 @@ function generic_class_optional_typevar_str() -> string throws baml.json.JsonSer
 }
 
 test "generic_class_with_optional_typevar_field" {
-    assert.is_true(baml.deep_equals(generic_class_optional_typevar_str(), "{\"value\":42}"))
+    assert.equal(generic_class_optional_typevar_str(), "{\"value\":42}")
 }
 
 // generic_class_with_optional_typevar_field_null: Box<int>{value:null}.to_json() → {"value":null}
@@ -332,7 +330,7 @@ function generic_class_optional_typevar_null_str() -> string throws baml.json.Js
 }
 
 test "generic_class_with_optional_typevar_field_null" {
-    assert.is_true(baml.deep_equals(generic_class_optional_typevar_null_str(), "{\"value\":null}"))
+    assert.equal(generic_class_optional_typevar_null_str(), "{\"value\":null}")
 }
 
 // generic_class_with_optional_typevar_field_honors_override
@@ -355,7 +353,7 @@ function generic_class_optional_override_str() -> string throws baml.json.JsonSe
 }
 
 test "generic_class_with_optional_typevar_field_honors_override" {
-    assert.is_true(baml.deep_equals(generic_class_optional_override_str(), "{\"value\":\"[redacted]\"}"))
+    assert.equal(generic_class_optional_override_str(), "{\"value\":\"[redacted]\"}")
 }
 
 // ─── Phase 5c: per-field auto-derive from_json with override-honoring ─────────
@@ -369,7 +367,7 @@ function primitive_field_from_json_val() -> int throws baml.json.JsonParseError 
 }
 
 test "primitive_field_from_json" {
-    assert.is_true(baml.deep_equals(primitive_field_from_json_val(), 42))
+    assert.equal(primitive_field_from_json_val(), 42)
 }
 
 class C4 { xs int[] }
@@ -381,7 +379,7 @@ function array_of_primitive_from_json_sum() -> int throws baml.json.JsonParseErr
 }
 
 test "array_of_primitive_from_json" {
-    assert.is_true(baml.deep_equals(array_of_primitive_from_json_sum(), 6))
+    assert.equal(array_of_primitive_from_json_sum(), 6)
 }
 
 // nested_class_override_honored_direct_from_json: B.from_json override returns B{y:99}
@@ -404,7 +402,7 @@ function nested_class_override_direct_from_json_val() -> int throws baml.json.Js
 }
 
 test "nested_class_override_honored_direct_from_json" {
-    assert.is_true(baml.deep_equals(nested_class_override_direct_from_json_val(), 99))
+    assert.equal(nested_class_override_direct_from_json_val(), 99)
 }
 
 // nested_class_override_honored_in_array_from_json: B.from_json always returns B{y:0}
@@ -427,7 +425,7 @@ function nested_class_override_array_from_json_sum() -> int throws baml.json.Jso
 }
 
 test "nested_class_override_honored_in_array_from_json" {
-    assert.is_true(baml.deep_equals(nested_class_override_array_from_json_sum(), 0))
+    assert.equal(nested_class_override_array_from_json_sum(), 0)
 }
 
 // nested_class_override_honored_in_map_from_json: B.from_json always returns B{v:0}
@@ -450,7 +448,7 @@ function nested_class_override_map_from_json_sum() -> int throws baml.json.JsonP
 }
 
 test "nested_class_override_honored_in_map_from_json" {
-    assert.is_true(baml.deep_equals(nested_class_override_map_from_json_sum(), 0))
+    assert.equal(nested_class_override_map_from_json_sum(), 0)
 }
 
 // recursive_class_from_json
@@ -464,7 +462,7 @@ function recursive_class_from_json_sum() -> int throws baml.json.JsonSerializati
 }
 
 test "recursive_class_from_json" {
-    assert.is_true(baml.deep_equals(recursive_class_from_json_sum(), 3))
+    assert.equal(recursive_class_from_json_sum(), 3)
 }
 
 // generic_class_from_json_concrete: Box<int>.from_json(parse("{\"value\":42}"))
@@ -477,7 +475,7 @@ function generic_class_from_json_concrete_val() -> int throws baml.json.JsonPars
 }
 
 test "generic_class_from_json_concrete" {
-    assert.is_true(baml.deep_equals(generic_class_from_json_concrete_val(), 42))
+    assert.equal(generic_class_from_json_concrete_val(), 42)
 }
 
 // generic_class_honors_override_through_typevar_from_json: Box<Secret>.from_json dispatches Secret.from_json
@@ -500,7 +498,7 @@ function generic_class_honors_override_from_json_val() -> string throws baml.jso
 }
 
 test "generic_class_honors_override_through_typevar_from_json" {
-    assert.is_true(baml.deep_equals(generic_class_honors_override_from_json_val(), "[reset]"))
+    assert.equal(generic_class_honors_override_from_json_val(), "[reset]")
 }
 
 // ─── Phase 5c: additional coverage ───────────────────────────────────────────
@@ -528,7 +526,7 @@ function optional_class_override_non_null_val() -> int throws baml.json.JsonPars
 }
 
 test "optional_class_override_honored_from_json_non_null" {
-    assert.is_true(baml.deep_equals(optional_class_override_non_null_val(), 99))
+    assert.equal(optional_class_override_non_null_val(), 99)
 }
 
 // optional_class_override_honored_from_json_null: same but b: null → -1
@@ -542,7 +540,7 @@ function optional_class_override_null_val() -> int throws baml.json.JsonParseErr
 }
 
 test "optional_class_override_honored_from_json_null" {
-    assert.is_true(baml.deep_equals(optional_class_override_null_val(), -1))
+    assert.equal(optional_class_override_null_val(), -1)
 }
 
 // optional_primitive_field_from_json: C{x:int?}, tests both non-null and null paths
@@ -566,7 +564,7 @@ function optional_primitive_field_from_json_sum() -> int throws baml.json.JsonPa
 
 test "optional_primitive_field_from_json" {
     // 42 + (-1) = 41
-    assert.is_true(baml.deep_equals(optional_primitive_field_from_json_sum(), 41))
+    assert.equal(optional_primitive_field_from_json_sum(), 41)
 }
 
 // map_of_primitive_from_json: C{lookup:map<string,int>}
@@ -579,7 +577,7 @@ function map_of_primitive_from_json_sum() -> int throws baml.json.JsonParseError
 }
 
 test "map_of_primitive_from_json" {
-    assert.is_true(baml.deep_equals(map_of_primitive_from_json_sum(), 6))
+    assert.equal(map_of_primitive_from_json_sum(), 6)
 }
 
 // top_level_from_json_call_concrete_class
@@ -592,7 +590,7 @@ function top_level_from_json_call_concrete_class_name() -> string throws baml.js
 }
 
 test "top_level_from_json_call_concrete_class" {
-    assert.is_true(baml.deep_equals(top_level_from_json_call_concrete_class_name(), "Ada"))
+    assert.equal(top_level_from_json_call_concrete_class_name(), "Ada")
 }
 
 // top_level_from_json_call_primitive
@@ -602,7 +600,7 @@ function top_level_from_json_call_primitive_val() -> int throws baml.json.JsonPa
 }
 
 test "top_level_from_json_call_primitive" {
-    assert.is_true(baml.deep_equals(top_level_from_json_call_primitive_val(), 42))
+    assert.equal(top_level_from_json_call_primitive_val(), 42)
 }
 
 // independent_synthesis_only_from_json_defined
@@ -629,7 +627,7 @@ function independent_synthesis_only_from_json_result() -> string throws baml.jso
 }
 
 test "independent_synthesis_only_from_json_defined" {
-    assert.is_true(baml.deep_equals(independent_synthesis_only_from_json_result(), "override-honored"))
+    assert.equal(independent_synthesis_only_from_json_result(), "override-honored")
 }
 
 // independent_synthesis_only_to_json_defined
@@ -653,7 +651,7 @@ function independent_synthesis_only_to_json_val() -> int throws baml.json.JsonPa
 
 test "independent_synthesis_only_to_json_defined" {
     // No user override on from_json side; auto-derive structural decode reads y=7.
-    assert.is_true(baml.deep_equals(independent_synthesis_only_to_json_val(), 7))
+    assert.equal(independent_synthesis_only_to_json_val(), 7)
 }
 
 // round_trip_with_overrides_both_directions
@@ -682,7 +680,7 @@ function round_trip_with_overrides_both_directions_val() -> string throws baml.j
 }
 
 test "round_trip_with_overrides_both_directions" {
-    assert.is_true(baml.deep_equals(round_trip_with_overrides_both_directions_val(), "[reset]"))
+    assert.equal(round_trip_with_overrides_both_directions_val(), "[reset]")
 }
 
 // alias_chain_dispatch_to_json: type Outer = Inner; type Inner = B; b.to_json() → B's override
@@ -709,7 +707,7 @@ function alias_chain_dispatch_to_json_val() -> int throws baml.json.JsonSerializ
 }
 
 test "alias_chain_dispatch_to_json" {
-    assert.is_true(baml.deep_equals(alias_chain_dispatch_to_json_val(), 42))
+    assert.equal(alias_chain_dispatch_to_json_val(), 42)
 }
 
 // alias_chain_dispatch_from_json: Outer.from_json(j) dispatches B's user from_json override
@@ -733,7 +731,7 @@ function alias_chain_dispatch_from_json_val() -> int throws baml.json.JsonParseE
 }
 
 test "alias_chain_dispatch_from_json" {
-    assert.is_true(baml.deep_equals(alias_chain_dispatch_from_json_val(), 99))
+    assert.equal(alias_chain_dispatch_from_json_val(), 99)
 }
 
 // from_json_wrapper_body_fallback: class Holder { value unknown }
@@ -749,5 +747,5 @@ function from_json_wrapper_body_fallback_val() -> int throws baml.json.JsonParse
 }
 
 test "from_json_wrapper_body_fallback" {
-    assert.is_true(baml.deep_equals(from_json_wrapper_body_fallback_val(), 42))
+    assert.equal(from_json_wrapper_body_fallback_val(), 42)
 }

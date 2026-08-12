@@ -923,49 +923,6 @@ test "reflect_implements_transitive_via_requires" {
     assert.is_true(ritv_main())
 }
 
-// reflect_implementors_lists_lexicographic_order_and_identity
-interface RillAnimal {
-    function speak(self) -> string throws never
-}
-class RillDog {
-    implements RillAnimal {
-        function speak(self) -> string { return "Woof!" }
-    }
-}
-class RillCat {
-    implements RillAnimal {
-        function speak(self) -> string { return "Meow." }
-    }
-}
-function rill_main() -> bool {
-    let impls = reflect.type_of<RillAnimal>().implementors()
-    return impls.length() == 2
-        && impls[0] == reflect.type_of<RillCat>()
-        && impls[1] == reflect.type_of<RillDog>()
-}
-test "reflect_implementors_lists_lexicographic_order_and_identity" {
-    assert.is_true(rill_main())
-}
-
-// reflect_implementors_empty_for_concrete_class
-class RiefDog {
-    breed: string
-}
-function rief_main() -> int {
-    return reflect.type_of<RiefDog>().implementors().length()
-}
-test "reflect_implementors_empty_for_concrete_class" {
-    assert.equal(rief_main(), 0)
-}
-
-// reflect_implementors_empty_for_primitive
-function riep_main() -> int {
-    return reflect.type_of<int>().implementors().length()
-}
-test "reflect_implementors_empty_for_primitive" {
-    assert.equal(riep_main(), 0)
-}
-
 // reflect_implements_inside_generic_function
 interface RiigAnimal {
     function speak(self) -> string throws never
@@ -1802,10 +1759,8 @@ implements OobvAnimal for OobvDog {
     function speak(self) -> string { return "woof" }
 }
 function oobv_main() -> bool {
-    let impls = reflect.type_of<OobvAnimal>().implementors()
     return reflect.type_of<OobvDog>().implements(reflect.type_of<OobvAnimal>())
-        && impls.length() == 1
-        && impls[0] == reflect.type_of<OobvDog>()
+        && reflect.type_of<OobvAnimal>().implemented_by(reflect.type_of<OobvDog>())
 }
 test "out_of_body_implements_is_visible_to_reflection_registry" {
     assert.is_true(oobv_main())

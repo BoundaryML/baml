@@ -1,7 +1,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.boundaryml.jetbrains_ext</id>
-    <name>BAML Playground</name>
+    <name>BAML v0 Playground</name>
     <vendor>BoundaryML</vendor>
 
     <depends>com.intellij.modules.platform</depends>
@@ -14,8 +14,8 @@
         <action
                 id="baml.openBamlPanel"
                 class="com.boundaryml.jetbrains_ext.BamlPlaygroundAction"
-                text="Open BAML Playground"
-                description="Opens an interactive playground for running and testing BAML code."
+                text="Open BAML v0 Playground"
+                description="Opens an interactive BAML v0 playground for running and testing BAML code."
                 icon="/icons/baml-lamb-light-mode.svg"
         >
         </action>
@@ -23,7 +23,7 @@
                 id="baml.runBamlTest"
                 class="com.boundaryml.jetbrains_ext.BamlPlaygroundAction"
                 text="Run BAML Test"
-                description="Opens the BAML playground and runs the specified test."
+                description="Opens the BAML v0 playground and runs the specified test."
                 icon="/icons/baml-lamb-light-mode.svg"
                 >
         </action>
@@ -32,7 +32,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <!-- When changing toolWindow.id, also make sure to change BamlPlaygroundAction.kt -->
         <toolWindow
-                id="BAML Playground (beta)"
+                id="BAML v0 Playground (beta)"
                 factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory"
                 icon="/icons/baml-lamb-light-mode.svg"
         />
@@ -46,16 +46,9 @@
 
         <textmate.bundleProvider implementation="com.boundaryml.jetbrains_ext.BamlTextMateBundleProvider" />
         <!--
-          We have to explicitly register textmate as the highlight provider because of a bug in how jetbrains textmate
-          works (and it's incredibly poorly documented). See jetbrains-plugin-fss for prior art
-          https://github.com/qligier/jetbrains-plugin-fss/blob/905622be4058fda8014f874af4acae46f24cc556/src/main/resources/META-INF/plugin.xml#L51-L53
+          BamlFileType implements TextMateBackedFileType, allowing TextMate's file type detector to select its own
+          highlighter for files recognized by the bundle without referencing TextMate implementation classes here.
         -->
-        <editorHighlighterProvider
-                filetype="BAML"
-                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateEditorHighlighterProvider"/>
-        <lang.syntaxHighlighterFactory
-                language="baml"
-                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateSyntaxHighlighterFactory"/>
 
     </extensions>
 

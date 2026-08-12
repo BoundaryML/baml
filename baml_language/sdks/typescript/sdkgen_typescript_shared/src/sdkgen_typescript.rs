@@ -28,6 +28,21 @@ pub fn to_source_code_with_bytecode(
     to_source_code(pool, baml_bytecode, naming_convention)
 }
 
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    crate::to_source_code_with_metadata(
+        pool,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        naming_convention,
+        crate::GeneratorConfig::new(RUNTIME_PACKAGE),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
@@ -37,15 +52,15 @@ mod tests {
 
     fn runtime_owned_pool() -> SymbolPool {
         let mut pool = SymbolPool::new();
-        for (namespace, class_name) in [
-            ("media", "Image"),
-            ("media", "Audio"),
-            ("media", "Video"),
-            ("media", "Pdf"),
-            ("llm", "Stream"),
+        for (root, namespace, class_name) in [
+            ("baml", "media", "Image"),
+            ("baml", "media", "Audio"),
+            ("baml", "media", "Video"),
+            ("baml", "media", "Pdf"),
+            ("ai", "stream", "Stream"),
         ] {
             let name = Name::new(
-                BaseName::new("baml"),
+                BaseName::new(root),
                 vec![BaseName::new(namespace)],
                 BaseName::new(class_name),
             );
@@ -74,7 +89,12 @@ mod tests {
         let root = &output[&PathBuf::from("index.ts")];
         let typemap = &output[&PathBuf::from("_typemap.ts")];
 
-        assert!(root.contains("pnpm add @boundaryml/baml-bridge"));
+        assert!(root.contains(
+            "//  $ pnpm add @boundaryml/baml-bridge\n\
+             //  $ npm install @boundaryml/baml-bridge\n\
+             //  $ yarn add @boundaryml/baml-bridge"
+        ));
+        assert!(!root.contains("baml package"));
         assert!(root.contains("from \"@boundaryml/baml-bridge\";"));
         assert!(typemap.contains("from \"@boundaryml/baml-bridge\";"));
         assert!(!root.contains("@boundaryml/baml-bridge-web"));
@@ -85,7 +105,7 @@ mod tests {
     fn generated_builtin_leaves_use_node_constructor_identity() {
         let output = to_source_code(&runtime_owned_pool(), &[], NamingConvention::PreserveCase);
         let media = &output[&PathBuf::from("baml/media/index.ts")];
-        let llm = &output[&PathBuf::from("baml/llm/index.ts")];
+        let stream = &output[&PathBuf::from("ai/stream/index.ts")];
         for (runtime_name, local_name) in [
             ("BamlImage", "Image"),
             ("BamlAudio", "Audio"),
@@ -96,7 +116,7 @@ mod tests {
                 "import {{ {runtime_name} as {local_name} }} from \"{RUNTIME_PACKAGE}\";"
             )));
         }
-        assert!(llm.contains(&format!(
+        assert!(stream.contains(&format!(
             "import {{ BamlStream as Stream }} from \"{RUNTIME_PACKAGE}\";"
         )));
         assert!(

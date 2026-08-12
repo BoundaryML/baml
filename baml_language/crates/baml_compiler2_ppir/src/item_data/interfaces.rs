@@ -58,6 +58,8 @@ pub struct InterfaceMethodSigData {
 pub struct InterfaceSourceMap {
     /// Full source span of the declaration.
     pub span: TextRange,
+    /// Span of the interface's name token.
+    pub name_span: TextRange,
     /// Spans for every node in [`InterfaceData::type_refs`].
     pub type_refs: TypeRefSourceMap,
     /// Name span per field, parallel to [`InterfaceData::fields`].
@@ -198,6 +200,11 @@ fn lower<'db>(
         },
         InterfaceSourceMap {
             span: data.span,
+            name_span: item_source_map
+                .interface_name_spans
+                .get(&interface.id(db))
+                .copied()
+                .unwrap_or_else(|| unreachable!("name span recorded at allocation")),
             type_refs: spans,
             field_name_spans,
             associated_type_spans: data

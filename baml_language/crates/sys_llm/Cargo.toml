@@ -24,7 +24,6 @@ bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_sap = { workspace = true }
 bex_vm_types = { workspace = true }
-sys_jinja = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
 aws-bedrock = { workspace = true }
@@ -33,7 +32,6 @@ base64 = { workspace = true }
 google-cloud-auth = { workspace = true }
 indexmap = { workspace = true }
 infer = { workspace = true }
-minijinja = { workspace = true }
 num-bigint = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

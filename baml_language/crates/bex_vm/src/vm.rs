@@ -888,8 +888,6 @@ pub struct BytecodeProgram {
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
-    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
-    pub template_strings_macros: String,
     /// Client build metadata, passed through to `SysOpContext`.
     pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
     /// Compiled test cases.
@@ -940,7 +938,6 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         globals: program.globals,
         resolved_function_names,
         function_global_indices: program.function_global_indices,
-        template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
         packages: program.packages,
@@ -1675,20 +1672,6 @@ impl BexVm {
         self.package(qtn.package())?
             .recursive_type_aliases
             .get(&local)
-    }
-
-    /// Every class and enum object across all loaded packages.
-    pub fn all_class_and_enum_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
-        self.packages
-            .package_ptrs()
-            .filter_map(move |p| self.get_object(p).as_package())
-            .flat_map(|package| {
-                package
-                    .classes
-                    .values()
-                    .chain(package.enums.values())
-                    .copied()
-            })
     }
 
     /// Get mutable access to an object via `HeapPtr`.
