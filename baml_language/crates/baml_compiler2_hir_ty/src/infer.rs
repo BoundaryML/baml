@@ -562,6 +562,11 @@ enum PendingDiag {
     RestNotBinding {
         pat: PatId,
     },
+    UnnecessaryOptionalChain {
+        expr: ExprId,
+        expr_text: String,
+        base_text: String,
+    },
     OrBindingConflict {
         pat: PatId,
         name: baml_type::Name,
@@ -1581,11 +1586,13 @@ impl<'db> InferenceContext<'db> {
             }
             Expr::OptionalMemberAccess { base, member } => {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
+                self.check_needless_chain(body, expr, *base, &base_ty);
                 let nonnull = self.peel_chain_null(&base_ty);
                 self.field_access(expr, &nonnull, member)
             }
             Expr::OptionalCall { callee, args } => {
                 let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
+                self.check_needless_chain(body, expr, *callee, &callee_ty);
                 let nonnull = self.peel_chain_null(&callee_ty);
                 let args = args.clone();
                 self.check_call_args(body, expr, *callee, &nonnull, false, &args)
@@ -5032,6 +5039,39 @@ impl<'db> InferenceContext<'db> {
         resolved
     }
 
+    /// A `?.` link whose base PROVABLY cannot be null is noise the user
+    /// probably didn't intend (E0004's did-you-mean family). Error/var
+    /// bases stay silent as cascades; chain-internal nullability (an
+    /// earlier `?.` peeled it) counts as nullable, so only the outermost
+    /// truly-non-null base fires - TIR's per-link rule.
+    fn check_needless_chain(&mut self, body: &ExprBody, expr: ExprId, base: ExprId, base_ty: &Ty) {
+        let resolved = self.table.resolve_completely(base_ty);
+        if resolved.has_error() || resolved.has_infer() {
+            return;
+        }
+        let nullable = match resolved.kind() {
+            TyKind::Null { .. } | TyKind::Unknown { .. } => true,
+            TyKind::Union(members, _) => members
+                .iter()
+                .any(|member| matches!(member.kind(), TyKind::Null { .. })),
+            _ => false,
+        };
+        // An optional link INSIDE a chain sees its base already peeled;
+        // the sugar is what makes the chain work, so it is never noise.
+        let base_is_chain = matches!(
+            body.exprs[base],
+            Expr::OptionalMemberAccess { .. } | Expr::OptionalCall { .. }
+        );
+        if !nullable && !base_is_chain {
+            self.pending_diags
+                .push(PendingDiag::UnnecessaryOptionalChain {
+                    expr,
+                    expr_text: body.display_expr(expr),
+                    base_text: body.display_expr(base),
+                });
+        }
+    }
+
     /// BEP-049 §11: every `${expr}` in an UNTAGGED template must be
     /// non-nullable (implicit `.to_string()` on null has no sound
     /// rendering). Nested `${for}`/`${if}` segments walk recursively.
@@ -5379,6 +5419,17 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::InterpolatedMaybeNull { expr, ty } => (
                         TirTypeError::InterpolatedValueMaybeNull {
                             ty: self.finalize_ty(&ty).to_plain(),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::UnnecessaryOptionalChain {
+                        expr,
+                        expr_text,
+                        base_text,
+                    } => (
+                        TirTypeError::UnnecessaryOptionalChaining {
+                            expr: expr_text,
+                            base: base_text,
                         },
                         expr,
                     ),
