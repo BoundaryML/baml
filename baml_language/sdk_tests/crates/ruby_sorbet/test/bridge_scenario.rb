@@ -338,8 +338,17 @@ when "fork_during_open_failure"
 
   runtime_class = Baml::Bridge.const_get(:ProcessRuntime, false)
   runtime = runtime_class.new
+  open_started = Queue.new
+  release_open = Queue.new
   open_failed = Queue.new
   release_failure = Queue.new
+  runtime.define_singleton_method(:open_library) do |path, flags|
+    if path == INVALID_LIBRARY
+      open_started << true
+      release_open.pop
+    end
+    super(path, flags)
+  end
   runtime.define_singleton_method(:load_api!) do |path|
     super(path)
   rescue Baml::Bridge::RuntimeLoadError
@@ -355,7 +364,7 @@ when "fork_during_open_failure"
   rescue Exception => error
     worker_error << error
   end
-  open_failed.pop
+  open_started.pop
 
   read_pipe, write_pipe = IO.pipe
   child = fork do
@@ -372,11 +381,8 @@ when "fork_during_open_failure"
   assert(status.success?, message)
   assert(message.include?("must exec before using BAML"), message)
 
-  release_failure << true
-  worker.join
-  error = worker_error.pop
-  assert(error.is_a?(Baml::Bridge::RuntimeLoadError), error.inspect)
-
+  release_open << true
+  open_failed.pop
   ENV["BAML_RUNTIME_PATH"] = FIXTURE
   read_pipe, write_pipe = IO.pipe
   child = fork do
@@ -395,6 +401,11 @@ when "fork_during_open_failure"
   result = read_pipe.read
   assert(status.success?, result)
   assert_equal("ok", result)
+
+  release_failure << true
+  worker.join
+  error = worker_error.pop
+  assert(error.is_a?(Baml::Bridge::RuntimeLoadError), error.inspect)
 when "registered_callback_retention"
   initialize_fixture
   runtime = Baml::Bridge.instance_variable_get(:@process_runtime)

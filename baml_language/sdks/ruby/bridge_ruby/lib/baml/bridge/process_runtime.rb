@@ -11,7 +11,7 @@ module Baml
       def initialize
         @mutex = Mutex.new
         @owner_pid = nil
-        @initialization_attempts = []
+        @native_load_in_progress = false
         @library = nil
         @api = nil
         @result_callback = nil
@@ -25,39 +25,31 @@ module Baml
         ensure_not_forked!
 
         candidate_path = nil
-        attempt = nil
         if @api.nil? && @terminal_error.nil?
           candidate_path = configured_runtime_path!
           claim_process!
-          attempt = Object.new
-          @initialization_attempts << attempt
         end
 
-        begin
-          @mutex.synchronize do
-            ensure_not_forked!
-            raise @terminal_error if @terminal_error
+        @mutex.synchronize do
+          ensure_not_forked!
+          raise @terminal_error if @terminal_error
 
-            if @program_bytes
-              return nil if @program_bytes == program
+          if @program_bytes
+            return nil if @program_bytes == program
 
-              raise ProgramConflictError,
-                    "This Ruby process already initialized a different generated BAML program"
-            end
-
-            load_api!(candidate_path) unless @api
-            begin
-              @api.initialize_runtime(program)
-            rescue IncompatibleRuntimeError => error
-              @terminal_error = error
-              raise
-            end
-            @program_bytes = program
-            nil
+            raise ProgramConflictError,
+                  "This Ruby process already initialized a different generated BAML program"
           end
-        ensure
-          # Remove this token only after synchronize has released the mutex.
-          @initialization_attempts.delete(attempt) if attempt
+
+          load_api!(candidate_path) unless @api
+          begin
+            @api.initialize_runtime(program)
+          rescue IncompatibleRuntimeError => error
+            @terminal_error = error
+            raise
+          end
+          @program_bytes = program
+          nil
         end
       end
 
@@ -109,10 +101,11 @@ module Baml
         current_pid = Process.pid
         return unless owner_pid && owner_pid != current_pid
 
-        # A failed library open creates no native state. Attempt tokens remain
-        # set until their initialization mutex has been released, so a child
-        # may reclaim only from a completed, state-free attempt.
-        if @library.nil? && @api.nil? && @terminal_error.nil? && @initialization_attempts.empty?
+        # Once a failed native open returns, a child has no native state to
+        # inherit. Replace the mutex that may still be locked by a vanished
+        # parent thread, then let the child retry with its own process claim.
+        if @library.nil? && @api.nil? && @terminal_error.nil? && !@native_load_in_progress
+          @mutex = Mutex.new
           @owner_pid = nil
           return
         end
@@ -138,13 +131,20 @@ module Baml
         nil
       end
 
+      def open_library(path, flags)
+        FFI::DynamicLibrary.open(path, flags)
+      end
+
       def load_api!(path)
         flags = FFI::DynamicLibrary::RTLD_NOW | FFI::DynamicLibrary::RTLD_LOCAL
         begin
-          @library = FFI::DynamicLibrary.open(path, flags)
+          @native_load_in_progress = true
+          @library = open_library(path, flags)
         rescue LoadError => error
           raise RuntimeLoadError,
                 "Unable to open BAML runtime #{path.inspect}: #{error.message}"
+        ensure
+          @native_load_in_progress = false
         end
 
         begin
