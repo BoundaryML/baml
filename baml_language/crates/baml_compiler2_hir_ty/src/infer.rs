@@ -551,6 +551,10 @@ enum PendingDiag {
         type_ref: baml_compiler2_hir::type_ref::TypeRefId,
         name: baml_type::Name,
     },
+    InterpolatedMaybeNull {
+        expr: ExprId,
+        ty: Ty,
+    },
 }
 
 /// Grows one map per slice; consumers must treat a missing entry as "not
@@ -1367,12 +1371,19 @@ impl<'db> InferenceContext<'db> {
                 let (fn_ty, bound) = self.infer_callee(body, expr, *base);
                 if bound { bind_receiver(fn_ty) } else { fn_ty }
             }
-            Expr::Template { tag, .. } => match tag {
+            Expr::Template { tag, segments } => match tag {
                 baml_compiler2_ast::TemplateTag::Default { elaborated } => {
                     // Untagged backtick (BEP-049 §11): the value IS the
                     // desugared `string.from`-wrapped `+` concat, which
                     // types every `${expr}` in place on its original span.
-                    self.infer_expr(body, *elaborated, &Expectation::None)
+                    let segments = segments.clone();
+                    let result = self.infer_expr(body, *elaborated, &Expectation::None);
+                    // §11 strict stringify: a NULLABLE interpolated value
+                    // errors at check time (the structured segments exist
+                    // exactly for these per-`${...}` diagnostics on the
+                    // original spans).
+                    self.check_template_interps_strict(&segments);
+                    result
                 }
                 baml_compiler2_ast::TemplateTag::Custom { tag, body: flatten } => {
                     // Tagged template (BEP-049 §10): the result is the TAG
@@ -5008,6 +5019,55 @@ impl<'db> InferenceContext<'db> {
         resolved
     }
 
+    /// BEP-049 §11: every `${expr}` in an UNTAGGED template must be
+    /// non-nullable (implicit `.to_string()` on null has no sound
+    /// rendering). Nested `${for}`/`${if}` segments walk recursively.
+    fn check_template_interps_strict(&mut self, segments: &[baml_compiler2_ast::TemplateSegment]) {
+        use baml_compiler2_ast::TemplateSegment;
+        for segment in segments {
+            match segment {
+                TemplateSegment::Interp(expr) => {
+                    let Some(ty) = self.result.type_of_expr.get(expr).cloned() else {
+                        continue;
+                    };
+                    let resolved = self.table.resolve_completely(&ty);
+                    if resolved.has_error() || resolved.has_infer() {
+                        continue;
+                    }
+                    let nullable = match resolved.kind() {
+                        TyKind::Null { .. } => true,
+                        TyKind::Union(members, _) => members
+                            .iter()
+                            .any(|member| matches!(member.kind(), TyKind::Null { .. })),
+                        _ => false,
+                    };
+                    if nullable {
+                        self.pending_diags.push(PendingDiag::InterpolatedMaybeNull {
+                            expr: *expr,
+                            ty: resolved,
+                        });
+                    }
+                }
+                TemplateSegment::For { body, .. }
+                | TemplateSegment::CStyleFor { body, .. } => {
+                    self.check_template_interps_strict(body);
+                }
+                TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        self.check_template_interps_strict(&branch.body);
+                    }
+                    if let Some(else_body) = else_body {
+                        self.check_template_interps_strict(else_body);
+                    }
+                }
+                TemplateSegment::Text(_) => {}
+            }
+        }
+    }
+
     /// One effect contribution: a thrown value or a callee's throws,
     /// accumulated into the current channel and, when the owner DECLARED
     /// its clause, checked against that contract - including when the
@@ -5298,6 +5358,12 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
+                    PendingDiag::InterpolatedMaybeNull { expr, ty } => (
+                        TirTypeError::InterpolatedValueMaybeNull {
+                            ty: self.finalize_ty(&ty).to_plain(),
+                        },
+                        expr,
+                    ),
                     PendingDiag::UnresolvedTypeAnnot { type_ref, name } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::UnresolvedType {
