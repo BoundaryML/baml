@@ -848,8 +848,6 @@ fn baml._from_json_shim = builtin(vm)
 
 fn baml.deep_copy = builtin(vm)
 
-fn baml.deep_equals = builtin(vm)
-
 fn baml.Float.is_nan = builtin(vm)
 
 fn baml.Float.is_infinite = builtin(vm)
@@ -6018,2289 +6016,6 @@ fn baml.json.deserialize(s: string) -> T {
     }
 }
 
-fn baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: baml.llm.PlannerState // self // param
-    let _2: string // client_name // param
-    let _3: int // offset
-    let _4: string[]
-    let _5: baml.iter.Iterator<Error = never, Item = string>
-    let _6: unknown
-    let _7: bool
-    let _8: string
-    let _9: string // seen_name
-    let _10: bool
-    let _11: string
-
-    bb0: {
-        _3 = const 0_i64;
-        _4 = copy _1.0;
-        _5 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _4) -> [bb1];
-    }
-
-    bb1: {
-        _6 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _5) -> [bb2];
-    }
-
-    bb2: {
-        _7 = is_type(copy _6, baml.iter.Done);
-        branch copy _7 -> [bb5, bb3];
-    }
-
-    bb3: {
-        _8 = copy _6;
-        fresh_cell(_9);
-        _9 = copy _8;
-        _11 = copy _9;
-        _10 = copy _11 == copy _2;
-        branch copy _10 -> [bb4, bb1];
-    }
-
-    bb4: {
-        _3 = copy _3 + const 1_i64;
-        goto -> bb1;
-    }
-
-    bb5: {
-        _0 = copy _3;
-        goto -> bb6;
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, counter: int, sub_client_count: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: baml.llm.PlannerState // self // param
-    let _2: string // client_name // param
-    let _3: int // counter // param
-    let _4: int // sub_client_count // param
-    let _5: int // local_offset
-    let _6: int
-    let _7: (string[], string) -> int throws never
-    let _8: type
-    let _9: int
-    let _10: int
-
-    bb0: {
-        _5 = call const fn baml.llm.PlannerState.rr_local_offset(copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        _7 = copy _1.0;
-        _8 = load_type(string);
-        _6 = call const fn baml.Array.push<copy _8>(copy _7, copy _2) -> [bb2];
-    }
-
-    bb2: {
-        _10 = copy _5;
-        _9 = copy _3 + copy _10;
-        _0 = copy _9 % copy _4;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn baml.llm.prompt_template_for(function_name: string, prompt_closure: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // function_name // param
-    let _2: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never) // prompt_closure // param
-    let _3: bool
-
-    bb0: {
-        _3 = copy _2 == const null;
-        branch copy _3 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _0 = const "";
-        goto -> bb3;
-    }
-
-    bb2: {
-        _0 = sys_op const fn baml.llm.get_jinja_template(copy _1) -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: string // function_name // param
-    let _3: map<string, unknown> // args // param
-    let _4: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never) // prompt_closure // param
-    let _5: bool
-    let _6: type // return_type
-    let _7: baml.llm.PrimitiveClient // primitive_client
-    let _8: string // template
-    let _9: string
-    let _10: type
-
-    bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = load_type(#0);
-        goto -> bb3;
-    }
-
-    bb3: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1, const true) -> [bb4];
-    }
-
-    bb4: {
-        _8 = call const fn baml.llm.prompt_template_for(copy _2, copy _4) -> [bb5];
-    }
-
-    bb5: {
-        _9 = copy _8;
-        _10 = copy _6;
-        _0 = call const fn baml.llm.PrimitiveClient.render_specialized_prompt(copy _7, copy _9, copy _3, copy _10, copy _4) -> [bb6];
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: string // function_name // param
-    let _3: map<string, unknown> // args // param
-    let _4: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never) // prompt_closure // param
-    let _5: bool
-    let _6: type // return_type
-    let _7: baml.llm.PrimitiveClient // primitive_client
-    let _8: string // template
-    let _9: baml.llm.PromptAst // specialized_prompt
-    let _10: string
-    let _11: type
-    let _12: baml.llm.PromptAst
-    let _13: type
-
-    bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = load_type(#0);
-        goto -> bb3;
-    }
-
-    bb3: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb4];
-    }
-
-    bb4: {
-        _8 = call const fn baml.llm.prompt_template_for(copy _2, copy _4) -> [bb5];
-    }
-
-    bb5: {
-        _10 = copy _8;
-        _11 = copy _6;
-        _9 = call const fn baml.llm.PrimitiveClient.render_specialized_prompt(copy _7, copy _10, copy _3, copy _11, copy _4) -> [bb6];
-    }
-
-    bb6: {
-        _12 = copy _9;
-        _13 = copy _6;
-        _0 = sys_op const fn baml.llm.PrimitiveClient.build_request(copy _7, copy _12, copy _13) -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: string // function_name // param
-    let _3: map<string, unknown> // args // param
-    let _4: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never) // prompt_closure // param
-    let _5: bool
-    let _6: type // return_type
-    let _7: baml.llm.PrimitiveClient // primitive_client
-    let _8: string // template
-    let _9: baml.llm.PromptAst // specialized_prompt
-    let _10: string
-    let _11: type
-    let _12: baml.llm.PromptAst
-    let _13: type
-
-    bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = load_type(#0);
-        goto -> bb3;
-    }
-
-    bb3: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb4];
-    }
-
-    bb4: {
-        _8 = call const fn baml.llm.prompt_template_for(copy _2, copy _4) -> [bb5];
-    }
-
-    bb5: {
-        _10 = copy _8;
-        _11 = copy _6;
-        _9 = call const fn baml.llm.PrimitiveClient.render_specialized_prompt(copy _7, copy _10, copy _3, copy _11, copy _4) -> [bb6];
-    }
-
-    bb6: {
-        _12 = copy _9;
-        _13 = copy _6;
-        _0 = sys_op const fn baml.llm.PrimitiveClient.build_request_stream(copy _7, copy _12, copy _13) -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn baml.llm.parse(json: string) -> TFinal {
-    // Locals:
-    let _0: TFinal // _0 // return
-    let _1: string // json // param
-    let _2: baml.llm.StreamCache<TStream, TFinal> // cache
-    let _3: type
-    let _4: type
-    let _5: unknown // _
-    let _6: baml.llm.StreamCache<TStream, TFinal>
-    let _7: type
-    let _8: type
-    let _9: bool
-    let _10: string
-    let _11: string // message
-    let _12: baml.errors.ParseError
-    let _13: string
-
-    bb0: {
-        _3 = load_type(#0);
-        goto -> bb1;
-    }
-
-    bb1: {
-        _4 = load_type(#1);
-        goto -> bb2;
-    }
-
-    bb2: {
-        _2 = sys_op const fn baml.llm.StreamCache.new(copy _3, copy _4) -> bb3;
-    }
-
-    bb3: {
-        _6 = copy _2;
-        _7 = load_type(#0);
-        _8 = load_type(#1);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _1, copy _6, copy _7, copy _8) -> bb4 unwind bb5;
-    }
-
-    bb4: {
-        return;
-    }
-
-    bb5: {
-        _9 = is_type(copy _5, baml.errors.LlmClient);
-        branch copy _9 -> [bb7, bb6];
-    }
-
-    bb6: {
-        rethrow copy _5;
-    }
-
-    bb7: {
-        _10 = copy _5.0;
-        _11 = copy _10;
-        _13 = copy _11;
-        _12 = baml.errors.ParseError { copy _13 };
-        throw copy _12;
-    }
-}
-
-fn baml.llm.__new_stream_cache() -> baml.llm.StreamCache<TStream, TFinal> {
-    // Locals:
-    let _0: baml.llm.StreamCache<TStream, TFinal> // _0 // return
-    let _1: baml.llm.StreamCache<TStream, TFinal> // cache
-    let _2: type
-    let _3: type
-
-    bb0: {
-        _2 = load_type(#0);
-        goto -> bb1;
-    }
-
-    bb1: {
-        _3 = load_type(#1);
-        goto -> bb2;
-    }
-
-    bb2: {
-        _1 = sys_op const fn baml.llm.StreamCache.new(copy _2, copy _3) -> bb3;
-    }
-
-    bb3: {
-        _0 = copy _1;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: string // function_name // param
-    let _3: map<string, unknown> // args // param
-    let _4: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never) // prompt_closure // param
-    let _5: bool
-    let _6: string // jinja_string
-    let _7: bool
-    let _8: baml.llm.ExecutionContext // context
-    let _9: string
-    let _10: T // result
-    let _11: baml.llm.ExecutionContext
-    let _12: type
-
-    bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _7 = copy _4 == const null;
-        branch copy _7 -> [bb4, bb3];
-    }
-
-    bb3: {
-        _6 = const "";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _6 = sys_op const fn baml.llm.get_jinja_template(copy _2) -> bb5;
-    }
-
-    bb5: {
-        _9 = copy _6;
-        _8 = baml.llm.ExecutionContext { copy _9, copy _3, copy _2, copy _4 };
-        _11 = copy _8;
-        _12 = load_type(#0);
-        _10 = call const fn baml.llm.Client.execute_oneshot<copy _12>(copy _1, copy _11, const 0_i64) -> [bb6];
-    }
-
-    bb6: {
-        _0 = copy _10;
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)) -> baml.llm.Stream<TStream, TFinal> {
-    // Locals:
-    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
-    let _1: baml.llm.Client // client // param
-    let _2: string // function_name // param
-    let _3: map<string, unknown> // args // param
-    let _4: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never) // prompt_closure // param
-    let _5: bool
-    let _6: string // jinja_string
-    let _7: bool
-    let _8: baml.llm.ExecutionContext // context
-    let _9: string
-    let _10: baml.llm.Stream<TStream, TFinal> // result
-    let _11: baml.llm.ExecutionContext
-    let _12: type
-    let _13: type
-
-    bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _7 = copy _4 == const null;
-        branch copy _7 -> [bb4, bb3];
-    }
-
-    bb3: {
-        _6 = const "";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _6 = sys_op const fn baml.llm.get_jinja_template(copy _2) -> bb5;
-    }
-
-    bb5: {
-        _9 = copy _6;
-        _8 = baml.llm.ExecutionContext { copy _9, copy _3, copy _2, copy _4 };
-        _11 = copy _8;
-        _12 = load_type(#0);
-        _13 = load_type(#1);
-        _10 = call const fn baml.llm.Client.execute_stream<copy _12, copy _13>(copy _1, copy _11, const 0_i64) -> [bb6];
-    }
-
-    bb6: {
-        _0 = copy _10;
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn baml.llm.PromptAst.text = builtin(io)
-
-fn baml.llm.PromptAst.messages = builtin(io)
-
-fn baml.llm.PromptAst.baml.ToString.to_string(self: baml.llm.PromptAst) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: baml.llm.PromptAst // self // param
-
-    bb0: {
-        _0 = sys_op const fn baml.llm.PromptAst.text(copy _1) -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.Context.output_format_with = builtin(io)
-
-fn baml.llm.RetryPolicy.initial_delay_or_default(self: baml.llm.RetryPolicy) -> float {
-    // Locals:
-    let _0: float // _0 // return
-    let _1: baml.llm.RetryPolicy // self // param
-    let _2: int
-    let _3: int | null
-    let _4: bool
-
-    bb0: {
-        _3 = copy _1.1;
-        _2 = copy _3;
-        _4 = copy _3 == const null;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const 200_i64;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _0 = copy _2 + const 0_f64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn baml.llm.RetryPolicy.multiplier_or_default(self: baml.llm.RetryPolicy) -> float {
-    // Locals:
-    let _0: float // _0 // return
-    let _1: baml.llm.RetryPolicy // self // param
-    let _2: float | null
-    let _3: bool
-
-    bb0: {
-        _2 = copy _1.2;
-        _0 = copy _2;
-        _3 = copy _2 == const null;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _0 = const 1.5_f64;
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn baml.llm.RetryPolicy.max_delay_or_default(self: baml.llm.RetryPolicy) -> float {
-    // Locals:
-    let _0: float // _0 // return
-    let _1: baml.llm.RetryPolicy // self // param
-    let _2: int
-    let _3: int | null
-    let _4: bool
-
-    bb0: {
-        _3 = copy _1.3;
-        _2 = copy _3;
-        _4 = copy _3 == const null;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const 10000_i64;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _0 = copy _2 + const 0_f64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool) -> baml.llm.PrimitiveClient {
-    // Locals:
-    let _0: baml.llm.PrimitiveClient // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: bool // lenient // param
-    let _3: bool
-    let _4: bool
-    let _5: (baml.String, string) -> bool throws never
-    let _6: string
-    let _7: (bool) -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const false;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = copy _1.0;
-        _4 = call const fn baml.String.includes(copy _5, const "/") -> [bb3];
-    }
-
-    bb3: {
-        branch copy _4 -> [bb6, bb4];
-    }
-
-    bb4: {
-        _7 = sys_op const fn baml.llm.Client.get_constructor(copy _1) -> bb5;
-    }
-
-    bb5: {
-        _0 = call copy _7(copy _2) -> [bb7];
-    }
-
-    bb6: {
-        _6 = copy _1.0;
-        _0 = sys_op const fn baml.llm.from_shorthand(copy _6) -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn baml.llm.Client.get_constructor = builtin(io)
-
-fn baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
-    // Locals:
-    let _0: baml.llm.OrchestrationStep[] // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.PlannerState // planner_state
-    let _3: string[]
-    let _4: baml.llm.PlannerState
-
-    bb0: {
-        _3 = []: string[];
-        _2 = baml.llm.PlannerState { copy _3 };
-        _4 = copy _2;
-        _0 = call const fn baml.llm.Client.build_attempt_with_state(copy _1, copy _4) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
-    // Locals:
-    let _0: baml.llm.OrchestrationStep[] // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.PlannerState // planner_state // param
-    let _3: baml.llm.ClientType
-    let _4: int
-    let _5: baml.llm.PrimitiveClient // primitive
-    let _6: baml.llm.OrchestrationStep
-    let _7: baml.llm.PrimitiveClient
-    let _8: baml.llm.OrchestrationStep[] // steps
-    let _9: baml.llm.Client[]
-    let _10: baml.iter.Iterator<Error = never, Item = baml.llm.Client>
-    let _11: unknown
-    let _12: bool
-    let _13: baml.llm.Client
-    let _14: baml.llm.Client // sub
-    let _15: baml.llm.OrchestrationStep[]
-    let _16: baml.iter.Iterator<Error = never, Item = baml.llm.OrchestrationStep>
-    let _17: unknown
-    let _18: bool
-    let _19: baml.llm.OrchestrationStep
-    let _20: baml.llm.OrchestrationStep // step
-    let _21: void
-    let _22: baml.llm.OrchestrationStep
-    let _23: bool
-    let _24: int
-    let _25: (baml.llm.Client[]) -> int throws never
-    let _26: int // idx
-    let _27: string
-    let _28: int
-    let _29: int
-    let _30: (baml.llm.Client[]) -> int throws never
-    let _31: baml.llm.Client
-    let _32: baml.llm.Client[]
-    let _33: int
-
-    bb0: {
-        _3 = copy _1.1;
-        _4 = discriminant(_3);
-        switch copy _4 [ClientType.Primitive: bb17, ClientType.Fallback: bb8, ClientType.RoundRobin: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _25 = copy _1.2;
-        _24 = len(_25);
-        goto -> bb3;
-    }
-
-    bb3: {
-        _23 = copy _24 == const 0_i64;
-        branch copy _23 -> [bb7, bb4];
-    }
-
-    bb4: {
-        _27 = copy _1.0;
-        _28 = copy _1.4;
-        _30 = copy _1.2;
-        _29 = len(_30);
-        goto -> bb5;
-    }
-
-    bb5: {
-        _26 = call const fn baml.llm.PlannerState.rr_pick_index(copy _2, copy _27, copy _28, copy _29) -> [bb6];
-    }
-
-    bb6: {
-        _32 = copy _1.2;
-        _33 = copy _26;
-        _31 = copy _32[_33];
-        _0 = call const fn baml.llm.Client.build_plan_with_state(copy _31, copy _2) -> [bb19];
-    }
-
-    bb7: {
-        _0 = []: baml.llm.OrchestrationStep[];
-        goto -> bb19;
-    }
-
-    bb8: {
-        _8 = []: baml.llm.OrchestrationStep[];
-        _9 = copy _1.2;
-        _10 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.llm.Client>(copy _9) -> [bb9];
-    }
-
-    bb9: {
-        _11 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.llm.Client>(copy _10) -> [bb10];
-    }
-
-    bb10: {
-        _12 = is_type(copy _11, baml.iter.Done);
-        branch copy _12 -> [bb16, bb11];
-    }
-
-    bb11: {
-        _13 = copy _11;
-        fresh_cell(_14);
-        _14 = copy _13;
-        _15 = call const fn baml.llm.Client.build_plan_with_state(copy _14, copy _2) -> [bb12];
-    }
-
-    bb12: {
-        _16 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.llm.OrchestrationStep>(copy _15) -> [bb13];
-    }
-
-    bb13: {
-        _17 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.llm.OrchestrationStep>(copy _16) -> [bb14];
-    }
-
-    bb14: {
-        _18 = is_type(copy _17, baml.iter.Done);
-        branch copy _18 -> [bb9, bb15];
-    }
-
-    bb15: {
-        _19 = copy _17;
-        fresh_cell(_20);
-        _20 = copy _19;
-        _22 = copy _20;
-        _21 = call const fn baml.Array.push(copy _8, copy _22) -> [bb13];
-    }
-
-    bb16: {
-        _0 = copy _8;
-        goto -> bb19;
-    }
-
-    bb17: {
-        _5 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb18];
-    }
-
-    bb18: {
-        _7 = copy _5;
-        _6 = baml.llm.OrchestrationStep { copy _7, const 0_i64 };
-        _0 = [copy _6]: baml.llm.OrchestrationStep[];
-        goto -> bb19;
-    }
-
-    bb19: {
-        return;
-    }
-}
-
-fn baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
-    // Locals:
-    let _0: baml.llm.OrchestrationStep[] // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.PlannerState // planner_state
-    let _3: string[]
-    let _4: baml.llm.PlannerState
-
-    bb0: {
-        _3 = []: string[];
-        _2 = baml.llm.PlannerState { copy _3 };
-        _4 = copy _2;
-        _0 = call const fn baml.llm.Client.build_plan_with_state(copy _1, copy _4) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
-    // Locals:
-    let _0: baml.llm.OrchestrationStep[] // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.PlannerState // planner_state // param
-    let _3: null | baml.llm.RetryPolicy
-    let _4: null | baml.llm.RetryPolicy
-    let _5: baml.llm.RetryPolicy // r
-    let _6: baml.llm.OrchestrationStep[] // result
-    let _7: float // current_delay
-    let _8: int // attempt
-    let _9: bool
-    let _10: int
-    let _11: int
-    let _12: int // delay
-    let _13: bool
-    let _14: int
-    let _15: float
-    let _16: float // next
-    let _17: float
-    let _18: float
-    let _19: bool
-    let _20: float
-    let _21: float
-    let _22: baml.llm.OrchestrationStep[] // inner
-    let _23: baml.llm.OrchestrationStep[]
-    let _24: baml.iter.Iterator<Error = never, Item = baml.llm.OrchestrationStep>
-    let _25: unknown
-    let _26: bool
-    let _27: baml.llm.OrchestrationStep
-    let _28: baml.llm.OrchestrationStep // step
-    let _29: int
-    let _30: baml.llm.OrchestrationStep
-    let _31: baml.llm.PrimitiveClient
-    let _32: int
-
-    bb0: {
-        _3 = copy _1.3;
-        _4 = copy _3;
-        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["llm"], name: "RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb2, bb1];
-    }
-
-    bb1: {
-        _0 = call const fn baml.llm.Client.build_attempt_with_state(copy _1, copy _2) -> [bb6];
-    }
-
-    bb2: {
-        _5 = copy _4;
-        _6 = []: baml.llm.OrchestrationStep[];
-        _7 = call const fn baml.llm.RetryPolicy.initial_delay_or_default(copy _5) -> [bb3];
-    }
-
-    bb3: {
-        _8 = const 0_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
-        _10 = copy _8;
-        _11 = copy _5.0;
-        _9 = copy _10 <= copy _11;
-        branch copy _9 -> [bb7, bb5];
-    }
-
-    bb5: {
-        _0 = copy _6;
-        goto -> bb6;
-    }
-
-    bb6: {
-        return;
-    }
-
-    bb7: {
-        _12 = const 0_i64;
-        _14 = copy _8;
-        _13 = copy _14 > const 0_i64;
-        branch copy _13 -> [bb8, bb14];
-    }
-
-    bb8: {
-        _15 = copy _7;
-        _12 = call const fn baml._trunc_to_int(copy _15) -> [bb9];
-    }
-
-    bb9: {
-        _17 = copy _7;
-        _18 = call const fn baml.llm.RetryPolicy.multiplier_or_default(copy _5) -> [bb10];
-    }
-
-    bb10: {
-        _16 = copy _17 * copy _18;
-        _20 = copy _16;
-        _21 = call const fn baml.llm.RetryPolicy.max_delay_or_default(copy _5) -> [bb11];
-    }
-
-    bb11: {
-        _19 = copy _20 > copy _21;
-        branch copy _19 -> [bb13, bb12];
-    }
-
-    bb12: {
-        _7 = copy _16;
-        goto -> bb14;
-    }
-
-    bb13: {
-        _7 = call const fn baml.llm.RetryPolicy.max_delay_or_default(copy _5) -> [bb14];
-    }
-
-    bb14: {
-        _22 = call const fn baml.llm.Client.build_attempt_with_state(copy _1, copy _2) -> [bb15];
-    }
-
-    bb15: {
-        _23 = copy _22;
-        _24 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.llm.OrchestrationStep>(copy _23) -> [bb16];
-    }
-
-    bb16: {
-        _25 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.llm.OrchestrationStep>(copy _24) -> [bb17];
-    }
-
-    bb17: {
-        _26 = is_type(copy _25, baml.iter.Done);
-        branch copy _26 -> [bb19, bb18];
-    }
-
-    bb18: {
-        _27 = copy _25;
-        fresh_cell(_28);
-        _28 = copy _27;
-        _31 = copy _28.0;
-        _32 = copy _12;
-        _30 = baml.llm.OrchestrationStep { copy _31, copy _32 };
-        _29 = call const fn baml.Array.push(copy _6, copy _30) -> [bb16];
-    }
-
-    bb19: {
-        _8 = copy _8 + const 1_i64;
-        goto -> bb4;
-    }
-}
-
-fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> {
-    // Locals:
-    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.ExecutionContext // context // param
-    let _3: int // inherited_delay_ms // param
-    let _4: null | baml.llm.RetryPolicy
-    let _5: null | baml.llm.RetryPolicy
-    let _6: baml.llm.RetryPolicy // r
-    let _7: float // current_delay
-    let _8: int // attempt
-    let _9: bool
-    let _10: int
-    let _11: int
-    let _12: int // attempt_delay
-    let _13: bool
-    let _14: int
-    let _15: float
-    let _16: float // next
-    let _17: float
-    let _18: float
-    let _19: bool
-    let _20: float
-    let _21: float
-    let _22: bool
-    let _23: int
-    let _24: int
-    let _25: baml.llm.Stream<TStream, TFinal> // result2
-    let _26: unknown // e
-    let _27: int
-    let _28: type
-    let _29: type
-    let _30: baml.errors.DevOther
-    let _31: baml.llm.Stream<TStream, TFinal> // result
-    let _32: type
-    let _33: type
-
-    bb0: {
-        _4 = copy _1.3;
-        _5 = copy _4;
-        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["llm"], name: "RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb1];
-    }
-
-    bb1: {
-        _32 = load_type(#0);
-        _33 = load_type(#1);
-        _31 = call const fn baml.llm.Client.execute_once_stream<copy _32, copy _33>(copy _1, copy _2, copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = copy _31;
-        goto -> bb20;
-    }
-
-    bb3: {
-        _6 = copy _5;
-        _7 = call const fn baml.llm.RetryPolicy.initial_delay_or_default(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _8 = const 0_i64;
-        goto -> bb7;
-    }
-
-    bb5: {
-        throw_if_panic copy _26 -> bb6;
-    }
-
-    bb6: {
-        _8 = copy _8 + const 1_i64;
-        goto -> bb7;
-    }
-
-    bb7: {
-        _10 = copy _8;
-        _11 = copy _6.0;
-        _9 = copy _10 <= copy _11;
-        branch copy _9 -> [bb9, bb8];
-    }
-
-    bb8: {
-        _30 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _30;
-    }
-
-    bb9: {
-        _12 = copy _3;
-        _14 = copy _8;
-        _13 = copy _14 > const 0_i64;
-        branch copy _13 -> [bb10, bb16];
-    }
-
-    bb10: {
-        _15 = copy _7;
-        _12 = call const fn baml._trunc_to_int(copy _15) -> [bb11];
-    }
-
-    bb11: {
-        _17 = copy _7;
-        _18 = call const fn baml.llm.RetryPolicy.multiplier_or_default(copy _6) -> [bb12];
-    }
-
-    bb12: {
-        _16 = copy _17 * copy _18;
-        _20 = copy _16;
-        _21 = call const fn baml.llm.RetryPolicy.max_delay_or_default(copy _6) -> [bb13];
-    }
-
-    bb13: {
-        _19 = copy _20 > copy _21;
-        branch copy _19 -> [bb15, bb14];
-    }
-
-    bb14: {
-        _7 = copy _16;
-        goto -> bb16;
-    }
-
-    bb15: {
-        _7 = call const fn baml.llm.RetryPolicy.max_delay_or_default(copy _6) -> [bb16];
-    }
-
-    bb16: {
-        _23 = copy _8;
-        _24 = copy _6.0;
-        _22 = copy _23 == copy _24;
-        branch copy _22 -> [bb17, bb18];
-    }
-
-    bb17: {
-        _12 = copy _3;
-        goto -> bb18;
-    }
-
-    bb18: {
-        _27 = copy _12;
-        _28 = load_type(#0);
-        _29 = load_type(#1);
-        _25 = call const fn baml.llm.Client.execute_once_stream<copy _28, copy _29>(copy _1, copy _2, copy _27) -> [bb19, unwind: bb5];
-    }
-
-    bb19: {
-        _0 = copy _25;
-        goto -> bb20;
-    }
-
-    bb20: {
-        return;
-    }
-}
-
-fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> {
-    // Locals:
-    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.ExecutionContext // context // param
-    let _3: int // active_delay_ms // param
-    let _4: baml.llm.ClientType
-    let _5: int
-    let _6: baml.llm.PrimitiveClient // primitive
-    let _7: type // return_type
-    let _8: string
-    let _9: baml.llm.PromptAst // specialized
-    let _10: string
-    let _11: map<string, unknown>
-    let _12: type
-    let _13: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)
-    let _14: baml.http.Request // http_request
-    let _15: baml.llm.PromptAst
-    let _16: type
-    let _17: baml.http.SseStream // sse
-    let _18: baml.http.Request
-    let _19: baml.llm.Stream<TStream, TFinal> // stream
-    let _20: baml.http.SseStream
-    let _21: type
-    let _22: type
-    let _23: baml.llm.Client[]
-    let _24: baml.iter.Iterator<Error = never, Item = baml.llm.Client>
-    let _25: unknown
-    let _26: bool
-    let _27: baml.llm.Client
-    let _28: baml.llm.Client // sub
-    let _29: baml.llm.Stream<TStream, TFinal> // result2
-    let _30: unknown // e
-    let _31: type
-    let _32: type
-    let _33: baml.errors.DevOther
-    let _34: bool
-    let _35: int
-    let _36: (baml.llm.Client[]) -> int throws never
-    let _37: baml.errors.DevOther
-    let _38: int // idx
-    let _39: int
-    let _40: int
-    let _41: (baml.llm.Client[]) -> int throws never
-    let _42: baml.llm.Stream<TStream, TFinal> // result3
-    let _43: baml.llm.Client
-    let _44: baml.llm.Client[]
-    let _45: int
-    let _46: type
-    let _47: type
-
-    bb0: {
-        _4 = copy _1.1;
-        _5 = discriminant(_4);
-        switch copy _5 [ClientType.Primitive: bb9, ClientType.Fallback: bb8, ClientType.RoundRobin: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _36 = copy _1.2;
-        _35 = len(_36);
-        goto -> bb3;
-    }
-
-    bb3: {
-        _34 = copy _35 == const 0_i64;
-        branch copy _34 -> [bb7, bb4];
-    }
-
-    bb4: {
-        _39 = copy _1.4;
-        _41 = copy _1.2;
-        _40 = len(_41);
-        goto -> bb5;
-    }
-
-    bb5: {
-        _38 = copy _39 % copy _40;
-        _1.4 = copy _1.4 + const 1_i64;
-        _44 = copy _1.2;
-        _45 = copy _38;
-        _43 = copy _44[_45];
-        _46 = load_type(#0);
-        _47 = load_type(#1);
-        _42 = call const fn baml.llm.Client.execute_stream<copy _46, copy _47>(copy _43, copy _2, copy _3) -> [bb6];
-    }
-
-    bb6: {
-        _0 = copy _42;
-        goto -> bb21;
-    }
-
-    bb7: {
-        _37 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
-        throw copy _37;
-    }
-
-    bb8: {
-        _23 = copy _1.2;
-        _24 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.llm.Client>(copy _23) -> [bb17];
-    }
-
-    bb9: {
-        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb10];
-    }
-
-    bb10: {
-        _8 = copy _2.2;
-        _7 = sys_op const fn baml.llm.get_return_type(copy _8) -> bb11;
-    }
-
-    bb11: {
-        _10 = copy _2.0;
-        _11 = copy _2.1;
-        _12 = copy _7;
-        _13 = copy _2.3;
-        _9 = call const fn baml.llm.PrimitiveClient.render_specialized_prompt(copy _6, copy _10, copy _11, copy _12, copy _13) -> [bb12];
-    }
-
-    bb12: {
-        _15 = copy _9;
-        _16 = copy _7;
-        _14 = sys_op const fn baml.llm.PrimitiveClient.build_request_stream(copy _6, copy _15, copy _16) -> bb13;
-    }
-
-    bb13: {
-        _18 = copy _14;
-        _17 = sys_op const fn baml.http.fetch_sse(copy _18) -> bb14;
-    }
-
-    bb14: {
-        _20 = copy _17;
-        _21 = load_type(#0);
-        _22 = load_type(#1);
-        _19 = call const fn baml.llm.Client.__make_stream<copy _21, copy _22>(copy _1, copy _20) -> [bb15];
-    }
-
-    bb15: {
-        _0 = copy _19;
-        goto -> bb21;
-    }
-
-    bb16: {
-        throw_if_panic copy _30 -> bb17;
-    }
-
-    bb17: {
-        _25 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.llm.Client>(copy _24) -> [bb18];
-    }
-
-    bb18: {
-        _26 = is_type(copy _25, baml.iter.Done);
-        branch copy _26 -> [bb22, bb19];
-    }
-
-    bb19: {
-        _27 = copy _25;
-        fresh_cell(_28);
-        _28 = copy _27;
-        _31 = load_type(#0);
-        _32 = load_type(#1);
-        _29 = call const fn baml.llm.Client.execute_stream<copy _31, copy _32>(copy _28, copy _2, copy _3) -> [bb20, unwind: bb16];
-    }
-
-    bb20: {
-        _0 = copy _29;
-        goto -> bb21;
-    }
-
-    bb21: {
-        return;
-    }
-
-    bb22: {
-        _33 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _33;
-    }
-}
-
-fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> {
-    // Locals:
-    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.http.SseStream // sse // param
-    let _3: baml.llm.PrimitiveClient // primitive
-    let _4: baml.llm.StreamAccumulator // acc
-    let _5: baml.llm.StreamCache<TStream, TFinal> // cache
-    let _6: type
-    let _7: type
-    let _8: baml.llm.PrimitiveClient
-    let _9: baml.llm.StreamAccumulator
-    let _10: baml.llm.StreamCache<TStream, TFinal>
-
-    bb0: {
-        _3 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb1];
-    }
-
-    bb1: {
-        _4 = sys_op const fn baml.llm.PrimitiveClient.new_stream_accumulator(copy _3) -> bb2;
-    }
-
-    bb2: {
-        _6 = load_type(#0);
-        goto -> bb3;
-    }
-
-    bb3: {
-        _7 = load_type(#1);
-        goto -> bb4;
-    }
-
-    bb4: {
-        _5 = sys_op const fn baml.llm.StreamCache.new(copy _6, copy _7) -> bb5;
-    }
-
-    bb5: {
-        _8 = copy _3;
-        _9 = copy _4;
-        _10 = copy _5;
-        _0 = baml.llm.Stream<#0, #1> { copy _8, copy _9, copy _2, copy _10 };
-        goto -> bb6;
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.ExecutionContext // context // param
-    let _3: int // inherited_delay_ms // param
-    let _4: null | baml.llm.RetryPolicy
-    let _5: null | baml.llm.RetryPolicy
-    let _6: baml.llm.RetryPolicy // r
-    let _7: float // current_delay
-    let _8: int // attempt
-    let _9: bool
-    let _10: int
-    let _11: int
-    let _12: int // attempt_delay
-    let _13: bool
-    let _14: int
-    let _15: float
-    let _16: float // next
-    let _17: float
-    let _18: float
-    let _19: bool
-    let _20: float
-    let _21: float
-    let _22: bool
-    let _23: int
-    let _24: int
-    let _25: T // result2
-    let _26: unknown // e
-    let _27: int
-    let _28: type
-    let _29: baml.errors.DevOther
-    let _30: T // result
-    let _31: type
-
-    bb0: {
-        _4 = copy _1.3;
-        _5 = copy _4;
-        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["llm"], name: "RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb1];
-    }
-
-    bb1: {
-        _31 = load_type(#0);
-        _30 = call const fn baml.llm.Client.execute_once_oneshot<copy _31>(copy _1, copy _2, copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = copy _30;
-        goto -> bb20;
-    }
-
-    bb3: {
-        _6 = copy _5;
-        _7 = call const fn baml.llm.RetryPolicy.initial_delay_or_default(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _8 = const 0_i64;
-        goto -> bb7;
-    }
-
-    bb5: {
-        throw_if_panic copy _26 -> bb6;
-    }
-
-    bb6: {
-        _8 = copy _8 + const 1_i64;
-        goto -> bb7;
-    }
-
-    bb7: {
-        _10 = copy _8;
-        _11 = copy _6.0;
-        _9 = copy _10 <= copy _11;
-        branch copy _9 -> [bb9, bb8];
-    }
-
-    bb8: {
-        _29 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _29;
-    }
-
-    bb9: {
-        _12 = copy _3;
-        _14 = copy _8;
-        _13 = copy _14 > const 0_i64;
-        branch copy _13 -> [bb10, bb16];
-    }
-
-    bb10: {
-        _15 = copy _7;
-        _12 = call const fn baml._trunc_to_int(copy _15) -> [bb11];
-    }
-
-    bb11: {
-        _17 = copy _7;
-        _18 = call const fn baml.llm.RetryPolicy.multiplier_or_default(copy _6) -> [bb12];
-    }
-
-    bb12: {
-        _16 = copy _17 * copy _18;
-        _20 = copy _16;
-        _21 = call const fn baml.llm.RetryPolicy.max_delay_or_default(copy _6) -> [bb13];
-    }
-
-    bb13: {
-        _19 = copy _20 > copy _21;
-        branch copy _19 -> [bb15, bb14];
-    }
-
-    bb14: {
-        _7 = copy _16;
-        goto -> bb16;
-    }
-
-    bb15: {
-        _7 = call const fn baml.llm.RetryPolicy.max_delay_or_default(copy _6) -> [bb16];
-    }
-
-    bb16: {
-        _23 = copy _8;
-        _24 = copy _6.0;
-        _22 = copy _23 == copy _24;
-        branch copy _22 -> [bb17, bb18];
-    }
-
-    bb17: {
-        _12 = copy _3;
-        goto -> bb18;
-    }
-
-    bb18: {
-        _27 = copy _12;
-        _28 = load_type(#0);
-        _25 = call const fn baml.llm.Client.execute_once_oneshot<copy _28>(copy _1, copy _2, copy _27) -> [bb19, unwind: bb5];
-    }
-
-    bb19: {
-        _0 = copy _25;
-        goto -> bb20;
-    }
-
-    bb20: {
-        return;
-    }
-}
-
-fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: baml.llm.ExecutionContext // context // param
-    let _3: int // active_delay_ms // param
-    let _4: baml.llm.ClientType
-    let _5: int
-    let _6: baml.llm.PrimitiveClient // primitive
-    let _7: type // return_type
-    let _8: baml.llm.PromptAst // specialized
-    let _9: string
-    let _10: map<string, unknown>
-    let _11: type
-    let _12: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)
-    let _13: baml.http.Request // http_request
-    let _14: baml.llm.PromptAst
-    let _15: type
-    let _16: baml.http.Response // http_response
-    let _17: baml.http.Request
-    let _18: bool
-    let _19: string // body
-    let _20: T // result
-    let _21: unknown // e
-    let _22: string
-    let _23: type
-    let _24: void
-    let _25: bool
-    let _26: baml.time.Duration
-    let _27: bigint
-    let _28: string // error_body
-    let _29: unknown // e
-    let _30: void
-    let _31: bool
-    let _32: baml.time.Duration
-    let _33: bigint
-    let _34: baml.errors.DevOther
-    let _35: string
-    let _36: string
-    let _37: baml.llm.Client[]
-    let _38: baml.iter.Iterator<Error = never, Item = baml.llm.Client>
-    let _39: unknown
-    let _40: bool
-    let _41: baml.llm.Client
-    let _42: baml.llm.Client // sub
-    let _43: T // result2
-    let _44: unknown // e
-    let _45: type
-    let _46: baml.errors.DevOther
-    let _47: bool
-    let _48: int
-    let _49: (baml.llm.Client[]) -> int throws never
-    let _50: baml.errors.DevOther
-    let _51: int // idx
-    let _52: int
-    let _53: int
-    let _54: (baml.llm.Client[]) -> int throws never
-    let _55: T // result3
-    let _56: baml.llm.Client
-    let _57: baml.llm.Client[]
-    let _58: int
-    let _59: type
-
-    bb0: {
-        _4 = copy _1.1;
-        _5 = discriminant(_4);
-        switch copy _5 [ClientType.Primitive: bb9, ClientType.Fallback: bb8, ClientType.RoundRobin: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _49 = copy _1.2;
-        _48 = len(_49);
-        goto -> bb3;
-    }
-
-    bb3: {
-        _47 = copy _48 == const 0_i64;
-        branch copy _47 -> [bb7, bb4];
-    }
-
-    bb4: {
-        _52 = copy _1.4;
-        _54 = copy _1.2;
-        _53 = len(_54);
-        goto -> bb5;
-    }
-
-    bb5: {
-        _51 = copy _52 % copy _53;
-        _1.4 = copy _1.4 + const 1_i64;
-        _57 = copy _1.2;
-        _58 = copy _51;
-        _56 = copy _57[_58];
-        _59 = load_type(#0);
-        _55 = call const fn baml.llm.Client.execute_oneshot<copy _59>(copy _56, copy _2, copy _3) -> [bb6];
-    }
-
-    bb6: {
-        _0 = copy _55;
-        goto -> bb38;
-    }
-
-    bb7: {
-        _50 = baml.errors.DevOther { const "RoundRobin client has no sub-clients" };
-        throw copy _50;
-    }
-
-    bb8: {
-        _37 = copy _1.2;
-        _38 = virtual_call iter as baml.iter.Iterable<Error = never, Item = baml.llm.Client>(copy _37) -> [bb34];
-    }
-
-    bb9: {
-        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb10];
-    }
-
-    bb10: {
-        _7 = load_type(#0);
-        goto -> bb11;
-    }
-
-    bb11: {
-        _9 = copy _2.0;
-        _10 = copy _2.1;
-        _11 = copy _7;
-        _12 = copy _2.3;
-        _8 = call const fn baml.llm.PrimitiveClient.render_specialized_prompt(copy _6, copy _9, copy _10, copy _11, copy _12) -> [bb12];
-    }
-
-    bb12: {
-        _14 = copy _8;
-        _15 = copy _7;
-        _13 = sys_op const fn baml.llm.PrimitiveClient.build_request(copy _6, copy _14, copy _15) -> bb13;
-    }
-
-    bb13: {
-        _17 = copy _13;
-        _16 = call const fn baml.http.send(copy _17, const <omitted>) -> [bb14];
-    }
-
-    bb14: {
-        _18 = call const fn baml.http.Response.ok(copy _16) -> [bb15];
-    }
-
-    bb15: {
-        branch copy _18 -> [bb17, bb16];
-    }
-
-    bb16: {
-        _28 = sys_op const fn baml.http.Response.text(copy _16) -> bb28 unwind bb26;
-    }
-
-    bb17: {
-        _19 = sys_op const fn baml.http.Response.text(copy _16) -> bb18;
-    }
-
-    bb18: {
-        _22 = copy _19;
-        _23 = load_type(#0);
-        _20 = sys_op const fn baml.llm.PrimitiveClient.parse(copy _6, copy _22, copy _23) -> bb19 unwind bb20;
-    }
-
-    bb19: {
-        _0 = copy _20;
-        goto -> bb38;
-    }
-
-    bb20: {
-        throw_if_panic copy _21 -> bb21;
-    }
-
-    bb21: {
-        _25 = copy _3 > const 0_i64;
-        branch copy _25 -> [bb23, bb22];
-    }
-
-    bb22: {
-        _24 = const null;
-        goto -> bb25;
-    }
-
-    bb23: {
-        _27 = copy _3 * const 1000000n;
-        _26 = call const fn baml.time.Duration.from_nanoseconds(copy _27) -> [bb24];
-    }
-
-    bb24: {
-        _24 = sys_op const fn baml.sys.sleep(copy _26) -> bb25;
-    }
-
-    bb25: {
-        rethrow copy _21;
-    }
-
-    bb26: {
-        throw_if_panic copy _29 -> bb27;
-    }
-
-    bb27: {
-        _28 = const "";
-        goto -> bb28;
-    }
-
-    bb28: {
-        _31 = copy _3 > const 0_i64;
-        branch copy _31 -> [bb30, bb29];
-    }
-
-    bb29: {
-        _30 = const null;
-        goto -> bb32;
-    }
-
-    bb30: {
-        _33 = copy _3 * const 1000000n;
-        _32 = call const fn baml.time.Duration.from_nanoseconds(copy _33) -> [bb31];
-    }
-
-    bb31: {
-        _30 = sys_op const fn baml.sys.sleep(copy _32) -> bb32;
-    }
-
-    bb32: {
-        _36 = copy _28;
-        _35 = const "HTTP request failed: " + copy _36;
-        _34 = baml.errors.DevOther { copy _35 };
-        throw copy _34;
-    }
-
-    bb33: {
-        throw_if_panic copy _44 -> bb34;
-    }
-
-    bb34: {
-        _39 = virtual_call next as baml.iter.Iterator<Error = never, Item = baml.llm.Client>(copy _38) -> [bb35];
-    }
-
-    bb35: {
-        _40 = is_type(copy _39, baml.iter.Done);
-        branch copy _40 -> [bb39, bb36];
-    }
-
-    bb36: {
-        _41 = copy _39;
-        fresh_cell(_42);
-        _42 = copy _41;
-        _45 = load_type(#0);
-        _43 = call const fn baml.llm.Client.execute_oneshot<copy _45>(copy _42, copy _2, copy _3) -> [bb37, unwind: bb33];
-    }
-
-    bb37: {
-        _0 = copy _43;
-        goto -> bb38;
-    }
-
-    bb38: {
-        return;
-    }
-
-    bb39: {
-        _46 = baml.errors.DevOther { const "All orchestration steps failed" };
-        throw copy _46;
-    }
-}
-
-fn baml.llm.StreamAccumulator.add_events = builtin(io)
-
-fn baml.llm.StreamAccumulator.content = builtin(io)
-
-fn baml.llm.StreamAccumulator.is_done = builtin(io)
-
-fn baml.llm.StreamAccumulator.model = builtin(io)
-
-fn baml.llm.StreamAccumulator.finish_reason = builtin(io)
-
-fn baml.llm.StreamAccumulator.input_tokens = builtin(io)
-
-fn baml.llm.StreamAccumulator.output_tokens = builtin(io)
-
-fn baml.llm.StreamCache.new = builtin(io)
-
-fn baml.llm.Stream.next(self: baml.llm.Stream) -> baml.stream.StreamFinished | TStream {
-    // Locals:
-    let _0: baml.stream.StreamFinished | TStream // _0 // return
-    let _1: baml.llm.Stream // self // param
-    let _2: string // next
-    let _3: string | null
-    let _4: () -> string | null throws baml.errors.Io
-    let _5: bool
-    let _6: string // next
-    let _7: null
-    let _8: (string) -> null throws baml.errors.LlmClient
-    let _9: string
-    let _10: bool
-    let _11: () -> bool throws baml.errors.LlmClient
-    let _12: null
-    let _13: () -> null throws never
-    let _14: string // content
-    let _15: () -> string throws baml.errors.LlmClient
-    let _16: baml.stream.StreamNoYield | TStream // parsed
-    let _17: string
-    let _18: baml.llm.StreamCache<TStream, TFinal>
-    let _19: type
-    let _20: type
-    let _21: bool
-    let _22: TStream // parsed
-
-    bb0: {
-        goto -> bb1;
-    }
-
-    bb1: {
-        branch const true -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = call const fn baml.sys.panic(const "Unreachable") -> [bb16];
-    }
-
-    bb3: {
-        _4 = copy _1.2;
-        _3 = sys_op const fn baml.http.SseStream.next(copy _4) -> bb4;
-    }
-
-    bb4: {
-        _5 = copy _3 == const null;
-        branch copy _5 -> [bb15, bb5];
-    }
-
-    bb5: {
-        _6 = copy _3;
-        _2 = copy _6;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _8 = copy _1.1;
-        _9 = copy _2;
-        _7 = sys_op const fn baml.llm.StreamAccumulator.add_events(copy _8, copy _9) -> bb7;
-    }
-
-    bb7: {
-        _11 = copy _1.1;
-        _10 = sys_op const fn baml.llm.StreamAccumulator.is_done(copy _11) -> bb8;
-    }
-
-    bb8: {
-        branch copy _10 -> [bb13, bb9];
-    }
-
-    bb9: {
-        _15 = copy _1.1;
-        _14 = sys_op const fn baml.llm.StreamAccumulator.content(copy _15) -> bb10;
-    }
-
-    bb10: {
-        _17 = copy _14;
-        _18 = copy _1.3;
-        _19 = load_type(#0);
-        _20 = load_type(#1);
-        _16 = sys_op const fn baml.llm.__sap_parse_partial(copy _17, copy _18, copy _19, copy _20) -> bb11;
-    }
-
-    bb11: {
-        _21 = is_type(copy _16, baml.stream.StreamNoYield);
-        branch copy _21 -> [bb1, bb12];
-    }
-
-    bb12: {
-        _22 = copy _16;
-        _0 = copy _22;
-        goto -> bb16;
-    }
-
-    bb13: {
-        _13 = copy _1.2;
-        _12 = sys_op const fn baml.http.SseStream.close(copy _13) -> bb14;
-    }
-
-    bb14: {
-        _0 = baml.stream.StreamFinished {  };
-        goto -> bb16;
-    }
-
-    bb15: {
-        _0 = baml.stream.StreamFinished {  };
-        goto -> bb16;
-    }
-
-    bb16: {
-        return;
-    }
-}
-
-fn baml.llm.Stream.final(self: baml.llm.Stream) -> TFinal {
-    // Locals:
-    let _0: TFinal // _0 // return
-    let _1: baml.llm.Stream // self // param
-    let _2: bool
-    let _3: bool
-    let _4: () -> bool throws baml.errors.LlmClient
-    let _5: string // next
-    let _6: string | null
-    let _7: () -> string | null throws baml.errors.Io
-    let _8: bool
-    let _9: string // next
-    let _10: null
-    let _11: (string) -> null throws baml.errors.LlmClient
-    let _12: string
-    let _13: bool
-    let _14: () -> bool throws baml.errors.LlmClient
-    let _15: null
-    let _16: () -> null throws never
-    let _17: null
-    let _18: string | null
-    let _19: () -> string | null throws baml.errors.LlmClient
-    let _20: bool
-    let _21: baml.errors.LlmClient
-    let _22: string // reason
-    let _23: (string) -> null throws baml.errors.LlmClient
-    let _24: string
-    let _25: string // content
-    let _26: () -> string throws baml.errors.LlmClient
-    let _27: string
-    let _28: baml.llm.StreamCache<TStream, TFinal>
-    let _29: type
-    let _30: type
-
-    bb0: {
-        goto -> bb1;
-    }
-
-    bb1: {
-        _4 = copy _1.1;
-        _3 = sys_op const fn baml.llm.StreamAccumulator.is_done(copy _4) -> bb2;
-    }
-
-    bb2: {
-        _2 = !copy _3;
-        branch copy _2 -> [bb3, bb10];
-    }
-
-    bb3: {
-        _7 = copy _1.2;
-        _6 = sys_op const fn baml.http.SseStream.next(copy _7) -> bb4;
-    }
-
-    bb4: {
-        _8 = copy _6 == const null;
-        branch copy _8 -> [bb10, bb5];
-    }
-
-    bb5: {
-        _9 = copy _6;
-        _5 = copy _9;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _11 = copy _1.1;
-        _12 = copy _5;
-        _10 = sys_op const fn baml.llm.StreamAccumulator.add_events(copy _11, copy _12) -> bb7;
-    }
-
-    bb7: {
-        _14 = copy _1.1;
-        _13 = sys_op const fn baml.llm.StreamAccumulator.is_done(copy _14) -> bb8;
-    }
-
-    bb8: {
-        branch copy _13 -> [bb9, bb1];
-    }
-
-    bb9: {
-        _16 = copy _1.2;
-        _15 = sys_op const fn baml.http.SseStream.close(copy _16) -> bb10;
-    }
-
-    bb10: {
-        _19 = copy _1.1;
-        _18 = sys_op const fn baml.llm.StreamAccumulator.finish_reason(copy _19) -> bb11;
-    }
-
-    bb11: {
-        _20 = copy _18 == const null;
-        branch copy _20 -> [bb16, bb12];
-    }
-
-    bb12: {
-        _22 = copy _18;
-        _23 = copy _1.0;
-        _24 = copy _22;
-        _17 = sys_op const fn baml.llm.PrimitiveClient.validate_finish_reason(copy _23, copy _24) -> bb13;
-    }
-
-    bb13: {
-        _26 = copy _1.1;
-        _25 = sys_op const fn baml.llm.StreamAccumulator.content(copy _26) -> bb14;
-    }
-
-    bb14: {
-        _27 = copy _25;
-        _28 = copy _1.3;
-        _29 = load_type(#0);
-        _30 = load_type(#1);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _27, copy _28, copy _29, copy _30) -> bb15;
-    }
-
-    bb15: {
-        return;
-    }
-
-    bb16: {
-        _21 = baml.errors.LlmClient { const "Streaming finished without finish_reason" };
-        throw copy _21;
-    }
-}
-
-fn baml.llm.PrimitiveClient.render_prompt = builtin(io)
-
-fn baml.llm.PrimitiveClient.specialize_prompt = builtin(io)
-
-fn baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never)) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: baml.llm.PrimitiveClient // self // param
-    let _2: string // template // param
-    let _3: map<string, unknown> // args // param
-    let _4: type // return_type // param
-    let _5: null | ((baml.llm.Context) -> baml.llm.PromptAst throws never) // prompt_closure // param
-    let _6: void
-    let _7: null | baml.reflect.enum.Type
-    let _8: null | baml.reflect.enum.Type
-    let _9: baml.reflect.enum.Type // enum_type
-    let _10: bool
-    let _11: int
-    let _12: baml.reflect.enum.Value[]
-    let _13: baml.reflect.errors.CompilationError
-    let _14: string
-    let _15: string
-    let _16: string
-    let _17: baml.reflect.Diagnostic[]
-    let _18: baml.reflect.Diagnostic
-    let _19: string
-    let _20: string
-    let _21: string
-    let _22: baml.llm.PromptAst // prompt
-    let _23: bool
-    let _24: (baml.llm.Context) -> baml.llm.PromptAst throws never // closure
-    let _25: (baml.llm.Context) -> baml.llm.PromptAst throws never
-    let _26: baml.llm.Context
-    let _27: baml.llm.PromptAst
-
-    bb0: {
-        _6 = call const fn baml.TypeValue._validate_renderable(copy _4) -> [bb1];
-    }
-
-    bb1: {
-        _7 = call const fn baml.TypeValue.as_enum(copy _4) -> [bb2];
-    }
-
-    bb2: {
-        _8 = copy _7;
-        _8 = narrow_bind copy _8 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["reflect", "enum"], name: "Type" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb6];
-    }
-
-    bb3: {
-        _9 = copy _8;
-        _12 = call const fn baml.reflect.enum.Type.values(copy _9) -> [bb4];
-    }
-
-    bb4: {
-        _11 = len(_12);
-        goto -> bb5;
-    }
-
-    bb5: {
-        _10 = copy _11 == const 0_i64;
-        branch copy _10 -> [bb12, bb6];
-    }
-
-    bb6: {
-        _23 = copy _5 == const null;
-        branch copy _23 -> [bb9, bb7];
-    }
-
-    bb7: {
-        _24 = copy _5;
-        _25 = copy _24;
-        _26 = call const fn baml.llm.build_prompt_context(copy _1, copy _4) -> [bb8];
-    }
-
-    bb8: {
-        _22 = call copy _25(copy _26) -> [bb10];
-    }
-
-    bb9: {
-        _22 = sys_op const fn baml.llm.PrimitiveClient.render_prompt(copy _1, copy _2, copy _3, copy _4) -> bb10;
-    }
-
-    bb10: {
-        _27 = copy _22;
-        _0 = sys_op const fn baml.llm.PrimitiveClient.specialize_prompt(copy _1, copy _27) -> bb11;
-    }
-
-    bb11: {
-        return;
-    }
-
-    bb12: {
-        _16 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb13];
-    }
-
-    bb13: {
-        _15 = const "empty enum `" + copy _16;
-        _14 = copy _15 + const "` cannot be rendered as an LLM output schema";
-        _21 = call const fn baml.TypeValue.baml.ToString.to_string(copy _4) -> [bb14];
-    }
-
-    bb14: {
-        _20 = const "empty enum `" + copy _21;
-        _19 = copy _20 + const "` cannot be rendered as an LLM output schema";
-        _18 = baml.reflect.Diagnostic { const "E0159", const null, copy _19 };
-        _17 = [copy _18]: baml.reflect.Diagnostic[];
-        _13 = baml.reflect.errors.CompilationError { copy _14, copy _17 };
-        throw copy _13;
-    }
-}
-
-fn baml.llm.PrimitiveClient.build_request = builtin(io)
-
-fn baml.llm.PrimitiveClient.build_request_stream = builtin(io)
-
-fn baml.llm.PrimitiveClient.new_stream_accumulator = builtin(io)
-
-fn baml.llm.PrimitiveClient.validate_finish_reason = builtin(io)
-
-fn baml.llm.PrimitiveClient.parse = builtin(io)
-
-fn baml.llm.from_shorthand = builtin(io)
-
-fn baml.llm.get_jinja_template = builtin(io)
-
-fn baml.llm.assemble_prompt_ast = builtin(vm)
-
-fn baml.llm.render_output_format = builtin(io)
-
-fn baml.llm.build_output_format = builtin(io)
-
-fn baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context {
-    // Locals:
-    let _0: baml.llm.Context // _0 // return
-    let _1: baml.llm.PrimitiveClient // primitive // param
-    let _2: type // return_type // param
-    let _3: baml.llm.ContextClient
-    let _4: string
-    let _5: string
-    let _6: string
-    let _7: string | null
-    let _8: bool
-    let _9: string[]
-    let _10: null | string[]
-    let _11: bool
-    let _12: map<string, unknown>
-    let _13: string
-    let _14: baml.llm.OutputFormat
-
-    bb0: {
-        _4 = copy _1.0;
-        _5 = copy _1.1;
-        _7 = copy _1.2.6;
-        _6 = copy _7;
-        _8 = copy _7 == const null;
-        branch copy _8 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _6 = const "system";
-        goto -> bb2;
-    }
-
-    bb2: {
-        _10 = copy _1.2.7;
-        _9 = copy _10;
-        _11 = copy _10 == const null;
-        branch copy _11 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _9 = []: string[];
-        goto -> bb4;
-    }
-
-    bb4: {
-        _3 = baml.llm.ContextClient { copy _4, copy _5, copy _6, copy _9 };
-        _12 = {  }: map<string, unknown>;
-        _13 = sys_op const fn baml.llm.render_output_format(copy _2) -> bb5;
-    }
-
-    bb5: {
-        _14 = sys_op const fn baml.llm.build_output_format(copy _2) -> bb6;
-    }
-
-    bb6: {
-        _0 = baml.llm.Context { copy _3, copy _12, copy _13, copy _14 };
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn baml.llm.make_role(name: string) -> baml.llm.Role {
-    // Locals:
-    let _0: baml.llm.Role // _0 // return
-    let _1: string // name // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = {  }: map<string, unknown>;
-        _0 = baml.llm.Role { copy _1, copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.prompt(body: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never {
-    // Locals:
-    let _0: (baml.llm.Context) -> baml.llm.PromptAst throws never // _0 // return
-    let _1: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never // body // param [captured]
-    let _2: (baml.llm.Context) -> baml.llm.PromptAst throws never // render
-
-    bb0: {
-        _2 = make_closure lambda[0](copy _1);
-        _0 = copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: baml.llm.Context // ctx // param
-    let _2: baml.TaggedString // t
-    let _3: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
-    let _4: string[]
-    let _5: unknown[]
-
-    bb0: {
-        _3 = copy capture[0];
-        _2 = call copy _3(const fn baml.llm.make_role, copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _4 = copy _2.0;
-        _5 = copy _2.1;
-        _0 = call const fn baml.llm.assemble_prompt_ast(copy _4, copy _5) -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn baml.llm.get_return_type = builtin(io)
-
-fn baml.llm.__sap_parse_final = builtin(io)
-
-fn baml.llm.__sap_parse_partial = builtin(io)
-
 fn baml.media.Pdf.url = builtin(vm)
 
 fn baml.media.Pdf.file = builtin(vm)
@@ -8879,6 +6594,109 @@ fn baml.ops.__union_rem = builtin(vm)
 
 fn baml.ops.__union_neg = builtin(vm)
 
+fn baml.prompt.Context.output_format_with = builtin(io)
+
+fn baml.prompt.validate_output_type(return_type: type) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: type // return_type // param
+    let _2: void
+    let _3: null | baml.reflect.enum.Type
+    let _4: null | baml.reflect.enum.Type
+    let _5: baml.reflect.enum.Type // enum_type
+    let _6: bool
+    let _7: int
+    let _8: baml.reflect.enum.Value[]
+    let _9: string // message
+    let _10: string
+    let _11: string
+    let _12: baml.reflect.errors.CompilationError
+    let _13: string
+    let _14: baml.reflect.Diagnostic[]
+    let _15: baml.reflect.Diagnostic
+    let _16: string
+
+    bb0: {
+        _2 = call const fn baml.TypeValue._validate_renderable(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = call const fn baml.TypeValue.as_enum(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        _4 = copy _3;
+        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["reflect", "enum"], name: "Type" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb3];
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb8;
+    }
+
+    bb4: {
+        _5 = copy _4;
+        _8 = call const fn baml.reflect.enum.Type.values(copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _7 = len(_8);
+        goto -> bb6;
+    }
+
+    bb6: {
+        _6 = copy _7 == const 0_i64;
+        branch copy _6 -> [bb9, bb7];
+    }
+
+    bb7: {
+        _0 = const null;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+
+    bb9: {
+        _11 = call const fn baml.TypeValue.baml.ToString.to_string(copy _1) -> [bb10];
+    }
+
+    bb10: {
+        _10 = const "empty enum `" + copy _11;
+        _9 = copy _10 + const "` cannot be rendered as an LLM output schema";
+        _13 = copy _9;
+        _16 = copy _9;
+        _15 = baml.reflect.Diagnostic { const "E0159", const null, copy _16 };
+        _14 = [copy _15]: baml.reflect.Diagnostic[];
+        _12 = baml.reflect.errors.CompilationError { copy _13, copy _14 };
+        throw copy _12;
+    }
+}
+
+fn baml.prompt.render_output_format = builtin(io)
+
+fn baml.prompt.build_output_format = builtin(io)
+
+fn baml.prompt.make_role(name: string) -> baml.prompt.Role {
+    // Locals:
+    let _0: baml.prompt.Role // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = {  }: map<string, unknown>;
+        _0 = baml.prompt.Role { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.prompt.get_return_type = builtin(io)
+
 fn baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -9193,8 +7011,6 @@ fn baml.reflect.interface.Type.baml.reflect.TypeView.as_type = builtin(vm)
 
 fn baml.reflect.interface.Type.implemented_by = builtin(vm)
 
-fn baml.reflect.interface.Type.implementors = builtin(vm)
-
 fn baml.reflect.interface.Implementation.field = builtin(vm)
 
 fn baml.reflect.interface.implementation = builtin(vm)
@@ -9354,28 +7170,65 @@ fn baml.reflect.signature = builtin(vm)
 
 fn baml.reflect.call_any = builtin(vm)
 
+fn baml.sap.ParseCache.new = builtin(io)
+
+fn baml.sap.__new_parse_cache() -> baml.sap.ParseCache<TStream, TFinal> {
+    // Locals:
+    let _0: baml.sap.ParseCache<TStream, TFinal> // _0 // return
+    let _1: baml.sap.ParseCache<TStream, TFinal> // cache
+    let _2: type
+    let _3: type
+
+    bb0: {
+        _2 = load_type(#0);
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = load_type(#1);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _1 = sys_op const fn baml.sap.ParseCache.new(copy _2, copy _3) -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _1;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.sap.__parse_final = builtin(io)
+
+fn baml.sap.__parse_partial = builtin(io)
+
 fn baml.sap.parse(text: string) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.StreamCache<T, T> // cache
+    let _2: baml.sap.ParseCache<T, T> // cache
     let _3: type
     let _4: type
-    let _5: baml.llm.StreamCache<T, T>
+    let _5: baml.sap.ParseCache<T, T>
     let _6: type
     let _7: type
 
     bb0: {
         _3 = load_type(#0);
         _4 = load_type(#0);
-        _2 = call const fn baml.llm.__new_stream_cache<copy _3, copy _4>() -> [bb1];
+        _2 = call const fn baml.sap.__new_parse_cache<copy _3, copy _4>() -> [bb1];
     }
 
     bb1: {
         _5 = copy _2;
         _6 = load_type(#0);
         _7 = load_type(#0);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _1, copy _5, copy _6, copy _7) -> bb2;
+        _0 = sys_op const fn baml.sap.__parse_final(copy _1, copy _5, copy _6, copy _7) -> bb2;
     }
 
     bb2: {
@@ -9388,20 +7241,20 @@ fn baml.sap.parse_type(t: type, text: string) -> unknown {
     let _0: unknown // _0 // return
     let _1: type // t // param
     let _2: string // text // param
-    let _3: baml.llm.StreamCache<unknown, unknown> // cache
-    let _4: baml.llm.StreamCache<unknown, unknown>
+    let _3: baml.sap.ParseCache<unknown, unknown> // cache
+    let _4: baml.sap.ParseCache<unknown, unknown>
     let _5: type
     let _6: type
 
     bb0: {
-        _3 = sys_op const fn baml.llm.StreamCache.new(copy _1, copy _1) -> bb1;
+        _3 = sys_op const fn baml.sap.ParseCache.new(copy _1, copy _1) -> bb1;
     }
 
     bb1: {
         _4 = copy _3;
         _5 = load_type(unknown);
         _6 = load_type(unknown);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _2, copy _4, copy _5, copy _6) -> bb2;
+        _0 = sys_op const fn baml.sap.__parse_final(copy _2, copy _4, copy _5, copy _6) -> bb2;
     }
 
     bb2: {
@@ -9563,7 +7416,88 @@ fn baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
     }
 }
 
+fn baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.sys.ProcessExit // self // param
+    let _2: int
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = copy _2 == const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> {
+    // Locals:
+    let _0: baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> // _0 // return
+    let _1: baml.sys.ProcessLineStream // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.ProcessLineStream.root.iter.Iterator.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done {
+    // Locals:
+    let _0: string | baml.iter.Done // _0 // return
+    let _1: baml.sys.ProcessLineStream // self // param
+    let _2: string | null
+    let _3: string | null
+    let _4: string // line
+
+    bb0: {
+        _2 = sys_op const fn baml.sys.ProcessLineStream._next(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
+    }
+
+    bb2: {
+        _0 = baml.iter.Done {  };
+        goto -> bb4;
+    }
+
+    bb3: {
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.sys.ProcessLineStream._next = builtin(io)
+
+fn baml.sys.ProcessLineStream.close = builtin(io)
+
+fn baml.sys.Process.write_stdin = builtin(io)
+
+fn baml.sys.Process.close_stdin = builtin(io)
+
+fn baml.sys.Process.wait = builtin(io)
+
+fn baml.sys.Process.kill = builtin(io)
+
+fn baml.sys.Process.close = builtin(io)
+
 fn baml.sys.exec = builtin(io)
+
+fn baml.sys.start_process = builtin(io)
 
 fn baml.sys.shell = builtin(io)
 
@@ -12679,8 +10613,6 @@ fn baml.TypeValue._to_string_impl = builtin(vm)
 fn baml.TypeValue.implements = builtin(vm)
 
 fn baml.TypeValue.implemented_by = builtin(vm)
-
-fn baml.TypeValue.implementors = builtin(vm)
 
 fn baml.Uint8Array.length = builtin(vm)
 

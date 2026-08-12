@@ -6,8 +6,6 @@ class Type {
   }
   //baml:vm
   function implemented_by(self, other: type) -> bool throws never { $rust_function }
-  //baml:mut_vm
-  function implementors(self) -> type[] throws never { $rust_function }
 }
 
 /// An immutable structural-conformance witness.  Values are created only by

@@ -1692,10 +1692,6 @@ impl BamlClassReflectInterfaceType for PackageBamlImpl {
     fn implemented_by(vm: &BexVm, r#type: &Value, other: &Value) -> bool {
         <PackageBamlImpl as BamlClassTypeValue>::implemented_by(vm, r#type, other)
     }
-
-    fn implementors(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        <PackageBamlImpl as BamlClassTypeValue>::implementors(vm, r#type)
-    }
 }
 
 impl BamlClassReflectLiteralType for PackageBamlImpl {

@@ -89,7 +89,7 @@ pub enum BexExternalAdt {
     /// A reflected type plus portable runtime definitions. Unlike `Type`, this
     /// is reminted on every inbound materialization.
     TypeDef(bex_vm_types::types::PortableTypeDef),
-    /// A rendered prompt AST (from `baml.llm.render_prompt`).
+    /// The Rust-backed payload inside a rendered `ai.Prompt`.
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<baml_builtins2::MediaValue>),
@@ -101,7 +101,7 @@ pub enum BexExternalAdt {
     /// the instance alive on the heap so the engine can re-enter it for
     /// instance-method calls (`Stream.next`, `Stream.final`, …).
     ///
-    /// Currently used by `baml.llm.Stream`; any future stdlib generic
+    /// Currently used by `ai.stream.Stream`; any future stdlib generic
     /// class that wants typed-handle round-trip treatment uses this same
     /// variant.
     TaggedHeapHandle {
@@ -584,7 +584,7 @@ impl BexExternalValue {
             BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
             // A rendered prompt handle: render its readable text instead of the
             // `Adt(PromptAst(Message { .. }))` Rust `Debug` dump (B-627). Nested
-            // inside a `baml.llm.PromptAst { _data: .. }` instance, this makes the
+            // inside a `ai.Prompt { _data: .. }` instance, this makes the
             // CLI's value print readable.
             BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => ast.render_text(),
             _ => format!("{self:?}"),
@@ -875,7 +875,7 @@ mod render_readable_tests {
         }
     }
 
-    /// A rendered-prompt handle (`baml.llm.PromptAst`'s `_data`) renders as its
+    /// A rendered-prompt handle (`ai.Prompt`'s `_data`) renders as its
     /// readable prompt text, not the `Adt(PromptAst(Message { .. }))` Rust
     /// `Debug` dump. This is the B-627 repro for the CLI value print.
     #[test]

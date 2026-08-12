@@ -4,7 +4,7 @@
 // allocation loops that generate many short-lived objects, and programs that
 // mix allocation with data access. Loop bodies mutate locals (boxed in the
 // test-block VM), so all logic lives in top-level helper functions with
-// file-scoped unique names; results are compared with `baml.deep_equals`.
+// file-scoped unique names; results are compared with `assert.equal`.
 
 // ── test_heavy_allocation_loop ────────────────────────────────────────────────
 //
@@ -26,7 +26,7 @@ function gc_heavy_allocation_loop() -> int {
 }
 
 test "test_heavy_allocation_loop" {
-    assert.is_true(baml.deep_equals(gc_heavy_allocation_loop(), 1498500))
+    assert.equal(gc_heavy_allocation_loop(), 1498500)
 }
 
 // ── test_map_survives_gc_during_operations ────────────────────────────────────
@@ -60,5 +60,5 @@ function gc_map_survives_pressure() -> int {
 }
 
 test "test_map_survives_gc_during_operations" {
-    assert.is_true(baml.deep_equals(gc_map_survives_pressure(), 5))
+    assert.equal(gc_map_survives_pressure(), 5)
 }

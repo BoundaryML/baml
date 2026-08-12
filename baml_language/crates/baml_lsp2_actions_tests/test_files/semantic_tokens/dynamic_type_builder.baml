@@ -20,7 +20,7 @@ enum Job {
 // This function returns the dynamic class defined above.
 function ExtractResume(from_text: string) -> Resume {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello ${from_text} ${ctx.output_format}`
 }
 
 test ReturnDynamicClassTest {
@@ -131,11 +131,11 @@ test ReturnDynamicClassTest {
 // dynamic_type_builder.baml:22:3 (property) len=6 "client"
 // dynamic_type_builder.baml:22:10 (string) len=20 "\"openai/gpt-4o-mini\""
 // dynamic_type_builder.baml:23:3 (property) [declaration] len=6 "prompt"
-// dynamic_type_builder.baml:23:10 (string) len=1 "#"
-// dynamic_type_builder.baml:23:11 (string) len=1 "\""
-// dynamic_type_builder.baml:23:12 (string) len=5 "Hello"
-// dynamic_type_builder.baml:23:17 (string) len=1 "\""
-// dynamic_type_builder.baml:23:18 (string) len=1 "#"
+// dynamic_type_builder.baml:23:10 (string) len=1 "`"
+// dynamic_type_builder.baml:23:11 (string) len=5 "Hello"
+// dynamic_type_builder.baml:23:19 (parameter) len=9 "from_text"
+// dynamic_type_builder.baml:23:36 (property) len=13 "output_format"
+// dynamic_type_builder.baml:23:50 (string) len=1 "`"
 // dynamic_type_builder.baml:26:1 (keyword) len=4 "test"
 // dynamic_type_builder.baml:26:6 (struct) [declaration] len=22 "ReturnDynamicClassTest"
 // dynamic_type_builder.baml:27:3 (property) len=9 "functions"

@@ -38,7 +38,7 @@ Examples:
     baml describe match
 
   Search for something by what it does:
-    baml describe --search 'run a subprocess'")]
+    baml describe --search 'read a file'")]
 pub struct DescribeArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
@@ -66,20 +66,24 @@ pub struct DescribeArgs {
     ///
     /// `describe` answers "what is this called"; `--search` answers "what does
     /// this", which is the question you have when you know the job and not the
-    /// name. `baml describe subprocess` finds nothing — nothing is called that
-    /// — while `baml describe --search subprocess` finds `baml.sys.exec`.
-    /// Matching is on whole words, best first.
+    /// name: `baml describe --search 'read a file'`. Matching is on whole words
+    /// — of names and of docstrings — best first, so it finds a symbol whose
+    /// documentation uses your words even when its name does not.
     #[arg(long, help_heading = "Output options")]
     pub search: bool,
 
-    /// Most results to return from `--search`.
+    /// Most results to return from `--search`. At least 1.
+    ///
+    /// Bounded below because `--limit 0` truncated a full result set to nothing
+    /// and then reported "no symbol matches", which is a different answer.
     #[arg(
         long,
         default_value_t = 30,
         value_name = "N",
+        value_parser = clap::value_parser!(u16).range(1..),
         help_heading = "Output options"
     )]
-    pub limit: usize,
+    pub limit: u16,
 
     /// Export a whole package's surface as one versioned JSON document
     /// (NAME must be a package: `baml`, `user`, …). Cross-package references
@@ -340,7 +344,7 @@ impl DescribeArgs {
 
         // ── --search: names and docstrings, rather than name resolution ─────
         if self.search {
-            let hits = crate::describe_search::search(&db, name, self.limit);
+            let hits = crate::describe_search::search(&db, name, usize::from(self.limit));
             if self.json {
                 println!(
                     "{}",

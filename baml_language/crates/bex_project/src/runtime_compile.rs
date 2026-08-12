@@ -235,6 +235,7 @@ fn declaration_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::CLASS_DEF
             | SyntaxKind::ENUM_DEF
             | SyntaxKind::INTERFACE_DEF
+            | SyntaxKind::CLIENT_VALUE_DEF
             | SyntaxKind::CLIENT_DEF
             | SyntaxKind::GENERATOR_DEF
             | SyntaxKind::RETRY_POLICY_DEF

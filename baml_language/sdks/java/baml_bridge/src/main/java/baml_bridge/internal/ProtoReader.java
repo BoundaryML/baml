@@ -108,6 +108,7 @@ public final class ProtoReader {
     // BamlOutboundHandle (key = 1, handle_type = 2, ty = 3).
     private static final int HANDLE_KEY = 1;
     private static final int HANDLE_TYPE = 2;
+    private static final int HANDLE_TY = 3;
 
     // BamlToHostCall (engine→host callable dispatch): args = 1.
     // BamlToHostArg: value = 1 (BamlOutboundValue), arg_name = 2, is_optional_arg = 3.
@@ -983,6 +984,7 @@ public final class ProtoReader {
     private static Object decodeHandle(WireReader r) {
         long key = 0;
         int handleType = 0;
+        String classFqn = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -990,20 +992,20 @@ public final class ProtoReader {
             switch (field) {
                 case HANDLE_KEY -> key = r.readVarint();
                 case HANDLE_TYPE -> handleType = (int) r.readVarint();
-                default -> r.skipField(wire); // ty (field 3)
+                case HANDLE_TY -> classFqn = selfTypeFqn(r.readMessage());
+                default -> r.skipField(wire);
             }
         }
-        BamlHandle handle = new BamlHandle(key, handleType);
+        BamlHandle handle = new BamlHandle(key, handleType, classFqn);
         return switch (handleType) {
             case ADT_MEDIA_IMAGE -> Image.fromHandle(handle);
             case ADT_MEDIA_AUDIO -> Audio.fromHandle(handle);
             case ADT_MEDIA_VIDEO -> Video.fromHandle(handle);
             case ADT_MEDIA_PDF -> Pdf.fromHandle(handle);
             // A tagged heap handle reifies the runtime-owned BamlStream wrapper.
-            // Python dispatches on `handle.ty.class_ty.name` (== "baml.llm.Stream")
-            // via its typemap; BamlStream is the only tagged-heap-handle wrapper, so
-            // the handle_type tag alone picks it (the ty carries the erased
-            // TPartial/TFinal, which Java also erases). Mirrors _decode_handle.
+            // The wrapper retains handle.ty.class_ty.name and derives `.next`
+            // and `.final` from that identity. Java erases the generic args but
+            // must not erase the receiver class FQN.
             case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle);
             default -> handle;
         };

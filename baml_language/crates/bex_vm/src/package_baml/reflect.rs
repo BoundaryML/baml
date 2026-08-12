@@ -2053,6 +2053,41 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     normalize::is_subtype(&actual, &expected, vm)
 }
 
+/// `reflect.call_any` mirrors the ordinary call boundary's one numeric
+/// conversion: an exactly representable `int` may enter a `float` (or
+/// `float?`) slot. Materialize the boxed float before dispatch so the callee
+/// receives the runtime representation its signature promises.
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "the round trip deliberately detects lossy i64-to-f64 conversions"
+)]
+fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy) -> Option<Value> {
+    fn is_float_slot(ty: &RealizedTy) -> bool {
+        match ty {
+            RealizedTy::Float { .. } => true,
+            RealizedTy::Union(members, _) => {
+                members.iter().any(is_float_slot)
+                    && members
+                        .iter()
+                        .all(|member| member.is_null() || is_float_slot(member))
+            }
+            _ => false,
+        }
+    }
+
+    if let bex_vm_types::ValueKind::Int(number) = value.kind()
+        && is_float_slot(expected)
+    {
+        let widened = number as f64;
+        if widened as i64 != number {
+            return None;
+        }
+        return Some(Value::object(vm.tlab.alloc(Object::Float(widened))));
+    }
+    value_fits(vm, value, expected).then_some(value)
+}
+
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
 ///
 /// Every argument is keyed by parameter name; a nameless positional is
@@ -2101,11 +2136,11 @@ fn call_any_impl(
         }
         match (param.mode, value) {
             (_, Some(value)) => {
-                if !value_fits(vm, value, &param.ty) {
+                let Some(value) = prepare_call_any_argument(vm, value, &param.ty) else {
                     let expected = param.ty.clone();
                     let got = value_realized_ty(vm, value);
                     return raise_invalid_argument(vm, key.as_deref().unwrap_or(""), expected, got);
-                }
+                };
                 matched += 1;
                 final_args.push(value);
             }

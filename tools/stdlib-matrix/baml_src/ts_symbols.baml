@@ -160,59 +160,56 @@ function extract_ts_symbols(doc: TsSurfaceDoc) -> TsSymbol[] {
     for (let module in doc.modules) {
         for (let container in module.containers) {
             let container_id = ts_container_id(module, container);
-            symbols
-                .push(
-                    TsSymbol {
-                        id: container_id,
-                        symbol: [module.name, container.name],
-                        display: ts_display_of(container_id),
-                        kind: container.kind,
-                        origin: "container",
-                        signature: ts_container_signature(container),
-                        doc: container.doc,
-                        since: container.since,
-                        references: [],
-                    },
-                );
+            symbols.push(
+                TsSymbol {
+                    id: container_id,
+                    symbol: [module.name, container.name],
+                    display: ts_display_of(container_id),
+                    kind: container.kind,
+                    origin: "container",
+                    signature: ts_container_signature(container),
+                    doc: container.doc,
+                    since: container.since,
+                    references: [],
+                },
+            );
             for (let member in container.members) {
                 let origin = ts_member_origin(member);
                 let member_id = ts_member_id(module, container, member);
-                symbols
-                    .push(
-                        TsSymbol {
-                            id: member_id,
-                            symbol: [module.name, container.name, member.name],
-                            display: ts_display_of(member_id),
-                            kind: ts_member_kind(origin),
-                            origin: origin,
-                            signature: ts_signature_of(member.signatures),
-                            doc: member.doc,
-                            since: member.since,
-                            references: [],
-                        },
-                    );
+                symbols.push(
+                    TsSymbol {
+                        id: member_id,
+                        symbol: [module.name, container.name, member.name],
+                        display: ts_display_of(member_id),
+                        kind: ts_member_kind(origin),
+                        origin: origin,
+                        signature: ts_signature_of(member.signatures),
+                        doc: member.doc,
+                        since: member.since,
+                        references: [],
+                    },
+                );
             }
         }
         for (let declared in module.functions) {
             let function_id = ts_function_id(module, declared);
-            symbols
-                .push(
-                    TsSymbol {
-                        id: function_id,
-                        symbol: [module.name, declared.name],
-                        display: ts_display_of(function_id),
-                        kind: if (ts_is_callable(declared.signatures)) {
-                            "function"
-                        } else {
-                            "property"
-                        },
-                        origin: "free",
-                        signature: ts_signature_of(declared.signatures),
-                        doc: declared.doc,
-                        since: declared.since,
-                        references: [],
+            symbols.push(
+                TsSymbol {
+                    id: function_id,
+                    symbol: [module.name, declared.name],
+                    display: ts_display_of(function_id),
+                    kind: if (ts_is_callable(declared.signatures)) {
+                        "function"
+                    } else {
+                        "property"
                     },
-                );
+                    origin: "free",
+                    signature: ts_signature_of(declared.signatures),
+                    doc: declared.doc,
+                    since: declared.since,
+                    references: [],
+                },
+            );
         }
     }
     attach_ts_references(symbols);

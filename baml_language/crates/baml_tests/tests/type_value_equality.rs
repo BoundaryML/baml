@@ -1,8 +1,6 @@
 //! Function-context pins for BEP-066 minted equality on `type` values.
 //!
-//! `==` once canonicalized `RealizedTy` while `baml.deep_equals` compared it
-//! syntactically. BEP-066 now requires every equality path to compare
-//! the mint, and equivalent static spellings receive the same canonical digest.
+//! Equivalent static spellings receive the same canonical mint.
 //! Matching test-block pins live in
 //! `baml_src/ns_type_reflection/type_reflection.baml`.
 
@@ -25,18 +23,17 @@ async fn permuted_union_double_equals_is_canonical() {
 }
 
 #[tokio::test]
-async fn permuted_union_deep_equals_uses_the_canonical_mint() {
+async fn permuted_union_equality_operators_use_the_canonical_mint() {
     let output = baml_test!(
         r#"
         function main() -> bool {
             let a = type.of<int | string>();
             let b = type.of<string | int>();
-            baml.deep_equals(a, b)
+            a == b && !(a != b)
         }
         "#
     );
-    // BEP-066 requires deep_equals to agree with `==` because
-    // both compare the same canonical static mint.
+    // Both equality operators compare the same canonical static mint.
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 

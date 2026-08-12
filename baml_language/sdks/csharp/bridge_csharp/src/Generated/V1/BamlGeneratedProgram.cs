@@ -58,7 +58,7 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    internal Task<BamlSafeHandle> StartStreamAsync<TPartial, TFinal>(
+    internal Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
         BamlGeneratedFunction<TFinal> function,
         BamlGeneratedArguments<TFinal> arguments,
         BamlGeneratedType<TPartial> partialType,
@@ -86,7 +86,7 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    internal Task<BamlSafeHandle> StartStreamAsync<TPartial, TFinal>(
+    internal Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
         BamlGeneratedBoundFunction<TFinal> function,
         BamlGeneratedGenericArguments<TFinal> arguments,
         BamlGeneratedType<TPartial> partialType,
@@ -115,7 +115,7 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    private async Task<BamlSafeHandle> StartStreamAsync<TPartial, TFinal>(
+    private async Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
         string functionIdentity,
         TypeDeclaration<TPartial> partialType,
         TypeDeclaration<TFinal> finalType,

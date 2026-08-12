@@ -20,7 +20,7 @@ function caps_active_and_queues_rest() -> int {
 }
 
 test "caps_active_and_queues_rest" {
-    assert.is_true(baml.deep_equals(caps_active_and_queues_rest(), 202))
+    assert.equal(caps_active_and_queues_rest(), 202)
 }
 
 // More spawns than the limit all complete — the queued ones start as slots free.
@@ -35,7 +35,7 @@ function queues_excess_and_all_complete() -> int {
 }
 
 test "queues_excess_and_all_complete" {
-    assert.is_true(baml.deep_equals(queues_excess_and_all_complete(), 5))
+    assert.equal(queues_excess_and_all_complete(), 5)
 }
 
 // `group.cancel()` fires its members' tokens; awaiting a cancelled member
@@ -48,7 +48,7 @@ function group_cancel_cancels_member() -> int {
 }
 
 test "group_cancel_cancels_member" {
-    assert.is_true(baml.deep_equals(group_cancel_cancels_member(), 0))
+    assert.equal(group_cancel_cancels_member(), 0)
 }
 
 // `limit()` / `set_limit()` round-trip.
@@ -60,7 +60,7 @@ function set_limit_updates_limit() -> int {
 }
 
 test "set_limit_updates_limit" {
-    assert.is_true(baml.deep_equals(set_limit_updates_limit(), 10))
+    assert.equal(set_limit_updates_limit(), 10)
 }
 
 //----
@@ -208,12 +208,9 @@ test "set_limit_updates_limit" {
 // task_group.baml:22:6 (string) len=29 "\"caps_active_and_queues_rest\""
 // task_group.baml:23:5 (namespace) [defaultLibrary] len=6 "assert"
 // task_group.baml:23:11 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:23:12 (function) len=7 "is_true"
-// task_group.baml:23:20 (namespace) [defaultLibrary] len=4 "baml"
-// task_group.baml:23:24 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:23:25 (function) len=11 "deep_equals"
-// task_group.baml:23:37 (function) len=27 "caps_active_and_queues_rest"
-// task_group.baml:23:68 (number) len=3 "202"
+// task_group.baml:23:12 (function) len=5 "equal"
+// task_group.baml:23:18 (function) len=27 "caps_active_and_queues_rest"
+// task_group.baml:23:49 (number) len=3 "202"
 // task_group.baml:26:1 (comment) len=83 "// More spawns than the limit all complete — the queued ones start as slots free."
 // task_group.baml:27:1 (keyword) len=8 "function"
 // task_group.baml:27:10 (function) [declaration] len=30 "queues_excess_and_all_complete"
@@ -310,12 +307,9 @@ test "set_limit_updates_limit" {
 // task_group.baml:37:6 (string) len=32 "\"queues_excess_and_all_complete\""
 // task_group.baml:38:5 (namespace) [defaultLibrary] len=6 "assert"
 // task_group.baml:38:11 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:38:12 (function) len=7 "is_true"
-// task_group.baml:38:20 (namespace) [defaultLibrary] len=4 "baml"
-// task_group.baml:38:24 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:38:25 (function) len=11 "deep_equals"
-// task_group.baml:38:37 (function) len=30 "queues_excess_and_all_complete"
-// task_group.baml:38:71 (number) len=1 "5"
+// task_group.baml:38:12 (function) len=5 "equal"
+// task_group.baml:38:18 (function) len=30 "queues_excess_and_all_complete"
+// task_group.baml:38:52 (number) len=1 "5"
 // task_group.baml:41:1 (comment) len=74 "// `group.cancel()` fires its members' tokens; awaiting a cancelled member"
 // task_group.baml:42:1 (comment) len=45 "// re-throws `Cancelled`, which is catchable."
 // task_group.baml:43:1 (keyword) len=8 "function"
@@ -373,12 +367,9 @@ test "set_limit_updates_limit" {
 // task_group.baml:50:6 (string) len=29 "\"group_cancel_cancels_member\""
 // task_group.baml:51:5 (namespace) [defaultLibrary] len=6 "assert"
 // task_group.baml:51:11 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:51:12 (function) len=7 "is_true"
-// task_group.baml:51:20 (namespace) [defaultLibrary] len=4 "baml"
-// task_group.baml:51:24 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:51:25 (function) len=11 "deep_equals"
-// task_group.baml:51:37 (function) len=27 "group_cancel_cancels_member"
-// task_group.baml:51:68 (number) len=1 "0"
+// task_group.baml:51:12 (function) len=5 "equal"
+// task_group.baml:51:18 (function) len=27 "group_cancel_cancels_member"
+// task_group.baml:51:49 (number) len=1 "0"
 // task_group.baml:54:1 (comment) len=40 "// `limit()` / `set_limit()` round-trip."
 // task_group.baml:55:1 (keyword) len=8 "function"
 // task_group.baml:55:10 (function) [declaration] len=23 "set_limit_updates_limit"
@@ -408,9 +399,6 @@ test "set_limit_updates_limit" {
 // task_group.baml:62:6 (string) len=25 "\"set_limit_updates_limit\""
 // task_group.baml:63:5 (namespace) [defaultLibrary] len=6 "assert"
 // task_group.baml:63:11 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:63:12 (function) len=7 "is_true"
-// task_group.baml:63:20 (namespace) [defaultLibrary] len=4 "baml"
-// task_group.baml:63:24 (namespace) [defaultLibrary] len=1 "."
-// task_group.baml:63:25 (function) len=11 "deep_equals"
-// task_group.baml:63:37 (function) len=23 "set_limit_updates_limit"
-// task_group.baml:63:64 (number) len=2 "10"
+// task_group.baml:63:12 (function) len=5 "equal"
+// task_group.baml:63:18 (function) len=23 "set_limit_updates_limit"
+// task_group.baml:63:45 (number) len=2 "10"

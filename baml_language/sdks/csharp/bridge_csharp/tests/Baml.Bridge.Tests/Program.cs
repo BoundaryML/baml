@@ -2117,7 +2117,7 @@ internal static unsafe class Program
             releasedHandles == 2,
             "rolled-back stream self clone and source were not released exactly once");
 
-        var streamClass = new BamlTyClass { Name = "baml.llm.Stream" };
+        var streamClass = new BamlTyClass { Name = "ai.stream.Stream" };
         streamClass.TypeArgs.Add(partialType);
         streamClass.TypeArgs.Add(finalType);
         var streamEnvelope = new BamlOutboundResult
@@ -2133,14 +2133,17 @@ internal static unsafe class Program
             },
         };
         int releasedBeforeHandle = releasedHandles;
-        using (BamlSafeHandle stream = PrimitiveProtocol.DecodeStreamHandle(
+        using (BamlStreamNativeHandle stream = PrimitiveProtocol.DecodeStreamHandle(
             streamEnvelope.ToByteArray(),
             partialMetadata,
             finalMetadata,
             "test.echo$stream",
             api))
         {
-            Require(stream.Key == 50, "stream factory handle key changed");
+            Require(
+                stream.Handle.Key == 50
+                    && stream.ClassIdentity == "ai.stream.Stream",
+                "stream factory handle descriptor changed");
             Require(
                 releasedHandles == releasedBeforeHandle,
                 "claimed stream handle was released before driver ownership ended");
@@ -2148,6 +2151,16 @@ internal static unsafe class Program
         Require(
             releasedHandles == releasedBeforeHandle + 1,
             "claimed stream handle was not released exactly once");
+
+        streamClass.Name = "test.NotStream";
+        Expect<BamlProtocolException>(() =>
+            _ = PrimitiveProtocol.DecodeStreamHandle(
+                streamEnvelope.ToByteArray(),
+                partialMetadata,
+                finalMetadata,
+                "test.echo$stream",
+                api));
+        streamClass.Name = "ai.stream.Stream";
 
         BamlOutboundResult partialEnvelope = StreamPullResult(
             partialType,
@@ -2157,7 +2170,7 @@ internal static unsafe class Program
             partialEnvelope.ToByteArray(),
             partialMetadata,
             "string",
-            "baml.llm.Stream.next",
+            "ai.stream.Stream.next",
             api);
         Require(
             partial.HasPartial && partial.Partial.ReadString() == "partial",
@@ -2165,17 +2178,17 @@ internal static unsafe class Program
 
         BamlOutboundResult finishedEnvelope = StreamPullResult(
             partialType,
-            "baml.stream.StreamFinished",
+            "ai.stream.Done",
             new BamlOutboundValue
             {
-                ClassValue = new BamlValueClass { Name = "baml.stream.StreamFinished" },
+                ClassValue = new BamlValueClass { Name = "ai.stream.Done" },
             });
         Require(
             !PrimitiveProtocol.DecodeStreamPull(
                 finishedEnvelope.ToByteArray(),
                 partialMetadata,
                 "string",
-                "baml.llm.Stream.next",
+                "ai.stream.Stream.next",
                 api).HasPartial,
             "exact native stream finished arm did not decode");
 
@@ -2189,7 +2202,7 @@ internal static unsafe class Program
                 finishedEnvelope.ToByteArray(),
                 partialMetadata,
                 "string",
-                "baml.llm.Stream.next",
+                "ai.stream.Stream.next",
                 api).HasPartial,
             "canonical union ordering changed stream pull arm recognition");
         options[1] = options[0].Clone();
@@ -2198,7 +2211,7 @@ internal static unsafe class Program
                 finishedEnvelope.ToByteArray(),
                 partialMetadata,
                 "string",
-                "baml.llm.Stream.next",
+                "ai.stream.Stream.next",
                 api));
     }
 
@@ -2211,7 +2224,7 @@ internal static unsafe class Program
         union.Options.Add(partialType.Clone());
         union.Options.Add(new BamlTy
         {
-            ClassTy = new BamlTyClass { Name = "baml.stream.StreamFinished" },
+            ClassTy = new BamlTyClass { Name = "ai.stream.Done" },
         });
         return new BamlOutboundResult
         {

@@ -9,18 +9,15 @@ use bex_engine::BexExternalValue;
 async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function ExtractNote<T>(transcript: string) -> T {
             client TestClient
-            prompt #"Extract a visit note from {{ transcript }}.\n{{ ctx.output_format }}"#
+            prompt `Extract a visit note from ${transcript}.\n${ctx.output_format}`
         }
 
         class SavedField {
@@ -126,18 +123,15 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
 async fn scenario_3_tool_union_dispatches_by_runtime_class_mint() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function PickAction<T>(context: string) -> T {
             client TestClient
-            prompt #"Pick one action for {{ context }}.\n{{ ctx.output_format }}"#
+            prompt `Pick one action for ${context}.\n${ctx.output_format}`
         }
 
         function main() -> string {
@@ -296,18 +290,15 @@ async fn class_order_identity_composites_and_to_baml_are_canonical() {
 async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function RoundTrip<T>() -> T {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> bool throws unknown {
@@ -416,18 +407,15 @@ async fn runtime_class_validation_is_eager_and_uses_compiler_diagnostics() {
 async fn same_fields_in_different_orders_render_independently() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function Render<T>() -> T {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {
@@ -474,18 +462,15 @@ async fn same_fields_in_different_orders_render_independently() {
 async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function Extract<T>() -> T {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {

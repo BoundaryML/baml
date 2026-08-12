@@ -27,12 +27,12 @@ function catch_arm_returns(x: int) -> int {
 
 test "catch_arm_braceless_return_fires_on_throw" {
     // x == 0 throws -> arm runs -> `return -1` exits the function with -1.
-    assert.is_true(baml.deep_equals(catch_arm_returns(0), -1))
+    assert.equal(catch_arm_returns(0), -1)
 }
 
 test "catch_arm_braceless_return_skipped_when_no_throw" {
     // x == 5 does not throw -> catch yields 5 -> 5 + 100 = 105.
-    assert.is_true(baml.deep_equals(catch_arm_returns(5), 105))
+    assert.equal(catch_arm_returns(5), 105)
 }
 
 // A typed catch arm value mixed with an early `return`: the `never`-typed
@@ -46,7 +46,7 @@ function catch_arm_return_mixed(x: int) -> int {
 
 test "catch_arm_braceless_return_mixed_arm_types" {
     // x == 0 throws "boom" (len 4) -> `return 4`.
-    assert.is_true(baml.deep_equals(catch_arm_return_mixed(0), 4))
+    assert.equal(catch_arm_return_mixed(0), 4)
 }
 
 // ── match arm ────────────────────────────────────────────────────────────────
@@ -63,9 +63,9 @@ function match_arm_returns(x: int) -> int {
 }
 
 test "match_arm_braceless_return_fires" {
-    assert.is_true(baml.deep_equals(match_arm_returns(0), -1))
+    assert.equal(match_arm_returns(0), -1)
 }
 
 test "match_arm_braceless_return_other_arm" {
-    assert.is_true(baml.deep_equals(match_arm_returns(7), 107))
+    assert.equal(match_arm_returns(7), 107)
 }

@@ -6,8 +6,9 @@
 //!
 //!   * `<name>.snap` / `<name>.snap.sse` — the raw SSE response body, captured
 //!     once with `curl` against the real provider (the request is built via the
-//!     compiler-synthesized `$build_request_stream` companion) and served
-//!     verbatim by the BAML replay server.
+//!     the fixture's recorder-only request helper, which delegates to the
+//!     same native-BAML provider lowering as `$stream`) and served verbatim
+//!     by the BAML replay server.
 //!
 //! Whether the network is hit is decided **only by insta state**: a capture
 //! runs when a `.snap.sse` payload is missing or `INSTA_UPDATE=always|force`;
@@ -36,9 +37,9 @@ recording mode is active (a recordings/*.snap.sse payload is missing, or
 INSTA_UPDATE forces an update), but OPENAI_API_KEY is not set — the live
 SSE capture can't run.
 
-maybe we should be running in `infisical run -- <command>`?
+maybe we should be running with Infisical?
 
-  infisical run -- cargo insta test -p sdk_test_llm_recordings
+  infisical run -- cargo nextest run -p sdk_test_llm_recordings
 
 see sdk_tests/fixtures/llm_functions/recordings/README.md"#;
 
@@ -116,8 +117,9 @@ struct RequestParts {
     body: String,
 }
 
-/// Build the streaming request via `<function>$build_request_stream` (the exact
-/// `{method,url,headers,body}` the runtime would send, `stream: true` injected).
+/// Build the streaming request via a fixture helper backed by the provider's
+/// native-BAML request lowering (the exact `{method,url,headers,body}` the
+/// runtime would send, with `stream: true`).
 /// Sets the replay client's env-resolved options first; `api_key` is the real
 /// key, since the only caller is the curl capture.
 async fn build_request(function: &str, api_key: &str) -> RequestParts {
@@ -135,7 +137,7 @@ async fn build_request(function: &str, api_key: &str) -> RequestParts {
     env::set_var("BAML_REPLAY_BASE_URL", OPENAI_BASE_URL);
     env::set_var("BAML_REPLAY_API_KEY", api_key);
 
-    let entry = format!("{function}$build_request_stream");
+    let entry = function.to_string();
     let mut args: IndexMap<&str, BexExternalValue> = IndexMap::new();
     args.insert("text", BexExternalValue::String(RECORDING_INPUT.into()));
     let out = run_compiled(program, &entry, args, false).await;
@@ -238,7 +240,12 @@ fn capture_via_curl(req: &RequestParts) -> Vec<u8> {
 }
 
 /// Well-formedness checks applied to a recording in BOTH record and validate
-/// modes: non-empty, several `data:` lines, terminated by `[DONE]`, no leaked key.
+/// modes: non-empty, several `data:` lines, properly terminated, no leaked key.
+///
+/// The openai client speaks the Responses API, so a recording ends with a
+/// terminal `response.completed` / `response.incomplete` / `response.failed`
+/// event. There is no `data: [DONE]` sentinel — that was Chat Completions,
+/// which no client speaks any more.
 fn validate_sse(bytes: &[u8]) {
     assert!(!bytes.is_empty(), "empty SSE recording");
     let text = String::from_utf8_lossy(bytes);
@@ -247,9 +254,14 @@ fn validate_sse(bytes: &[u8]) {
         data_lines > 3,
         "expected >3 `data:` lines, got {data_lines}"
     );
+    let tail = text.trim_end();
+    let terminated = tail.contains("\"response.completed\"")
+        || tail.contains("\"response.incomplete\"")
+        || tail.contains("\"response.failed\"");
     assert!(
-        text.trim_end().ends_with("data: [DONE]"),
-        "SSE recording must end with `data: [DONE]`"
+        terminated,
+        "SSE recording must end with a terminal Responses-API event \
+         (response.completed / response.incomplete / response.failed)"
     );
     assert!(
         !text.contains("sk-"),
@@ -271,16 +283,45 @@ fn openai_api_key_available_when_recording() {
     }
 }
 
+#[tokio::test]
+async fn recording_request_uses_stream_provider_lowering() {
+    let request = build_request(
+        "lorem.stream_e2e_extract_recording_request",
+        "test-recording-key",
+    )
+    .await;
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.url, "https://api.openai.com/v1/responses");
+    assert!(
+        request.body.contains("\"stream\":true"),
+        "recording request enables streaming: {}",
+        request.body
+    );
+    assert!(
+        request.body.contains("\"input\":"),
+        "recording request contains Responses input: {}",
+        request.body
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn sse_snapshot_string() {
-    let bytes = obtain_sse("replay_extract_string", "lorem.stream_e2e_extract").await;
+    let bytes = obtain_sse(
+        "replay_extract_string",
+        "lorem.stream_e2e_extract_recording_request",
+    )
+    .await;
     validate_sse(&bytes);
     settings().bind(|| insta::assert_binary_snapshot!("replay_extract_string.sse", bytes.clone()));
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn sse_snapshot_doc() {
-    let bytes = obtain_sse("replay_extract_doc", "lorem.stream_e2e_extract_doc").await;
+    let bytes = obtain_sse(
+        "replay_extract_doc",
+        "lorem.stream_e2e_extract_doc_recording_request",
+    )
+    .await;
     validate_sse(&bytes);
     settings().bind(|| insta::assert_binary_snapshot!("replay_extract_doc.sse", bytes.clone()));
 }

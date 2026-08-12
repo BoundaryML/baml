@@ -76,17 +76,14 @@ function typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] | str
 // A runtime enum is a legal call-site type argument for the
 // offline LLM companions. This compile model pins the public surface while the
 // executable scenarios in `reflect_call_any.rs` prove rendering and SAP landing.
-client<llm> RuntimeEnumClient {
-    provider openai
-    options {
-        model "gpt-4o-mini"
-        api_key "test-key"
-    }
-}
+client RuntimeEnumClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+);
 
 function RuntimeClassify<T>(input: string) -> T {
     client RuntimeEnumClient
-    prompt #"Choose a category for {{ input }}.\n{{ ctx.output_format }}"#
+    prompt `Choose a category for ${input}.\n${ctx.output_format}`
 }
 
 function runtime_enum_llm_companions_compile() -> string {

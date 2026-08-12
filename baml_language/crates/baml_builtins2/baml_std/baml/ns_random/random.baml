@@ -45,7 +45,7 @@ interface Rng {
 class SystemRandom {
     /// Returns a new `SystemRandom` instance using the global system random number generator.
     function get() -> SystemRandom throws never {
-        SystemRandom {}
+        SystemRandom {  }
     }
 
     implements Rng {
@@ -67,7 +67,7 @@ class SystemRandom {
 /// `SystemRandom` or a well-seeded `ChaCha20` instead.
 class Xoshiro256PlusPlus {
     /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type
+    _state: $rust_type,
 
     /// Creates a new `Xoshiro256PlusPlus` pseudo-random number generator.
     ///
@@ -113,7 +113,7 @@ class Xoshiro256PlusPlus {
 /// its output predictable.
 class ChaCha20 {
     /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type
+    _state: $rust_type,
 
     /// Creates a new `ChaCha20` pseudo-random number generator.
     ///
@@ -124,9 +124,7 @@ class ChaCha20 {
     ///
     /// ## Panics
     /// If `seed` is shorter than 32 bytes.
-    function new(
-        seed: uint8array = SystemRandom.get().random(32),
-    ) -> ChaCha20 throws never {
+    function new(seed: uint8array = SystemRandom.get().random(32)) -> ChaCha20 throws never {
         // A `$rust_function` builtin can't fill omitted default args, so this
         // thin wrapper resolves the default seed and forwards to `_new` (whose
         // `seed` is required) — the `net.TcpStream.connect`/`_connect` convention.

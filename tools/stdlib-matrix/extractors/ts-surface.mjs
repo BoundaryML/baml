@@ -380,6 +380,12 @@ function walkLibFile(filePath, isDom) {
           // literal, and only the first was ever recognized: every web class
           // came out an interface with none of its statics.
           if (!allowContainers.has(valueName)) continue;
+          // A namespace object's constructor is not a container of its own. The
+          // DOM declares `interface Performance`, `declare var Performance: {…}`
+          // *and* `declare var performance: Performance`; without this, the
+          // middle one minted a second container holding nothing but
+          // `prototype`, and `(web)` reported 34 containers for 33 names.
+          if (SINGLETONS.has(valueName)) continue;
           const container = containerFor(module, valueName, "class", since);
           for (const member of decl.type.members) {
             addMember(container, member, sourceFile, { since, isStatic: true });
@@ -414,13 +420,35 @@ function walkNodeModuleFile(filePath) {
   const text = fs.readFileSync(filePath, "utf8");
   const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, false);
 
-  function visitModuleBody(bareName, body) {
+  function visitModuleBody(bareName, body, nested = false) {
     const module = moduleFor(`node:${bareName}`, "node");
     const containerInterfaces = NODE_CONTAINER_INTERFACES.get(bareName);
     const pooledInterfaces = NODE_MODULE_INTERFACES.get(bareName);
     for (const stmt of body.statements ?? []) {
       if (ts.isFunctionDeclaration(stmt) && stmt.name) {
-        addFunction(module, stmt, sourceFile, "node");
+        // Only at the module's own level. Node declares overload helpers as
+        // `export namespace readFile { function __promisify__(…) }`, 67 of them
+        // in `fs` alone — pooling those upward invented `fs.__promisify__` and
+        // `fs.native` as stdlib symbols (each judged by a model, at cost) while
+        // merging 56 unrelated declarations under one id, destroying the real
+        // `fs.readFile.__promisify__`.
+        if (!nested) addFunction(module, stmt, sourceFile, "node");
+      } else if (ts.isVariableStatement(stmt)) {
+        // `export const EOL: string`. Reached on the module exactly as its
+        // functions are, and dropped entirely until now — `os.EOL` and
+        // `os.devNull` were both absent.
+        //
+        // `os.constants` stays out: it is a `namespace` of nested namespaces,
+        // not a value, so there is no declaration to record. The comment that
+        // used to sit below claimed `os.constants.signals` was reachable
+        // through the module; it never was.
+        if (!nested) {
+          for (const decl of stmt.declarationList.declarations) {
+            if (ts.isIdentifier(decl.name)) {
+              addPooledMember(module, decl, sourceFile);
+            }
+          }
+        }
       } else if (ts.isClassDeclaration(stmt) && stmt.name) {
         const container = containerFor(module, stmt.name.text, "class", "node");
         container.doc ??= jsdocDescription(stmt, sourceFile);
@@ -450,10 +478,11 @@ function walkNodeModuleFile(filePath) {
           }
         }
       } else if (ts.isModuleDeclaration(stmt) && stmt.body && ts.isModuleBlock(stmt.body)) {
-        // `namespace fs { … }` inside `declare module "fs"`, and `declare
-        // namespace NodeJS`. Flattened into the module: a reader reaches
-        // `os.constants.signals` through `os`, not through a nested scope.
-        visitModuleBody(bareName, stmt.body);
+        // Descended into for the interfaces it may hold — `process`'s API lives
+        // in `declare namespace NodeJS { interface Process }` — but marked
+        // nested, so the functions and values inside stay where they are
+        // declared rather than being pooled onto the module.
+        visitModuleBody(bareName, stmt.body, true);
       }
     }
   }

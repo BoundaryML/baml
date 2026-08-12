@@ -4314,22 +4314,36 @@ impl<'a> Parser<'a> {
                     if text == "const" {
                         return false;
                     }
+                    // `tools` is deliberately NOT a trigger: every LLM function
+                    // must also declare `client` and `prompt`, and raw string
+                    // contents lex as ordinary tokens in this scan, so a body
+                    // containing e.g. "tools/list" would misclassify.
                     if text == "client" || text == "prompt" {
                         // An LLM field is `client <value>` / `prompt <template>`.
-                        // A following `=`, `,`, or `)` means a named call arg
-                        // or plain identifier use, so this is an expression body.
+                        // A following `=`, `,`, `)`, or `.` means a named call
+                        // arg, plain identifier use, or a member access, and a
+                        // following `(` is a call (e.g. `spec.prompt()`), so
+                        // those are expression bodies — a field value never
+                        // starts with any of them.
                         let j = self.skip_trivia_and_comments_from(i + 1);
                         let next = self.tokens.get(j).map(|t| t.kind);
                         if !matches!(
                             next,
-                            Some(TokenKind::Equals | TokenKind::Comma | TokenKind::RParen)
+                            Some(
+                                TokenKind::Equals
+                                    | TokenKind::Comma
+                                    | TokenKind::RParen
+                                    | TokenKind::Dot
+                                    | TokenKind::LParen
+                            )
                         ) {
                             return true;
                         }
                     }
                 }
-                // `client` as KW_CLIENT: LLM directive is `client Model`, not
-                // `client.method(...)` or the named call arg `client = ...`.
+                // `client` as KW_CLIENT: the LLM directive is `client Model`,
+                // not `client.method(...)`, the named call arg `client = ...`,
+                // or a call THROUGH a parameter named `client` — `client(...)`.
                 TokenKind::Client if brace_depth == 1 => {
                     let j = self.skip_trivia_and_comments_from(i + 1);
                     let next = self.tokens.get(j).map(|t| t.kind);
@@ -4340,6 +4354,7 @@ impl<'a> Parser<'a> {
                                 | TokenKind::Equals
                                 | TokenKind::Comma
                                 | TokenKind::RParen
+                                | TokenKind::LParen
                         )
                     ) {
                         return true;
@@ -4371,6 +4386,7 @@ impl<'a> Parser<'a> {
 
             let mut has_client = false;
             let mut has_prompt = false;
+            let mut has_tools = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword (except Client)
@@ -4401,6 +4417,14 @@ impl<'a> Parser<'a> {
                     }
                     has_prompt = true;
                     p.parse_prompt_field();
+                } else if p.at(TokenKind::Word)
+                    && p.current().map(|t| t.text == "tools").unwrap_or(false)
+                {
+                    if has_tools {
+                        p.error_unexpected_token("Duplicate 'tools' field".to_string());
+                    }
+                    has_tools = true;
+                    p.parse_tools_field();
                 } else if p.try_recover_removed_type_builder() {
                     // Legacy `type_builder { ... }` inside an LLM function —
                     // E0098 emitted, block consumed.
@@ -4417,7 +4441,7 @@ impl<'a> Parser<'a> {
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
-                        "Only 'client' and 'prompt' allowed in LLM function, found '{}'",
+                        "Only 'client', 'tools' and 'prompt' allowed in LLM function, found '{}'",
                         p.current().map(|t| t.text.as_str()).unwrap_or("EOF")
                     ));
                     p.bump();
@@ -4448,55 +4472,45 @@ impl<'a> Parser<'a> {
             // Optional colon
             p.eat(TokenKind::Colon);
 
-            // Client name can be:
-            // - A simple identifier: MyClient
-            // - A quoted string: "openai/gpt-4o"
-            // - An unquoted shorthand: openai/gpt-4o-mini (contains slashes)
+            // The client value is either:
+            // - A quoted "provider/model" string: client "openai/gpt-4o"
+            // - An expression evaluating to an ai.Client: a declared client
+            //   name (`client Fast`), a constructor call
+            //   (`client openai.OpenAiClient.new(...)`), a wrapper
+            //   (`client ai.Retry.new(Fast)`), etc.
+            //
+            // The unquoted `client openai/gpt-4o` shorthand of the legacy
+            // world is no longer special-cased: as an expression it would be
+            // a division of two unresolved names, so lowering rejects a
+            // division-shaped client value with a "quote the model string"
+            // migration error rather than letting E0003 cascade.
             if p.at(TokenKind::Quote) {
                 p.parse_string();
-            } else if p.at(TokenKind::Word) {
-                // Parse unquoted client value - consume tokens until newline, brace,
-                // a field separator, or the start of the next LLM-block field. This
-                // handles multi-token shorthands like `openai/gpt-4o-mini` while still
-                // terminating the scan on a single-line body such as
-                // `{ client: Fast prompt: `...` }`, where the value must not swallow
-                // `prompt` and then misreport it as missing (B-621). Stopping at `,`/`;`
-                // keeps them out of the client value so they surface an accurate
-                // block-level diagnostic instead.
-                //
-                // The field-start boundary only applies once a value token has been
-                // consumed: a bare `client` whose value is absent (with the next field
-                // on the following line) must stop immediately via the newline check
-                // rather than absorbing that field, and a client whose name happens to
-                // be `prompt` is still read as the value.
-                let mut consumed_value = false;
-                while !p.at_end() {
-                    if p.at(TokenKind::RBrace)
-                        || p.at(TokenKind::LBrace)
-                        || p.at(TokenKind::Comma)
-                        || p.at(TokenKind::Semicolon)
-                        || p.has_newline_ahead()
-                        || (consumed_value && p.at_llm_field_start())
-                    {
-                        break;
-                    }
-                    p.bump();
-                    consumed_value = true;
-                }
+            } else if p.at(TokenKind::RBrace) || p.has_newline_ahead() || p.at_end() {
+                p.error_unexpected_token("client value".to_string());
             } else {
-                p.error_unexpected_token("client name".to_string());
+                p.parse_expr();
             }
         });
     }
 
-    /// True when the parser is positioned at the start of an LLM-block field
-    /// (`client` or `prompt`). The unquoted client-value scan uses this to
-    /// stop at the next field so that fields written on a single line (with
-    /// no separating newline) are not merged into the client value.
-    fn at_llm_field_start(&self) -> bool {
-        self.at(TokenKind::Client)
-            || (self.at(TokenKind::Word)
-                && self.current().map(|t| t.text == "prompt").unwrap_or(false))
+    /// Parse the `tools` field of an LLM function body: `tools [a, b]` or
+    /// `tools: [a, b]`. The value is an arbitrary expression producing the
+    /// tool list (usually an array literal of function references).
+    fn parse_tools_field(&mut self) {
+        self.with_node(SyntaxKind::TOOLS_FIELD, |p| {
+            // 'tools' keyword (as Word token)
+            if p.at(TokenKind::Word) && p.current().map(|t| t.text == "tools").unwrap_or(false) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("'tools' keyword".to_string());
+            }
+
+            // Optional colon
+            p.eat(TokenKind::Colon);
+
+            p.parse_expr();
+        });
     }
 
     fn parse_prompt_field(&mut self) {
@@ -6281,6 +6295,22 @@ impl<'a> Parser<'a> {
                     }
                     self.finish_node();
                 }
+            } else if op == TokenKind::At
+                && !self.has_newline_ahead()
+                && self
+                    .peek(1)
+                    .is_some_and(|t| t.kind == TokenKind::Word && t.text == "spec")
+            {
+                // Postfix `@spec` on an LLM function reference: `MyFunc@spec(...)`.
+                // Wraps the base expression in a SPEC_EXPR; AST lowering renames
+                // the path's last segment to the `<name>$spec` companion. The
+                // no-newline guard mirrors the tagged-template rule so an
+                // attribute at the start of the next line is never absorbed.
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
+                self.bump(); // @
+                self.bump(); // spec
+                self.finish_node();
             } else if op == TokenKind::Dot && self.looks_like_as_projection() {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
@@ -7751,8 +7781,25 @@ impl<'a> Parser<'a> {
 
     // ============ Client Parsing ============
 
-    /// Parse a client declaration
+    /// Parse a client declaration.
+    ///
+    /// Two forms: `client Name = <expr>;` (a named client value — the
+    /// single-path world) and the legacy `client<llm> Name { ... }` config
+    /// block, which still parses so lowering can emit a targeted migration
+    /// error instead of a parse cascade.
     pub(crate) fn parse_client(&mut self) {
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Word)
+            && self.peek(2).map(|t| t.kind) == Some(TokenKind::Equals)
+        {
+            self.with_node(SyntaxKind::CLIENT_VALUE_DEF, |p| {
+                p.expect(TokenKind::Client);
+                p.bump(); // name
+                p.bump(); // =
+                p.parse_expr();
+                p.eat(TokenKind::Semicolon);
+            });
+            return;
+        }
         self.with_node(SyntaxKind::CLIENT_DEF, |p| {
             // 'client' keyword
             p.expect(TokenKind::Client);
@@ -9632,6 +9679,31 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
         let source = r#"
 function f() -> int {
   client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_calling_a_client_param_is_not_llm_body() {
+        // `client` lexes as KW_CLIENT, so a call THROUGH a parameter named
+        // `client` looks like the start of an LLM directive unless `(` is
+        // excluded — the body would then be parsed as an LLM block and fail.
+        let source = r#"
+function f(client: (int) -> int) -> int {
+  client(1)
 }
 "#;
 

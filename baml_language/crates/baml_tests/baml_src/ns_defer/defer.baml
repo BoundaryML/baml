@@ -93,7 +93,7 @@ function defer_call_throws_main() -> string[] {
 }
 
 test "defer_runs_when_called_function_throws" {
-    assert.is_true(baml.deep_equals(defer_call_throws_main(), ["cleanup", "caught"]))
+    assert.equal(defer_call_throws_main(), ["cleanup", "caught"])
 }
 
 // Two armed defers, then a call throws after both: they run last-first.
@@ -114,7 +114,7 @@ function defer_unwind_lifo_main() -> string[] {
 }
 
 test "defer_unwind_is_lifo_with_multiple_defers" {
-    assert.is_true(baml.deep_equals(defer_unwind_lifo_main(), ["b", "a"]))
+    assert.equal(defer_unwind_lifo_main(), ["b", "a"])
 }
 
 // A throw between two defers runs ONLY the defer armed before it (stair-step
@@ -140,7 +140,7 @@ function defer_armed_only_main() -> string[] {
 }
 
 test "defer_unwind_runs_only_armed_defers" {
-    assert.is_true(baml.deep_equals(defer_armed_only_main(), ["a"]))
+    assert.equal(defer_armed_only_main(), ["a"])
 }
 
 // ─── Stage 1: the remaining static exit paths ────────────────────────────────
@@ -161,7 +161,7 @@ function defer_early_return_main() -> string[] {
 }
 
 test "defer_runs_on_early_return" {
-    assert.is_true(baml.deep_equals(defer_early_return_main(), ["cleanup"]))
+    assert.equal(defer_early_return_main(), ["cleanup"])
 }
 
 // The defer in the loop body runs on the iteration that `break`s.
@@ -177,7 +177,7 @@ function defer_on_break_main() -> string[] {
 }
 
 test "defer_runs_on_break" {
-    assert.is_true(baml.deep_equals(defer_on_break_main(), ["i", "d", "d"]))
+    assert.equal(defer_on_break_main(), ["i", "d", "d"])
 }
 
 // The defer in the loop body runs on the iteration that `continue`s.
@@ -193,7 +193,7 @@ function defer_on_continue_main() -> string[] {
 }
 
 test "defer_runs_on_continue" {
-    assert.is_true(baml.deep_equals(defer_on_continue_main(), ["d", "body", "d"]))
+    assert.equal(defer_on_continue_main(), ["d", "body", "d"])
 }
 
 // An explicit `throw` in the deferring function runs the defer, then the
@@ -212,7 +212,7 @@ function defer_explicit_throw_main() -> string[] {
 }
 
 test "defer_runs_on_explicit_throw_in_same_function" {
-    assert.is_true(baml.deep_equals(defer_explicit_throw_main(), ["cleanup", "caught"]))
+    assert.equal(defer_explicit_throw_main(), ["cleanup", "caught"])
 }
 
 // A defer that throws mid-unwind: the remaining (earlier-declared) defers
@@ -236,7 +236,7 @@ function defer_throwing_defer_main() -> string[] {
 }
 
 test "defer_that_throws_still_runs_remaining_defers" {
-    assert.is_true(baml.deep_equals(defer_throwing_defer_main(), ["b", "a", "from_b"]))
+    assert.equal(defer_throwing_defer_main(), ["b", "a", "from_b"])
 }
 
 // `await` is allowed inside a defer body; it suspends/resumes correctly.
@@ -256,5 +256,5 @@ function defer_await_inside_main() -> string[] {
 }
 
 test "await_inside_defer" {
-    assert.is_true(baml.deep_equals(defer_await_inside_main(), ["body", "awaited"]))
+    assert.equal(defer_await_inside_main(), ["body", "awaited"])
 }

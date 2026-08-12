@@ -60,6 +60,12 @@ function legendFor(side: Side): ReadonlyArray<readonly [string, string]> {
 }
 
 /**
+ * The report shape this build understands. Bumped by the producer whenever the
+ * relation changes — v2 moved the judgement key to the TypeScript side.
+ */
+const REPORT_FORMAT = 2;
+
+/**
  * Which report to load, given whatever `?src=` said.
  *
  * A relative path only, resolved against this page. The parameter exists so one
@@ -71,12 +77,25 @@ function legendFor(side: Side): ReadonlyArray<readonly [string, string]> {
 export function reportSource(requested: string | null): string {
   const fallback = './matrix.json';
   if (requested === null || requested.length === 0) return fallback;
-  // Anything the URL parser accepts as absolute — including a scheme-relative
-  // `//host/x` — names an origin, and so is refused.
-  const resolved = new URL(requested, location.href);
-  return resolved.origin === location.origin
-    ? resolved.pathname + resolved.search
-    : fallback;
+  let resolved: URL;
+  try {
+    // Anything the URL parser accepts as absolute — including a scheme-relative
+    // `//host/x` — names an origin, and so is refused.
+    resolved = new URL(requested, location.href);
+  } catch {
+    // The parser rejects some inputs outright (`http://[`). Throwing here would
+    // escape `connectedCallback` and leave the page on "Loading…" forever,
+    // since the load's own error handling is downstream of this call.
+    return fallback;
+  }
+  if (resolved.origin !== location.origin) return fallback;
+  // The resolved URL, not a path rebuilt from its parts. Returning
+  // `pathname + search` passed the origin check and then threw the origin
+  // away: a `..` that pops past the root leaves a pathname beginning with
+  // `//`, and `fetch("//host/x")` is scheme-relative, not a path. So
+  // `?src=/..//evil.example/matrix.json` cleared the check and then fetched
+  // evil.example — the precise thing this function exists to prevent.
+  return resolved.href;
 }
 
 export class MatrixAppElement extends LitElement {
@@ -169,15 +188,33 @@ export class MatrixAppElement extends LitElement {
     this.target = { ...ref, nonce: this.#requests };
   }
 
-  /** `#<side>/<name>`, when the report knows that name. */
+  /**
+   * `#<side>/<name>`, when the report knows that name.
+   *
+   * Everything here is best-effort: the fragment is whatever was in the address
+   * bar, and a bad one must not cost the reader the report. It used to: this
+   * runs inside `#load`'s try, *after* the matrix is assigned, so a fragment
+   * like `#ts/%zz` made `decodeURIComponent` throw and the page reported
+   * "Could not load ./matrix.json — URI malformed" over a report that had
+   * loaded perfectly. Via `popstate` the same throw was uncaught entirely.
+   */
   #followHash() {
     const raw = location.hash.slice(1);
     const index = this.matrix ? SymbolIndex.for(this.matrix) : null;
     if (raw.length === 0 || !index) return;
     const cut = raw.indexOf('/');
+    // No separator means no name. `slice(0, -1)` would drop the last character
+    // and read `#tsX` as side `ts`, which is a different symbol's address.
+    if (cut < 0) return;
     const side = raw.slice(0, cut);
     if (side !== 'baml' && side !== 'ts') return;
-    const ref = index.resolve(side, decodeURIComponent(raw.slice(cut + 1)));
+    let name: string;
+    try {
+      name = decodeURIComponent(raw.slice(cut + 1));
+    } catch {
+      return;
+    }
+    const ref = index.resolve(side, name);
     if (ref) this.#focus(ref);
   }
 
@@ -187,6 +224,16 @@ export class MatrixAppElement extends LitElement {
       if (!response.ok)
         throw new Error(`${response.status} ${response.statusText}`);
       const matrix = (await response.json()) as SymbolMatrix;
+      // The producer refuses a report it cannot read, and so does the workflow;
+      // this is the third consumer and the only public one. Rendering a shape
+      // this build does not understand is worse than saying so — the fields it
+      // still recognises would draw a plausible page over the wrong data.
+      if (matrix.format_version !== REPORT_FORMAT) {
+        this.error =
+          `${source} is report format v${matrix.format_version}; this page reads ` +
+          `v${REPORT_FORMAT}. Rebuild it with tools/stdlib-matrix/run.`;
+        return;
+      }
       this.#links = new Links(matrix);
       this.matrix = matrix;
       this.#followHash();

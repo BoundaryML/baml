@@ -27,67 +27,58 @@ enum RgbColor { Red, Green, Blue }
 
 test "type_of_class_to_string" {
     let s = type.of<User>().to_string();
-    assert.is_true(baml.deep_equals(s, "reflect_type_of.User"))
+    assert.equal(s, "reflect_type_of.User")
 }
 
 test "type_of_int_to_string" {
-    assert.is_true(baml.deep_equals(type.of<int>().to_string(), "int"))
+    assert.equal(type.of<int>().to_string(), "int")
 }
 
 test "type_of_string_to_string" {
-    assert.is_true(baml.deep_equals(type.of<string>().to_string(), "string"))
+    assert.equal(type.of<string>().to_string(), "string")
 }
 
 test "type_of_bool_to_string" {
-    assert.is_true(baml.deep_equals(type.of<bool>().to_string(), "bool"))
+    assert.equal(type.of<bool>().to_string(), "bool")
 }
 
 test "type_of_array_to_string" {
     let s = type.of<User[]>().to_string();
-    assert.is_true(baml.deep_equals(s, "reflect_type_of.User[]"))
+    assert.equal(s, "reflect_type_of.User[]")
 }
 
 test "type_of_optional_to_string" {
     let s = type.of<User?>().to_string();
-    assert.is_true(baml.deep_equals(s, "reflect_type_of.User | null"))
+    assert.equal(s, "reflect_type_of.User | null")
 }
 
 test "type_of_map_to_string" {
     let s = type.of<map<string, User>>().to_string();
-    assert.is_true(baml.deep_equals(s, "map<string, reflect_type_of.User>"))
+    assert.equal(s, "map<string, reflect_type_of.User>")
 }
 
 test "type_of_generic_class_runs_without_crash" {
     let s = type.of<Container<User>>().to_string();
-    assert.is_true(baml.deep_equals(s, "reflect_type_of.Container<reflect_type_of.User>"))
+    assert.equal(s, "reflect_type_of.Container<reflect_type_of.User>")
 }
 
 test "type_of_generic_class_to_string_matches_source" {
     let matches = type.of<Container<User>>().to_string() == "reflect_type_of.Container<reflect_type_of.User>";
-    assert.is_true(baml.deep_equals(matches, true))
+    assert.is_true(matches)
 }
 
 // ─── Structural equality ─────────────────────────────────────────────────────
 
 test "type_of_map_eq" {
-    assert.is_true(baml.deep_equals(
-        type.of<map<string, User>>() == type.of<map<string, User>>(),
-        true
-    ))
+    assert.is_true(type.of<map<string, User>>() == type.of<map<string, User>>())
 }
 
 test "type_of_generic_class_eq" {
-    assert.is_true(baml.deep_equals(
-        type.of<Container<User>>() == type.of<Container<User>>(),
-        true
-    ))
+    assert.is_true(type.of<Container<User>>() == type.of<Container<User>>())
 }
 
 test "type_of_generic_class_neq_different_arg" {
-    assert.is_true(baml.deep_equals(
-        type.of<Container<User>>() == type.of<Container<int>>(),
-        false
-    ))
+    assert.is_true(type.of<Container<User>>() != type.of<Container<int>>())
 }
 
 // ─── Phase 7: parametric class forwarding via generic bodies ─────────────────
@@ -100,23 +91,17 @@ function wrap_in_container<T>() -> type {
 
 test "wrap_in_container_to_string" {
     let s = wrap_in_container<int>().to_string();
-    assert.is_true(baml.deep_equals(s, "reflect_type_of.Container<int>"))
+    assert.equal(s, "reflect_type_of.Container<int>")
 }
 
 // ─── Structural equality ─────────────────────────────────────────────────────
 
 test "type_of_same_class_eq" {
-    assert.is_true(baml.deep_equals(
-        type.of<User>() == type.of<User>(),
-        true
-    ))
+    assert.is_true(type.of<User>() == type.of<User>())
 }
 
 test "type_of_different_class_neq" {
-    assert.is_true(baml.deep_equals(
-        type.of<User>() == type.of<int>(),
-        false
-    ))
+    assert.is_true(type.of<User>() != type.of<int>())
 }
 
 test "type_of_assign_and_compare" {
@@ -125,42 +110,30 @@ test "type_of_assign_and_compare" {
     // making this compare `null == null`).
     let a: type = type.of<User>();
     let b: type = type.of<User>();
-    assert.is_true(baml.deep_equals(a == b, true))
+    assert.is_true(a == b)
 }
 
 // ─── Enum and union coverage ─────────────────────────────────────────────────
 
 test "type_of_enum_to_string" {
     let s = type.of<RgbColor>().to_string();
-    assert.is_true(baml.deep_equals(s, "reflect_type_of.RgbColor"))
+    assert.equal(s, "reflect_type_of.RgbColor")
 }
 
 test "type_of_enum_eq" {
-    assert.is_true(baml.deep_equals(
-        type.of<RgbColor>() == type.of<RgbColor>(),
-        true
-    ))
+    assert.is_true(type.of<RgbColor>() == type.of<RgbColor>())
 }
 
 test "type_of_enum_neq_class" {
-    assert.is_true(baml.deep_equals(
-        type.of<RgbColor>() == type.of<User>(),
-        false
-    ))
+    assert.is_true(type.of<RgbColor>() != type.of<User>())
 }
 
 test "type_of_union_eq" {
-    assert.is_true(baml.deep_equals(
-        type.of<int | string>() == type.of<int | string>(),
-        true
-    ))
+    assert.is_true(type.of<int | string>() == type.of<int | string>())
 }
 
 test "type_of_union_neq_different_member" {
-    assert.is_true(baml.deep_equals(
-        type.of<int | string>() == type.of<int | bool>(),
-        false
-    ))
+    assert.is_true(type.of<int | string>() != type.of<int | bool>())
 }
 
 // ─── Stable identity via .to_string() ───────────────────────────────────────
@@ -169,7 +142,7 @@ test "type_of_to_string_works_as_map_key" {
     let m: map<string, int> = {};
     m[type.of<User>().to_string()] = 1;
     m[type.of<int>().to_string()] = 2;
-    assert.is_true(baml.deep_equals(m[type.of<User>().to_string()], 1))
+    assert.equal(m[type.of<User>().to_string()], 1)
 }
 
 // ─── type.of_value (BEP-066 K-13) ────────────────────────────────────────────

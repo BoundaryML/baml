@@ -2,48 +2,37 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.TestClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+function user.FunctionWithComments(a: string, b: int, client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(FunctionWithComments$spec(a, b)).value : string
 }
-function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "FunctionWithComments", map { "a": a, "b": b }) : string
+function user.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
 }
-function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.llm.PromptAst
+lambda user.FunctionWithComments$spec {
 }
-function user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.http.Request
+function user.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt throws never {
+  FunctionWithComments$spec(a, b).prompt(output_format = ai.wire.render_output_format(type.of<string>())) : ai.Prompt
 }
-function user.FunctionWithComments$build_request_stream(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.http.Request
+function user.FunctionWithComments$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
-function user.CommentAfterArrow(client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "CommentAfterArrow", map {  }) : string
+function user.CommentAfterArrow(client: ai.Client | null = null) -> string throws never {
+  ai.Agent.new<string>(client = client).run(CommentAfterArrow$spec()).value : string
 }
-function user.CommentAfterArrow$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "CommentAfterArrow", map {  }) : baml.llm.PromptAst
+function user.CommentAfterArrow$spec() -> ai.FunctionSpec<string> throws never {
+  ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: TestClient } : ai.FunctionSpec<string>
 }
-function user.CommentAfterArrow$build_request(client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "CommentAfterArrow", map {  }) : baml.http.Request
+lambda user.CommentAfterArrow$spec {
 }
-function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "CommentAfterArrow", map {  }) : baml.http.Request
+function user.CommentAfterArrow$render_prompt() -> ai.Prompt throws never {
+  CommentAfterArrow$spec().prompt(output_format = ai.wire.render_output_format(type.of<string>())) : ai.Prompt
 }
-function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "FunctionWithComments", map { "a": a, "b": b }) : baml.llm.Stream<string | null, string>
+function user.CommentAfterArrow$parse(json: string) -> string throws never {
+  baml.sap.parse<T>(json) : string
 }
-function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
+function user.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(FunctionWithComments$spec(a, b), client = client) : ai.stream.Stream<string | null, string>
 }
-function user.FunctionWithComments$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
-}
-function user.CommentAfterArrow$stream(client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "CommentAfterArrow", map {  }) : baml.llm.Stream<string | null, string>
-}
-function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-}
-function user.CommentAfterArrow$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.parse<TFinal>(json) : string
+function user.CommentAfterArrow$stream(client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
+  ai.stream.from_spec(CommentAfterArrow$spec(), client = client) : ai.stream.Stream<string | null, string>
 }

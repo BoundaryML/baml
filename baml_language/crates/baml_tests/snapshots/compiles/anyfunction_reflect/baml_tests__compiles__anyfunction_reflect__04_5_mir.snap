@@ -335,37 +335,17 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
     }
 }
 
-fn user.RuntimeEnumClient$new(lenient: bool) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: bool // lenient // param
-    let _2: baml.llm.PrimitiveClientOptions
-    let _3: map<string, string>
-    let _4: map<string, string>
-    let _5: map<string, unknown>
-
-    bb0: {
-        _3 = {  }: map<string, string>;
-        _4 = {  }: map<string, string>;
-        _5 = {  }: map<string, unknown>;
-        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4o-mini", const null, const null, const null, const null, const null, const null, const null, const null, const "test-key", const null, const null, copy _3, copy _4, copy _5 };
-        _0 = baml.llm.PrimitiveClient { const "RuntimeEnumClient", const "openai", copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RuntimeClassify(input: string, client: baml.llm.Client) -> T {
+fn user.RuntimeClassify(input: string, client: null | ai.Client) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // input // param
-    let _2: baml.llm.Client // client // param
+    let _2: null | ai.Client // client // param
     let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
+    let _4: ai.RunResult<T>
+    let _5: ai.Agent<T>
+    let _6: type
+    let _7: ai.FunctionSpec<T>
+    let _8: type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -373,199 +353,243 @@ fn user.RuntimeClassify(input: string, client: baml.llm.Client) -> T {
     }
 
     bb1: {
-        _2 = const item user.RuntimeEnumClient;
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "input": copy _1 }: map<string, unknown>;
-        _5 = load_type(#0);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "RuntimeClassify", copy _4, const <omitted>) -> [bb3];
+        _6 = load_type(#0);
+        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
+        _8 = load_type(#0);
+        _7 = call const fn user.RuntimeClassify$spec<copy _8>(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _4 = virtual_call run as ai.Runner<#0, Error = ai.errors.Failure | baml.errors.UnknownError | baml.reflect.errors.CompilationError, Output = ai.RunResult<#0>>(copy _5, copy _7) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _4.0;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn user.RuntimeClassify$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // input // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.RuntimeEnumClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "input": copy _1 }: map<string, unknown>;
-        _5 = load_type(#0);
-        _0 = call const fn baml.llm.build_request<copy _5>(copy _2, const "RuntimeClassify", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.RuntimeClassify$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // input // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.RuntimeEnumClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "input": copy _1 }: map<string, unknown>;
-        _5 = load_type(#0);
-        _0 = call const fn baml.llm.build_request_stream<copy _5>(copy _2, const "RuntimeClassify", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.RuntimeClassify$parse(json: string, client: baml.llm.Client) -> T {
+fn user.RuntimeClassify$parse(json: string) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
+    let _2: type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _2 = const item user.RuntimeEnumClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(#0 | null);
-        _5 = load_type(#0);
-        _0 = call const fn baml.llm.parse<copy _4, copy _5>(copy _1) -> [bb3];
-    }
-
-    bb3: {
         return;
     }
 }
 
-fn user.RuntimeClassify$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | T, T> {
+fn user.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
     // Locals:
-    let _0: baml.llm.Stream<null | T, T> // _0 // return
-    let _1: baml.http.SseStream // sse // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.RuntimeEnumClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(#0 | null);
-        _5 = load_type(#0);
-        _0 = call const fn baml.llm.Client.__make_stream<copy _4, copy _5>(copy _2, copy _1) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.RuntimeClassify$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
+    let _0: ai.Prompt // _0 // return
     let _1: string // input // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const item user.RuntimeEnumClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = { const "input": copy _1 }: map<string, unknown>;
-        _5 = load_type(#0);
-        _0 = call const fn baml.llm.render_prompt<copy _5>(copy _2, const "RuntimeClassify", copy _4, const <omitted>) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.RuntimeClassify$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<null | T, T> {
-    // Locals:
-    let _0: baml.llm.Stream<null | T, T> // _0 // return
-    let _1: string // input // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: map<string, unknown>
+    let _2: ai.FunctionSpec<T>
+    let _3: type
+    let _4: string
     let _5: type
     let _6: type
 
     bb0: {
+        _3 = load_type(#0);
+        _2 = call const fn user.RuntimeClassify$spec<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _5 = load_type(#0);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn ai.wire.render_output_format(copy _5) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(#0);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _6>(copy _2, copy _4) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T> {
+    // Locals:
+    let _0: ai.FunctionSpec<T> // _0 // return
+    let _1: string // input // param [captured]
+    let _2: map<string, unknown>
+    let _3: (string) -> ai.Prompt throws never
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+
+    bb0: {
+        _2 = { const "input": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0]<1 type_args>(copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _0 = ai.FunctionSpec<#0> { const "RuntimeClassify", copy _2, copy _3, copy _4, const item user.RuntimeEnumClient };
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: ai.internal.SpecCtx // ctx
+    let _3: baml.TaggedString //  __spec_tagged_prompt
+    let _4: string[] //  __tt_parts
+    let _5: unknown[] //  __tt_values
+    let _6: string //  __tt_cur
+    let _7: string
+    let _8: int
+    let _9: string[]
+    let _10: string
+    let _11: type
+    let _12: int
+    let _13: unknown[]
+    let _14: string
+    let _15: type
+    let _16: string
+    let _17: int
+    let _18: string[]
+    let _19: string
+    let _20: type
+    let _21: int
+    let _22: unknown[]
+    let _23: string
+    let _24: type
+    let _25: int
+    let _26: string[]
+    let _27: string
+    let _28: type
+    let _29: string[]
+    let _30: unknown[]
+    let _31: string[]
+    let _32: baml.TaggedString
+    let _33: unknown[]
+    let _34: baml.TaggedString
+
+    bb0: {
+        _2 = ai.internal.SpecCtx { copy _1 };
+        _4 = []: string[];
+        _5 = []: unknown[];
+        _6 = const "";
+        _7 = copy _6;
+        _6 = copy _7 + const "Choose a category for ";
+        _9 = copy _4;
+        _10 = copy _6;
+        _11 = load_type(string);
+        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1];
+    }
+
+    bb1: {
+        _6 = const "";
+        _13 = copy _5;
+        _14 = copy capture[0];
+        _15 = load_type(unknown);
+        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2];
+    }
+
+    bb2: {
+        _16 = copy _6;
+        _6 = copy _16 + const ".\n";
+        _18 = copy _4;
+        _19 = copy _6;
+        _20 = load_type(string);
+        _17 = call const fn baml.Array.push<copy _20>(copy _18, copy _19) -> [bb3];
+    }
+
+    bb3: {
+        _6 = const "";
+        _22 = copy _5;
+        _23 = copy _2.0;
+        _24 = load_type(unknown);
+        _21 = call const fn baml.Array.push<copy _24>(copy _22, copy _23) -> [bb4];
+    }
+
+    bb4: {
+        _26 = copy _4;
+        _27 = copy _6;
+        _28 = load_type(string);
+        _25 = call const fn baml.Array.push<copy _28>(copy _26, copy _27) -> [bb5];
+    }
+
+    bb5: {
+        _29 = copy _4;
+        _30 = copy _5;
+        _3 = baml.TaggedString { copy _29, copy _30 };
+        _32 = copy _3;
+        _31 = copy _32.0;
+        _34 = copy _3;
+        _33 = copy _34.1;
+        _0 = call const fn ai.internal.assemble_prompt(copy _31, copy _33) -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<null | T, T> {
+    // Locals:
+    let _0: ai.stream.Stream<null | T, T> // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.stream.StreamingClient // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<T>
+    let _5: type
+    let _6: type
+    let _7: type
+
+    bb0: {
         _3 = copy _2 == const <omitted>;
         branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
-        _2 = const item user.RuntimeEnumClient;
+        _2 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _4 = { const "input": copy _1 }: map<string, unknown>;
-        _5 = load_type(#0 | null);
-        _6 = load_type(#0);
-        _0 = call const fn baml.llm.stream_llm_function<copy _5, copy _6>(copy _2, const "RuntimeClassify", copy _4, const <omitted>) -> [bb3];
+        _5 = load_type(#0);
+        _4 = call const fn user.RuntimeClassify$spec<copy _5>(copy _1) -> [bb3];
     }
 
     bb3: {
+        _6 = load_type(#0 | null);
+        _7 = load_type(#0);
+        _0 = call const fn ai.stream.from_spec<copy _6, copy _7>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -577,7 +601,7 @@ fn user.runtime_enum_llm_companions_compile() -> string {
     let _2: (string | baml.reflect.enum.Value)[]
     let _3: baml.reflect.enum.Value
     let _4: string // prompt
-    let _5: baml.llm.PromptAst
+    let _5: ai.Prompt
     let _6: baml.reflect.enum.Type
     let _7: unknown // parsed
     let _8: baml.reflect.enum.Type
@@ -596,16 +620,16 @@ fn user.runtime_enum_llm_companions_compile() -> string {
 
     bb2: {
         _6 = copy _1;
-        _5 = call const fn user.RuntimeClassify$render_prompt<copy _6>(const "sample", const <omitted>) -> [bb3];
+        _5 = call const fn user.RuntimeClassify$render_prompt<copy _6>(const "sample") -> [bb3];
     }
 
     bb3: {
-        _4 = sys_op const fn baml.llm.PromptAst.text(copy _5) -> bb4;
+        _4 = call const fn ai.Prompt.text(copy _5) -> [bb4];
     }
 
     bb4: {
         _8 = copy _1;
-        _7 = call const fn user.RuntimeClassify$parse<copy _8>(const "\"k7\"", const <omitted>) -> [bb5];
+        _7 = call const fn user.RuntimeClassify$parse<copy _8>(const "\"k7\"") -> [bb5];
     }
 
     bb5: {

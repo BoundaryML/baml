@@ -68,18 +68,15 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
             email: string
         }
 
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function ExtractPerson<T extends PersonAnchor>(input: string) -> T {
             client TestClient
-            prompt #"Extract a person from {{ input }}.\n{{ ctx.output_format }}"#
+            prompt `Extract a person from ${input}.\n${ctx.output_format}`
         }
 
         function main() -> string {
@@ -129,18 +126,15 @@ async fn bounded_unreflect_fails_before_rendering() {
             email: string
         }
 
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function ExtractPerson<T extends PersonAnchor>() -> T {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {
@@ -273,18 +267,15 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
             email: string
         }
 
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function ExtractPerson<T extends PersonAnchor>() -> T {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> bool {
@@ -333,18 +324,15 @@ async fn open_interface_occurrence_fails_at_render_boundary() {
             person PersonAnchor
         }
 
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
 
         function ExtractEnvelope() -> Envelope {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {

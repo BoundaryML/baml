@@ -10,9 +10,7 @@
 //! [`EqualsDriver`] dispatches a class's or enum's custom `Equals.eq` when it has
 //! one, falling back to structural / variant-identity comparison otherwise.)
 //!
-//! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator
-//! and deliberately *unlike* `baml.deep_equals`, whose NaN-equal convention is
-//! a test-helper nicety rather than the language's equality.
+//! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator.
 
 use std::{
     collections::{HashMap, HashSet},

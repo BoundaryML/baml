@@ -10,17 +10,14 @@ use bex_engine::{
 use sys_native::SysOpsExt;
 
 const SCENARIO_SOURCE: &str = r####"
-client<llm> TestClient {
-  provider openai
-  options {
-    model "unused-network-free-companions"
-    api_key "unused"
-  }
-}
+client TestClient = openai.OpenAiClient.new(
+    model = "unused-network-free-companions",
+    api_key = "unused",
+);
 
 function Extract<T>(document: string) -> T {
   client TestClient
-  prompt #"Extract the document using this schema:\n{{ ctx.output_format }}"#
+  prompt `Extract the document using this schema:\n${ctx.output_format}`
 }
 
 function main() -> string throws unknown {
@@ -82,15 +79,13 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
 function main() -> bool throws unknown {
   let pkg = reflect.Package.compile({ "schema.baml": #"
-client<llm> InitClient {
-  provider openai
-  options {
-    model "unused-network-free-init-check"
-    api_key "unused"
-  }
-}
+client InitClient = openai.OpenAiClient.new(
+    model = "unused-network-free-init-check",
+    api_key = "unused",
+);
 function init_ready() -> bool {
-  InitClient.name == "InitClient"
+  let c = InitClient
+  c.model == "unused-network-free-init-check"
 }
 class Ready { value string }
 "# })
@@ -103,13 +98,10 @@ class Ready { value string }
 const REJECTED_INIT_SOURCE: &str = r####"
 function main() -> null throws unknown {
   reflect.Package.compile({ "schema.baml": #"
-client<llm> InitClient {
-  provider openai
-  options {
-    model "unused-network-free-init-check"
-    api_key "unused"
-  }
-}
+client InitClient = openai.OpenAiClient.new(
+    model = "unused-network-free-init-check",
+    api_key = "unused",
+);
 class Broken { value MissingType }
 "# })
   null

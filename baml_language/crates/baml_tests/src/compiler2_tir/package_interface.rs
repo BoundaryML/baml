@@ -1426,17 +1426,14 @@ implement app.Taggable for Mine {
             &[(
                 "main.baml",
                 r##"
-client<llm> Dummy {
-    provider openai
-    options {
-        model "gpt-4o"
-        api_key "test"
-    }
-}
+client Dummy = openai.OpenAiClient.new(
+    model = "gpt-4o",
+    api_key = "test",
+);
 
 function Ask() -> app.Widget {
     client Dummy
-    prompt #"Return a widget"#
+    prompt `Return a widget`
 }
 "##,
             )],

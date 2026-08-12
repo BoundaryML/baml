@@ -83,7 +83,7 @@ mod tests {
         let _file_a = db.add_file("a.baml", "class Foo { name string }");
         let _file_b = db.add_file(
             "b.baml",
-            "function bar(x: string) -> string { client GPT4\nprompt #\"hi\"# }",
+            "function bar(x: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
         );
 
         let user_pkg_id = PackageId::new(&db, Name::new("user"));
@@ -136,7 +136,7 @@ mod tests {
         let mut db = make_db();
         let _f = db.add_file(
             "methods.baml",
-            "class MyClass {\n  name string\n  function helper(x: string) -> string { client C\nprompt #\"hi\"# }\n}",
+            "class MyClass {\n  name string\n  function helper(x: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }\n}",
         );
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
@@ -237,7 +237,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "fn.baml",
-            "function greet(name: string) -> string { client C\nprompt #\"hi\"# }",
+            "function greet(name: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
         );
 
         // Find the function via the firewall.
@@ -482,7 +482,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "bindings.baml",
-            "function add(a: int, b: int) -> int { client C\nprompt #\"hi\"# }",
+            "function add(a: int, b: int) -> int { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
         );
 
         let index = file_semantic_index(&db, file);
@@ -564,15 +564,15 @@ mod tests {
         let mut db = make_db();
         let _file_a = db.add_file(
             "a.baml",
-            "function greet(x: string) -> string { client C\nprompt #\"hi\"# }",
+            "function greet(x: string) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }",
         );
         let _file_b = db.add_file(
             "b.baml",
-            "function greet(y: int) -> int { client C\nprompt #\"hey\"# }",
+            "function greet(y: int) -> int { client \"openai/gpt-4o-mini\"\nprompt `hey` }",
         );
         let _file_c = db.add_file(
             "c.baml",
-            "function greet(z: bool) -> bool { client C\nprompt #\"yo\"# }",
+            "function greet(z: bool) -> bool { client \"openai/gpt-4o-mini\"\nprompt `yo` }",
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
@@ -581,10 +581,9 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Four conflicts: greet, greet$render_prompt, greet$build_request,
-        // greet$build_request_stream
-        // Each LLM function expands to AST-level companions, all duplicated across 3 files.
-        // ($stream, $parse_stream, and $parse are PPIR-level and don't appear here.)
+        // Four conflicts: greet, greet$spec, greet$render_prompt, greet$parse.
+        // Each LLM function expands to AST-level companions, all duplicated
+        // across 3 files.
         assert_eq!(ns.conflicts().len(), 4);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
@@ -669,10 +668,7 @@ mod tests {
         let _type_file = db.add_file("types.baml", "type Backend = string");
         let _client_file = db.add_file(
             "clients.baml",
-            r#"client<llm> Backend {
-  provider openai
-  options { model "gpt-4o-mini" }
-}"#,
+            r#"client Backend = openai.OpenAiClient.new(model = "gpt-4o-mini");"#,
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
@@ -794,7 +790,7 @@ mod tests {
         let mut db = make_db();
         let file = db.add_file(
             "dup_method.baml",
-            "class Foo {\n  name string\n  function Bar(self) -> string { client C\nprompt #\"hi\"# }\n  function Bar(self) -> string { client C\nprompt #\"bye\"# }\n}",
+            "class Foo {\n  name string\n  function Bar(self) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }\n  function Bar(self) -> string { client \"openai/gpt-4o-mini\"\nprompt `bye` }\n}",
         );
 
         let index = file_semantic_index(&db, file);
@@ -1520,7 +1516,7 @@ function foo(user: User) -> string {
         let mut db = make_db();
         let file = db.add_file(
             "cross_kind.baml",
-            "class Foo {\n  bar string\n  function bar(self) -> string { client C\nprompt #\"hi\"# }\n}",
+            "class Foo {\n  bar string\n  function bar(self) -> string { client \"openai/gpt-4o-mini\"\nprompt `hi` }\n}",
         );
 
         let index = file_semantic_index(&db, file);
@@ -2105,14 +2101,7 @@ implements MyIface for MyClass {
 
 template_string MyTemplate(x: string) #"{{ x }}"#
 
-client<llm> MyClient {
-  provider openai
-  options { model "gpt-4o-mini" }
-}
-
-retry_policy MyPolicy {
-  max_retries 2
-}
+client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
 
 function target() -> int { 1 }
 
@@ -2177,10 +2166,8 @@ test my_test {
             "MyTemplate"
         );
 
-        // `client<llm>` and `retry_policy` desugar to top-level lets
-        // (`LetOrigin::Client` / `LetOrigin::RetryPolicy`), so their name
-        // spans come from the let source map, not the client/retry-policy
-        // item queries.
+        // `client Name = <expr>;` desugars to a top-level let, so its name
+        // span comes from the let source map, not a client item query.
         let find_let = |name: &str| {
             *item_data::file_lets(&db, file)
                 .iter()
@@ -2190,10 +2177,6 @@ test my_test {
         assert_eq!(
             text(item_data::let_source_map(&db, find_let("MyClient")).name_span),
             "MyClient"
-        );
-        assert_eq!(
-            text(item_data::let_source_map(&db, find_let("MyPolicy")).name_span),
-            "MyPolicy"
         );
 
         let test_loc = *item_data::file_tests(&db, file)

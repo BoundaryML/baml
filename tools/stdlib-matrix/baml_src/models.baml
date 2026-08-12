@@ -128,13 +128,6 @@ class ExportImplMethod {
 /// parser rejects it in struct-literal position, so this class can only be
 /// built by JSON decoding — which is how it always arrives (tests build
 /// fixtures with `baml.json.from_string` for the same reason).
-///
-// BUG: `baml fmt` cannot format a file containing this declaration — it fails
-// with "Expected token/node of kind WORD, but found KW_INTERFACE" pointing at
-// the field below. The declaration is accepted by the compiler, so the parser
-// and the formatter disagree about whether `interface` is a legal field name.
-// This file and symbols.baml (which reads `impl_record.interface`) are the two
-// the formatter skips.
 class ExportImpl {
     id: string,
     interface: string,

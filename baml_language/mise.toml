@@ -70,3 +70,9 @@ description = "Run all snapshot tests with INSTA_UPDATE=always"
 env = { INSTA_UPDATE = "always" }
 run = "cargo test --workspace"
 sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.fmt-stdlib]
+description = "Run the BAML formatter on the standard library packages"
+run = "cargo run -p baml_cli -- fmt"
+dir = "crates/baml_builtins2/baml_std"
+sources = ["crates/baml_builtins2/baml_std/**/*.baml"]

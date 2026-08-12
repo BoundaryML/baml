@@ -545,7 +545,7 @@ An unregistered type returns `null`, letting the value encoder reject it.
 
 > ⚠ **Deviation from Python (stdlib media detection).** Python seeds hardcoded
 > reverse typemap overrides for `baml.media.{Image,Audio,Video,Pdf}` and
-> `baml.llm.Stream`. Java does **not** register media in `TypeRegistry`; instead
+> `ai.stream.Stream`. Java does **not** register media in `TypeRegistry`; instead
 > the media wrapper classes implement the `BamlMedia` marker interface
 > (`bamlHandle()` + `bamlFqn()`), and the encoder detects them by
 > `instanceof BamlMedia` (`ProtoWriter.java:220-225`, `BamlMedia.java`).

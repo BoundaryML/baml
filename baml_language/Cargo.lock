@@ -6828,6 +6828,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "base64",
 ]
 
 [[package]]

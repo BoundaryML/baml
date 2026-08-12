@@ -72,20 +72,19 @@ function user.typed_dispatch(name: string, args: map<string, unknown>) -> user.D
             "bad-args" : "bad-args"
   }
 }
-function user.RuntimeEnumClient$new(lenient: bool) -> ? throws never {
-  baml.llm.PrimitiveClient { name: "RuntimeEnumClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+function user.RuntimeClassify<T>(input: string, client: ai.Client | null = null) -> T throws never {
+  ai.Agent.new<T>(client = client).run(RuntimeClassify$spec<T>(input)).value : T
 }
-function user.RuntimeClassify<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> T throws never {
-  baml.llm.call_llm_function<T>(client, "RuntimeClassify", map { "input": input }) : T
+function user.RuntimeClassify$spec<T>(input: string) -> ai.FunctionSpec<T> throws never {
+  ai.FunctionSpec { spec_name: "RuntimeClassify", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: RuntimeEnumClient } : ai.FunctionSpec<T>
 }
-function user.RuntimeClassify$render_prompt<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.PromptAst throws never {
-  baml.llm.render_prompt(client, "RuntimeClassify", map { "input": input }) : baml.llm.PromptAst
+lambda user.RuntimeClassify$spec {
 }
-function user.RuntimeClassify$build_request<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.http.Request throws never {
-  baml.llm.build_request(client, "RuntimeClassify", map { "input": input }) : baml.http.Request
+function user.RuntimeClassify$render_prompt<T>(input: string) -> ai.Prompt throws never {
+  RuntimeClassify$spec<T>(input).prompt(output_format = ai.wire.render_output_format(type.of<T>())) : ai.Prompt
 }
-function user.RuntimeClassify$build_request_stream<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.http.Request throws never {
-  baml.llm.build_request_stream(client, "RuntimeClassify", map { "input": input }) : baml.http.Request
+function user.RuntimeClassify$parse<T>(json: string) -> T throws never {
+  baml.sap.parse<T>(json) : T
 }
 function user.runtime_enum_llm_companions_compile() -> string throws never {
   { : never
@@ -101,12 +100,6 @@ class user.ToolError$stream {
 class user.Doc$stream {
   title: string | null
 }
-function user.RuntimeClassify$stream<T>(input: string, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.Stream<T | null, T> throws never {
-  baml.llm.stream_llm_function(client, "RuntimeClassify", map { "input": input }) : baml.llm.Stream<T | null, T>
-}
-function user.RuntimeClassify$parse_stream<T>(sse: baml.http.SseStream, client: baml.llm.Client = RuntimeEnumClient) -> baml.llm.Stream<T | null, T> throws never {
-  client.__make_stream(sse) : baml.llm.Stream<T | null, T>
-}
-function user.RuntimeClassify$parse<T>(json: string, client: baml.llm.Client = RuntimeEnumClient) -> T throws never {
-  baml.llm.parse<TFinal>(json) : T
+function user.RuntimeClassify$stream<T>(input: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<T | null, T> throws never {
+  ai.stream.from_spec(RuntimeClassify$spec<T>(input), client = client) : ai.stream.Stream<T | null, T>
 }

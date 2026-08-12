@@ -2,7 +2,7 @@
 //! (`let f = foo<int>`).
 //!
 //! The runtime fixtures in `baml_src/ns_instantiation_expr/` assert *value*
-//! equality via `baml.deep_equals`, which (by design) also holds for distinct
+//! equality via `==`, which (by design) also holds for distinct
 //! but structurally-equal copies — so it can't prove the pooled, pointer-stable
 //! identity that `foo<int> === foo<int>` is supposed to guarantee. BAML has no
 //! in-language identity operator, so the guarantee is verified here instead, by
@@ -49,18 +49,18 @@ class Other { id int }
 
 function identity<T>(x: T) -> T { x }
 
-// Two references to the SAME specialization. Returned via deep_equals so the
+// Two references to the SAME specialization. Compared with `==` so the
 // bindings stay live through optimization.
 function marker_pair() -> bool {
     let a = identity<Marker>;
     let b = identity<Marker>;
-    baml.deep_equals(a, b)
+    a == b
 }
 
 // A DIFFERENT specialization.
 function other_one() -> bool {
     let c = identity<Other>;
-    baml.deep_equals(c, c)
+    c == c
 }
 "#,
     );

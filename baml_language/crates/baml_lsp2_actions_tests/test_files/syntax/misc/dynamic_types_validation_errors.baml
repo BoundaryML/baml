@@ -1,6 +1,6 @@
 function TypeBuilderFn() -> string {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
 }
 
 class NonDynamic {

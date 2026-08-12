@@ -8,18 +8,15 @@ use bex_engine::BexExternalValue;
 async fn self_recursive_employee_renders_and_parses() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
 
         function Extract<T>() -> T {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {
@@ -108,18 +105,15 @@ async fn mutually_recursive_group_freezes_together_and_is_idempotent() {
 async fn frozen_mutation_and_unresolved_call_name_the_builder() {
     let output = baml_test!(
         r##"
-        client<llm> TestClient {
-            provider openai
-            options {
-                model "gpt-4o-mini"
-                api_key "test-key"
-                base_url "http://localhost:1234"
-            }
-        }
+        client TestClient = openai.OpenAiClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
 
         function Extract<T>() -> T {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {

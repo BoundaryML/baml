@@ -16,7 +16,7 @@ pub struct BamlHandle {
 ///    - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
 ///    - baml.llm.PromptAst                     -> ADT_PROMPT_AST
 ///    - baml.llm.Collector                     -> ADT_COLLECTOR
-///    - baml.llm.Stream                        -> ADT_TAGGED_HEAP_HANDLE
+///    - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
@@ -26,7 +26,7 @@ pub struct BamlHandle {
 ///
 /// Stdlib symbols TODO (decode to bare BamlPyHandle today):
 ///    - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
-///    - baml.glob.Glob, baml.llm.{StreamAccumulator,StreamCache}
+///    - baml.glob.Glob, baml.sap.ParseCache
 ///
 /// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -611,7 +611,7 @@ pub mod inbound_value {
         #[prost(string, tag = "12")]
         BigintValue(::prost::alloc::string::String),
         /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-        /// value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+        /// value, e.g. the result of `type.of<T>()`). Accepted as an
         /// argument value so the host can pass types as data.
         #[prost(message, tag = "13")]
         TyValue(super::BamlTy),
@@ -843,7 +843,7 @@ pub mod baml_outbound_value {
         Uint8arrayValue(::prost::alloc::vec::Vec<u8>),
         #[prost(string, tag = "20")]
         BigintValue(::prost::alloc::string::String),
-        /// A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+        /// A reflected BAML type returned as a value (e.g. `type.of<T>()`).
         /// Shares the `BamlTy` representation with the inbound side.
         #[prost(message, tag = "21")]
         TyValue(super::BamlTy),

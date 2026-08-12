@@ -24,19 +24,19 @@ test "field_of_type_json_lowers_cleanly" {
 // ─── 1.2 Union arm: null ─────────────────────────────────────────────────────
 
 test "let_json_null" {
-    assert.is_true(baml.deep_equals(null, null))
+    assert.equal(null, null)
 }
 
 // ─── 1.3 Union arm: int ──────────────────────────────────────────────────────
 
 test "let_json_int" {
-    assert.is_true(baml.deep_equals(42, 42))
+    assert.equal(42, 42)
 }
 
 // ─── 1.4 Union arm: string ───────────────────────────────────────────────────
 
 test "let_json_string" {
-    assert.is_true(baml.deep_equals("hello", "hello"))
+    assert.equal("hello", "hello")
 }
 
 // ─── 1.5 Union arm: array ────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ function json_array_len() -> int {
 }
 
 test "let_json_array" {
-    assert.is_true(baml.deep_equals(json_array_len(), 3))
+    assert.equal(json_array_len(), 3)
 }
 
 // ─── 1.6 Union arm: map literal ──────────────────────────────────────────────
@@ -88,7 +88,7 @@ function match_json(j: json) -> string {
 }
 
 test "match_json_arms_exhaustive" {
-    assert.is_true(baml.deep_equals(match_json(null), "null"))
+    assert.equal(match_json(null), "null")
 }
 
 // ─── 1.8 Impl dispatch with `json` as a generic argument (B-1078) ────────────

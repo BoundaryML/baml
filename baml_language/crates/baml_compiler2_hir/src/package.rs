@@ -431,6 +431,16 @@ pub fn package_dependencies<'db>(
         "baml" => vec![PackageId::new(db, Name::new("log"))],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
+        // The "ai" package uses BAML primitives, runtime type reflection, and
+        // prompt schema rendering, all of which now live in the "baml" package.
+        "ai" => vec![PackageId::new(db, Name::new("baml"))],
+        // Provider packages implement `ai.Client`; claude_code also logs its
+        // own event stream.
+        "openai" | "anthropic" | "google" | "claude_code" => vec![
+            PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("log")),
+            PackageId::new(db, Name::new("ai")),
+        ],
         // User packages depend on public builtin packages — plus every mounted
         // source-less package (BEP-066 mounted-package linking) and every auxiliary source
         // package installed through `compiler2_extra_files`. The latter makes
@@ -445,6 +455,11 @@ pub fn package_dependencies<'db>(
                 PackageId::new(db, Name::new("testing")),
                 PackageId::new(db, Name::new("assert")),
                 PackageId::new(db, Name::new("log")),
+                PackageId::new(db, Name::new("ai")),
+                PackageId::new(db, Name::new("openai")),
+                PackageId::new(db, Name::new("anthropic")),
+                PackageId::new(db, Name::new("google")),
+                PackageId::new(db, Name::new("claude_code")),
             ];
             let mounted = mounted_package_names(db);
             if !mounted.iter().any(|m| m.as_str() == name) {

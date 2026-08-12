@@ -389,27 +389,26 @@ function iter.iter_array_collect_count() -> bool {
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
-    load_type int[]
     load_var _3
     load_const 4
     load_const 5
     load_const 6
     load_type int
     alloc_array 3
-    call baml.deep_equals
+    call baml.ops.equals_equals
     jump_if_false L0
     pop 1
     load_var xs
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _8
-    load_var _8
+    store_var _7
+    load_var _7
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "count"
     virtual_call nargs=1 ntypeargs=0
-    store_var _7
-    load_var _7
+    store_var _6
+    load_var _6
     load_const 3
     cmp_int_op ==
 
@@ -627,16 +626,14 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_const "for_each"
     virtual_call nargs=2 ntypeargs=1
     pop 1
-    load_type int[]
     load_var mapped
     load_const 20
     load_const 40
     load_type int
     alloc_array 2
-    call baml.deep_equals
+    call baml.ops.equals_equals
     jump_if_false L0
     pop 1
-    load_type int[]
     load_var flattened
     load_const 1
     load_const 11
@@ -644,7 +641,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_const 12
     load_type int
     alloc_array 4
-    call baml.deep_equals
+    call baml.ops.equals_equals
 
   L0:
     jump_if_false L1
@@ -656,13 +653,12 @@ function iter.iter_array_first_adapter_defaults() -> bool {
   L1:
     jump_if_false L2
     pop 1
-    load_type int[]
     load_deref ?12
     load_const 3
     load_const 9
     load_type int
     alloc_array 2
-    call baml.deep_equals
+    call baml.ops.equals_equals
 
   L2:
     return
@@ -703,17 +699,15 @@ function iter.iter_array_first_native_methods() -> bool {
     load_const 0
     call baml.Array.reduce
     store_var reduced
-    load_type int[]
     load_var mapped
     load_const 2
     load_const 4
     load_const 6
     load_type int
     alloc_array 3
-    call baml.deep_equals
+    call baml.ops.equals_equals
     jump_if_false L0
     pop 1
-    load_type int[]
     load_var flat_mapped
     load_const 1
     load_const 11
@@ -721,7 +715,7 @@ function iter.iter_array_first_native_methods() -> bool {
     load_const 12
     load_type int
     alloc_array 4
-    call baml.deep_equals
+    call baml.ops.equals_equals
 
   L0:
     jump_if_false L1

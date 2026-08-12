@@ -66,7 +66,7 @@ fn float_eq_uses_ieee_equality() {
 
     assert!(call_bool(&mut vm, FLOAT_EQ, &[one, one_b]));
     assert!(!call_bool(&mut vm, FLOAT_EQ, &[one, two]));
-    // IEEE: NaN is not equal to itself (deliberately unlike `deep_equals`).
+    // IEEE: NaN is not equal to itself.
     assert!(!call_bool(&mut vm, FLOAT_EQ, &[nan, nan]));
 }
 

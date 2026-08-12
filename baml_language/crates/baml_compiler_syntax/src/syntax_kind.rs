@@ -176,6 +176,7 @@ pub enum SyntaxKind {
     PROMPT_FIELD,
     CLIENT_REFERENCE,
     CLIENT_FIELD, // 'client' field in LLM function
+    TOOLS_FIELD,  // 'tools' field in LLM function (BEP: tools: [fn, ...])
     DEFAULT_IMPL,
 
     // Class components
@@ -199,6 +200,11 @@ pub enum SyntaxKind {
 
     // Client components
     CLIENT_TYPE, // <llm> part
+    /// `client Name = <expr>;` — a named client value declaration (the
+    /// single-path replacement for `client<llm>` config blocks). Children:
+    /// `KW_CLIENT`, `WORD` (name), `EQUALS`, one expression node/token,
+    /// optional `SEMICOLON`.
+    CLIENT_VALUE_DEF,
     CONFIG_BLOCK,
     CONFIG_ITEM,
     CONFIG_VALUE,
@@ -253,6 +259,11 @@ pub enum SyntaxKind {
     FIELD_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
+    /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
+    ///
+    /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the
+    /// path's last segment to the `<name>$spec` companion function.
+    SPEC_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
     /// Structure: `<base_expr> QUESTION_DOT WORD`

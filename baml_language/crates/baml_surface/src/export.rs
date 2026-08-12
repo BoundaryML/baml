@@ -76,9 +76,11 @@ impl TyRef {
             Some(TyHead::Nominal(qtn)) => Some(
                 SymbolId {
                     kind: crate::ids::IdKind::Type,
-                    package: qtn.package().to_string(),
-                    namespace: qtn.namespace().iter().map(ToString::to_string).collect(),
-                    name: qtn.name().to_string(),
+                    owner: crate::ids::Owner::Path {
+                        package: qtn.package().to_string(),
+                        namespace: qtn.namespace().iter().map(ToString::to_string).collect(),
+                        name: qtn.name().to_string(),
+                    },
                     member: None,
                 }
                 .to_string(),
@@ -160,14 +162,22 @@ pub struct SourceExport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FunctionExport {
-    /// Where this record lives, unique across the document. A method reached
-    /// through an impl block is addressed under that block, because the same
-    /// declaration can be re-listed by many of them.
+    /// Where this record lives. A method reached through an impl block is
+    /// addressed *through* it — `M:(int as baml.ops.Add<bigint>).add` — because
+    /// the same declaration can be re-listed by many blocks and each listing
+    /// needs its own address.
+    ///
+    /// One id may appear on two records when they are the same symbol seen two
+    /// ways: a method written in a class body's `implements` block is listed
+    /// both as a method of the class and as a method of the block. Two
+    /// *different* symbols never share one.
     pub id: String,
-    /// The declaring symbol's own id, when it has one — an inherited default
-    /// names the interface method it came from, and an override on a named type
-    /// names that type's member. Absent for a method declared only inside a
-    /// free impl block, which has no address other than [`id`](Self::id).
+    /// Where the code is written, when that is somewhere else — an inherited
+    /// default names the interface method it came from. Absent when [`id`]
+    /// already names the declaration, which is the case for every method a
+    /// block writes itself.
+    ///
+    /// [`id`]: Self::id
     #[serde(skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     pub name: String,
@@ -363,13 +373,9 @@ struct ImplIndex<'db> {
 
 impl<'db> ImplIndex<'db> {
     fn build(db: &'db dyn Db) -> Self {
-        // Deterministic id assignment: file order (builtins first, then
-        // project files), `#n` suffixes for same-headed duplicates.
-        let mut seen_bases: std::collections::HashMap<String, u32> =
-            std::collections::HashMap::new();
         let mut exports = Vec::new();
         for imp in crate::handles::project_impls(db) {
-            let Some(export) = export_impl(db, imp, &mut seen_bases) else {
+            let Some(export) = export_impl(db, imp) else {
                 continue;
             };
             exports.push((imp, export));
@@ -432,13 +438,34 @@ fn function_export(
     db: &dyn Db,
     function: Function<'_>,
     from_default: bool,
-    block: Option<&str>,
+    via: Option<Impl<'_>>,
 ) -> FunctionExport {
     let sig = function.signature(db);
     let name = function.name(db);
     let declared = SymbolId::of_symbol(db, Symbol::Function(function)).map(|id| id.to_string());
-    let (id, declared_by) = match block {
-        Some(block) => (format!("{block}::{name}"), declared),
+    let (id, declared_by) = match via {
+        // Reached through an impl block, so addressed through it, in the
+        // qualified path a caller would actually write. This used to be
+        // `<block id>::<name>`, which addressed the record perfectly well and
+        // was spelled in a language BAML is not: `::` appears nowhere in the
+        // grammar, and an id exists to be pasted back into a tool.
+        Some(imp) => {
+            let qualified = SymbolId::impl_owner(db, imp)
+                .map(|owner| {
+                    SymbolId {
+                        kind: crate::ids::IdKind::Method,
+                        owner,
+                        member: Some(name.to_string()),
+                    }
+                    .to_string()
+                })
+                .unwrap_or_default();
+            // `declared_by` is only worth stating when it differs — an
+            // inherited default lives on the interface, while a method the
+            // block writes itself is already named by `id`.
+            let declared_by = declared.filter(|declared| declared != &qualified);
+            (qualified, declared_by)
+        }
         // A method of a named type: its declaration is its address.
         None => (declared.unwrap_or_default(), None),
     };
@@ -531,11 +558,9 @@ fn required_method_export(
     }
 }
 
-fn export_impl(
-    db: &dyn Db,
-    imp: Impl<'_>,
-    seen_bases: &mut std::collections::HashMap<String, u32>,
-) -> Option<ImplExport> {
+/// The interface an impl names, with its arguments: `baml.ops.Add<bigint>`.
+///
+fn export_impl(db: &dyn Db, imp: Impl<'_>) -> Option<ImplExport> {
     let data = crate::facts::impl_data(db, imp.loc())?;
     // Impls of a MOUNTED (source-less) interface are not exported through the
     // tooling surface yet — the interface has no handle to link against.
@@ -544,19 +569,29 @@ fn export_impl(
     let pkg = baml_compiler2_hir::file_package::file_package(db, imp.file(db)).package;
 
     let for_ty = TyRef::of(&data.for_ty_pattern);
-    let base = format!(
-        "X:{pkg}.impl[{} for {}]",
-        iface_qtn.render_dotted(false),
-        for_ty.display
-    );
-    let n = seen_bases.entry(base.clone()).or_insert(0);
-    let id = if *n == 0 { base } else { format!("{base}#{n}") };
-    *n += 1;
+    // Destructured from the one renderer rather than rebuilt here, so a block's
+    // id and the ids of the methods it contributes can never disagree about
+    // what identifies it.
+    let crate::ids::Owner::Impl {
+        interface: iface_display,
+        ..
+    } = SymbolId::impl_owner(db, imp)?
+    else {
+        unreachable!("impl_owner always yields the impl form")
+    };
+    // No positional `#n` suffix. It used to disambiguate same-headed blocks,
+    // which meant twenty ids in `baml` alone were determined by declaration
+    // order — the one thing this module promises an id never depends on.
+    // Reordering two `impl Add for int` blocks silently rebound every consumer
+    // keyed on them. The arguments distinguish those blocks honestly, and if
+    // two blocks still collide they overlap, which coherence must reject
+    // rather than an id scheme paper over.
+    let id = format!("X:{pkg}.impl[{iface_display} for {}]", for_ty.display);
 
     let mut methods: Vec<FunctionExport> = imp
         .all_methods(db)
         .into_iter()
-        .map(|m| function_export(db, m.function, m.from_default, Some(&id)))
+        .map(|m| function_export(db, m.function, m.from_default, Some(imp)))
         .collect();
     methods.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -594,7 +629,12 @@ fn export_item<'db>(
 ) -> Option<ItemExport> {
     let id = SymbolId::of_symbol(db, symbol)?;
     let name = symbol.name(db)?;
-    let namespace = id.namespace.clone();
+    // An item always has a path owner; only impl-contributed methods do not,
+    // and those are not exported as items.
+    let namespace = match &id.owner {
+        crate::ids::Owner::Path { namespace, .. } => namespace.clone(),
+        crate::ids::Owner::Impl { .. } => Vec::new(),
+    };
 
     let detail = match symbol {
         Symbol::Class(class) => {

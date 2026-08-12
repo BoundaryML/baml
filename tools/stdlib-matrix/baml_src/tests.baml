@@ -210,14 +210,14 @@ test "TypeScript symbols separate callables from properties" {
         assert.equal(container.display, "Foo");
         assert.equal(container.origin, "container");
         assert.equal(container.kind, "class");
-        assert.is_true(baml.deep_equals(container.symbol, ["(globals)", "Foo"]));
+        assert.equal(container.symbol, ["(globals)", "Foo"]);
     } else {
         baml.sys.panic("no TS symbols");
     }
     if let index_of: TsSymbol = symbols.at(1) {
         assert.equal(index_of.display, "Foo.prototype.indexOf");
         assert.equal(index_of.origin, "method");
-        assert.is_true(baml.deep_equals(index_of.symbol, ["(globals)", "Foo", "indexOf"]));
+        assert.equal(index_of.symbol, ["(globals)", "Foo", "indexOf"]);
     } else {
         baml.sys.panic("no member symbol");
     }
@@ -363,20 +363,16 @@ test "the markdown view renders both sides" {
 }
 
 test "a rendered type is split into the names it mentions" {
-    assert.is_true(baml.deep_equals(type_names("baml.fs.DirEntry[]"), ["baml.fs.DirEntry"]));
-    assert.is_true(
-        baml.deep_equals(type_names("map<string, unknown>"), ["map", "string", "unknown"]),
-    );
+    assert.equal(type_names("baml.fs.DirEntry[]"), ["baml.fs.DirEntry"]);
+    assert.equal(type_names("map<string, unknown>"), ["map", "string", "unknown"]);
     // A dotted path is one name, and the punctuation around a projection does
     // not glue onto either side of it.
-    assert.is_true(
-        baml.deep_equals(
-            type_names("(Self as baml.Comparable).CompareError"),
-            ["Self", "as", "baml.Comparable", "CompareError"],
-        ),
+    assert.equal(
+        type_names("(Self as baml.Comparable).CompareError"),
+        ["Self", "as", "baml.Comparable", "CompareError"],
     );
     // String-literal contents survive as names that resolve to nothing.
-    assert.is_true(baml.deep_equals(type_names("\"r\" | \"w+\""), ["r", "w"]));
+    assert.equal(type_names("\"r\" | \"w+\""), ["r", "w"]);
 }
 
 test "a generic parameter splits from its bound" {
@@ -397,7 +393,7 @@ test "references resolve to declarations, never to members or to nothing" {
     // companion; `int` is not in this fixture, so only Foo resolves. The symbol
     // is not its own reference.
     if let index_of: BamlSymbol = by_display.get("Foo.index_of") {
-        assert.is_true(baml.deep_equals(index_of.references, ["T:baml.Foo"]));
+        assert.equal(index_of.references, ["T:baml.Foo"]);
     } else {
         baml.sys.panic("Foo.index_of missing");
     }
@@ -405,7 +401,7 @@ test "references resolve to declarations, never to members or to nothing" {
     // A type declaration names nothing by existing.
     if let foo: BamlSymbol = by_display.get("Foo") {
         let none: string[] = [];
-        assert.is_true(baml.deep_equals(foo.references, none));
+        assert.equal(foo.references, none);
     } else {
         baml.sys.panic("Foo missing");
     }
@@ -416,7 +412,7 @@ test "references resolve to declarations, never to members or to nothing" {
         symbol.origin == "impl_method" && symbol.display.includes("compare")
     });
     if let compare: BamlSymbol = compares.at(0) {
-        assert.is_true(baml.deep_equals(compare.references, ["T:baml.Foo"]));
+        assert.equal(compare.references, ["T:baml.Foo"]);
     } else {
         baml.sys.panic("the impl's compare is missing");
     }
@@ -459,14 +455,12 @@ test "impl entries address themselves and name what they re-list" {
     for (let method in impl_methods) {
         ids.push(method.id);
     }
-    assert.is_true(
-        baml.deep_equals(
-            ids,
-            [
-                "X:baml.impl[baml.Comparable for baml.Foo]::compare",
-                "X:baml.impl[baml.Comparable for baml.Foo]::index_of",
-            ],
-        ),
+    assert.equal(
+        ids,
+        [
+            "X:baml.impl[baml.Comparable for baml.Foo]::compare",
+            "X:baml.impl[baml.Comparable for baml.Foo]::index_of",
+        ],
     );
     // The re-listed one carries the declaration it came from; the override
     // declared only in the block has no other address.
@@ -1050,7 +1044,7 @@ test "a finding that names a real symbol by path is applied" {
         judgement.ts == "Foo.prototype.only"
     });
     if let judgement: Judgement = applied.at(0) {
-        assert.is_true(baml.deep_equals(judgement.baml, ["M:baml.Foo.sort_helper"]));
+        assert.equal(judgement.baml, ["M:baml.Foo.sort_helper"]);
     } else {
         baml.sys.panic("the finding was not applied");
     }
@@ -1101,11 +1095,164 @@ test "an answer keeps its finding when only the example is bad" {
         divergence: null,
         example: CodeExample { typescript: "foo.only()", baml: "this does not compile", note: null },
     };
-    let stripped = without_example(finding);
-    assert.is_true(stripped.example == null);
-    assert.equal(stripped.verdict, finding.verdict);
-    assert.is_true(baml.deep_equals(stripped.baml, finding.baml));
-    assert.equal(stripped.reason, finding.reason);
+    let names: map<string, string> = { "M:baml.Foo.index_of": "M:baml.Foo.index_of" };
+    if let stripped: Finding = without_faults(finding, names) {
+        assert.is_true(stripped.example == null);
+        assert.equal(stripped.verdict, finding.verdict);
+        assert.equal(stripped.baml, finding.baml);
+        assert.equal(stripped.reason, finding.reason);
+    } else {
+        baml.sys.panic("a finding with a real counterpart was dropped");
+    }
+
+    // But a pairing whose every counterpart was invented has nothing left to
+    // salvage: keeping it with an empty list would turn a hallucination into a
+    // confident "nothing in BAML does this".
+    let invented = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "match",
+        baml: ["baml.does_not_exist"],
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        example: null,
+    };
+    assert.is_true(without_faults(invented, names) == null);
+}
+
+/// A toolbox that can answer nothing. Enough for the checks that run before
+/// any tool is reached — a finding with no example never touches the compiler.
+function fixture_toolbox() -> Toolbox {
+    let headings: string[] = [];
+    let bodies: map<string, string> = {};
+    Toolbox {
+        skill: "",
+        doc_headings: headings,
+        doc_bodies: bodies,
+        repo_root: ".",
+        scratch_root: ".",
+        baml_bin: "baml-cli-that-is-never-run",
+    }
+}
+
+/// Built fresh per call, not aliased: class values are references, so mutating
+/// a `let` bound to one of these would edit the finding it was copied from.
+function fixture_divergence(
+    verdict: "match" | "divergent" | "unnecessary" | "none",
+    divergence: string?,
+) -> Finding {
+    Finding {
+        ts: "Foo.prototype.only",
+        verdict: verdict,
+        baml: ["M:baml.Foo.index_of"],
+        confidence: "high",
+        reason: "fixture",
+        divergence: divergence,
+        example: null,
+    }
+}
+
+test "a pairing verdict that names nothing is sent back" {
+    // `apply_findings` already refused these, but it runs after the session has
+    // ended: the symbol was marked covered, no retry was spent, and it came out
+    // unjudged with the reason recorded where the session could not read it.
+    let box = fixture_toolbox();
+    let names: map<string, string> = { "M:baml.Foo.index_of": "M:baml.Foo.index_of" };
+    let nothing: string[] = [];
+
+    let bare_match = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "match",
+        baml: nothing,
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        example: null,
+    };
+    if let complaint: string = finding_fault(box, bare_match, names) {
+        assert.is_true(complaint.includes("named no BAML symbol"));
+    } else {
+        baml.sys.panic("a match naming nothing was accepted");
+    }
+
+    let bare_divergent = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "divergent",
+        baml: nothing,
+        confidence: "high",
+        reason: "fixture",
+        divergence: "they differ",
+        example: null,
+    };
+    if let complaint: string = finding_fault(box, bare_divergent, names) {
+        assert.is_true(complaint.includes("named no BAML symbol"));
+    } else {
+        baml.sys.panic("a divergent naming nothing was accepted");
+    }
+
+    // The verdicts that legitimately name nothing are untouched.
+    let absent = Finding {
+        ts: "Foo.prototype.only",
+        verdict: "none",
+        baml: nothing,
+        confidence: "high",
+        reason: "fixture",
+        divergence: null,
+        example: null,
+    };
+    assert.is_true(finding_fault(box, absent, names) == null);
+}
+
+test "freshness follows references all the way, not one step" {
+    // A judgement naming A carried when A referenced B and B was built from a
+    // changed C. One hop short of what the module header already promised.
+    let seed = fixture_revision(fixture_matrix("sha-t", "5.8.3-test"));
+    let before = Revision {
+        provenance: seed.provenance,
+        texts: { "M:baml.a": "a", "T:baml.b": "b", "T:baml.c": "c" },
+        baml_ids: seed.baml_ids,
+        judgements: {},
+    };
+    let references: map<string, string[]> = { "M:baml.a": ["T:baml.b"], "T:baml.b": ["T:baml.c"] };
+    // C two hops out has been retyped.
+    let now: map<string, string> = { "M:baml.a": "a", "T:baml.b": "b", "T:baml.c": "changed" };
+    assert.is_true(!is_fresh_transitively("M:baml.a", now, before, references));
+
+    // Nothing moved: it carries.
+    let still: map<string, string> = { "M:baml.a": "a", "T:baml.b": "b", "T:baml.c": "c" };
+    assert.is_true(is_fresh_transitively("M:baml.a", still, before, references));
+
+    // A cycle terminates rather than spinning.
+    let cyclic: map<string, string[]> = { "M:baml.a": ["T:baml.b"], "T:baml.b": ["M:baml.a"] };
+    assert.is_true(is_fresh_transitively("M:baml.a", still, before, cyclic));
+}
+
+test "a divergent verdict must say how they diverge" {
+    // Thirteen shipped without one. `divergent` is not a stronger `match`; the
+    // caveat is the entire difference between them, and a striped swatch whose
+    // tooltip is empty tells the reader nothing they can act on.
+    let box = fixture_toolbox();
+    let names: map<string, string> = { "M:baml.Foo.index_of": "M:baml.Foo.index_of" };
+
+    if let complaint: string = finding_fault(box, fixture_divergence("divergent", null), names) {
+        assert.is_true(complaint.includes("did not say how"));
+    } else {
+        baml.sys.panic("a divergent finding with no divergence was accepted");
+    }
+    // Whitespace is not a difference either.
+    assert.is_true(finding_fault(box, fixture_divergence("divergent", "   "), names) != null);
+
+    // And the converse: a difference written under a verdict that claims none.
+    let contradictory = fixture_divergence("match", "the argument order is reversed");
+    if let complaint: string = finding_fault(box, contradictory, names) {
+        assert.is_true(complaint.includes("the verdict is match"));
+    } else {
+        baml.sys.panic("a match carrying a divergence was accepted");
+    }
+
+    // Stated, it passes.
+    let stated = fixture_divergence("divergent", "BAML returns an optional rather than -1");
+    assert.is_true(finding_fault(box, stated, names) == null);
 }
 
 test "a long tool answer is cut, and says where" {
@@ -1133,13 +1280,135 @@ test "the last round cannot ask for another lookup" {
     // mechanism: it is what the model is shown. This has already been lost once
     // to a careless edit, leaving a comment describing a function that no
     // longer existed, so it is worth a test that costs nothing.
-    let step = baml.llm.render_output_format(baml.llm.get_return_type("session_step"));
-    let last = baml.llm.render_output_format(baml.llm.get_return_type("session_final"));
+    let step = baml.prompt.render_output_format(baml.prompt.get_return_type("session_step"));
+    let last = baml.prompt.render_output_format(baml.prompt.get_return_type("session_final"));
     assert.is_true(step.includes("any of these schemas"));
     assert.is_true(step.includes("lookups"));
     assert.is_true(!last.includes("any of these schemas"));
     assert.is_true(last.includes("findings"));
     assert.is_true(!last.includes("lookups"));
+}
+
+test "a judgement goes stale when a type its counterpart names changes" {
+    // The case revision.baml's own header describes and the code did not do:
+    // `read(path) -> baml.fs.DirEntry[]` means something new the moment
+    // `DirEntry` gains a field. `is_fresh` ran on the TypeScript side only, so
+    // retyping a field left every judgement about reading a directory carried,
+    // shipping reasoning written against the old type.
+    let before = fixture_revision(fixture_matrix("sha-a", "5.8.3-test"));
+    let matrix = fixture_matrix("sha-a", "5.8.3-test");
+    let baseline = apply_revision(fixture_matrix("sha-a", "5.8.3-test"), before);
+
+    // `M:baml.Foo.clone` returns `baml.Foo`, so it names a type. Nothing about
+    // the method itself moves — only the type it hands back.
+    let named: string[] = [];
+    for (let symbol in matrix.baml) {
+        if (symbol.id == "M:baml.Foo.clone") {
+            named = symbol.references;
+        }
+    }
+    assert.is_true(named.includes("T:baml.Foo"));
+    for (let symbol in matrix.baml) {
+        if (symbol.id == "T:baml.Foo") {
+            symbol.doc = "the type gained a field";
+        }
+    }
+
+    let outcome = apply_revision(matrix, before);
+    let now = current_texts(matrix);
+    // The methods themselves did not move — only the type they hand back and
+    // take as a receiver. That is the whole point: their own text compares
+    // equal, so a check that stopped at the named symbol would carry them.
+    assert.equal(now.get("M:baml.Foo.clone") ?? "", before.texts.get("M:baml.Foo.clone") ?? "");
+    assert.is_true((now.get("T:baml.Foo") ?? "") != (before.texts.get("T:baml.Foo") ?? ""));
+    assert.is_true(baseline.carried > 0);
+    assert.equal(outcome.carried, 0);
+}
+
+test "the field separator is one character that content cannot contain" {
+    // It was `\u{1f}`, which BAML does not parse as an escape — so the
+    // separator was six printable characters that a docstring could contain,
+    // and two symbols differing only in where a field boundary fell could
+    // compare equal.
+    assert.equal(field_separator().length(), 1);
+    assert.is_true(!field_separator().is_graphic());
+}
+
+test "a pairing that names nothing is refused, whatever the verdict says" {
+    // The shipped report had 11 of these: `match` and `divergent` findings with
+    // an empty counterpart list, because the guard only fired when a name had
+    // been *offered and refused*. They inflated `matched`, rendered a "BAML"
+    // section with nothing under it, and — since the freshness rule read the
+    // empty list as an absence — were cached against a rule for a different
+    // claim entirely.
+    let matrix = fixture_matrix("sha-e", "5.8.3-test");
+    let nothing: string[] = [];
+    let outcome = apply_findings(
+        matrix,
+        fixture_answers(
+            [
+                fixture_finding("Foo.prototype.only", "match", nothing),
+                fixture_finding("Foo.prototype.sortStuff", "divergent", nothing),
+            ],
+        ),
+    );
+    assert.equal(outcome.judged, 0);
+    assert.equal(outcome.rejected.length(), 2);
+    assert.is_true((outcome.rejected.at(0) ?? "").includes("names none"));
+
+    // An absence naming nothing is exactly right, and still lands.
+    let absence = apply_findings(
+        fixture_matrix("sha-e2", "5.8.3-test"),
+        fixture_answers([fixture_finding("Foo.prototype.only", "none", nothing)]),
+    );
+    assert.equal(absence.judged, 1);
+}
+
+test "the markdown summary and its table agree about what is claimed" {
+    // They disagreed by eight rows in the shipped report: `recount` counts a
+    // symbol as named whatever the verdict, while the renderer counted only
+    // `match`/`divergent`. Eight symbols were listed under "BAML symbols no
+    // judgement names" in the very table the summary line introduces.
+    let matrix = fixture_matrix("sha-md", "5.8.3-test");
+    let unnecessary_only: string[] = ["M:baml.Foo.sort_helper"];
+    matrix.judgements.push(
+        Judgement {
+            ts: "Foo.prototype.only",
+            baml: unnecessary_only,
+            verdict: "unnecessary",
+            basis: "model",
+            confidence: "high",
+            reason: "the language answers this",
+            divergence: null,
+            rejected: [],
+            verified: false,
+            example: null,
+        },
+    );
+    matrix.counts = recount(matrix);
+
+    let markdown = render_matrix_markdown(matrix);
+    // The one named only by an `unnecessary` judgement is claimed, so it is
+    // absent from the table of symbols nothing names.
+    let table = markdown.split("## BAML symbols no judgement names").at(1) ?? "";
+    assert.is_true(!table.includes("Foo.sort_helper"));
+    assert.is_true(
+        markdown.includes(`${matrix.counts.baml_symbols - matrix.counts.baml_unclaimed} of`),
+    );
+}
+
+test "an interstitial is not mistaken for the skill" {
+    // A captive portal or CDN error page returns 200 with HTML, and
+    // `response.ok()` is true for all of them. Accepting one told every session
+    // that BAML is that HTML, and overwrote the good cached copy on the way.
+    assert.is_true(
+        !looks_like_skill("<!DOCTYPE html><html><body>Sign in to continue</body></html>"),
+    );
+    assert.is_true(!looks_like_skill(""));
+    assert.is_true(!looks_like_skill("baml"));
+    // Long enough, not markup, and about BAML.
+    let real = `---\nname: baml-core\n---\n\n# baml\n\nBAML is a statically-typed language. ${"filler ".repeat(400)}`;
+    assert.is_true(looks_like_skill(real));
 }
 
 test "the concurrency cap falls back when nothing was asked for" {

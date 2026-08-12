@@ -34,6 +34,7 @@ use std::{
     path::PathBuf,
 };
 
+use baml_base::qualified_name::AI_STREAM_STREAM;
 use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::Engine as _;
@@ -93,9 +94,9 @@ fn to_source_code_with_optional_metadata(
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
     for (key, symbol) in sorted_pool {
         let fqn = key.to_string();
-        // `baml.llm.Stream` is runtime-owned (BamlStream wraps the
+        // `ai.stream.Stream` is runtime-owned (BamlStream wraps the
         // engine handle) — never emitted as a generated struct.
-        if fqn == "baml.llm.Stream" {
+        if fqn == AI_STREAM_STREAM {
             continue;
         }
         let mut ns = translate_ty::namespace_for(key);
@@ -758,6 +759,21 @@ mod tests {
         assert_eq!(
             t(&list(union(vec![int(), string()]))).as_deref(),
             Some("[BamlUnion2<Swift.Int, Swift.String>]")
+        );
+
+        let stream_name = Name::new(
+            baml_base::Name::new("ai"),
+            vec![baml_base::Name::new("stream")],
+            baml_base::Name::new("Stream"),
+        );
+        let stream = Ty::Class(
+            stream_name,
+            vec![string(), string()],
+            baml_base::TyAttr::EMPTY,
+        );
+        assert_eq!(
+            t(&stream).as_deref(),
+            Some("BamlStream<Swift.String, Swift.String>")
         );
         // Same shape is the same type everywhere (structural identity).
         assert_eq!(
