@@ -41,7 +41,8 @@ impl BexLspNotification for BexMulitProject {
         &self,
         _params: lsp_notification_params!("textDocument/willSave"),
     ) -> Result<(), LspError> {
-        // Advertised in capabilities; nothing to prepare before a save.
+        // Accept quietly if a client sends this despite it not being advertised;
+        // there is no pre-save work to perform.
         Ok(())
     }
 

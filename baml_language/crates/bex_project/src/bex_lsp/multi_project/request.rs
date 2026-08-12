@@ -1228,6 +1228,17 @@ mod tests {
     }
 
     #[test]
+    fn capabilities_do_not_request_will_save_notifications() {
+        let Some(TextDocumentSyncCapability::Options(options)) =
+            server_capabilities(PositionEncoding::UTF16).text_document_sync
+        else {
+            panic!("expected text document sync options");
+        };
+
+        assert_eq!(options.will_save, Some(false));
+    }
+
+    #[test]
     fn completion_conversion_preserves_snippet_format() {
         let completion = baml_lsp2_actions::Completion {
             label: "function".to_string(),

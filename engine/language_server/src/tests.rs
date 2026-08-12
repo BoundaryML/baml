@@ -3,6 +3,7 @@ use std::{num::NonZeroUsize, thread};
 use crossbeam_channel::{Receiver, Sender};
 use log::LevelFilter;
 use lsp_server::Message;
+use lsp_types::TextDocumentSyncCapability;
 use serde_json::json;
 use tokio::sync::broadcast;
 
@@ -389,4 +390,15 @@ test TestSucc {
 // #[test]
 fn test_initialization() {
     TestCase::mk_simple().run().unwrap()
+}
+
+#[test]
+fn capabilities_do_not_request_will_save_notifications() {
+    let Some(TextDocumentSyncCapability::Options(options)) =
+        Server::server_capabilities(Default::default()).text_document_sync
+    else {
+        panic!("expected text document sync options");
+    };
+
+    assert_eq!(options.will_save, Some(false));
 }
