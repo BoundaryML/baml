@@ -220,6 +220,60 @@ fn lower_expr_in_scope<'db>(
     )
 }
 
+/// A definition's fully qualified name - its declaring file's package
+/// and namespace plus the short name (the spelling the runtime tags
+/// use).
+fn qualify_def(
+    db: &dyn crate::Db,
+    def: baml_compiler2_hir::contributions::Definition<'_>,
+    name: &Name,
+) -> QualifiedTypeName {
+    let file = def.file(db);
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
+}
+
+/// hir_ty's bounds map in the plain TypeVarBoundsMap currency MIR's
+/// lowering roads still speak (dies with that alias at TIR deletion).
+fn plain_bounds_map(
+    bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+) -> baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap {
+    bounds
+        .into_iter()
+        .map(|(param, conjunction)| {
+            (
+                param,
+                conjunction
+                    .iter()
+                    .filter_map(|bound| plain_interface_ty(bound).as_interface())
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+/// The class-frame bounds, hir_ty's road, in the plain currency.
+fn class_bounds_map<'db>(
+    db: &'db dyn crate::Db,
+    class: baml_compiler2_hir::loc::ClassLoc<'db>,
+) -> baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap {
+    plain_bounds_map(baml_compiler2_hir_ty::lower::class_generic_bounds(
+        db, class,
+    ))
+}
+
+/// An interned interface bound as the plain interface TYPE - the
+/// dispatch view MIR's per-param bound map holds.
+fn plain_interface_ty(bound: &baml_type::interned::InterfaceRef) -> Tir2Ty {
+    baml_type::interned::Ty::intern(baml_type::interned::TyKind::Interface(
+        bound.name.clone(),
+        bound.generics.clone(),
+        bound.associated_types.clone(),
+        baml_type::TyAttr::default(),
+    ))
+    .to_plain()
+}
+
 /// TIR's plain bounds map in hir_ty's interned spelling - the port-era
 /// bridge; dies with the TypeVarBoundsMap callers.
 fn hir_bounds(
@@ -1141,11 +1195,7 @@ fn interface_type_name_from_loc<'db>(
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> TypeName {
     let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-    baml_compiler2_tir::lower_type_expr::qualify_def(
-        db,
-        Definition::Interface(iface_loc),
-        &iface_data.name,
-    )
+    qualify_def(db, Definition::Interface(iface_loc), &iface_data.name)
 }
 
 struct PackagePopulation<'a> {
@@ -1612,7 +1662,7 @@ impl<'db> LoweringContext<'db> {
         let class_tn = class_qtn.clone();
         let class_loc = self.resolve_class_loc_by_type_name(&class_tn)?;
         let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
-        let class_params = baml_compiler2_tir::class_generic_params(self.db, class_loc);
+        let class_params = baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
 
         for impl_block in &class_data.implements {
             let view = self.resolve_implements_target_view(
@@ -1857,7 +1907,7 @@ impl<'db> LoweringContext<'db> {
                         let mut fields = IndexMap::new();
                         let mut field_types = IndexMap::new();
                         let class_generic_params =
-                            baml_compiler2_tir::class_generic_params(db, *class_loc);
+                            baml_compiler2_hir_ty::lower::class_generic_frame(db, *class_loc);
                         let pkg_ns = baml_compiler2_hir::file_package::file_package(db, cfile)
                             .namespace_path;
                         let mut diags: Vec<baml_compiler2_tir::infer_context::TirTypeError> =
@@ -1886,9 +1936,7 @@ impl<'db> LoweringContext<'db> {
                                     pkg_items,
                                     ns,
                                     generic_params,
-                                    baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                                        db, *class_loc,
-                                    ),
+                                    &class_bounds_map(db, *class_loc),
                                     None,
                                 );
                                 let field_ty = resolved_aliases.convert(&tir_ty);
@@ -1981,166 +2029,23 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items_for_bounds = package_items(db, pkg_id);
-        let mut bound_param_names = Vec::new();
-        // Each source item owns its own `TypeRef` arena, so bounds are collected as
-        // `(store, id)` pairs — index-aligned with `bound_param_names` — and lowered
-        // together below once every sibling param name is in scope (a bound may
-        // reference a sibling type var).
-        let mut bound_refs: Vec<
-            Option<(
-                &baml_compiler2_hir::type_ref::TypeRefStore,
-                baml_compiler2_hir::type_ref::TypeRefId,
-            )>,
-        > = Vec::new();
-        if let Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) =
-            baml_compiler2_ppir::item_data::method_owner(db, func_loc)
-        {
-            let imp = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-            if let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
-                &imp.subject
-            {
-                for g in generics {
-                    bound_param_names.push(g.name.clone());
-                    bound_refs.push(g.bounds.first().copied().map(|id| (&imp.type_refs, id)));
-                }
-            }
-        } else if let Some(parent_idx) = func_scope.parent {
-            let parent = &index.scopes[parent_idx.index() as usize];
-            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class)
-                && let Some(type_name) = &parent.name
-            {
-                if let Some(class_loc) = baml_compiler2_ppir::item_data::file_classes(db, file)
-                    .iter()
-                    .copied()
-                    .find(|&loc| {
-                        baml_compiler2_ppir::item_data::class_data(db, loc).name == *type_name
-                    })
-                {
-                    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-                    bound_param_names.extend(class_data.generic_params.iter().cloned());
-                    for bound in &class_data.generic_param_bounds {
-                        bound_refs.push(bound.map(|id| (&class_data.type_refs, id)));
-                    }
-                } else if let Some(iface_loc) =
-                    baml_compiler2_ppir::item_data::file_interfaces(db, file)
-                        .iter()
-                        .copied()
-                        .find(|&loc| {
-                            baml_compiler2_ppir::item_data::interface_data(db, loc).name
-                                == *type_name
-                        })
-                {
-                    let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-                    bound_param_names.extend(iface_data.generic_params.iter().cloned());
-                    for bound in &iface_data.generic_param_bounds {
-                        bound_refs.push(bound.map(|id| (&iface_data.type_refs, id)));
-                    }
-                    bound_param_names.extend(
-                        iface_data
-                            .associated_types
-                            .iter()
-                            .map(|assoc| assoc.name.clone()),
-                    );
-                    for assoc in &iface_data.associated_types {
-                        bound_refs.push(assoc.bound.map(|id| (&iface_data.type_refs, id)));
-                    }
-                }
-            }
-        }
-        bound_param_names.extend(func_data.generic_params.iter().cloned());
-        for bound in &func_data.generic_param_bounds {
-            bound_refs.push(bound.map(|id| (&func_data.type_refs, id)));
-        }
-        let all_generic_params = baml_compiler2_tir::function_generic_params(db, func_loc);
-        let mut generic_param_bounds: FxHashMap<ParamTy, Tir2Ty> = FxHashMap::default();
-        for (idx, name) in bound_param_names.iter().enumerate() {
-            let Some(Some((store, id))) = bound_refs.get(idx).copied() else {
-                continue;
-            };
-            let mut diags = Vec::new();
-            // A bound pins only what it writes, so a rigid receiver's dispatch
-            // view keeps unpinned members symbolic and realizes them
-            // per-receiver.
-            let bound_ty = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
-                store,
-                id,
-                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: pkg_items_for_bounds,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params: &all_generic_params,
-                    // Lowering a bound expression itself: the sibling type-var *names* are in
-                    // scope, but their bounds are not needed (a bound is an interface resolved by
-                    // name), matching tir's own `lower_generic_param_bounds`.
-                    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
-                    self_ty: None,
-                },
-                &mut diags,
-            );
-            if diags.is_empty()
-                && let Some(param) = all_generic_params.iter().find(|param| param.name() == name)
-            {
-                generic_param_bounds.insert(param.clone(), bound_ty);
-            }
-        }
-        // BEP-044 Self-as-type-variable: an interface default method's `self` is
-        // a `Self` type variable bound by the interface (matching the TIR
-        // typing in `inference.rs`). Registering the bound lets member access on
-        // `self` dispatch through the interface — `interface_dispatch_target_for_tir_ty`
-        // already follows type-var bounds — so default methods keep dispatching
-        // through the concrete implementor.
-        if let Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) =
-            baml_compiler2_ppir::item_data::method_owner(db, func_loc)
-        {
-            let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-            if let Some(def) =
-                pkg_items_for_bounds.lookup_type(&pkg_info.namespace_path, &iface.name)
-            {
-                let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface.name);
-                let args = iface
-                    .generic_params
-                    .iter()
-                    .map(|name| {
-                        let param = all_generic_params
-                            .iter()
-                            .find(|param| param.name() == name)
-                            .expect("interface generic parameter is in the function environment");
-                        Tir2Ty::TypeVar(param.clone(), baml_compiler2_tir::ty::TyAttr::default())
-                    })
-                    .collect();
-                let associated_bindings = iface
-                    .associated_types
-                    .iter()
-                    .map(|assoc| {
-                        let param = all_generic_params
-                            .iter()
-                            .find(|param| param.name() == &assoc.name)
-                            .expect("associated type is in the function environment");
-                        (
-                            assoc.name.clone(),
-                            Tir2Ty::TypeVar(
-                                param.clone(),
-                                baml_compiler2_tir::ty::TyAttr::default(),
-                            ),
-                        )
-                    })
-                    .collect();
-                let self_param = all_generic_params
-                    .iter()
-                    .find(|param| param.as_str() == "Self")
-                    .expect("interface method environment contains Self");
-                generic_param_bounds.insert(
-                    self_param.clone(),
-                    Tir2Ty::Interface(
-                        qtn,
-                        args,
-                        associated_bindings,
-                        baml_compiler2_tir::ty::TyAttr::default(),
-                    ),
-                );
-            }
-        }
+        // The per-param bound TYPES (the dispatch view), from hir_ty's
+        // function_generic_bounds - the ONE declaration-bounds road
+        // (class prefix, interface Self env with frame-pinned associated
+        // slots, free-impl generics, own params). This map keeps one
+        // bound per param; a conjunction collapses to its head, matching
+        // the singular builder it replaces (bounds are written singular
+        // today; the multi-bound dispatch view is the conjunction road's
+        // future work, not this map's).
+        let generic_param_bounds: FxHashMap<ParamTy, Tir2Ty> =
+            baml_compiler2_hir_ty::lower::function_generic_bounds(db, func_loc)
+                .into_iter()
+                .filter_map(|(param, conjunction)| {
+                    conjunction
+                        .first()
+                        .map(|bound| (param, plain_interface_ty(bound)))
+                })
+                .collect();
 
         // Class/enum/interface schema + resolved aliases, memoized per package
         // (was rebuilt — and every class field re-lowered — per function).
@@ -3692,9 +3597,7 @@ impl<'db> LoweringContext<'db> {
                                 .lookup_type(&pkg_info.namespace_path, cn)
                                 .map(|def| {
                                     let tir_ty = baml_compiler2_tir::ty::Ty::Class(
-                                        baml_compiler2_tir::lower_type_expr::qualify_def(
-                                            self.db, def, cn,
-                                        ),
+                                        qualify_def(self.db, def, cn),
                                         vec![],
                                         baml_compiler2_tir::ty::TyAttr::default(),
                                     );
@@ -6051,7 +5954,7 @@ impl<'db> LoweringContext<'db> {
         };
 
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-        let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
+        let class_generic_params = baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
 
         let field = class_data.fields.iter().find(|f| &f.name == field_name);
         let Some(field) = field else {
@@ -6070,7 +5973,7 @@ impl<'db> LoweringContext<'db> {
             pkg_items_ref,
             &pkg_ns,
             &class_generic_params,
-            baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(db, class_loc),
+            &class_bounds_map(db, class_loc),
             None,
         );
         // Build a TyTemplate with `TypeArgRef(N)` for each class-level
@@ -7503,13 +7406,13 @@ impl<'db> LoweringContext<'db> {
                     let iface_data =
                         baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
                     let iface_env =
-                        baml_compiler2_tir::interface_generic_params(self.db, iface_loc);
+                        baml_compiler2_hir_ty::lower::interface_frame(self.db, iface_loc);
                     let self_param = iface_env
                         .first()
                         .expect("interface frame starts with Self")
                         .clone();
                     let iface_params =
-                        baml_compiler2_tir::interface_declared_generic_params(self.db, iface_loc);
+                        baml_compiler2_hir_ty::lower::interface_declared_params(self.db, iface_loc);
                     let mut default_bindings: FxHashMap<ParamTy, Tir2Ty> = FxHashMap::default();
                     default_bindings.insert(self_param, self_subject.clone());
                     for (param, arg) in iface_params.iter().zip(&iface_args) {
@@ -8745,7 +8648,7 @@ impl LoweringContext<'_> {
         let Some(fl) = self.func_loc else {
             return Vec::new();
         };
-        let mut params = baml_compiler2_tir::function_generic_params(self.db, fl);
+        let mut params = baml_compiler2_hir_ty::lower::function_generic_frame(self.db, fl);
         params.extend(self.lambda_generic_params.iter().cloned());
         params
     }
@@ -8769,21 +8672,12 @@ impl LoweringContext<'_> {
         let Some(fl) = self.func_loc else {
             return baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
         };
-        let mut bounds =
-            baml_compiler2_tir::lower_type_expr::function_in_scope_generic_param_bounds(
-                self.db, fl,
-            )
-            .clone();
-        if let Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) =
-            baml_compiler2_ppir::item_data::method_owner(self.db, fl)
-        {
-            for (name, conjunction) in
-                baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(self.db, impl_loc)
-            {
-                bounds.insert(name.clone(), conjunction.clone());
-            }
-        }
-        bounds
+        // hir_ty's one declaration-bounds road (class prefix, interface
+        // Self env, free-impl generics, own params), in the plain
+        // currency the lowering helpers speak.
+        plain_bounds_map(baml_compiler2_hir_ty::lower::function_generic_bounds(
+            self.db, fl,
+        ))
     }
 
     /// Emit `LoadType` temps for a list of type args seeding a callee frame,
@@ -10611,11 +10505,13 @@ impl<'db> LoweringContext<'db> {
             &class_pkg.namespace_path,
         )?;
         let target_data = baml_compiler2_ppir::item_data::interface_data(self.db, target_loc);
-        let class_generic_params = baml_compiler2_tir::class_generic_params(self.db, class_loc);
+        let class_generic_params =
+            baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
         let target_generic_params =
-            baml_compiler2_tir::interface_declared_generic_params(self.db, target_loc);
-        let target_frame_params = baml_compiler2_tir::interface_generic_params(self.db, target_loc);
-        let target_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+            baml_compiler2_hir_ty::lower::interface_declared_params(self.db, target_loc);
+        let target_frame_params =
+            baml_compiler2_hir_ty::lower::interface_frame(self.db, target_loc);
+        let target_qtn = qualify_def(
             self.db,
             Definition::Interface(target_loc),
             &target_data.name,
@@ -10628,7 +10524,7 @@ impl<'db> LoweringContext<'db> {
             class_pkg_items,
             &class_pkg.namespace_path,
             &class_generic_params,
-            baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(self.db, class_loc),
+            &class_bounds_map(self.db, class_loc),
             &mut diags,
         );
         let target_iface_pkg =
@@ -10656,9 +10552,7 @@ impl<'db> LoweringContext<'db> {
                         class_pkg_items,
                         &class_pkg.namespace_path,
                         &bindings,
-                        baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                            self.db, class_loc,
-                        ),
+                        &class_bounds_map(self.db, class_loc),
                         &mut diags,
                     );
                     let assoc_param = target_frame_params
@@ -10676,9 +10570,7 @@ impl<'db> LoweringContext<'db> {
                         class_pkg_items,
                         &target_iface_pkg.namespace_path,
                         &bindings,
-                        baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                            self.db, class_loc,
-                        ),
+                        &class_bounds_map(self.db, class_loc),
                         &mut diags,
                     );
                     let assoc_param = target_frame_params
@@ -10718,12 +10610,12 @@ impl<'db> LoweringContext<'db> {
         match method_owner(self.db, fl)? {
             MethodOwner::Class(class_loc) => {
                 let class = class_data(self.db, class_loc);
-                let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                let qtn = qualify_def(
                     self.db,
                     baml_compiler2_hir::contributions::Definition::Class(class_loc),
                     &class.name,
                 );
-                let args = baml_compiler2_tir::class_generic_params(self.db, class_loc)
+                let args = baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc)
                     .iter()
                     .map(|p| Tir2Ty::TypeVar(p.clone(), TyAttr::default()))
                     .collect();
@@ -10774,7 +10666,7 @@ impl<'db> LoweringContext<'db> {
         let fl = self.func_loc?;
         match method_owner(self.db, fl)? {
             MethodOwner::Interface(iface_loc) => {
-                let self_param = baml_compiler2_tir::interface_generic_params(self.db, iface_loc)
+                let self_param = baml_compiler2_hir_ty::lower::interface_frame(self.db, iface_loc)
                     .into_iter()
                     .next()
                     .expect("interface frame starts with Self");
@@ -12512,7 +12404,8 @@ impl LoweringContext<'_> {
         let file = class_loc.file(self.db);
         let ns_context = file_package(self.db, file).namespace_path;
         let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
-        let class_generic_params = baml_compiler2_tir::class_generic_params(self.db, class_loc);
+        let class_generic_params =
+            baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
         let bindings =
             baml_compiler2_tir::generics::bind_type_vars(&class_generic_params, class_type_args);
 
@@ -12527,9 +12420,7 @@ impl LoweringContext<'_> {
                     pkg_items_for_class,
                     &ns_context,
                     &class_generic_params,
-                    baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                        self.db, class_loc,
-                    ),
+                    &class_bounds_map(self.db, class_loc),
                     None,
                 )
             } else {
@@ -12540,9 +12431,7 @@ impl LoweringContext<'_> {
                     pkg_items_for_class,
                     &ns_context,
                     &bindings,
-                    baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                        self.db, class_loc,
-                    ),
+                    &class_bounds_map(self.db, class_loc),
                     &mut diags,
                 )
             };

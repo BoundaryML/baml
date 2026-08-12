@@ -751,6 +751,16 @@ pub fn interface_frame<'db>(
     interface_generic_frame_params(&names)
 }
 
+/// The interface's OWN declared params - `interface_frame`'s middle
+/// section, without `Self` and the associated slots.
+pub fn interface_declared_params<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: InterfaceLoc<'db>,
+) -> Vec<ParamTy> {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    interface_frame(db, interface)[1..1 + data.generic_params.len()].to_vec()
+}
+
 /// The root generic frame for a class.
 pub fn class_generic_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -807,6 +817,35 @@ pub fn reject_holes(ty: &Ty) -> Ty {
         return Ty::error();
     }
     Ty::intern(ty.kind().map_children(reject_holes))
+}
+
+/// The declared interface bounds for a CLASS's own generic frame - the
+/// class arm of [`function_generic_bounds`], for declaration sites that
+/// lower class-scoped types with no method in hand.
+pub fn class_generic_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ClassLoc<'db>,
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    let frame = class_generic_frame(db, class);
+    let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(frame.clone());
+    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let mut out = FxHashMap::default();
+    for (param, bound) in frame.iter().zip(&data.generic_param_bounds) {
+        let Some(type_ref) = bound else { continue };
+        if let TyKind::Interface(name, args, pins, _) =
+            ctx.lower_type_ref(&data.type_refs, *type_ref).kind()
+        {
+            out.insert(
+                param.clone(),
+                vec![baml_type::interned::InterfaceRef::new(
+                    name.clone(),
+                    args.to_vec().into_boxed_slice(),
+                    pins.to_vec(),
+                )],
+            );
+        }
+    }
+    out
 }
 
 /// The declared interface bounds for a function's full generic frame
