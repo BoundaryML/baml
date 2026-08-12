@@ -345,7 +345,6 @@ fn lower_function(
         // plain backtick templates through the spec.
         if let Some(raw_prompt) = llm.prompt_field().and_then(|pf| pf.raw_string()) {
             diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
-                function_name: name.as_str().to_string(),
                 span: raw_prompt.syntax().span_range(),
             });
         }

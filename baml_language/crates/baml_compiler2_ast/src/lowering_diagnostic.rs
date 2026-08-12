@@ -194,10 +194,7 @@ pub enum LoweringDiagnostic {
 
     /// A legacy Jinja `#"..."#` prompt on an LLM function. Removed: prompts
     /// are backtick templates.
-    LlmJinjaPromptRemoved {
-        function_name: String,
-        span: TextRange,
-    },
+    LlmJinjaPromptRemoved { span: TextRange },
 
     /// The LLM function's `client` value cannot be used: unknown provider
     /// prefix, a string without a `provider/model` shape, or the removed
@@ -578,18 +575,13 @@ impl LoweringDiagnostic {
                 *span,
                 "retry composes at the client boundary now",
             ),
-            LoweringDiagnostic::LlmJinjaPromptRemoved {
-                function_name,
-                span,
-            } => (
+            LoweringDiagnostic::LlmJinjaPromptRemoved { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                format!(
-                    "LLM function `{function_name}` uses a Jinja `#\"...\"#` prompt, which is no \
-                     longer supported. Use a backtick prompt with `${{...}}` interpolation instead."
-                ),
+                "Jinja `#\"...\"#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead."
+                    .to_string(),
                 *span,
-                "replace `#\"Hello {{ name }}\"#` with `` `Hello ${name}` ``",
+                "use a backtick prompt instead",
             ),
             LoweringDiagnostic::InvalidLlmClient {
                 function_name,
