@@ -1319,12 +1319,15 @@ fn pin_selector_in_manifest(content: &str, selector_key: &str, selector: &str) -
         document.insert("toolchain", Item::Table(Table::new()));
     }
     let toolchain = document["toolchain"]
-        .as_table_mut()
-        .context("`toolchain` must be a TOML table")?;
-    let decorated_selector = toolchain
-        .remove_entry("version")
-        .or_else(|| toolchain.remove_entry("channel"))
-        .or_else(|| toolchain.remove_entry("path"));
+        .as_table_like_mut()
+        .context("`toolchain` must be a TOML table or inline table")?;
+    let decorated_selector = ["version", "channel", "path"]
+        .into_iter()
+        .find_map(|selector| {
+            let key = toolchain.key(selector)?.clone();
+            let item = toolchain.remove(selector)?;
+            Some((key, item))
+        });
     toolchain.remove("version");
     toolchain.remove("channel");
     toolchain.remove("path");
@@ -1337,7 +1340,9 @@ fn pin_selector_in_manifest(content: &str, selector_key: &str, selector: &str) -
             *selector_value.decor_mut() = old_value.decor().clone();
         }
     }
-    toolchain.insert_formatted(&key, Item::Value(selector_value));
+    toolchain
+        .entry_format(&key)
+        .or_insert(Item::Value(selector_value));
     Ok(document.to_string())
 }
 
@@ -1943,7 +1948,24 @@ mod tests {
         let error = pin_selector_in_manifest("toolchain = \"nightly\"\n", "version", "0.16.0")
             .unwrap_err()
             .to_string();
-        assert!(error.contains("must be a TOML table"), "{error}");
+        assert!(
+            error.contains("must be a TOML table or inline table"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn pin_selector_preserves_inline_toolchain_table() {
+        let output = pin_selector_in_manifest(
+            "toolchain = { version = \"0.15.0\" }\n\n[package]\nname = \"demo\"\n",
+            "channel",
+            "nightly",
+        )
+        .unwrap();
+        assert!(
+            output.contains("toolchain = { channel = \"nightly\" }"),
+            "{output}"
+        );
     }
 
     #[test]

@@ -198,7 +198,7 @@ version = "{generated_toolchain}"
             f"{get_toolchain_version()}" in message
         )
         assert f"`baml toolchain pin {get_toolchain_version()}`" in message
-        assert "upgrade `baml-bridge` (the Python package)" in message
+        assert "install `baml-bridge` (the Python package)" in message
         assert "then re-run `baml generate`" in message
         assert "Failed to deserialize BAML bytecode" not in message
 

@@ -141,11 +141,13 @@ fn pin_accepts_and_activates_a_local_path() {
     let home = temp.path().join("home");
     let project = temp.path().join("project");
     let nested = project.join("baml_src/nested");
-    let local_cli = nested.join("local").join(if cfg!(windows) {
+    let local_cli_name = if cfg!(windows) {
         "baml-cli.exe"
     } else {
         "baml-cli"
-    });
+    };
+    let local_cli = nested.join("local").join(local_cli_name);
+    let local_selector = format!("./local/{local_cli_name}");
     fs::create_dir_all(local_cli.parent().unwrap()).unwrap();
     fs::create_dir_all(&home).unwrap();
     fs::write(&local_cli, "").unwrap();
@@ -161,7 +163,7 @@ fn pin_accepts_and_activates_a_local_path() {
     .unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_baml"))
-        .args(["toolchain", "pin", "./local/baml-cli"])
+        .args(["toolchain", "pin", &local_selector])
         .current_dir(&nested)
         .env("BAML_HOME", &home)
         .env("HOME", temp.path())
@@ -179,11 +181,7 @@ fn pin_accepts_and_activates_a_local_path() {
         .canonicalize()
         .unwrap()
         .join("local")
-        .join(if cfg!(windows) {
-            "baml-cli.exe"
-        } else {
-            "baml-cli"
-        });
+        .join(local_cli_name);
     let manifest_value = manifest.parse::<toml::Value>().unwrap();
     let toolchain = manifest_value["toolchain"].as_table().unwrap();
     assert_eq!(
