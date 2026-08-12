@@ -16,12 +16,8 @@ function sum_skip_three_break_at_six() -> int {
     while (true) {
         i = i + 1;
         match (i) {
-            6 => {
-                break;
-            },
-            3 => {
-                continue;
-            },
+            6 => break,
+            3 => continue,
             _ => {
                 total = total + i;
             },
@@ -45,9 +41,7 @@ function countdown_sum(start: int) -> int {
     let i = start;
     while (true) {
         let step = match (i) {
-            0 => {
-                break;
-            },
+            0 => break,
             _ => i,
         };
         total = total + step;
@@ -69,9 +63,7 @@ function sum_1_to_5_skip_3() -> int {
     while (i < 5) {
         i = i + 1;
         let add = match (i) {
-            3 => {
-                continue;
-            },
+            3 => continue,
             _ => i,
         };
         total = total + add;

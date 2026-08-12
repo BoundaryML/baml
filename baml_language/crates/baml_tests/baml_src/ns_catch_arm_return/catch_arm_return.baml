@@ -20,9 +20,7 @@ function car_throws(x: int) -> int throws string {
 // early; otherwise the catch yields the base value and execution continues.
 function catch_arm_returns(x: int) -> int {
     let v = car_throws(x) catch (e) {
-        _ => {
-            return -1;
-        },
+        _ => return -1,
     };
     v + 100
 }
@@ -41,9 +39,7 @@ test "catch_arm_braceless_return_skipped_when_no_throw" {
 // `return` arm unifies with the `int` arm, so the catch result stays `int`.
 function catch_arm_return_mixed(x: int) -> int {
     let v = car_throws(x) catch (e) {
-        let s: string => {
-            return s.length();
-        },
+        let s: string => return s.length(),
     };
     v + 100
 }
@@ -60,9 +56,7 @@ test "catch_arm_braceless_return_mixed_arm_types" {
 
 function match_arm_returns(x: int) -> int {
     let v = match (x) {
-        0 => {
-            return -1;
-        },
+        0 => return -1,
         _ => x,
     };
     v + 100
