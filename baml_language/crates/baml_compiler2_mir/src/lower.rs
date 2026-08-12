@@ -234,6 +234,25 @@ fn interface_requires_closure_locs<'db>(
     out
 }
 
+/// Literals widened to their bases REGARDLESS of freshness - impl
+/// dispatch is by base type (hir_ty's operand-dispatch discipline; a
+/// `"x"`-typed receiver IS a string at runtime).
+fn widen_literal_bases(ty: &Tir2Ty) -> Tir2Ty {
+    match ty {
+        Tir2Ty::Literal(lit, _, attr) => {
+            Tir2Ty::from_primitive(baml_type::PrimitiveType::from_literal(lit), attr.clone())
+        }
+        Tir2Ty::Union(members, attr) => Tir2Ty::Union(
+            members.iter().map(widen_literal_bases).collect(),
+            attr.clone(),
+        ),
+        Tir2Ty::List(inner, attr) => {
+            Tir2Ty::List(Box::new(widen_literal_bases(inner)), attr.clone())
+        }
+        _ => ty.clone(),
+    }
+}
+
 /// A `recv.NAME(..)` / `Prefix.NAME(..)` callee shape - the desugar
 /// trigger the engines and this lowering share.
 fn is_sugar_callee(expr: &baml_compiler2_ast::Expr, name: &str) -> bool {
@@ -1143,10 +1162,8 @@ use baml_compiler2_hir::{
     },
 };
 use baml_compiler2_ppir::file_semantic_index;
-use baml_compiler2_tir::{
-    inference::infer_scope_types,
-    resolve::{ResolvedName, resolve_name_at_in_scope},
-};
+use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
+use baml_compiler2_tir::inference::infer_scope_types;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
@@ -1383,7 +1400,7 @@ fn package_lowering_data<'db>(
 
     // Collect every interface-declared method name in scope (own package +
     // dependency closure). `dispatch_target_for_concrete` previously enumerated
-    // every impl block in the closure (via `l1_impls_for_recv`, which probes
+    // every impl block in the closure (via `l1_impl_views_for_recv`, which probes
     // each impl's pattern against the receiver — running alias normalization /
     // subtype checks per probe) for EVERY method call and field access, just to
     // conclude "no impl provides this member" for the overwhelmingly common
@@ -1694,13 +1711,9 @@ impl<'db> LoweringContext<'db> {
                 .into_iter()
                 .find(|(tn, _, _)| tn == target_tn);
         }
-        for resolved in self.l1_impls_for_recv(actual_ty) {
-            let realized = resolved.implemented_interface(self.db);
-            let Some(views) = self.interface_closure_type_name_views(
-                &realized.name,
-                &realized.generics,
-                &realized.associated_types,
-            ) else {
+        for (name, generics, associated) in self.l1_impl_views_for_recv(actual_ty) {
+            let Some(views) = self.interface_closure_type_name_views(&name, &generics, &associated)
+            else {
                 continue;
             };
             if let Some(view) = views.into_iter().find(|(tn, _, _)| tn == target_tn) {
@@ -2878,20 +2891,59 @@ impl<'db> LoweringContext<'db> {
     /// carrying the enclosing function's rigid type variables — enumerated through
     /// the canonical L1 substrate, with each impl's generic bounds discharged by
     /// the canonical algebra against this scope's bounds.
-    fn l1_impls_for_recv(
-        &self,
-        recv: &Tir2Ty,
-    ) -> Vec<baml_compiler2_tir::interfaces::ResolvedImpl<'db>> {
-        let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg);
-        let facts = self.hir_facts();
-        baml_compiler2_tir::interfaces::impls_for_type(
-            self.db,
-            pkg_id,
-            recv,
-            &self.resolved_aliases.aliases,
-            |a, b| baml_type::normalize::is_subtype(a, b, &facts),
-        )
+    fn l1_impl_views_for_recv(&self, recv: &Tir2Ty) -> Vec<InterfaceTypeView> {
+        // The L1 impl substrate is ENGINE-side: each provider arm probes
+        // its own engine's registry (the retiring branch handles TIR's
+        // internal sentinels natively and dies with TIR).
+        if self.tables.is_tir() {
+            let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
+            let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg);
+            let facts = self.hir_facts();
+            return baml_compiler2_tir::interfaces::impls_for_type(
+                self.db,
+                pkg_id,
+                recv,
+                &self.resolved_aliases.aliases,
+                |a, b| baml_type::normalize::is_subtype(a, b, &facts),
+            )
+            .into_iter()
+            .map(|resolved| {
+                let realized = resolved.implemented_interface(self.db);
+                (realized.name, realized.generics, realized.associated_types)
+            })
+            .collect();
+        }
+        // hir_ty's substrate: alias transparency and impl-bound discharge
+        // are internal to it (its own facts). Dispatch is by BASE type
+        // (hir_ty's operand-dispatch discipline) - a literal-typed
+        // receiver probes as its base primitive; realized view members
+        // reduce through the oracle before becoming dispatch types (the
+        // requires-closure rule).
+        let recv = widen_literal_bases(recv);
+        let Some(interned) = baml_compiler2_hir_ty::impls::try_interned_ty(&recv) else {
+            return Vec::new();
+        };
+        baml_compiler2_hir_ty::impls::impls_for_type(self.db, &interned)
+            .into_iter()
+            .map(|resolved| {
+                let realized = resolved.implemented_view(self.db, &interned);
+                (
+                    realized.name.clone(),
+                    realized
+                        .generics
+                        .iter()
+                        .map(|ty| self.resolve_ty_projections(&ty.to_plain()))
+                        .collect(),
+                    realized
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            (name.clone(), self.resolve_ty_projections(&ty.to_plain()))
+                        })
+                        .collect(),
+                )
+            })
+            .collect()
     }
 
     /// The interface a *concrete* receiver provides `method` through — the realized
@@ -2924,7 +2976,7 @@ impl<'db> LoweringContext<'db> {
         }
         // Fast pre-filter: a member name no in-scope interface declares can
         // never dispatch through an impl, so skip the per-call impl enumeration
-        // entirely. `l1_impls_for_recv` probes every impl block's pattern
+        // entirely. `l1_impl_views_for_recv` probes every impl block's pattern
         // against the receiver (each probe running alias normalization / subtype
         // checks via the canonical algebra), so this hash lookup collapses the
         // dominant "plain method / field access" case — where the accessed
@@ -2935,10 +2987,9 @@ impl<'db> LoweringContext<'db> {
         if !self.interface_method_names.contains(method) {
             return None;
         }
-        for resolved in self.l1_impls_for_recv(recv_ty) {
-            let realized = resolved.implemented_interface(self.db);
-            if self.mir_interface_declares_method(&realized.name, method) {
-                return Some((realized.name, realized.generics, realized.associated_types));
+        for (name, generics, associated) in self.l1_impl_views_for_recv(recv_ty) {
+            if self.mir_interface_declares_method(&name, method) {
+                return Some((name, generics, associated));
             }
         }
         None
@@ -8365,7 +8416,7 @@ impl LoweringContext<'_> {
                     .as_ref()
                     .map(|sm| sm.expr_span(callee).start())
                     .unwrap_or_default();
-                let resolved = baml_compiler2_tir::resolve::resolve_name_at_in_scope(
+                let resolved = resolve_name_at_in_scope(
                     self.db,
                     self.file,
                     span_start,
@@ -8373,10 +8424,10 @@ impl LoweringContext<'_> {
                     self.scope_func_name.as_ref(),
                 );
                 match resolved {
-                    baml_compiler2_tir::resolve::ResolvedName::Builtin(
+                    ResolvedName::Builtin(
                         baml_compiler2_hir::contributions::Definition::Function(fl),
                     ) => Some(fl),
-                    baml_compiler2_tir::resolve::ResolvedName::Item(
+                    ResolvedName::Item(
                         baml_compiler2_hir::contributions::Definition::Function(fl),
                     ) => Some(fl),
                     _ => None,

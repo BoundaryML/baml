@@ -688,6 +688,29 @@ fn classify_pair(tir: &str, hir: &str) -> Option<Option<&'static str>> {
             }
         }
     }
+    // view-projection (the oracle-reduction rule, virtual_call views):
+    // each engine reduces a dispatch view's associated pins as far as
+    // ITS oracle determines - hir_ty reduces ground projections and
+    // keeps rigid ones symbolic (the ratified symbolic-under-bounds
+    // direction); TIR's per-view choices differ in both directions. The
+    // pair admits when the lines agree outside the pin list and at
+    // least one side spells a projection in it.
+    if let (Some(t), Some(h)) = (
+        t_norm.trim_start().strip_prefix("_ = virtual_call "),
+        h_norm.trim_start().strip_prefix("_ = virtual_call "),
+    ) && let (Some(t_open), Some(h_open)) = (t.find('<'), h.find('<'))
+        && let (Some(t_close), Some(h_close)) = (t.rfind(">("), h.rfind(">("))
+        && t_open < t_close
+        && h_open < h_close
+        && t[..t_open] == h[..h_open]
+        && t[t_close..] == h[h_close..]
+        && (t[t_open..t_close].contains(" as ")
+            || h[h_open..h_close].contains(" as ")
+            || t[t_open..t_close].contains('#')
+            || h[h_open..h_close].contains('#'))
+    {
+        return Some(Some("view-projection"));
+    }
     // virtual-field-index (the proper-dyn ruling): TIR reads a virtual
     // field by NAME through an upcast; hir_ty reads by index through
     // the declaring interface's realized view - same slot, the render

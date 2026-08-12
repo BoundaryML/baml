@@ -2616,11 +2616,11 @@ fn baml.csv.stringify_records(records: (int | bigint | float | string | bool | n
     }
 
     bb3: {
-        _6 = virtual_call iter as baml.iter.Iterable<Error = never, Item = (null | bool | int | bigint | float | string)[]>(copy _1) -> [bb4, unwind: bb8];
+        _6 = virtual_call iter as baml.iter.Iterable<Error = never, Item = (int | bigint | float | string | bool | null)[]>(copy _1) -> [bb4, unwind: bb8];
     }
 
     bb4: {
-        _7 = virtual_call next as baml.iter.Iterator<Error = never, Item = (null | bool | int | bigint | float | string)[]>(copy _6) -> [bb5, unwind: bb8];
+        _7 = virtual_call next as baml.iter.Iterator<Error = never, Item = (int | bigint | float | string | bool | null)[]>(copy _6) -> [bb5, unwind: bb8];
     }
 
     bb5: {

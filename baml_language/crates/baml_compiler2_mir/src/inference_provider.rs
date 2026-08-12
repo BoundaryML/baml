@@ -159,6 +159,12 @@ pub(crate) struct ScopePair<'db> {
 }
 
 impl<'db> ProviderTables<'db> {
+    /// Whether the retiring TIR arm backs this run (engine-side choices
+    /// like the L1 impl substrate follow the engine).
+    pub(crate) fn is_tir(&self) -> bool {
+        matches!(self, ProviderTables::Tir { .. })
+    }
+
     pub(crate) fn for_scope(
         &self,
         scope: baml_compiler2_hir::semantic_index::ExprMetadataScope,

@@ -325,9 +325,46 @@ pub struct ResolvedImpl<'db> {
 
 impl ResolvedImpl<'_> {
     /// The interface this impl provides, realized through the match's
-    /// bindings.
+    /// bindings. Associated members carry only what the HEADER wrote -
+    /// block-level `type X = ...` bindings and defaults resolve
+    /// per-member (`resolved_pin`); [`Self::implemented_view`] is the
+    /// complete spelling.
     pub fn implemented(&self) -> InterfaceRef {
         realized(&self.facts.interface, &self.bindings)
+    }
+
+    /// The COMPLETE realized view of the implemented interface for
+    /// subject `self_ty`: every associated member the interface declares,
+    /// resolved through the same ladder projection uses (header pin,
+    /// block-level binding, realized default) - the spelling runtime
+    /// dispatch keys on.
+    pub fn implemented_view(&self, db: &dyn baml_compiler2_ppir::Db, self_ty: &Ty) -> InterfaceRef {
+        let header = self.implemented();
+        let declared: Vec<baml_type::Name> = {
+            let package =
+                baml_compiler2_hir::package::PackageId::new(db, header.name.package().clone());
+            match baml_compiler2_ppir::package_items(db, package)
+                .lookup_type(header.name.namespace(), header.name.name())
+            {
+                Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => {
+                    baml_compiler2_ppir::item_data::interface_data(db, loc)
+                        .associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .collect()
+                }
+                _ => return header,
+            }
+        };
+        let associated_types = declared
+            .into_iter()
+            .filter_map(|member| resolved_pin(db, self, self_ty, &member).map(|pin| (member, pin)))
+            .collect();
+        InterfaceRef::new(
+            header.name.clone(),
+            header.generics.clone(),
+            associated_types,
+        )
     }
 }
 

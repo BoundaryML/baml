@@ -10,6 +10,7 @@
 
 pub mod expand;
 pub mod item_data;
+pub mod resolve;
 pub mod ty;
 
 use std::sync::Arc;
@@ -798,9 +799,7 @@ pub fn body_type_refs<'db>(
     match owner {
         BodyOwnerId::Function(function) => function_body_type_refs(db, function),
         BodyOwnerId::Let(let_binding) => let_body_type_refs(db, let_binding),
-        BodyOwnerId::ParameterDefaults(function) => {
-            parameter_defaults_type_refs(db, function)
-        }
+        BodyOwnerId::ParameterDefaults(function) => parameter_defaults_type_refs(db, function),
     }
 }
 
@@ -811,9 +810,7 @@ pub fn parameter_defaults_type_refs<'db>(
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
     let defaults = function_parameter_defaults(db, function);
-    Arc::new(
-        baml_compiler2_hir::body_type_refs::collect_body_type_refs(&defaults.defaults.exprs).0,
-    )
+    Arc::new(baml_compiler2_hir::body_type_refs::collect_body_type_refs(&defaults.defaults.exprs).0)
 }
 
 /// Canonical function signature — uses PPIR's item tree.
