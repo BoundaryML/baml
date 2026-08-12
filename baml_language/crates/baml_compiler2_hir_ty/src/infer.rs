@@ -569,6 +569,11 @@ enum PendingDiag {
     VoidResultUsed {
         expr: ExprId,
     },
+    UnknownPatternField {
+        pat: PatId,
+        class_name: baml_type::QualifiedTypeName,
+        field_name: baml_type::Name,
+    },
     UnnecessaryOptionalChain {
         expr: ExprId,
         expr_text: String,
@@ -5465,6 +5470,23 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::UnknownPatternField {
+                        pat,
+                        class_name,
+                        field_name,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::UnknownClassPatternField {
+                                class_name,
+                                field_name,
+                                suggestions: Vec::new(),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::VoidResultUsed { expr } => {
                         (TirTypeError::VoidFunctionResultUsed, expr)
                     }

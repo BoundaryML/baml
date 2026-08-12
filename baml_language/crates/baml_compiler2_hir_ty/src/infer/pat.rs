@@ -855,8 +855,14 @@ impl<'db> InferenceContext<'db> {
                     sub_dpats[index] = Some(outcome.dpat);
                 }
                 None => {
-                    // Unknown field: S17's diagnostic; sub-bindings still
-                    // record (as Error).
+                    // Unknown field (E0007); sub-bindings still record
+                    // (as Error).
+                    self.pending_diags
+                        .push(super::PendingDiag::UnknownPatternField {
+                            pat,
+                            class_name: qtn.clone(),
+                            field_name: name.clone(),
+                        });
                     self.lower_pattern(body, *field_pat, &Ty::error());
                 }
             }
