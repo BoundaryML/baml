@@ -10,12 +10,10 @@ function ThrowsViolation(x: int) -> string throws string {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `string` is missing int
-//    ╭─[ throw_throws_contract_violation.baml:3:52 ]
-//    │
+// E0096
+//
+//   × declared throws is `string`, but this function may also throw `int`
+//    ╭─[throw_throws_contract_violation.baml:3:51]
 //  3 │ function ThrowsViolation(x: int) -> string throws string {
-//    │                                                    ───┬───  
-//    │                                                       ╰───── throws contract violation: `string` is missing int
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+//    ·                                                   ──────
+//    ╰────

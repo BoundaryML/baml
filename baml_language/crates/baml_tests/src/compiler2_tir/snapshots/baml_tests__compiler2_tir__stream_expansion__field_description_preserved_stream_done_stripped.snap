@@ -8,5 +8,5 @@ class user.WithDesc {
 }
 class user.WithDesc$stream {
   name: string @description("The name")
-  age: null | int @description("Age in years")
+  age: int | null @description("Age in years")
 }

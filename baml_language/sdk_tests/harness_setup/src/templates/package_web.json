@@ -1,0 +1,23 @@
+{
+  "name": "__PACKAGE_NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:web": "vitest run --config vitest.web.config.ts",
+    "test:workers": "vitest run --config vitest.workers.config.ts"
+  },
+  "dependencies": {
+    "@boundaryml/baml-bridge-web": "file:../../../../../sdks/typescript/bridge_typescript_web"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.18.4",
+    "@types/node": "^24.0.0",
+    "@vitest/browser-playwright": "^4.1.0",
+    "playwright": "^1.53.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "4.110.0"
+  }
+}

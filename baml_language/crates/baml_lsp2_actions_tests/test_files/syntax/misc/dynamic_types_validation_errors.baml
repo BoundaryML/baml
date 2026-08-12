@@ -1,6 +1,6 @@
 function TypeBuilderFn() -> string {
   client "openai/gpt-4o-mini"
-  prompt #"Hello"#
+  prompt `Hello`
 }
 
 class NonDynamic {
@@ -227,12 +227,11 @@ args {
 
 //----
 //- diagnostics
-// Error: field 'C' is missing a type annotation
-//      ╭─[ misc_dynamic_types_validation_errors.baml:105:7 ]
-//      │
+// E0010
+//
+//   × invalid syntax
+//      ╭─[misc_dynamic_types_validation_errors.baml:105:7]
 //  105 │       C
-//      │       ┬  
-//      │       ╰── field 'C' is missing a type annotation
-//      │ 
-//      │ Note: Error code: E0010
-// ─────╯
+//      ·       ┬
+//      ·       ╰── field 'C' is missing a type annotation
+//      ╰────

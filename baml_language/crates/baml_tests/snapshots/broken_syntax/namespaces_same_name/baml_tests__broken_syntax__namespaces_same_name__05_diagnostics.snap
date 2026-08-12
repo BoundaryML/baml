@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:15:31]
+ 15 │ function ThrowsHttpResponse() throws root.http.Response {
+    ·                               ───┬──
+    ·                                  ╰── expected `return type (->)`, found `throws`
+    ╰────

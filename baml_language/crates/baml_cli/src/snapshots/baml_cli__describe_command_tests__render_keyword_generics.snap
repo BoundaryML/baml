@@ -1,0 +1,22 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+generics — Concept page for generic type parameters and bounds.
+
+Syntax:
+  interface Slot<T> {
+    value: T
+  }
+  
+  class Box<T extends Named> {
+    value: T
+  }
+  
+  implements<T extends Named> Printable for Box<T> {
+    function display(self) -> string {
+      return self.value.name
+    }
+  }
+
+Generics are declared where the parameter is introduced: `class Box<T>`, `interface Slot<T>`, `function get<T>(value: T) -> T`, and top-level `implements<T extends Bound> Interface for Wrapper<T> { ... }`. In an `implements<T>` block, the binder goes immediately after `implements`, before the interface target; each bound parameter must be used in the `for` type so the implementation can be matched. Use `T extends Interface<Assoc = Type>` for bounds with associated type constraints.

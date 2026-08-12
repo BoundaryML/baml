@@ -8,5 +8,5 @@ class user.WithDone {
 }
 class user.WithDone$stream {
   name: string
-  age: null | int
+  age: int | null
 }

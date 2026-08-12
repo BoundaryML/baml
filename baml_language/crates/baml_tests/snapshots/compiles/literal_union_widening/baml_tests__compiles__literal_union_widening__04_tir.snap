@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.arrayOfInts() -> int[] throws never {
+  { : never
+    let x = [1, 2, 3] : int[]
+    return x : int[]
+  }
+}
+function user.mapOfInts() -> map<string, int> throws never {
+  { : never
+    let m = map { "a": 1, "b": 2 } : map<string, int>
+    return m : map<string, int>
+  }
+}
+function user.nestedArray() -> int[][] throws never {
+  { : never
+    let x = [[1, 2], [3, 4]] : int[][]
+    return x : int[][]
+  }
+}
+function user.annotatedLiteralUnion() -> int throws never {
+  { : never
+    let x: 1 | 2 = 1 : 1 -> 1 | 2
+    return x : 1 | 2
+  }
+}

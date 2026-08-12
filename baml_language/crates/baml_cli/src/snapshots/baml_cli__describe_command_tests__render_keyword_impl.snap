@@ -1,0 +1,14 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+impl — Rust-style shorthand is not BAML syntax; use `implements`.
+
+Syntax:
+  implements Label for int {
+    function label(self) -> string {
+      return "${self}"
+    }
+  }
+
+BAML accepts `implements` and the singular `implement`; it does not use `impl`.

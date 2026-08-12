@@ -1,0 +1,96 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f(v: NumberBag | int[][]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: NumberBag | int[][] // v // param
+    let _2: bool
+    let _3: int[]
+    let _4: int[] // field
+    let _5: int[]
+    let _6: 0
+    let _7: bool
+    let _8: int
+    let _9: bool
+    let _10: int
+    let _11: int[]
+    let _12: bool
+    let _13: bool
+    let _14: int
+    let _15: bool
+    let _16: int
+    let _17: int[]
+    let _18: int[]
+    let _19: int
+    let _20: int[] // field
+    let _21: int[]
+    let _22: 0
+
+    bb0: {
+        _2 = is_type(copy _1, NumberBag);
+        branch copy _2 -> [bb9, bb1];
+    }
+
+    bb1: {
+        _7 = is_type_tag(copy _1, LIST);
+        branch copy _7 -> [bb2, bb6];
+    }
+
+    bb2: {
+        _8 = len(_1);
+        _9 = copy _8 >= const 1_i64;
+        branch copy _9 -> [bb3, bb6];
+    }
+
+    bb3: {
+        _10 = const 0_i64;
+        _11 = copy _1[_10];
+        _12 = is_type(copy _11, int[]);
+        branch copy _12 -> [bb4, bb6];
+    }
+
+    bb4: {
+        _13 = is_type(copy _11, int[]);
+        branch copy _13 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _14 = len(_11);
+        _15 = copy _14 >= const 0_i64;
+        branch copy _15 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _0 = const 0_i64;
+        goto -> bb10;
+    }
+
+    bb7: {
+        _16 = const 0_i64;
+        _17 = copy _1[_16];
+        _19 = len(_17);
+        _18 = call const fn baml.Array.slice(copy _17, const 0_i64, copy _19) -> [bb8];
+    }
+
+    bb8: {
+        _20 = copy _18;
+        _21 = copy _20;
+        _22 = const 0_i64;
+        _0 = copy _21[_22];
+        goto -> bb10;
+    }
+
+    bb9: {
+        _3 = copy _1.0;
+        _4 = copy _3;
+        _5 = copy _4;
+        _6 = const 0_i64;
+        _0 = copy _5[_6];
+        goto -> bb10;
+    }
+
+    bb10: {
+        return;
+    }
+}

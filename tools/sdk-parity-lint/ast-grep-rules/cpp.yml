@@ -1,0 +1,34 @@
+id: cpp-test
+language: Cpp
+rule:
+  all:
+    - kind: 'parameter_declaration > type_identifier'
+    - inside:
+        all:
+          - kind: function_declarator
+          - has:
+              kind: identifier
+              regex: '^BAML_TEST$'
+              stopBy: end
+        stopBy: end
+---
+id: cpp-audit-test
+language: Cpp
+rule:
+  all:
+    - kind: 'parameter_declaration > type_identifier'
+    - inside:
+        all:
+          - kind: function_declarator
+          - has:
+              kind: identifier
+              regex: '^BAML_TEST$'
+              stopBy: end
+        stopBy: end
+---
+id: sdk-parity-lint-skip
+language: Cpp
+rule:
+  all:
+    - kind: comment
+    - regex: 'SDK_PARITY_LINT\(skip\):'

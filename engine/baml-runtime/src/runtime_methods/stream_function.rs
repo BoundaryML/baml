@@ -15,7 +15,6 @@ use internal_baml_core::{
 };
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
-use stream_cancel::Tripwire;
 
 use crate::{
     client_registry::ClientProperty,

@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-//# Top Level Header
-function Foo() -> int {
-    1
-}

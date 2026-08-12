@@ -1,0 +1,1066 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.ints"
+    load_const "int_abs_positive"
+    make_closure .<lambda($init_test_ns_ints_ints, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_abs_negative"
+    make_closure .<lambda($init_test_ns_ints_ints, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_abs_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_abs_min_value_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_abs_near_min_value_succeeds"
+    make_closure .<lambda($init_test_ns_ints_ints, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_min_basic"
+    make_closure .<lambda($init_test_ns_ints_ints, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_min_other_smaller"
+    make_closure .<lambda($init_test_ns_ints_ints, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_min_equal"
+    make_closure .<lambda($init_test_ns_ints_ints, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_min_negative"
+    make_closure .<lambda($init_test_ns_ints_ints, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_max_basic"
+    make_closure .<lambda($init_test_ns_ints_ints, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_max_other_smaller"
+    make_closure .<lambda($init_test_ns_ints_ints, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_max_negative"
+    make_closure .<lambda($init_test_ns_ints_ints, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_clamp_in_range"
+    make_closure .<lambda($init_test_ns_ints_ints, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_clamp_below_min"
+    make_closure .<lambda($init_test_ns_ints_ints, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_clamp_above_max"
+    make_closure .<lambda($init_test_ns_ints_ints, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_clamp_at_min_boundary"
+    make_closure .<lambda($init_test_ns_ints_ints, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_clamp_at_max_boundary"
+    make_closure .<lambda($init_test_ns_ints_ints, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_max_value_returns_i63_max"
+    make_closure .<lambda($init_test_ns_ints_ints, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_min_value_returns_i63_min"
+    make_closure .<lambda($init_test_ns_ints_ints, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_max_min_inverse"
+    make_closure .<lambda($init_test_ns_ints_ints, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_basic"
+    make_closure .<lambda($init_test_ns_ints_ints, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_negative"
+    make_closure .<lambda($init_test_ns_ints_ints, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_explicit_plus_sign"
+    make_closure .<lambda($init_test_ns_ints_ints, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_max_value"
+    make_closure .<lambda($init_test_ns_ints_ints, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_min_value"
+    make_closure .<lambda($init_test_ns_ints_ints, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_leading_zeros_ok"
+    make_closure .<lambda($init_test_ns_ints_ints, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_empty_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_non_digit_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_alpha_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_whitespace_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_overflow_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_underflow_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_just_sign_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_underscore_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_parse_round_trip_via_to_string"
+    make_closure .<lambda($init_test_ns_ints_ints, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_random_in_range_and_covers_endpoints"
+    make_closure .<lambda($init_test_ns_ints_ints, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_random_negative_range"
+    make_closure .<lambda($init_test_ns_ints_ints, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_random_single_element_range"
+    make_closure .<lambda($init_test_ns_ints_ints, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_random_full_range_returns_some_int"
+    make_closure .<lambda($init_test_ns_ints_ints, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_random_distinct_values_in_wide_range"
+    make_closure .<lambda($init_test_ns_ints_ints, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_random_lower_equals_upper_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_random_lower_greater_than_upper_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_perfect_square"
+    make_closure .<lambda($init_test_ns_ints_ints, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_non_square_rounds_down"
+    make_closure .<lambda($init_test_ns_ints_ints, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_large"
+    make_closure .<lambda($init_test_ns_ints_ints, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_max_value"
+    make_closure .<lambda($init_test_ns_ints_ints, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_negative_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_isqrt_min_value_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_basic"
+    make_closure .<lambda($init_test_ns_ints_ints, 51)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_zero_exponent"
+    make_closure .<lambda($init_test_ns_ints_ints, 52)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_zero_to_zero_is_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 53)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_zero_to_positive_is_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 54)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_negative_exponent_returns_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 55)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_negative_base_odd_exp"
+    make_closure .<lambda($init_test_ns_ints_ints, 56)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_negative_base_even_exp"
+    make_closure .<lambda($init_test_ns_ints_ints, 57)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_one_anything"
+    make_closure .<lambda($init_test_ns_ints_ints, 58)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_negative_one_even"
+    make_closure .<lambda($init_test_ns_ints_ints, 59)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_negative_one_odd"
+    make_closure .<lambda($init_test_ns_ints_ints, 60)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_negative_one_huge_even_exp"
+    make_closure .<lambda($init_test_ns_ints_ints, 61)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_overflow_positive_saturates"
+    make_closure .<lambda($init_test_ns_ints_ints, 62)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_overflow_negative_odd_saturates_to_min"
+    make_closure .<lambda($init_test_ns_ints_ints, 63)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_pow_overflow_negative_even_saturates_to_max"
+    make_closure .<lambda($init_test_ns_ints_ints, 64)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_base_10"
+    make_closure .<lambda($init_test_ns_ints_ints, 65)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_base_2_power_of_two"
+    make_closure .<lambda($init_test_ns_ints_ints, 66)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_rounds_down"
+    make_closure .<lambda($init_test_ns_ints_ints, 67)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_one_is_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 68)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_self_zero_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 69)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_self_negative_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 70)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_base_one_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 71)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_base_zero_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 72)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_ilog_base_negative_throws"
+    make_closure .<lambda($init_test_ns_ints_ints, 73)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_leading_zeros_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 74)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_leading_zeros_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 75)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_leading_zeros_negative_one_is_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 76)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_leading_zeros_large_power_of_two"
+    make_closure .<lambda($init_test_ns_ints_ints, 77)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_leading_ones_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 78)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_leading_ones_negative_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 79)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_trailing_zeros_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 80)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_trailing_zeros_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 81)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_trailing_zeros_eight"
+    make_closure .<lambda($init_test_ns_ints_ints, 82)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_trailing_ones_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 83)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_trailing_ones_seven"
+    make_closure .<lambda($init_test_ns_ints_ints, 84)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_trailing_ones_negative_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 85)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_count_zeros_of_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 86)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_count_zeros_of_negative_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 87)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_count_ones_of_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 88)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_count_ones_of_seven"
+    make_closure .<lambda($init_test_ns_ints_ints, 89)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_count_ones_of_negative_one"
+    make_closure .<lambda($init_test_ns_ints_ints, 90)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_count_zeros_plus_count_ones_equals_64"
+    make_closure .<lambda($init_test_ns_ints_ints, 91)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_add_at_max_boundary_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 92)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_sub_at_min_boundary_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 93)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_mul_max_by_one_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 94)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_mul_min_by_one_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 95)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_abs_bare_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 96)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_to_string_bare_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 97)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_hex_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 98)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_hex_lowercase_digits"
+    make_closure .<lambda($init_test_ns_ints_ints, 99)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_hex_mixed_case_digits"
+    make_closure .<lambda($init_test_ns_ints_ints, 100)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_octal_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 101)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_binary_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 102)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_prefixed_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 103)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_negative_prefixed"
+    make_closure .<lambda($init_test_ns_ints_ints, 104)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_underscore_separators"
+    make_closure .<lambda($init_test_ns_ints_ints, 105)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_trailing_underscore"
+    make_closure .<lambda($init_test_ns_ints_ints, 106)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_hex_underscores"
+    make_closure .<lambda($init_test_ns_ints_ints, 107)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_binary_underscores"
+    make_closure .<lambda($init_test_ns_ints_ints, 108)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_octal_underscores"
+    make_closure .<lambda($init_test_ns_ints_ints, 109)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_underscore_after_prefix"
+    make_closure .<lambda($init_test_ns_ints_ints, 110)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_hex_max_value"
+    make_closure .<lambda($init_test_ns_ints_ints, 111)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_hex_bitwise"
+    make_closure .<lambda($init_test_ns_ints_ints, 112)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.ints"
+    load_const "int_hex_bare_literal_method"
+    make_closure .<lambda($init_test_ns_ints_ints, 113)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function ints.count_zeros_plus_ones(n: int) -> int {
+    load_var n
+    call baml.Int.count_zeros
+    store_var _2
+    load_var n
+    call baml.Int.count_ones
+    load_var _2
+    add_int
+    return
+}
+
+function ints.int_add_(a: int, b: int) -> int {
+    load_var2 1 2
+    add_int
+    return
+}
+
+function ints.int_mul_(a: int, b: int) -> int {
+    load_var2 1 2
+    mul_int
+    return
+}
+
+function ints.int_random_distinct_values_in_wide_range() -> bool {
+    load_const 1000
+    store_var min_seen
+    load_const 0
+    store_var max_seen
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 100
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 1
+    sub_int
+    load_const 500
+    cmp_int_op >=
+    return
+
+  L2:
+    load_const 0
+    load_const 1000
+    call baml.Int.random
+    store_var r
+    load_var2 4 1
+    cmp_int_op <
+    pop_jump_if_false L3
+    load_var r
+    store_var min_seen
+
+  L3:
+    load_var2 4 2
+    cmp_int_op >
+    pop_jump_if_false L4
+    load_var r
+    store_var max_seen
+
+  L4:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function ints.int_random_full_range_returns_some_int() -> bool {
+    call baml.Int.min_value
+    store_var _2
+    call baml.Int.max_value
+    store_var _3
+    load_var2 2 3
+    call baml.Int.random
+    store_var r
+    call baml.Int.min_value
+    store_var _6
+    load_var2 1 4
+    cmp_int_op >=
+    jump_if_false L0
+    pop 1
+    call baml.Int.max_value
+    store_var _8
+    load_var2 1 5
+    cmp_int_op <=
+
+  L0:
+    return
+}
+
+function ints.int_random_in_range_and_covers_endpoints() -> bool {
+    load_const true
+    store_var ok
+    load_const false
+    store_var saw_lo
+    load_const false
+    store_var saw_hi
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 1000
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var ok
+    jump_if_false L2
+    pop 1
+    load_var saw_lo
+
+  L2:
+    jump_if_false L3
+    pop 1
+    load_var saw_hi
+
+  L3:
+    return
+
+  L4:
+    load_const 0
+    load_const 10
+    call baml.Int.random
+    store_var r
+    load_var r
+    load_const 0
+    cmp_int_op <
+    jump_if_false L5
+    jump L6
+
+  L5:
+    pop 1
+    load_var r
+    load_const 10
+    cmp_int_op >=
+
+  L6:
+    pop_jump_if_false L7
+    load_const false
+    store_var ok
+
+  L7:
+    load_var r
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L8
+    load_const true
+    store_var saw_lo
+
+  L8:
+    load_var r
+    load_const 9
+    cmp_int_op ==
+    pop_jump_if_false L9
+    load_const true
+    store_var saw_hi
+
+  L9:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function ints.int_random_negative_range() -> bool {
+    load_const true
+    store_var ok
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 200
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var ok
+    return
+
+  L2:
+    load_const 5
+    unary_op -
+    load_const 5
+    call baml.Int.random
+    store_var r
+    load_var r
+    load_const 5
+    unary_op -
+    cmp_int_op <
+    jump_if_false L3
+    jump L4
+
+  L3:
+    pop 1
+    load_var r
+    load_const 5
+    cmp_int_op >=
+
+  L4:
+    pop_jump_if_false L5
+    load_const false
+    store_var ok
+
+  L5:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function ints.int_random_single_element_range() -> bool {
+    load_const true
+    store_var ok
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 50
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var ok
+    return
+
+  L2:
+    load_const 0
+    load_const 1
+    call baml.Int.random
+    load_const 0
+    cmp_int_op !=
+    pop_jump_if_false L3
+    load_const false
+    store_var ok
+
+  L3:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function ints.int_sub_(a: int, b: int) -> int {
+    load_var2 1 2
+    sub_int
+    return
+}

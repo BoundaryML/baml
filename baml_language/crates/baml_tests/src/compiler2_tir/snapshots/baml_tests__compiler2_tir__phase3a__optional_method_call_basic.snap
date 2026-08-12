@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a.rs
+expression: "render_tir(&db, file)"
+---
+class user.User {
+  name: string
+}
+function user.User.getName(self: user.User) -> string throws never {
+  { : string
+    self.name : string
+  }
+}
+function user.f(u: user.User | null) -> string | null throws never {
+  { : string | null
+    u?.getName() : string | null
+  }
+}
+class user.User$stream {
+  name: string | null
+}

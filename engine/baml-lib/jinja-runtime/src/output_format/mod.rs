@@ -195,10 +195,24 @@ impl minijinja::value::Object for OutputFormat {
             None
         };
 
+        let render_null_as = if kwargs.has("render_null_as") {
+            match kwargs.get::<Option<String>>("render_null_as") {
+                Ok(render_null_as) => Some(render_null_as),
+                Err(e) => {
+                    return Err(Error::new(
+                        ErrorKind::SyntaxError,
+                        format!("Invalid value for render_null_as (expected string | null): {e}"),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+
         let Ok(_) = kwargs.assert_all_used() else {
             return Err(Error::new(
                 ErrorKind::TooManyArguments,
-                "output_format() got an unexpected keyword argument (only 'prefix', 'always_hoist_enums', 'enum_value_prefix', 'or_splitter', 'hoisted_class_prefix', 'hoist_classes', 'map_style', and 'quote_class_fields' are allowed)",
+                "output_format() got an unexpected keyword argument (only 'prefix', 'always_hoist_enums', 'enum_value_prefix', 'or_splitter', 'hoisted_class_prefix', 'hoist_classes', 'map_style', 'quote_class_fields', and 'render_null_as' are allowed)",
             ));
         };
 
@@ -211,6 +225,7 @@ impl minijinja::value::Object for OutputFormat {
             hoisted_class_prefix,
             hoist_classes,
             quote_class_fields,
+            render_null_as,
         ))?;
 
         match content {

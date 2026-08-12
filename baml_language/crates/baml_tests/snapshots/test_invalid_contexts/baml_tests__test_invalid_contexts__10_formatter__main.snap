@@ -1,5 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== PARSER ERROR ===
-[InvalidSyntax { message: "test blocks are only allowed at the top level or inside a testset", span: Span { file_id: FileId(0), range: 95..99 } }, InvalidSyntax { message: "testset blocks are only allowed at the top level or inside a testset", span: Span { file_id: FileId(0), range: 183..190 } }]

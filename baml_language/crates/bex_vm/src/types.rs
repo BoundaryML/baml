@@ -11,8 +11,8 @@ pub trait ObjectTrait {
     /// inner `Function`. This fixes the silent-empty-trace bug in `stack_trace()`
     /// where closure frames were causing an early `Err` that got swallowed.
     fn as_callable(&self) -> Result<&Function, VmInternalError>;
-    fn as_string(&self) -> Result<&String, VmInternalError>;
-    fn as_string_mut(&mut self) -> Result<&mut String, VmInternalError>;
+    fn as_string(&self) -> Result<&bex_vm_types::BexStr, VmInternalError>;
+    fn as_string_mut(&mut self) -> Result<&mut bex_vm_types::BexStr, VmInternalError>;
 }
 
 #[allow(unsafe_code)]
@@ -32,8 +32,9 @@ impl ObjectTrait for Object {
         }
     }
 
-    /// Unwrap either an [`Object::Function`] or the inner function of an
-    /// [`Object::Closure`], returning a reference to the underlying `Function`.
+    /// Unwrap either an [`Object::Function`], the inner function of an
+    /// [`Object::Closure`], or the inner function of an [`Object::BoundMethod`],
+    /// returning a reference to the underlying `Function`.
     ///
     /// This mirrors the dual-dispatch pattern in `load_function()` in `vm.rs`.
     #[inline]
@@ -47,6 +48,12 @@ impl ObjectTrait for Object {
                 let func_obj: &Object = unsafe { closure.function.get() };
                 func_obj.as_function()
             }
+            Object::BoundMethod(bm) => {
+                // SAFETY: bm.function points to a Function object that lives for
+                // the lifetime of the program. Same guarantee as closures.
+                let func_obj: &Object = unsafe { bm.function.get() };
+                func_obj.as_function()
+            }
             _ => Err(VmInternalError::TypeError {
                 expected: FunctionType::Any.into(),
                 got: ObjectType::of(self).into(),
@@ -54,7 +61,7 @@ impl ObjectTrait for Object {
         }
     }
 
-    fn as_string(&self) -> Result<&String, VmInternalError> {
+    fn as_string(&self) -> Result<&bex_vm_types::BexStr, VmInternalError> {
         let Self::String(str) = self else {
             return Err(VmInternalError::TypeError {
                 expected: ObjectType::String.into(),
@@ -65,7 +72,7 @@ impl ObjectTrait for Object {
         Ok(str)
     }
 
-    fn as_string_mut(&mut self) -> Result<&mut String, VmInternalError> {
+    fn as_string_mut(&mut self) -> Result<&mut bex_vm_types::BexStr, VmInternalError> {
         let Self::String(str) = self else {
             return Err(VmInternalError::TypeError {
                 expected: ObjectType::String.into(),

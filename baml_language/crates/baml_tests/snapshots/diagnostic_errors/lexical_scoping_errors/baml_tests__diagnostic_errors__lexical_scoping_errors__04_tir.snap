@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.block_does_not_leak(b: bool) -> int throws never {
+  { : unknown
+    if (b : bool) : void
+      { : void
+        let a = 1 : 1 -> int
+      }
+    a : unknown
+  }
+  !! 80..81: unresolved name: a
+}
+function user.standalone_block_does_not_leak() -> int throws never {
+  { : unknown
+    { : void
+      let x = 1 : 1 -> int
+    }
+    x : unknown
+  }
+  !! 162..163: unresolved name: x
+}
+function user.for_binding_does_not_leak() -> int throws never {
+  { : unknown
+    for x in [1, 2]
+      { : void
+        x : int
+      }
+    x : unknown
+  }
+  !! 253..254: unresolved name: x
+}

@@ -10,10 +10,10 @@ use baml_runtime::TripWire;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use pyo3::prelude::*;
-use stream_cancel::Trigger;
+use tokio_util::sync::CancellationToken;
 
-// Track active operations with their triggers
-static OPERATION_TRIGGERS: Lazy<DashMap<u32, Trigger>> = Lazy::new(DashMap::new);
+// Track active operations with their cancellation tokens
+static OPERATION_TRIGGERS: Lazy<DashMap<u32, CancellationToken>> = Lazy::new(DashMap::new);
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
 #[pyclass(module = "baml_py.baml_py")]
@@ -55,8 +55,8 @@ impl AbortController {
             return TripWire::new(None);
         }
 
-        let (trigger, tripwire) = stream_cancel::Tripwire::new();
-        OPERATION_TRIGGERS.insert(self.id, trigger);
+        let token = CancellationToken::new();
+        OPERATION_TRIGGERS.insert(self.id, token.clone());
         let id = self.id;
         if let Some(timeout) = &self.timeout {
             let timeout = *timeout;
@@ -69,7 +69,7 @@ impl AbortController {
         }
 
         TripWire::new_with_on_drop(
-            Some(tripwire),
+            Some(token),
             Box::new(move || {
                 OPERATION_TRIGGERS.remove(&id);
             }),
@@ -79,13 +79,18 @@ impl AbortController {
 
 impl Drop for AbortController {
     fn drop(&mut self) {
-        OPERATION_TRIGGERS.remove(&self.id);
+        // Preserve the previous cancel-on-drop behavior: dropping the controller
+        // (e.g. when Python GCs it) cancels any still-running operation. A bare
+        // `CancellationToken` drop does not cancel, so cancel explicitly.
+        if let Some((_, token)) = OPERATION_TRIGGERS.remove(&self.id) {
+            token.cancel();
+        }
     }
 }
 
 fn abort(id: u32) {
-    if let Some((_, trigger)) = OPERATION_TRIGGERS.remove(&id) {
-        trigger.cancel();
+    if let Some((_, token)) = OPERATION_TRIGGERS.remove(&id) {
+        token.cancel();
     }
 }
 

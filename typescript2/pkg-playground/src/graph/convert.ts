@@ -1,9 +1,18 @@
 import type { ControlFlowGraph, CfgNodeType } from '../worker-protocol';
-import type { GraphNode, GraphEdge, GraphNodeType, WorkflowNode, WorkflowEdge } from './types';
+import type {
+  GraphNode,
+  GraphEdge,
+  GraphNodeType,
+  WorkflowNode,
+  WorkflowEdge,
+} from './types';
 import { getMarkerColors } from './edges/Marker';
 
 // Stage 1: ControlFlowGraph JSON -> GraphNode[] / GraphEdge[]
-export function cfgToGraphNodes(cfg: ControlFlowGraph): { nodes: GraphNode[]; edges: GraphEdge[] } {
+export function cfgToGraphNodes(cfg: ControlFlowGraph): {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+} {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
 
@@ -16,7 +25,10 @@ export function cfgToGraphNodes(cfg: ControlFlowGraph): { nodes: GraphNode[]; ed
       metadata: {
         logFilterKey: node.logFilterKey,
         sourceExpr: node.sourceExpr,
+        sourceSpan: node.sourceSpan,
         isContainer: node.isContainer,
+        llmClient: node.llmClient,
+        calleeName: node.calleeName,
       },
     });
   }
@@ -38,12 +50,22 @@ function cfgNodeTypeToGraphType(nt: CfgNodeType): GraphNodeType {
   // Preserve semantic type — whether a node is a group is determined
   // separately in graphToReactflow via isContainer.
   switch (nt) {
-    case 'functionRoot': return 'function';
-    case 'headerContextEnter': return 'header';
-    case 'branchGroup': return 'conditional';
-    case 'branchArm': return 'scope';
-    case 'loop': return 'loop';
-    case 'otherScope': return 'scope';
+    case 'functionRoot':
+      return 'function';
+    case 'llmFunction':
+      return 'llm_function';
+    case 'headerContextEnter':
+      return 'header';
+    case 'branchGroup':
+      return 'conditional';
+    case 'branchArm':
+      return 'scope';
+    case 'loop':
+      return 'loop';
+    case 'otherScope':
+      return 'scope';
+    case 'return':
+      return 'return';
   }
 }
 
@@ -80,6 +102,7 @@ export function graphToReactflow(
         executionState: 'not-started' as const,
         selected: false,
         logFilterKey: gn.metadata.logFilterKey,
+        llmClient: gn.metadata.llmClient,
       },
       ...(parentId ? { parentId } : {}),
     } as WorkflowNode;
@@ -103,6 +126,10 @@ export function graphToReactflow(
     edgesBySource.set(edge.source, list);
   }
 
+  // Resolve theme-aware marker colors once for the whole graph rather than
+  // re-probing the DOM per edge.
+  const colors = getMarkerColors();
+
   // Apply color data to fan-out edges
   for (const [, siblings] of edgesBySource) {
     const siblingCount = siblings.length;
@@ -110,7 +137,7 @@ export function graphToReactflow(
       const rawLabel = edge.data?.label;
       edge.data = {
         ...edge.data,
-        color: computeEdgeColor(rawLabel, siblingCount, idx),
+        color: computeEdgeColor(colors, rawLabel, siblingCount, idx),
       };
     });
   }
@@ -119,12 +146,11 @@ export function graphToReactflow(
 }
 
 function computeEdgeColor(
+  colors: ReturnType<typeof getMarkerColors>,
   label: string | undefined,
   siblingCount: number,
   siblingIndex: number,
 ): string {
-  const colors = getMarkerColors();
-
   // No label = sequential edge → base color
   if (!label) return colors.base;
 
@@ -143,11 +169,19 @@ function computeEdgeColor(
 
 function graphTypeToReactflowType(gt: GraphNodeType): string {
   switch (gt) {
-    case 'function': return 'base';
-    case 'llm_function': return 'llm';
-    case 'conditional': return 'diamond';
-    case 'loop': return 'hexagon';
-    case 'scope': return 'base';
-    case 'header': return 'base';
+    case 'function':
+      return 'base';
+    case 'llm_function':
+      return 'llm';
+    case 'conditional':
+      return 'diamond';
+    case 'loop':
+      return 'hexagon';
+    case 'scope':
+      return 'base';
+    case 'header':
+      return 'base';
+    case 'return':
+      return 'base';
   }
 }

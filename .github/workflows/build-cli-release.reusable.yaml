@@ -56,7 +56,7 @@ jobs:
             target: aarch64-unknown-linux-musl
 
     # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
-    # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
+    # with a newer GLIBC version compatible with Node24 used by actions/checkout@v6
     # container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
 
@@ -70,7 +70,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # This sets up protoc-gen-go for non-Windows builds
       # and on windows this seems to hang forever since 0.217.0
@@ -264,7 +264,7 @@ jobs:
 
       # Upload the CFFI library for this specific target
       - name: Upload CFFI Library Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # Artifact name uses the target name for uniqueness (as decided previously)
           name: libbaml-cffi-${{ matrix._.target }}
@@ -323,8 +323,7 @@ jobs:
 
           echo "Copying files to staging directory"
           cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
-          # Use find for robust copy
-          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          cp README.v0.md "$staging_dir/README.md"
           find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
 
           echo "Creating archive: $archive_file"
@@ -371,8 +370,7 @@ jobs:
 
           echo "Copying files to staging directory"
           cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
-          # Use find for robust copy
-          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          cp README.v0.md "$staging_dir/README.md"
           find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
 
           echo "Creating archive: $archive_file"
@@ -407,7 +405,7 @@ jobs:
       # Upload different artifacts based on mode
       - name: Upload CLI artifacts (Release)
         if: inputs.package_for_release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # Artifact name in GitHub Actions UI remains the same
           name: baml-cli-${{ matrix._.target }}
@@ -417,7 +415,7 @@ jobs:
 
       - name: Upload CLI artifacts (CI)
         if: inputs.package_for_release == false
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: baml-cli-${{ matrix._.target }}
           path: |

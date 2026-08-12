@@ -1,0 +1,47 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.ArrayOfComparisons(a: int, b: int, c: int, d: int) -> bool[] throws never {
+  { : bool[]
+    [a < b, c > d] : bool[]
+  }
+}
+function user.ArrayOfComparisonsParenthesized(a: int, b: int, c: int, d: int) -> bool[] throws never {
+  { : bool[]
+    [a < b, c > d] : bool[]
+  }
+}
+function user.ArrayCompareThenCall(f: int, x: int) -> int[] throws never {
+  { : int[]
+    [f < x, y()] : int[]
+  }
+  !! 1110..1115: type mismatch: expected int, got bool
+}
+function user.y() -> int throws never {
+  { : 0
+    0 : 0
+  }
+}
+function user.f<K, V>(k: K, v: V) -> V throws never {
+  { : V
+    v : V
+  }
+}
+function user.GenericCallInArray(k: int, v: string) -> string[] throws never {
+  { : string[]
+    [f<int, string>(k, v)] : string[]
+  }
+}
+function user.literal_arg() -> string throws never {
+  { : string
+    f<K, V>("a", "b") : string
+  }
+  !! 941..944: type mismatch: expected "assistant", got "a"
+  !! 941..944: type mismatch: expected "assistant", got "a"
+}
+function user.paren_union_arg() -> string throws never {
+  { : string
+    f<K, V>(0, "b") : string
+  }
+}

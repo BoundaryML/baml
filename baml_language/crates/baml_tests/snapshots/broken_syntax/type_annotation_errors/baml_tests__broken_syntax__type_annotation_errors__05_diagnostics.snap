@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[type_malformed.baml:7:6]
+ 7 │ type Foo
+   ·      ─┬─
+   ·       ╰── expected `'='`, found `identifier`
+   ╰────
+
+  [type] E0002
+
+  × unresolved type: Foo
+   ╭─[type_malformed.baml:7:6]
+ 7 │ type Foo
+   ·      ───
+   ╰────
+
+  [hir] E0108
+
+  × could not parse type expression for type alias `Bar`
+    ╭─[type_malformed.baml:10:11]
+ 10 │ type Bar =
+    ·           ▲
+    ·           ╰── unparseable type
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[type_malformed.baml:10:11]
+ 10 │ type Bar =
+    ·           ▲
+    ·           ╰── expected `type`, found `EOF`
+    ╰────

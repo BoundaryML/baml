@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a.rs
+expression: "render_tir(&db, file)"
+---
+class user.User {
+  name: string
+}
+type user.MaybeUser = user.User | null
+function user.f(u: user.MaybeUser) -> string | null throws never {
+  { : string | null
+    u?.name : string | null
+  }
+}
+class user.User$stream {
+  name: string | null
+}
+type user.MaybeUser$stream = user.User$stream | null

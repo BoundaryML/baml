@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[type_aliases.baml:11:3]
+ 11 │   true
+    ·   ──┬─
+    ·     ╰── expected `foo`, found `true`
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: name
+   ╭─[type_aliases_json.baml:4:9]
+ 4 │   inner name
+   ·         ────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[type_aliases_json.baml:9:3]
+ 9 │   NotJSON{ inner: "Whoops" }
+   ·   ─────────────┬────────────
+   ·                ╰── expected `JSON`, found `NotJSON`
+   ╰────

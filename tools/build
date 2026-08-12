@@ -427,8 +427,8 @@ case "$_path" in
     fi
     ;;
 
-  /baml_language/crates/bridge_nodejs | /baml_language/crates/bridge_nodejs/* )
-    command="cd ${_repo_root}/baml_language/crates/bridge_nodejs && pnpm build:debug"
+  /baml_language/sdks/typescript/bridge_typescript | /baml_language/sdks/typescript/bridge_typescript/* )
+    command="cd ${_repo_root}/baml_language/sdks/typescript/bridge_typescript && pnpm build:debug"
     if [ "$_test_mode" -eq 1 ]; then
       command="${command} && cargo test --lib && pnpm test"
     fi

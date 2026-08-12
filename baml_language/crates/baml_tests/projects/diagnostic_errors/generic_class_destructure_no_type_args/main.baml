@@ -1,0 +1,13 @@
+// Moved from tests/patterns_new_runtime.rs (generic_class_destructure_without_type_args_is_rejected).
+// Destructuring a generic class without specifying type arguments must be rejected
+// at compile time; the diagnostics snapshot is the assertion.
+
+class Box<T> {
+    value T
+}
+
+function main() -> int {
+    let boxed: Box<int> = Box { value: 42 };
+    let Box { value } = boxed;
+    value
+}

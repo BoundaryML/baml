@@ -1,10 +1,13 @@
 use std::{borrow::Cow, sync::LazyLock};
 
+use num_bigint::BigInt;
 use regex::Regex;
 
 use super::{ParsingContext, ParsingError, array_helper::coerce_array_to_singular};
 use crate::{
-    baml_value::{BamlBool, BamlFloat, BamlInt, BamlMedia, BamlNull, BamlString, BamlValue},
+    baml_value::{
+        BamlBigint, BamlBool, BamlFloat, BamlInt, BamlMedia, BamlNull, BamlString, BamlValue,
+    },
     deserializer::{
         coercer::TypeCoercer,
         deserialize_flags::{DeserializerConditions, Flag},
@@ -12,10 +15,30 @@ use crate::{
     },
     jsonish::{self, CompletionState},
     sap_model::{
-        AttrLiteral, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy, PrimitiveTy,
-        StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+        AttrLiteral, BigintTy, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy,
+        PrimitiveTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
     },
 };
+
+/// Parse a decimal byte slice into a `BigInt`, rejecting inputs that would
+/// exceed the workspace bigint cap ([`baml_type::MAX_BIGINT_DECIMAL_DIGITS`]).
+///
+/// The digit-count check is a cheap pre-flight reject (so a malicious LLM
+/// payload doesn't reach `BigInt::parse_bytes` at all); the exact `bi.bits()`
+/// check after parsing catches borderline cases. Mirrors the VM
+/// (`vm.rs:try_alloc_bigint`) and FFI (`bridge_ctypes/src/value_decode.rs`)
+/// guards so a host- or LLM-supplied value can't drive an unbounded
+/// allocation through SAP deserialization.
+fn parse_bigint_decimal_bounded(bytes: &[u8]) -> Option<BigInt> {
+    if bytes.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS {
+        return None;
+    }
+    let bi = BigInt::parse_bytes(bytes, 10)?;
+    if bi.bits() > baml_type::MAX_BIGINT_BITS {
+        return None;
+    }
+    Some(bi)
+}
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for PrimitiveTy
 where
@@ -34,6 +57,10 @@ where
             }
             PrimitiveTy::Int(ty) => IntTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
                 .map(|v| v.map(|v| v.map_value(Into::into))),
+            PrimitiveTy::Bigint(ty) => {
+                BigintTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
+                    .map(|v| v.map(|v| v.map_value(Into::into)))
+            }
             PrimitiveTy::Float(ty) => FloatTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
                 .map(|v| v.map(|v| v.map_value(Into::into))),
             PrimitiveTy::Bool(ty) => BoolTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
@@ -57,6 +84,10 @@ where
             }
             PrimitiveTy::Int(ty) => IntTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
                 .map(|v| v.map_value(Into::into)),
+            PrimitiveTy::Bigint(ty) => {
+                BigintTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
+                    .map(|v| v.map_value(Into::into))
+            }
             PrimitiveTy::Float(ty) => {
                 FloatTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
                     .map(|v| v.map_value(Into::into))
@@ -99,7 +130,7 @@ where
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let res = if let Some(n) = n.as_i64() {
+                if let Some(n) = n.as_i64() {
                     BamlInt { value: n } // also covers u64
                 } else if n.as_u64().is_some() {
                     return Err(ctx.error_integer_out_of_bounds(n));
@@ -115,9 +146,7 @@ where
                     }
                 } else {
                     return Err(ctx.error_integer_out_of_bounds(n));
-                };
-                target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -134,7 +163,7 @@ where
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
-                let res = if let Ok(n) = s.parse::<i64>() {
+                if let Ok(n) = s.parse::<i64>() {
                     BamlInt { value: n }
                 } else if let Ok(n) = s.parse::<u64>() {
                     let Ok(n) = i64::try_from(n) else {
@@ -167,9 +196,7 @@ where
                     }
                 } else {
                     return Err(ctx.error_unexpected_type(&target, &value));
-                };
-                target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -196,7 +223,6 @@ where
                 else {
                     return Ok(None);
                 };
-                target.meta.expect_asserts(&singular.value, ctx)?;
                 flags.flags.extend_from_slice(&singular.meta.flags.flags);
                 let BamlValue::Int(singular) = singular.value else {
                     unreachable!("coerce_array_to_singular should only return Int");
@@ -260,6 +286,240 @@ where
     }
 }
 
+/// Parses a `serde_json::Number` that exceeded `i64`/`u64` range as a `BigInt`.
+///
+/// `serde_json` keeps the original digit sequence in the `Number`'s `Display`
+/// output, so for arbitrary-precision integer literals the string form is the
+/// canonical source — `as_i64`/`as_u64` only succeed for in-range values.
+fn parse_bigint_from_number_text(n: &serde_json::Number) -> Option<BigInt> {
+    let s = n.to_string();
+    // Reject anything that looks like a non-integer (decimal point, exponent).
+    // The float-fallback path below handles those cases explicitly.
+    if s.contains('.') || s.contains('e') || s.contains('E') {
+        return None;
+    }
+    parse_bigint_decimal_bounded(s.as_bytes())
+}
+
+/// Converts a finite `f64` to a `BigInt` via "round half away from zero".
+///
+/// Returns `None` for NaN or infinity (callers should reject those before
+/// invoking this).
+///
+/// For typical doubles like `42.0`, this rounds to `42` and produces
+/// `BigInt::from(42)`. For huge floats beyond `i128` range, we go through the
+/// decimal-text representation so we don't lose precision near the upper bound
+/// of the float-representable integers.
+fn bigint_from_finite_f64(f: f64) -> Option<BigInt> {
+    if !f.is_finite() {
+        return None;
+    }
+    let rounded = f.round();
+    // Fast path: in i128 range, the cast is exact (and avoids the formatting hit).
+    // `i128::MAX as f64` rounds to a power of two slightly above `i128::MAX`,
+    // so the range check alone can admit values that truncate during cast.
+    // Round-trip the candidate back through `f64` to detect that case.
+    #[allow(clippy::cast_precision_loss)]
+    if (i128::MIN as f64) <= rounded && rounded <= (i128::MAX as f64) {
+        #[allow(clippy::cast_possible_truncation)]
+        let candidate = rounded as i128;
+        // Exact-equality is intentional — anything else admits the truncation.
+        #[expect(clippy::float_cmp)]
+        let lossless = (candidate as f64) == rounded;
+        if lossless {
+            return Some(BigInt::from(candidate));
+        }
+    }
+    // Out-of-i128-range (or lossy near the boundary): format with no fractional
+    // digits and parse via the bounded helper. (An `f64` past `i128` range is
+    // `> 1.7e38`, well under the bigint cap, so this never actually overflows
+    // in practice — using the bounded parser keeps the SAP path uniform.)
+    let s = format!("{rounded:.0}");
+    parse_bigint_decimal_bounded(s.as_bytes())
+}
+
+#[allow(clippy::cast_precision_loss)]
+impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for BigintTy
+where
+    't: 's,
+    's: 'v,
+{
+    fn coerce(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBigint, N>>, ParsingError> {
+        let mut flags = DeserializerConditions::new();
+
+        let result = match (value, target.meta.in_progress.as_ref()) {
+            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
+                return Ok(None);
+            }
+            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
+                target.ty.from_literal(lit, ctx)?
+            }
+            (jsonish::Value::Number(n, c), _) => {
+                if matches!(c, CompletionState::Incomplete) {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                if let Some(i) = n.as_i64() {
+                    BamlBigint {
+                        value: BigInt::from(i),
+                    }
+                } else if let Some(u) = n.as_u64() {
+                    BamlBigint {
+                        value: BigInt::from(u),
+                    }
+                } else if let Some(parsed) = parse_bigint_from_number_text(n) {
+                    // Arbitrary-precision integer that exceeded i64/u64.
+                    BamlBigint { value: parsed }
+                } else if let Some(f) = n.as_f64() {
+                    if !f.is_finite() {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    }
+                    let Some(bi) = bigint_from_finite_f64(f) else {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    };
+                    flags.add_flag(Flag::FloatToBigint(f));
+                    BamlBigint { value: bi }
+                } else {
+                    return Err(ctx.error_unexpected_type(&target, &value));
+                }
+            }
+            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
+                return Ok(None);
+            }
+            (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
+                flags.add_flag(Flag::StringToBigint(s.clone()));
+                target.ty.from_literal(lit, ctx)?
+            }
+            (jsonish::Value::String(s, c), _) => {
+                if matches!(c, CompletionState::Incomplete) {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                let trimmed = s.trim();
+                // Trim trailing commas
+                let trimmed = trimmed.trim_end_matches(',');
+                if let Some(bi) = parse_bigint_decimal_bounded(trimmed.as_bytes()) {
+                    flags.add_flag(Flag::StringToBigint(s.clone()));
+                    BamlBigint { value: bi }
+                } else if let Some(n) = trimmed
+                    .parse::<f64>()
+                    .ok()
+                    .or_else(|| float_from_maybe_fraction(trimmed))
+                    .or_else(|| float_from_comma_separated(trimmed))
+                {
+                    if !n.is_finite() {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    }
+                    let Some(bi) = bigint_from_finite_f64(n) else {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    };
+                    flags.add_flag(Flag::StringToBigint(s.clone()));
+                    flags.add_flag(Flag::FloatToBigint(n));
+                    BamlBigint { value: bi }
+                } else {
+                    return Err(ctx.error_unexpected_type(&target, &value));
+                }
+            }
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
+                return Ok(None);
+            }
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
+                target.ty.from_literal(lit, ctx)?
+            }
+            (jsonish::Value::Array(items, c), _) => {
+                if matches!(c, CompletionState::Incomplete) {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                let target_ty = target.ty;
+                let target_meta = target.meta;
+                let Some(singular) = coerce_array_to_singular(
+                    ctx,
+                    TyWithMeta::new(TyResolvedRef::Bigint(BigintTy), target_meta),
+                    items.iter(),
+                    &|value| {
+                        Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
+                            .map(|v| v.map(|v| v.map_value(Into::into)))
+                    },
+                )?
+                else {
+                    return Ok(None);
+                };
+                flags.flags.extend_from_slice(&singular.meta.flags.flags);
+                let BamlValue::Bigint(singular) = singular.value else {
+                    unreachable!("coerce_array_to_singular should only return Bigint");
+                };
+                singular
+            }
+            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+        };
+        let result = ValueWithFlags::new(
+            result,
+            DeserializerMeta {
+                flags,
+                ty: target.map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
+            },
+        );
+        Ok(Some(result))
+    }
+
+    fn try_cast(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlBigint, N>> {
+        let jsonish::Value::Number(num, completion_state) = value else {
+            return None;
+        };
+
+        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        ValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultButHadValue(Cow::Borrowed(value))),
+                                ty: target.map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
+        };
+
+        // Only accept exact JSON integer numbers — no float fallback, no string parsing.
+        let bi = if let Some(i) = num.as_i64() {
+            BigInt::from(i)
+        } else if let Some(u) = num.as_u64() {
+            BigInt::from(u)
+        } else {
+            // Try arbitrary-precision parse from the raw digits.
+            parse_bigint_from_number_text(num)?
+        };
+
+        Some(ValueWithFlags::new(
+            BamlBigint { value: bi },
+            DeserializerMeta {
+                flags,
+                ty: TyWithMeta::new(TyResolvedRef::Bigint(BigintTy), target.meta),
+            },
+        ))
+    }
+}
+
 #[allow(clippy::cast_precision_loss)]
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for FloatTy
 where
@@ -285,7 +545,7 @@ where
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let res = if let Some(n) = n.as_f64() {
+                if let Some(n) = n.as_f64() {
                     BamlFloat { value: n }
                 } else if let Some(n) = n.as_i64() {
                     BamlFloat { value: n as f64 }
@@ -293,9 +553,7 @@ where
                     BamlFloat { value: n as f64 }
                 } else {
                     return Err(ctx.error_unexpected_type(&target, &value));
-                };
-                target.meta.expect_asserts(&BamlValue::Float(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -312,7 +570,7 @@ where
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
-                let res = if let Ok(n) = s.parse::<f64>() {
+                if let Ok(n) = s.parse::<f64>() {
                     BamlFloat { value: n }
                 } else if let Ok(n) = s.parse::<i64>() {
                     BamlFloat { value: n as f64 }
@@ -330,9 +588,7 @@ where
                     BamlFloat { value: frac }
                 } else {
                     return Err(ctx.error_unexpected_type(&target, &value));
-                };
-                target.meta.expect_asserts(&BamlValue::Float(res), ctx)?;
-                res
+                }
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -359,7 +615,6 @@ where
                 else {
                     return Ok(None);
                 };
-                target.meta.expect_asserts(&singular.value, ctx)?;
                 flags.flags.extend_from_slice(&singular.meta.flags.flags);
                 let BamlValue::Float(singular) = singular.value else {
                     unreachable!("coerce_array_to_singular should only return Float");
@@ -435,11 +690,7 @@ where
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
-            (crate::jsonish::Value::Boolean(b), _) => {
-                let res = BamlBool { value: *b };
-                target.meta.expect_asserts(&BamlValue::Bool(res), ctx)?;
-                res
-            }
+            (crate::jsonish::Value::Boolean(b), _) => BamlBool { value: *b },
             (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
@@ -452,7 +703,7 @@ where
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let res = match s.to_lowercase().as_str() {
+                match s.to_lowercase().as_str() {
                     "true" => {
                         flags.add_flag(Flag::StringToBool(s.clone()));
                         BamlBool { value: true }
@@ -461,34 +712,30 @@ where
                         flags.add_flag(Flag::StringToBool(s.clone()));
                         BamlBool { value: false }
                     }
-                    _ => {
-                        match super::match_string::match_string(
-                            ctx,
-                            TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
-                            Cow::Borrowed(value),
-                            &[
-                                ("true", vec!["true", "True", "TRUE"]),
-                                ("false", vec!["false", "False", "FALSE"]),
-                            ],
-                            true,
-                        ) {
-                            Ok(val) => match val.value {
-                                "true" => {
-                                    flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
-                                    BamlBool { value: true }
-                                }
-                                "false" => {
-                                    flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
-                                    BamlBool { value: false }
-                                }
-                                _ => return Err(ctx.error_unexpected_type(&target, &value)),
-                            },
-                            Err(_) => return Err(ctx.error_unexpected_type(&target, &value)),
-                        }
-                    }
-                };
-                target.meta.expect_asserts(&BamlValue::Bool(res), ctx)?;
-                res
+                    _ => match super::match_string::match_string(
+                        ctx,
+                        TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
+                        Cow::Borrowed(value),
+                        &[
+                            ("true", vec!["true", "True", "TRUE"]),
+                            ("false", vec!["false", "False", "FALSE"]),
+                        ],
+                        true,
+                    ) {
+                        Ok(val) => match val.value {
+                            "true" => {
+                                flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
+                                BamlBool { value: true }
+                            }
+                            "false" => {
+                                flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
+                                BamlBool { value: false }
+                            }
+                            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+                        },
+                        Err(_) => return Err(ctx.error_unexpected_type(&target, &value)),
+                    },
+                }
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -515,7 +762,6 @@ where
                 else {
                     return Ok(None);
                 };
-                target.meta.expect_asserts(&singular.value, ctx)?;
                 flags.flags.extend_from_slice(&singular.meta.flags.flags);
                 let BamlValue::Bool(singular) = singular.value else {
                     unreachable!("coerce_array_to_singular should only return Bool");
@@ -595,7 +841,6 @@ where
         }
 
         let result = BamlNull;
-        target.meta.expect_asserts(&BamlValue::Null(result), ctx)?;
 
         Ok(Some(ValueWithFlags::new(
             result,
@@ -698,9 +943,6 @@ where
         let result = BamlString {
             value: result.into(),
         };
-        target
-            .meta
-            .expect_asserts(&BamlValue::String(result.clone()), ctx)?;
 
         Ok(Some(ValueWithFlags::new(
             result,
@@ -951,5 +1193,40 @@ mod tests {
         let baml_value = result.unwrap().unwrap();
         // Should fall back to the raw input string
         assert_eq!(&*baml_value.value.value, "some raw input");
+    }
+
+    // ── Bigint size-cap helper tests ─────────────────────────────────────
+    //
+    // The integration path (through SAP coercion) needs a string that
+    // exceeds the bigint cap, which is ~80M digits — too expensive to
+    // construct on every test run. These unit tests exercise the bounds
+    // logic directly with small inputs, and the cap branch is verified via
+    // an `oversize` test gated on the cap constant.
+
+    #[test]
+    fn parse_bigint_decimal_bounded_accepts_small() {
+        let bi = super::parse_bigint_decimal_bounded(b"42").unwrap();
+        assert_eq!(bi, BigInt::from(42));
+    }
+
+    #[test]
+    fn parse_bigint_decimal_bounded_accepts_negative() {
+        let bi = super::parse_bigint_decimal_bounded(b"-42").unwrap();
+        assert_eq!(bi, BigInt::from(-42));
+    }
+
+    #[test]
+    fn parse_bigint_decimal_bounded_rejects_garbage() {
+        // The underlying parser refuses non-digit bytes.
+        assert!(super::parse_bigint_decimal_bounded(b"not-a-number").is_none());
+        assert!(super::parse_bigint_decimal_bounded(b"").is_none());
+    }
+
+    #[test]
+    fn parse_bigint_decimal_bounded_rejects_oversized() {
+        // Construct a digit string one byte past the pre-flight cap. The
+        // function must reject it without performing the BigInt allocation.
+        let oversized: Vec<u8> = vec![b'9'; baml_type::MAX_BIGINT_DECIMAL_DIGITS + 1];
+        assert!(super::parse_bigint_decimal_bounded(&oversized).is_none());
     }
 }

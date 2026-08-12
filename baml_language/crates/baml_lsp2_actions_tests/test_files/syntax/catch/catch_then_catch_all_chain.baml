@@ -12,7 +12,7 @@ function MayFailIntOrString(x: int) -> string {
 // catch handles string, catch_all handles the rest with wildcard — OK
 function CatchThenCatchAllOk(x: int) -> string {
   MayFailIntOrString(x) catch (e) {
-    _: string => "caught string"
+    string => "caught string"
   } catch_all (e2) {
     _ => "caught rest"
   }
@@ -22,9 +22,9 @@ function CatchThenCatchAllOk(x: int) -> string {
 // remains — OK since string+int covers all thrown types
 function CatchThenCatchAllTyped(x: int) -> string {
   MayFailIntOrString(x) catch (e) {
-    _: string => "caught string"
+    string => "caught string"
   } catch_all (e2) {
-    _: int => "caught int"
+    int => "caught int"
   }
 }
 

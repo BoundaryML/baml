@@ -1,0 +1,28 @@
+// Intent: a generic call inside an array literal: `[f<K, V>(...)]`.
+// `>` is followed directly by `(`, the truly ambiguous shape — at the token
+// level `f < K , V > ( ... )` could read as either:
+//   - a generic call `f<K, V>(...)`, or
+//   - two comparisons `f < K , V > (...)`  (Baml has no tuples, but the
+//     parser would have to look further to know that).
+//
+// The parser's `looks_like_generic_args` heuristic (parser.rs:3914) commits
+// to generics on `<` Word `,`/`>`/`<`, so it picks the call interpretation.
+
+function f<K, V>(k: K, v: V) -> V {
+    v
+}
+
+function GenericCallInArray(k: int, v: string) -> string[] {
+    [f<int, string>(k, v)]
+}
+
+// Generic args can also start with non-Word tokens — string-literal types
+// and parenthesized union types. These previously fell back to comparison
+// because the lookahead allowlist only covered Word/Dot/etc.
+function literal_arg() -> string {
+    f<"assistant", string>("a", "b")
+}
+
+function paren_union_arg() -> string {
+    f<(int | string), string>(0, "b")
+}

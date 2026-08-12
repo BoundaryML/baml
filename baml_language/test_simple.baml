@@ -252,8 +252,8 @@ function CallOther() -> int {
 type MyInt = int
 type StringOrInt = string | int
 type IntList = int[]
-type Callback = (x: int) -> int
-type Nested = (x: int) -> (y: int) -> int
+type Callback = (x: int) -> int throws never
+type Nested = (x: int) -> ((y: int) -> int throws never) throws never
 
 // recursive type alias
 type Tree = int | Tree[]

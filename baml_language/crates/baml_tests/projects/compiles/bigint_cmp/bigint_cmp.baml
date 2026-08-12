@@ -1,0 +1,21 @@
+// Phase 6 snapshot test: bigint equality and ordering operators.
+// Verifies that CmpBigintOp is emitted (not the generic CmpOp) for
+// statically-typed bigint operands.
+
+function EqSameAlloc() -> bool {
+    42n == 42n
+}
+
+function EqDistinctAllocs() -> bool {
+    let a: bigint = 42n;
+    let b: bigint = bigint.parse("42");
+    a == b
+}
+
+function OrderingLt() -> bool {
+    3n < 5n
+}
+
+function OrderingGtEq() -> bool {
+    5n >= 5n
+}

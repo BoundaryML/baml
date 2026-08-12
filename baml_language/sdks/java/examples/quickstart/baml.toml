@@ -1,0 +1,7 @@
+[package]
+name = "java-quickstart"
+
+[generator.java_client]
+output_type = "java"
+output_dir = "."
+naming_convention = "preserve-case"

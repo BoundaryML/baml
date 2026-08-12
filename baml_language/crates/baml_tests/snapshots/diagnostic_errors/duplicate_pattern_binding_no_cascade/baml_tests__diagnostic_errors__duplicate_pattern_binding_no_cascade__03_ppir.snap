@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Person {
+  age: int
+  name: string
+}
+class user.Person$stream {
+  age: int | null
+  name: string | null
+}
+function user.if_let_int_last(person: user.Person | null) -> string  [expr] {
+  {  } if let Person { name: item, age: item } = person {  } item else {  } ""
+}
+function user.if_let_string_last(person: user.Person | null) -> int  [expr] {
+  {  } if let Person { age: item, name: item } = person {  } item else {  } 0
+}
+function user.int_last(person: user.Person) -> string  [expr] {
+  { let Person { name: item, age: item } = person } item
+}
+function user.string_last(person: user.Person) -> int  [expr] {
+  { let Person { age: item, name: item } = person } item
+}

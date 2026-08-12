@@ -1,18 +1,25 @@
-//! Resource registry for WASM - stores HTTP response body promises.
+//! Resource registry for WASM - stores HTTP response body promises and SSE streams.
 //!
 //! In `sys_native`, response bodies live in a registry as `reqwest::Response`
 //! and are consumed lazily. For WASM, the JS fetch callback returns a
 //! `bodyPromise` (`Promise<string>`); we store that and await it only when
 //! `response.text()` is called.
+//!
+//! SSE streams use reqwest's WASM byte-streaming support with `SseParser`
+//! to parse events entirely in Rust, matching the native implementation.
+#![allow(unsafe_code)]
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
+    pin::Pin,
     sync::{
         Arc, RwLock,
         atomic::{AtomicUsize, Ordering},
     },
 };
 
+use futures::stream::Stream;
 use js_sys::Promise;
 
 use crate::send_wrapper::SendWrapper;
@@ -31,7 +38,7 @@ enum RegistryEntry {
 
 /// WASM resource registry.
 ///
-/// Stores HTTP response body promises and provides opaque keys.
+/// Stores HTTP response body promises, providing opaque keys.
 /// When a [`WasmResponseBody`] is dropped, it automatically removes the entry.
 pub(crate) struct WasmRegistry {
     next_key: AtomicUsize,
@@ -92,5 +99,61 @@ pub(crate) struct WasmResponseBody {
 impl Drop for WasmResponseBody {
     fn drop(&mut self) {
         self.registry.remove(self.key);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SSE stream handle
+// ---------------------------------------------------------------------------
+
+/// A boxed byte stream from reqwest's `bytes_stream()`.
+///
+/// On WASM, this wraps a browser `ReadableStream` via reqwest's WASM backend.
+pub(crate) type ByteStream = Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>>>>;
+
+/// Channel receiver type for SSE events.
+pub(crate) type SseEventReceiver =
+    futures::channel::mpsc::UnboundedReceiver<Result<sys_types::sse::SseEvent, String>>;
+
+/// Opaque handle stored in `owned::http::SseStream._handle`.
+///
+/// A background task (spawned via `wasm_bindgen_futures::spawn_local`) reads
+/// from the byte stream, parses SSE events, and sends them through an mpsc
+/// channel. `next()` drains available events from the receiver.
+///
+/// Dropping the receiver (via `close()` / `mark_done()`) signals the
+/// background task to exit on its next send attempt.
+pub(crate) struct WasmSseStreamHandle {
+    /// Channel receiver for parsed SSE events. `None` after `close()`.
+    receiver: SendWrapper<RefCell<Option<SseEventReceiver>>>,
+}
+
+// SAFETY: wasm32-unknown-unknown is single-threaded.
+unsafe impl Send for WasmSseStreamHandle {}
+unsafe impl Sync for WasmSseStreamHandle {}
+
+impl WasmSseStreamHandle {
+    pub(crate) fn new(receiver: SseEventReceiver) -> Self {
+        Self {
+            receiver: SendWrapper::new(RefCell::new(Some(receiver))),
+        }
+    }
+
+    /// Returns true if the stream has been closed (receiver dropped).
+    pub(crate) fn is_done(&self) -> bool {
+        self.receiver.borrow().is_none()
+    }
+
+    /// Close the stream by dropping the receiver.
+    ///
+    /// The background task will detect the closed channel on its next send
+    /// and exit.
+    pub(crate) fn mark_done(&self) {
+        self.receiver.borrow_mut().take();
+    }
+
+    /// Borrow the inner `RefCell` for synchronous drain and poll operations.
+    pub(crate) fn receiver_ref(&self) -> &RefCell<Option<SseEventReceiver>> {
+        self.receiver.inner()
     }
 }

@@ -1,0 +1,55 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[extra_greater.baml:7:29]
+ 7 │   bad_field map<string, int>>
+   ·                             ┬
+   ·                             ╰── unmatched `>` in type expression (found 1 extra)
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:23:38]
+ 23 │ function BadParam(x: map<string, int>>) -> string {
+    ·                                      ┬
+    ·                                      ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+    ╭─[extra_greater.baml:24:10]
+ 24 │   client GPT4
+    ·          ────
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:29:45]
+ 29 │ function BadReturnType() -> map<string, int>> {
+    ·                                             ┬
+    ·                                             ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+    ╭─[extra_greater.baml:30:10]
+ 30 │   client GPT4
+    ·          ────
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:35:33]
+ 35 │ type BadAlias = map<string, int>>
+    ·                                 ┬
+    ·                                 ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────

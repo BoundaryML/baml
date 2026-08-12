@@ -8,9 +8,9 @@
 //!   CSTs for `WORD` tokens that match the target name, confirm each via
 //!   `resolve_name_at`, and collect as `Location`s.
 //!
-//! - **Locals** (let bindings, parameters): search only within the enclosing
-//!   function's `ExprBody` for `Expr::Path` nodes that use the same name and
-//!   resolve to the same local binding.
+//! - **Locals** (let bindings, parameters): search the enclosing function and
+//!   nested lambda arenas for `Expr::Path` nodes that resolve to the same local
+//!   binding.
 //!
 //! ## Optimization
 //!
@@ -21,7 +21,13 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::{Expr, ExprBody};
-use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::ScopeKind};
+use baml_compiler2_hir::{
+    body::FunctionBody,
+    scope::{FileScopeId, ScopeKind},
+    semantic_index::{
+        BindingId, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
+    },
+};
 use baml_compiler2_tir::resolve::{ResolvedName, resolve_name_at};
 use rowan::NodeOrToken;
 use text_size::{TextRange, TextSize};
@@ -54,6 +60,10 @@ pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Locatio
     let name_text = token.text().to_string();
     let name = Name::new(&name_text);
 
+    if let Some(target_binding) = local_binding_id_at(db, file, offset, &name) {
+        return find_local_usages(db, file, offset, &name_text, target_binding);
+    }
+
     let resolved = resolve_name_at(db, file, offset, &name);
 
     match &resolved {
@@ -64,10 +74,7 @@ pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Locatio
         ResolvedName::Local {
             definition_site: Some(_),
             ..
-        } => {
-            // Local variable — only search in the enclosing function body.
-            find_local_usages(db, file, offset, &name_text, &resolved)
-        }
+        } => Vec::new(),
         ResolvedName::Local {
             definition_site: None,
             ..
@@ -149,22 +156,19 @@ fn same_item_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
 
 // ── local usages ──────────────────────────────────────────────────────────────
 
-/// Search for references to a local variable within the enclosing function's
-/// expression body.
+/// Search for references to a local variable within the enclosing function.
 ///
 /// We walk the `ExprBody` (span-free) and use the source map for positions.
-/// For each `Expr::Path([name])` that resolves to the same local, we emit a
-/// `Location` using the expression's span from the source map.
+/// For each path whose root resolves to the same local, we emit a `Location`
+/// using the root segment's span from the source map.
 fn find_local_usages(
     db: &dyn Db,
     file: SourceFile,
     at_offset: TextSize,
     name_text: &str,
-    target_resolved: &ResolvedName<'_>,
+    target_binding: BindingId,
 ) -> Vec<Location> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-
     // Find the enclosing Function scope.
     let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
@@ -181,19 +185,15 @@ fn find_local_usages(
         return Vec::new();
     };
 
-    let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
-
-    // Find the function in the item tree by matching its span.
-    let func_entry = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == func_scope_range);
-
-    let Some((func_local_id, _)) = func_entry else {
+    // The recorded item↔scope link, not a span match (which cannot tell a
+    // function from its companions — they share one span). A template-string
+    // scope has a non-Function owner and returns early here.
+    let owner_scope = index.scope_ids[enclosing_func_scope.index() as usize];
+    let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
+        baml_compiler2_ppir::item_data::scope_owner(db, owner_scope)
+    else {
         return Vec::new();
     };
-
-    let func_loc = FunctionLoc::new(db, file, *func_local_id);
 
     // We need an expression body and source map.
     let body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -205,75 +205,146 @@ fn find_local_usages(
         return Vec::new();
     };
 
-    let name = Name::new(name_text);
-    let mut results = Vec::new();
-
-    collect_local_path_usages(
-        db,
+    let mut collector = LocalUsageCollector {
         file,
+        index,
+        name: Name::new(name_text),
+        target_binding,
+        results: Vec::new(),
+    };
+    collector.collect(
+        enclosing_func_scope,
+        expr_body.root_expr,
         expr_body,
-        &name,
-        target_resolved,
+        ExprMetadataScope::Body(enclosing_func_scope),
         &source_map,
-        &mut results,
     );
 
-    results
+    // A defaults arena is a *forest* — one root per defaulted parameter, and
+    // `root_expr` is always `None` for it (`lower_default_expr_nodes` finishes
+    // with `None`). Walk each parameter's default separately.
+    let defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+    for default in defaults.params.iter().flatten() {
+        collector.collect(
+            enclosing_func_scope,
+            Some(default.expr.expr()),
+            &defaults.defaults.exprs,
+            ExprMetadataScope::ParameterDefault(enclosing_func_scope),
+            &defaults.defaults.source_map,
+        );
+    }
+
+    collector.results
 }
 
-/// Walk an `ExprBody` and collect `Expr::Path([name])` occurrences that
-/// resolve to the same local as `target_resolved`.
-fn collect_local_path_usages(
+struct LocalUsageCollector<'index, 'db> {
+    file: SourceFile,
+    index: &'index FileSemanticIndex<'db>,
+    name: Name,
+    target_binding: BindingId,
+    results: Vec<Location>,
+}
+
+impl LocalUsageCollector<'_, '_> {
+    /// Walk the expressions belonging to `owner_scope`, recursing into lambda
+    /// bodies under *their* scope.
+    ///
+    /// Structural rather than a flat arena scan: lambda bodies share this arena
+    /// but are recorded under their own metadata namespace, so visiting them
+    /// here would look them up under the wrong key and silently find nothing.
+    fn collect(
+        &mut self,
+        owner_scope: FileScopeId,
+        root: Option<baml_compiler2_ast::ExprId>,
+        expr_body: &ExprBody,
+        metadata_scope: ExprMetadataScope,
+        source_map: &baml_compiler2_ast::AstSourceMap,
+    ) {
+        let nodes = root
+            .map(|root| expr_body.reachable_excluding_lambdas(root))
+            .unwrap_or_default();
+        for node in nodes {
+            let baml_compiler2_ast::BodyNode::Expr(expr_id) = node else {
+                continue;
+            };
+            let expr = &expr_body.exprs[expr_id];
+            match expr {
+                Expr::Path(segments) if segments.first() == Some(&self.name) => {
+                    let segment_range = source_map.path_segment_span(expr_id, 0);
+                    let range =
+                        TextRange::at(segment_range.start(), TextSize::of(segments[0].as_str()));
+                    if range.is_empty() {
+                        continue;
+                    }
+
+                    let key = ExprMetadataKey::new(metadata_scope, expr_id);
+                    if self.index.path_resolution(key)
+                        == Some(PathResolution::Local(self.target_binding))
+                    {
+                        self.results.push(Location {
+                            file: self.file,
+                            range,
+                        });
+                    }
+                }
+                Expr::Lambda(func_def) => {
+                    let span = source_map.expr_span(expr_id);
+                    let Some(lambda_scope) = self.index.lambda_scope_for_within(owner_scope, span)
+                    else {
+                        continue;
+                    };
+
+                    // One root per defaulted parameter — see above.
+                    for param in &func_def.params {
+                        let Some(default) = param.default else {
+                            continue;
+                        };
+                        self.collect(
+                            lambda_scope,
+                            Some(default.expr()),
+                            &func_def.defaults.exprs,
+                            ExprMetadataScope::ParameterDefault(lambda_scope),
+                            &func_def.defaults.source_map,
+                        );
+                    }
+
+                    self.collect(
+                        lambda_scope,
+                        func_def.body,
+                        expr_body,
+                        ExprMetadataScope::Body(lambda_scope),
+                        source_map,
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn local_binding_id_at(
     db: &dyn Db,
     file: SourceFile,
-    expr_body: &ExprBody,
+    offset: TextSize,
     name: &Name,
-    target_resolved: &ResolvedName<'_>,
-    source_map: &baml_compiler2_ast::AstSourceMap,
-    results: &mut Vec<Location>,
-) {
-    for (expr_id, expr) in expr_body.exprs.iter() {
-        let Expr::Path(segments) = expr else {
-            continue;
-        };
+) -> Option<BindingId> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
 
-        // Only single-segment paths can refer to locals.
-        if segments.len() != 1 || &segments[0] != name {
-            continue;
-        }
-
-        // Get the span of this expression from the source map.
-        let range = source_map.expr_span(expr_id);
-        if range.is_empty() {
-            continue;
-        }
-
-        // Confirm that this usage resolves to the same local.
-        let use_offset = range.start();
-        let resolved_here = resolve_name_at(db, file, use_offset, name);
-
-        if same_local_definition(&resolved_here, target_resolved) {
-            results.push(Location { file, range });
+    // Declaration tokens are intentionally not visible until after their
+    // initializer/statement, so identify them by their recorded name range.
+    for ancestor_id in index.ancestor_scopes(scope_id) {
+        let bindings = &index.scope_bindings[ancestor_id.index() as usize];
+        for (binding_idx, binding) in bindings.bindings.iter().enumerate().rev() {
+            if &binding.name == name
+                && (binding.name_range.contains(offset) || binding.name_range.start() == offset)
+            {
+                return Some(BindingId::local(ancestor_id, binding_idx));
+            }
         }
     }
-}
 
-/// Returns `true` when two `ResolvedName::Local` values refer to the same
-/// definition site.
-fn same_local_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
-    match (a, b) {
-        (
-            ResolvedName::Local {
-                definition_site: Some(site_a),
-                ..
-            },
-            ResolvedName::Local {
-                definition_site: Some(site_b),
-                ..
-            },
-        ) => site_a == site_b,
-        _ => false,
-    }
+    index.visible_binding_at(scope_id, offset, name)
 }
 
 // ── field definition usages ───────────────────────────────────────────────────
@@ -283,7 +354,7 @@ fn same_local_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
 /// Uses text pre-filter + `ScopeInference` confirmation pattern:
 /// 1. Check that cursor is on a class field definition (Class scope).
 /// 2. Collect all source files.
-/// 3. For each file, scan function scopes for `FieldAccess` and Object constructor
+/// 3. For each file, scan function scopes for `MemberAccess` and Object constructor
 ///    expressions that reference the same field of the same class.
 fn find_field_definition_usages(
     db: &dyn Db,
@@ -294,7 +365,6 @@ fn find_field_definition_usages(
     use baml_compiler2_tir::ty::Ty;
 
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let scope_id = index.scope_at_offset(offset, None);
     let scope = &index.scopes[scope_id.index() as usize];
 
@@ -302,16 +372,15 @@ fn find_field_definition_usages(
     if !matches!(scope.kind, ScopeKind::Class) {
         return Vec::new();
     }
-    let class_name = match &scope.name {
-        Some(n) => n.clone(),
-        None => return Vec::new(),
-    };
 
-    // Find the ClassLoc for this class
-    let class_entry = item_tree.classes.iter().find(|(_, c)| c.name == class_name);
-    let Some((class_local_id, class_data)) = class_entry else {
+    // The class that opened this scope, from the recorded item↔scope link.
+    let owner_scope = index.scope_ids[scope_id.index() as usize];
+    let Some(baml_compiler2_ppir::item_data::ScopeOwner::Class(class_loc)) =
+        baml_compiler2_ppir::item_data::scope_owner(db, owner_scope)
+    else {
         return Vec::new();
     };
+    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
     // Verify the cursor is actually on this field
     let field_match = class_data
@@ -321,8 +390,6 @@ fn find_field_definition_usages(
     if !field_match {
         return Vec::new();
     }
-
-    let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_local_id);
 
     // Collect all source files
     let source_files = collect_source_files(db, file);
@@ -337,7 +404,6 @@ fn find_field_definition_usages(
         }
 
         let sf_index = baml_compiler2_hir::file_semantic_index(db, sf);
-        let sf_item_tree = baml_compiler2_hir::file_item_tree(db, sf);
 
         // Scan each function scope in the file
         for (scope_idx, scope) in sf_index.scopes.iter().enumerate() {
@@ -345,16 +411,14 @@ fn find_field_definition_usages(
                 continue;
             }
 
-            // Find matching function in item tree
-            let func_entry = sf_item_tree
-                .functions
-                .iter()
-                .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name));
-            let Some((func_local_id, _)) = func_entry else {
+            // The function that opened this scope, via the recorded item↔scope
+            // link (template-string scopes have a non-Function owner → skipped).
+            let owner_scope = sf_index.scope_ids[scope_idx];
+            let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
+                baml_compiler2_ppir::item_data::scope_owner(db, owner_scope)
+            else {
                 continue;
             };
-
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, sf, *func_local_id);
             let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
                 continue;
@@ -370,7 +434,7 @@ fn find_field_definition_usages(
             let scope_id_salsa = sf_index.scope_ids[file_scope_id.index() as usize];
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id_salsa);
 
-            // FieldAccess sites: scan resolutions for matching Field
+            // MemberAccess sites: scan resolutions for matching Field
             for (expr_id, resolution) in inference.iter_resolutions() {
                 use baml_compiler2_tir::inference::MemberResolution;
                 if let MemberResolution::Field {
@@ -379,7 +443,7 @@ fn find_field_definition_usages(
                 } = resolution
                 {
                     if *res_class_loc == class_loc && field_name.as_str() == field_name_text {
-                        // Get field name range from the FieldAccess expression span
+                        // Get field name range from the MemberAccess expression span
                         let expr_span = source_map.expr_span(*expr_id);
                         // Extract just the field name portion (after the last dot)
                         let start: usize = expr_span.start().into();
@@ -404,6 +468,43 @@ fn find_field_definition_usages(
                 }
             }
 
+            // Multi-segment Path sites: scan path_member_resolutions for matching Field.
+            // For `obj.field` which is Path(["obj", "field"]), the field resolution is
+            // in path_member_resolutions[expr_id][0] (index into segments[1..]).
+            for (expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
+                use baml_compiler2_tir::inference::MemberResolution;
+                // Look up the Path's segments to find which segment index matched.
+                let Some((_, path_expr)) = expr_body.exprs.iter().find(|(id, _)| id == expr_id)
+                else {
+                    continue;
+                };
+                let baml_compiler2_ast::Expr::Path(segments) = path_expr else {
+                    continue;
+                };
+                for (res_idx, resolution) in member_resolutions.iter().enumerate() {
+                    if let MemberResolution::Field {
+                        class_loc: res_class_loc,
+                        field_name,
+                    } = resolution
+                    {
+                        if *res_class_loc == class_loc && field_name.as_str() == field_name_text {
+                            // segment index in the full segments array = res_idx + 1
+                            // (since res_idx 0 corresponds to segments[1])
+                            let seg_idx = res_idx + 1;
+                            if seg_idx < segments.len() {
+                                let seg_span = source_map.path_segment_span(*expr_id, seg_idx);
+                                if !seg_span.is_empty() {
+                                    results.push(Location {
+                                        file: sf,
+                                        range: seg_span,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Object constructor field sites: scan Object expressions
             for (expr_id, expr) in expr_body.exprs.iter() {
                 if let Expr::Object { fields, .. } = expr {
@@ -419,7 +520,7 @@ fn find_field_definition_usages(
                     let Some(obj_ty) = inference.expression_type(expr_id) else {
                         continue;
                     };
-                    let Ty::Class(qtn, _) = obj_ty else {
+                    let Ty::Class(qtn, _, _) = obj_ty else {
                         continue;
                     };
 

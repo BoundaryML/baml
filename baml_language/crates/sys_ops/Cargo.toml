@@ -7,19 +7,29 @@ authors.workspace = true
 license.workspace = true
 description = "Includes definitions and some blanket impls for sys ops"
 
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "sys_llm/aws-crypto" ]
+ring-crypto = [ "sys_llm/ring-crypto" ]
+
 [build-dependencies]
 baml_builtins2 = { workspace = true }
 baml_builtins2_codegen = { workspace = true }
 
 [dependencies]
+baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
+bex_resource_types = { workspace = true }
+bex_sap = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_llm = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
+num-bigint = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }

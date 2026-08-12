@@ -15,7 +15,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::types::{BamlType, NativeBuiltin, NativeClassDef};
+use crate::{
+    rust_ident::rust_field_ident,
+    types::{BamlType, NativeBuiltin, NativeClassDef, Receiver},
+};
 
 // ============================================================================
 // Path configuration for generated code
@@ -71,7 +74,7 @@ impl IoNamespaceNode<'_> {
 /// All IO builtins start with "baml." and have a namespace as the second segment:
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
-/// - `"baml.llm.get_client"` → `"llm"`
+/// - `"baml.prompt.get_client"` → `"llm"`
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
     after_baml.split('.').next().unwrap_or("")
@@ -80,6 +83,24 @@ fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
 /// Extract the method name (last segment) from an IO builtin path.
 fn io_method_name(builtin: &NativeBuiltin) -> &str {
     builtin.path.rsplit('.').next().unwrap_or("")
+}
+
+/// The class-dispatch match key for an IO method: the path portion after
+/// `...{ClassName}.`.
+///
+/// A method declared inside an `implements I { ... }` block keeps the interface
+/// segment in its runtime path (`...{Class}.I.method`), so the key is
+/// `I.method`; a direct method is just `method`. The clean trait method name
+/// and glue still use the final segment (`io_method_name`).
+fn io_class_dispatch_key(builtin: &NativeBuiltin) -> String {
+    builtin
+        .receiver
+        .as_ref()
+        .and_then(|r| builtin.path.split_once(&format!(".{}.", r.class_name)))
+        .map_or_else(
+            || io_method_name(builtin).to_string(),
+            |(_, rest)| rest.to_string(),
+        )
 }
 
 fn build_io_namespace_tree<'a>(
@@ -181,6 +202,7 @@ fn owned_rust_type(
     match ty {
         BamlType::String => quote! { String },
         BamlType::Int => quote! { i64 },
+        BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
@@ -207,7 +229,7 @@ fn owned_rust_type(
             } else {
                 match name.as_str() {
                     "unknown" => quote! { BexExternalValue },
-                    "type" => quote! { baml_type::Ty },
+                    "type" => quote! { baml_type::RuntimeTy },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
                 }
@@ -222,15 +244,34 @@ fn owned_rust_type(
 fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
     match ty {
         BamlType::Int => quote! { Result<i64, AccessError> },
-        BamlType::Float => quote! { Result<f64, AccessError> },
+        // Float is heap-boxed (`Object::Float`); the accessor needs a
+        // `PermitProof` to deref the pointer soundly.
+        BamlType::Float => {
+            *needs_heap = true;
+            quote! { Result<f64, AccessError> }
+        }
         BamlType::Bool => quote! { Result<bool, AccessError> },
+        // Bigints live behind a heap pointer (`Object::Bigint`) or by value in
+        // an external value; either way `as_bigint` hands back an owned `Arc`,
+        // so the accessor needs a `PermitProof` to deref the pointer soundly.
+        BamlType::Bigint => {
+            *needs_heap = true;
+            quote! { Result<std::sync::Arc<num_bigint::BigInt>, AccessError> }
+        }
         BamlType::String => {
             *needs_heap = true;
-            quote! { Result<&'a String, AccessError> }
+            quote! { Result<&'a bex_str::BexStr, AccessError> }
         }
         BamlType::RustType => {
             *needs_heap = true;
             quote! { Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> }
+        }
+        // The `type` metatype's owned representation is `RuntimeTy` (see the
+        // owned-field mapping), so the accessor must return it too — not the
+        // generic `BexExternalValue` fallback, which would not type-check.
+        BamlType::Named(name) if name == "type" => {
+            *needs_heap = true;
+            quote! { Result<baml_type::RuntimeTy, AccessError> }
         }
         _ => {
             *needs_heap = true;
@@ -244,11 +285,15 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
     let field_lit = field_name;
     match ty {
         BamlType::Int => quote! { self.cls.field(#field_lit)?.as_int() },
-        BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float() },
+        BamlType::Float => quote! { self.cls.field(#field_lit)?.as_float(heap, permit) },
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
-        BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap) },
-        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap) },
-        _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap) },
+        BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
+        BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
+        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
+        BamlType::Named(name) if name == "type" => {
+            quote! { self.cls.field(#field_lit)?.as_baml_type_owned(heap, permit) }
+        }
+        _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },
     }
 }
 
@@ -263,7 +308,7 @@ fn external_to_typed_expr(
     match ty {
         BamlType::String => quote! {
             match #val_expr {
-                BexExternalValue::String(v) => Ok(v),
+                BexExternalValue::String(v) => Ok(v.to_string()),
                 other => Err(AccessError::TypeMismatch {
                     expected: "string",
                     actual: other.type_name().to_string(),
@@ -275,6 +320,15 @@ fn external_to_typed_expr(
                 BexExternalValue::Int(v) => Ok(v),
                 other => Err(AccessError::TypeMismatch {
                     expected: "int",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
+        BamlType::Bigint => quote! {
+            match #val_expr {
+                BexExternalValue::Bigint(v) => Ok(std::sync::Arc::new(v)),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "bigint",
                     actual: other.type_name().to_string(),
                 }),
             }
@@ -354,6 +408,28 @@ fn external_to_typed_expr(
             let name_ident = format_ident!("{}", name);
             quote! { #owned::#ns_ident::#name_ident::from_external(#val_expr) }
         }
+        BamlType::Uint8Array => quote! {
+            match #val_expr {
+                BexExternalValue::Uint8Array(v) => Ok(v),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "uint8array",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
+        // The `type` metatype's owned representation is `RuntimeTy`; unwrap it
+        // from the external `Type` ADT rather than passing the raw
+        // `BexExternalValue` through (which would not type-check against the
+        // `RuntimeTy` owned field).
+        BamlType::Named(name) if name == "type" => quote! {
+            match #val_expr {
+                BexExternalValue::Adt(bex_external_types::BexExternalAdt::Type(v)) => Ok(v),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "type",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
         _ => quote! { Ok(#val_expr) },
     }
 }
@@ -365,24 +441,87 @@ fn into_owned_expr(
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    let field_ident = format_ident!("{}", field_name);
+    let field_ident = rust_field_ident(field_name);
     match ty {
-        BamlType::Int | BamlType::Float | BamlType::Bool => {
+        BamlType::Int | BamlType::Bool => {
             quote! { self.#field_ident()? }
         }
-        BamlType::String => quote! { self.#field_ident(heap)?.clone() },
-        BamlType::RustType => quote! { self.#field_ident(heap)? },
-        BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
-            let val = quote! { self.#field_ident(heap)? };
+        // Float accessor is now heap-aware (`Object::Float` deref).
+        BamlType::Float => quote! { self.#field_ident(heap, permit)? },
+        BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
+        BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
+        BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
+            let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
-            let val = quote! { self.#field_ident(heap)? };
+            let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
-        _ => quote! { self.#field_ident(heap)? },
+        _ => quote! { self.#field_ident(heap, permit)? },
+    }
+}
+
+/// Emit a `baml_type::RuntimeTy` expression describing `ty`, for tagging a
+/// `BexExternalValue::Array`/`Map` with its declared element/key/value type.
+///
+/// The owned→external conversion runs without a `vm` or call type-args in
+/// scope, so a generic parameter cannot be resolved to its instantiation here
+/// and degrades to `unknown`. Every concrete position — primitives, nested
+/// containers, media, and named classes — is recovered exactly (never erased).
+fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
+    match ty {
+        BamlType::String => quote! { baml_type::RuntimeTy::string() },
+        BamlType::Int => quote! { baml_type::RuntimeTy::int() },
+        BamlType::Bigint => quote! { baml_type::RuntimeTy::bigint() },
+        BamlType::Float => quote! { baml_type::RuntimeTy::float() },
+        BamlType::Bool => quote! { baml_type::RuntimeTy::bool() },
+        BamlType::Null => quote! { baml_type::RuntimeTy::null() },
+        BamlType::Uint8Array => quote! { baml_type::RuntimeTy::uint8array() },
+        BamlType::List(inner) => {
+            let inner = runtime_ty_tokens(inner);
+            quote! { baml_type::RuntimeTy::list(#inner) }
+        }
+        BamlType::Map(key, value) => {
+            let key = runtime_ty_tokens(key);
+            let value = runtime_ty_tokens(value);
+            quote! { baml_type::RuntimeTy::map(#key, #value) }
+        }
+        BamlType::Optional(inner) => {
+            let inner = runtime_ty_tokens(inner);
+            quote! { baml_type::RuntimeTy::optional(#inner) }
+        }
+        BamlType::Media(kind) => {
+            let kind = media_kind_tokens(kind);
+            quote! { baml_type::RuntimeTy::Media(#kind, baml_type::TyAttr::default()) }
+        }
+        BamlType::RustType => {
+            quote! { baml_type::RuntimeTy::RustType { attr: baml_type::TyAttr::default() } }
+        }
+        // `Named` is a lossy catch-all: the type parser discards a class's
+        // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
+        // unions/unresolved types through it (`Named("union")`,
+        // `Named("unknown")`). Reconstructing a `RuntimeTy::class(name)` here
+        // would both drop generics and fabricate a class for the placeholder
+        // names, so this static-`BamlType` path cannot recover a named type — the
+        // complete type lives only on the runtime value's stored `element_ty`.
+        BamlType::Named(_) | BamlType::Generic(_) => {
+            quote! { baml_type::RuntimeTy::unknown() }
+        }
+    }
+}
+
+/// The `baml_base::MediaKind` token for a `Media(name)` BAML type. Unknown names
+/// degrade to the catch-all `Generic` media kind (never an erased type).
+fn media_kind_tokens(name: &str) -> TokenStream {
+    match name {
+        "Image" => quote! { baml_base::MediaKind::Image },
+        "Audio" => quote! { baml_base::MediaKind::Audio },
+        "Video" => quote! { baml_base::MediaKind::Video },
+        "Pdf" => quote! { baml_base::MediaKind::Pdf },
+        _ => quote! { baml_base::MediaKind::Generic },
     }
 }
 
@@ -395,26 +534,32 @@ fn owned_to_external_expr(
 ) -> TokenStream {
     match ty {
         BamlType::Int => quote! { BexExternalValue::Int(#field_expr) },
+        BamlType::Bigint => quote! {
+            BexExternalValue::Bigint(std::sync::Arc::unwrap_or_clone(#field_expr))
+        },
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
-        BamlType::String => quote! { BexExternalValue::String(#field_expr) },
+        BamlType::String => quote! { BexExternalValue::String((#field_expr).into()) },
         BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
             let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
+            let element_type = runtime_ty_tokens(inner);
             quote! {
                 BexExternalValue::Array {
-                    element_type: baml_type::Ty::unknown(),
+                    element_type: #element_type,
                     items: #field_expr.into_iter().map(|__v| #inner_conv).collect(),
                 }
             }
         }
-        BamlType::Map(_k, v) => {
+        BamlType::Map(k, v) => {
             let v_conv = owned_to_external_expr(&quote! { __v }, v, class_ns_map);
+            let key_type = runtime_ty_tokens(k);
+            let value_type = runtime_ty_tokens(v);
             quote! {
                 BexExternalValue::Map {
-                    key_type: baml_type::Ty::string(),
-                    value_type: baml_type::Ty::unknown(),
+                    key_type: #key_type,
+                    value_type: #value_type,
                     entries: #field_expr.into_iter().map(|(__k, __v)| (__k, #v_conv)).collect(),
                 }
             }
@@ -439,6 +584,7 @@ fn clean_rust_type(
     match ty {
         BamlType::String => quote! { String },
         BamlType::Int => quote! { i64 },
+        BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
@@ -464,7 +610,7 @@ fn clean_rust_type(
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
                 match name.as_str() {
-                    "type" => quote! { baml_type::Ty },
+                    "type" => quote! { baml_type::RuntimeTy },
                     "unknown" => quote! { BexExternalValue },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
@@ -474,6 +620,42 @@ fn clean_rust_type(
         BamlType::Uint8Array => quote! { Vec<u8> },
         BamlType::Generic(_) | BamlType::Media(_) => quote! { BexExternalValue },
     }
+}
+
+/// True if `ty` is the builtin top-level `function` type — a callable BAML value
+/// (function, closure, or bound method) passed to a sys-op, which crosses as a
+/// rooted [`Handle`](bex_external_types::Handle) rather than a `BexExternalValue`.
+///
+/// Only matches a top-level `function` (and, via [`clean_param_type`], a
+/// top-level-optional one). A `function` nested in a container (`list<…>` /
+/// `map<…>`) or behind a type alias is NOT detected and would fall back to the
+/// (closure-incompatible) `as_owned_but_very_slow` path — no such sys-op param
+/// exists today; add handling here if one is introduced.
+fn is_callable_param(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> bool {
+    matches!(ty, BamlType::Named(name) if name == "function" && !class_ns_map.contains_key(name.as_str()))
+}
+
+/// Like [`clean_rust_type`], but for a sys-op *parameter*. A `function`-typed
+/// parameter is a callable BAML value passed into the op; it crosses as a rooted
+/// heap [`Handle`](bex_external_types::Handle) (extracted via `as_callable_handle`)
+/// that the op later invokes with `VmSpawner::spawn_with_callable`. An optional
+/// callable (`((…) -> …)?`) becomes `Option<Handle>`. (A `function`-typed
+/// *return*, by contrast, is a `FunctionRef` and stays `BexExternalValue` — so
+/// this only diverges on the parameter side.)
+fn clean_param_type(
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    if is_callable_param(ty, class_ns_map) {
+        return quote! { bex_external_types::Handle };
+    }
+    if let BamlType::Optional(inner) = ty {
+        if is_callable_param(inner, class_ns_map) {
+            return quote! { Option<bex_external_types::Handle> };
+        }
+    }
+    clean_rust_type(ty, class_ns_map, paths)
 }
 
 /// Generate the arg extraction expression for a glue method parameter.
@@ -488,9 +670,10 @@ fn glue_extract_expr(
         return quote! { /* receiver extracted below */ };
     }
     match ty {
-        BamlType::String => quote! { #arg_ident.as_string(&__p)?.to_string() },
+        BamlType::String => quote! { #arg_ident.as_string(heap.as_ref(), permit)?.to_string() },
         BamlType::Int => quote! { #arg_ident.as_int()? },
-        BamlType::Float => quote! { #arg_ident.as_float()? },
+        BamlType::Bigint => quote! { #arg_ident.as_bigint(heap.as_ref(), permit)? },
+        BamlType::Float => quote! { #arg_ident.as_float(heap.as_ref(), permit)? },
         BamlType::Bool => quote! { #arg_ident.as_bool()? },
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
@@ -498,22 +681,28 @@ fn glue_extract_expr(
                 let ns_ident = format_ident!("{}", ns);
                 let name_ident = format_ident!("{}", name);
                 quote! {
-                    #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(&__p)?.into_owned(&__p)?
+                    #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(heap.as_ref(), permit)?.into_owned(heap.as_ref(), permit)?
                 }
             } else {
                 match name.as_str() {
-                    "type" => quote! { #arg_ident.as_baml_type_owned(&__p)? },
-                    _ => quote! { #arg_ident.as_owned_but_very_slow(&__p)? },
+                    "type" => quote! { #arg_ident.as_baml_type_owned(heap.as_ref(), permit)? },
+                    "function" => quote! { #arg_ident.as_callable_handle(heap.as_ref(), permit)? },
+                    _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
                 }
             }
         }
-        BamlType::RustType => quote! { #arg_ident.as_rust_data(&__p)? },
-        BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
-            let val = quote! { #arg_ident.as_owned_but_very_slow(&__p)? };
+        BamlType::RustType => quote! { #arg_ident.as_rust_data(heap.as_ref(), permit)? },
+        // An optional callable param (`((…) -> …)?`): `null` → `None`, else a
+        // rooted handle. Must precede the general `Optional(_)` arm below.
+        BamlType::Optional(inner) if is_callable_param(inner, class_ns_map) => {
+            quote! { #arg_ident.as_optional_callable_handle(heap.as_ref(), permit)? }
+        }
+        BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
+            let val = quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
-        _ => quote! { #arg_ident.as_owned_but_very_slow(&__p)? },
+        _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
     }
 }
 
@@ -537,6 +726,28 @@ fn class_trait_ident(ns: &str, class: &str) -> syn::Ident {
     format_ident!("IoClass{}{}", capitalize_first(ns), class)
 }
 
+/// Whether the clean trait method and glue thread an *extracted* receiver value
+/// to the impl.
+///
+/// True for a non-static receiver on an instance-backed (field-carrying) class:
+/// the receiver is materialized as an `owned::{ns}::{Class}` and passed through.
+///
+/// A fieldless marker class (e.g. `random.SystemRandom`) still takes `self` in
+/// BAML so it can satisfy an interface, but it carries no data and has no
+/// generated `owned::`/`view::` struct. Its `self` arg slot is still consumed
+/// by the glue (the VM pushes it), but the value is ignored and the clean
+/// method takes no receiver parameter. `consumes_self_slot` covers that case.
+fn receiver_is_extracted(receiver: &Receiver) -> bool {
+    !receiver.receiver_type.is_static() && receiver.instance_backed
+}
+
+/// Whether the method consumes a leading `self` arg slot on the operand stack.
+/// True for any non-static receiver, including fieldless marker classes whose
+/// receiver value is consumed but ignored.
+fn consumes_self_slot(receiver: &Receiver) -> bool {
+    !receiver.receiver_type.is_static()
+}
+
 // ============================================================================
 // Generate SysOp Enum
 // ============================================================================
@@ -552,11 +763,35 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .iter()
         .map(|b| {
             let variant = format_ident!("{}", b.sys_op_variant_name());
-            if b.throws.is_empty() {
-                quote! { SysOp::#variant => &[] }
-            } else {
-                let cats: Vec<_> = b.throws.iter().map(|t| format_ident!("{}", t)).collect();
-                quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+            // `None` (no clause) is rejected during extraction; `Some([])`
+            // (`throws never`) and `None` both map to no error categories.
+            // A `throws` entry that names one of the builtin's generic params
+            // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
+            // contract, not a fixed `SysOpErrorCategory`. The static category
+            // list cannot represent a mix of "concrete X" + "dynamic E" — the
+            // dynamic component would be silently dropped, leaving
+            // `validate_sys_op_error` to wrongly reject any `E`-shaped throw
+            // as off-contract. Apply an all-or-nothing rule: if *any* throws
+            // entry is generic, emit an empty list ("accept any category")
+            // and defer the entire contract check to runtime. Concrete-only
+            // contracts still emit a precise category list. (The `throws`
+            // clause stays non-empty either way, so the builtin remains
+            // `is_fallible`.)
+            match &b.throws {
+                Some(cats) => {
+                    let has_generic_throw = cats.iter().any(|t| b.generics.iter().any(|g| g == t));
+                    if has_generic_throw {
+                        quote! { SysOp::#variant => &[] }
+                    } else {
+                        let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
+                        if cats.is_empty() {
+                            quote! { SysOp::#variant => &[] }
+                        } else {
+                            quote! { SysOp::#variant => &[#(SysOpErrorCategory::#cats),*] }
+                        }
+                    }
+                }
+                None => quote! { SysOp::#variant => &[] },
             }
         })
         .collect();
@@ -583,7 +818,15 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         .collect();
 
     let tokens = quote! {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(
+            Clone,
+            Copy,
+            Debug,
+            PartialEq,
+            Eq,
+            ::borsh::BorshSerialize,
+            ::borsh::BorshDeserialize,
+        )]
         pub enum SysOp {
             #(#variant_idents,)*
         }
@@ -751,11 +994,15 @@ fn emit_view_struct(
             let mut needs_heap = false;
             let ret_type = view_return_type(&field.field_type, &mut needs_heap);
             let body = view_accessor_body(&field.name, &field.field_type);
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
 
             if needs_heap {
                 quote! {
-                    pub fn #field_ident(&self, heap: &'a GcProtectedHeap<'a>) -> #ret_type {
+                    pub fn #field_ident(
+                        &self,
+                        heap: &'a BexHeap,
+                        permit: PermitProof<'a>,
+                    ) -> #ret_type {
                         #body
                     }
                 }
@@ -778,7 +1025,7 @@ fn emit_view_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map, paths);
             quote! { #field_ident: #expr }
         })
@@ -805,7 +1052,11 @@ fn emit_view_struct(
         impl<'a> #name_ident<'a> {
             #(#accessors)*
 
-            pub fn into_owned(self, heap: &'a GcProtectedHeap<'a>) -> Result<#owned_path, AccessError> {
+            pub fn into_owned(
+                self,
+                heap: &'a BexHeap,
+                permit: PermitProof<'a>,
+            ) -> Result<#owned_path, AccessError> {
                 Ok(#owned_path {
                     #(#into_owned_fields,)*
                 })
@@ -818,19 +1069,98 @@ fn emit_view_struct(
 // Owned module
 // ============================================================================
 
+/// Compute the set of class names that cannot derive `Default`.
+///
+/// A class is non-defaultable if it directly contains a `$rust_type` field,
+/// or if any of its fields transitively references a non-defaultable class.
+///
+/// Both a fully-qualified name (for example `baml.sap.ParseCache`) and its
+/// short name are stored, because field type references may use
+/// either form depending on whether the path was single- or multi-segment.
+fn compute_non_defaultable_classes(
+    class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
+) -> std::collections::HashSet<String> {
+    use crate::types::BamlType;
+
+    fn references_non_defaultable(
+        ty: &BamlType,
+        non_defaultable: &std::collections::HashSet<String>,
+    ) -> bool {
+        match ty {
+            BamlType::Named(name) => non_defaultable.contains(name),
+            BamlType::List(inner) | BamlType::Optional(inner) => {
+                references_non_defaultable(inner, non_defaultable)
+            }
+            BamlType::Map(k, v) => {
+                references_non_defaultable(k, non_defaultable)
+                    || references_non_defaultable(v, non_defaultable)
+            }
+            _ => false,
+        }
+    }
+
+    // Collect all classes with both name forms.
+    let all_classes: Vec<(&NativeClassDef, String)> = class_defs_by_ns
+        .values()
+        .flat_map(|classes| classes.iter().copied())
+        .map(|cd| (cd, format!("{}.{}", cd.namespace_prefix, cd.name)))
+        .collect();
+
+    // Seed: classes with a direct non-`Default` field — insert both name forms.
+    // `$rust_type` (`Arc<dyn Any>`) and the `type` metatype (`RuntimeTy`) are
+    // both non-`Default`. (Container forms like `list<type>`/`type?` stay
+    // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
+    let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (cd, full_name) in &all_classes {
+        if cd.fields.iter().any(|f| {
+            matches!(f.field_type, BamlType::RustType)
+                || matches!(&f.field_type, BamlType::Named(name) if name == "type")
+        }) {
+            non_defaultable.insert(full_name.clone());
+            non_defaultable.insert(cd.name.clone());
+        }
+    }
+
+    // Fixed-point: propagate through Named references until stable.
+    loop {
+        let mut changed = false;
+        for (cd, full_name) in &all_classes {
+            if non_defaultable.contains(full_name) {
+                continue;
+            }
+            if cd
+                .fields
+                .iter()
+                .any(|f| references_non_defaultable(&f.field_type, &non_defaultable))
+            {
+                non_defaultable.insert(full_name.clone());
+                non_defaultable.insert(cd.name.clone());
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    non_defaultable
+}
+
 fn emit_owned_module(
     _io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    let non_defaultable = compute_non_defaultable_classes(class_defs_by_ns);
+
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
         .map(|(ns, classes)| {
             let ns_ident = format_ident!("{}", ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
-                .map(|cd| emit_owned_struct(cd, class_ns_map, ns, paths))
+                .map(|cd| emit_owned_struct(cd, class_ns_map, ns, paths, &non_defaultable))
                 .collect();
             quote! {
                 pub mod #ns_ident {
@@ -853,17 +1183,14 @@ fn emit_owned_struct(
     class_ns_map: &BTreeMap<String, String>,
     _ns: &str,
     paths: &CodegenPaths,
+    non_defaultable: &std::collections::HashSet<String>,
 ) -> TokenStream {
     let name_ident = format_ident!("{}", cd.name);
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
     let source_comment = format!("Generated from `{}`", cd.source_file);
 
-    let has_rust_type = cd
-        .fields
-        .iter()
-        .any(|f| matches!(f.field_type, BamlType::RustType));
-
-    let derives = if has_rust_type {
+    // Struct definition
+    let derives = if non_defaultable.contains(&full_path) {
         quote! { #[derive(Clone, Debug)] }
     } else {
         quote! { #[derive(Clone, Debug, Default)] }
@@ -874,7 +1201,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let rust_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
             quote! { pub #field_ident: #rust_ty }
         })
@@ -886,7 +1213,7 @@ fn emit_owned_struct(
         .iter()
         .map(|field| {
             let field_name_str = &field.name;
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let conv = owned_to_external_expr(
                 &quote! { self.#field_ident },
                 &field.field_type,
@@ -901,7 +1228,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = rust_field_ident(&field.name);
             let field_name_str = &field.name;
             let field_val = quote! {
                 fields.swap_remove(#field_name_str).unwrap_or(BexExternalValue::Null)
@@ -924,6 +1251,7 @@ fn emit_owned_struct(
             fn into_bex_external_value(self) -> BexExternalValue {
                 BexExternalValue::Instance {
                     class_name: #full_path.to_string(),
+                    type_args: vec![],
                     fields: indexmap::indexmap! {
                         #(#as_bex_entries,)*
                     },
@@ -968,6 +1296,29 @@ fn emit_class_traits(
     quote! { #(#traits)* }
 }
 
+/// Returns the count of *function-level* generic type parameters for a builtin.
+///
+/// For IO class methods, the `NativeBuiltin.generics` list merges the enclosing
+/// class's generics with the function's own generics.  Only the function-level
+/// ones (those NOT contributed by the class) generate synthetic type-arg value
+/// slots on the operand stack: class-level generics are part of the instance
+/// type and are not threaded as extra stack args.
+///
+/// For free functions (no receiver), every generic is function-level, so this
+/// just returns `generics.len()`.
+fn fn_only_generic_count(builtin: &NativeBuiltin) -> usize {
+    let class_generics: &[String] = builtin
+        .receiver
+        .as_ref()
+        .map(|r| r.class_generics.as_slice())
+        .unwrap_or(&[]);
+    builtin
+        .generics
+        .iter()
+        .filter(|g| !class_generics.contains(g))
+        .count()
+}
+
 fn emit_one_class_trait(
     ns: &str,
     class_name: &str,
@@ -992,16 +1343,38 @@ fn emit_one_class_trait(
             let owned = &paths.owned;
             let ns_ident = format_ident!("{}", ns);
             let class_ident = format_ident!("{}", class_name);
-            let receiver_param_ident = format_ident!("{}", class_name.to_lowercase());
-            let receiver_ty = quote! { #owned::#ns_ident::#class_ident };
+            let Some(receiver) = &m.receiver else {
+                return quote! {
+                    compile_error!(concat!("missing receiver for method ", stringify!(#method_ident)));
+                };
+            };
+            let receiver_param = if receiver_is_extracted(receiver) {
+                let receiver_param_ident = format_ident!("{}", class_name.to_lowercase());
+                let receiver_ty = quote! { #owned::#ns_ident::#class_ident };
+                Some(quote! { #receiver_param_ident: #receiver_ty,})
+            } else {
+                None
+            };
 
             let extra_params: Vec<TokenStream> = m
                 .params
                 .iter()
                 .map(|p| {
                     let p_ident = format_ident!("{}", p.name);
-                    let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
+                    let p_ty = clean_param_type(&p.ty, class_ns_map, paths);
                     quote! { #p_ident: #p_ty }
+                })
+                .collect();
+
+            // Synthetic type-arg params appended after value params.
+            // Only function-level generics (those NOT from the enclosing
+            // class) generate type-arg slots — class-level generics are
+            // part of the instance type and are not threaded as stack args.
+            let fn_type_arg_count = fn_only_generic_count(m);
+            let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
+                .map(|i| {
+                    let p_ident = format_ident!("type_arg_{}", i);
+                    quote! { #p_ident: baml_type::RuntimeTy }
                 })
                 .collect();
 
@@ -1010,8 +1383,9 @@ fn emit_one_class_trait(
                     &self,
                     heap: &std::sync::Arc<BexHeap>,
                     call_id: CallId,
-                    #receiver_param_ident: #receiver_ty,
+                    #receiver_param
                     #(#extra_params,)*
+                    #(#type_arg_params,)*
                     ctx: &SysOpContext,
                 ) -> SysOpOutput<#ret_ty>;
             }
@@ -1028,10 +1402,10 @@ fn emit_one_class_trait(
     let dispatch_arms: Vec<TokenStream> = methods
         .iter()
         .map(|m| {
-            let method_name_str = io_method_name(m);
+            let method_name_str = io_class_dispatch_key(m);
             let glue_ident = format_ident!("__glue_{}", m.fn_name);
             quote! {
-                #method_name_str => Some(self.#glue_ident(heap, args, ctx, call_id))
+                #method_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id))
             }
         })
         .collect();
@@ -1043,11 +1417,12 @@ fn emit_one_class_trait(
 
             #(#glue_methods)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 method: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1068,6 +1443,11 @@ fn emit_glue_method(
     paths: &CodegenPaths,
 ) -> TokenStream {
     let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
+    let Some(receiver) = &builtin.receiver else {
+        return quote! {
+            compile_error!(concat!("missing receiver for glue method ", stringify!(#glue_ident)));
+        };
+    };
     let variant_ident = format_ident!("{}", builtin.sys_op_variant_name());
     let clean_method_ident = format_ident!("{}", io_method_name(builtin));
 
@@ -1076,6 +1456,16 @@ fn emit_glue_method(
     let class_ident = format_ident!("{}", class_name);
 
     // Arg extraction lets
+    let arg_self = if !consumes_self_slot(receiver) {
+        None
+    } else if receiver_is_extracted(receiver) {
+        Some(quote! { let __arg_self = __args.next().unwrap(); })
+    } else {
+        // Fieldless marker receiver: consume the `self` slot but discard it —
+        // the clean method takes no receiver and there is no `view::` struct.
+        Some(quote! { let _ = __args.next().unwrap(); })
+    };
+
     let arg_idents: Vec<syn::Ident> = (0..builtin.params.len())
         .map(|i| format_ident!("__arg{}", i))
         .collect();
@@ -1083,6 +1473,28 @@ fn emit_glue_method(
         .iter()
         .map(|id| quote! { let #id = __args.next().unwrap(); })
         .collect();
+
+    // Synthetic type-arg slots: appended after all value args by the compiler.
+    // Only function-level generics generate these slots; class-level generics
+    // (from the enclosing class definition) do not.
+    let fn_type_arg_count = fn_only_generic_count(builtin);
+    let type_arg_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("__type_arg{}", i))
+        .collect();
+    let type_arg_lets: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .map(|id| quote! { let #id = __args.next().unwrap(); })
+        .collect();
+
+    let receiver_extraction = if receiver_is_extracted(receiver) {
+        Some(quote! {
+            let __receiver = __arg_self
+                .as_builtin_class::<#view::#ns_ident::#class_ident>(heap.as_ref(), permit)?
+                .into_owned(heap.as_ref(), permit)?;
+        })
+    } else {
+        None
+    };
 
     // Extraction inside gc protection
     let param_extractions: Vec<TokenStream> = builtin
@@ -1097,44 +1509,95 @@ fn emit_glue_method(
         })
         .collect();
 
+    // Extract synthetic type-arg slots as baml_type::RuntimeTy.
+    let type_arg_extractions: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .enumerate()
+        .map(|(i, raw_id)| {
+            let extracted_ident = format_ident!("__type_arg_val{}", i);
+            quote! { let #extracted_ident = #raw_id.as_baml_type_owned(heap.as_ref(), permit)?; }
+        })
+        .collect();
+    let type_arg_val_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("__type_arg_val{}", i))
+        .collect();
+
     // Tuple elements for Ok return
-    let tuple_idents: Vec<syn::Ident> = std::iter::once(format_ident!("__receiver"))
-        .chain(builtin.params.iter().map(|p| format_ident!("__{}", p.name)))
+    let receiver_ident = if receiver_is_extracted(receiver) {
+        Some(quote! { __receiver, })
+    } else {
+        None
+    };
+    let tuple_idents: Vec<syn::Ident> = builtin
+        .params
+        .iter()
+        .map(|p| format_ident!("__{}", p.name))
         .collect();
 
     // Call args for clean method
-    let call_param_idents: Vec<syn::Ident> = std::iter::once(format_ident!("__receiver"))
-        .chain(builtin.params.iter().map(|p| format_ident!("__{}", p.name)))
+    let call_param_idents: Vec<syn::Ident> = builtin
+        .params
+        .iter()
+        .map(|p| format_ident!("__{}", p.name))
         .collect();
 
+    // Clean method type-arg call params (positional: type_arg_0, type_arg_1, ...)
+    let clean_type_arg_call_idents: Vec<syn::Ident> = (0..fn_type_arg_count)
+        .map(|i| format_ident!("type_arg_{}", i))
+        .collect();
+
+    // Bind extracted type-arg vals to the clean param names inside the match arm.
+    let type_arg_bind_stmts: Vec<TokenStream> = type_arg_val_idents
+        .iter()
+        .zip(clean_type_arg_call_idents.iter())
+        .map(|(val_id, param_id)| quote! { let #param_id = #val_id; })
+        .collect();
+
+    let call_expr = quote! {
+        self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* #(#clean_type_arg_call_idents,)* ctx)
+    };
+    // Use the shared helper so a class method returning a class array
+    // (`Vec<owned::ns::Class>`) is converted via `into_result_mapped` — the same
+    // path free functions use — instead of an unconditional `into_result`
+    // (which requires an `AsBexExternalValue` impl that `Vec<ClassName>` lacks).
+    let into_result = emit_into_result_call(
+        &builtin.return_type,
+        &variant_ident,
+        &call_expr,
+        class_ns_map,
+        paths,
+    );
+
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
             let mut __args = args.into_iter();
-            let __arg_self = __args.next().unwrap();
+            #arg_self
             #(#arg_lets)*
+            // Synthetic type-arg slots (appended by lower_call for generic IO functions).
+            #(#type_arg_lets)*
 
-            let __extraction = heap.with_gc_protection(move |__p| {
-                let __receiver = __arg_self
-                    .as_builtin_class::<#view::#ns_ident::#class_ident>(&__p)?
-                    .into_owned(&__p)?;
+            let __extraction = (|| {
+                #receiver_extraction
                 #(#param_extractions)*
-                Ok::<_, AccessError>((#(#tuple_idents),*))
-            });
+                #(#type_arg_extractions)*
+                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*))
+            })();
 
             match __extraction {
-                Ok((#(#tuple_idents),*)) => {
-                    self.#clean_method_ident(heap, call_id, #(#call_param_idents,)* ctx)
-                        .into_result(SysOp::#variant_ident)
+                Ok((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*)) => {
+                    #(#type_arg_bind_stmts)*
+                    #into_result
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1193,8 +1656,19 @@ fn emit_one_namespace_trait(
                 .iter()
                 .map(|p| {
                     let p_ident = format_ident!("{}", p.name);
-                    let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
+                    let p_ty = clean_param_type(&p.ty, class_ns_map, paths);
                     quote! { #p_ident: #p_ty }
+                })
+                .collect();
+
+            // Synthetic type-arg params appended after value params.
+            let type_arg_params: Vec<TokenStream> = f
+                .generics
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    let p_ident = format_ident!("type_arg_{}", i);
+                    quote! { #p_ident: baml_type::RuntimeTy }
                 })
                 .collect();
 
@@ -1204,6 +1678,7 @@ fn emit_one_namespace_trait(
                     heap: &std::sync::Arc<BexHeap>,
                     call_id: CallId,
                     #(#extra_params,)*
+                    #(#type_arg_params,)*
                     ctx: &SysOpContext,
                 ) -> SysOpOutput<#ret_ty>;
             }
@@ -1214,7 +1689,7 @@ fn emit_one_namespace_trait(
     let free_fn_glues: Vec<TokenStream> = node
         .free_fns
         .iter()
-        .map(|f| emit_free_fn_glue(f, class_ns_map, paths))
+        .map(|f| emit_free_fn_glue(f, &trait_ident, class_ns_map, paths))
         .collect();
 
     // Dispatch method body
@@ -1226,7 +1701,7 @@ fn emit_one_namespace_trait(
             .map(|f| {
                 let fn_name_str = io_method_name(f);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
-                quote! { #fn_name_str => Some(self.#glue_ident(heap, args, ctx, call_id)) }
+                quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
             .collect();
 
@@ -1244,7 +1719,7 @@ fn emit_one_namespace_trait(
             .map(|cn| {
                 let cn_str = cn.as_str();
                 let dispatch = format_ident!("__dispatch_{}_{}", ns, cn.to_lowercase());
-                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, args, ctx, call_id) }
+                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
             })
             .collect();
 
@@ -1254,7 +1729,7 @@ fn emit_one_namespace_trait(
             .map(|f| {
                 let fn_name_str = io_method_name(f);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
-                quote! { #fn_name_str => Some(self.#glue_ident(heap, args, ctx, call_id)) }
+                quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
             .collect();
 
@@ -1276,11 +1751,12 @@ fn emit_one_namespace_trait(
 
             #(#free_fn_glues)*
 
-            fn #dispatch_fn_ident(
+            fn #dispatch_fn_ident<'a>(
                 &self,
                 rest: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1290,8 +1766,50 @@ fn emit_one_namespace_trait(
     }
 }
 
+/// Generate the `.into_result(...)` call for a given return type.
+///
+/// - Scalar types implementing `AsBexExternalValue` use `.into_result(op)`.
+/// - `List(Named(...))` uses `.into_result_mapped(op, |v| ...)` because
+///   `Vec<ClassName>` does not implement `AsBexExternalValue` (orphan rules
+///   prevent it in the generated crate).
+fn emit_into_result_call(
+    return_type: &BamlType,
+    variant_ident: &syn::Ident,
+    call_expr: &TokenStream,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    if let BamlType::List(inner) = return_type {
+        if let BamlType::Named(name) = inner.as_ref() {
+            if let Some(ns) = class_ns_map.get(name.as_str()) {
+                let owned = &paths.owned;
+                let ns_ident = format_ident!("{}", ns);
+                let name_ident = format_ident!("{}", name);
+                return quote! {
+                    #call_expr
+                        .into_result_mapped(SysOp::#variant_ident, |v| {
+                            BexExternalValue::Array {
+                                // `#name` is a real class, but `BamlType` drops
+                                // its generic args, so the complete element type
+                                // is only recoverable from the runtime value.
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: v.into_iter()
+                                    .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))
+                                    .collect(),
+                            }
+                        })
+                };
+            }
+        }
+    }
+    quote! {
+        #call_expr.into_result(SysOp::#variant_ident)
+    }
+}
+
 fn emit_free_fn_glue(
     builtin: &NativeBuiltin,
+    ns_trait_ident: &syn::Ident,
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
@@ -1299,16 +1817,56 @@ fn emit_free_fn_glue(
     let variant_ident = format_ident!("{}", builtin.sys_op_variant_name());
     let clean_ident = format_ident!("{}", io_method_name(builtin));
 
-    if builtin.params.is_empty() {
+    // Synthetic type-arg slots (appended after value args by the compiler).
+    let type_arg_idents: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("__type_arg{}", i))
+        .collect();
+    let type_arg_lets: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .map(|id| quote! { let #id = __args.next().unwrap(); })
+        .collect();
+    let type_arg_extractions: Vec<TokenStream> = type_arg_idents
+        .iter()
+        .enumerate()
+        .map(|(i, raw_id)| {
+            let extracted_ident = format_ident!("__type_arg_val{}", i);
+            quote! { let #extracted_ident = #raw_id.as_baml_type_owned(heap.as_ref(), permit)?; }
+        })
+        .collect();
+    let type_arg_val_idents: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("__type_arg_val{}", i))
+        .collect();
+    // Named params as passed to clean method: type_arg_0, type_arg_1, ...
+    let clean_type_arg_params: Vec<syn::Ident> = (0..builtin.generics.len())
+        .map(|i| format_ident!("type_arg_{}", i))
+        .collect();
+    let type_arg_bind_stmts: Vec<TokenStream> = type_arg_val_idents
+        .iter()
+        .zip(clean_type_arg_params.iter())
+        .map(|(val_id, param_id)| quote! { let #param_id = #val_id; })
+        .collect();
+
+    if builtin.params.is_empty() && builtin.generics.is_empty() {
+        let call_expr = quote! {
+            #ns_trait_ident::#clean_ident(self, heap, call_id, ctx)
+        };
+        let into_result = emit_into_result_call(
+            &builtin.return_type,
+            &variant_ident,
+            &call_expr,
+            class_ns_map,
+            paths,
+        );
         return quote! {
-            fn #glue_ident(
+            fn #glue_ident<'a>(
                 &self,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                _permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> SysOpResult {
-                self.#clean_ident(heap, call_id, ctx).into_result(SysOp::#variant_ident)
+                #into_result
             }
         };
     }
@@ -1339,44 +1897,66 @@ fn emit_free_fn_glue(
         .map(|p| format_ident!("__{}", p.name))
         .collect();
 
-    let ok_pattern = if param_idents.len() == 1 {
-        let id = &param_idents[0];
+    // Build ok_pattern and extraction_return accounting for type args.
+    let all_extracted_idents: Vec<syn::Ident> = param_idents
+        .iter()
+        .chain(type_arg_val_idents.iter())
+        .cloned()
+        .collect();
+
+    let ok_pattern = if all_extracted_idents.len() == 1 {
+        let id = &all_extracted_idents[0];
         quote! { #id }
     } else {
-        quote! { (#(#param_idents),*) }
+        quote! { (#(#all_extracted_idents),*) }
     };
 
-    let extraction_return = if param_idents.len() == 1 {
-        let id = &param_idents[0];
+    let extraction_return = if all_extracted_idents.len() == 1 {
+        let id = &all_extracted_idents[0];
         quote! { Ok::<_, AccessError>(#id) }
     } else {
-        quote! { Ok::<_, AccessError>((#(#param_idents),*)) }
+        quote! { Ok::<_, AccessError>((#(#all_extracted_idents),*)) }
     };
 
+    let call_expr = quote! {
+        #ns_trait_ident::#clean_ident(self, heap, call_id, #(#param_idents,)* #(#clean_type_arg_params,)* ctx)
+    };
+    let into_result = emit_into_result_call(
+        &builtin.return_type,
+        &variant_ident,
+        &call_expr,
+        class_ns_map,
+        paths,
+    );
+
     quote! {
-        fn #glue_ident(
+        fn #glue_ident<'a>(
             &self,
             heap: &std::sync::Arc<BexHeap>,
-            args: Vec<BexValue<'_>>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
             ctx: &SysOpContext,
             call_id: CallId,
         ) -> SysOpResult {
             let mut __args = args.into_iter();
             #(#arg_lets)*
+            // Synthetic type-arg slots (appended by lower_call for generic IO functions).
+            #(#type_arg_lets)*
 
-            let __extraction = heap.with_gc_protection(move |__p| {
+            let __extraction = (|| {
                 #(#param_extractions)*
+                #(#type_arg_extractions)*
                 #extraction_return
-            });
+            })();
 
             match __extraction {
                 Ok(#ok_pattern) => {
-                    self.#clean_ident(heap, call_id, #(#param_idents,)* ctx)
-                        .into_result(SysOp::#variant_ident)
+                    #(#type_arg_bind_stmts)*
+                    #into_result
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,
-                    OpErrorKind::AccessError(e),
+                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
                 ))),
             }
         }
@@ -1396,18 +1976,19 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
             let ns_str = ns.as_str();
             let dispatch_fn_ident = format_ident!("__dispatch_{}", ns);
             quote! {
-                Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, args, ctx, call_id)
+                Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id)
             }
         })
         .collect();
 
     quote! {
         pub trait IoPackageBaml: #(#ns_trait_idents)+* {
-            fn get_sys_op_fn(
+            fn get_sys_op_fn<'a>(
                 &self,
                 path: &str,
                 heap: &std::sync::Arc<BexHeap>,
-                args: Vec<BexValue<'_>>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
                 ctx: &SysOpContext,
                 call_id: CallId,
             ) -> Option<SysOpResult> {
@@ -1448,11 +2029,13 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
             quote! {
                 #field_ident: {
                     let t = t.clone();
-                    std::sync::Arc::new(move |heap, args, ctx, call_id| {
-                        t.get_sys_op_fn(#path_str, heap, args, ctx, call_id)
+                    std::sync::Arc::new(move |heap, permit, args, ctx, call_id| {
+                        t.get_sys_op_fn(#path_str, heap, permit, args, ctx, call_id)
                             .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(
                                 SysOp::#variant_ident,
-                                OpErrorKind::Unsupported,
+                                bex_vm_types::errors::VmBamlError::Unsupported {
+                                    message: "Operation not supported on this platform".to_string(),
+                                },
                             ))))
                     })
                 }
@@ -1474,10 +2057,12 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
             }
 
             pub fn unsupported(operation: SysOp) -> SysOpFn {
-                std::sync::Arc::new(move |_, _, _, _| {
+                std::sync::Arc::new(move |_, _, _, _, _| {
                     SysOpResult::Ready(Err(OpError::new(
                         operation,
-                        OpErrorKind::Unsupported,
+                        bex_vm_types::errors::VmBamlError::Unsupported {
+                            message: "Operation not supported on this platform".to_string(),
+                        },
                     )))
                 })
             }
@@ -1589,7 +2174,19 @@ fn emit_runtime_io_handles(
     let mut handles = Vec::new();
 
     for (ns, node) in tree {
-        for class_name in node.classes.keys() {
+        for (class_name, methods) in &node.classes {
+            // Fieldless marker classes (e.g. `random.SystemRandom`) have no
+            // generated `owned::` struct, so there is nothing to wrap in a
+            // handle and `from_external` would not resolve. They are never used
+            // as a receiver handle in the `RuntimeIo` trait either (see
+            // `emit_runtime_io_trait`), so skip them entirely.
+            let instance_backed = methods
+                .first()
+                .and_then(|m| m.receiver.as_ref())
+                .is_none_or(|r| r.instance_backed);
+            if !instance_backed {
+                continue;
+            }
             let handle_ident = handle_type_name(ns, class_name);
 
             // Find the class def to get non-opaque fields.
@@ -1605,7 +2202,7 @@ fn emit_runtime_io_handles(
                     if field.field_type == BamlType::RustType {
                         continue;
                     }
-                    let field_ident = format_ident!("{}", field.name);
+                    let field_ident = rust_field_ident(&field.name);
                     let field_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
                     pub_fields.push(quote! { pub #field_ident: #field_ty });
 
@@ -1678,16 +2275,25 @@ fn emit_runtime_io_trait(
 
         let mut params: Vec<TokenStream> = Vec::new();
 
-        // For class methods, the first param is a handle reference.
+        // For class methods, the first param is a handle reference. Fieldless
+        // marker receivers (e.g. `random.SystemRandom`) have no handle type, so
+        // they take no receiver param — the adapter synthesizes their `self`.
         if let Some(ref receiver) = builtin.receiver {
-            let ns = io_namespace_name(builtin);
-            let handle = handle_type_name(ns, &receiver.class_name);
-            let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
-            params.push(quote! { #param_ident: &#handle });
+            if receiver.instance_backed {
+                let ns = io_namespace_name(builtin);
+                let handle = handle_type_name(ns, &receiver.class_name);
+                let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
+                params.push(quote! { #param_ident: &#handle });
+            }
         }
 
         for p in &builtin.params {
             let p_ident = format_ident!("{}", p.name);
+            // The host-facing `RuntimeIo` path uses `clean_rust_type` (not
+            // `clean_param_type`): a `function` param stays `BexExternalValue`
+            // here on purpose. A host can't synthesize a VM closure `Handle`, so
+            // this path is never used for callbacks — don't "unify" it with the
+            // VM-facing trait's `Handle` mapping.
             let p_ty = clean_rust_type(&p.ty, class_ns_map, paths);
             params.push(quote! { #p_ident: #p_ty });
         }
@@ -1744,6 +2350,9 @@ pub fn generate_io_adapter(
     let resolve_fn = emit_resolve_helper();
 
     let tokens = quote! {
+        // Bring `HeapPermit::proof()` into scope for the adapter impl below.
+        use ::bex_heap::HeapPermit as _;
+
         #resolve_fn
         #adapter_struct
         #adapter_impl
@@ -1781,6 +2390,7 @@ fn emit_adapter_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
     quote! {
         pub struct RuntimeIoAdapter {
             heap: Arc<BexHeap>,
+            permit_manager: Arc<HeapPermitManager>,
             ctx: SysOpContext,
             #(#fields,)*
         }
@@ -1813,11 +2423,23 @@ fn emit_adapter_impl(
 
         if let Some(ref receiver) = builtin.receiver {
             let ns = io_namespace_name(builtin);
-            let handle = handle_type_name(ns, &receiver.class_name);
-            let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
-            params.push(quote! { #param_ident: &#handle });
-            ext_bindings.push(quote! { let __recv_raw = #param_ident.raw.clone(); });
-            arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
+            if receiver.instance_backed {
+                let handle = handle_type_name(ns, &receiver.class_name);
+                let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
+                params.push(quote! { #param_ident: &#handle });
+                ext_bindings.push(quote! { let __recv_raw = #param_ident.raw.clone(); });
+                arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
+            } else if !receiver.receiver_type.is_static() {
+                // Fieldless marker receiver: the SysOpFn glue still consumes a
+                // leading `self` slot, so synthesize an empty instance for it.
+                // The `RuntimeIo` method itself takes no receiver param.
+                let class_fqn = format!("baml.{}.{}", ns, receiver.class_name);
+                ext_bindings.push(quote! {
+                    let __recv_raw =
+                        BexExternalValue::instance(#class_fqn, indexmap::IndexMap::new());
+                });
+                arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
+            }
         }
 
         for (i, p) in builtin.params.iter().enumerate() {
@@ -1836,10 +2458,22 @@ fn emit_adapter_impl(
         let body = quote! {
             let fn_ptr = self.#method_ident.clone();
             let heap = self.heap.clone();
+            let permit_manager = self.permit_manager.clone();
             let ctx = self.ctx.clone();
             #(#ext_bindings)*
             Box::pin(async move {
-                let result = fn_ptr(&heap, vec![#(#arg_exprs),*], &ctx, CallId::next());
+                // Acquire a `()`-backed permit so the SysOpFn has a valid GC-exclusion
+                // proof for arg extraction. RuntimeIoAdapter callers run outside the VM
+                // event loop, so no other permit is in scope here.
+                let permit = permit_manager.new_permit(()).await.acquire().await;
+                let result = fn_ptr(
+                    &heap,
+                    permit.proof(),
+                    vec![#(#arg_exprs),*],
+                    &ctx,
+                    CallId::next(),
+                );
+                drop(permit);
                 let __val = __resolve_sys_op_result(result).await?;
                 #result_conversion
             })
@@ -1862,14 +2496,29 @@ fn emit_adapter_impl(
 }
 
 /// Generate the expression that converts `__val: BexExternalValue` to the method's return type.
+///
+/// Top-level entry: looks up handle classes in `tree` and supports `Null`
+/// (returning unit). Recursive calls into containers pass `tree = None` and
+/// override the error suffix so messages reflect the nesting context.
 fn emit_result_conversion(
     builtin: &NativeBuiltin,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    // Check if return type maps to a handle.
-    if let BamlType::Named(name) = &builtin.return_type {
+    emit_result_conversion_for_ty(&builtin.return_type, Some(tree), class_ns_map, paths, "")
+}
+
+fn emit_result_conversion_for_ty(
+    ty: &BamlType,
+    tree: Option<&BTreeMap<String, IoNamespaceNode>>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+    ctx: &str,
+) -> TokenStream {
+    // Handle-class shortcut: only at the top level (lists/maps of handles
+    // aren't supported).
+    if let (Some(tree), BamlType::Named(name)) = (tree, ty) {
         if let Some(ns) = class_ns_map.get(name.as_str()) {
             if let Some(node) = tree.get(ns) {
                 if node.classes.contains_key(name.as_str()) {
@@ -1880,43 +2529,77 @@ fn emit_result_conversion(
         }
     }
 
-    match &builtin.return_type {
-        BamlType::String => quote! {
-            match __val {
-                BexExternalValue::String(s) => Ok(s),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected string, got {}", other.type_name()),
-                )),
+    match ty {
+        BamlType::String => {
+            let msg = format!("expected string{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::String(s) => Ok(s.to_string()),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Int => quote! {
-            match __val {
-                BexExternalValue::Int(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected int, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Int => {
+            let msg = format!("expected int{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Int(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Float => quote! {
-            match __val {
-                BexExternalValue::Float(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected float, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Bigint => {
+            let msg = format!("expected bigint{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Bigint(v) => Ok(std::sync::Arc::new(v)),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Bool => quote! {
-            match __val {
-                BexExternalValue::Bool(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected bool, got {}", other.type_name()),
-                )),
+        }
+        BamlType::Float => {
+            let msg = format!("expected float{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Float(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
             }
-        },
-        BamlType::Null => quote! { Ok(()) },
+        }
+        BamlType::Bool => {
+            let msg = format!("expected bool{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Bool(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
+            }
+        }
+        BamlType::Uint8Array => {
+            let msg = format!("expected uint8array{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Uint8Array(v) => Ok(v),
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
+            }
+        }
+        // `Null` as a return type means unit; only meaningful at the top level.
+        BamlType::Null if tree.is_some() => quote! { Ok(()) },
         BamlType::Optional(inner) => {
-            // Create a temporary builtin with the inner type to recurse.
-            let inner_conv = emit_result_conversion_simple(inner, class_ns_map, paths);
+            let inner_conv = emit_result_conversion_for_ty(inner, None, class_ns_map, paths, ctx);
             quote! {
                 match __val {
                     BexExternalValue::Null => Ok(None),
@@ -1927,28 +2610,56 @@ fn emit_result_conversion(
                 }
             }
         }
-        BamlType::Uint8Array => quote! {
-            match __val {
-                BexExternalValue::Uint8Array(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected uint8array, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Named(name) => match name.as_str() {
-            "type" => quote! {
+        BamlType::List(inner) => {
+            let inner_conv =
+                emit_result_conversion_for_ty(inner, None, class_ns_map, paths, " in list");
+            let msg = format!("expected array{ctx}, got {{}}");
+            quote! {
                 match __val {
-                    BexExternalValue::Adt(
-                        bex_external_types::BexExternalAdt::Type(ty),
-                    ) => Ok(ty),
+                    BexExternalValue::Array { items, .. } => {
+                        items.into_iter()
+                            .map(|__val| { #inner_conv })
+                            .collect::<Result<Vec<_>, _>>()
+                    }
                     other => Err(RuntimeIoError::Other(
-                        format!("expected type, got {}", other.type_name()),
+                        format!(#msg, other.type_name()),
                     )),
                 }
-            },
+            }
+        }
+        BamlType::Map(key, value) if matches!(key.as_ref(), BamlType::String) => {
+            let value_conv =
+                emit_result_conversion_for_ty(value, None, class_ns_map, paths, " in map");
+            let msg = format!("expected map{ctx}, got {{}}");
+            quote! {
+                match __val {
+                    BexExternalValue::Map { entries, .. } => {
+                        entries.into_iter()
+                            .map(|(__key, __val)| Ok((__key, { #value_conv }?)))
+                            .collect::<Result<indexmap::IndexMap<_, _>, _>>()
+                    }
+                    other => Err(RuntimeIoError::Other(
+                        format!(#msg, other.type_name()),
+                    )),
+                }
+            }
+        }
+        BamlType::Named(name) => match name.as_str() {
+            "type" => {
+                let msg = format!("expected type{ctx}, got {{}}");
+                quote! {
+                    match __val {
+                        BexExternalValue::Adt(
+                            bex_external_types::BexExternalAdt::Type(ty),
+                        ) => Ok(ty),
+                        other => Err(RuntimeIoError::Other(
+                            format!(#msg, other.type_name()),
+                        )),
+                    }
+                }
+            }
             _ => {
-                if class_ns_map.contains_key(name.as_str()) {
-                    let ns = &class_ns_map[name.as_str()];
+                if let Some(ns) = class_ns_map.get(name.as_str()) {
                     let owned = &paths.owned;
                     let ns_ident = format_ident!("{}", ns);
                     let name_ident = format_ident!("{}", name);
@@ -1959,49 +2670,6 @@ fn emit_result_conversion(
                 } else {
                     quote! { Ok(__val) }
                 }
-            }
-        },
-        _ => quote! { Ok(__val) },
-    }
-}
-
-/// Simplified result conversion for inner types (used in Optional).
-fn emit_result_conversion_simple(
-    ty: &BamlType,
-    _class_ns_map: &BTreeMap<String, String>,
-    _paths: &CodegenPaths,
-) -> TokenStream {
-    match ty {
-        BamlType::String => quote! {
-            match __val {
-                BexExternalValue::String(s) => Ok(s),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected string, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Int => quote! {
-            match __val {
-                BexExternalValue::Int(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected int, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Float => quote! {
-            match __val {
-                BexExternalValue::Float(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected float, got {}", other.type_name()),
-                )),
-            }
-        },
-        BamlType::Bool => quote! {
-            match __val {
-                BexExternalValue::Bool(v) => Ok(v),
-                other => Err(RuntimeIoError::Other(
-                    format!("expected bool, got {}", other.type_name()),
-                )),
             }
         },
         _ => quote! { Ok(__val) },
@@ -2022,13 +2690,100 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
         pub fn build_runtime_io(
             sys_ops: &SysOps,
             heap: &Arc<BexHeap>,
+            permit_manager: &Arc<HeapPermitManager>,
             ctx: &SysOpContext,
         ) -> Arc<dyn RuntimeIo> {
             Arc::new(RuntimeIoAdapter {
                 heap: heap.clone(),
+                permit_manager: permit_manager.clone(),
                 ctx: ctx.clone(),
                 #(#field_inits,)*
             })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, HashSet};
+
+    use super::{CodegenPaths, emit_owned_struct, emit_view_struct};
+    use crate::{
+        rust_ident::rust_field_ident,
+        types::{BamlType, NativeClassDef, NativeClassField},
+    };
+
+    #[test]
+    fn generated_keyword_fields_keep_original_vm_keys() {
+        const BAML_FIELD_NAMES: &[&str] = &[
+            "type",
+            "match",
+            "move",
+            "self",
+            "self_",
+            "Self",
+            "super",
+            "crate",
+            "_",
+            "dash-name",
+            "$data",
+            "__baml_field_73656c66",
+        ];
+        let class = NativeClassDef {
+            name: "KeywordFields".to_string(),
+            namespace_prefix: "baml.test".to_string(),
+            generic_params: Vec::new(),
+            fields: BAML_FIELD_NAMES
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(index, name)| NativeClassField {
+                    name: name.to_string(),
+                    field_type: BamlType::Bool,
+                    index,
+                })
+                .collect(),
+            source_file: "<test>/keywords.baml".to_string(),
+        };
+        let class_ns_map = BTreeMap::new();
+        let paths = CodegenPaths::inline();
+
+        let owned = crate::format_tokens(&emit_owned_struct(
+            &class,
+            &class_ns_map,
+            "test",
+            &paths,
+            &HashSet::new(),
+        ));
+        let view = crate::format_tokens(&emit_view_struct(&class, &class_ns_map, "test", &paths));
+        let compact_owned: String = owned.chars().filter(|c| !c.is_whitespace()).collect();
+        let compact_view: String = view.chars().filter(|c| !c.is_whitespace()).collect();
+
+        for baml_name in BAML_FIELD_NAMES {
+            let rust_name = rust_field_ident(baml_name);
+            assert!(
+                compact_owned.contains(&format!("pub{rust_name}:bool")),
+                "missing escaped owned field `{rust_name}`:\n{owned}"
+            );
+            assert!(
+                compact_view.contains(&format!("pubfn{rust_name}(")),
+                "missing escaped view accessor `{rust_name}`:\n{view}"
+            );
+        }
+
+        for baml_name in BAML_FIELD_NAMES {
+            assert!(
+                compact_owned.contains(&format!("\"{baml_name}\".to_string()")),
+                "external conversion changed the BAML key `{baml_name}`:\n{owned}"
+            );
+            assert!(
+                compact_owned.contains(&format!("fields.swap_remove(\"{baml_name}\")")),
+                "external lookup changed the BAML key `{baml_name}`:\n{owned}"
+            );
+            assert!(
+                compact_view.contains(&format!("self.cls.field(\"{baml_name}\")")),
+                "VM lookup changed the BAML key `{baml_name}`:\n{view}"
+            );
         }
     }
 }

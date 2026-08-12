@@ -13,8 +13,8 @@ function RethrowError(x: int) -> string {
 // Conditional rethrow
 function ConditionalRethrow(x: int) -> string {
   MayFail(x) catch (e) {
-    _: string => "handled string",
-    other => throw other
+    string => "handled string",
+    let other => throw other
   }
 }
 
@@ -27,42 +27,31 @@ function ThrowNewInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:9:11 ]
-//     │
-//   9 │ ╭─▶     _ => throw e
-//  10 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:16:20 ]
-//     │
-//  16 │     _: string => "handled string",
-//     │                    ────────┬───────  
-//     │                            ╰───────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:17:15 ]
-//     │
-//  17 │ ╭─▶     other => throw other
-//  18 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
-// Warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:24:11 ]
-//     │
-//  24 │ ╭─▶     _ => throw "wrapped: original error"
-//  25 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
+// E0063
+//
+//   ⚠ unreachable arm
+//    ╭─[throw_throw_in_catch.baml:9:10]
+//  9 │     _ => throw e
+//    ·          ───────
+//    ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throw_in_catch.baml:16:15]
+//  16 │     string => "handled string",
+//     ·               ────────────────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throw_in_catch.baml:17:18]
+//  17 │     let other => throw other
+//     ·                  ───────────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throw_in_catch.baml:24:10]
+//  24 │     _ => throw "wrapped: original error"
+//     ·          ───────────────────────────────
+//     ╰────

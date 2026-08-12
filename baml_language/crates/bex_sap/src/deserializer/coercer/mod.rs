@@ -12,10 +12,6 @@ mod match_string;
 
 use std::{borrow::Cow, collections::HashSet, marker::PhantomData};
 
-// use baml_types::{BamlValue, Constraint, JinjaExpression};
-// use internal_baml_core::ir::jinja_helpers::evaluate_predicate;
-// use internal_baml_jinja::types::OutputFormatContent;
-use super::types::BamlValueWithFlags;
 use crate::{
     baml_value::ValueWithMeta,
     deserializer::types::DeserializerMeta,
@@ -43,13 +39,6 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
 }
 
 impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
-    pub fn display_scope(&self) -> String {
-        if self.scope.is_empty() {
-            return "<root>".to_string();
-        }
-        self.scope.join(".")
-    }
-
     pub fn new(db: &'t TypeRefDb<'t, N>) -> Self {
         ParsingContext {
             scope: Vec::new(),
@@ -343,14 +332,6 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             causes: Vec::new(),
         }
     }
-
-    pub(crate) fn error_assertion_failure(&self) -> ParsingError {
-        ParsingError {
-            reason: "Assertion failed".to_string(),
-            scope: self.scope.clone(),
-            causes: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -418,13 +399,6 @@ where
     ) -> Option<
         ValueWithMeta<<Self as TypeValue<'s, 'v, 't>>::Value, DeserializerMeta<'s, 'v, 't, N>>,
     >;
-}
-
-pub trait DefaultValue<'s, 'v, 't, N: TypeIdent> {
-    fn default_value(
-        &self,
-        error: Option<&ParsingError>,
-    ) -> Option<BamlValueWithFlags<'s, 'v, 't, N>>;
 }
 
 /// A trait that gets the type name (permitting resolution errors) from a type.

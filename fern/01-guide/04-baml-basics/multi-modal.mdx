@@ -473,7 +473,7 @@ When using Google AI with images stored in GCS:
 client<llm> GeminiWithGCS {
   provider google-ai
   options {
-    model "gemini-1.5-pro"
+    model "gemini-3.1-pro-preview"
     api_key env.GOOGLE_API_KEY
     media_url_handler {
       image "send_base64_unless_google_url"  // Preserve gs:// URLs, convert others

@@ -46,25 +46,11 @@ function BadValueReturn(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Duplicate binding `b` in `WithStack`
-//     ╭─[ misc_return.baml:23:11 ]
-//     │
-//  15 │       let b = 1;
-//     │           ┬  
-//     │           ╰── first defined as binding here
-//     │ 
-//  23 │       let b = 3;
-//     │           ┬  
-//     │           ╰── duplicate binding definition
-//     │ 
-//     │ Note: Error code: E0012
-// ────╯
-// Error: type mismatch: expected string, got 1
-//     ╭─[ misc_return.baml:36:11 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[misc_return.baml:36:11]
 //  36 │    return 1;
-//     │           ┬  
-//     │           ╰── type mismatch: expected string, got 1
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·           ┬
+//     ·           ╰── expected `string`, found `1`
+//     ╰────

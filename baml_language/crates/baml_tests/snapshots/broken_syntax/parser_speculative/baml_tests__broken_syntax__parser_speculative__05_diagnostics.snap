@@ -1,0 +1,63 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[ambiguous_function.baml:5:1]
+ 5 │ }
+   · ┬
+   · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[ambiguous_function.baml:9:3]
+ 9 │   clent GPT4  // Typo in "client"
+   ·   ──┬──
+   ·     ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[ambiguous_function.baml:9:9]
+ 9 │   clent GPT4  // Typo in "client"
+   ·         ──┬─
+   ·           ╰── expected `Only 'client', 'tools' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[ambiguous_function.baml:11:1]
+ 11 │ }
+    · ┬
+    · ╰── expected `LLM function missing 'client' field`, found `'}'`
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+   ╭─[llm_function.baml:2:10]
+ 2 │   client GPT4
+   ·          ────
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+   ╭─[mixed_functions.baml:3:10]
+ 3 │   client GPT4
+   ·          ────
+   ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+    ╭─[mixed_functions.baml:32:10]
+ 32 │   client GPT4
+    ·          ────
+    ╰────

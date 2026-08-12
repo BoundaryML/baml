@@ -12,4 +12,35 @@ function UseReserved() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × unexpected token
+//    ╭─[expr_var_keyword_let_await.baml:2:7]
+//  2 │   let await = 1;
+//    ·       ──┬──
+//    ·         ╰── expected `identifier after 'let'`, found `await`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[expr_var_keyword_let_await.baml:2:13]
+//  2 │   let await = 1;
+//    ·             ┬
+//    ·             ╰── expected `expression`, found `'='`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[expr_var_keyword_let_await.baml:4:1]
+//  4 │ }
+//    · ┬
+//    · ╰── expected `expression`, found `'}'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[expr_var_keyword_let_await.baml:4:2]
+//  4 │ }
+//    ·  ▲
+//    ·  ╰── expected `'}'`, found `EOF`
+//    ╰────

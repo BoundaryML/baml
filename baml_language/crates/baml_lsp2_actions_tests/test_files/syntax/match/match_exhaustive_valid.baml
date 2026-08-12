@@ -28,7 +28,7 @@ function WildcardCatchAll(d: Direction) -> string {
 function NamedCatchAll(d: Direction) -> string {
   match (d) {
     Direction.North => "north",
-    other => "other"
+    let other => "other"
   }
 }
 
@@ -43,7 +43,7 @@ function BoolExhaustive(b: bool) -> string {
 // Optional with null
 function OptionalExhaustive(x: int?) -> string {
   match (x) {
-    n: int => "has value",
+    let n: int => "has value",
     null => "null"
   }
 }
@@ -59,8 +59,8 @@ type MyResult = Ok | Err
 
 function TypeAliasExhaustive(r: MyResult) -> string {
   match (r) {
-    o: Ok => o.value,
-    e: Err => e.message
+    let o: Ok => o.value,
+    let e: Err => e.message
   }
 }
 

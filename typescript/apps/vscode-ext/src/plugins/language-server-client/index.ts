@@ -154,7 +154,7 @@ const executeLanguageServerRestart = async (options: {
     bamlOutputChannel?.appendLine(logMessage);
 
     const userMessage = isManualRestart
-      ? 'Failed to manually restart Baml language server.'
+      ? 'Failed to manually restart BAML v0 language server.'
       : `Failed to restart BAML Language Server to version ${version}.`;
 
     window.showErrorMessage(userMessage);
@@ -250,7 +250,7 @@ const getClientOptions = (): LanguageClientOptions => {
       { scheme: 'file', language: 'baml' },
       { language: 'json', pattern: '**/baml_src/**' },
     ],
-    outputChannel: vscode.window.createOutputChannel('Baml Language Server'),
+    outputChannel: vscode.window.createOutputChannel('BAML v0 Language Server'),
     revealOutputChannelOn: RevealOutputChannelOn.Never,
     synchronize: {
       fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
@@ -918,7 +918,7 @@ const plugin: BamlVSCodePlugin = {
             `ERROR: Error during manual restart: ${manualRestartErrorMessage}`,
           );
           window.showErrorMessage(
-            'Failed to manually restart Baml language server.',
+            'Failed to manually restart BAML v0 language server.',
           );
         }
       }),

@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.fetch_as<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  { : T
+    baml.json.from_string<T>(s) : T
+  }
+}

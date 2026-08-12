@@ -1,0 +1,99 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.text(value: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // value // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.number(value: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // value // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.score(query: string, max_results: int, filter: string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: bool
+    let _5: bool
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const "none";
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = copy _2;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.main() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: string
+    let _2: string
+    let _3: int
+
+    bb0: {
+        _1 = call const fn user.text(const "first") -> [bb1];
+    }
+
+    bb1: {
+        _2 = call const fn user.text(const "second") -> [bb2];
+    }
+
+    bb2: {
+        _3 = call const fn user.number(const 3_i64) -> [bb3];
+    }
+
+    bb3: {
+        _0 = call const fn user.score(copy _2, copy _3, copy _1) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}

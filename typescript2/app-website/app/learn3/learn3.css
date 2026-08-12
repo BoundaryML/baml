@@ -1,0 +1,547 @@
+/* =========================================================================
+   /learn3 — additions layered on top of learn2.css (which it reuses).
+   All animation is CSS keyframes with computed delays; replay = key remount.
+   ========================================================================= */
+
+/* =================== deck skin (distinct from /learn2) =================== */
+/* Plain paper (no pattern), terminal-green accent instead of violet,
+   ruled slide titles, a thin progress bar, and a wider stage. */
+.l3-deck {
+  --l2-violet: #047857;
+  --l2-link: #047857;
+  background-color: #f7f6f1;
+  background-image: none;
+  /* pin the deck to mono even if the next/font variable fails to load */
+  font-family:
+    var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+.l3-deck .l2-slide {
+  max-width: 1400px;
+}
+.l3-deck .l2-slide-shell--wide {
+  max-width: 1120px;
+}
+.l3-deck .l2-slide-title {
+  border-bottom: 1px solid var(--l2-rule-strong);
+  padding-bottom: 0.55rem;
+}
+.l3-deck .l2-bullets li::before {
+  border-radius: 1px;
+}
+.l3-progress {
+  height: 2px;
+  background: #e6e2d6;
+}
+.l3-progress span {
+  display: block;
+  height: 100%;
+  background: #047857;
+  transition: width 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* the full-width playground slide */
+.l3-playground-slide {
+  max-width: none;
+}
+.l3-lead-wide {
+  max-width: 72ch;
+}
+.l3-deck .l3-playground-slide .l2-live {
+  height: min(72vh, 700px);
+}
+
+/* hold all descendant animations (delays included) until scrolled into view;
+   useAnimateInView drops this class on first intersection */
+.anim-hold,
+.anim-hold * {
+  animation-play-state: paused !important;
+}
+
+/* =================== animated terminal =================== */
+.l3-term {
+  border: 1px solid #2a2620;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #141210;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  text-align: left;
+}
+.l3-term-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 7px 12px;
+  background: #201c18;
+  border-bottom: 1px solid #2a2620;
+}
+.l3-term-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.l3-term-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #4a443c;
+}
+.l3-term-title {
+  flex: 1;
+  color: #8a8580;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.l3-term-replay {
+  border: 1px solid #3a352d;
+  border-radius: 6px;
+  background: none;
+  color: #8a8580;
+  font-family: inherit;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.l3-term-replay:hover {
+  color: #f3ede0;
+  border-color: #5a544a;
+}
+.l3-term-body {
+  margin: 0;
+  padding: 12px 14px 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #d7d0c0;
+  overflow-x: auto;
+}
+.l3-term-row {
+  white-space: pre;
+  min-height: 1.7em;
+  opacity: 0;
+  animation: l3-appear 160ms ease forwards;
+}
+.l3-term-prompt {
+  color: #7ee787;
+  user-select: none;
+}
+.l3-term-cmd {
+  display: inline-block;
+  vertical-align: bottom;
+  white-space: pre;
+  overflow: hidden;
+  max-width: 0;
+  color: #f3ede0;
+  animation-name: l3-type;
+  animation-fill-mode: forwards;
+}
+@keyframes l3-type {
+  to {
+    max-width: var(--l3-w);
+  }
+}
+@keyframes l3-appear {
+  to {
+    opacity: 1;
+  }
+}
+.l3-tone-dim {
+  color: #6f6a63;
+}
+.l3-tone-ok {
+  color: #7ee787;
+}
+.l3-tone-err {
+  color: #ff7b72;
+}
+.l3-tone-accent {
+  color: #d2a8ff;
+}
+.l3-tone-warn {
+  color: #e3b341;
+}
+
+/* =================== infection graph =================== */
+.l3-inf {
+  border: 1px solid var(--l2-rule-strong, #d8cfbd);
+  border-radius: 12px;
+  background: #fffdf7;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.l3-inf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+.l3-inf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 13.5px;
+}
+.l3-inf-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  white-space: pre;
+}
+.l3-inf-tree {
+  color: #b9b2a3;
+  user-select: none;
+}
+.l3-inf-node {
+  display: inline-block;
+  padding: 0.18rem 0.6rem;
+  border: 1px solid #d8cfbd;
+  border-radius: 7px;
+  background: #fbf7ed;
+  color: #2b2520;
+}
+/* deterministic-stays-deterministic */
+.l3-inf-node--clean {
+  border-color: #bfe3d2;
+  background: #eafaf2;
+  color: #0c5e42;
+}
+/* the nondeterministic source + everything it infects */
+.l3-inf-node--hot {
+  animation: l3-infect 360ms ease forwards;
+}
+@keyframes l3-infect {
+  to {
+    border-color: #ecbf85;
+    background: #fcefdb;
+    color: #8a4d04;
+  }
+}
+.l3-inf-tag {
+  font-size: 11px;
+  color: #8a8580;
+  opacity: 0;
+  animation: l3-appear 240ms ease forwards;
+}
+.l3-inf-tag--hot {
+  color: #b45309;
+}
+.l3-inf-tag--ok {
+  color: #047857;
+}
+.l3-inf-caption {
+  margin: 1rem 0 0;
+  font-size: 13px;
+  color: #6f6a63;
+  opacity: 0;
+  animation: l3-appear 300ms ease forwards;
+}
+.l3-inf-caption strong {
+  color: #8a4d04;
+  font-weight: 600;
+}
+
+/* =================== metrics DAG timeline =================== */
+.l3-dag {
+  border: 1px solid var(--l2-rule-strong, #d8cfbd);
+  border-radius: 12px;
+  background: #fffdf7;
+  padding: 1rem 1.1rem 1.1rem;
+  font-size: 12.5px;
+}
+.l3-dag-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+.l3-dag-event {
+  white-space: pre;
+  color: #2b2520;
+  font-weight: 600;
+  margin: 0.5rem 0 0.4rem;
+  opacity: 0;
+  animation: l3-appear 220ms ease forwards;
+}
+.l3-dag-event--later {
+  color: #8a4d04;
+}
+.l3-dag-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr auto;
+  gap: 0.8rem;
+  align-items: baseline;
+  padding: 0.16rem 0;
+  white-space: pre;
+}
+.l3-dag-name {
+  color: #1a1612;
+}
+.l3-dag-deps {
+  color: #8a8580;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.l3-dag-status {
+  position: relative;
+  min-width: 11ch;
+  text-align: right;
+}
+.l3-dag-pending {
+  color: #b45309;
+  animation: l3-vanish 1ms linear forwards;
+}
+.l3-dag-fired {
+  position: absolute;
+  inset: 0;
+  text-align: right;
+  color: #047857;
+  opacity: 0;
+  animation: l3-appear 200ms ease forwards;
+}
+@keyframes l3-vanish {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ---- the metric dependency graph (SVG) ---- */
+.mdg {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 0.4rem;
+}
+.mdg text {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  fill: #1a1612;
+}
+.mdg-label {
+  font-size: 12px;
+}
+.mdg-sub {
+  font-size: 9.5px;
+  fill: #8a8580;
+}
+/* the metric block "attaching" around the measurements */
+.mdg-block {
+  opacity: 0;
+  animation: mdg-attach 420ms ease forwards;
+  animation-delay: var(--d);
+}
+@keyframes mdg-attach {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mdg-block-rect {
+  fill: none;
+  stroke: #b9b2a3;
+  stroke-width: 1.3;
+  stroke-dasharray: 5 4;
+}
+.mdg-block-label {
+  font-size: 10.5px;
+  fill: #8a8580;
+}
+/* nodes: a pending shell, with the fired state fading in over it */
+.mdg-pend {
+  fill: #fffdf6;
+  stroke: #d8a35c;
+  stroke-width: 1.3;
+  stroke-dasharray: 4 3;
+}
+.mdg-pend--root {
+  stroke: #1a1612;
+  stroke-dasharray: none;
+}
+.mdg-pend--slot {
+  stroke: #b9b2a3;
+}
+.mdg-fired {
+  fill: #eafaf2;
+  stroke: #047857;
+  stroke-width: 1.5;
+  opacity: 0;
+  animation: l3-appear 280ms ease forwards;
+  animation-delay: var(--d);
+}
+.mdg-fired--slot {
+  fill: #fcefdb;
+  stroke: #b45309;
+}
+.mdg-check {
+  font-size: 11px;
+  fill: #047857;
+  opacity: 0;
+  animation: l3-appear 280ms ease forwards;
+  animation-delay: var(--d);
+}
+.mdg-edge {
+  fill: none;
+  stroke: #d8cfbd;
+  stroke-width: 1.4;
+}
+.mdg-edge--soft {
+  opacity: 0.45;
+}
+.mdg-edge-hot {
+  fill: none;
+  stroke: #047857;
+  stroke-width: 1.6;
+  opacity: 0;
+  animation: l3-appear 280ms ease forwards;
+  animation-delay: var(--d);
+}
+
+/* ---- cores-in-use chart ---- */
+.cu {
+  border: 1px solid var(--l2-rule-strong, #d8cfbd);
+  border-radius: 12px;
+  background: #fffdf7;
+  padding: 1rem 1.1rem 0.9rem;
+}
+.cu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+.cu-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.cu-grid {
+  stroke: #efe8d8;
+  stroke-width: 1;
+}
+.cu-tick,
+.cu-axis {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  fill: #8a8580;
+}
+.cu-line {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+}
+.cu-line--baml {
+  stroke: #047857;
+}
+.cu-line--node {
+  stroke: #b45309;
+}
+/* the time sweep that reveals both series at the same rate */
+.cu-sweep {
+  width: 0;
+  animation: cu-sweep 4.6s linear forwards;
+}
+@keyframes cu-sweep {
+  to {
+    width: 566px;
+  }
+}
+.cu-note {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  opacity: 0;
+  animation: l3-appear 250ms ease forwards;
+}
+.cu-note--baml {
+  fill: #047857;
+}
+.cu-note--node {
+  fill: #b45309;
+}
+.cu-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.4rem;
+  font-size: 11px;
+  padding: 0.4rem 0.2rem 0;
+}
+.cu-key--baml {
+  color: #047857;
+}
+.cu-key--node {
+  color: #b45309;
+}
+.cu-key--dim {
+  color: #8a8580;
+  margin-left: auto;
+}
+
+/* =================== misc layout =================== */
+/* three small code columns (error-handling comparison) */
+.l3-cols3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+}
+@media (max-width: 920px) {
+  .l3-cols3 {
+    grid-template-columns: 1fr;
+  }
+}
+/* shrink code inside the 3-up comparison so it fits */
+.l3-cols3 .l2-pre {
+  font-size: 11.5px;
+}
+
+/* the question card on the describe slide */
+.l3-task {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  border: 1px solid var(--l2-rule-strong, #d8cfbd);
+  border-left: 3px solid #047857;
+  border-radius: 10px;
+  background: #fffdf6;
+  padding: 0.7rem 1rem;
+  margin-bottom: 1.1rem;
+  font-size: 14.5px;
+  color: #1a1612;
+}
+.l3-task-label {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #047857;
+}
+
+.l3-design-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8a4d04;
+  border: 1px solid #ecbf85;
+  background: #fcefdb;
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-bottom: 0.7rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l3-term-row,
+  .l3-term-cmd,
+  .l3-inf-node--hot,
+  .l3-inf-tag,
+  .l3-inf-caption,
+  .l3-dag-event,
+  .l3-dag-pending,
+  .l3-dag-fired,
+  .mdg-block,
+  .mdg-fired,
+  .mdg-check,
+  .mdg-edge-hot,
+  .cu-sweep,
+  .cu-note {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}

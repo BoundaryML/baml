@@ -1,0 +1,51 @@
+[package]
+name = "baml_bridge"
+edition.workspace = true
+# Advertise the crate's minimum supported Rust to crates.io consumers; the
+# verify workflow's MSRV leg proves the packaged crate + generated SDK compile
+# on it.
+rust-version.workspace = true
+# A literal version, NOT the workspace `0.0.0-beta`: this crate publishes to
+# crates.io, so its version must be the canonical BAML language version.
+# `scripts/baml-language-version` keeps this equal to the canary version and
+# stamps it to the release version at packaging time (`check` guards it).
+version = "0.16.0"
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+description = "BAML runtime bridge for Rust: embeds the BAML engine behind generated, typed SDKs"
+readme = "README.md"
+keywords = [ "baml", "llm", "ai", "sdk" ]
+categories = [ "api-bindings", "development-tools" ]
+
+[lib]
+name = "baml_bridge"
+doc = false
+doctest = false
+
+# The engine is never linked into this crate: like the other dylib-loader
+# clients, every call goes through the C ABI of a `bridge_cffi` shared
+# library resolved at runtime by `baml_bridge::loader` — one call path in
+# development and in production. Engine capabilities (HTTP stack, crypto)
+# are baked into the shared library when *it* is built.
+[dependencies]
+hex = { workspace = true }
+indexmap = { workspace = true }
+libloading = { workspace = true }
+num-bigint = { workspace = true }
+prost = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
+ureq = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }
+
+[lints]
+workspace = true
+
+[package.metadata.ci]
+wasm_support = false

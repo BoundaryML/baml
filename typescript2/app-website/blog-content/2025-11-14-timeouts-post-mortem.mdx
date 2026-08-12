@@ -1,0 +1,90 @@
+---
+title: "A cautionary tale on vibes"
+description: Post-mortem of the 0.212.0 timeouts incident
+slug: timeouts-post-mortem
+date: November 14, 2025
+tags: ['Engineering']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/imalsogreg/
+---
+
+<blockquote>
+It was the best of vibes, it was the worst of vibes, it was the age of wisdom,
+it was the age of foolishness
+</blockquote>
+  &dash; Charles Dickens, 19th Century English vibe coder
+
+At the end of October, we released a version (0.212.0) of BAML that
+inadventently added strict timeouts to the runtime. We caught and fixed
+the issue on the next release (0.213.0).
+The story of how this bug got released contains useful lessons for vibe
+coding in large systems with high stability requirements.
+
+# What happened
+
+ - Oct 10 - Engineer 1 starts working on docs and an implementation for
+   timeouts.
+ - Oct 14 - Engineers 2 & 3 start a fresh implementation of timeouts for a
+   vibe-coding demonstration.
+ - Oct 18 - Engineer 1 picks up the second implementation, finishes it up
+   and merges to the deployment branch.
+ - Oct 28 - Deployment of 0.212.0 goes out with the second implementation.
+ - Nov 05 - A user reports that some of their requests are returning with
+   empty payloads. No exception is raised.
+ - Nov 05 - We suspect timeouts, discover the default (30 seconds), and
+   quickly raise it to 5 minutes.
+ - Nov 05 - We find and fix the place where errors were being swallowed
+   instead of raising exceptions.
+ - Nov 05 - Deployment of 0.213.0 goes out with the fixes, users report
+   their requests no longer failing.
+
+Several factors came together to help this issue slip out into prod. Normally
+when doing a "5 whys" analysis you want to drill down 5 levels deep to find
+some organizational or process issue. In this case, it feels more like
+4 or 5 independent risk factors, all of which combined to push us over the
+threshold.
+
+# Why did it happen
+
+ - Engineer 1 was surprised about the existence of default timeouts. Since
+   they started one implementation with a lot of documentation, but merged
+   the second implementation started by Engineers 2 & 3, they were mixed
+   up about what features had ended up in which implementation.
+ - Timeouts are tricky. You want to test them, but you don't want to force
+   a 30-second (or 5-minute) step into your CI pipeline.
+ - The user's issue was for a code path that wasn't tested - it is specific
+   to `request_timeout_ms` on streaming requests. We had added several
+   integration tests for `request_timeout_ms` and streaming both returning
+   the expected exceptions, but we didn't test that _combination_ that failed.
+ - Both implementation 1 and implementation 2 were largely vibe-coded.
+
+# Learnings
+
+Our main take-home from this incident is that we have a _difficulty budget_.
+We know we can build a stable product that includes vibe-coded components.
+We can have one engineer start a task, and another engineer pick it up and
+finish it. We can (and regularly do!) add features that are generally
+acknowledged to be a little thorny, like timeouts.
+
+So the thing we are going to watch out for in the future is: _how many of these
+process penalties are we taking on at once_? In other words, for a task like
+timeouts, we need to reign in some of the other process issues that add risk.
+If something is risky, we need to make sure it has a single end-to-end owner.
+Vibe-coding anything touching the runtime needs a couple rounds of review,
+because it's famously easy for the eyes to glaze over when reading a vibe-coded
+PR. And for cross-cutting features with multiple interacting parts, it's not
+enough to have "a bunch of tests". We need to enumerate the dimensions:
+(1) request timeout vs. idle timeout vs. total timeout, (2) final vs. streaming.
+And test coverage is scored according to how well we sample the whole matrix.
+
+# Coda
+
+The BAML promise has always been: "Learn our system, add a new level of
+reliability to your AI workflow." Reliability and stability are very important
+to us, and if you're writing production apps, they are important to you, too!
+
+We're sorry for any interuptions that this caused, and we hope this
+post-mortem helps to give you some insight into our process or even helps you
+avoid similar issues.

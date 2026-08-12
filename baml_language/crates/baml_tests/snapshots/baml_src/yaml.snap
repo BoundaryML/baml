@@ -1,0 +1,128 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function yaml.$init_test_ns_yaml_yaml(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_scalars"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_sequence"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_nested_mapping"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_empty_input_is_null"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_resolves_anchors_and_aliases"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_deserialize_decodes_class"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_deserialize_honors_from_json_override"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_deserialize_decode_failure"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_malformed_throws"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_non_string_map_key_throws"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_integer_overflow_throws"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_non_finite_float_throws"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_duplicate_key_throws"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_multi_document_throws"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.yaml"
+    load_const "yaml_parse_tag_throws"
+    make_closure .<lambda($init_test_ns_yaml_yaml, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function yaml.YamlWrappedName.baml.FromJson.from_json(j: baml.json.json) -> yaml.YamlWrappedName {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _4
+    load_type string
+    load_var _4
+    call baml.json.from_json
+    store_var _3
+    load_const "wrapped:"
+    load_var _3
+    bin_op +
+    init_instance user.yaml.YamlWrappedName .name
+    return
+}

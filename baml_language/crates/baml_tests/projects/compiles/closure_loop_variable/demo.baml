@@ -1,0 +1,13 @@
+function sum_array(arr: int[]) -> int {
+    let sum = 0;
+    let total = [];
+    for (let i in arr) {
+        total.push(() -> {
+        sum += i;
+        })
+    }
+    for (let cb in total) {
+        cb();
+    }
+    sum
+}

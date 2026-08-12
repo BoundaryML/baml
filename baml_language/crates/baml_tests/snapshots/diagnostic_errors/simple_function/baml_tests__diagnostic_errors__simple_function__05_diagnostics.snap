@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0003
+
+  × unresolved name: `GPT4`
+   ╭─[main.baml:2:10]
+ 2 │   client GPT4
+   ·          ────
+   ╰────

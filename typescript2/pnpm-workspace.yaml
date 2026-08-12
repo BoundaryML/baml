@@ -2,5 +2,42 @@ packages:
   - "pkg-*"
   - "app-*"
 
+# pnpm 11 promotes un-approved postinstall builds to errors. Approve the
+# transitive build-script dependencies the lockfile currently pulls in.
+allowBuilds:
+  '@bufbuild/buf': true
+  '@mongodb-js/zstd': true
+  # downloads a prebuilt binary; @posthog/nextjs-config shells out to it
+  '@posthog/cli': true
+  # telemetry only
+  '@scarf/scarf': false
+  # native binding for Tailwind v4
+  '@tailwindcss/oxide': true
+  # postinstall is only an advisory VERCEL_ANALYTICS_ID env check
+  '@vercel/speed-insights': false
+  # postinstall only prints a funding banner
+  core-js: false
+  # postinstall only prints an informational message in Russian time zones
+  es5-ext: false
+  esbuild: true
+  msw: true
+  # native build needs system liblzma headers, which CI/Vercel images lack.
+  # Was `pnpm.neverBuiltDependencies` in package.json before pnpm 11 stopped
+  # reading that field; just-bash (app-promptfiddle) works without it.
+  node-liblzma: false
+  # postinstall only warns about incompatible dependency version prefixes
+  protobufjs: false
+  # selects/downloads prebuilt libvips; Next image optimization needs it
+  sharp: true
+  # downloads the prebuilt tree-sitter binary (pkg-grammar-treesitter)
+  tree-sitter-cli: true
+  unrs-resolver: true
+
 catalog:
   jotai: ^2.10.0
+
+# Force all packages to use the same version of @types/react to avoid
+# JSX component type incompatibility errors (e.g., "cannot be used as JSX component")
+overrides:
+  '@types/react': 18.3.26
+  '@types/react-dom': 18.3.7

@@ -166,6 +166,9 @@ pub fn typecheck_returning_context<'a>(
                 vec![TypeIR::string(), TypeIR::string(), TypeIR::string()],
                 TypeIR::string(),
             ),
+            "baml.Float.to_fixed" => {
+                TypeIR::arrow(vec![TypeIR::float(), TypeIR::int()], TypeIR::string())
+            }
             "baml.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
             "baml.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
             "baml.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
@@ -228,12 +231,6 @@ pub fn typecheck_returning_context<'a>(
                     TypeIR::bool(),
                 )
             }
-            "baml.unstable.string" => {
-                // baml.unstable.string<T>(T) -> string
-                // Takes any type and returns string representation
-                TypeIR::arrow(vec![TypeIR::Top(Default::default())], TypeIR::string())
-            }
-
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1750,7 +1747,6 @@ pub fn typecheck_expression(
                     ("audio", "from_base64") => Some("baml.media.audio.from_base64"),
                     ("video", "from_base64") => Some("baml.media.video.from_base64"),
                     ("pdf", "from_base64") => Some("baml.media.pdf.from_base64"),
-                    ("baml.unstable", "string") => Some("baml.unstable.string"),
                     _ => None,
                 };
 
@@ -1811,20 +1807,6 @@ pub fn typecheck_expression(
                             ));
                             return_type = Some(TypeIR::bool());
                         }
-                        "baml.unstable.string" => {
-                            // baml.unstable.string<T>(T) -> string
-                            if let Some(arg) = typed_args.first() {
-                                if let Some(arg_type) = &arg.meta().1 {
-                                    // Specialize the function type for this specific call
-                                    func_type = Some(TypeIR::arrow(
-                                        vec![arg_type.clone()],
-                                        TypeIR::string(),
-                                    ));
-                                    return_type = Some(TypeIR::string());
-                                }
-                            }
-                        }
-
                         "baml.fetch_as" => {
                             let has_type_args = !type_args.is_empty();
 
@@ -1992,6 +1974,28 @@ pub fn typecheck_expression(
                     }
                 },
 
+                Some(TypeIR::Primitive(TypeValue::Float, _)) => match method.as_str() {
+                    "to_fixed" => Some("baml.Float.to_fixed".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on type `float`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
+                Some(TypeIR::Primitive(TypeValue::Int, _)) => match method.as_str() {
+                    "to_fixed" => Some("baml.Float.to_fixed".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on type `int`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
                 Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                     let subtype = match media_type {
                         BamlMediaType::Image => "baml.media.image",
@@ -2054,8 +2058,6 @@ pub fn typecheck_expression(
                             ("baml", "deep_equals") => Some("baml.deep_equals".to_string()),
 
                             ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
-
-                            ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
 
                             ("env", "get") => Some("env.get".to_string()),
 
@@ -2136,7 +2138,7 @@ pub fn typecheck_expression(
 
             let mut generic_return_type_inferred = None;
 
-            let typed_args: Vec<_> = if is_known_function {
+            let mut typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions. Skip the first argument since that's going to be
                 // our method receiver.
                 args.iter()
@@ -2180,14 +2182,6 @@ pub fn typecheck_expression(
                                             TypeIR::Top(Default::default()),
                                         ],
                                         TypeIR::bool(),
-                                    ));
-                                }
-                                "baml.unstable.string" => {
-                                    generic_return_type_inferred = Some(TypeIR::string());
-
-                                    func_type = Some(TypeIR::arrow(
-                                        vec![arg_type.clone()],
-                                        TypeIR::string(),
                                     ));
                                 }
                                 "baml.fetch_as" => {
@@ -2257,6 +2251,14 @@ pub fn typecheck_expression(
                     .collect()
             };
 
+            // to_fixed(digits?) defaults to digits=0 when omitted.
+            if full_name == "baml.Float.to_fixed" && typed_args.is_empty() {
+                typed_args.push(thir::Expr::Value(BamlValueWithMeta::Int(
+                    0,
+                    (span.clone(), Some(TypeIR::int())),
+                )));
+            }
+
             // image.from_url is not a "method", it's an associated function (kind of).
             let is_function_call_on_namespace = matches!(
                 &typed_receiver,
@@ -2267,9 +2269,9 @@ pub fn typecheck_expression(
             );
 
             let passed_number_of_args = if is_function_call_on_namespace {
-                args.len()
+                typed_args.len()
             } else {
-                args.len() + 1 // self
+                typed_args.len() + 1 // self
             };
 
             // Check argument count only for known functions
@@ -2737,13 +2739,6 @@ pub fn typecheck_expression(
                             match field.as_str() {
                                 // Typecheck as var and then next thing is MethodCall.
                                 // MethodCall figures out this is function on namespace.
-                                "unstable" => {
-                                    return thir::Expr::Var(
-                                        "baml.unstable".to_string(),
-                                        (base.span(), None),
-                                    );
-                                }
-
                                 "HttpRequest" => {
                                     return thir::Expr::Var(
                                         "baml.HttpRequest".to_string(),

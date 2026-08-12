@@ -103,7 +103,7 @@ export class WebviewPanelHost {
         // Panel view type
         'showHelloWorld',
         // Panel title
-        'BAML Playground',
+        'BAML v0 Playground',
         // The editor column the panel should be displayed in
         // process.env.VSCODE_DEBUG_MODE === 'true' ? ViewColumn.Two : ViewColumn.Beside,
         { viewColumn: ViewColumn.Beside, preserveFocus: true },
@@ -339,7 +339,7 @@ export class WebviewPanelHost {
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" type="text/css" href="${stylesUri}">
-        <title>BAML Playground</title>
+        <title>BAML v0 Playground</title>
         <style>
           /* Match playground loading spinner style */
           .baml-loading-container {
@@ -399,7 +399,7 @@ export class WebviewPanelHost {
           <div class="baml-loading-container">
             <div class="baml-loading-box">
               <div class="baml-spinner"></div>
-              <div class="baml-loading-title">Loading BAML Playground...</div>
+              <div class="baml-loading-title">Loading BAML v0 Playground...</div>
               <div class="baml-loading-desc">Please wait while the playground loads.</div>
             </div>
           </div>

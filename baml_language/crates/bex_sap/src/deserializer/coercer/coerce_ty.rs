@@ -11,9 +11,10 @@ use crate::{
     },
     jsonish::{self, CompletionState},
     sap_model::{
-        ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy,
-        IntLiteralTy, IntTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy,
-        StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, UnionTy,
+        ArrayTy, AttrLiteral, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy,
+        EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy, MediaTy, NullTy, PrimitiveTy,
+        StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations,
+        TypeIdent, UnionTy,
     },
 };
 
@@ -38,6 +39,11 @@ where
         match target.ty {
             TyResolvedRef::Int(v) => {
                 let p = PrimitiveTy::Int(v);
+                PrimitiveTy::try_cast(ctx, TyWithMeta::new(p.as_static_ref(), target.meta), value)
+                    .map(|v| v.map_value(Into::into))
+            }
+            TyResolvedRef::Bigint(v) => {
+                let p = PrimitiveTy::Bigint(v);
                 PrimitiveTy::try_cast(ctx, TyWithMeta::new(p.as_static_ref(), target.meta), value)
                     .map(|v| v.map_value(Into::into))
             }
@@ -73,6 +79,10 @@ where
             TyResolvedRef::LiteralInt(l) => {
                 IntLiteralTy::try_cast(ctx, TyWithMeta::new(l, target.meta), value)
                     .map(|v| v.map_value(BamlPrimitive::Int).map_value(Into::into))
+            }
+            TyResolvedRef::LiteralBigint(l) => {
+                BigintLiteralTy::try_cast(ctx, TyWithMeta::new(l, target.meta), value)
+                    .map(|v| v.map_value(BamlPrimitive::Bigint).map_value(Into::into))
             }
             TyResolvedRef::LiteralBool(l) => {
                 BoolLiteralTy::try_cast(ctx, TyWithMeta::new(l, target.meta), value)
@@ -131,12 +141,19 @@ where
 
         let result = match value {
             jsonish::Value::AnyOf(candidates, primitive) => match target.ty {
-                TyResolvedRef::String(_) => BamlValueWithFlags::new(
-                    BamlValue::String(BamlString {
-                        value: primitive.clone(),
-                    }),
-                    DeserializerMeta::new(target.clone()),
-                ),
+                TyResolvedRef::String(_) => {
+                    // If the complete response is a JSON string literal, honor
+                    // that structure and return the decoded value. Plain text,
+                    // partial strings, and prose containing JSON stay verbatim.
+                    let value = serde_json::from_str::<String>(primitive.as_ref())
+                        .map(Cow::Owned)
+                        .unwrap_or_else(|_| primitive.clone());
+
+                    BamlValueWithFlags::new(
+                        BamlValue::String(BamlString { value }),
+                        DeserializerMeta::new(target.clone()),
+                    )
+                }
                 TyResolvedRef::Enum(enum_ty) => {
                     let primitive =
                         jsonish::Value::String(primitive.clone(), CompletionState::Complete);
@@ -214,6 +231,10 @@ where
                             IntTy::coerce(ctx, TyWithMeta::new(&IntTy, target_meta), value)?
                                 .map(|v| v.map_value(BamlValue::Int))
                         }
+                        TyResolvedRef::Bigint(_) => {
+                            BigintTy::coerce(ctx, TyWithMeta::new(&BigintTy, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Bigint))
+                        }
                         TyResolvedRef::Float(_) => {
                             FloatTy::coerce(ctx, TyWithMeta::new(&FloatTy, target_meta), value)?
                                 .map(|v| v.map_value(BamlValue::Float))
@@ -261,6 +282,10 @@ where
                         TyResolvedRef::LiteralInt(l) => {
                             IntLiteralTy::coerce(ctx, TyWithMeta::new(l, target_meta), value)?
                                 .map(|v| v.map_value(BamlValue::Int))
+                        }
+                        TyResolvedRef::LiteralBigint(l) => {
+                            BigintLiteralTy::coerce(ctx, TyWithMeta::new(l, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Bigint))
                         }
                         TyResolvedRef::LiteralBool(l) => {
                             BoolLiteralTy::coerce(ctx, TyWithMeta::new(l, target_meta), value)?
@@ -321,10 +346,6 @@ where
     }
 }
 
-// TODO: Implement validate_asserts once Assertion/Constraint types are fully defined.
-// pub fn validate_asserts(constraints: &[(Constraint, bool)]) -> Result<(), ParsingError> { ... }
-
-// TODO: Implement DefaultValue for AnnotatedTy once Assertion type is fully defined.
+// TODO: Implement DefaultValue for AnnotatedTy.
 // The old implementation matched on AnnotatedTy variants (Enum, List, Class, etc.)
 // and provided default values (empty list, null, empty map) for optional types.
-// It also validated constraints/asserts on the default values.

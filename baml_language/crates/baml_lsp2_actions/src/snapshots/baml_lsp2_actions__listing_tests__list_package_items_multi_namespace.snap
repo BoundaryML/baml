@@ -1,0 +1,8 @@
+---
+source: crates/baml_lsp2_actions/src/listing_tests.rs
+expression: listing
+---
+class            Point                            types.baml:2
+class            llm.Config                       models.baml:2
+function         llm.LlmIdentity                  models.baml:7
+class            lorem.Resume                     types.baml:2

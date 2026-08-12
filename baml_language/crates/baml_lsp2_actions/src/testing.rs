@@ -17,7 +17,6 @@ use text_size::TextSize;
 use crate::{
     definition::{Location, definition_at},
     describe::SymbolDescription,
-    grep::{GrepOptions, GrepResult, TextMatch},
     usages::usages_at,
 };
 
@@ -284,8 +283,7 @@ fn offset_to_line_col(content: &str, offset: usize) -> (usize, usize) {
 
 // ── Project-level test infrastructure (no cursor needed) ────────────────────
 
-/// A test project with multiple BAML files, suitable for testing `describe()`
-/// and `grep()` which operate on a set of source files.
+/// A test project with multiple BAML files for project-level IDE features.
 pub(crate) struct ProjectTest {
     pub(crate) db: TestDb,
     pub(crate) files: Vec<SourceFile>,
@@ -302,29 +300,47 @@ impl ProjectTest {
         crate::describe::describe(&self.db, &self.files, name)
     }
 
-    /// Run `grep()` and return the result.
-    pub(crate) fn grep(&self, pattern: &str) -> GrepResult {
-        let opts = GrepOptions {
-            pattern,
-            ignore_case: false,
-            kind_filter: &[],
-        };
-        crate::grep::grep(&self.db, &self.files, &opts)
+    /// Run `describe()` using the compiler2-visible file set.
+    #[allow(dead_code)]
+    pub(crate) fn describe_compiler2_visible(&self, name: &str) -> Vec<SymbolDescription> {
+        let files = baml_compiler2_hir::compiler2_all_files(&self.db);
+        crate::describe::describe(&self.db, &files, name)
     }
 
-    /// Run `grep()` with case-insensitive matching.
-    pub(crate) fn grep_case_insensitive(&self, pattern: &str) -> GrepResult {
-        let opts = GrepOptions {
-            pattern,
-            ignore_case: true,
-            kind_filter: &[],
-        };
-        crate::grep::grep(&self.db, &self.files, &opts)
+    /// Run `list_package_items()` for the user package and return the result.
+    pub(crate) fn list_package_items_user(&self) -> Vec<crate::listing::ListingEntry> {
+        let package_id =
+            baml_compiler2_hir::package::PackageId::new(&self.db, baml_base::Name::new("user"));
+        crate::listing::list_package_items(&self.db, package_id)
     }
 
-    /// Run `list_symbols()` and return the result.
-    pub(crate) fn list_symbols(&self) -> Vec<crate::search::SymbolInfo> {
-        crate::grep::list_symbols(&self.db, &self.files, &[])
+    /// Run `list_namespace_items()` for a user namespace.
+    pub(crate) fn list_namespace_items_user(
+        &self,
+        ns_segments: &[&str],
+    ) -> Option<Vec<crate::listing::ListingEntry>> {
+        let package_id =
+            baml_compiler2_hir::package::PackageId::new(&self.db, baml_base::Name::new("user"));
+        let ns_path: Vec<baml_base::Name> = ns_segments.iter().map(baml_base::Name::new).collect();
+        crate::listing::list_namespace_items(&self.db, package_id, &ns_path)
+    }
+
+    /// Format a `ListingEntry` for snapshot comparison.
+    pub(crate) fn format_listing_entry(&self, entry: &crate::listing::ListingEntry) -> String {
+        let filename = entry
+            .file
+            .path(&self.db)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        format!(
+            "{:<16} {:<32} {}:{}",
+            entry.kind.as_str(),
+            entry.fqn(),
+            filename,
+            entry.line,
+        )
     }
 
     /// Format a `SymbolDescription` for snapshot comparison.
@@ -341,13 +357,48 @@ impl ProjectTest {
         let offset: usize = desc.name_span.start().into();
         let (line, _col) = offset_to_line_col(text, offset);
 
-        writeln!(out, "── {} ── {}:{}", desc.kind, filename, line).unwrap();
+        let fqn = desc
+            .canonical_fqn
+            .as_deref()
+            .map(|f| format!("  ({f})"))
+            .unwrap_or_default();
+        writeln!(
+            out,
+            "{} {}{}  {}:{}",
+            desc.kind, desc.name, fqn, filename, line
+        )
+        .unwrap();
         if let Some(ref doc) = desc.docstring {
             for line in doc.lines() {
-                writeln!(out, "/// {line}").unwrap();
+                if line.is_empty() {
+                    writeln!(out, "///").unwrap();
+                } else {
+                    writeln!(out, "/// {line}").unwrap();
+                }
             }
         }
         writeln!(out, "shape: {}", desc.shape).unwrap();
+        if !desc.instance_methods.is_empty() {
+            writeln!(out, "methods:").unwrap();
+            for m in &desc.instance_methods {
+                if let Some(doc) = &m.docstring {
+                    writeln!(out, "  /// {doc}").unwrap();
+                }
+                writeln!(out, "  {}", m.signature).unwrap();
+            }
+        }
+        if !desc.static_methods.is_empty() {
+            writeln!(out, "static_methods:").unwrap();
+            for m in &desc.static_methods {
+                if let Some(doc) = &m.docstring {
+                    writeln!(out, "  /// {doc}").unwrap();
+                }
+                writeln!(out, "  {}", m.signature).unwrap();
+            }
+        }
+        if let Some(ref c) = desc.container {
+            writeln!(out, "container: {}", c.name).unwrap();
+        }
         if !desc.dependencies.is_empty() {
             out.push_str("deps:");
             for dep in &desc.dependencies {
@@ -369,28 +420,6 @@ impl ProjectTest {
             }
         }
         out
-    }
-
-    /// Format a `TextMatch` for snapshot comparison.
-    pub(crate) fn format_text_match(&self, m: &TextMatch) -> String {
-        let filename = m
-            .file
-            .path(&self.db)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        let annotation = match &m.annotation {
-            Some(ann) => format!("  ← {ann:?}"),
-            None => String::new(),
-        };
-        format!(
-            "{}:{}│ {}{}",
-            filename,
-            m.line_number,
-            m.line_text.trim(),
-            annotation
-        )
     }
 }
 

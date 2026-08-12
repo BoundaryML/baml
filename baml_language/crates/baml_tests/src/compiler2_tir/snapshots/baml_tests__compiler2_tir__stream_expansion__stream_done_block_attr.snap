@@ -7,6 +7,6 @@ class user.AtomicPoint {
   y: float
 }
 class user.AtomicPoint$stream {
-  x: null | float
-  y: null | float
+  x: float | null
+  y: float | null
 }

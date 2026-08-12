@@ -46,7 +46,10 @@
   --destructive-foreground: var(--vscode-editor-foreground, #cccccc);
 
   /* Borders + inputs */
-  --border: var(--vscode-panel-border, var(--vscode-editorWidget-border, #2b2b2b));
+  --border: var(
+    --vscode-panel-border,
+    var(--vscode-editorWidget-border, #2b2b2b)
+  );
   --input: var(--vscode-input-border, transparent);
   --ring: var(--vscode-focusBorder, #007fd4);
 }
@@ -84,8 +87,14 @@
   /* ─ Backward-compat vsc-* tokens (migrate off incrementally) ─ */
   --color-vsc-bg: var(--vscode-editor-background, #1f1f1f);
   --color-vsc-surface: var(--vscode-sideBar-background, #181818);
-  --color-vsc-panel: var(--vscode-panel-background, var(--vscode-editor-background, #1f1f1f));
-  --color-vsc-border: var(--vscode-panel-border, var(--vscode-editorWidget-border, #2b2b2b));
+  --color-vsc-panel: var(
+    --vscode-panel-background,
+    var(--vscode-editor-background, #1f1f1f)
+  );
+  --color-vsc-border: var(
+    --vscode-panel-border,
+    var(--vscode-editorWidget-border, #2b2b2b)
+  );
   --color-vsc-border-subtle: var(--vscode-widget-border, #2b2b2b);
   --color-vsc-text: var(--vscode-editor-foreground, #cccccc);
   --color-vsc-text-bright: var(--vscode-foreground, #cccccc);
@@ -98,7 +107,10 @@
   --color-vsc-green: var(--vscode-testing-iconPassed, #3fb950);
   --color-vsc-red: var(--vscode-errorForeground, #f85149);
   --color-vsc-yellow: var(--vscode-editorWarning-foreground, #d29922);
-  --color-vsc-yellow-subtle: var(--vscode-inputValidation-warningBackground, rgba(210, 153, 34, 0.15));
+  --color-vsc-yellow-subtle: var(
+    --vscode-inputValidation-warningBackground,
+    rgba(210, 153, 34, 0.15)
+  );
   --color-vsc-input-bg: var(--vscode-input-background, #313131);
   --color-vsc-input-fg: var(--vscode-input-foreground, #cccccc);
   --color-vsc-input-border: var(--vscode-input-border, transparent);
@@ -111,8 +123,22 @@
   --color-vsc-list-hoverBg: var(--vscode-list-hoverBackground, #2a2d2e);
 
   /* ─ Fonts ─ */
-  --font-vsc: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
-  --font-vsc-mono: var(--vscode-editor-font-family, "SF Mono", "Fira Code", Consolas, monospace);
+  --font-vsc: var(
+    --vscode-font-family,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    sans-serif
+  );
+  --font-vsc-mono: var(
+    --vscode-editor-font-family,
+    "SF Mono",
+    "Fira Code",
+    Consolas,
+    monospace
+  );
 }
 
 /* ── Scoped preflight reset ────────────────────────────────────────── */
@@ -127,9 +153,9 @@
   }
 
   .playground-root button,
-  .playground-root [type='button'],
-  .playground-root [type='reset'],
-  .playground-root [type='submit'] {
+  .playground-root [type="button"],
+  .playground-root [type="reset"],
+  .playground-root [type="submit"] {
     appearance: none;
     background-color: transparent;
     background-image: none;
@@ -194,5 +220,15 @@
 
   .playground-root {
     @apply border-border outline-ring/50;
+    font-family: var(
+      --vscode-font-family,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Helvetica,
+      Arial,
+      sans-serif
+    );
+    line-height: 1.4;
   }
 }

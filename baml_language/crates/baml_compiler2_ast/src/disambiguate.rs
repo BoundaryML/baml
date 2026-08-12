@@ -5,11 +5,11 @@
 //! - `is_field_attr()` — classify an attribute name as field-level
 //! - `validate_field_attrs()` — post-lowering pass that rejects field attrs
 //!   remaining on any `TypeExpr` (they're in invalid positions), including
-//!   type annotations inside expression bodies (let, watch-let, patterns, lambdas)
+//!   type annotations inside expression bodies (let, patterns, lambdas)
 
 use crate::ast::{
-    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LetDef, Pattern, TypeAliasDef,
-    TypeExpr,
+    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LambdaDef, LetDef, TypeAliasDef,
+    TypeExpr, TypeExprKind,
 };
 
 /// The canonical set of field attribute names.
@@ -44,11 +44,9 @@ pub(crate) fn validate_field_attrs(items: &[Item]) -> Vec<(String, text_size::Te
 
 fn validate_class(class: &ClassDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
     for field in &class.fields {
-        if let Some(ref spanned_type) = field.type_expr {
-            // After hoisting, the outermost TypeExpr should have no field attrs left.
-            // Any remaining field attrs are in invalid positions.
-            validate_type_expr_tree(&spanned_type.expr, diagnostics);
-        }
+        // After hoisting, the outermost TypeExpr should have no field attrs left.
+        // Any remaining field attrs are in invalid positions.
+        validate_type_expr_tree(&field.type_expr, diagnostics);
     }
     // Also validate method signatures
     for method in &class.methods {
@@ -59,16 +57,16 @@ fn validate_class(class: &ClassDef, diagnostics: &mut Vec<(String, text_size::Te
 fn validate_function(func: &FunctionDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
     for param in &func.params {
         if let Some(ref spanned) = param.type_expr {
-            validate_type_expr_tree(&spanned.expr, diagnostics);
+            validate_type_expr_tree(spanned, diagnostics);
         }
     }
     if let Some(ref spanned) = func.return_type {
-        validate_type_expr_tree(&spanned.expr, diagnostics);
+        validate_type_expr_tree(spanned, diagnostics);
     }
     if let Some(ref spanned) = func.throws {
-        validate_type_expr_tree(&spanned.expr, diagnostics);
+        validate_type_expr_tree(spanned, diagnostics);
     }
-    // Walk expression body for let/watch-let/pattern type annotations.
+    // Walk expression body for let and pattern type annotations.
     if let Some(FunctionBodyDef::Expr(ref body, _)) = func.body {
         validate_expr_body(body, diagnostics);
     }
@@ -90,19 +88,37 @@ fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size:
         validate_type_expr_tree(ty, diagnostics);
     }
 
-    // Check typed patterns (e.g. `let x: string @alias("n") = ...`).
+    // Check typed patterns (e.g. `let x: string @alias("n") = ...`). Type
+    // information lives in `Pattern::Type` atoms, including those that appear
+    // as later links of a `Chain`. The arena iteration covers all of them.
     for (_, pat) in body.patterns.iter() {
-        if let Pattern::TypedBinding { ty, .. } = pat {
+        if let crate::ast::Pattern::Type(ty) = pat {
             validate_type_expr_tree(ty, diagnostics);
         }
     }
 
-    // Recurse into lambda bodies — they have their own FunctionDef with nested ExprBody.
+    // Recurse into lambda bodies — each has its own nested `ExprBody`.
     for (_, expr) in body.exprs.iter() {
-        if let Expr::Lambda(func_def) = expr {
-            validate_function(func_def, diagnostics);
+        if let Expr::Lambda(lambda) = expr {
+            validate_lambda(lambda, diagnostics);
         }
     }
+}
+
+fn validate_lambda(lambda: &LambdaDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
+    for param in &lambda.params {
+        if let Some(ref spanned) = param.type_expr {
+            validate_type_expr_tree(spanned, diagnostics);
+        }
+    }
+    if let Some(ref spanned) = lambda.return_type {
+        validate_type_expr_tree(spanned, diagnostics);
+    }
+    if let Some(ref spanned) = lambda.throws {
+        validate_type_expr_tree(spanned, diagnostics);
+    }
+    // The body lives in the arena this walk is already covering, so there is
+    // nothing further to recurse into.
 }
 
 fn validate_type_alias(
@@ -110,7 +126,7 @@ fn validate_type_alias(
     diagnostics: &mut Vec<(String, text_size::TextRange)>,
 ) {
     if let Some(ref spanned) = alias.type_expr {
-        validate_type_expr_tree(&spanned.expr, diagnostics);
+        validate_type_expr_tree(spanned, diagnostics);
     }
 }
 
@@ -125,24 +141,32 @@ fn validate_type_expr_tree(expr: &TypeExpr, diagnostics: &mut Vec<(String, text_
     }
 
     // Recurse into children
-    match expr {
-        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
+    match &expr.kind {
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             validate_type_expr_tree(inner, diagnostics);
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             validate_type_expr_tree(key, diagnostics);
             validate_type_expr_tree(value, diagnostics);
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             for v in variants {
                 validate_type_expr_tree(v, diagnostics);
             }
         }
-        TypeExpr::Function { params, ret, .. } => {
+        TypeExprKind::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             for p in params {
                 validate_type_expr_tree(&p.ty, diagnostics);
             }
             validate_type_expr_tree(ret, diagnostics);
+            if let Some(throws) = throws {
+                validate_type_expr_tree(throws, diagnostics);
+            }
         }
         _ => {}
     }

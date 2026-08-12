@@ -1,27 +1,72 @@
 /**
- * Jotai atoms for environment variable state.
+ * Jotai mirrors for SessionStore environment variable state.
  *
- * These atoms are the single source of truth for env vars across the
- * playground UI. Components read/write via `useEnvVars()` or directly
- * via `useAtom(envVarsAtom)` / `useAtomValue(knownRequiredKeysAtom)`.
+ * SessionStore is the single source of truth for env values. These atoms keep
+ * React components subscribed to that store and preserve the existing
+ * `useEnvVars()` API.
  */
 
-import { useCallback } from 'react';
-import { atom, useAtom, useSetAtom, useAtomValue } from 'jotai';
+import { useCallback, useEffect, useRef } from 'react';
+import { atom, useAtomValue } from 'jotai';
 import type { RuntimePort } from './runtime-port';
+import {
+  defaultSessionStore,
+  type EnvVars,
+  type EnvVarsUpdate,
+  type SessionStoreSnapshot,
+  type StringSetUpdate,
+} from './session-store';
 
 // ---------------------------------------------------------------------------
 // Atoms
 // ---------------------------------------------------------------------------
 
+const sessionSnapshotAtom = atom<SessionStoreSnapshot>(
+  defaultSessionStore.getSnapshot(),
+);
+sessionSnapshotAtom.onMount = (setAtom) =>
+  defaultSessionStore.subscribe(setAtom);
+
 /** Current env var key-value pairs. */
-export const envVarsAtom = atom<Record<string, string>>({});
+export const envVarsAtom = atom(
+  (get) => get(sessionSnapshotAtom).envVars,
+  (_get, _set, update: EnvVarsUpdate) =>
+    defaultSessionStore.setEnvVars(update),
+);
 
 /**
- * Keys the project is known to need — accumulated from worker envVarRequests.
+ * Keys the project is known to need, accumulated from worker envVarRequests.
  * Never shrunk during a session so the UI can proactively show missing keys.
  */
-export const knownRequiredKeysAtom = atom<Set<string>>(new Set<string>());
+export const knownRequiredKeysAtom = atom(
+  (get) => get(sessionSnapshotAtom).knownRequiredKeys,
+  (_get, _set, update: StringSetUpdate) =>
+    defaultSessionStore.setKnownRequiredKeys(update),
+);
+
+/**
+ * Original process env vars from the server (set once on init, never mutated).
+ * Used to display shell-sourced vars and support "revert to shell" functionality.
+ */
+export const shellEnvVarsAtom = atom(
+  (get) => get(sessionSnapshotAtom).shellEnvVars,
+);
+
+/**
+ * Shell env keys that the user has manually overridden or deleted.
+ * A key present here means the user changed or removed the value in the dialog.
+ */
+export const shellOverriddenKeysAtom = atom(
+  (get) => get(sessionSnapshotAtom).shellOverriddenKeys,
+);
+
+/**
+ * Shell env keys that the user has deleted.
+ * These are still shown in the dialog so the user can revert them.
+ */
+export const shellDeletedKeysAtom = atom(
+  (get) => get(sessionSnapshotAtom).shellDeletedKeys,
+);
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -30,10 +75,22 @@ export const knownRequiredKeysAtom = atom<Set<string>>(new Set<string>());
 export interface UseEnvVars {
   envVars: Record<string, string>;
   knownRequiredKeys: Set<string>;
+  /** Original process env vars from the server's shell. */
+  shellEnvVars: Record<string, string>;
+  /** Shell keys that the user has manually overridden or deleted. */
+  shellOverriddenKeys: Set<string>;
+  /** Shell keys that the user has deleted. */
+  shellDeletedKeys: Set<string>;
   addEnvVar: (key: string, value: string) => void;
   removeEnvVar: (key: string) => void;
   importEnvVars: (vars: Record<string, string>) => void;
   addRequiredKey: (key: string) => void;
+  /** Import a single shell-provided env var. Does NOT overwrite user-entered values. */
+  addShellEnvVar: (key: string, value: string) => void;
+  /** Bulk import process env vars on init. Stores originals and merges into env vars. */
+  importShellEnvVars: (vars: Record<string, string>) => void;
+  /** Revert a key to its original shell value (clears the user override). */
+  revertToShell: (key: string) => void;
 }
 
 /**
@@ -43,33 +100,83 @@ export interface UseEnvVars {
  * WASM runtime stays in sync.
  */
 export function useEnvVars(port: RuntimePort): UseEnvVars {
-  const [envVars, setEnvVars] = useAtom(envVarsAtom);
-  const requiredKeys = useAtomValue(knownRequiredKeysAtom);
-  const setRequiredKeys = useSetAtom(knownRequiredKeysAtom);
+  const session = useAtomValue(sessionSnapshotAtom);
+  const envVars = session.envVars;
+  const requiredKeys = session.knownRequiredKeys;
+  const shellEnvVars = session.shellEnvVars;
+  const shellOverriddenKeys = session.shellOverriddenKeys;
+  const shellDeletedKeys = session.shellDeletedKeys;
+  const envVarsRef = useRef(envVars);
 
-  const addEnvVar = useCallback((key: string, value: string) => {
-    setEnvVars((prev) => ({ ...prev, [key]: value }));
-    port.postMessage({ type: 'setEnvVar', key, value });
-  }, [setEnvVars, port]);
+  useEffect(() => {
+    envVarsRef.current = envVars;
+  }, [envVars]);
 
-  const removeEnvVar = useCallback((key: string) => {
-    setEnvVars((prev: Record<string, string>) => {
-      const { [key]: _, ...rest } = prev;
-      return rest;
-    });
-    port.postMessage({ type: 'deleteEnvVar', key });
-  }, [setEnvVars, port]);
+  useEffect(() => {
+    return defaultSessionStore.attachRuntimePort(port);
+  }, [port]);
 
-  const importEnvVars = useCallback((vars: Record<string, string>) => {
-    setEnvVars((prev) => ({ ...prev, ...vars }));
-    for (const [key, value] of Object.entries(vars)) {
-      port.postMessage({ type: 'setEnvVar', key, value });
-    }
-  }, [setEnvVars, port]);
+  const addEnvVar = useCallback(
+    (key: string, value: string) => {
+      defaultSessionStore.addEnvVar(key, value);
+    },
+    [],
+  );
 
-  const addRequiredKey = useCallback((key: string) => {
-    setRequiredKeys((prev) => prev.has(key) ? prev : new Set([...prev, key]));
-  }, [setRequiredKeys]);
+  const removeEnvVar = useCallback(
+    (key: string) => {
+      defaultSessionStore.removeEnvVar(key);
+    },
+    [],
+  );
 
-  return { envVars, knownRequiredKeys: requiredKeys, addEnvVar, removeEnvVar, importEnvVars, addRequiredKey };
+  const importEnvVars = useCallback(
+    (vars: EnvVars) => {
+      defaultSessionStore.importEnvVars(vars);
+    },
+    [],
+  );
+
+  const addRequiredKey = useCallback(
+    (key: string) => {
+      defaultSessionStore.addRequiredKey(key);
+    },
+    [],
+  );
+
+  const addShellEnvVar = useCallback(
+    (key: string, value: string) => {
+      defaultSessionStore.addShellEnvVar(key, value);
+    },
+    [],
+  );
+
+  const importShellEnvVars = useCallback(
+    (vars: EnvVars) => {
+      defaultSessionStore.importShellEnvVars(vars);
+    },
+    [],
+  );
+
+  const revertToShell = useCallback(
+    (key: string) => {
+      defaultSessionStore.revertToShell(key);
+    },
+    [],
+  );
+
+  return {
+    envVars,
+    knownRequiredKeys: requiredKeys,
+    shellEnvVars,
+    shellOverriddenKeys,
+    shellDeletedKeys,
+    addEnvVar,
+    removeEnvVar,
+    importEnvVars,
+    addRequiredKey,
+    addShellEnvVar,
+    importShellEnvVars,
+    revertToShell,
+  };
 }

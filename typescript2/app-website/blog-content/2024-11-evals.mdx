@@ -1,0 +1,111 @@
+---
+title: Announcing LLM Eval Support for Python, Ruby, Typescript, Go, and more.
+description: Use BAML to evaluate your LLM applications regardless of the language you use to call them
+slug: llm-evals
+date: Nov 27, 2024
+tags: ['announcements']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/greg-hale-5684b1bb/
+
+---
+
+We are excited to announce that [BAML](https://docs.boundaryml.com) now supports evaluating LLM prompts using [tests and assertions](https://docs.boundaryml.com/guide/baml-basics/testing-functions#assertions).
+
+Here is how it works:
+1. Define an LLM prompt in BAML + the expected output type.
+2. Define a `test` with the arguments you want to pass to the LLM prompt.
+3. Add `@@assert`s and `@@check`s to fail the test if the LLM output doesn't match the expected output.
+4. Run the test in the LLM Playground!
+5. Run your tested LLM function in Python, Ruby, Typescript, Go, and more!
+
+Let's look at an interactive example!
+
+<BamlBlock name="1" bamlCode={`
+enum Category {
+  CANCEL_SUBSCRIPTION
+  CHANGE_SUBSCRIPTION
+  OTHER
+}
+
+function ClassifyMessage(message: string) -> Category {
+  client "openai/gpt-4o"
+  prompt #"
+    Classify the message given by the user.
+
+    {{ ctx.output_format}}
+    {{ _.role("user") }} {{ message }}
+  "#
+}
+
+test TestName {
+  functions [ClassifyMessage]
+  args {
+    message "I want to cancel my subscription"
+  }
+  // This will fail because the LLM returns "CANCEL_SUBSCRIPTION"
+  @@assert(category, {{ this == "CHANGE_SUBSCRIPTION" }})
+}`
+}
+
+ />
+
+If you press `Run`, you'll see this test fail.
+
+### Test expressions
+
+The expression inside the `@@assert` is a `jinja2` expression.
+
+- The `_` variable contains fields `result`, `checks` and `latency_ms`.
+- The `this` variable refers to the value computed by the test, and is shorthand for `_.result`.
+- In a given check or assert, `_.checks.$NAME` can refer to the NAME of any earlier check that was run in the same test block. By referring to prior checks, you can build compound checks and asserts, for example asserting that all checks of a certain type passed.
+
+
+<BamlBlock name="2" bamlCode={`
+enum Category {
+  CANCEL_SUBSCRIPTION
+  CHANGE_SUBSCRIPTION
+  OTHER
+}
+
+function ClassifyMessage(message: string) -> Category {
+  client "openai/gpt-4o"
+  prompt #"
+    Classify the message given by the user into one of the allowed categories.
+
+    {{ ctx.output_format}}
+    {{ _.role("user") }} {{ message }}
+  "#
+}
+
+test TestName {
+  functions [ClassifyMessage]
+  args {
+    message "I want to cancel my subscription"
+  }
+
+
+  // Check that we got a valid response
+  @@check(valid_category, {{ this in ["CANCEL_SUBSCRIPTION", "CHANGE_SUBSCRIPTION", "OTHER"] }})
+
+  // Check response time is reasonable
+  @@check(response_time, {{ _.latency_ms < 5000 }})
+
+  // Assert that all our checks passed
+  @@assert(all_checks_passed, {{ _.checks.valid_category and _.checks.response_time }})
+}`}
+
+ />
+
+Unlike other LLM testing frameworks, BAML evals:
+1. Work for **prompts with structured outputs** -- with compile-time error checking of your test expressions.
+2. **Support any language** -- since you don't need Python, Ruby, Typescript, Go, etc. to run your tests (only BAML)
+3. **Run locally** -- no logins required.
+3. **Work with the BAML VSCode Playground**
+4. Integrate with **[Boundary Studio](https://app.boundaryml.com), our observability dashboard**
+
+
+Read more about [evaluating LLM functions](https://docs.boundaryml.com/guide/baml-basics/testing-functions) and let us know what you think!
+
+We are looking at supporting LLM-as-judge evaluations in the future, and providing more helper functions to make it easier to evaluate free-form text. Stay tuned for more updates!

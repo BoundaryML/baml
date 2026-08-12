@@ -1,5 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== STRONG AST ERROR ===
-Expected token/node of kind STRING_LITERAL, but found BINARY_EXPR at main.baml:4:7

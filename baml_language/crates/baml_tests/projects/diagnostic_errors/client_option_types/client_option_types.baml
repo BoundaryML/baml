@@ -1,0 +1,52 @@
+// Legacy client configuration constructs produce removal diagnostics.
+//
+// The `client<llm>` config block (and with it per-provider option type
+// checking) and the `retry_policy` block are removed: clients are plain
+// values now, and retry composes at the client boundary via `ai.Retry.new`.
+// Each legacy block below must be flagged with its removal error.
+
+// Removed: `client<llm>` config block.
+client<llm> LegacyOpenAI {
+    provider openai
+    options {
+        model "gpt-4"
+        max_tokens 100
+        temperature 0.7
+        base_url "https://api.openai.com/v1"
+    }
+}
+
+// Removed: `retry_policy` block.
+retry_policy LegacyRetry {
+    max_retries 3
+}
+
+// Jinja prompt migrated to a backtick prompt.
+function MigratedPrompt(input: string) -> string {
+    client ValidClient
+    prompt `Echo: ${input}`
+}
+
+// Structural role markers remain valid while the surrounding fixture checks
+// the independently removed client forms.
+function LegacyRoleMarker(input: string) -> string {
+    client ValidClient
+    prompt `${role("system")}Be terse. ${input}`
+}
+
+// Removed: only a known "provider/model" prefix works as a client string.
+function UnknownProviderPrefix(input: string) -> string {
+    client "aws-bedrock/anthropic.claude-3-haiku"
+    prompt `${input}`
+}
+
+// Control: the new-world replacement compiles cleanly.
+client ValidClient = openai.OpenAiClient.new(
+    model = "gpt-4",
+    api_key = "test-key",
+);
+
+function ValidFunction(input: string) -> string {
+    client ValidClient
+    prompt `Echo: ${input}`
+}

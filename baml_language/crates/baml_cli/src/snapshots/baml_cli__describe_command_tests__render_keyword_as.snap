@@ -1,0 +1,30 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+as — Projects a value or type through an interface, and maps interface fields to class fields.
+
+Syntax:
+  // Field mapping inside an implements block.
+  interface HasId {
+    type Id
+    id: Id
+  }
+  
+  class User {
+    implements HasId {
+      type Id = string
+      id as user_id
+    }
+    full_name: string
+    user_id: string
+  }
+  
+  function label(user: User) -> string {
+    return user.as<HasId>.id
+  }
+  
+  // Associated type projection in a type position.
+  type UserId = (User as HasId).Id
+
+Use `value.as<Interface>` when a class implements multiple interfaces with the same member name or when you need the interface view. Use `(Type as Interface).Assoc` for qualified associated type projection in a type position; do not write `Type.as<Interface>` as a type. Inside an `implements` block, `interface_field as class_field` maps an interface field to a differently named class field.

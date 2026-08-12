@@ -1586,3 +1586,112 @@ test_deserializer!(
     nested_parse_as_db(),
     {"inner": {"x": 1}, "y": 2}
 );
+
+// ============================================================================
+// Section 25: `json`-typed stream (BEP-006 primitive rules)
+//
+// `baml.json.json` is treated as an opaque leaf in streaming:
+//   - While the input is incomplete (is_done=false), the stream yields `null`.
+//   - Once the input is complete (is_done=true), the stream yields the parsed value.
+//   - No in-progress intermediate yields.
+//
+// We model `baml.json.json` via the same `JsonValue` recursive alias used in
+// `test_aliases.rs` (`int | float | bool | string | null | JsonValue[] | map<string,
+// JsonValue>`). The stream type produced by the PPIR sentinel in `expand.rs` is
+// `(JsonValue | null) @parse_without_null @in_progress(null)`, exactly mirroring
+// the BEP-006 primitive streaming pattern for `int | null @parse_without_null
+// @in_progress(null)` tested in Section 21.
+// ============================================================================
+
+/// Duplicate of `json_value_db()` from `test_aliases` (kept local to avoid
+/// cross-module `pub` churn).
+fn json_value_db_for_streaming() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        type JsonValueArr = [JsonValue];
+        type JsonValueMap = (map<string, JsonValue>);
+        type JsonValue = (int | float | bool | string | null | JsonValueArr | JsonValueMap);
+    }
+}
+
+// --- Incomplete input → null ---
+// When streaming is in progress (is_done=false), a partial JSON object yields
+// null because @in_progress(null) is set on the stream type.
+
+test_partial_deserializer!(
+    test_json_stream_incomplete_object_yields_null,
+    r#"{"key": "val"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null @in_progress(null)),
+    json_value_db_for_streaming(),
+    null
+);
+
+test_partial_deserializer!(
+    test_json_stream_incomplete_array_yields_null,
+    r#"[1, 2, 3"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null @in_progress(null)),
+    json_value_db_for_streaming(),
+    null
+);
+
+test_partial_deserializer!(
+    test_json_stream_incomplete_string_yields_null,
+    r#""hello"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null @in_progress(null)),
+    json_value_db_for_streaming(),
+    null
+);
+
+// --- Complete input → parsed value ---
+// When streaming is done (is_done=true), the complete value is returned.
+
+test_deserializer!(
+    test_json_stream_complete_object,
+    r#"{"key": "value", "num": 42}"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null @in_progress(null)),
+    json_value_db_for_streaming(),
+    {"key": "value", "num": 42}
+);
+
+test_deserializer!(
+    test_json_stream_complete_array,
+    r#"[1, 2, 3]"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null @in_progress(null)),
+    json_value_db_for_streaming(),
+    [1, 2, 3]
+);
+
+test_deserializer!(
+    test_json_stream_complete_null_value,
+    r#"null"#,
+    baml_tyannotated!(JsonValue),
+    json_value_db_for_streaming(),
+    null
+);
+
+test_deserializer!(
+    test_json_stream_complete_number,
+    r#"42"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null @in_progress(null)),
+    json_value_db_for_streaming(),
+    42
+);
+
+test_deserializer!(
+    test_json_stream_complete_nested_object,
+    r#"{"a": {"b": [1, 2, null]}}"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null @in_progress(null)),
+    json_value_db_for_streaming(),
+    {"a": {"b": [1, 2, null]}}
+);
+
+// --- null literal is accepted via the JsonValue union arm, not the outer null ---
+// @parse_without_null prevents the outer null arm from matching, but JsonValue
+// itself includes null as a union variant — so `null` input still succeeds,
+// producing the null-arm value.
+test_deserializer!(
+    test_json_stream_null_accepted_via_json_value_arm,
+    r#"null"#,
+    baml_tyannotated!((JsonValue | null) @parse_without_null),
+    json_value_db_for_streaming(),
+    null
+);

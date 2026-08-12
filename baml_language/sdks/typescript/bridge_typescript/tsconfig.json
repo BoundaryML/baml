@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "rootDir": "./typescript_src",
+    "outDir": "./dist"
+  },
+  "include": ["typescript_src/**/*.ts"],
+  "exclude": ["node_modules", "tests", "proto", "dist"]
+}

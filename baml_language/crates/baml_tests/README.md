@@ -62,8 +62,6 @@ projects/
 ## What Gets Tested
 
 For each project, we automatically test:
-- **Lexer**: Token generation for each file
-- **Parser**: Syntax tree for each file
 - **HIR**: Name resolution for the whole project
 - **THIR**: Type checking for the whole project
 - **Diagnostics**: All errors and warnings

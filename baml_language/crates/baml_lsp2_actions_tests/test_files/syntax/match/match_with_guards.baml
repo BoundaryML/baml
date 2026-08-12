@@ -6,19 +6,27 @@ function MayFail(x: int) -> string {
 // Guards only — non-exhaustive (guards can't guarantee full coverage)
 function GuardsOnlyNonExhaustive(x: int) -> string {
   match (x) {
-    n: int if n > 0 => "positive",
-    n: int if n < 0 => "negative"
+    let n: int if n > 0 => "positive",
+    let n: int if n < 0 => "negative"
   }
 }
 
 // Guards with fallback — exhaustive
 function GuardsWithFallback(x: int) -> string {
   match (x) {
-    n: int if n > 0 => "positive",
+    let n: int if n > 0 => "positive",
     _ => "non-positive"
   }
 }
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0062
+//
+//   × non-exhaustive match on type int; missing: _
+//     ╭─[match_match_with_guards.baml:8:3]
+//   8 │ ╭─▶   match (x) {
+//   9 │ │       let n: int if n > 0 => "positive",
+//  10 │ │       let n: int if n < 0 => "negative"
+//  11 │ ╰─▶   }
+//     ╰────

@@ -14,35 +14,31 @@ function ThrowsString(x: int) -> string {
 // Case 1: int arm can never match string throws → unreachable warning
 function UnreachableIntArm(x: int) -> string {
   ThrowsString(x) catch (e) {
-    _: int => "unreachable"
+    int => "unreachable"
   }
 }
 
 // Case 2: string arm matches string throws → reachable, no warning
 function ReachableStringArm(x: int) -> string {
   ThrowsString(x) catch (e) {
-    _: string => "caught"
+    string => "caught"
   }
 }
 
 // Case 3: panic arm is always reachable even after residual is exhausted
 function PanicArmAfterExhaustion(x: int) -> string {
   ThrowsString(x) catch (e) {
-    _: string => "caught string",
-    _: baml.panics.DivisionByZero => "caught panic"
+    string => "caught string",
+    baml.panics.DivisionByZero => "caught panic"
   }
 }
 
 //----
 //- diagnostics
-// Warning: unreachable arm
-//     ╭─[ catch_catch_throw_set_reachability.baml:17:21 ]
-//     │
-//  17 │ ╭─▶     _: int => "unreachable"
-//     ┆ ┆   
-//  19 │ ├─▶ }
-//     │ │       
-//     │ ╰─────── unreachable arm
-//     │     
-//     │     Note: Error code: E0001
-// ────╯
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_catch_throw_set_reachability.baml:17:12]
+//  17 │     int => "unreachable"
+//     ·            ─────────────
+//     ╰────

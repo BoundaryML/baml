@@ -13,10 +13,11 @@ permissions: {}
 
 jobs:
   publish-zed-release:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout upstream zed extensions
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: BoundaryML/zed-extensions
           ref: main
