@@ -5048,8 +5048,7 @@ impl<'db> InferenceContext<'db> {
                         });
                     }
                 }
-                TemplateSegment::For { body, .. }
-                | TemplateSegment::CStyleFor { body, .. } => {
+                TemplateSegment::For { body, .. } | TemplateSegment::CStyleFor { body, .. } => {
                     self.check_template_interps_strict(body);
                 }
                 TemplateSegment::If {

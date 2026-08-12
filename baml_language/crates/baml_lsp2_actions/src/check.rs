@@ -152,16 +152,12 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
-        // SIGNATURE-side unresolved types (E0002): every function's
-        // written signature references, re-lowered with the sink.
+        // SIGNATURE-side diagnostics: unresolved references (E0002) and
+        // non-interface bounds (E0145), re-lowered with the sink.
         for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
-            for (range, name) in
+            for (range, error) in
                 baml_compiler2_hir_ty::lower::signature_lowering_diagnostics(db, func_loc)
             {
-                let error = baml_compiler2_hir_ty::diagnostics::TirTypeError::UnresolvedType {
-                    name,
-                    suggestions: Box::default(),
-                };
                 let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
                     message: error.to_string(),
                     error,

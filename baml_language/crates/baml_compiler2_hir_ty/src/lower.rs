@@ -453,6 +453,18 @@ impl<'db> LowerCtx<'db> {
             let mut ty = Ty::intern(TyKind::TypeVar(param.clone(), attr()));
             for member in &segments[1..] {
                 let Some(interface) = self.projection_interface_for(&ty, member) else {
+                    if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
+                        diags.borrow_mut().push(LoweringDiag {
+                            type_ref,
+                            name: Name::new(
+                                segments
+                                    .iter()
+                                    .map(Name::as_str)
+                                    .collect::<Vec<_>>()
+                                    .join("."),
+                            ),
+                        });
+                    }
                     return Ty::error();
                 };
                 ty = Ty::intern(TyKind::AssociatedTypeProjection {
@@ -1146,7 +1158,8 @@ pub fn owner_self_ty<'db>(
 pub fn signature_lowering_diagnostics<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-) -> Vec<(text_size::TextRange, Name)> {
+) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
+    use crate::diagnostics::TirTypeError;
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
@@ -1173,10 +1186,35 @@ pub fn signature_lowering_diagnostics<'db>(
         ctx.lower_type_ref(&data.type_refs, throws);
     }
     let source_map = baml_compiler2_ppir::item_data::function_source_map(db, function);
-    ctx.take_diagnostics()
+    let mut out: Vec<(text_size::TextRange, TirTypeError)> = ctx
+        .take_diagnostics()
         .into_iter()
-        .map(|diag| (source_map.type_refs.span(diag.type_ref), diag.name))
-        .collect()
+        .map(|diag| {
+            (
+                source_map.type_refs.span(diag.type_ref),
+                TirTypeError::UnresolvedType {
+                    name: diag.name,
+                    suggestions: Box::default(),
+                },
+            )
+        })
+        .collect();
+    // A bound must name an interface DIRECTLY (E0145): an alias denotes
+    // a type, never the interface itself. `function_generic_bounds`
+    // silently skips such bounds; the diagnostic walk names them.
+    let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
+    for bound in func_data.generic_param_bounds.iter().flatten() {
+        let lowered = ctx.lower_type_ref(&func_data.type_refs, *bound);
+        if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
+            out.push((
+                source_map.type_refs.span(*bound),
+                TirTypeError::GenericBoundNotInterface {
+                    bound: lowered.to_plain(),
+                },
+            ));
+        }
+    }
+    out
 }
 
 #[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
