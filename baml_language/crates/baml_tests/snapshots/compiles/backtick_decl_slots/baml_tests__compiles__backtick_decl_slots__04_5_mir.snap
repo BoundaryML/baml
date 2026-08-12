@@ -229,3 +229,25 @@ fn user.Greet$stream(name: string, client: null | ai.stream.StreamingClient) -> 
         return;
     }
 }
+
+fn user.Header(title: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // title // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(string);
+        _2 = call const fn baml.String.from<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const "# " + copy _2;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

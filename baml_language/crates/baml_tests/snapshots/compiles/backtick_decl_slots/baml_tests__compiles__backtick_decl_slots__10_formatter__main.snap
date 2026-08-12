@@ -1,9 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-// BEP-049 backtick string literals in the declarative slots that the formatter
-// used to reject (it only knew the quoted and raw string tokens there). Both
-// slots below compile cleanly and format without error.
+// BEP-049 backtick string literals in prompt and expression positions compile
+// cleanly and format without error.
 //
 // `baml fmt` re-indents a multi-line backtick interior to sit one level past the
 // surrounding block (like a raw string), but only when that preserves the
@@ -23,7 +22,9 @@ function Greet(name: string) -> string {
     `
 }
 
-// Backtick body in a `template_string`.
-template_string Header(title: string) `
-    # ${title}
-`
+// Backtick value in expression position.
+function Header(title: string) -> string {
+    `
+        # ${title}
+    `
+}

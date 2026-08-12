@@ -585,11 +585,11 @@ impl LoweringDiagnostic {
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
                 format!(
-                    "LLM function `{function_name}` uses a Jinja `#\"...\"#` prompt, which is \
-                     removed; write a backtick template: prompt `... ${{ctx.output_format}}`"
+                    "LLM function `{function_name}` uses a Jinja `#\"...\"#` prompt, which is no \
+                     longer supported. Use a backtick prompt with `${{...}}` interpolation instead."
                 ),
                 *span,
-                "migrate to a backtick prompt",
+                "replace `#\"Hello {{ name }}\"#` with `` `Hello ${name}` ``",
             ),
             LoweringDiagnostic::InvalidLlmClient {
                 function_name,

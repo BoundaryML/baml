@@ -443,13 +443,6 @@ pub enum SyntaxKind {
     BACKTICK_ELSE,     // ${else}
     BACKTICK_ENDIF,    // ${endif}
 
-    // Template components (inside raw strings)
-    TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
-    TEMPLATE_INTERPOLATION, // {{ expr }} - Jinja expressions
-    TEMPLATE_CONTROL,       // {% for ... %} - Jinja statements
-    TEMPLATE_COMMENT,       // {# comment #} - Jinja comments
-    PROMPT_TEXT,            // Plain text between Jinja constructs
-
     // Error recovery
     ERROR,
 

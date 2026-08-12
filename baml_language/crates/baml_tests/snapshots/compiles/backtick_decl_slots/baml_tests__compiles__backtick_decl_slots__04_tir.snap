@@ -16,6 +16,11 @@ function user.Greet$render_prompt(name: string) -> ai.Prompt throws never {
 function user.Greet$parse(json: string) -> string throws never {
   baml.sap.parse<T>(json) : string
 }
+function user.Header(title: string) -> string throws never {
+  { : string
+    `...` : string
+  }
+}
 function user.Greet$stream(name: string, client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<string | null, string> throws never {
   ai.stream.from_spec(Greet$spec(name), client = client) : ai.stream.Stream<string | null, string>
 }

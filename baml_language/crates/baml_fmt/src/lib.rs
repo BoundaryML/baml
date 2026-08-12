@@ -648,6 +648,17 @@ mod backtick_format_tests {
         assert_eq!(formatted, second);
     }
 
+    #[test]
+    fn backtick_function_return_dedents() {
+        let source = "function Foo(name: string) -> string {\n    `\n            Hello ${name}\n            Bye\n    `\n}\n";
+        let expected = "function Foo(name: string) -> string {\n    `\n        Hello ${name}\n        Bye\n    `\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
     /// A single-line backtick prompt is accepted and printed verbatim.
     #[test]
     fn backtick_prompt_one_liner_accepted() {
@@ -666,19 +677,6 @@ mod backtick_format_tests {
     fn backtick_attribute_arg_dedents() {
         let source = "class Foo {\n    bar string @description(`\n        some desc\n        more\n    `)\n}\n";
         let expected = "class Foo {\n    bar: string @description(\n        `\n            some desc\n            more\n        `,\n    ),\n}\n";
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(formatted, expected, "got:\n{formatted}");
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second);
-    }
-
-    /// A backtick `template_string` body is accepted and its interior re-indented
-    /// (closing backtick at column 0, like a raw-string body).
-    #[test]
-    fn backtick_template_string_dedents() {
-        let source = "template_string Foo(name: string) `\n        Hello ${name}\n        Bye\n`\n";
-        let expected = "template_string Foo(name: string) `\n    Hello ${name}\n    Bye\n`\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert_eq!(formatted, expected, "got:\n{formatted}");

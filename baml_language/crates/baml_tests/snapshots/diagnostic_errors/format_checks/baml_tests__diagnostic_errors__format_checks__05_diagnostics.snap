@@ -844,15 +844,12 @@ source: crates/baml_tests/src/generated_tests.rs
      · ╰──── retry composes at the client boundary now
      ╰────
 
-  [hir] E0010
+  [type] E0003
 
-  × LLM function `TestTarget` uses a Jinja `#"..."#` prompt, which is removed; write a backtick template: prompt `... ${ctx.output_format}`
-     ╭─[config_decls.baml:445:33]
- 445 │ ╭─▶ function TestTarget() -> string {
- 446 │ │       client BasicClient
- 447 │ │       prompt #"Hello"#
- 448 │ ├─▶ }
-     · ╰──── migrate to a backtick prompt
+  × unresolved name: `BasicClient`
+     ╭─[config_decls.baml:446:12]
+ 446 │     client BasicClient
+     ·            ───────────
      ╰────
 
   [hir] E0010
@@ -931,7 +928,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [validation] E0011
 
-  × name `ExtraWhitespace` defined 5 times as: class, enum, function, template_string, type
+  × name `ExtraWhitespace` defined 4 times as: class, enum, function, type
      ╭─[enum_decls.baml:211:9]
  211 │ enum    ExtraWhitespace    {
      ·         ───────┬───────
@@ -946,11 +943,6 @@ source: crates/baml_tests/src/generated_tests.rs
   │        ╭─[function_decls.baml:497:13]
   │    497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
   │        ·             ───────────────
-  │        ╰────
-  ├─▶   ☞ duplicate template_string definition
-  │        ╭─[template_string_decls.baml:364:20]
-  │    364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
-  │        ·                    ───────────────
   │        ╰────
   ╰─▶   ☞ duplicate type definition
            ╭─[type_alias_decls.baml:401:9]
@@ -1132,13 +1124,114 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                                                    ╰── expected `string`, found `0`
      ╰────
 
+  [type] E0002
+
+  × cannot infer type parameter `T`
+   ╭─[template_string_decls.baml:5:5]
+ 5 │     `Hello, ${name}!`
+   ·     ─────────────────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[template_string_decls.baml:5:15]
+ 5 │     `Hello, ${name}!`
+   ·               ──┬─
+   ·                 ╰── expected `T`, found `string`
+   ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:13:5]
+ 13 │ ╭─▶     `
+ 14 │ │           Name: ${first} ${last}
+ 15 │ │           Age: ${age}
+ 16 │ ╰─▶     `
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:13:5]
+ 13 │ ╭─▶     `
+ 14 │ │           Name: ${first} ${last}
+ 15 │ │           Age: ${age}
+ 16 │ ╰─▶     `
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:14:17]
+ 14 │         Name: ${first} ${last}
+    ·                 ──┬──
+    ·                   ╰── expected `T`, found `string`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:14:26]
+ 14 │         Name: ${first} ${last}
+    ·                          ──┬─
+    ·                            ╰── expected `T`, found `string`
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:20:5]
+ 20 │ ╭─▶     `
+ 21 │ │           Items: ${items}
+ 22 │ │           Config: ${config}
+ 23 │ ╰─▶     `
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:20:5]
+ 20 │ ╭─▶     `
+ 21 │ │           Items: ${items}
+ 22 │ │           Config: ${config}
+ 23 │ ╰─▶     `
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:21:18]
+ 21 │         Items: ${items}
+    ·                  ──┬──
+    ·                    ╰── expected `T`, found `string[]`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:22:19]
+ 22 │         Config: ${config}
+    ·                   ───┬──
+    ·                      ╰── expected `T`, found `map<string, int>`
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:26:41]
+ 26 │ function SingleLine(x: int) -> string { `Value is ${x}` }
+    ·                                         ───────────────
+    ╰────
+
   [validation] E0011
 
-  × name `ManyParams` defined 2 times as: function, template_string
-    ╭─[template_string_decls.baml:30:17]
- 30 │ template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
-    ·                 ─────┬────
-    ·                      ╰── duplicate template_string definition
+  × duplicate function `ManyParams`
+    ╭─[template_string_decls.baml:28:10]
+ 28 │ function ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) -> string {
+    ·          ─────┬────
+    ·               ╰── duplicate function definition
     ╰────
   ╰─▶   ☞ first defined as function here
           ╭─[function_decls.baml:23:10]
@@ -1146,59 +1239,236 @@ source: crates/baml_tests/src/generated_tests.rs
           ·          ──────────
           ╰────
 
-  [validation] E0011
+  [type] E0002
 
-  × name `MultiParamTrivia` defined 2 times as: function, template_string
-    ╭─[template_string_decls.baml:89:17]
- 89 │ template_string MultiParamTrivia(
-    ·                 ────────┬───────
-    ·                         ╰── duplicate template_string definition
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:29:5]
+ 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
+    ·     ───────────────────────────────────────────────────────────────────────────────
     ╰────
-  ╰─▶   ☞ first defined as function here
-           ╭─[function_decls.baml:135:10]
-       135 │ function MultiParamTrivia(
-           ·          ────────────────
-           ╰────
 
-  [validation] E0011
+  [type] E0002
 
-  × name `MultiParamTriviaBlock` defined 2 times as: function, template_string
-     ╭─[template_string_decls.baml:106:17]
- 106 │ template_string MultiParamTriviaBlock(
-     ·                 ──────────┬──────────
-     ·                           ╰── duplicate template_string definition
-     ╰────
-  ╰─▶   ☞ first defined as function here
-           ╭─[function_decls.baml:152:10]
-       152 │ function MultiParamTriviaBlock(
-           ·          ─────────────────────
-           ╰────
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:29:5]
+ 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
+    ·     ───────────────────────────────────────────────────────────────────────────────
+    ╰────
 
-  [validation] E0011
+  [type] E0002
 
-  × name `SixLongParams` defined 2 times as: function, template_string
-     ╭─[template_string_decls.baml:171:17]
- 171 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
-     ·                 ──────┬──────
-     ·                       ╰── duplicate template_string definition
-     ╰────
-  ╰─▶   ☞ first defined as function here
-          ╭─[function_decls.baml:37:10]
-       37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int,
-      fifth_parameter_name: string, sixth_parameter_name: float) -> string {
-          ·          ─────────────
-          ╰────
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:29:5]
+ 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
+    ·     ───────────────────────────────────────────────────────────────────────────────
+    ╰────
 
-  [validation] E0011
+  [type] E0001
 
-  × name `T` defined 2 times as: template_string, type
-     ╭─[type_alias_decls.baml:398:6]
- 398 │ type T = int
-     ·      ┬
-     ·      ╰── duplicate type definition
-     ╰────
-  ╰─▶   ☞ first defined as template_string here
-           ╭─[template_string_decls.baml:123:17]
-       123 │ template_string T(x: int) #"{{ x }}"#
-           ·                 ─
-           ╰────
+  × mismatched types
+    ╭─[template_string_decls.baml:29:8]
+ 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
+    ·        ───────┬───────
+    ·               ╰── expected `T`, found `string`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:29:27]
+ 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
+    ·                           ────────┬───────
+    ·                                   ╰── expected `T`, found `string`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:29:66]
+ 29 │     `${first_parameter} ${second_parameter} ${third_parameter} ${fourth_parameter}`
+    ·                                                                  ────────┬───────
+    ·                                                                          ╰── expected `T`, found `bool`
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:33:5]
+ 33 │     `${items} ${config}`
+    ·     ────────────────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:33:5]
+ 33 │     `${items} ${config}`
+    ·     ────────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:33:8]
+ 33 │     `${items} ${config}`
+    ·        ──┬──
+    ·          ╰── expected `T`, found `(int | string | bool)[]`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:33:17]
+ 33 │     `${items} ${config}`
+    ·                 ───┬──
+    ·                    ╰── expected `T`, found `map<string, int | string>`
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:37:5]
+ 37 │     `${name} ${age} ${items}`
+    ·     ─────────────────────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:37:5]
+ 37 │     `${name} ${age} ${items}`
+    ·     ─────────────────────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:37:5]
+ 37 │     `${name} ${age} ${items}`
+    ·     ─────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `string | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:7]
+ 37 │     `${name} ${age} ${items}`
+    ·       ──────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:37:8]
+ 37 │     `${name} ${age} ${items}`
+    ·        ──┬─
+    ·          ╰── expected `T`, found `string | null`
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:15]
+ 37 │     `${name} ${age} ${items}`
+    ·               ─────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:37:16]
+ 37 │     `${name} ${age} ${items}`
+    ·                ─┬─
+    ·                 ╰── expected `T`, found `int | null`
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `string[] | null` — it may be null; coalesce with `?? "…"` or unwrap it first
+    ╭─[template_string_decls.baml:37:22]
+ 37 │     `${name} ${age} ${items}`
+    ·                      ───────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:37:23]
+ 37 │     `${name} ${age} ${items}`
+    ·                       ──┬──
+    ·                         ╰── expected `T`, found `string[] | null`
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:52:5]
+ 52 │     `Hello ${x}`
+    ·     ────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:52:14]
+ 52 │     `Hello ${x}`
+    ·              ┬
+    ·              ╰── expected `T`, found `string`
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:56:5]
+ 56 │ ╭─▶     `
+ 57 │ │           ${for (let item in items)}
+ 58 │ │           - ${item}
+ 59 │ │           ${endfor}
+ 60 │ ╰─▶     `
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:56:5]
+ 56 │ ╭─▶     `
+ 57 │ │           ${for (let item in items)}
+ 58 │ │           - ${item}
+ 59 │ │           ${endfor}
+ 60 │ ╰─▶     `
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:58:13]
+ 58 │         - ${item}
+    ·             ──┬─
+    ·               ╰── expected `T`, found `string`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:58:13]
+ 58 │         - ${item}
+    ·             ──┬─
+    ·               ╰── expected `T`, found `string`
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[template_string_decls.baml:64:5]
+ 64 │     `${if (show)}${value}${else}hidden${endif}`
+    ·     ───────────────────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[template_string_decls.baml:64:20]
+ 64 │     `${if (show)}${value}${else}hidden${endif}`
+    ·                    ──┬──
+    ·                      ╰── expected `T`, found `string`
+    ╰────

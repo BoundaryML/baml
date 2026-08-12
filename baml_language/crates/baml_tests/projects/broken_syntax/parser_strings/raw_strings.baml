@@ -12,10 +12,10 @@ class RawStrings {
 
 function ProcessText(input: string) -> string {
   client GPT4
-  prompt #"
+  prompt `
     Process the following text:
-    {{ input }}
+    ${input}
     
     Return the processed result.
-  "#
+  `
 }

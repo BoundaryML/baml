@@ -46,7 +46,7 @@ client<llm> MyClient {
     ]
     block_string #"
       hello there my friend
-      {# a comment in a prompt #}
+      raw strings preserve their contents
     "#
   }
 }
@@ -106,7 +106,7 @@ client<llm> MyClient {
 //  46 │ │       ]
 //  47 │ │       block_string #"
 //  48 │ │         hello there my friend
-//  49 │ │         {# a comment in a prompt #}
+//  49 │ │         raw strings preserve their contents
 //  50 │ │       "#
 //  51 │ │     }
 //  52 │ ├─▶ }

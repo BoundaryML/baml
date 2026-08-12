@@ -361,7 +361,7 @@ retry_policy TriviaRetryBlock { /* 6 open brace trailing */
 // ===== Test declaration =====
 function TestTarget() -> string {
     client: BasicClient
-    prompt: #"Hello"#
+    prompt: `Hello`
 }
 
 test BasicTest {

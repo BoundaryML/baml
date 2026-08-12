@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × LLM function `Greet` uses a Jinja `#"..."#` prompt, which is no longer supported. Use a backtick prompt with `${...}` interpolation instead.
+   ╭─[main.baml:3:12]
+ 3 │     prompt #"Hello {{ name }}"#
+   ·            ──────────┬─────────
+   ·                      ╰── replace `#"Hello {{ name }}"#` with `` `Hello ${name}` ``
+   ╰────
