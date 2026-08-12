@@ -150,19 +150,16 @@ impl TypeContext for Facts<'_> {
                     if !crate::impls::head_matches(&head, &target, &eq) {
                         continue;
                     }
+                    // Param-env pins ONLY (rustc's projection discipline
+                    // for a param base): the declared default belongs to
+                    // impl selection - an impl may override it - so an
+                    // unpinned member stays a rigid projection, resolved
+                    // per-receiver at runtime.
                     let value = head
                         .associated_types
                         .iter()
                         .find(|(name, _)| name == member)
-                        .map(|(_, ty)| ty.clone())
-                        .or_else(|| {
-                            crate::impls::realized_assoc_default(
-                                self.db,
-                                &head,
-                                &base_interned,
-                                member,
-                            )
-                        });
+                        .map(|(_, ty)| ty.clone());
                     if let Some(value) = value
                         && !candidates
                             .iter()

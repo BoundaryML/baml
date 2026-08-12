@@ -2,22 +2,22 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-443..446 'get': hir_ty=[<missing>] tir=[throws never]
-493..497 'pair': throws never
-532..631 '{\n   ...n    }': (Self as user.Store).Item[]
-542..547 'let a': (Self as user.Store).Item
-550..558 'self.get': hir_ty=[(self: Self) -> (Self as user.Store).Item throws never] tir=[() -> (Self as user.Store).Item throws never]
-550..560 'self.get()': (Self as user.Store).Item
-610..625 '[a, self.get()]': (Self as user.Store).Item[]
-611..612 'a': (Self as user.Store).Item
-614..622 'self.get': hir_ty=[(self: Self) -> (Self as user.Store).Item throws never] tir=[() -> (Self as user.Store).Item throws never]
-614..624 'self.get()': (Self as user.Store).Item
-730..733 'get': throws never
-760..794 '{\n   ...     }': int
-774..784 'self.value': int
-813..824 'use_default': throws never
-860..907 '{\n   ...  r\n}': int[]
-866..871 'let r': int[]
-874..880 's.pair': hir_ty=[(self: user.IntStore) -> int[] throws never] tir=[() -> int[] throws never]
-874..882 's.pair()': int[]
-904..905 'r': int[]
+632..635 'get': hir_ty=[<missing>] tir=[throws never]
+682..686 'pair': throws never
+721..799 '{\n   ...n    }': hir_ty=[Item[]] tir=[(Self as user.Store).Item[]]
+731..736 'let a': hir_ty=[Item] tir=[(Self as user.Store).Item]
+739..747 'self.get': hir_ty=[(self: Self) -> Item throws never] tir=[() -> (Self as user.Store).Item throws never]
+739..749 'self.get()': hir_ty=[Item] tir=[(Self as user.Store).Item]
+778..793 '[a, self.get()]': hir_ty=[Item[]] tir=[(Self as user.Store).Item[]]
+779..780 'a': hir_ty=[Item] tir=[(Self as user.Store).Item]
+782..790 'self.get': hir_ty=[(self: Self) -> Item throws never] tir=[() -> (Self as user.Store).Item throws never]
+782..792 'self.get()': hir_ty=[Item] tir=[(Self as user.Store).Item]
+898..901 'get': throws never
+928..962 '{\n   ...     }': int
+942..952 'self.value': int
+981..992 'use_default': throws never
+1028..1075 '{\n   ...  r\n}': int[]
+1034..1039 'let r': int[]
+1042..1048 's.pair': hir_ty=[(self: user.IntStore) -> int[] throws never] tir=[() -> int[] throws never]
+1042..1050 's.pair()': int[]
+1072..1073 'r': int[]

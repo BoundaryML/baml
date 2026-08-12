@@ -3,8 +3,8 @@ source: crates/baml_tests/src/compiler2_mir/provider_sweep.rs
 ---
 == S16 provider sweep ==
 functions compared: 2823
-agreements: 2518
-O2 agreements (informational; optimizer parity deferred): 2518
+agreements: 2521
+O2 agreements (informational; optimizer parity deferred): 2521
 ruled bigint-context: 2
 ruled canonical-absorption: 2
 ruled canonical-absorption+literal-widening+tir-unknown: 2
@@ -30,7 +30,7 @@ ruled receiver-seeding+void-union: 5
 ruled self-param-render: 5
 ruled throws-precision: 25
 ruled tir-never-test: 4
-ruled tir-uninstantiated: 13
+ruled tir-uninstantiated: 10
 ruled tir-uninstantiated+tir-unknown: 1
 ruled tir-unknown: 93
 ruled virtual-field-index: 1

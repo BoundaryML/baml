@@ -2641,7 +2641,9 @@ impl<'db> LoweringContext<'db> {
         key: ExprMetadataKey,
     ) -> Option<&[baml_compiler2_tir::inference::MemberResolution<'db>]> {
         if let Some(tables) = &self.hir_tables {
-            return tables.for_scope(key.scope).path_member_resolutions(key.expr);
+            return tables
+                .for_scope(key.scope)
+                .path_member_resolutions(key.expr);
         }
         match key.scope {
             MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_member_resolution(key.expr),
@@ -13984,7 +13986,22 @@ pub fn lower_let_body<'db>(
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
-    lower_let_body_with(db, let_loc, opt, crate::InferenceProvider::Tir)
+    lower_let_body_with(db, let_loc, opt, default_provider())
+}
+
+/// The S16 migration toggle: `BAML_INFERENCE_PROVIDER=hir` routes the
+/// DEFAULT entry points through hir_ty's `InferenceResult` so the
+/// release suites run unmodified under either engine (rustc's
+/// `-Z borrowck=compare` playbook). Deleted with the flip, when hir_ty
+/// becomes the only provider.
+fn default_provider() -> crate::InferenceProvider {
+    static PROVIDER: std::sync::OnceLock<crate::InferenceProvider> = std::sync::OnceLock::new();
+    *PROVIDER.get_or_init(
+        || match std::env::var("BAML_INFERENCE_PROVIDER").as_deref() {
+            Ok("hir") => crate::InferenceProvider::HirTy,
+            _ => crate::InferenceProvider::Tir,
+        },
+    )
 }
 
 /// [`lower_let_body`] with an explicit inference provider (see
@@ -14021,7 +14038,7 @@ pub fn lower_function<'db>(
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> MirFunction {
-    lower_function_with(db, func_loc, opt, crate::InferenceProvider::Tir)
+    lower_function_with(db, func_loc, opt, default_provider())
 }
 
 /// [`lower_function`] with an explicit inference provider - the S16

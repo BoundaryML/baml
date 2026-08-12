@@ -1,13 +1,12 @@
 ---
 source: crates/baml_tests/src/type_spec/sweep.rs
-assertion_line: 509
 expression: report
 ---
 files: 116
 nodes compared: 60705
-agreements: 52700
+agreements: 52697
 one-sided (coverage): 204
-conflicts: 7801 across 1377 distinct pairs
+conflicts: 7804 across 1378 distinct pairs
 hir_ty error-channel entries: 0
 tir diagnostics: 0
 panics: 0
@@ -19,14 +18,14 @@ panics: 0
 480x literal-collapse-render
 720x ours-reduced
 27x ours-residual-never
-92x ours-union-join
+93x ours-union-join
 38x qualification-render
 935x self-showing-callee-render
 2624x throws-precision
 16x tir-error
 5x tir-known-bug-repro
 13x tir-never-render
-2263x tir-uninstantiated
+2265x tir-uninstantiated
 1x tir-unreduced-projection
 6x written-ascription
 
@@ -964,6 +963,9 @@ panics: 0
 [3x] hir_ty=[7] tir=[int]
     at ns_lexical_scoping/lexical_scoping.baml:6726..6731 `first`
     at ns_lexical_scoping/lexical_scoping.baml:6768..6774 `second`
+[3x] hir_ty=[Item] tir=[(Self as user.projection_patterns.Holder).Item]
+    at ns_projection_patterns/projection_patterns.baml:910..919 `Self.Item`
+    at ns_projection_patterns/projection_patterns.baml:1024..1040 `let x: Self.Item`
 [3x] hir_ty=[baml.iter.Iterator<Error = never, Item = baml.iter.ArrayIterator<int>>] tir=[baml.iter.Iterator<Item = baml.iter.ArrayIterator<int>, Error = never>]
     at ns_iter/iter.baml:14041..14122 `let outer:...or = never>`
     at ns_iter/iter.baml:14052..14122 `baml.iter....or = never>`
@@ -2298,6 +2300,8 @@ panics: 0
     at ns_json_to_from_string/json_to_from_string.baml:4116..4134 `level3<UserSimple>`
 [1x] hir_ty=[(s: string) -> user.yaml.YamlWrappedName throws baml.json.JsonDecodeError | baml.yaml.YamlParseError] tir=[(s: string) -> T throws baml.yaml.YamlParseError | baml.json.JsonDecodeError]
     at ns_yaml/yaml.baml:1919..1940 `baml.yaml.deserialize`
+[1x] hir_ty=[(self: (H as user.interfaces_associated_types.AdbHolder<user.interfaces_associated_types.AdbUser>).Item) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:7672..7692 `holder.get().summary`
 [1x] hir_ty=[(self: (H as user.interfaces_associated_types.ApdHolder).Item) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:8808..8818 `item.label`
 [1x] hir_ty=[(self: (H as user.interfaces_associated_types.ApdHolder).Item, other: (H as user.interfaces_associated_types.ApdHolder).Item) -> bool throws never] tir=[(other: (H as user.interfaces_associated_types.ApdHolder).Item) -> bool throws never]
@@ -2314,15 +2318,15 @@ panics: 0
     at ns_interfaces_class_generics/interfaces_class_generics.baml:1574..1586 `driver.drive`
 [1x] hir_ty=[(self: F) -> int throws (F as user.interfaces_associated_types.Fallible).Error] tir=[() -> int throws (F as user.interfaces_associated_types.Fallible).Error]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:962..973 `value.value`
-[1x] hir_ty=[(self: H) -> user.interfaces_associated_types.AdbUser throws never] tir=[() -> (H as user.interfaces_associated_types.AdbHolder<user.interfaces_associated_types.AdbUser>).Item throws never]
+[1x] hir_ty=[(self: H) -> (H as user.interfaces_associated_types.AdbHolder<user.interfaces_associated_types.AdbUser>).Item throws never] tir=[() -> (H as user.interfaces_associated_types.AdbHolder<user.interfaces_associated_types.AdbUser>).Item throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:7672..7682 `holder.get`
 [1x] hir_ty=[(self: S) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:5205..5219 `self.inner.get`
-[1x] hir_ty=[(self: Self) -> (Self as user.interfaces_associated_types.Describable).Output throws never] tir=[() -> (Self as user.interfaces_associated_types.Describable).Output throws never]
+[1x] hir_ty=[(self: Self) -> Output throws never] tir=[() -> (Self as user.interfaces_associated_types.Describable).Output throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:2813..2823 `self.value`
 [1x] hir_ty=[(self: Self) -> T throws unknown] tir=[() -> T throws unknown]
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:3255..3264 `self.head`
-[1x] hir_ty=[(self: Self) -> int throws (Self as user.interfaces_associated_types.Fallible).Error] tir=[() -> int throws (Self as user.interfaces_associated_types.Fallible).Error]
+[1x] hir_ty=[(self: Self) -> int throws Error] tir=[() -> int throws (Self as user.interfaces_associated_types.Fallible).Error]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:666..676 `self.value`
 [1x] hir_ty=[(self: Self) -> int throws never] tir=[() -> int throws never]
     at ns_interfaces/interfaces_2.baml:17007..17016 `self.size`
@@ -2700,8 +2704,6 @@ panics: 0
     at ns_interfaces/interfaces_3.baml:7031..7040 `b.display`
 [1x] hir_ty=[(self: user.interfaces.W3spNamed) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces_3.baml:6027..6034 `n.greet`
-[1x] hir_ty=[(self: user.interfaces_associated_types.AdbUser) -> string throws never] tir=[() -> string throws never]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:7672..7692 `holder.get().summary`
 [1x] hir_ty=[(self: user.interfaces_associated_types.AlwaysFails) -> int throws user.interfaces_associated_types.Boom] tir=[() -> int throws user.interfaces_associated_types.Boom]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:1043..1072 `AlwaysFail...ue_plus_one`
 [1x] hir_ty=[(self: user.interfaces_associated_types.BcpWrapped<user.interfaces_associated_types.BcpTextSource>) -> string throws never] tir=[() -> string throws never]
@@ -3210,6 +3212,10 @@ panics: 0
     at ns_future_types/future_types.baml:7933..7965 `baml.futur...t, never>[]`
 [1x] hir_ty=[Future<string, never>] tir=[never]
     at ns_future_types/future_types.baml:1139..1172 `baml.futur...ing, never>`
+[1x] hir_ty=[Label] tir=[(Self as user.projection_patterns.Labeled).Label]
+    at ns_projection_patterns/projection_patterns.baml:3987..3997 `Self.Label`
+[1x] hir_ty=[Output] tir=[(Self as user.interfaces_associated_types.Describable).Output]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:2813..2825 `self.value()`
 [1x] hir_ty=[R] tir=[R | user.iter_impl_generics_only.core.Done]
     at ns_iter_impl_generics_only/ns_core/core.baml:5409..5421 `self.func(x)`
 [1x] hir_ty=[baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = baml.csv.CsvError | baml.errors.Io>]
@@ -3296,10 +3302,6 @@ panics: 0
     at ns_interfaces_associated_types/interfaces_associated_types.baml:2359..2360 `e`
 [1x] hir_ty=[string] tir=["" | string]
     at ns_arrays/arrays.baml:28383..28457 `["a", "b",... + x }, "")`
-[1x] hir_ty=[string] tir=[(Self as user.projection_patterns.Labeled).Label]
-    at ns_projection_patterns/projection_patterns.baml:3987..3997 `Self.Label`
-[1x] hir_ty=[string] tir=[(T as user.projection_patterns.Labeled).Label]
-    at ns_projection_patterns/projection_patterns.baml:4557..4564 `T.Label`
 [1x] hir_ty=[string] tir=[(user.interfaces_class_generics.McapIntDriver as user.interfaces_class_generics.McapDriver<user.interfaces_class_generics.McapTask<int>>).Output]
     at ns_interfaces_class_generics/interfaces_class_generics.baml:1989..2017 `task.drive...tDriver {})`
 [1x] hir_ty=[string] tir=[string | "not a swimmer"]
@@ -3370,6 +3372,8 @@ panics: 0
     at ns_exceptions/exceptions.baml:40749..40764 `s16_risky_jump2`
 [1x] hir_ty=[throws "x"] tir=[throws string]
     at ns_exceptions/exceptions.baml:45406..45414 `s19_boom`
+[1x] hir_ty=[throws (Self as user.interfaces_associated_types.Fallible<Error = Error>).Error] tir=[throws (Self as user.interfaces_associated_types.Fallible).Error]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:603..617 `value_plus_one`
 [1x] hir_ty=[throws 3.14] tir=[throws float]
     at ns_exceptions/exceptions.baml:36976..36991 `s15_fails_opt_2`
 [1x] hir_ty=[throws 7] tir=[throws int]
@@ -3398,8 +3402,6 @@ panics: 0
     at ns_interfaces/interfaces_3.baml:11797..11798 `x`
 [1x] hir_ty=[user.interfaces.W312Cat | user.interfaces.W312Dog] tir=[user.interfaces.W312Dog | user.interfaces.W312Cat]
     at ns_interfaces/interfaces_3.baml:4670..4671 `x`
-[1x] hir_ty=[user.interfaces_associated_types.AdbUser] tir=[(H as user.interfaces_associated_types.AdbHolder<user.interfaces_associated_types.AdbUser>).Item]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:7672..7684 `holder.get()`
 [1x] hir_ty=[user.iter_impl_generics_only.core.Done | user.iter_impl_generics_only.core.Iterable<R, E3>] tir=[user.iter_impl_generics_only.core.Iterable<R, E3> | user.iter_impl_generics_only.core.Done]
     at ns_iter_impl_generics_only/ns_core/core.baml:8003..8019 `self.iter.next()`
 [1x] hir_ty=[user.json_auto_derive.Box6<int>] tir=[user.json_auto_derive.Box6]

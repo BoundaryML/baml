@@ -1,9 +1,15 @@
+// tir: fails
+//
+// (TIR renders the frame slot as the projection `(Self as
+// user.Store).Item` rather than the slot's own name.)
+//
 // I6: an interface DEFAULT-method body is an ordinary inference root.
 // Inside it `self` is the rigid `Self` (frame slot 0) bounded by the
-// interface itself - the spec's universal reading ("`Self` on interface
-// methods is a universal type") - so a call through `self` resolves
-// members via the carried bound exactly like `T extends I` would, and
-// `Self.Item` is the symbolic projection.
+// interface AT ITS OWN FRAME (each associated slot pinned to the
+// frame's own var), so a call through `self` resolves members via the
+// carried bound exactly like `T extends I` would, and `Self.Item`
+// reduces to the frame's `Item` slot - the same slot the runtime binds
+// per-receiver at impl selection.
 interface Store {
     type Item
 
@@ -11,7 +17,7 @@ interface Store {
 
     function pair(self) -> Self.Item[] throws never {
         let a = self.get();
-         // ^ (Self as user.Store).Item
+         // ^ Item
         [a, self.get()]
     }
 }

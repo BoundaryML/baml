@@ -2,15 +2,15 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-582..587 'first': throws never
-649..807 '{\n   ...ull\n}': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
-655..660 'let r': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
-663..754 'match ...n    }': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
-670..677 'it.next': hir_ty=[(self: T) -> baml.iter.Done | (T as baml.iter.Iterator).Item throws never] tir=[() -> (T as baml.iter.Iterator).Item | baml.iter.Done throws (T as baml.iter.Iterator).Error]
-670..679 'it.next()': hir_ty=[baml.iter.Done | (T as baml.iter.Iterator).Item] tir=[(T as baml.iter.Iterator).Item | baml.iter.Done]
-691..705 'baml.iter.Done': baml.iter.Done
-709..713 'null': null
-723..739 'let it...T.Item': (T as baml.iter.Iterator).Item
-733..739 'T.Item': (T as baml.iter.Iterator).Item
-743..747 'item': (T as baml.iter.Iterator).Item
-760..761 'r': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
+646..651 'first': throws (T as baml.iter.Iterator).Error
+715..873 '{\n   ...ull\n}': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
+721..726 'let r': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
+729..820 'match ...n    }': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
+736..743 'it.next': hir_ty=[(self: T) -> baml.iter.Done | (T as baml.iter.Iterator).Item throws (T as baml.iter.Iterator).Error] tir=[() -> (T as baml.iter.Iterator).Item | baml.iter.Done throws (T as baml.iter.Iterator).Error]
+736..745 'it.next()': hir_ty=[baml.iter.Done | (T as baml.iter.Iterator).Item] tir=[(T as baml.iter.Iterator).Item | baml.iter.Done]
+757..771 'baml.iter.Done': baml.iter.Done
+775..779 'null': null
+789..805 'let it...T.Item': (T as baml.iter.Iterator).Item
+799..805 'T.Item': (T as baml.iter.Iterator).Item
+809..813 'item': (T as baml.iter.Iterator).Item
+826..827 'r': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]

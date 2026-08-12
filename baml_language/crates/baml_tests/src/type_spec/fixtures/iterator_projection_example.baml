@@ -1,16 +1,17 @@
 // tir: fails
 //
-// (TIR: null-first render + a throws-contract error on next()'s
-// effect.)
+// (TIR's null-first union render: `null | (T as
+// baml.iter.Iterator).Item`.)
 //
-// I5: the spec's Interfaces `first` example verbatim. A bound WITHOUT
-// pinned associated types leaves `T.Item` symbolic in the signature,
-// the `next()` call types through the bound, the match narrows
-// `baml.iter.Done | T.Item`, and `next()`'s `Self.Error` effect
-// reduces to `never` through the interface DEFAULT at the bare bound
-// reference (spec: omitted defaulted associated types "use said
-// defaults") - which is what makes the declared `throws never` sound.
-function first<T extends baml.iter.Iterator>(it: T) -> T.Item? throws never {
+// I5: a bound WITHOUT pinned associated types leaves every projection
+// symbolic - INCLUDING defaulted ones (ruled 2026-08-11: defaults
+// realize at impl selection only, rustc's model; an impl may override
+// a default, so reducing `T.Error` to its default at the bound would
+// drop the pinned type). `next()`'s effect is therefore the symbolic
+// `(T as baml.iter.Iterator).Error`, and the sound signature
+// PROPAGATES it; `T extends baml.iter.Iterator<Error = never>` is the
+// pinned spelling when a caller needs `throws never`.
+function first<T extends baml.iter.Iterator>(it: T) -> T.Item? throws T.Error {
     let r = match (it.next()) {
         baml.iter.Done => null,
         let item: T.Item => item,

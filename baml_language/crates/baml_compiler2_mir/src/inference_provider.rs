@@ -119,9 +119,7 @@ impl<'db> ConvertedTables<'db> {
         &self,
         expr: AstExprId,
     ) -> Option<&[MemberResolution<'db>]> {
-        self.path_member_resolutions
-            .get(&expr)
-            .map(Vec::as_slice)
+        self.path_member_resolutions.get(&expr).map(Vec::as_slice)
     }
     pub(crate) fn call_plan(&self, expr: AstExprId) -> Option<&CallPlan> {
         self.call_plans.get(&expr)
@@ -228,14 +226,17 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
     for (&expr, adjustments) in &result.expr_adjustments {
         for adjustment in adjustments.iter() {
             let hir_infer::Adjust::FunctionAdapter = adjustment.kind;
-            let (Some(Tir2Ty::Function {
-                params: source_params,
-                ..
-            }), Tir2Ty::Function {
-                params: target_params,
-                ret: target_return,
-                ..
-            }) = (
+            let (
+                Some(Tir2Ty::Function {
+                    params: source_params,
+                    ..
+                }),
+                Tir2Ty::Function {
+                    params: target_params,
+                    ret: target_return,
+                    ..
+                },
+            ) = (
                 result.type_of_expr.get(&expr).map(|ty| ty.to_plain()),
                 adjustment.target.to_plain(),
             )
@@ -256,9 +257,7 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
     out
 }
 
-fn convert_resolution<'db>(
-    resolution: &hir_infer::MemberResolution<'db>,
-) -> MemberResolution<'db> {
+fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> MemberResolution<'db> {
     match resolution {
         hir_infer::MemberResolution::Field { class, field } => MemberResolution::Field {
             class_loc: *class,

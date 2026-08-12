@@ -311,6 +311,15 @@ impl InferenceTable {
         out
     }
 
+    /// Whether `var`'s class already carries a solution. Resolution
+    /// passes iterate a var list collected up front, and a
+    /// generalization step can ALIAS two listed vars mid-pass - the
+    /// later var must be re-checked before acting on it (rustc's
+    /// shallow-resolve-before-relating discipline).
+    pub fn is_solved(&mut self, var: InferVar) -> bool {
+        self.vars.probe_value(VarKey(var)) != VarValue::Unknown
+    }
+
     /// Solves `var := ty` directly (resolution-time binding; unlike
     /// [`InferenceTable::unify`] this performs no occurs check because the
     /// solution was derived from resolved bounds).

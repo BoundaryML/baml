@@ -903,12 +903,28 @@ pub fn interface_scope_bounds<'db>(
             .take(data.generic_params.len())
             .map(|param| Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())))
             .collect();
+        // Each associated slot pins to the frame's OWN var, so inside the
+        // interface `Self.Member` reduces to that slot (TIR's layout: the
+        // member is a frame position, bound per-receiver at impl
+        // selection - a default method's projection stays symbolic, never
+        // the declared default).
+        let pins: Vec<(Name, Ty)> = frame
+            .iter()
+            .skip(1 + data.generic_params.len())
+            .zip(&data.associated_types)
+            .map(|(param, assoc)| {
+                (
+                    assoc.name.clone(),
+                    Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())),
+                )
+            })
+            .collect();
         out.insert(
             self_param.clone(),
             vec![baml_type::interned::InterfaceRef::new(
                 interface_qualified_name(db, interface),
                 args.into_boxed_slice(),
-                Vec::new(),
+                pins,
             )],
         );
     }

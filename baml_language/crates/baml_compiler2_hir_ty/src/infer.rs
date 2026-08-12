@@ -5224,6 +5224,12 @@ impl<'db> InferenceContext<'db> {
         var: baml_type::interned::InferVar,
         bounds: &unify::VarBounds,
     ) -> bool {
+        // A sibling's generalization step may have ALIASED this var into
+        // a solved class since the caller collected its list; acting on
+        // it again would union a second solution onto a Known root.
+        if self.table.is_solved(var) {
+            return false;
+        }
         let (lowers, deferred_lowers): (Vec<Ty>, Vec<Ty>) = bounds
             .lowers
             .iter()
