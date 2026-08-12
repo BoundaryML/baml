@@ -44,7 +44,20 @@ use rustc_hash::FxHashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoweringDiag {
     pub type_ref: TypeRefId,
-    pub name: Name,
+    pub kind: LoweringDiagKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoweringDiagKind {
+    /// The written path resolved nowhere (E0002).
+    Unresolved { name: Name },
+    /// Written type-argument count disagrees with the declaration
+    /// (E0001's type-arity spelling).
+    WrongArgCount {
+        name: Name,
+        expected: usize,
+        got: usize,
+    },
 }
 
 pub struct LowerCtx<'db> {
@@ -121,6 +134,24 @@ impl<'db> LowerCtx<'db> {
     pub fn with_diagnostics(mut self) -> LowerCtx<'db> {
         self.diags = Some(std::cell::RefCell::new(Vec::new()));
         self
+    }
+
+    /// Record a written-vs-declared type-argument count disagreement
+    /// (`enforce_arity` silently pads/truncates; the sink names it).
+    fn record_arity(&self, name: &Name, got: usize, expected: usize) {
+        if got == expected {
+            return;
+        }
+        if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
+            diags.borrow_mut().push(LoweringDiag {
+                type_ref,
+                kind: LoweringDiagKind::WrongArgCount {
+                    name: name.clone(),
+                    expected,
+                    got,
+                },
+            });
+        }
     }
 
     pub fn take_diagnostics(&self) -> Vec<LoweringDiag> {
@@ -456,13 +487,15 @@ impl<'db> LowerCtx<'db> {
                     if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
                         diags.borrow_mut().push(LoweringDiag {
                             type_ref,
-                            name: Name::new(
-                                segments
-                                    .iter()
-                                    .map(Name::as_str)
-                                    .collect::<Vec<_>>()
-                                    .join("."),
-                            ),
+                            kind: LoweringDiagKind::Unresolved {
+                                name: Name::new(
+                                    segments
+                                        .iter()
+                                        .map(Name::as_str)
+                                        .collect::<Vec<_>>()
+                                        .join("."),
+                                ),
+                            },
                         });
                     }
                     return Ty::error();
@@ -480,13 +513,15 @@ impl<'db> LowerCtx<'db> {
         if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
             diags.borrow_mut().push(LoweringDiag {
                 type_ref,
-                name: Name::new(
-                    segments
-                        .iter()
-                        .map(Name::as_str)
-                        .collect::<Vec<_>>()
-                        .join("."),
-                ),
+                kind: LoweringDiagKind::Unresolved {
+                    name: Name::new(
+                        segments
+                            .iter()
+                            .map(Name::as_str)
+                            .collect::<Vec<_>>()
+                            .join("."),
+                    ),
+                },
             });
         }
         Ty::error()
@@ -503,6 +538,7 @@ impl<'db> LowerCtx<'db> {
         match def {
             Definition::Class(class_loc) => {
                 let data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
+                self.record_arity(short, args.len(), data.generic_params.len());
                 enforce_arity(&mut args, data.generic_params.len());
                 let qtn = self.qualify(def, short);
                 let ty = class_ty(qtn, args);
@@ -520,6 +556,7 @@ impl<'db> LowerCtx<'db> {
             }
             Definition::Interface(interface_loc) => {
                 let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface_loc);
+                self.record_arity(short, args.len(), data.generic_params.len());
                 enforce_arity(&mut args, data.generic_params.len());
                 // Written bindings only; defaults and completeness checking
                 // arrive with I5. Sorted for order-insensitive identity.
@@ -1155,6 +1192,26 @@ pub fn owner_self_ty<'db>(
 /// unresolved path with its resolved span (the item source map's
 /// type-ref spans). Untracked and pure - spans never enter salsa
 /// results (r-a's ide-layer discipline).
+/// A recorded lowering diagnostic as the shared error vocabulary.
+pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTypeError {
+    use crate::diagnostics::TirTypeError;
+    match kind {
+        LoweringDiagKind::Unresolved { name } => TirTypeError::UnresolvedType {
+            name: name.clone(),
+            suggestions: Box::default(),
+        },
+        LoweringDiagKind::WrongArgCount {
+            name,
+            expected,
+            got,
+        } => TirTypeError::WrongNumberOfTypeArgs {
+            type_name: name.clone(),
+            expected: *expected,
+            got: *got,
+        },
+    }
+}
+
 pub fn signature_lowering_diagnostics<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
@@ -1192,10 +1249,7 @@ pub fn signature_lowering_diagnostics<'db>(
         .map(|diag| {
             (
                 source_map.type_refs.span(diag.type_ref),
-                TirTypeError::UnresolvedType {
-                    name: diag.name,
-                    suggestions: Box::default(),
-                },
+                lowering_diag_error(&diag.kind),
             )
         })
         .collect();
@@ -1214,6 +1268,42 @@ pub fn signature_lowering_diagnostics<'db>(
             ));
         }
     }
+    out
+}
+
+/// The check layer's INTERFACE-declaration diagnostic walk: requires
+/// targets re-lowered with the sink under the interface's own frame
+/// (unresolved paths, wrong type-arg counts, non-interface targets).
+pub fn interface_lowering_diagnostics<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: InterfaceLoc<'db>,
+) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
+    use crate::diagnostics::TirTypeError;
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let frame = interface_frame(db, interface);
+    let ctx = lower_ctx_for_file(db, interface.file(db))
+        .with_frame(frame)
+        .with_diagnostics();
+    let source_map = baml_compiler2_ppir::item_data::interface_source_map(db, interface);
+    let mut out = Vec::new();
+    for &target in &data.requires {
+        let lowered = ctx.lower_type_ref(&data.type_refs, target);
+        if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
+            out.push((
+                source_map.type_refs.span(target),
+                TirTypeError::InterfaceRequiresNonInterface {
+                    interface: interface_qualified_name(db, interface),
+                    target: lowered.to_plain(),
+                },
+            ));
+        }
+    }
+    out.extend(ctx.take_diagnostics().into_iter().map(|diag| {
+        (
+            source_map.type_refs.span(diag.type_ref),
+            lowering_diag_error(&diag.kind),
+        )
+    }));
     out
 }
 

@@ -168,6 +168,21 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
+        // INTERFACE requires-clause diagnostics.
+        for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, file) {
+            for (range, error) in
+                baml_compiler2_hir_ty::lower::interface_lowering_diagnostics(db, iface_loc)
+            {
+                let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                    message: error.to_string(),
+                    error,
+                    range,
+                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    related: Vec::new(),
+                };
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
     } else {
         let ppir_index = baml_compiler2_ppir::file_semantic_index(db, file);
         for (file_scope_idx, scope_id) in ppir_index

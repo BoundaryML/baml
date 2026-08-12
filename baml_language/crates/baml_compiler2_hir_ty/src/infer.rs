@@ -547,9 +547,9 @@ enum PendingDiag {
         lhs: Ty,
         rhs: Option<Ty>,
     },
-    UnresolvedTypeAnnot {
+    BodyAnnot {
         type_ref: baml_compiler2_hir::type_ref::TypeRefId,
-        name: baml_type::Name,
+        kind: crate::lower::LoweringDiagKind,
     },
     InterpolatedMaybeNull {
         expr: ExprId,
@@ -5270,9 +5270,9 @@ impl<'db> InferenceContext<'db> {
             // The body LowerCtx's sink: every written annotation whose
             // path resolved nowhere (E0002), anchored at its TypeRefId.
             for lowering in self.lower.take_diagnostics() {
-                self.pending_diags.push(PendingDiag::UnresolvedTypeAnnot {
+                self.pending_diags.push(PendingDiag::BodyAnnot {
                     type_ref: lowering.type_ref,
-                    name: lowering.name,
+                    kind: lowering.kind,
                 });
             }
             for pending in std::mem::take(&mut self.pending_diags) {
@@ -5363,12 +5363,9 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
-                    PendingDiag::UnresolvedTypeAnnot { type_ref, name } => {
+                    PendingDiag::BodyAnnot { type_ref, kind } => {
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::UnresolvedType {
-                                name,
-                                suggestions: Box::default(),
-                            },
+                            error: crate::lower::lowering_diag_error(&kind),
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::TypeRef(type_ref),
                             related: Vec::new(),
