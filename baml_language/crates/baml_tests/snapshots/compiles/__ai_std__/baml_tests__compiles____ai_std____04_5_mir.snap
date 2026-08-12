@@ -3420,7 +3420,7 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     }
 
     bb44: {
-        _24 = sys_op const fn baml.fs.File.bytes(copy _8) -> bb45 unwind bb54;
+        _24 = call const fn baml.fs.File.bytes(copy _8) -> [bb45, unwind: bb54];
     }
 
     bb45: {
@@ -3486,7 +3486,7 @@ fn ai.internal._resolve_media_content(url: string | null, file: string | null, i
     bb57: {
         _29 = const "media file " + copy _30;
         _28 = copy _29 + const " could not be read: ";
-        _35 = load_type(baml.errors.InvalidArgument | baml.errors.Io);
+        _35 = load_type(baml.errors.Io);
         _34 = call const fn baml.String.from<copy _35>(copy _23) -> [bb58];
     }
 

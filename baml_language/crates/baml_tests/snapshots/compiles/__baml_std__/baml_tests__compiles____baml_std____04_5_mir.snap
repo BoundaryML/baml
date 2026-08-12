@@ -1489,7 +1489,7 @@ fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.
     let _12: (baml.csv.CsvError) -> null throws never // cb
     let _13: (baml.csv.CsvError) -> null throws never
     let _14: baml.csv.CsvError
-    let _15: null
+    let _15: void
 
     bb0: {
         goto -> bb1;
@@ -1569,7 +1569,7 @@ fn baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> null | string[] {
     let _2: baml.csv.CsvHeaders | baml.csv.CsvNeedData
     let _3: baml.csv.CsvHeaders | baml.csv.CsvNeedData
     let _4: baml.csv.CsvHeaders // h
-    let _5: null
+    let _5: void
 
     bb0: {
         goto -> bb1;
@@ -1714,110 +1714,85 @@ fn baml.csv.CsvReader._mark_closed = builtin(vm)
 
 fn baml.csv.CsvReader._mark_exhausted = builtin(vm)
 
-fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null {
+fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: baml.csv.CsvReader // self // param
-    let _2: null | baml.fs.File
-    let _3: bool
-    let _4: null
-    let _5: baml.fs.File // f
-    let _6: uint8array // chunk
-    let _7: unknown // e
+    let _2: null | uint8array // chunk
+    let _3: unknown // e
+    let _4: (baml.fs.File, int) -> null | uint8array throws baml.errors.Io
+    let _5: null | baml.fs.File
+    let _6: bool
+    let _7: null | baml.fs.File
     let _8: bool
-    let _9: bool
-    let _10: string
-    let _11: string // message
-    let _12: baml.csv.CsvError
-    let _13: string
-    let _14: string
-    let _15: null
-    let _16: bool
-    let _17: int
-    let _18: null
-    let _19: null
-    let _20: uint8array
+    let _9: null
+    let _10: bool
+    let _11: null
+    let _12: uint8array // bytes
+    let _13: null
+    let _14: uint8array
 
     bb0: {
-        _2 = copy _1.1;
-        _3 = copy _2 == const null;
-        branch copy _3 -> [bb7, bb1];
+        _5 = copy _1.1;
+        _6 = copy _5 == const null;
+        branch copy _6 -> [bb2, bb1];
     }
 
     bb1: {
-        _5 = copy _2;
-        _6 = sys_op const fn baml.fs.File.read_bytes(copy _5, const 65536_i64) -> bb2 unwind bb10;
+        _7 = copy _1.1;
+        _4 = make_bound_method baml.fs.File.root.io.Read.read(copy _7);
+        _2 = call copy _4(const 65536_i64) -> [bb3, unwind: bb9];
     }
 
     bb2: {
-        _17 = len(_6);
+        _2 = const null;
         goto -> bb3;
     }
 
     bb3: {
-        _16 = copy _17 == const 0_i64;
-        branch copy _16 -> [bb5, bb4];
+        _10 = copy _2 == const null;
+        branch copy _10 -> [bb6, bb4];
     }
 
     bb4: {
-        _20 = copy _6;
-        _19 = call const fn baml.csv.CsvReader._feed(copy _1, copy _20) -> [bb6];
+        _12 = copy _2;
+        _14 = copy _12;
+        _13 = call const fn baml.csv.CsvReader._feed(copy _1, copy _14) -> [bb5];
     }
 
     bb5: {
-        _18 = call const fn baml.csv.CsvReader._feed_eof(copy _1) -> [bb6];
+        _0 = const null;
+        goto -> bb8;
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb9;
+        _11 = call const fn baml.csv.CsvReader._feed_eof(copy _1) -> [bb7];
     }
 
     bb7: {
-        _4 = call const fn baml.csv.CsvReader._feed_eof(copy _1) -> [bb8];
+        _0 = const null;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb9;
-    }
-
-    bb9: {
         return;
     }
 
+    bb9: {
+        _8 = is_type(copy _3, baml.errors.Io);
+        branch copy _8 -> [bb11, bb10];
+    }
+
     bb10: {
-        _8 = is_type(copy _7, baml.errors.InvalidArgument);
-        branch copy _8 -> [bb15, bb11];
+        rethrow copy _3;
     }
 
     bb11: {
-        _9 = is_type(copy _7, baml.errors.Io);
-        branch copy _9 -> [bb13, bb12];
+        _9 = call const fn baml.csv.CsvReader._mark_exhausted(copy _1) -> [bb12];
     }
 
     bb12: {
-        rethrow copy _7;
-    }
-
-    bb13: {
-        _15 = call const fn baml.csv.CsvReader._mark_exhausted(copy _1) -> [bb14];
-    }
-
-    bb14: {
-        rethrow copy _7;
-    }
-
-    bb15: {
-        _10 = copy _7.0;
-        _11 = copy _10;
-        _14 = copy _11;
-        _13 = const "underlying file handle is closed: " + copy _14;
-        _12 = call const fn baml.csv._error(const baml.csv.CsvErrorKind.Closed, copy _13) -> [bb16];
-    }
-
-    bb16: {
-        throw copy _12;
+        rethrow copy _3;
     }
 }
 
@@ -2114,18 +2089,12 @@ fn baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null {
     let _6: bool
     let _7: int
     let _8: int
-    let _9: unknown // _
-    let _10: bool
-    let _11: string
-    let _12: string // message
-    let _13: baml.errors.Io
-    let _14: string
-    let _15: string
+    let _9: uint8array
 
     bb0: {
         _3 = copy _1.1;
         _4 = copy _3 == const null;
-        branch copy _4 -> [bb5, bb1];
+        branch copy _4 -> [bb6, bb1];
     }
 
     bb1: {
@@ -2135,43 +2104,29 @@ fn baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null {
 
     bb2: {
         _6 = copy _7 > const 0_i64;
-        branch copy _6 -> [bb3, bb4];
+        branch copy _6 -> [bb3, bb5];
     }
 
     bb3: {
-        _8 = sys_op const fn baml.fs.File.write(copy _5, copy _2) -> bb4 unwind bb7;
+        _9 = call const fn baml.String.to_utf8(copy _2) -> [bb4];
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb6;
+        _8 = virtual_call write as baml.io.Write(copy _5, copy _9) -> [bb5];
     }
 
     bb5: {
         _0 = const null;
-        goto -> bb6;
+        goto -> bb7;
     }
 
     bb6: {
-        return;
+        _0 = const null;
+        goto -> bb7;
     }
 
     bb7: {
-        _10 = is_type(copy _9, baml.errors.InvalidArgument);
-        branch copy _10 -> [bb9, bb8];
-    }
-
-    bb8: {
-        rethrow copy _9;
-    }
-
-    bb9: {
-        _11 = copy _9.0;
-        _12 = copy _11;
-        _15 = copy _12;
-        _14 = const "underlying file handle is closed: " + copy _15;
-        _13 = baml.errors.Io { copy _14 };
-        throw copy _13;
+        return;
     }
 }
 
@@ -3256,21 +3211,76 @@ fn baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackTrace) 
 
 fn baml.errors.StackTrace._to_string_impl = builtin(vm)
 
-fn baml.fs.File.text = builtin(io)
+fn baml.fs.File.text(self: baml.fs.File) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.fs.File // self // param
 
-fn baml.fs.File.bytes = builtin(io)
+    bb0: {
+        _0 = virtual_call read_to_string as baml.io.Read(copy _1) -> [bb1];
+    }
 
-fn baml.fs.File.read = builtin(io)
+    bb1: {
+        return;
+    }
+}
 
-fn baml.fs.File.read_bytes = builtin(io)
+fn baml.fs.File.bytes(self: baml.fs.File) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: baml.fs.File // self // param
+
+    bb0: {
+        _0 = virtual_call read_to_end as baml.io.Read(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.fs.File.root.io.Read.read = builtin(io)
 
 fn baml.fs.File.close = builtin(io)
 
 fn baml.fs.File.seek_from = builtin(io)
 
-fn baml.fs.File.write = builtin(io)
+fn baml.fs.File.root.io.Write.write = builtin(io)
 
-fn baml.fs.File.write_bytes = builtin(io)
+fn baml.fs.File.root.io.Write.flush = builtin(io)
+
+fn baml.fs.File.write(self: baml.fs.File, data: string | uint8array) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.fs.File // self // param
+    let _2: string | uint8array // data // param
+    let _3: uint8array // bytes
+    let _4: bool
+    let _5: uint8array
+
+    bb0: {
+        _4 = is_type(copy _2, string);
+        branch copy _4 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = copy _2;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _3 = call const fn baml.String.to_utf8(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _5 = copy _3;
+        _0 = virtual_call write as baml.io.Write(copy _1, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.fs.open = builtin(io)
 

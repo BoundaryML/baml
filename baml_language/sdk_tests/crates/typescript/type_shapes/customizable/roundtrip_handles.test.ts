@@ -95,10 +95,15 @@ describe.runIf(isTestRuntime("node"))(
     it("handles_file_cursor_state_persists_across_calls", () => {
       const f = baml.fs.open(filePath, "r");
 
-      expect(f.read(3)).toBe("012");
-      expect(f.read(3)).toBe("345");
+      // Two successive relative seeks on the *same* handle must accumulate —
+      // the second continues where the first stopped. This is the load-bearing
+      // assertion: engine-side file state survives across separate host→engine
+      // FFI calls. (`read` reaches the cursor too, but it comes from
+      // `baml.io.Read`, and interface methods are not on the bridge surface.)
+      expect(f.seek_from("current", 3)).toBe(3);
+      expect(f.seek_from("current", 3)).toBe(6);
       expect(f.seek_from("start", 0)).toBe(0);
-      expect(f.read(2)).toBe("01");
+      expect(f.seek_from("current", 2)).toBe(2);
       expect(f.text()).toBe("23456789");
       expect(f.close()).toBeNull();
     });

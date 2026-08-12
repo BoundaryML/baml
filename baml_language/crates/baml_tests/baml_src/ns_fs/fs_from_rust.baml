@@ -4,8 +4,13 @@
 // Error types (from crates/sys_native/src/io_impls.rs):
 //   open/read/write/remove/remove_dir/remove_dir_all/read_dir/mkdir failures
 //     -> baml.errors.Io
-//   file.read(negative n)          -> baml.errors.InvalidArgument
-//   operations on a closed handle  -> baml.errors.InvalidArgument ("File is closed")
+//   file.read(n <= 0)              -> an empty chunk, NOT an error and NOT the
+//                                     `null` that signals end-of-file
+//   closed handle, via baml.io.Read / baml.io.Write
+//                                  -> baml.errors.Io ("File is closed"), the
+//                                     only class those interfaces declare
+//   closed handle, via close / seek_from
+//                                  -> baml.errors.InvalidArgument ("File is closed")
 //   seek_from("start", negative)   -> baml.errors.InvalidArgument
 //
 // HERMETICITY: same idiom as fs.baml — every test builds a unique path via
@@ -50,7 +55,7 @@ function fs_file_write_on_readonly_errors_fn() -> bool {
     baml.fs.write(path, "content");
     let file = baml.fs.open(path, "r");
     let msg = {
-        file.write("should fail");
+        file.write("should fail".to_utf8());
         "no error thrown"
     } catch (e) {
         baml.errors.Io => e.message
@@ -196,29 +201,31 @@ test "fs_remove_dir_all_on_file_errors" {
 }
 
 // ============================================================================
-// file.read with a negative length errors (InvalidArgument)
+// file.read with a non-positive length reads nothing: an EMPTY chunk, which is
+// distinct from the `null` that means end-of-file. Reporting EOF here would
+// silently truncate `read_to_end`, so the sentinel below ("x", length 1) makes
+// a `null` return fail the assertion instead of passing as an empty read.
 // ============================================================================
 
-function fs_file_read_negative_n_errors_fn() -> bool {
-    let path = fs_tmp("read_negative_n.txt");
+function fs_file_read_non_positive_n_is_empty_fn() -> int[] {
+    let path = fs_tmp("read_non_positive_n.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
-    let threw = {
-        f.read(-1);
-        false
-    } catch (e) {
-        baml.errors.InvalidArgument => true
-    };
+    let zero = f.read(0) ?? "x".to_utf8();
+    let negative = f.read(-1) ?? "x".to_utf8();
+    f.close();
     baml.fs.remove(path);
-    threw
+    [zero.length(), negative.length()]
 }
 
-test "fs_file_read_negative_n_errors" {
-    assert.is_true(fs_file_read_negative_n_errors_fn())
+test "fs_file_read_non_positive_n_is_empty" {
+    assert.equal(fs_file_read_non_positive_n_is_empty_fn(), [0, 0])
 }
 
 // ============================================================================
-// close invalidates the handle: reading after close errors ("File is closed")
+// close invalidates the handle: reading after close errors ("File is closed").
+// `text()` reads through `baml.io.Read`, whose only declared error class is
+// `Io` — unlike `close`/`seek_from`, which still raise `InvalidArgument`.
 // ============================================================================
 
 function fs_file_close_invalidates_handle_fn() -> bool {
@@ -230,7 +237,7 @@ function fs_file_close_invalidates_handle_fn() -> bool {
         f.text();
         false
     } catch (e) {
-        baml.errors.InvalidArgument => true
+        baml.errors.Io => true
     };
     baml.fs.remove(path);
     threw

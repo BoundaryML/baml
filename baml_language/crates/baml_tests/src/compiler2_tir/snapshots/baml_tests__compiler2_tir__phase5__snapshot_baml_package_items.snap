@@ -119,7 +119,7 @@ namespace baml.errors:
 namespace baml.events:
 namespace baml.fs:
   class DirEntry { methods: [] }
-  class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
+  class File { methods: [text, bytes, close, seek_from, write, read, write, flush] }
   class MkdirOptions { methods: [] }
   function chmod
   function exists

@@ -1269,85 +1269,63 @@ function baml.csv.CsvReader._poll(self: baml.csv.CsvReader) -> baml.csv.CsvRecor
 function baml.csv.CsvReader._poll_headers(self: baml.csv.CsvReader) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData {
 }
 
-function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null {
+function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
     load_var self
     load_field ._file
-    store_var_load_var _2
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L9
+    jump L3
 
   L0:
-    load_var _2
     load_const 65536
-    sys_op baml.fs.File.read_bytes
+    load_var self
+    load_field ._file
+    make_bound_method baml.fs.File.root.io.Read.read
+    call_indirect
     store_var chunk
-    jump L5
-    load_var e
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
     jump L4
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L1
+    jump L2
 
   L1:
     load_var e
-    is_type baml.errors.Io
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var e
     rethrow
 
-  L3:
+  L2:
     load_var self
     call baml.csv.CsvReader._mark_exhausted
     pop 1
     load_var e
     rethrow
 
+  L3:
+    load_const null
+    store_var chunk
+
   L4:
-    load_const baml.csv.CsvErrorKind.Closed
-    alloc_variant baml.csv.CsvErrorKind
-    load_const "underlying file handle is closed: "
-    load_var e
-    load_field .0
-    bin_op +
-    call baml.csv._error
-    throw
+    load_var chunk
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    jump L6
 
   L5:
-    load_var chunk
-    container_len
-    store_var _17
-    load_var _17
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L6
+    load_var2 1 2
+    call baml.csv.CsvReader._feed
+    pop 1
+    load_const null
     jump L7
 
   L6:
-    load_var2 1 3
-    call baml.csv.CsvReader._feed
+    load_var self
+    call baml.csv.CsvReader._feed_eof
     pop 1
-    jump L8
+    load_const null
 
   L7:
-    load_var self
-    call baml.csv.CsvReader._feed_eof
-    pop 1
-
-  L8:
-    load_const null
-    jump L10
-
-  L9:
-    load_var self
-    call baml.csv.CsvReader._feed_eof
-    pop 1
-    load_const null
-
-  L10:
     return
 }
 
@@ -1644,43 +1622,31 @@ function baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L4
+    jump L2
 
   L0:
     load_var out
     call baml.String.length
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L3
-    load_var2 3 2
-    sys_op baml.fs.File.write
-    pop 1
-    jump L3
-    load_var _
-    is_type baml.errors.InvalidArgument
     pop_jump_if_false L1
-    jump L2
+    load_var out
+    call baml.String.to_utf8
+    store_var _9
+    load_var2 3 4
+    load_type baml.io.Write
+    load_const "write"
+    virtual_call nargs=2 ntypeargs=0
+    pop 1
 
   L1:
-    load_var _
-    rethrow
+    load_const null
+    jump L3
 
   L2:
-    load_const "underlying file handle is closed: "
-    load_var _
-    load_field .0
-    bin_op +
-    init_instance baml.errors.Io .message
-    throw
+    load_const null
 
   L3:
-    load_const null
-    jump L5
-
-  L4:
-    load_const null
-
-  L5:
     return
 }
 
@@ -2481,27 +2447,64 @@ function baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackT
 }
 
 function baml.fs.File.bytes(self: baml.fs.File) -> uint8array {
+    load_var self
+    load_type baml.io.Read
+    load_const "read_to_end"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
 }
 
 function baml.fs.File.close(self: baml.fs.File) -> null {
 }
 
-function baml.fs.File.read(self: baml.fs.File, n: int) -> string {
+function baml.fs.File.root.io.Read.read(self: baml.fs.File, n: int) -> uint8array | null {
 }
 
-function baml.fs.File.read_bytes(self: baml.fs.File, n: int) -> uint8array {
+function baml.fs.File.root.io.Write.flush(self: baml.fs.File) -> void {
+}
+
+function baml.fs.File.root.io.Write.write(self: baml.fs.File, data: uint8array) -> int {
 }
 
 function baml.fs.File.seek_from(self: baml.fs.File, whence: "start" | "current" | "end", offset: int) -> int {
 }
 
 function baml.fs.File.text(self: baml.fs.File) -> string {
+    load_var self
+    load_type baml.io.Read
+    load_const "read_to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
 }
 
-function baml.fs.File.write(self: baml.fs.File, data: string) -> int {
-}
+function baml.fs.File.write(self: baml.fs.File, data: string | uint8array) -> int {
+    load_var data
+    is_type string
+    pop_jump_if_false L0
+    jump L1
 
-function baml.fs.File.write_bytes(self: baml.fs.File, data: uint8array) -> int {
+  L0:
+    load_var data
+    store_var bytes
+    jump L2
+
+  L1:
+    load_var data
+    call baml.String.to_utf8
+    store_var bytes
+
+  L2:
+    load_var2 1 4
+    load_type baml.io.Write
+    load_const "write"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
 }
 
 function baml.fs.chmod(path: string, mode: int) -> void {

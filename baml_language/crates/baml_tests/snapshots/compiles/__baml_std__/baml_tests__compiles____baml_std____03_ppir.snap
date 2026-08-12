@@ -476,7 +476,7 @@ function baml.csv._cell_by_index(rec: baml.csv.CsvRecord, index: int) -> T?  [bu
 function baml.csv._cell_by_name(rec: baml.csv.CsvRecord, column: string) -> T?  [builtin]
 function baml.csv._decode_record(rec: baml.csv.CsvRecord) -> T  [builtin]
 function baml.csv._emit(self: ?, out: string) -> null  [expr] {
-  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out) catch (_) { root.errors.InvalidArgument { message: message } => { throw root.errors.Io { message: "underlying file h..." Add message } } } } } null }
+  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out.to_utf8()) } } null }
 }
 function baml.csv._encode_header(self: ?, names: string[]) -> string  [builtin]
 function baml.csv._encode_record(self: ?, record: baml.csv.CsvValue[]) -> string  [builtin]
@@ -492,8 +492,8 @@ function baml.csv._mark_closed(self: ?) -> null  [builtin]
 function baml.csv._mark_exhausted(self: ?) -> null  [builtin]
 function baml.csv._poll(self: ?) -> baml.csv.CsvRecord | baml.csv.CsvSkip | baml.csv.CsvNeedData | root.iter.Done  [builtin]
 function baml.csv._poll_headers(self: ?) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData  [builtin]
-function baml.csv._read_chunk(self: ?) -> null  [expr] {
-  {  } match (self._file) { null => { self._feed_eof() } null, f: root.fs.File => { let chunk = f.read_bytes(65536) catch (e) { root.errors.InvalidArgument { message: message } => { throw _error(CsvErrorKind.Closed, "underlying file h..." Add message) }, root.errors.Io => { self._mark_exhausted(); throw e } }; if (chunk.length() Eq 0) { self._feed_eof() } else { self._feed(chunk) } } null }
+function baml.csv._read_chunk(self: ?) -> void  [expr] {
+  { let chunk = self._file?.read(65536) catch (e) { root.errors.Io => { self._mark_exhausted(); throw e } } } match (chunk) { null => { self._feed_eof() }, bytes: uint8array => { self._feed(bytes) } }
 }
 function baml.csv._reader(source: string | uint8array | root.fs.File, options: baml.csv.ReaderOptions?, owns_file: bool) -> baml.csv.CsvReader  [builtin]
 function baml.csv._to_markdown(rows: T[], max_rows: int) -> string  [builtin]
@@ -805,15 +805,17 @@ class baml.fs.MkdirOptions {
 class baml.fs.MkdirOptions$stream {
   recursive: bool | null
 }
-function baml.fs.bytes(self: ?) -> uint8array  [builtin]
+function baml.fs.bytes(self: ?) -> uint8array  [expr] {
+  {  } self.as<root.io.Read>.read_to_end()
+}
 function baml.fs.chmod(path: string, mode: int) -> void  [builtin]
 function baml.fs.close(self: ?) -> null  [builtin]
 function baml.fs.exists(path: string) -> bool  [builtin]
+function baml.fs.flush(self: ?) -> void  [builtin]
 function baml.fs.mkdir(path: string, options: baml.fs.MkdirOptions) -> null  [builtin]
 function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> baml.fs.File  [builtin]
-function baml.fs.read(self: ?, n: int) -> string  [builtin]
+function baml.fs.read(self: ?, n: int) -> uint8array?  [builtin]
 function baml.fs.read(path: string) -> string  [builtin]
-function baml.fs.read_bytes(self: ?, n: int) -> uint8array  [builtin]
 function baml.fs.read_dir(path: string) -> baml.fs.DirEntry[]  [builtin]
 function baml.fs.remove(path: string) -> null  [builtin]
 function baml.fs.remove_dir(path: string) -> null  [builtin]
@@ -821,10 +823,14 @@ function baml.fs.remove_dir_all(path: string) -> null  [builtin]
 function baml.fs.seek_from(self: ?, whence: "start" | "current" | "end", offset: int) -> int  [builtin]
 function baml.fs.size(path: string) -> int  [builtin]
 function baml.fs.symlink(target: string, path: string) -> void  [builtin]
-function baml.fs.text(self: ?) -> string  [builtin]
-function baml.fs.write(self: ?, data: string) -> int  [builtin]
+function baml.fs.text(self: ?) -> string  [expr] {
+  {  } self.as<root.io.Read>.read_to_string()
+}
+function baml.fs.write(self: ?, data: uint8array) -> int  [builtin]
+function baml.fs.write(self: ?, data: string | uint8array) -> int  [expr] {
+  { let bytes = match (data) { string => data.to_utf8(), uint8array => data } } self.as<root.io.Write>.write(bytes)
+}
 function baml.fs.write(path: string, content: string) -> int  [builtin]
-function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
 function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_future/future.baml ---

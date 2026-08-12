@@ -415,53 +415,18 @@ fn closed_err() -> VmBamlError {
     }
 }
 
+/// The closed-handle failure for the `root.io.Read` / `root.io.Write` methods.
+///
+/// Those interfaces declare `throws root.errors.Io` only, so the
+/// `InvalidArgument` that `File`'s own methods raise is not in the contract —
+/// a closed stream has to surface as an I/O failure instead.
+fn closed_io_err() -> VmBamlError {
+    VmBamlError::Io {
+        message: "File is closed".into(),
+    }
+}
+
 impl io::IoClassFsFile for NativeSysOps {
-    fn text(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        use tokio::io::AsyncReadExt;
-
-        SysOpOutput::async_op(async move {
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
-            let f = guard.as_mut().ok_or_else(closed_err)?;
-            let mut contents = String::new();
-            f.read_to_string(&mut contents)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file: {e}"),
-                })?;
-            Ok(contents)
-        })
-    }
-
-    fn bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        use tokio::io::AsyncReadExt;
-
-        SysOpOutput::async_op(async move {
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
-            let f = guard.as_mut().ok_or_else(closed_err)?;
-            let mut contents = Vec::new();
-            f.read_to_end(&mut contents)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file: {e}"),
-                })?;
-            Ok(contents)
-        })
-    }
-
     fn read(
         &self,
         _heap: &Arc<BexHeap>,
@@ -469,25 +434,7 @@ impl io::IoClassFsFile for NativeSysOps {
         file: owned::fs::File,
         n: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::async_op(async move {
-            let bytes = read_up_to(&file, n).await?;
-            String::from_utf8(bytes)
-                .map_err(|e| VmBamlError::ParseError {
-                    message: format!("Invalid UTF-8 in file: {e}"),
-                })
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn read_bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         SysOpOutput::async_op(
             async move { read_up_to(&file, n).await.map_err(VmRustFnError::from) },
         )
@@ -560,21 +507,6 @@ impl io::IoClassFsFile for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         file: owned::fs::File,
-        data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move {
-            write_all_bytes(&file, data.into_bytes())
-                .await
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn write_bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
         data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
@@ -584,17 +516,45 @@ impl io::IoClassFsFile for NativeSysOps {
                 .map_err(VmRustFnError::from)
         })
     }
+
+    fn flush(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_io_err)?;
+            f.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush: {e}"),
+            })?;
+            Ok(())
+        })
+    }
 }
 
-async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, VmBamlError> {
+/// `root.io.Read.read` over an open handle: at most `n` bytes, or `None` once
+/// the cursor has already reached the end of the file.
+///
+/// A zero-length read only means end-of-file when bytes were actually asked
+/// for, so `n <= 0` yields an empty chunk rather than the end-of-source signal
+/// — a caller that requested nothing has learned nothing about the cursor, and
+/// reporting EOF there would silently truncate `read_to_end`.
+async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Option<Vec<u8>>, VmBamlError> {
     use tokio::io::AsyncReadExt;
 
-    let cap = u64::try_from(n).map_err(|_| VmBamlError::InvalidArgument {
-        message: format!("Negative read length: {n}"),
-    })?;
+    let cap = match u64::try_from(n) {
+        Err(_) | Ok(0) => return Ok(Some(Vec::new())), // read nothing
+        Ok(cap) => cap,
+    };
     let handle = downcast_handle(file)?;
     let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_err)?;
+    let f = guard.as_mut().ok_or_else(closed_io_err)?;
     let mut buf = Vec::new();
     f.take(cap)
         .read_to_end(&mut buf)
@@ -602,15 +562,21 @@ async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, VmBamlErr
         .map_err(|e| VmBamlError::Io {
             message: format!("Failed to read file: {e}"),
         })?;
-    Ok(buf)
+    Ok((!buf.is_empty()).then_some(buf))
 }
 
+/// `root.io.Write.write` over an open handle.
+///
+/// The flush is part of the write rather than something `flush` alone
+/// provides: `tokio::fs::File` buffers internally, and callers (plus every
+/// existing `fs` test) rely on a completed `write` being visible to a
+/// subsequent `seek_from` + `read` on the same handle.
 async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, VmBamlError> {
     use tokio::io::AsyncWriteExt;
 
     let handle = downcast_handle(file)?;
     let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_err)?;
+    let f = guard.as_mut().ok_or_else(closed_io_err)?;
     #[allow(clippy::cast_possible_wrap)]
     let len = data.len() as i64;
     f.write_all(&data).await.map_err(|e| VmBamlError::Io {

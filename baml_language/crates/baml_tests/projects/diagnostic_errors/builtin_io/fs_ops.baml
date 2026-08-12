@@ -40,14 +40,14 @@ function ReadFileBytesAndClose() -> uint8array {
     data
 }
 
-function ReadChunk() -> string {
+function ReadChunk() -> uint8array? {
     let f = baml.fs.open("log.txt", "r");
     f.read(512)
 }
 
-function ReadChunkBytes() -> uint8array {
+function ReadChunkOrEmpty() -> uint8array {
     let f = baml.fs.open("data.bin", "r");
-    f.read_bytes(4096)
+    f.read(4096) ?? b""
 }
 
 function WriteFile() -> int {
@@ -67,24 +67,24 @@ function SeekAndRead() -> string {
 
 function FileWrite() -> int {
     let f = baml.fs.open("data.txt", "r+");
-    f.write("hello")
+    f.write("hello".to_utf8())
 }
 
 function FileWriteBytes() -> int {
     let f = baml.fs.open("data.bin", "r+");
     let data = f.bytes();
     f.seek_from("start", 0);
-    f.write_bytes(data)
+    f.write(data)
 }
 
 function Append() -> int {
     let f = baml.fs.open("log.txt", "a");
-    f.write("line\n")
+    f.write("line\n".to_utf8())
 }
 
 function AppendAndRead() -> string {
     let f = baml.fs.open("log.txt", "a+");
-    f.write("line\n");
+    f.write("line\n".to_utf8());
     f.seek_from("start", 0);
     f.text()
 }

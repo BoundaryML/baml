@@ -115,16 +115,18 @@ class TestHandles {
         try {
             f = Fns.open(path.toString(), "r");
 
-            // Two successive reads on the *same* handle must advance the
-            // cursor — the second read continues where the first stopped.
+            // Two successive relative seeks on the *same* handle must
+            // accumulate — the second continues where the first stopped.
             // This is the load-bearing assertion: engine-side file state
-            // survives across separate host->engine FFI calls.
-            assertEquals("012", f.read(3L));
-            assertEquals("345", f.read(3L));
+            // survives across separate host->engine FFI calls. (`read`
+            // reaches the cursor too, but it comes from `baml.io.Read`, and
+            // interface methods are not on the bridge surface.)
+            assertEquals(3L, f.seek_from("current", 3L));
+            assertEquals(6L, f.seek_from("current", 3L));
 
             // Seek back to the start and confirm the cursor actually moved.
             assertEquals(0L, f.seek_from("start", 0L));
-            assertEquals("01", f.read(2L));
+            assertEquals(2L, f.seek_from("current", 2L));
 
             // text() reads from the current cursor (now at 2) to EOF.
             assertEquals("23456789", f.text());

@@ -4312,7 +4312,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
 
   L23:
     load_var handle
-    sys_op baml.fs.File.bytes
+    call baml.fs.File.bytes
     call baml.Uint8Array.to_base64
     store_var data
     jump L24
@@ -4325,7 +4325,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_var path
     call baml.String.from
     store_var _30
-    load_type baml.errors.InvalidArgument | baml.errors.Io
+    load_type baml.errors.Io
     load_var e
     call baml.String.from
     store_var _34

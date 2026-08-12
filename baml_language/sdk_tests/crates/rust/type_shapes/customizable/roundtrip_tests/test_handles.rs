@@ -103,16 +103,17 @@ fn test_handles_file_cursor_state_persists_across_calls() {
     let temp_file = temp_file();
     let f = baml_open(temp_file.to_str().unwrap().to_string(), "r".to_string()).unwrap();
 
-    // Two successive reads on the *same* handle must advance the cursor —
-    // the second read continues where the first stopped. This is the
-    // load-bearing assertion: engine-side file state survives across
-    // separate host→engine FFI calls.
-    assert_eq!(f.read(3).unwrap(), "012");
-    assert_eq!(f.read(3).unwrap(), "345");
+    // Two successive relative seeks on the *same* handle must accumulate —
+    // the second continues where the first stopped. This is the load-bearing
+    // assertion: engine-side file state survives across separate host→engine
+    // FFI calls. (`read` reaches the cursor too, but it comes from
+    // `baml.io.Read`, and interface methods are not on the bridge surface.)
+    assert_eq!(f.seek_from("current".to_string(), 3).unwrap(), 3);
+    assert_eq!(f.seek_from("current".to_string(), 3).unwrap(), 6);
 
     // Seek back to the start and confirm the cursor actually moved.
     assert_eq!(f.seek_from("start".to_string(), 0).unwrap(), 0);
-    assert_eq!(f.read(2).unwrap(), "01");
+    assert_eq!(f.seek_from("current".to_string(), 2).unwrap(), 2);
 
     // text() reads from the current cursor (now at 2) to EOF.
     assert_eq!(f.text().unwrap(), "23456789");

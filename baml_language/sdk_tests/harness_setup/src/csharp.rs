@@ -260,7 +260,6 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
 
     for expected in [
         "public sealed partial class File : global::System.IDisposable",
-        "public string Read(",
         "public long SeekFrom(\n        string whence,",
         "public string Text(",
         "public File Clone() => new(\n        resource.Clone());",
@@ -285,6 +284,23 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
     assert!(!file.contains("public global::Baml.BamlHandle Handle"));
     assert!(!file.contains("private readonly global::Baml.BamlHandle"));
 
+    // `File` reaches `read` / `flush` only through `baml.io.Read` / `baml.io.Write`,
+    // and interface-block methods are excluded from the bridge surface, so neither
+    // is projected at all. The one `Write` that survives is the class's own
+    // `write(string | uint8array)`; a second one would mean the interface method
+    // was projected under the same name.
+    for absent in [" Read(", " ReadAsync(", " Flush(", " FlushAsync("] {
+        assert!(
+            !file.contains(absent),
+            "generated File resource surface exposed interface-block member `{absent}`"
+        );
+    }
+    assert_eq!(
+        file.matches(" Write(").count(),
+        1,
+        "expected exactly one File.Write (the class method, not baml.io.Write's)"
+    );
+
     let resource_surfaces = [
         (
             "Fs/File.g.cs",
@@ -293,18 +309,12 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
                 " TextAsync(",
                 " Bytes(",
                 " BytesAsync(",
-                " Read(",
-                " ReadAsync(",
-                " ReadBytes(",
-                " ReadBytesAsync(",
                 " Close(",
                 " CloseAsync(",
                 " SeekFrom(",
                 " SeekFromAsync(",
                 " Write(",
                 " WriteAsync(",
-                " WriteBytes(",
-                " WriteBytesAsync(",
             ],
         ),
         (
@@ -358,17 +368,10 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
             vec![" AllowTls12 { get; }", " New(", " NewAsync("],
         ),
         (
+            // `read` / `write` / `flush` live in `implements` blocks, so they are
+            // excluded from the bridge surface — only `connect` and `close` remain.
             "Net/TcpStream.g.cs",
-            vec![
-                " Connect(",
-                " ConnectAsync(",
-                " Read(",
-                " ReadAsync(",
-                " Write(",
-                " WriteAsync(",
-                " Close(",
-                " CloseAsync(",
-            ],
+            vec![" Connect(", " ConnectAsync(", " Close(", " CloseAsync("],
         ),
         (
             "Net/TcpListener.g.cs",

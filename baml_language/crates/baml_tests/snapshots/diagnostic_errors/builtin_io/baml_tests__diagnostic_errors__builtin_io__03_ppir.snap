@@ -3,28 +3,28 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === PPIR ===
 function user.Append() -> int  [expr] {
-  { let f = baml.fs.open("log.txt", "a") } f.write("line\n")
+  { let f = baml.fs.open("log.txt", "a") } f.write("line\n".to_utf8())
 }
 function user.AppendAndRead() -> string  [expr] {
-  { let f = baml.fs.open("log.txt", "a+"); f.write("line\n"); f.seek_from("start", 0) } f.text()
+  { let f = baml.fs.open("log.txt", "a+"); f.write("line\n".to_utf8()); f.seek_from("start", 0) } f.text()
 }
 function user.Exists() -> bool  [expr] {
   {  } baml.fs.exists("maybe.txt")
 }
 function user.FileWrite() -> int  [expr] {
-  { let f = baml.fs.open("data.txt", "r+") } f.write("hello")
+  { let f = baml.fs.open("data.txt", "r+") } f.write("hello".to_utf8())
 }
 function user.FileWriteBytes() -> int  [expr] {
-  { let f = baml.fs.open("data.bin", "r+"); let data = f.bytes(); f.seek_from("start", 0) } f.write_bytes(data)
+  { let f = baml.fs.open("data.bin", "r+"); let data = f.bytes(); f.seek_from("start", 0) } f.write(data)
 }
 function user.ReadAndClose() -> string  [expr] {
   { let f = baml.fs.open("example.txt", "r"); let content = f.text(); f.close() } content
 }
-function user.ReadChunk() -> string  [expr] {
+function user.ReadChunk() -> uint8array?  [expr] {
   { let f = baml.fs.open("log.txt", "r") } f.read(512)
 }
-function user.ReadChunkBytes() -> uint8array  [expr] {
-  { let f = baml.fs.open("data.bin", "r") } f.read_bytes(4096)
+function user.ReadChunkOrEmpty() -> uint8array  [expr] {
+  { let f = baml.fs.open("data.bin", "r") } f.read(4096) NullCoalesce b"<0 bytes>"
 }
 function user.ReadDir() -> baml.fs.DirEntry[]  [expr] {
   {  } baml.fs.read_dir("some/path")
