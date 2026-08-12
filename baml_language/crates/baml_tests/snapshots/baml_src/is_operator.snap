@@ -953,15 +953,13 @@ function is_operator.is_evaluates_scrutinee_exactly_once_fn() -> int {
 
   L0:
     load_var _3
-    pop 1
-    load_const false
+    is_type string
     pop_jump_if_false L1
     jump L2
 
   L1:
     load_var _3
-    pop 1
-    load_const false
+    is_type bool
     pop_jump_if_false L2
 
   L2:
@@ -1356,8 +1354,7 @@ function is_operator.is_or_pattern_with_literals_fn() -> bool {
 
 function is_operator.is_pattern_disjoint_from_scrutinee_type_returns_false_fn() -> bool {
     load_const 42
-    pop 1
-    load_const false
+    is_type string
     pop_jump_if_false L0
     jump L1
 
@@ -1580,7 +1577,7 @@ function is_operator.is_with_parenthesised_arithmetic_scrutinee_fn() -> bool {
     load_const 1
     load_const 2
     add_int
-    is_type 3
+    is_type int
     pop_jump_if_false L0
     jump L1
 

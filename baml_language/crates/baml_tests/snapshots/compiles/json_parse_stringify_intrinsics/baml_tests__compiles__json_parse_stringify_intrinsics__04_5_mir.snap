@@ -1,13 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11483
 ---
 === MIR2 ===
 fn user.parse_and_roundtrip(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // s // param
-    let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
+    let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
 
     bb0: {
         _2 = call const fn baml.json.parse(copy _1) -> [bb1];
@@ -27,8 +28,8 @@ fn user.parse_and_roundtrip_pretty(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // s // param
-    let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
+    let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
 
     bb0: {
         _2 = call const fn baml.json.parse(copy _1) -> [bb1];
@@ -48,17 +49,17 @@ fn user.match_parsed(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // s // param
-    let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j
+    let _3: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _4: baml.json.json[] // arr
-    let _5: (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[]
-    let _6: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _5: (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[]
+    let _6: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _7: map<string, baml.json.json> // m
-    let _8: map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>
-    let _9: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
-    let _10: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
-    let _11: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
-    let _12: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _8: map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _9: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _10: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _11: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _12: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _13: string // st
 
     bb0: {
@@ -67,12 +68,12 @@ fn user.match_parsed(s: string) -> string {
 
     bb1: {
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as List(Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb13, bb2];
+        _3 = narrow_bind copy _3 as List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb13, bb2];
     }
 
     bb2: {
         _6 = copy _2;
-        _6 = narrow_bind copy _6 as Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, List(TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb12, bb3];
+        _6 = narrow_bind copy _6 as Map { key: String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, value: TypeAlias(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "json" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb12, bb3];
     }
 
     bb3: {

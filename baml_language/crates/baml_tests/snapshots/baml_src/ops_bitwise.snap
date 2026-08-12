@@ -45,7 +45,7 @@ function ops_bitwise.band(x: #0, y: int) -> (#0 as baml.ops.BitAnd<int>).Output 
 }
 
 function ops_bitwise.bigint_ops() -> bool {
-    load_type bigint | 2n
+    load_type bigint
     load_const 6n
     load_const 3n
     bit_and_bigint
@@ -53,7 +53,7 @@ function ops_bitwise.bigint_ops() -> bool {
     call baml.deep_equals
     jump_if_false L0
     pop 1
-    load_type bigint | 7n
+    load_type bigint
     load_const 6n
     load_const 3n
     bit_or_bigint
@@ -63,7 +63,7 @@ function ops_bitwise.bigint_ops() -> bool {
   L0:
     jump_if_false L1
     pop 1
-    load_type bigint | 5n
+    load_type bigint
     load_const 6n
     load_const 3n
     bit_xor_bigint
@@ -73,7 +73,7 @@ function ops_bitwise.bigint_ops() -> bool {
   L1:
     jump_if_false L2
     pop 1
-    load_type bigint | 1180591620717411303424n
+    load_type bigint
     load_const 1n
     load_const 70n
     shl_bigint
@@ -83,7 +83,7 @@ function ops_bitwise.bigint_ops() -> bool {
   L2:
     jump_if_false L3
     pop 1
-    load_type bigint | 1n
+    load_type bigint
     load_const 1180591620717411303424n
     load_const 70n
     shr_bigint

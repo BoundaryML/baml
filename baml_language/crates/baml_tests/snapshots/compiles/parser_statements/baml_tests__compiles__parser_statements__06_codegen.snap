@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 20327
 ---
 function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
@@ -302,16 +303,7 @@ function user.mul_assign() -> int {
 }
 
 function user.multi_assign() -> int {
-    load_const 1
-    store_var a
-    load_const 2
-    store_var b
-    load_const 10
-    store_var a
-    load_const 20
-    store_var b
-    load_var2 1 2
-    add_int
+    load_const 30
     return
 }
 

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22858
 ---
 === MIR2 ===
 fn user.TestClient$new(lenient: bool) -> null {
@@ -240,7 +241,7 @@ fn user.call_stream_inferred() -> baml.llm.Stream<string | null, string> {
 
     bb0: {
         _1 = { const "input": const "world" }: map<string, unknown>;
-        _2 = load_type(null | string);
+        _2 = load_type(string | null);
         _3 = load_type(string);
         _0 = call const fn baml.llm.stream_llm_function<copy _2, copy _3>(const item user.TestClient, const "TestFunc", copy _1, const <omitted>) -> [bb1];
     }

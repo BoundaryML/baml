@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function closures.$init_test_ns_closures_closures(registry: testing.TestCollector) -> null {
     load_var registry
@@ -327,6 +328,7 @@ function closures.closures_repeated_bound_calls() -> int {
 }
 
 function closures.closures_strategy_swap() -> int[] {
+    load_type never
     load_const "add"
     init_instance user.closures.ClsCalculator .op
     make_bound_method user.closures.ClsCalculator.compute
@@ -334,13 +336,14 @@ function closures.closures_strategy_swap() -> int[] {
     load_const 4
     call user.closures.closures_apply
     store_var _5
+    load_type never
     load_const "mul"
     init_instance user.closures.ClsCalculator .op
     make_bound_method user.closures.ClsCalculator.compute
     load_const 3
     load_const 4
     call user.closures.closures_apply
-    store_var _7
+    store_var _8
     load_var2 1 2
     load_type int
     alloc_array 2

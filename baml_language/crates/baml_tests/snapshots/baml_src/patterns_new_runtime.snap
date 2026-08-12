@@ -3332,7 +3332,7 @@ function patterns_new_runtime.test_fn_arm_before_wildcard_int() -> string {
 
 function patterns_new_runtime.test_fn_is_matching() -> bool {
     make_closure .<lambda(test_fn_is_matching, 0)>, 0
-    is_type (int) -> int throws never
+    is_type (int) -> int throws unknown
     pop_jump_if_false L0
     jump L1
 
@@ -3349,8 +3349,7 @@ function patterns_new_runtime.test_fn_is_matching() -> bool {
 
 function patterns_new_runtime.test_fn_is_mismatched() -> bool {
     make_closure .<lambda(test_fn_is_mismatched, 0)>, 0
-    pop 1
-    load_const false
+    is_type (string) -> string throws unknown
     pop_jump_if_false L0
     jump L1
 
@@ -3458,6 +3457,7 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     load_field .coordinate
     load_field .zip
     store_deref ?4
+    load_type () -> int throws never
     load_var2 1 4
     make_closure .<lambda(test_for_deep_class_capture_fresh, 0)>, 1
     call baml.Array.push
@@ -3469,25 +3469,25 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     load_const 0
     load_array_element
     call_indirect
-    store_var _25
+    store_var _26
     load_var funcs
     load_const 1
     load_array_element
     call_indirect
-    store_var _30
+    store_var _31
     load_var funcs
     load_const 2
     load_array_element
     call_indirect
-    store_var _34
-    load_var _25
+    store_var _35
+    load_var _26
     load_const 100
     mul_int
-    load_var _30
+    load_var _31
     load_const 10
     mul_int
     add_int
-    load_var _34
+    load_var _35
     add_int
     return
 }
@@ -3625,6 +3625,7 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     store_var b
     load_var _6
     store_deref ?6
+    load_type () -> int throws never
     load_var2 1 6
     make_closure .<lambda(test_for_let_chain_alias_capture, 0)>, 1
     call baml.Array.push
@@ -3636,25 +3637,25 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     load_const 0
     load_array_element
     call_indirect
-    store_var _13
+    store_var _14
     load_var funcs
     load_const 1
     load_array_element
     call_indirect
-    store_var _18
+    store_var _19
     load_var funcs
     load_const 2
     load_array_element
     call_indirect
-    store_var _22
-    load_var _13
+    store_var _23
+    load_var _14
     load_const 100
     mul_int
-    load_var _18
+    load_var _19
     load_const 10
     mul_int
     add_int
-    load_var _22
+    load_var _23
     add_int
     return
 }
@@ -3838,18 +3839,18 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     load_const 3
     load_type int
     alloc_array 2
-    load_type never
+    load_type int
     alloc_array 0
-    load_type int[] | never[]
+    load_type int[]
     alloc_array 3
-    load_type baml.iter.Iterable<Error = never, Item = int[] | never[]>
+    load_type baml.iter.Iterable<Error = never, Item = int[]>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = int[] | never[]>
+    load_type baml.iter.Iterator<Error = never, Item = int[]>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -3913,6 +3914,7 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     store_var row
     load_var _8
     store_deref ?4
+    load_type () -> int throws never
     load_var2 1 4
     make_closure .<lambda(test_for_rest_capture_fresh_cell, 0)>, 1
     call baml.Array.push
@@ -3924,25 +3926,25 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     load_const 0
     load_array_element
     call_indirect
-    store_var _16
+    store_var _17
     load_var funcs
     load_const 1
     load_array_element
     call_indirect
-    store_var _21
+    store_var _22
     load_var funcs
     load_const 2
     load_array_element
     call_indirect
-    store_var _25
-    load_var _16
+    store_var _26
+    load_var _17
     load_const 100
     mul_int
-    load_var _21
+    load_var _22
     load_const 10
     mul_int
     add_int
-    load_var _25
+    load_var _26
     add_int
     return
 }
@@ -4362,7 +4364,7 @@ function patterns_new_runtime.test_match_chain_binding_guard() -> int {
     load_const 4
     store_var _1
     load_var _1
-    narrow_bind 4, slot=1
+    narrow_bind int, slot=1
     pop_jump_if_false L0
     load_var _1
     store_var_load_var n
@@ -4593,7 +4595,7 @@ function patterns_new_runtime.test_match_or_chain_narrows() -> int {
     load_const 10
     store_var _2
     load_var _2
-    narrow_bind 10, slot=1
+    narrow_bind int, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -4601,7 +4603,7 @@ function patterns_new_runtime.test_match_or_chain_narrows() -> int {
     load_const 10
     store_var _5
     load_var _5
-    narrow_bind 10, slot=2
+    narrow_bind int, slot=2
     pop_jump_if_false L2
     load_var _5
     load_const 2

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23001
 ---
 function $init() -> null {
     call $init_let_0
@@ -193,7 +194,7 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
 }
 
 function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
-    load_type null | string
+    load_type string | null
     load_type string
     load_global user.TestClient
     load_const "TestFunc"

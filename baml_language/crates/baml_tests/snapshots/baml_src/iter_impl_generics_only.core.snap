@@ -383,6 +383,7 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     jump L2
 
   L1:
+    load_type #1
     load_var2 2 3
     call baml.Array.push
     pop 1

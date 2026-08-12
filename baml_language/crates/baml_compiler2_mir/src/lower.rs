@@ -13911,10 +13911,14 @@ pub fn lower_let_body<'db>(
 /// becomes the only provider.
 fn default_provider() -> crate::InferenceProvider {
     static PROVIDER: std::sync::OnceLock<crate::InferenceProvider> = std::sync::OnceLock::new();
+    // THE FLIP (S16, 2026-08-12): hir_ty is the default engine behind
+    // every MIR lowering. `BAML_INFERENCE_PROVIDER=tir` opts back onto
+    // the retiring engine while it still exists; the toggle and the Tir
+    // arm are deleted with TIR.
     *PROVIDER.get_or_init(
         || match std::env::var("BAML_INFERENCE_PROVIDER").as_deref() {
-            Ok("hir") => crate::InferenceProvider::HirTy,
-            _ => crate::InferenceProvider::Tir,
+            Ok("tir") => crate::InferenceProvider::Tir,
+            _ => crate::InferenceProvider::HirTy,
         },
     )
 }

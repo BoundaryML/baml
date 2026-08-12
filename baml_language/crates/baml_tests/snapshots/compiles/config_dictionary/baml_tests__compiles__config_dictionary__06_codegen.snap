@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8033
 ---
 function $init() -> null {
     call $init_let_0
@@ -82,7 +83,7 @@ function user.MyClient$new(lenient: bool) -> null {
     load_const "nestedArray"
     load_const "number"
     load_type string
-    load_type string | string[] | int
+    load_type int | string | string[]
     alloc_map 4
     load_const "value"
     load_const 100
@@ -106,7 +107,7 @@ function user.MyClient$new(lenient: bool) -> null {
     load_type string
     load_type string
     alloc_map 1
-    load_type map<string, string | map<string, string>> | map<string, string>
+    load_type map<string, string> | map<string, string | map<string, string>>
     alloc_array 2
     load_const "#hellotheremyfriend{#acommentinaprompt#}#"
     load_const "max_tokens"

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2905
 ---
 function baml.Array.at(self: baml.Array<#0>, index: int) -> #0 | null {
 }
@@ -58,6 +59,7 @@ function baml.Array.filter_map(self: baml.Array<#0>, fn: (#0) -> #1 | null throw
     jump L0
 
   L2:
+    load_type #1
     load_var2 3 7
     call baml.Array.push
     pop 1
@@ -140,6 +142,7 @@ function baml.Array.generate(length: int, f: (int) -> #0 throws #1) -> #0[] {
     load_var2 4 2
     call_indirect
     store_var _8
+    load_type #0
     load_var2 3 5
     call baml.Array.push
     pop 1
@@ -242,6 +245,7 @@ function baml.Array.sort_by_key(self: baml.Array<#0>, key: (#0) -> #1 throws #2)
     load_var2 7 2
     call_indirect
     store_var _17
+    load_type #1
     load_deref ?5
     load_var _17
     call baml.Array.push
@@ -279,15 +283,15 @@ function baml.Array.sort_by_key(self: baml.Array<#0>, key: (#0) -> #1 throws #2)
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _32
+    store_var _34
 
   L6:
-    load_var _32
+    load_var _34
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _33
-    load_var _33
+    store_var _35
+    load_var _35
     is_type baml.iter.Done
     pop_jump_if_false L7
     jump L9
@@ -296,14 +300,15 @@ function baml.Array.sort_by_key(self: baml.Array<#0>, key: (#0) -> #1 throws #2)
     load_type #0
     load_var2 4 13
     call baml.Array.at
-    store_var _37
-    load_var _37
+    store_var _39
+    load_var _39
     load_const null
     cmp_op ==
     pop_jump_if_false L8
     jump L6
 
   L8:
+    load_type #0
     load_var2 11 14
     call baml.Array.push
     pop 1
@@ -318,20 +323,21 @@ function baml.Array.sort_by_key(self: baml.Array<#0>, key: (#0) -> #1 throws #2)
     load_type baml.iter.Iterable<Error = never, Item = #0>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _47
+    store_var _50
 
   L10:
-    load_var _47
+    load_var _50
     load_type baml.iter.Iterator<Error = never, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _48
-    load_var _48
+    store_var _51
+    load_var _51
     is_type baml.iter.Done
     pop_jump_if_false L11
     jump L12
 
   L11:
+    load_type #0
     load_var2 1 16
     call baml.Array.push
     pop 1
@@ -342,6 +348,7 @@ function baml.Array.sort_by_key(self: baml.Array<#0>, key: (#0) -> #1 throws #2)
     jump L15
 
   L13:
+    load_type int
     load_var2 9 10
     call baml.Array.push
     pop 1
@@ -613,7 +620,7 @@ function baml.Float.to_degrees(self: baml.Float) -> float {
     load_const 180.0
     bin_op *
     load_var _3
-    div_float
+    call baml.ops.__union_div
     return
 }
 
@@ -623,7 +630,7 @@ function baml.Float.to_radians(self: baml.Float) -> float {
     load_var2 1 2
     bin_op *
     load_const 180.0
-    div_float
+    call baml.ops.__union_div
     return
 }
 
@@ -1892,6 +1899,7 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     load_var _7
     call baml.csv.CsvRecord.fields
     store_var _11
+    load_type string[]
     load_var2 5 7
     call baml.Array.push
     pop 1
@@ -3016,6 +3024,7 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> #1[] {
     jump L2
 
   L1:
+    load_type #1
     load_var2 2 3
     call baml.Array.push
     pop 1
@@ -4239,8 +4248,8 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     load_var self
     load_field .sub_clients
     container_len
-    store_var _24
-    load_var _24
+    store_var _25
+    load_var _25
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -4249,14 +4258,14 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
   L2:
     load_var self
     load_field .name
-    store_var _27
+    store_var _28
     load_var self
     load_field .counter
-    store_var _28
+    store_var _29
     load_var self
     load_field .sub_clients
     container_len
-    store_var _29
+    store_var _30
     load_var2 2 11
     load_var2 12 13
     call baml.llm.PlannerState.rr_pick_index
@@ -4316,6 +4325,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L5
 
   L8:
+    load_type baml.llm.OrchestrationStep
     load_var2 4 8
     call baml.Array.push
     pop 1
@@ -4443,6 +4453,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     jump L11
 
   L10:
+    load_type baml.llm.OrchestrationStep
     load_var2 5 13
     load_field .primitive_client
     load_var delay
@@ -5645,6 +5656,7 @@ function baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
     store_var _9
 
   L4:
+    load_type unknown
     load_var2 2 6
     call baml.Array.push
     pop 1
@@ -8294,7 +8306,7 @@ function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
     jump_table [L3, L3, L3, L2, L3, _, L0, L1], default L5
 
   L0: list
-    load_type baml.json.json
+    load_type int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null
     load_type baml.toml.Item
     load_type baml.json.JsonDecodeError
     load_var json
@@ -8362,7 +8374,7 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     jump L7
 
   L4: list
-    load_type baml.toml.Item
+    load_type int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | (int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[])[]
     load_type baml.json.json
     load_type baml.json.JsonSerializationError
     load_var item
@@ -8407,7 +8419,7 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     load_const null /* unknown class: map */
     store_var items
     load_type string
-    load_type baml.json.json
+    load_type int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null
     load_var j
     call baml.Map.keys
     load_type baml.iter.Iterable<Error = never, Item = string>

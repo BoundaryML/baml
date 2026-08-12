@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12948
 ---
 === MIR2 ===
 fn user.test_chained_map() -> int[] {
@@ -7,11 +8,11 @@ fn user.test_chained_map() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int[] // step1
-    let _3: (int) -> int throws E
+    let _3: (int) -> int throws never
     let _4: type
     let _5: type
     let _6: type
-    let _7: (int) -> int throws E
+    let _7: (int) -> int throws never
     let _8: type
     let _9: type
     let _10: type
@@ -74,7 +75,7 @@ fn user.test_map_string_to_int() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: string[] // words
-    let _2: (string) -> int throws E
+    let _2: (string) -> int throws never
     let _3: type
     let _4: type
     let _5: type
@@ -393,7 +394,7 @@ fn user.test_map_with_capture() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int // factor [captured]
-    let _3: (int) -> int throws E
+    let _3: (int) -> int throws never
     let _4: type
     let _5: type
     let _6: type
@@ -437,7 +438,7 @@ fn user.test_nested_map() -> int[][] {
     let _1: int[][] // matrix
     let _2: int[]
     let _3: int[]
-    let _4: (int[]) -> int[] throws E
+    let _4: (int[]) -> int[] throws never
     let _5: type
     let _6: type
     let _7: type
@@ -463,7 +464,7 @@ fn .<lambda(test_nested_map, 0)>(row: int[]) -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // row // param
-    let _2: (int) -> int throws E
+    let _2: (int) -> int throws never
     let _3: type
     let _4: type
     let _5: type
@@ -501,7 +502,7 @@ fn user.test_map_multi_statement() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws E
+    let _2: (int) -> int throws never
     let _3: type
     let _4: type
     let _5: type
@@ -591,7 +592,7 @@ fn user.test_shadowing() -> string {
     let _1: string // x
     let _2: int[] // items
     let _3: int[] // mapped
-    let _4: (int) -> int throws E
+    let _4: (int) -> int throws never
     let _5: type
     let _6: type
     let _7: type
@@ -762,7 +763,7 @@ fn user.test_fully_inferred_map() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws E
+    let _2: (int) -> int throws never
     let _3: type
     let _4: type
     let _5: type
@@ -801,7 +802,7 @@ fn user.test_map_type_change_inferred() -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: int[] // nums
-    let _2: (int) -> string throws E
+    let _2: (int) -> string throws never
     let _3: type
     let _4: type
     let _5: type
@@ -854,7 +855,7 @@ fn user.test_literal_return_inference() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws E
+    let _2: (int) -> int throws never
     let _3: type
     let _4: type
     let _5: type
@@ -894,11 +895,11 @@ fn user.test_compose_inferred() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int[] // step1
-    let _3: (int) -> int throws E
+    let _3: (int) -> int throws never
     let _4: type
     let _5: type
     let _6: type
-    let _7: (int) -> int throws E
+    let _7: (int) -> int throws never
     let _8: type
     let _9: type
     let _10: type
@@ -1308,7 +1309,7 @@ fn user.test_capture_in_map_inferred() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int // factor [captured]
-    let _3: (int) -> int throws E
+    let _3: (int) -> int throws never
     let _4: type
     let _5: type
     let _6: type
@@ -1522,7 +1523,7 @@ fn user.test_map_optional_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: (int | null)[] // items
-    let _2: (int | null) -> int throws E
+    let _2: (int | null) -> int throws never
     let _3: type
     let _4: type
     let _5: type
@@ -1572,7 +1573,7 @@ fn user.test_shadowing_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws E
+    let _2: (int) -> int throws never
     let _3: type
     let _4: type
     let _5: type

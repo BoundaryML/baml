@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 149
 ---
 function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inferred_generic_type_args(registry: testing.TestCollector) -> null {
     load_var registry
@@ -274,6 +275,7 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     jump L2
 
   L1:
+    load_type #1
     load_var2 2 3
     call baml.Array.push
     pop 1
