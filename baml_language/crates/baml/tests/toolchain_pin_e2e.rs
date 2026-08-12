@@ -184,11 +184,14 @@ fn pin_accepts_and_activates_a_local_path() {
         } else {
             "baml-cli"
         });
-    assert!(
-        manifest.contains(&format!("path = {:?}", expected_cli.display().to_string())),
+    let manifest_value = manifest.parse::<toml::Value>().unwrap();
+    let toolchain = manifest_value["toolchain"].as_table().unwrap();
+    assert_eq!(
+        toolchain["path"].as_str(),
+        Some(expected_cli.to_str().unwrap()),
         "{manifest}"
     );
-    assert!(!manifest.contains("version ="), "{manifest}");
+    assert!(!toolchain.contains_key("version"), "{manifest}");
 
     let status = Command::new(env!("CARGO_BIN_EXE_baml"))
         .args(["toolchain", "status"])
