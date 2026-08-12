@@ -660,7 +660,7 @@ Similar to OpenAI's Batch API, you can use the modular API with [AWS Bedrock's b
 Use `b.request` with an `aws-bedrock` client to build one JSON object per line. Each line needs a unique `recordId`; its `modelInput` is the complete Converse request body that BAML generated.
 
 <CodeBlocks>
-```python Python
+```python Python focus={4-20}
 import json
 from baml_client.sync_client import b
 
@@ -687,7 +687,7 @@ key = '<YOUR_INPUT_KEY_PREFIX>/batch.jsonl'
 output_prefix = '<YOUR_OUTPUT_KEY_PREFIX>/'
 region = '<YOUR_REGION>'
 ```
-```typescript TypeScript
+```typescript TypeScript focus={4-13}
 import { b } from './baml_client/sync_client';
 import type { HTTPRequest } from '@boundaryml/baml';
 
@@ -711,12 +711,14 @@ const region = '<YOUR_REGION>';
 
 ### Upload to S3 and submit the batch job
 
-Write `jsonl` to the object key you will reference from the batch job, then create a model invocation job pointing at that object and an output prefix in the same bucket.
+Write `jsonl` to the object key you will reference from the batch job, then create a model invocation job pointing at that object and an output prefix in the same bucket. Before the first submission attempt, generate a unique token and persist it with the unchanged job parameters in durable application state. The placeholder below represents that stored value; reload and reuse it whenever an uncertain API response requires retrying the same logical submission.
 
 <CodeBlocks>
-```python Python
+```python Python focus={4-16}
 import time
 import boto3
+
+submission_token = '<PERSISTED_UNIQUE_TOKEN>'
 
 try:
     boto3.client('s3', region_name=region).put_object(Bucket=bucket, Key=key, Body=jsonl)
@@ -724,6 +726,7 @@ try:
         jobName=f'baml-batch-{int(time.time() * 1000)}',
         modelId='<YOUR_MODEL_ID>',
         roleArn='arn:aws:iam::<YOUR_ACCOUNT_ID>:role/<YOUR_BEDROCK_ROLE>',
+        clientRequestToken=submission_token,
         modelInvocationType='Converse',
         inputDataConfig={'s3InputDataConfig': {'s3Uri': f's3://{bucket}/{key}', 's3InputFormat': 'JSONL'}},
         outputDataConfig={'s3OutputDataConfig': {'s3Uri': f's3://{bucket}/{output_prefix}'}}
@@ -732,9 +735,11 @@ except Exception as err:
     print('Failed to upload batch input or submit Bedrock batch job', err)
     raise
 ```
-```typescript TypeScript
+```typescript TypeScript focus={4-20}
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { BedrockClient, CreateModelInvocationJobCommand } from '@aws-sdk/client-bedrock';
+
+const submissionToken = '<PERSISTED_UNIQUE_TOKEN>';
 
 void (async () => {
   const s3 = new S3Client({ region });
@@ -745,6 +750,7 @@ void (async () => {
       jobName: `baml-batch-${Date.now()}`,
       modelId: '<YOUR_MODEL_ID>',
       roleArn: 'arn:aws:iam::<YOUR_ACCOUNT_ID>:role/<YOUR_BEDROCK_ROLE>',
+      clientRequestToken: submissionToken,
       modelInvocationType: 'Converse',
       inputDataConfig: { s3InputDataConfig: { s3Uri: `s3://${bucket}/${key}`, s3InputFormat: 'JSONL' } },
       outputDataConfig: { s3OutputDataConfig: { s3Uri: `s3://${bucket}/${outputPrefix}` } }
@@ -765,7 +771,8 @@ void (async () => {
 
   - Record-count quotas vary by model. This example creates 100 records; check the `Minimum number of records per batch inference job` quota for your model.
   - Jobs are asynchronous. Poll with `get_model_invocation_job` or monitor state changes with Amazon EventBridge before reading the output.
-  - Per-record inference errors appear in the output JSONL after the job completes.
+  - Bedrock does not automatically retry failed individual records. After completion, inspect each output JSONL record for an `error` instead of `modelOutput`, then resubmit any records you want to retry in a new job.
+  - Client-side retries of the `CreateModelInvocationJob` API are different from record retries. Reuse the same persisted `clientRequestToken` and unchanged parameters when the original submission's outcome is uncertain so the retry cannot create a duplicate job.
   - Bedrock batch inference does not support tool calling or structured output (`response_format`).
 </Note>
 
