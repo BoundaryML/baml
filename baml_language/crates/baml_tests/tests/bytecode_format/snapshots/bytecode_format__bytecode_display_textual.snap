@@ -6505,7 +6505,7 @@ function claude_code.internal.tool_protocol(tb: ai.tools.Toolbox) -> string {
     load_var _30
     call baml.String.from
     store_var _29
-    load_const "The output contract is one object with an outcome field. Set outcome\nto either the final result or a tool request. The tools in the catalog\nbelow are NOT installed in your environment — never attempt to invoke\nthem directly; any such attempt fails. The ONLY way to run one is to\nfinish your reply with outcome set to\n{\"calls\": [{\"id\": \"<unique id>\", \"name\": \"<exact tool name>\", \"args\": {...}}]};\nthe caller executes the calls and re-invokes you with their results in\nthe conversation. If the Conversation so far section shows no tool\nresults yet, your outcome MUST be a calls request — never invent data a\ntool can provide. After tool results appear in the conversation, use\nthem; the Conversation so far section is authoritative. A tool result\nwith is_error=false means that call already ran — never repeat the same\nsuccessful tool call. Request only tools that are still necessary, or\nreturn the final result.\n\nApplication tool catalog (request via outcome.calls only):\n["
+    load_const "\n\nThe output contract is one object with an outcome field. Set outcome\nto either the final result or a tool request. The tools in the catalog\nbelow are NOT installed in your environment — never attempt to invoke\nthem directly; any such attempt fails. The ONLY way to run one is to\nfinish your reply with outcome set to\n{\"calls\": [{\"id\": \"<unique id>\", \"name\": \"<exact tool name>\", \"args\": {...}}]};\nthe caller executes the calls and re-invokes you with their results in\nthe conversation. If the Conversation so far section shows no tool\nresults yet, your outcome MUST be a calls request — never invent data a\ntool can provide. After tool results appear in the conversation, use\nthem; the Conversation so far section is authoritative. A tool result\nwith is_error=false means that call already ran — never repeat the same\nsuccessful tool call. Request only tools that are still necessary, or\nreturn the final result.\n\nApplication tool catalog (request via outcome.calls only):\n["
     load_var _29
     bin_op +
     load_const "]"
@@ -6739,7 +6739,7 @@ function claude_code.internal.transcript_text(j: ai.Journal) -> string {
     load_var _79
     call baml.String.from
     store_var _78
-    load_const "Conversation so far:\n"
+    load_const "\n\nConversation so far:\n"
     load_var _78
     bin_op +
     jump L15
