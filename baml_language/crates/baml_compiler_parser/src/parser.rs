@@ -10,6 +10,15 @@ use text_size::TextRange;
 
 use crate::ParseError;
 
+/// The `if let` form quoted by the postfix-`!` diagnostic, with `T` and `opt`
+/// standing in for the user's own type and optional value.
+///
+/// Kept as a constant so the `optional_unwrap_hint_suggests_real_syntax` test
+/// can instantiate those metavariables and assert the suggested form actually
+/// parses. A hint that doesn't parse drives users into a second error cascade
+/// instead of fixing the first.
+const IF_LET_UNWRAP_SHAPE: &str = "if let x: T = opt { ... }";
+
 pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
     parse_impl(tokens, None)
 }
@@ -6091,9 +6100,10 @@ impl<'a> Parser<'a> {
                 // restriction the tagged-template (`Backtick`) branch uses.
                 let bang_span = token.span;
                 self.error(
-                    "unexpected '!'; BAML has no non-null assertion operator — \
-                     unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'"
-                        .to_string(),
+                    format!(
+                        "unexpected '!'; BAML has no non-null assertion operator — \
+                         unwrap optionals with '?? <default>' or '{IF_LET_UNWRAP_SHAPE}'"
+                    ),
                     bang_span,
                 );
                 self.bump(); // consume the stray '!'
@@ -8166,7 +8176,7 @@ mod tests {
     use baml_compiler_syntax::{Item, SourceFile, SyntaxKind, SyntaxNode};
     use rowan::ast::AstNode;
 
-    use super::{ParseError, parse_file};
+    use super::{IF_LET_UNWRAP_SHAPE, ParseError, parse_file};
 
     fn parse_source(source: &str) -> (SyntaxNode, Vec<ParseError>) {
         let tokens = lex_lossless(source, FileId::new(0));
@@ -8513,6 +8523,27 @@ function f(xs: int[]) -> int {
         assert_eq!(
             array_count, 1,
             "expected exactly one ARRAY_PATTERN in the if-let"
+        );
+    }
+
+    /// The postfix-`!` diagnostic points users at two ways to unwrap an
+    /// optional. Instantiate the metavariables in the `if let` form it quotes
+    /// and parse the result, so the hint cannot drift back to a shape the
+    /// grammar doesn't have — B-1129 quoted `if (let x) = opt`, which yielded
+    /// four fresh errors the moment anyone pasted it.
+    #[test]
+    fn optional_unwrap_hint_suggests_real_syntax() {
+        let concrete = IF_LET_UNWRAP_SHAPE
+            .replace(": T ", ": int ")
+            .replace("{ ... }", "{ x }");
+        let source = format!("function f(opt: int?) -> int {{\n  {concrete} else {{ 0 }}\n}}\n");
+        let (root, errors) = parse_source(&source);
+        assert_no_errors(&errors);
+        // A shape that parses but isn't an `if let` would be just as wrong.
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::IF_LET_EXPR),
+            "hint should describe an `if let`, got: {concrete}"
         );
     }
 
