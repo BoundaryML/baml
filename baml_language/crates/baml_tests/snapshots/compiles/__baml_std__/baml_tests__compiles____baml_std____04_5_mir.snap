@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2766
 ---
 === MIR2 ===
 
@@ -4776,7 +4777,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
     let _1: baml.iter.FlatMap // self // param
     let _2: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
     let _3: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
-    let _4: baml.iter.Iterator<Item = R, Error = E3> // cur
+    let _4: baml.iter.Iterator<Error = E3, Item = R> // cur
     let _5: baml.iter.Done | R
     let _6: bool
     let _7: R // y
@@ -4896,7 +4897,7 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
     let _1: baml.iter.Flatten // self // param
     let _2: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
     let _3: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
-    let _4: baml.iter.Iterator<Item = R, Error = E3> // cur
+    let _4: baml.iter.Iterator<Error = E3, Item = R> // cur
     let _5: baml.iter.Done | R
     let _6: bool
     let _7: R // y

@@ -118,29 +118,32 @@ fn with_global_ctx<R>(
 /// projection resolves through `T`'s bound rather than erasing to `unknown`. Replaces the
 /// removed `lower_type_expr_with_generics` (a bare lower-then-substitute that dropped bounds);
 /// `bounds` is required, so bound-erasure is unrepresentable at the call sites.
-fn lower_ty_with_bindings(
-    db: &dyn crate::Db,
+fn lower_ty_with_bindings<'db>(
+    db: &'db dyn crate::Db,
     expr: &baml_compiler2_ast::TypeExpr,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     bindings: &FxHashMap<ParamTy, Tir2Ty>,
     bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap,
-    diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
+    _diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
 ) -> Tir2Ty {
-    let generic_params: Vec<ParamTy> = bindings.keys().cloned().collect();
-    let lowered = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-        expr,
-        &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-            db,
-            package_items: pkg_items,
-            ns_context: namespace_path,
-            generic_params: &generic_params,
-            bounds,
-            self_ty: None,
-        },
-        diags,
-    );
-    baml_compiler2_tir::generics::substitute_ty(&lowered, bindings)
+    // The AST node lowers through hir's firewall into a scratch store,
+    // then through hir_ty's ONE type-lowering road (S16: MIR's
+    // declaration-site lowering re-pointed off TIR). Errors are the
+    // sentinel in the lowered type, not a diag side-channel (S17's).
+    let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+    let id = builder.lower(expr);
+    let (store, _spans) = builder.finish();
+    lower_ref_with_bindings(
+        db,
+        &store,
+        id,
+        pkg_items,
+        namespace_path,
+        bindings,
+        bounds,
+        _diags,
+    )
 }
 
 /// The `TypeRef`-arena twin of [`lower_ty_with_bindings`], for callers holding
@@ -150,31 +153,90 @@ fn lower_ty_with_bindings(
     clippy::too_many_arguments,
     reason = "mirrors the 7-arg lower_ty_with_bindings; the (store, id) pair replaces its one &TypeExpr"
 )]
-fn lower_ref_with_bindings(
-    db: &dyn crate::Db,
+fn lower_ref_with_bindings<'db>(
+    db: &'db dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     id: baml_compiler2_hir::type_ref::TypeRefId,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     bindings: &FxHashMap<ParamTy, Tir2Ty>,
     bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap,
-    diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
+    _diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
 ) -> Tir2Ty {
     let generic_params: Vec<ParamTy> = bindings.keys().cloned().collect();
-    let lowered = baml_compiler2_tir::lower_type_expr::lower_type_ref(
-        store,
-        id,
-        &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-            db,
-            package_items: pkg_items,
-            ns_context: namespace_path,
-            generic_params: &generic_params,
-            bounds,
-            self_ty: None,
-        },
-        diags,
-    );
+    let ctx =
+        baml_compiler2_hir_ty::lower::lower_ctx_for_package(db, pkg_items, namespace_path.to_vec())
+            .with_frame(generic_params)
+            .with_bounds(hir_bounds(bounds));
+    let lowered = ctx.lower_type_ref(store, id).to_plain();
     baml_compiler2_tir::generics::substitute_ty(&lowered, bindings)
+}
+
+/// The IN-SCOPE twins of the binding wrappers above: explicit frame, no
+/// substitution - the same hir_ty road for sites that keep their type
+/// variables rigid (turbofish args, annotations, dispatch targets).
+#[allow(clippy::too_many_arguments)]
+fn lower_ref_in_scope<'db>(
+    db: &'db dyn crate::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    generic_params: &[ParamTy],
+    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap,
+    self_ty: Option<Tir2Ty>,
+) -> Tir2Ty {
+    let ctx =
+        baml_compiler2_hir_ty::lower::lower_ctx_for_package(db, pkg_items, namespace_path.to_vec())
+            .with_frame(generic_params.to_vec())
+            .with_bounds(hir_bounds(bounds))
+            .with_self_ty(self_ty.map(|ty| baml_type::interned::Ty::from_plain(&ty)));
+    ctx.lower_type_ref(store, id).to_plain()
+}
+
+/// The AST twin of [`lower_ref_in_scope`] (scratch firewall store).
+#[allow(clippy::too_many_arguments)]
+fn lower_expr_in_scope<'db>(
+    db: &'db dyn crate::Db,
+    expr: &baml_compiler2_ast::TypeExpr,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+    generic_params: &[ParamTy],
+    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap,
+    self_ty: Option<Tir2Ty>,
+) -> Tir2Ty {
+    let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+    let id = builder.lower(expr);
+    let (store, _spans) = builder.finish();
+    lower_ref_in_scope(
+        db,
+        &store,
+        id,
+        pkg_items,
+        namespace_path,
+        generic_params,
+        bounds,
+        self_ty,
+    )
+}
+
+/// TIR's plain bounds map in hir_ty's interned spelling - the port-era
+/// bridge; dies with the TypeVarBoundsMap callers.
+fn hir_bounds(
+    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap,
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    bounds
+        .iter()
+        .map(|(param, interfaces)| {
+            (
+                param.clone(),
+                interfaces
+                    .iter()
+                    .map(baml_type::interned::InterfaceRef::from_constraint)
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 /// Whether `ty` contains an associated-type projection node at any depth.
@@ -1057,18 +1119,16 @@ fn lower_ref_interface_target_args<'db>(
         baml_compiler2_hir::type_ref::TypeRefKind::Path { generic_args, .. } => generic_args
             .iter()
             .map(|&arg| {
-                baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                let _ = &diags;
+                lower_ref_in_scope(
+                    db,
                     store,
                     arg,
-                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                        db,
-                        package_items: pkg_items,
-                        ns_context: namespace_path,
-                        generic_params,
-                        bounds,
-                        self_ty: None,
-                    },
-                    diags,
+                    pkg_items,
+                    namespace_path,
+                    generic_params,
+                    bounds,
+                    None,
                 )
             })
             .collect(),
@@ -1800,7 +1860,8 @@ impl<'db> LoweringContext<'db> {
                             baml_compiler2_tir::class_generic_params(db, *class_loc);
                         let pkg_ns = baml_compiler2_hir::file_package::file_package(db, cfile)
                             .namespace_path;
-                        let mut diags = Vec::new();
+                        let mut diags: Vec<baml_compiler2_tir::infer_context::TirTypeError> =
+                            Vec::new();
                         let mut idx_counter = 0usize;
                         let mut insert_field =
                             |name: &str,
@@ -1817,18 +1878,18 @@ impl<'db> LoweringContext<'db> {
                                 let idx = idx_counter;
                                 fields.insert(name.to_string(), idx);
                                 idx_counter += 1;
-                                let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                                let _ = &diags;
+                                let tir_ty = lower_ref_in_scope(
+                                    db,
                                     &class_data.type_refs,
                                     type_ref,
-                                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                                        db,
-                                        package_items: pkg_items,
-                                        ns_context: ns,
-                                        generic_params,
-                                        bounds: baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(db, *class_loc),
-                                        self_ty: None,
-                                    },
-                                    diags,
+                                    pkg_items,
+                                    ns,
+                                    generic_params,
+                                    baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
+                                        db, *class_loc,
+                                    ),
+                                    None,
                                 );
                                 let field_ty = resolved_aliases.convert(&tir_ty);
                                 field_types.insert(name.to_string(), field_ty.clone());
@@ -2816,18 +2877,14 @@ impl<'db> LoweringContext<'db> {
                 param
             });
         let generic_param_bounds = self.enclosing_generic_param_bounds();
-        let mut diags = Vec::new();
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        let tir_ty = lower_expr_in_scope(
+            self.db,
             te,
-            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                db: self.db,
-                package_items: pkg_items,
-                ns_context,
-                generic_params: &generic_params,
-                bounds: &generic_param_bounds,
-                self_ty: Some(Tir2Ty::TypeVar(self_param, TyAttr::default())),
-            },
-            &mut diags,
+            pkg_items,
+            ns_context,
+            &generic_params,
+            &generic_param_bounds,
+            Some(Tir2Ty::TypeVar(self_param, TyAttr::default())),
         );
         self.convert_tir_ty_for_runtime(&tir_ty)
     }
@@ -2974,18 +3031,14 @@ impl<'db> LoweringContext<'db> {
         let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
         let generic_params = self.enclosing_generic_params();
         let generic_param_bounds = self.enclosing_generic_param_bounds();
-        let mut diags = Vec::new();
-        let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        let target_ty = lower_expr_in_scope(
+            self.db,
             target,
-            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                db: self.db,
-                package_items: pkg_items,
-                ns_context: &pkg_info.namespace_path,
-                generic_params: &generic_params,
-                bounds: &generic_param_bounds,
-                self_ty: None,
-            },
-            &mut diags,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &generic_param_bounds,
+            None,
         );
         self.interface_dispatch_target_for_tir_ty(&target_ty)
     }
@@ -3407,18 +3460,14 @@ impl<'db> LoweringContext<'db> {
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
         let ty_expr = &self.desugar_body_type_expr(ty_expr);
-        let mut diags = Vec::new();
-        baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        lower_expr_in_scope(
+            self.db,
             ty_expr,
-            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                db: self.db,
-                package_items: pkg_items,
-                ns_context: &pkg_info.namespace_path,
-                generic_params: &generic_params,
-                bounds: &generic_param_bounds,
-                self_ty: self.body_self_tir_ty(),
-            },
-            &mut diags,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &generic_param_bounds,
+            self.body_self_tir_ty(),
         )
     }
 
@@ -3622,21 +3671,17 @@ impl<'db> LoweringContext<'db> {
                         for_target, ..
                     } = &imp.subject
                 {
-                    let mut diags = Vec::new();
                     let generic_params = self.enclosing_generic_params();
                     let generic_param_bounds = self.enclosing_generic_param_bounds();
-                    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                    let tir_ty = lower_ref_in_scope(
+                        self.db,
                         &imp.type_refs,
                         *for_target,
-                        &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                            db: self.db,
-                            package_items: pkg_items,
-                            ns_context: &pkg_info.namespace_path,
-                            generic_params: &generic_params,
-                            bounds: &generic_param_bounds,
-                            self_ty: None,
-                        },
-                        &mut diags,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &generic_params,
+                        &generic_param_bounds,
+                        None,
                     );
                     self.convert_tir_ty_for_runtime(&tir_ty)
                 } else {
@@ -4057,18 +4102,14 @@ impl<'db> LoweringContext<'db> {
         // throws), with the enclosing and lambda generics in scope. Lowering
         // diagnostics are dropped: TIR reports the lambda's own type errors.
         let lower_sig_ty = |this: &mut Self, te: &baml_compiler2_ast::TypeExpr| {
-            let mut diags = Vec::new();
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+            lower_expr_in_scope(
+                this.db,
                 te,
-                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                    db: this.db,
-                    package_items: pkg_items,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params: &lambda_param_generics,
-                    bounds: &this.enclosing_generic_param_bounds(),
-                    self_ty: None,
-                },
-                &mut diags,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &lambda_param_generics,
+                &this.enclosing_generic_param_bounds(),
+                None,
             )
         };
         // BEP-062: collect the runtime signature alongside, so emit can stamp
@@ -4463,34 +4504,25 @@ impl LoweringContext<'_> {
                         .name
                         .clone()
                         .unwrap_or_else(|| Name::new(format!("__arg{i}")));
-                    let mut diags = Vec::new();
-                    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                    let tir_ty = lower_expr_in_scope(
+                        self.db,
                         &p.ty,
-                        &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                            db: self.db,
-                            package_items: tag_pkg_items,
-                            ns_context: &tag_pkg_info.namespace_path,
-                            generic_params: &[],
-                            bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(
-                            ),
-                            self_ty: None,
-                        },
-                        &mut diags,
+                        tag_pkg_items,
+                        &tag_pkg_info.namespace_path,
+                        &[],
+                        &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
+                        None,
                     );
                     body_params.push((name, self.resolved_aliases.convert(&tir_ty)));
                 }
-                let mut diags = Vec::new();
-                let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                let tir_ty = lower_expr_in_scope(
+                    self.db,
                     body_te,
-                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                        db: self.db,
-                        package_items: tag_pkg_items,
-                        ns_context: &tag_pkg_info.namespace_path,
-                        generic_params: &[],
-                        bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
-                        self_ty: None,
-                    },
-                    &mut diags,
+                    tag_pkg_items,
+                    &tag_pkg_info.namespace_path,
+                    &[],
+                    &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
+                    None,
                 );
                 self.resolved_aliases.convert(&tir_ty)
             }
@@ -6031,21 +6063,15 @@ impl<'db> LoweringContext<'db> {
 
         let pkg_ns =
             baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let mut diags = Vec::new();
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_ref(
+        let tir_ty = lower_ref_in_scope(
+            db,
             &class_data.type_refs,
             type_ref,
-            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                db,
-                package_items: pkg_items_ref,
-                ns_context: &pkg_ns,
-                generic_params: &class_generic_params,
-                bounds: baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                    db, class_loc,
-                ),
-                self_ty: None,
-            },
-            &mut diags,
+            pkg_items_ref,
+            &pkg_ns,
+            &class_generic_params,
+            baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(db, class_loc),
+            None,
         );
         // Build a TyTemplate with `TypeArgRef(N)` for each class-level
         // generic param, then substitute `class_type_args` so a field
@@ -7462,11 +7488,15 @@ impl<'db> LoweringContext<'db> {
                         let Some(id) = binding.type_ref else { continue };
                         assoc_bindings.push((
                             binding.name.clone(),
-                            baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                            lower_ref_in_scope(
+                                self.db,
                                 &target.type_refs,
                                 id,
-                                &ctx,
-                                &mut diags,
+                                pkg_items,
+                                &current_pkg.namespace_path,
+                                &generic_params,
+                                &generic_param_bounds,
+                                None,
                             ),
                         ));
                     }
@@ -8653,18 +8683,14 @@ impl LoweringContext<'_> {
         // items lowered them to `Unknown` → `Void` and broke `StreamCache.new`
         // at runtime.
         let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
-        let mut diags = Vec::new();
-        baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        lower_expr_in_scope(
+            self.db,
             type_arg,
-            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                db: self.db,
-                package_items: pkg_items,
-                ns_context: &pkg_info.namespace_path,
-                generic_params,
-                bounds: &self.enclosing_generic_param_bounds(),
-                self_ty: self.body_self_tir_ty(),
-            },
-            &mut diags,
+            pkg_items,
+            &pkg_info.namespace_path,
+            generic_params,
+            &self.enclosing_generic_param_bounds(),
+            self.body_self_tir_ty(),
         )
     }
 
@@ -10717,19 +10743,15 @@ impl<'db> LoweringContext<'db> {
                 let pkg_items = package_items(self.db, pkg_id);
                 let generic_params = self.enclosing_generic_params();
                 let bounds = self.enclosing_generic_param_bounds();
-                let mut diags = Vec::new();
-                Some(baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                Some(lower_ref_in_scope(
+                    self.db,
                     &block.type_refs,
                     *for_target,
-                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                        db: self.db,
-                        package_items: pkg_items,
-                        ns_context: &pkg_info.namespace_path,
-                        generic_params: &generic_params,
-                        bounds: &bounds,
-                        self_ty: None,
-                    },
-                    &mut diags,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &generic_params,
+                    &bounds,
+                    None,
                 ))
             }
             // Interface default methods have no implements-block target
@@ -12498,20 +12520,17 @@ impl LoweringContext<'_> {
         for field in &class_data.fields {
             let mut diags = Vec::new();
             let field_ty = if bindings.is_empty() {
-                baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                lower_ref_in_scope(
+                    self.db,
                     &class_data.type_refs,
                     field.type_ref,
-                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                        db: self.db,
-                        package_items: pkg_items_for_class,
-                        ns_context: &ns_context,
-                        generic_params: &class_generic_params,
-                        bounds: baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                            self.db, class_loc,
-                        ),
-                        self_ty: None,
-                    },
-                    &mut diags,
+                    pkg_items_for_class,
+                    &ns_context,
+                    &class_generic_params,
+                    baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
+                        self.db, class_loc,
+                    ),
+                    None,
                 )
             } else {
                 lower_ref_with_bindings(

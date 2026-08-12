@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3375
 ---
 === MIR2 ===
 fn user.web_search(q: string) -> Doc[] {
@@ -75,10 +76,10 @@ fn user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = strin
     }
 }
 
-fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
+fn user.signature_access(f: baml.AnyFunction) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // f // param
+    let _1: baml.AnyFunction // f // param
     let _2: reflect.Signature // sig
     let _3: string // parts
     let _4: string

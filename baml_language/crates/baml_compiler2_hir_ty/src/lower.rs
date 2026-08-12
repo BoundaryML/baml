@@ -76,6 +76,25 @@ pub fn lower_ctx_for_file(
     }
 }
 
+/// A lowering context over an explicit package view - the same pair the
+/// file form derives from a `SourceFile`. MIR's declaration-site road
+/// (its callers hold `PackageItems` + a namespace path, not always a
+/// file).
+pub fn lower_ctx_for_package<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    package_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
+    ns_context: Vec<Name>,
+) -> LowerCtx<'db> {
+    LowerCtx {
+        db,
+        package_items,
+        ns_context,
+        generic_params: Vec::new(),
+        self_ty: None,
+        bounds: FxHashMap::default(),
+    }
+}
+
 impl<'db> LowerCtx<'db> {
     #[must_use]
     pub fn with_frame(mut self, frame: Vec<ParamTy>) -> LowerCtx<'db> {
